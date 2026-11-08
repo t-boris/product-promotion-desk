@@ -40,3 +40,15 @@
 11. Buttons, inputs and selects take their size from the tokens in `styles.css` (`--control-h`, `--control-radius`, `--control-pad-x`, `--control-min-w`); variants change colour only, never size or weight. A button never shrinks or wraps: the text next to it gives way. Font sizes come from the `--fs-*` scale, not from pixel values.
 12. Check a UI standard by measuring every control on every route (heights, wrapped labels, horizontal scroll), not by looking at one screenshot.
 13. The same action keeps the same label in every state (disable it, show the state elsewhere) so its size does not change.
+
+## 2026-11-08 (later): window scroll, narrow columns, specificity, icon
+
+**What happened.** The owner sent a screenshot of the installed app: the whole window scrolled (the sidebar slid under the window buttons), the product card was squeezed to "Natal Mysti c", and the Dock showed the default Electron icon.
+
+**Rules for myself.**
+
+14. The shell is exactly as tall as the window: the grid row is `minmax(0, 1fr)` and every flex or grid child that holds a scroller has `min-height: 0`. Test it by making the window short (set the html height), not in one tall viewport: a layout that fits a 930 px browser tab hid this bug.
+15. A page rule that restyles a shared class needs more specificity (`.list-row.account-row`), because the bundle does not guarantee that a page stylesheet comes after `styles.css`. Check the computed style in the running app, not the source order.
+16. Do not put `overflow-wrap: anywhere` on a flex item beside content that does not shrink: it collapses to one letter. Narrow columns get a stacked layout instead; a nested two-column layout inside a column is too tight.
+17. The app has its own icon: `scripts/make-icon.py` draws `build/icon.png` and `build/icon.icns`, `electron-builder.yml` sets `mac.icon`. Check the bundle for `Contents/Resources/icon.icns` after a build.
+18. The standard sweep for any UI change: every route, with a short window, measuring button heights, wrapped labels, elements outside the page edge and window scroll.

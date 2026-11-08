@@ -15,7 +15,7 @@ export function ProductList({ products, selectedId, onSelect }: { products: Prod
           key={product.id}
           role="button"
           tabIndex={0}
-          className={`list-row selectable ${product.id === selectedId ? 'active' : ''}`}
+          className={`list-row stacked selectable ${product.id === selectedId ? 'active' : ''}`}
           onClick={() => onSelect(product.id)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
