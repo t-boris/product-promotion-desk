@@ -126,6 +126,10 @@ export function registerFlowApi({ core, store, review, monitor, drafting, sendin
       await sending.reconcile(id)
       return card(id)
     },
+    'opportunities.resolveUnknown': async ({ id, outcome, url }) => {
+      await sending.resolveUnknown(id, outcome, url)
+      return card(id)
+    },
 
     // ───────────── standalone publications ─────────────
     'publications.suggest': async ({ channelId }) => card((await publications.suggest(channelId)).id),

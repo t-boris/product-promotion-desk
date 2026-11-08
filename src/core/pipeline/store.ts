@@ -289,16 +289,30 @@ export class FlowStore {
     return this.core.repos.draft(id)
   }
 
-  insertApproval(p: { draftId: Id; contentHash: string; accountId: Id; destination: string; approvedBy: Approval['approvedBy']; ruleId: string | null }): Approval {
+  /** `identity` is who was signed in to the account when the hash was computed; it is part of what the hash binds. */
+  insertApproval(p: { draftId: Id; contentHash: string; accountId: Id; identity: string | null; destination: string; approvedBy: Approval['approvedBy']; ruleId: string | null }): Approval {
     const id = newId()
     this.db
       .prepare(
-        `INSERT INTO approvals (id, draft_id, content_hash, account_id, destination, approved_by, rule_id, approved_at, invalidated_at, invalid_reason)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)`
+        `INSERT INTO approvals (id, draft_id, content_hash, account_id, signed_in_identity, destination, approved_by, rule_id, approved_at, invalidated_at, invalid_reason)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)`
       )
-      .run(id, p.draftId, p.contentHash, p.accountId, p.destination, p.approvedBy, p.ruleId, this.now())
+      .run(id, p.draftId, p.contentHash, p.accountId, p.identity, p.destination, p.approvedBy, p.ruleId, this.now())
     const row = this.db.prepare('SELECT * FROM approvals WHERE id = ?').get(id) as Row
     return mapApproval(row)
+  }
+
+  /** The identity the approval was given under (null when none was known). The shared Approval type does not carry it. */
+  approvalIdentity(approvalId: Id): string | null {
+    const row = this.db.prepare('SELECT signed_in_identity AS identity FROM approvals WHERE id = ?').get(approvalId) as { identity: string | null } | undefined
+    return row?.identity ?? null
+  }
+
+  /** Whether another confirmed send of this account already recorded that platform object as its result. */
+  externalIdUsed(externalId: string, accountId: Id, exceptActionId: Id): boolean {
+    return (
+      this.db.prepare("SELECT 1 FROM send_actions WHERE state = 'confirmed' AND result_external_id = ? AND account_id = ? AND id != ? LIMIT 1").get(externalId, accountId, exceptActionId) !== undefined
+    )
   }
 
   /** Invalidates every still-valid approval of any draft of the opportunity. Returns how many were invalidated. */

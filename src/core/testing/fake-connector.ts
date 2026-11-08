@@ -37,6 +37,8 @@ export interface PublishedItem {
   /** Whether findPublished can see it, i.e. whether it really reached the platform. */
   visible: boolean
   ref: PublishedRef
+  /** When it appeared on the platform; findPublished ignores items older than the attempt being reconciled. */
+  createdAt?: string
 }
 
 export interface FakeConnectorOptions {
@@ -48,8 +50,6 @@ export interface FakeConnectorOptions {
 
 const ALL_CAPABILITIES: CapabilityKey[] = ['read_posts', 'read_comments', 'detect_changes', 'publish_post', 'publish_reply', 'verify_send', 'metrics', 'rules']
 
-type ThreadFlags = RemoteDiscussion & { locked?: boolean; archived?: boolean }
-
 export class FakeConnector implements Connector {
   readonly id: string
   readonly platform: string
@@ -59,6 +59,8 @@ export class FakeConnector implements Connector {
   /** The world: what the platform currently shows. Tests mutate it directly or through the helpers. */
   discussions: RemoteDiscussion[] = []
   readonly lockedDiscussions = new Set<string>()
+  /** Threads the fake can only read partially (like a page with unexpanded "load more" parts). */
+  readonly incompleteDiscussions = new Set<string>()
   capabilities: Capability[] = ALL_CAPABILITIES.map((key) => ({ key, status: 'verified', detail: '', checkedAt: null }))
   login: LoginState
   metrics: MetricReading[] = []
@@ -71,6 +73,9 @@ export class FakeConnector implements Connector {
   fetchActivityError: Error | null = null
   fetchThreadError: Error | null = null
   findPublishedError: Error | null = null
+  checkLoginError: Error | null = null
+  /** The requests findPublished received, to check what reconciliation asks the platform. */
+  readonly findPublishedRequests: PublishRequest[] = []
   /** Holds every publish call until the promise resolves (concurrency tests). */
   publishGate: Promise<void> | null = null
   /** When false, methods do not use the browser session at all. */
@@ -130,6 +135,10 @@ export class FakeConnector implements Connector {
     this.lockedDiscussions.add(discussionId)
   }
 
+  markIncomplete(discussionId: string): void {
+    this.incompleteDiscussions.add(discussionId)
+  }
+
   setCapability(key: CapabilityKey, status: Capability['status'], detail = ''): void {
     this.capabilities = this.capabilities.map((c) => (c.key === key ? { ...c, status, detail } : c))
   }
@@ -163,7 +172,10 @@ export class FakeConnector implements Connector {
 
   async checkLogin(ctx: ConnectorContext): Promise<LoginState> {
     this.calls.push('checkLogin')
-    return this.withBrowser(ctx, 'fake-login', () => this.login)
+    return this.withBrowser(ctx, 'fake-login', () => {
+      if (this.checkLoginError) throw this.checkLoginError
+      return this.login
+    })
   }
 
   async assess(ctx: ConnectorContext): Promise<Capability[]> {
@@ -188,8 +200,9 @@ export class FakeConnector implements Connector {
       if (this.fetchThreadError) throw this.fetchThreadError
       const found = this.discussions.find((d) => d.externalId === discussionExternalId)
       if (!found) return null
-      const copy: ThreadFlags = structuredClone(found)
+      const copy: RemoteDiscussion = structuredClone(found)
       if (this.lockedDiscussions.has(discussionExternalId)) copy.locked = true
+      if (this.incompleteDiscussions.has(discussionExternalId)) copy.incomplete = true
       return copy
     })
   }
@@ -214,7 +227,7 @@ export class FakeConnector implements Connector {
         await page.click('#fake-submit', ticket)
       }
 
-      const item = this.record(request, ticket, behavior.kind === 'confirm' ? true : (behavior.visible ?? false))
+      const item = this.record(request, ticket, behavior.kind === 'confirm' ? true : (behavior.visible ?? false), ctx.clock.now().toISOString())
       if (behavior.kind === 'throw') throw behavior.error ?? new Error('Connection lost while sending')
       if (behavior.kind === 'unknown') return { status: 'unknown' as const, error: behavior.error ?? 'The page did not show a result' }
       this.showAsOwnComment(request, item.ref)
@@ -222,10 +235,10 @@ export class FakeConnector implements Connector {
     })
   }
 
-  private record(request: PublishRequest, ticket: SendTicket, visible: boolean): PublishedItem {
+  private record(request: PublishRequest, ticket: SendTicket, visible: boolean, createdAt: string): PublishedItem {
     this.counter += 1
     const ref: PublishedRef = { url: `${request.destination}#published-${this.counter}`, externalId: `fake-pub-${this.counter}` }
-    const item: PublishedItem = { request, ticket, visible, ref }
+    const item: PublishedItem = { request, ticket, visible, ref, createdAt }
     this.published.push(item)
     return item
   }
@@ -246,9 +259,14 @@ export class FakeConnector implements Connector {
 
   async findPublished(ctx: ConnectorContext, request: PublishRequest): Promise<PublishedRef | null> {
     this.calls.push('findPublished')
+    this.findPublishedRequests.push(request)
     return this.withBrowser(ctx, 'fake-find', () => {
       if (this.findPublishedError) throw this.findPublishedError
-      const match = this.published.find((p) => p.visible && p.request.destination === request.destination && p.request.text === request.text)
+      // Like a real connector, only match what was created at or after the attempt being reconciled.
+      const since = request.attemptedAt ? Date.parse(request.attemptedAt) : null
+      const match = this.published.find(
+        (p) => p.visible && p.request.destination === request.destination && p.request.text === request.text && (since === null || !p.createdAt || Date.parse(p.createdAt) >= since)
+      )
       return match ? match.ref : null
     })
   }

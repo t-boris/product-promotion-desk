@@ -12,12 +12,14 @@
 // The connector takes browser control itself (ctx.session.withAgentControl); the session is not re-entrant, so
 // this service must not hold control around the connector call.
 
+import { ApiError } from '../../shared/api'
 import type { Id, SendAction } from '../../shared/types'
 import type { Core } from '../core'
 import { TakeoverError, TicketError, type PublishOutcome, type PublishedRef } from '../ports'
 import type { SendingService } from '../services'
 import { SendBlockedError, type GateBlock, type GateGrant, type SendGate } from './gate'
 import type { Ingestor } from './ingest'
+import { isLoginError, type LoginWatch } from './login-watch'
 import { buildPublishRequest } from './request'
 import type { ReviewFlow } from './review'
 import { SEND_LOCKED_STATES, type FlowStore } from './store'
@@ -26,13 +28,31 @@ import { KeyedMutex, errorMessage } from './util'
 /** An unknown result is declared failed only after the platform has been silent for this long. */
 export const UNKNOWN_WAIT_MS = 10 * 60 * 1000
 export const NOT_FOUND_REASON = 'not found on the platform after 10 minutes; safe to retry after review'
+/** A scheduled publication is sent without a click only within this long after its planned time. */
+export const SCHEDULE_GRACE_MS = 60 * 60 * 1000
+export const SCHEDULE_MISSED_REASON = 'The scheduled time passed while the app was not running; confirm to send'
+export const OWNER_NOT_PUBLISHED_ERROR = 'Owner confirmed it was not published'
 
 export interface SendOptions {
   /** Initiated by a rule or the scheduler instead of an explicit click: the global pause applies. */
   automatic?: boolean
 }
 
-type AttemptOutcome = { kind: 'confirmed'; url: string; externalId: string } | { kind: 'failed'; error: string } | { kind: 'unknown'; error: string }
+/** `loginLike`: the failure is worded like "not signed in", which makes the session worth checking. */
+type AttemptOutcome =
+  | { kind: 'confirmed'; url: string; externalId: string }
+  | { kind: 'failed'; error: string; loginLike?: boolean }
+  | { kind: 'unknown'; error: string; loginLike?: boolean }
+
+type LoginProblem = 'login' | 'captcha'
+
+function isHttpUrl(value: string): boolean {
+  try {
+    return /^https?:$/.test(new URL(value).protocol)
+  } catch {
+    return false
+  }
+}
 
 const isUniqueViolation = (error: unknown): boolean => typeof error === 'object' && error !== null && (error as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE'
 
@@ -48,7 +68,8 @@ export class SendingFlow implements SendingService {
     private readonly store: FlowStore,
     private readonly gate: SendGate,
     private readonly review: ReviewFlow,
-    private readonly ingestor: Ingestor
+    private readonly ingestor: Ingestor,
+    private readonly watch: LoginWatch
   ) {}
 
   // ───────────── sending ─────────────
@@ -103,7 +124,8 @@ export class SendingFlow implements SendingService {
     try {
       await this.core.runs.track('send', { channelId: grant.channel.id, productId: grant.opportunity.productId }, async () => {
         const outcome = await this.publish(grant)
-        settled = this.settle(grant, outcome)
+        const problem = await this.loginProblem(grant, outcome)
+        settled = this.settle(grant, outcome, problem)
         return { status: outcome.kind === 'confirmed' ? ('ok' as const) : ('failed' as const), summary: this.describe(grant, outcome) }
       })
     } finally {
@@ -129,8 +151,33 @@ export class SendingFlow implements SendingService {
       if (error instanceof TicketError) return { kind: 'failed', error: `The send authorization was rejected: ${error.message}` }
       // Anything else may have happened after the content was submitted (including losing the browser to the user).
       const takeover = error instanceof TakeoverError ? ' You took control of the browser during the send.' : ''
-      return { kind: 'unknown', error: `The connector stopped with an error, so it is not known whether the content was published: ${errorMessage(error)}.${takeover}` }
+      return {
+        kind: 'unknown',
+        error: `The connector stopped with an error, so it is not known whether the content was published: ${errorMessage(error)}.${takeover}`,
+        loginLike: isLoginError(error)
+      }
     }
+  }
+
+  /**
+   * A send that failed like "not signed in" must not go back to review every tick: the session is checked and, if
+   * it really is gone, the account is suspended so nothing is tried until the owner signs in. A check that says the
+   * account is fine means the failure was something else.
+   */
+  private async loginProblem(grant: GateGrant, outcome: AttemptOutcome): Promise<LoginProblem | null> {
+    if (outcome.kind === 'confirmed' || !outcome.loginLike) return null
+    let verdict
+    try {
+      const { connector, ctx } = this.core.connectorContext(grant.channel.id)
+      verdict = await this.watch.diagnose(connector, ctx)
+    } catch (error) {
+      this.core.log.warn('send', `Could not check the login after a failed send: ${errorMessage(error)}`, grant.channel.id)
+      return null
+    }
+    if (verdict === 'login' || verdict === 'captcha') return verdict
+    // The connector itself said "not signed in" but the check could not run: believe the connector.
+    if (verdict === 'unchecked') return /captcha/i.test(outcome.error) ? 'captcha' : 'login'
+    return null
   }
 
   private normalize(outcome: PublishOutcome): AttemptOutcome {
@@ -142,12 +189,18 @@ export class SendingFlow implements SendingService {
       if (url || externalId) return { kind: 'confirmed', url, externalId }
       return { kind: 'unknown', error: 'The connector reported success without a link or an id, so the result cannot be trusted.' }
     }
-    if (o?.status === 'failed') return { kind: 'failed', error: text(o.error) || 'The platform rejected the publication.' }
-    if (o?.status === 'unknown') return { kind: 'unknown', error: text(o.error) || 'The result could not be confirmed.' }
+    if (o?.status === 'failed') {
+      const error = text(o.error) || 'The platform rejected the publication.'
+      return { kind: 'failed', error, loginLike: isLoginError(error) }
+    }
+    if (o?.status === 'unknown') {
+      const error = text(o.error) || 'The result could not be confirmed.'
+      return { kind: 'unknown', error, loginLike: isLoginError(error) }
+    }
     return { kind: 'unknown', error: 'The connector returned an unrecognised result.' }
   }
 
-  private settle(grant: GateGrant, outcome: AttemptOutcome): SendAction {
+  private settle(grant: GateGrant, outcome: AttemptOutcome, problem: LoginProblem | null): SendAction {
     const oppId = grant.opportunity.id
     const now = this.store.now()
     this.core.db.transaction(() => {
@@ -158,13 +211,20 @@ export class SendingFlow implements SendingService {
         this.store.updateOpportunity(oppId, { state: 'confirmed', reason: '' })
       } else if (outcome.kind === 'failed') {
         this.core.db.prepare("UPDATE send_actions SET state = 'failed', completed_at = ?, error = ? WHERE id = ?").run(now, outcome.error, grant.actionId)
-        this.review.returnToReview(oppId, `Sending failed: ${outcome.error} Review it before trying again.`, { settlingAttempt: true })
+        if (problem) {
+          // Nothing was submitted and the content is unchanged, so the approval stays; the account is what needs the owner.
+          const what = problem === 'captcha' ? 'is waiting for a CAPTCHA' : 'is signed out'
+          this.store.updateOpportunity(oppId, { state: 'ready', reason: `Sending is paused: account "${grant.account.label}" ${what}. Fix it, then press Send.` })
+        } else {
+          this.review.returnToReview(oppId, `Sending failed: ${outcome.error} Review it before trying again.`, { settlingAttempt: true })
+        }
       } else {
         this.core.db.prepare("UPDATE send_actions SET state = 'unknown', completed_at = NULL, error = ? WHERE id = ?").run(outcome.error, grant.actionId)
         this.store.updateOpportunity(oppId, { state: 'unknown_result', reason: `${outcome.error} No new attempt is possible until this is reconciled with the platform.` })
       }
     })()
     if (outcome.kind === 'confirmed') this.markVerified(grant.channel.id, grant.opportunity.kind === 'standalone', outcome.url || outcome.externalId)
+    if (problem) this.watch.suspendAfterFailedSend(grant.channel, problem)
     const level = outcome.kind === 'confirmed' ? 'info' : 'warn'
     this.core.log.log(level, 'send', this.describe(grant, outcome), grant.channel.id)
     return this.core.repos.action(grant.actionId)
@@ -272,7 +332,9 @@ export class SendingFlow implements SendingService {
     const opp = this.store.requireOpportunity(action.opportunityId)
     const draft = this.core.repos.draft(action.draftId)
     const comment = opp.commentId ? this.store.comment(opp.commentId) : null
-    const request = buildPublishRequest(opp, draft, comment, action.destination)
+    // The connector must only match what was created at or after this attempt: an older, identical reply or post
+    // is not evidence that this one went out.
+    const request = { ...buildPublishRequest(opp, draft, comment, action.destination), attemptedAt: action.attemptedAt }
 
     let ref: PublishedRef | null
     try {
@@ -285,6 +347,13 @@ export class SendingFlow implements SendingService {
       return { action, status: error instanceof TakeoverError ? 'suspended' : 'failed', summary: detail }
     }
 
+    // A reference that already belongs to another confirmed send of this account is that other publication, not
+    // this attempt; treating it as a match would confirm something that may never have been published.
+    if (ref?.externalId && this.store.externalIdUsed(ref.externalId, action.accountId, action.id)) {
+      this.core.log.warn('reconcile', `Ignored a platform match (${ref.externalId}) that belongs to another confirmed send`, opp.channelId)
+      ref = null
+    }
+
     const now = this.store.now()
     if (ref) {
       this.core.db.transaction(() => {
@@ -293,7 +362,9 @@ export class SendingFlow implements SendingService {
           .run(now, ref.url || null, ref.externalId || null, action.id)
         this.store.updateOpportunity(opp.id, { state: 'confirmed', reason: '' })
       })()
-      this.markVerified(opp.channelId, opp.kind === 'standalone', ref.url || ref.externalId)
+      // Capabilities are proven by a direct confirmed send. A reconciled match only counts when the connector
+      // pointed at one specific, previously unused platform object.
+      if (ref.externalId) this.markVerified(opp.channelId, opp.kind === 'standalone', ref.url || ref.externalId)
       this.core.log.info('reconcile', `Found the publication on the platform: ${ref.url}`, opp.channelId)
       return { action: this.core.repos.action(action.id), status: 'ok', summary: `Found on the platform: ${ref.url}` }
     }
@@ -329,17 +400,77 @@ export class SendingFlow implements SendingService {
     return resolved
   }
 
+  // ───────────── the owner settles an unknown result ─────────────
+
+  /**
+   * The owner looked at the platform themselves. Without this an unreachable platform check (login expired, site
+   * down) would lock the item forever. 'published' records the send as confirmed by the owner; 'not_published'
+   * closes the attempt as failed and returns the item to review: a new attempt needs a fresh approval.
+   */
+  async resolveUnknown(opportunityId: Id, outcome: 'published' | 'not_published', url?: string): Promise<SendAction> {
+    const opp = this.store.requireOpportunity(opportunityId)
+    const channel = this.store.requireChannel(opp.channelId)
+    const link = url?.trim() || null
+    if (outcome !== 'published' && outcome !== 'not_published') throw new ApiError('invalid_input', 'The outcome must be "published" or "not_published".')
+    if (link && !isHttpUrl(link)) throw new ApiError('invalid_input', 'The link must be a full http(s) address.')
+
+    return this.locks.run(channel.accountId, async () => {
+      this.recoverInterrupted()
+      const action = this.store.unknownActions().find((a) => a.opportunityId === opportunityId)
+      if (!action) throw new ApiError('invalid_state', 'Only an item whose last send has an unknown result can be settled this way.')
+      const now = this.store.now()
+      this.core.db.transaction(() => {
+        if (outcome === 'published') {
+          const info = this.core.db
+            .prepare("UPDATE send_actions SET state = 'confirmed', completed_at = ?, result_url = ?, result_external_id = NULL, authorization_basis = ?, error = NULL WHERE id = ? AND state = 'unknown'")
+            .run(now, link, `${action.authorizationBasis}; resolved by owner`, action.id)
+          if (info.changes !== 1) throw new ApiError('conflict', 'The result of this send was settled in the meantime.')
+          this.store.updateOpportunity(opportunityId, { state: 'confirmed', reason: '' })
+        } else {
+          const info = this.core.db.prepare("UPDATE send_actions SET state = 'failed', completed_at = ?, error = ? WHERE id = ? AND state = 'unknown'").run(now, OWNER_NOT_PUBLISHED_ERROR, action.id)
+          if (info.changes !== 1) throw new ApiError('conflict', 'The result of this send was settled in the meantime.')
+          this.review.returnToReview(opportunityId, 'You confirmed that the earlier attempt was not published. Review it and approve again to send.', { settlingAttempt: true })
+        }
+      })()
+      this.core.log.info(
+        'send',
+        outcome === 'published' ? `Owner confirmed that the unknown send ${action.id} was published${link ? ` (${link})` : ''}` : `Owner confirmed that the unknown send ${action.id} was not published`,
+        opp.channelId
+      )
+      this.store.notify()
+      return this.core.repos.action(action.id)
+    })
+  }
+
   // ───────────── scheduled standalone publications ─────────────
 
+  /**
+   * Sends approved publications whose planned time has come, without a click. Two guards keep that safe:
+   *  - only what was approved BEFORE its planned time is picked up: approving something whose time already passed
+   *    is the owner looking at it, and sending it is then the owner's Send, never an immediate side effect;
+   *  - one more than an hour late (the app was not running) goes back to review instead of going out stale.
+   */
   async sendDuePublications(): Promise<number> {
     // Scheduled publications go out without a click, so the global pause applies to them.
     if (this.core.settings.getRaw('automation.paused', false)) return 0
+    const nowMs = this.core.clock.now().getTime()
     const due = this.core.db
-      .prepare("SELECT id FROM opportunities WHERE kind = 'standalone' AND state = 'ready' AND scheduled_at IS NOT NULL AND scheduled_at <= ? ORDER BY scheduled_at, rowid")
-      .all(this.store.now()) as { id: string }[]
+      .prepare("SELECT id, scheduled_at AS at FROM opportunities WHERE kind = 'standalone' AND state = 'ready' AND scheduled_at IS NOT NULL AND scheduled_at <= ? ORDER BY scheduled_at, rowid")
+      .all(this.store.now()) as { id: string; at: string }[]
     let attempted = 0
-    for (const { id } of due) {
+    for (const { id, at } of due) {
       try {
+        const draft = this.core.repos.latestDraft(id)
+        const approval = draft ? this.core.repos.activeApproval(draft.id) : null
+        if (!approval) continue
+        const plannedMs = Date.parse(at)
+        if (Date.parse(approval.approvedAt) > plannedMs) continue
+        if (nowMs - plannedMs > SCHEDULE_GRACE_MS) {
+          this.review.returnToReview(id, SCHEDULE_MISSED_REASON)
+          this.core.log.warn('send', `Scheduled publication ${id} was ${Math.round((nowMs - plannedMs) / 60_000)} minutes late; returned to review`)
+          this.store.notify()
+          continue
+        }
         await this.send(id, { automatic: true })
         attempted++
       } catch (error) {
@@ -349,4 +480,3 @@ export class SendingFlow implements SendingService {
     return attempted
   }
 }
-

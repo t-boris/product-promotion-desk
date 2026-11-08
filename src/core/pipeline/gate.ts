@@ -10,7 +10,7 @@ import type { Core } from '../core'
 import { newId } from '../db/database'
 import { TakeoverError, type Connector, type ConnectorContext, type PublishRequest, type RemoteDiscussion, type SendTicket } from '../ports'
 import { attachmentProblem } from './attachments'
-import { commentBodyHash, contentHash } from './hash'
+import { commentBodyHash, contentHash, hashedIdentity } from './hash'
 import { autoCategoryOf, autoRuleId } from './modes'
 import { buildPublishRequest, publishCapability } from './request'
 import type { FlowStore } from './store'
@@ -74,9 +74,6 @@ const DAY_MS = 24 * HOUR_MS
 
 const block = (effect: GateEffect, code: string, ...reasons: string[]): GateBlock => ({ allowed: false, effect, code, reasons })
 
-/** Optional thread flags some connectors report; the port type does not carry them yet. */
-type ThreadFlags = RemoteDiscussion & { locked?: boolean; archived?: boolean }
-
 export class SendGate {
   constructor(
     private readonly core: Core,
@@ -116,7 +113,7 @@ export class SendGate {
     const draftNow = now.draft as Draft
     const approval = this.core.repos.activeApproval(draftNow.id) as Approval
     const destination = this.store.resolveDestination(opp, channel)
-    const hash = contentHash(draftNow, account.id, destination)
+    const hash = contentHash(draftNow, account, destination)
     const actionId = newId()
     const ticket = this.core.tickets.issue({ actionId, contentHash: hash, accountId: account.id, destination })
     return {
@@ -164,8 +161,14 @@ export class SendGate {
 
     // The approval covers the exact content, account and destination; recompute all of it from the current records.
     const destination = this.store.resolveDestination(opp, channel)
-    const hash = contentHash(draft, account.id, destination)
+    const hash = contentHash(draft, account, destination)
     if (approval.contentHash !== hash || approval.accountId !== account.id || approval.destination !== destination) {
+      // Say WHY when the only difference is who is signed in: the owner approved a reply for another login.
+      const approvedIdentity = this.store.approvalIdentity(approval.id)
+      const sameAsApproved = approval.accountId === account.id && approval.destination === destination && approval.contentHash === contentHash(draft, { id: account.id, identity: approvedIdentity }, destination)
+      if (sameAsApproved && hashedIdentity(approvedIdentity) !== hashedIdentity(account.identity)) {
+        return block('review', 'identity_changed', 'Approval no longer applies: the signed-in identity changed; approve again.')
+      }
       return block('review', 'approval_stale', 'The text, attachments, account or destination changed after approval. Review and approve again.')
     }
 
@@ -223,20 +226,25 @@ export class SendGate {
       return block('hold', 'thread_unreadable', `The current thread could not be read, so the reply was not sent: ${errorMessage(error)}`)
     }
     if (!remote) return block('cancel', 'thread_unavailable', 'The discussion is no longer available on the platform.')
-    const flags = remote as ThreadFlags
-    if (flags.locked === true || flags.archived === true) {
-      return block('cancel', 'thread_locked', `The discussion is ${flags.locked ? 'locked' : 'archived'}; new replies are not possible.`)
+    if (remote.locked === true || remote.archived === true) {
+      return block('cancel', 'thread_locked', `The discussion is ${remote.locked ? 'locked' : 'archived'}; new replies are not possible.`)
     }
 
     const target = remote.comments.find((c) => c.externalId === comment.externalId)
-    if (!target) return block('cancel', 'comment_gone', 'The comment you are replying to was removed from the discussion.')
 
     // A reply by this account under the comment - including one the owner typed by hand - means the job is done.
+    // Evidence of a reply is conclusive even in a partial snapshot; only the ABSENCE of one is not.
     const identity = normalizeIdentity(s.account.identity)
     const remoteReply = identity !== '' && remote.comments.some((c) => c.parentExternalId === comment.externalId && normalizeIdentity(c.author) === identity)
     if (remoteReply || this.store.ownReplyUnder(s.channel.id, comment.externalId)) {
       return block('cancel', 'already_replied', 'You already replied to this comment (found under it on the platform), so the application did not send another reply.')
     }
+
+    // The connector could not read the whole thread (collapsed "load more" parts): "no reply found" proves nothing.
+    if (remote.incomplete === true) {
+      return block('hold', 'thread_incomplete', 'The thread is too large to check for an existing reply, so the reply was not sent. Check the thread yourself and send it manually if no reply exists.')
+    }
+    if (!target) return block('cancel', 'comment_gone', 'The comment you are replying to was removed from the discussion.')
 
     if (commentBodyHash(target.body) !== comment.contentHash) {
       return { ...block('review', 'comment_changed', 'The comment changed after the draft was prepared. Review the reply against the new text.'), thread: remote }
@@ -246,6 +254,12 @@ export class SendGate {
 
   // ───────────── (d) limits, aggregated per account ─────────────
 
+  /**
+   * A channel's perHour/perDay is the budget of the ACCOUNT it posts with, not of the channel alone: this
+   * channel's limit is compared with the number of sends made by the account across ALL its channels. Channels
+   * that share an account therefore share one budget, and each channel's own limit is the ceiling it is
+   * measured against. That keeps one real login within the platform's tolerance.
+   */
   private checkLimits(s: Snapshot): GateBlock | null {
     const { channel, account } = s
     const now = this.core.clock.now().getTime()

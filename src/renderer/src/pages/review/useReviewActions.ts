@@ -15,6 +15,8 @@ export interface ReviewActions {
   defer(id: Id): Promise<OpportunityCard | undefined>
   send(id: Id): Promise<OpportunityCard | undefined>
   reconcile(id: Id): Promise<OpportunityCard | undefined>
+  /** The owner checked the platform themselves and settles an unknown result. */
+  resolveUnknown(id: Id, outcome: 'published' | 'not_published', url?: string): Promise<OpportunityCard | undefined>
   schedule(id: Id, at: IsoTime | null): Promise<OpportunityCard | undefined>
 }
 
@@ -49,6 +51,7 @@ export function useReviewActions(onDone?: (card: OpportunityCard) => void): Revi
     defer: (id) => perform(() => call('opportunities.defer', { id })),
     send: (id) => perform(() => call('opportunities.send', { id })),
     reconcile: (id) => perform(() => call('opportunities.reconcile', { id })),
+    resolveUnknown: (id, outcome, url) => perform(() => call('opportunities.resolveUnknown', { id, outcome, url: url || undefined })),
     schedule: (id, at) => perform(() => call('publications.schedule', { id, at }))
   }
 }

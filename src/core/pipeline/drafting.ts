@@ -13,10 +13,10 @@ import type { Channel, Id, Opportunity, OpportunityState } from '../../shared/ty
 import type { Core } from '../core'
 import { AiError } from '../ports'
 import type { DraftingService } from '../services'
-import { buildReplyContext, type ReplyContext } from './context'
+import { buildReplyContext, loadKnowledge, type Knowledge, type ReplyContext } from './context'
 import { buildReplyPrompt, parseReplyProposal, REPLY_LABEL, REPLY_SYSTEM, type ReplyProposal } from './draft-prompt'
 import { SendBlockedError } from './gate'
-import { autoEligibility } from './modes'
+import { autoEligibility, TOOL_FREE_REQUIRED_REASON } from './modes'
 import type { ReviewFlow } from './review'
 import { allowedHostsFor, checkDraftSafety } from './safety'
 import type { SendingFlow } from './sending'
@@ -112,6 +112,10 @@ export class DraftingFlow implements DraftingService {
         this.review.returnToReview(opp.id, 'The channel is no longer in automatic mode; review this reply.')
         continue
       }
+      if (!this.core.engines.selected()?.toolFree) {
+        this.review.returnToReview(opp.id, TOOL_FREE_REQUIRED_REASON)
+        continue
+      }
       if (this.core.clock.now().getTime() - Date.parse(approval.approvedAt) > AUTO_HOLD_MAX_MS) {
         this.review.returnToReview(opp.id, 'The automatic reply waited too long to be sent; review it again.')
         continue
@@ -165,8 +169,11 @@ export class DraftingFlow implements DraftingService {
     if (ctx.knowledge.approved.length === 0) return this.toNeedsUser(id, NO_KNOWLEDGE_REASON)
 
     let raw: string
+    let toolFree: boolean
     try {
-      raw = await this.core.engines.require().run({ label: REPLY_LABEL, system: REPLY_SYSTEM, prompt: buildReplyPrompt(ctx), timeoutMs: AI_TIMEOUT_MS })
+      const engine = this.core.engines.require()
+      toolFree = engine.toolFree
+      raw = await engine.run({ label: REPLY_LABEL, system: REPLY_SYSTEM, prompt: buildReplyPrompt(ctx), timeoutMs: AI_TIMEOUT_MS })
     } catch (error) {
       const why = error instanceof AiError ? `${error.kind}: ${error.message}` : errorMessage(error)
       return this.toNeedsUser(id, `AI drafting is not available (${why}). Write the reply yourself or try again later.`)
@@ -186,6 +193,15 @@ export class DraftingFlow implements DraftingService {
       return 'skipped'
     }
 
+    // The facts may have changed while the AI was working (a new passport version, a claim withdrawn): a draft built
+    // on the old ones is dropped and prepared again, never saved or sent.
+    const fresh = loadKnowledge(this.core, opp.productId)
+    if (this.knowledgeChanged(ctx.knowledge, fresh, proposal.usedClaimIds)) {
+      this.store.transition(id, ['analyzing'], 'discovered', 'Product knowledge changed while the draft was being prepared; it will be prepared again.')
+      return 'skipped'
+    }
+    ctx = { ...ctx, knowledge: fresh }
+
     this.store.updateOpportunity(id, { category: proposal.category, decision: proposal.decision })
     switch (proposal.decision) {
       case 'ignore': {
@@ -197,11 +213,23 @@ export class DraftingFlow implements DraftingService {
       case 'handoff':
         return this.toNeedsUser(id, `Handed over to you without a draft: ${proposal.rationale || 'this needs your own answer.'}`)
       default:
-        return this.applyReply(opp, channel, ctx, proposal, explicit)
+        return this.applyReply(opp, channel, ctx, proposal, explicit, toolFree)
     }
   }
 
-  private async applyReply(opp: Opportunity, channel: Channel, ctx: ReplyContext, proposal: ReplyProposal, explicit: boolean): Promise<PrepareOutcome> {
+  /** The knowledge the AI worked from is no longer current: another version, or a cited claim edited or withdrawn. */
+  private knowledgeChanged(before: Knowledge, now: Knowledge, citedIds: string[]): boolean {
+    if (before.versionId !== now.versionId) return true
+    const current = new Map(now.approved.map((c) => [c.id, c]))
+    return citedIds.some((id) => {
+      const then = before.approved.find((c) => c.id === id)
+      if (!then) return false // an unknown id is the safety checks' business
+      const claim = current.get(id)
+      return !claim || claim.text !== then.text || claim.lineageId !== then.lineageId
+    })
+  }
+
+  private async applyReply(opp: Opportunity, channel: Channel, ctx: ReplyContext, proposal: ReplyProposal, explicit: boolean, engineToolFree: boolean): Promise<PrepareOutcome> {
     const { knowledge } = ctx
     const report = checkDraftSafety({
       text: proposal.reply,
@@ -218,12 +246,13 @@ export class DraftingFlow implements DraftingService {
 
     const eligibility =
       channel.mode === 'auto' && !explicit
-        ? autoEligibility({ channel, category: proposal.category, decision: proposal.decision, commentBody: ctx.comment.body, reply: proposal.reply, usedClaimIds: proposal.usedClaimIds, approved: knowledge.approved })
+        ? autoEligibility({ channel, category: proposal.category, decision: proposal.decision, commentBody: ctx.comment.body, reply: proposal.reply, usedClaimIds: proposal.usedClaimIds, approved: knowledge.approved, engineToolFree })
         : null
     // Safe defaults: a draft in 'draft' mode stays a draft; everything else waits for approval.
     const mode = explicit ? (channel.mode === 'draft' || channel.mode === 'observe' ? 'draft' : 'approval') : channel.mode
     const target: OpportunityState = mode === 'draft' ? 'draft' : 'awaiting_approval'
-    const reason = eligibility && !eligibility.eligible ? `Waiting for your approval, not sent automatically: ${eligibility.why}.` : ''
+    const reason =
+      eligibility && !eligibility.eligible ? (eligibility.why === TOOL_FREE_REQUIRED_REASON ? TOOL_FREE_REQUIRED_REASON : `Waiting for your approval, not sent automatically: ${eligibility.why}.`) : ''
 
     const saved = this.core.db.transaction(() => {
       if (!this.store.transition(opp.id, ['analyzing'], target, reason)) return null // the owner acted meanwhile
@@ -251,8 +280,9 @@ export class DraftingFlow implements DraftingService {
   /** Sends an automatically approved reply through the same path and gate as a manual send. */
   private async autoSend(opportunityId: Id): Promise<'auto_sent' | 'held'> {
     try {
-      await this.sending.send(opportunityId, { automatic: true })
-      return 'auto_sent'
+      const action = await this.sending.send(opportunityId, { automatic: true })
+      // A definite failure was not sent; the sender has already put the item where the owner will see it.
+      return action.state === 'failed' ? 'held' : 'auto_sent'
     } catch (error) {
       if (error instanceof SendBlockedError) {
         // 'hold': stays approved and is retried on the next pass. 'review'/'cancel' were applied by the sender.

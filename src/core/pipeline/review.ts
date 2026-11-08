@@ -10,15 +10,18 @@ import type { PipelineHooks } from '../services'
 import type { Core } from '../core'
 import { attachmentProblem } from './attachments'
 import { normalizeDraftInput } from './draft-input'
-import { contentHash } from './hash'
+import { contentHash, hashedIdentity } from './hash'
 import { SEND_LOCKED_STATES, type FlowStore } from './store'
 
 export const FACTS_CHANGED_REASON = 'Product facts changed; review again'
 
 /** States from which the owner may approve the latest draft. */
 const APPROVABLE: OpportunityState[] = ['draft', 'awaiting_approval', 'ready', 'deferred', 'needs_user', 'error', 'no_reply']
-/** States holding content that may be waiting for a send and therefore depends on product facts. */
-const FACT_DEPENDENT: OpportunityState[] = ['draft', 'awaiting_approval', 'ready', 'deferred']
+/**
+ * States holding content that may be waiting for a send and therefore depends on product facts. 'analyzing' is
+ * included because the AI call in flight reads the old facts: its result is dropped and the item is prepared again.
+ */
+const FACT_DEPENDENT: OpportunityState[] = ['analyzing', 'draft', 'awaiting_approval', 'ready', 'deferred']
 
 export class ReviewFlow implements PipelineHooks {
   constructor(
@@ -33,10 +36,11 @@ export class ReviewFlow implements PipelineHooks {
   }
 
   /** The content hash for the latest draft as it stands now (used when approving and by the SendGate). */
-  currentHash(opp: Opportunity, draft: Draft): { hash: string; accountId: Id; destination: string } {
+  currentHash(opp: Opportunity, draft: Draft): { hash: string; accountId: Id; identity: string | null; destination: string } {
     const channel = this.store.requireChannel(opp.channelId)
+    const account = this.core.repos.account(channel.accountId)
     const destination = this.store.resolveDestination(opp, channel)
-    return { hash: contentHash(draft, channel.accountId, destination), accountId: channel.accountId, destination }
+    return { hash: contentHash(draft, account, destination), accountId: account.id, identity: hashedIdentity(account.identity), destination }
   }
 
   /**
@@ -88,14 +92,17 @@ export class ReviewFlow implements PipelineHooks {
       if (!APPROVABLE.includes(current.state)) throw new ApiError('invalid_state', `This item cannot be approved while it is "${current.state}".`)
       const latest = this.core.repos.latestDraft(id)
       if (!latest || latest.id !== draft.id) throw new ApiError('conflict', 'The draft changed while you were approving. Review it again.')
-      const { hash, accountId, destination } = this.currentHash(current, latest)
+      const { hash, accountId, identity, destination } = this.currentHash(current, latest)
       const existing = this.core.repos.activeApproval(latest.id)
       const reusable = existing && existing.approvedBy === 'user' && existing.contentHash === hash && existing.accountId === accountId && existing.destination === destination
       if (!reusable) {
         if (existing) this.store.invalidateApprovals(id, 'Superseded by a new approval')
-        this.store.insertApproval({ draftId: latest.id, contentHash: hash, accountId, destination, approvedBy: 'user', ruleId: null })
+        this.store.insertApproval({ draftId: latest.id, contentHash: hash, accountId, identity, destination, approvedBy: 'user', ruleId: null })
       }
-      this.store.updateOpportunity(id, { state: 'ready', reason: '' })
+      // Approving never publishes by itself. A publication whose planned time is already behind us is not picked
+      // up by the scheduler either (it only sends what was approved before its time): the owner presses Send.
+      const lateSchedule = current.kind === 'standalone' && current.scheduledAt !== null && Date.parse(current.scheduledAt) <= this.core.clock.now().getTime()
+      this.store.updateOpportunity(id, { state: 'ready', reason: lateSchedule ? 'The scheduled time has already passed; press Send to publish it now.' : '' })
     })()
     this.store.notify()
     return this.store.requireOpportunity(id)
@@ -108,9 +115,9 @@ export class ReviewFlow implements PipelineHooks {
   createAutoApproval(id: Id, draft: Draft, ruleId: string): Approval {
     return this.core.db.transaction(() => {
       const opp = this.store.requireOpportunity(id)
-      const { hash, accountId, destination } = this.currentHash(opp, draft)
+      const { hash, accountId, identity, destination } = this.currentHash(opp, draft)
       this.store.invalidateApprovals(id, 'Superseded by an automatic approval')
-      const approval = this.store.insertApproval({ draftId: draft.id, contentHash: hash, accountId, destination, approvedBy: 'auto_rule', ruleId })
+      const approval = this.store.insertApproval({ draftId: draft.id, contentHash: hash, accountId, identity, destination, approvedBy: 'auto_rule', ruleId })
       this.store.updateOpportunity(id, { state: 'ready', reason: `Approved automatically by rule ${ruleId}` })
       return approval
     })()
@@ -164,8 +171,11 @@ export class ReviewFlow implements PipelineHooks {
       let count = 0
       for (const opp of this.store.list({ states: FACT_DEPENDENT, limit: 10_000 })) {
         if (opp.productId !== productId) continue
-        const draft = this.core.repos.latestDraft(opp.id)
-        if (!draft || !draft.usedClaimLineageIds.some((lineage) => changed.has(lineage))) continue
+        // The lineage of what an in-flight draft will cite is not known yet, so every analysis of the product restarts.
+        if (opp.state !== 'analyzing') {
+          const draft = this.core.repos.latestDraft(opp.id)
+          if (!draft || !draft.usedClaimLineageIds.some((lineage) => changed.has(lineage))) continue
+        }
         this.returnToReview(opp.id, FACTS_CHANGED_REASON)
         count++
       }

@@ -46,7 +46,7 @@ describe('SendGate (a): approval is bound to the exact content, account and dest
     expect(decision.allowed).toBe(true)
     if (!decision.allowed) return
     const draft = world.core.repos.latestDraft(opp.id)!
-    expect(decision.ticket.contentHash).toBe(contentHash(draft, world.account.id, commentOf(opp).url))
+    expect(decision.ticket.contentHash).toBe(contentHash(draft, world.account, commentOf(opp).url))
     expect(decision.ticket.accountId).toBe(world.account.id)
     expect(decision.ticket.destination).toBe(commentOf(opp).url)
     expect(decision.authorizationBasis).toMatch(/^user approval /)
@@ -123,7 +123,7 @@ describe('SendGate (a): approval is bound to the exact content, account and dest
     world.core.db.prepare("UPDATE opportunities SET category = 'thanks' WHERE id = ?").run(opp.id)
     await world.core.router.call('opportunities.saveDraft', { id: opp.id, draft: { text: 'Thank you!' } })
     const draft = world.core.repos.latestDraft(opp.id)!
-    world.store.insertApproval({ draftId: draft.id, contentHash: contentHash(draft, world.account.id, commentOf(opp).url), accountId: world.account.id, destination: commentOf(opp).url, approvedBy: 'auto_rule', ruleId: 'auto:thanks:v1' })
+    world.store.insertApproval({ draftId: draft.id, contentHash: contentHash(draft, world.account, commentOf(opp).url), accountId: world.account.id, identity: world.account.identity, destination: commentOf(opp).url, approvedBy: 'auto_rule', ruleId: 'auto:thanks:v1' })
     world.store.updateOpportunity(opp.id, { state: 'ready' })
 
     const block = await sendBlocked(world.opportunity(opp.id), true)
@@ -137,7 +137,7 @@ describe('SendGate (a): approval is bound to the exact content, account and dest
     const created = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'Hello', text: 'A post' } })
     const opp = created.opportunity
     const draft = world.core.repos.latestDraft(opp.id)!
-    world.store.insertApproval({ draftId: draft.id, contentHash: contentHash(draft, world.account.id, world.channel.url), accountId: world.account.id, destination: world.channel.url, approvedBy: 'auto_rule', ruleId: 'auto:thanks:v1' })
+    world.store.insertApproval({ draftId: draft.id, contentHash: contentHash(draft, world.account, world.channel.url), accountId: world.account.id, identity: world.account.identity, destination: world.channel.url, approvedBy: 'auto_rule', ruleId: 'auto:thanks:v1' })
     world.store.updateOpportunity(opp.id, { state: 'ready' })
 
     const block = await sendBlocked(world.opportunity(opp.id), true)
@@ -656,24 +656,31 @@ describe('standalone publications (REQ-003 criterion 5)', () => {
     expect(request.link).toBe('https://natalmystic.com')
   })
 
+  /** A publication approved BEFORE its planned time, as the scheduler expects. */
+  const scheduledAndApproved = async (title: string, minutesAhead: number) => {
+    const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title, text: `${title} body` } })
+    await world.core.router.call('publications.schedule', { id: opportunity.id, at: new Date(world.clock.now().getTime() + minutesAhead * 60_000).toISOString() })
+    await world.core.router.call('opportunities.approve', { id: opportunity.id })
+    return opportunity
+  }
+
   it('sendDuePublications sends approved, due publications and nothing else', async () => {
     world = makeWorld()
+    const due = await scheduledAndApproved('due', 5)
+    const future = await scheduledAndApproved('future', 120)
     const create = async (title: string) => (await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title, text: `${title} body` } })).opportunity
-    const due = await create('due')
-    const future = await create('future')
     const unapproved = await create('unapproved')
+    await world.core.router.call('publications.schedule', { id: unapproved.id, at: new Date(world.clock.now().getTime() + 5 * 60_000).toISOString() })
     const unscheduled = await create('unscheduled')
-    const now = world.clock.now().getTime()
-    for (const [opp, at] of [[due, now - 1000], [future, now + 3_600_000], [unapproved, now - 1000]] as const) {
-      await world.core.router.call('publications.schedule', { id: opp.id, at: new Date(at).toISOString() })
-    }
-    for (const opp of [due, future, unscheduled]) await world.core.router.call('opportunities.approve', { id: opp.id })
+    await world.core.router.call('opportunities.approve', { id: unscheduled.id })
 
+    world.clock.advance(10 * 60_000)
     expect(await sending().sendDuePublications()).toBe(1)
 
     expect(world.connector.published.map((p) => p.request.title)).toEqual(['due'])
     expect(world.opportunity(due.id).state).toBe('confirmed')
     expect(world.opportunity(future.id).state).toBe('ready')
+    expect(world.opportunity(unapproved.id).state).toBe('draft')
 
     world.clock.advance(2 * 3_600_000)
     expect(await sending().sendDuePublications()).toBe(1)
@@ -682,14 +689,9 @@ describe('standalone publications (REQ-003 criterion 5)', () => {
 
   it('sendDuePublications does nothing while automation is paused, and counts only real attempts', async () => {
     world = makeWorld({ settings: { limits: { perHour: 1, perDay: 5 } } })
-    const make = async (title: string) => {
-      const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title, text: 'b' } })
-      await world.core.router.call('publications.schedule', { id: opportunity.id, at: new Date(world.clock.now().getTime() - 1000).toISOString() })
-      await world.core.router.call('opportunities.approve', { id: opportunity.id })
-      return opportunity
-    }
-    await make('one')
-    await make('two')
+    await scheduledAndApproved('one', 5)
+    await scheduledAndApproved('two', 5)
+    world.clock.advance(10 * 60_000)
 
     world.core.settings.setRaw('automation.paused', true)
     expect(await sending().sendDuePublications()).toBe(0)
@@ -698,6 +700,471 @@ describe('standalone publications (REQ-003 criterion 5)', () => {
     world.core.settings.setRaw('automation.paused', false)
     expect(await sending().sendDuePublications()).toBe(1) // the second one is held back by the hourly limit
     expect(publishCalls()).toBe(1)
+  })
+
+  it('does not send a publication more than an hour past its planned time; it returns to review', async () => {
+    world = makeWorld()
+    const late = await scheduledAndApproved('late', 5)
+    const barelyOk = await scheduledAndApproved('barely ok', 10)
+
+    // The app was not running: now it is 61 minutes after 'late' and 56 after 'barely ok'.
+    world.clock.advance(66 * 60_000)
+    expect(await sending().sendDuePublications()).toBe(1)
+
+    expect(world.connector.published.map((p) => p.request.title)).toEqual(['barely ok'])
+    const after = world.opportunity(late.id)
+    expect(after.state).toBe('draft')
+    expect(after.reason).toBe('The scheduled time passed while the app was not running; confirm to send')
+    expect(world.card(late.id).approval).toBeNull()
+    expect(world.opportunity(barelyOk.id).state).toBe('confirmed')
+
+    // Nothing happens again for it: it waits for the owner, who confirms by approving and pressing Send.
+    expect(await sending().sendDuePublications()).toBe(0)
+    await world.core.router.call('opportunities.approve', { id: late.id })
+    expect(await sending().sendDuePublications()).toBe(0)
+    expect(publishCalls()).toBe(1)
+    expect((await sending().send(late.id)).state).toBe('confirmed')
+  })
+
+  it('approving a publication whose planned time has already passed does not publish it by itself', async () => {
+    world = makeWorld()
+    const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'Past', text: 'Body' } })
+    await world.core.router.call('publications.schedule', { id: opportunity.id, at: new Date(world.clock.now().getTime() - 5 * 60_000).toISOString() })
+
+    const card = await world.core.router.call('opportunities.approve', { id: opportunity.id })
+    expect(card.opportunity.state).toBe('ready')
+    expect(card.opportunity.reason).toMatch(/already passed; press Send/)
+
+    expect(await sending().sendDuePublications()).toBe(0)
+    world.clock.advance(5 * 60_000)
+    expect(await sending().sendDuePublications()).toBe(0)
+    expect(publishCalls()).toBe(0)
+
+    // The owner pressing Send is what publishes it.
+    expect((await world.core.router.call('opportunities.send', { id: opportunity.id })).opportunity.state).toBe('confirmed')
+    expect(publishCalls()).toBe(1)
+  })
+})
+
+describe('SendGate: the approval is bound to who is signed in', () => {
+  const setIdentity = (identity: string | null): void => void world.core.db.prepare('UPDATE accounts SET identity = ? WHERE id = ?').run(identity, world.account.id)
+
+  it('refuses to send after the signed-in identity changed, saying exactly why, and needs a new approval', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    const approvalId = world.card(opp.id).approval!.id
+    expect(world.store.approvalIdentity(approvalId)).toBe('brand_account')
+
+    setIdentity('someone_else')
+    const block = await sendBlocked(opp)
+
+    expect(block.code).toBe('identity_changed')
+    expect(block.effect).toBe('review')
+    expect(block.reasons.join(' ')).toContain('the signed-in identity changed; approve again')
+    expect(publishCalls()).toBe(0)
+    expect(world.opportunity(opp.id).state).toBe('awaiting_approval')
+    expect(world.card(opp.id).approval).toBeNull()
+
+    await world.core.router.call('opportunities.approve', { id: opp.id })
+    expect(world.store.approvalIdentity(world.card(opp.id).approval!.id)).toBe('someone_else')
+    expect((await sending().send(opp.id)).state).toBe('confirmed')
+  })
+
+  it('also refuses when the identity was lost, or confirmed after the approval was given without one', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    setIdentity(null)
+    expect((await sendBlocked(opp)).code).toBe('identity_changed')
+
+    // Approved while no identity was known; the identity then gets confirmed.
+    await world.core.router.call('opportunities.approve', { id: opp.id })
+    expect(world.store.approvalIdentity(world.card(opp.id).approval!.id)).toBeNull()
+    setIdentity('brand_account')
+    const block = await sendBlocked(opp)
+    expect(block.code).toBe('identity_changed')
+    expect(block.reasons.join(' ')).toContain('the signed-in identity changed; approve again')
+    expect(publishCalls()).toBe(0)
+  })
+
+  it('does not treat a different spelling of the same identity as a different login', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    setIdentity('u/BRAND_Account')
+    expect((await sending().send(opp.id)).state).toBe('confirmed')
+  })
+
+  it('keeps the generic reason when something else than the identity changed', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    world.core.db.prepare('UPDATE drafts SET text = ? WHERE opportunity_id = ?').run('sneaky different text', opp.id)
+    expect((await sendBlocked(opp)).code).toBe('approval_stale')
+  })
+
+  it('binds an automatic approval to the identity as well', async () => {
+    world = makeWorld({ mode: 'auto', settings: { autoCategories: ['thanks', 'faq'] } })
+    world.engine.on('draft.reply', JSON.stringify({ category: 'thanks', decision: 'reply', reply: 'Glad you like it, enjoy!', rationale: 'thanks', usedClaimIds: [] }))
+    const opp = await world.newOpportunity({ body: 'Thanks, great app!' })
+    world.core.settings.setRaw('automation.paused', true)
+    await world.drafting.processChannel(world.channel.id)
+    expect(world.opportunity(opp.id).state).toBe('ready')
+
+    setIdentity('someone_else')
+    world.core.settings.setRaw('automation.paused', false)
+    await world.drafting.processChannel(world.channel.id)
+
+    expect(publishCalls()).toBe(0)
+    expect(world.opportunity(opp.id).state).toBe('awaiting_approval')
+    expect(world.opportunity(opp.id).reason).toContain('the signed-in identity changed; approve again')
+  })
+})
+
+describe('SendGate (c): threads the connector could not read completely', () => {
+  it('holds the send instead of concluding that no reply exists', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    world.connector.markIncomplete('d1')
+
+    const block = await sendBlocked(opp)
+
+    expect(block.code).toBe('thread_incomplete')
+    expect(block.effect).toBe('hold')
+    expect(block.reasons.join(' ')).toContain('The thread is too large to check for an existing reply')
+    expect(publishCalls()).toBe(0)
+    expect(world.opportunity(opp.id).state).toBe('ready')
+    expect(world.card(opp.id).approval).not.toBeNull()
+  })
+
+  it('still stops when a reply of the account is visible in the part that was read', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    world.connector.markIncomplete('d1')
+    world.connector.addComment('d1', { externalId: 'manual', parentExternalId: commentOf(opp).externalId, author: 'Brand_Account' })
+    expect((await sendBlocked(opp)).code).toBe('already_replied')
+  })
+
+  it('does not cancel for a comment that is merely missing from a partial read, and sends once the thread reads fully', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    world.connector.markIncomplete('d1')
+    world.connector.removeComment('d1', commentOf(opp).externalId) // not visible in the partial snapshot
+    const block = await sendBlocked(opp)
+    expect(block.code).toBe('thread_incomplete')
+    expect(world.opportunity(opp.id).state).toBe('ready')
+
+    world.connector.incompleteDiscussions.clear()
+    world.connector.addComment('d1', { externalId: commentOf(opp).externalId, body: 'How does the natal chart work?' })
+    expect((await sending().send(opp.id)).state).toBe('confirmed')
+  })
+
+  it('holds automatic sends too, without spamming the owner', async () => {
+    world = makeWorld({ mode: 'auto', settings: { autoCategories: ['thanks', 'faq'] } })
+    world.engine.on('draft.reply', JSON.stringify({ category: 'thanks', decision: 'reply', reply: 'Glad you like it, enjoy!', rationale: 'thanks', usedClaimIds: [] }))
+    world.connector.addDiscussion({ externalId: 'd1' })
+    world.connector.markIncomplete('d1')
+    const opp = await world.newOpportunity({ body: 'Thanks, great app!' })
+    await world.drafting.processChannel(world.channel.id)
+    expect(world.opportunity(opp.id).state).toBe('ready')
+    expect(world.opportunity(opp.id).reason).toMatch(/too large to check/)
+    expect(publishCalls()).toBe(0)
+  })
+})
+
+describe('a send that fails because the account is not signed in (REQ-005)', () => {
+  const loginProblem = () => ({ loggedIn: false, identity: null, captcha: false })
+  const changes = (): string[] => {
+    const scopes: string[] = []
+    world.core.events.subscribe((e) => {
+      if (e.type === 'changed') scopes.push(e.scope)
+    })
+    return scopes
+  }
+
+  it('suspends the account and keeps the approved item instead of returning it to review on every tick', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    const scopes = changes()
+    world.connector.publishScript.push({ kind: 'fail', error: 'You are not signed in to the site' })
+    world.connector.login = loginProblem()
+
+    const action = await sending().send(opp.id)
+
+    expect(action.state).toBe('failed')
+    expect(world.core.repos.account(world.account.id).status).toBe('login_required')
+    expect(world.refresh().status).toBe('needs_user')
+    expect(world.refresh().statusDetail).toMatch(/signed out/)
+    expect(scopes).toEqual(expect.arrayContaining(['accounts', 'attention']))
+    const after = world.opportunity(opp.id)
+    expect(after.state).toBe('ready')
+    expect(after.reason).toMatch(/Sending is paused: account .* is signed out/)
+    expect(world.card(opp.id).approval).not.toBeNull()
+
+    // Later ticks do not try again, and nothing is sent until the owner has signed in.
+    for (let i = 0; i < 3; i++) expect((await sendBlocked(world.opportunity(opp.id))).code).toBe('unavailable')
+    expect(publishCalls()).toBe(1)
+
+    world.core.db.prepare("UPDATE accounts SET status = 'ready' WHERE id = ?").run(world.account.id)
+    world.connector.login = { loggedIn: true, identity: 'brand_account', captcha: false }
+    expect((await sending().send(opp.id)).state).toBe('confirmed')
+  })
+
+  it('recognises a CAPTCHA the same way', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    world.connector.publishScript.push({ kind: 'fail', error: 'CAPTCHA required before posting' })
+    world.connector.login = { loggedIn: true, identity: 'brand_account', captcha: true }
+    await sending().send(opp.id)
+    expect(world.core.repos.account(world.account.id).status).toBe('captcha')
+    expect(world.opportunity(opp.id).state).toBe('ready')
+  })
+
+  it('treats an exception named like a login problem as an unknown result AND suspends the account', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    world.connector.publishScript.push({ kind: 'throw', error: Object.assign(new Error('redirected'), { name: 'LoginRequiredError' }) })
+    world.connector.login = loginProblem()
+
+    const action = await sending().send(opp.id)
+
+    expect(action.state).toBe('unknown')
+    expect(world.opportunity(opp.id).state).toBe('unknown_result')
+    expect(world.core.repos.account(world.account.id).status).toBe('login_required')
+    expect(world.refresh().status).toBe('needs_user')
+  })
+
+  it('believes a login-sounding failure only when the login check agrees', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    world.connector.publishScript.push({ kind: 'fail', error: 'Session expired while posting' })
+
+    const action = await sending().send(opp.id) // the login check says the account is signed in
+
+    expect(action.state).toBe('failed')
+    expect(world.core.repos.account(world.account.id).status).toBe('ready')
+    expect(world.opportunity(opp.id).state).toBe('awaiting_approval')
+  })
+
+  it('does not look at the login for an ordinary failure', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    world.connector.publishScript.push({ kind: 'fail', error: 'Rate limit exceeded' })
+    const before = world.connector.calls.filter((c) => c === 'checkLogin').length
+    await sending().send(opp.id)
+    expect(world.connector.calls.filter((c) => c === 'checkLogin').length).toBe(before)
+    expect(world.opportunity(opp.id).state).toBe('awaiting_approval')
+  })
+})
+
+describe('reconciliation asks for the right thing and does not over-trust the answer', () => {
+  const verifiedKeys = (): string[] => {
+    const keys: string[] = []
+    world.core.services.channels = { markCapabilityVerified: (_id, key) => void keys.push(key) }
+    return keys
+  }
+
+  it('passes the time of the attempt so an older identical publication cannot be mistaken for it', async () => {
+    world = makeWorld()
+    world.connector.publishScript.push({ kind: 'unknown', visible: false })
+    const opp = await world.readyReply()
+    const first = await sending().send(opp.id)
+    const draft = world.core.repos.latestDraft(opp.id)!
+    // An earlier, identical publication of the same text exists on the platform.
+    world.connector.published.push({
+      request: { kind: 'reply', destination: first.destination, parentExternalId: null, title: null, text: draft.text, link: null, attachments: [] },
+      ticket: {} as never,
+      visible: true,
+      ref: { url: 'https://fake.test/older', externalId: 'older-1' },
+      createdAt: new Date(world.clock.now().getTime() - 3_600_000).toISOString()
+    })
+    world.clock.advance(60_000)
+
+    const after = await sending().reconcile(opp.id)
+
+    expect(world.connector.findPublishedRequests.at(-1)?.attemptedAt).toBe(first.attemptedAt)
+    expect(after?.state).toBe('unknown')
+    expect(world.opportunity(opp.id).state).toBe('unknown_result')
+  })
+
+  it('does not accept a match that is the result of another confirmed send', async () => {
+    world = makeWorld()
+    const sent = await world.readyReply()
+    const done = await sending().send(sent.id)
+    world.connector.publishScript.push({ kind: 'unknown', visible: false })
+    const pending = await world.readyReply({ text: 'A different reply entirely.' })
+    const attempt = await sending().send(pending.id)
+    world.connector.published.push({
+      request: { kind: 'reply', destination: attempt.destination, parentExternalId: null, title: null, text: 'A different reply entirely.', link: null, attachments: [] },
+      ticket: {} as never,
+      visible: true,
+      ref: { url: done.resultUrl as string, externalId: done.resultExternalId as string },
+      createdAt: new Date(world.clock.now().getTime() + 1000).toISOString()
+    })
+    world.clock.advance(60_000)
+
+    const after = await sending().reconcile(pending.id)
+
+    expect(after?.state).toBe('unknown')
+    expect(world.core.repos.lastAction(pending.id)?.state).toBe('unknown')
+  })
+
+  it('marks capabilities verified from a reconciled match only when it is a specific, unused platform object', async () => {
+    world = makeWorld()
+    const keys = verifiedKeys()
+    world.connector.publishScript.push({ kind: 'unknown', visible: true })
+    const opp = await world.readyReply()
+    await sending().send(opp.id)
+    expect(keys).toEqual([])
+
+    expect((await sending().reconcile(opp.id))?.state).toBe('confirmed')
+    expect(keys).toEqual(['publish_reply', 'verify_send'])
+  })
+
+  it('confirms a match without a platform id, but does not treat it as proof that the channel can publish', async () => {
+    world = makeWorld()
+    const keys = verifiedKeys()
+    world.connector.publishScript.push({ kind: 'unknown', visible: false })
+    const opp = await world.readyReply()
+    await sending().send(opp.id)
+    world.connector.findPublished = async () => ({ url: 'https://fake.test/some-link', externalId: '' })
+    world.clock.advance(60_000)
+
+    const after = await sending().reconcile(opp.id)
+
+    expect(after?.state).toBe('confirmed')
+    expect(after?.resultUrl).toBe('https://fake.test/some-link')
+    expect(keys).toEqual([])
+  })
+
+  it('still verifies the capabilities after a direct confirmed send', async () => {
+    world = makeWorld()
+    const keys = verifiedKeys()
+    await sending().send((await world.readyReply()).id)
+    expect(keys).toEqual(['publish_reply', 'verify_send'])
+  })
+})
+
+describe('the owner settles an unknown result (opportunities.resolveUnknown)', () => {
+  const unknownItem = async () => {
+    world.connector.publishScript.push({ kind: 'unknown', visible: false })
+    const opp = await world.readyReply()
+    const action = await sending().send(opp.id)
+    expect(action.state).toBe('unknown')
+    return { opp, action }
+  }
+  const logs = (): string[] => world.core.log.list(50).map((l) => l.message)
+
+  it('published: confirms the attempt with the given link, notes who resolved it, and logs it', async () => {
+    world = makeWorld()
+    const { opp, action } = await unknownItem()
+
+    const card = await world.core.router.call('opportunities.resolveUnknown', { id: opp.id, outcome: 'published', url: ' https://fake.test/r/test/comments/d1/mine ' })
+
+    expect(card.opportunity.state).toBe('confirmed')
+    expect(card.lastAction).toMatchObject({ id: action.id, state: 'confirmed', resultUrl: 'https://fake.test/r/test/comments/d1/mine', resultExternalId: null, error: null })
+    expect(card.lastAction?.authorizationBasis).toMatch(/^user approval .*; resolved by owner$/)
+    expect(card.lastAction?.completedAt).toBe(world.clock.now().toISOString())
+    expect(logs().some((m) => /Owner confirmed that the unknown send .* was published/.test(m))).toBe(true)
+    expect((await sendBlocked(world.opportunity(opp.id))).code).toBe('already_sent')
+    expect(publishCalls()).toBe(1)
+  })
+
+  it('published without a link is allowed', async () => {
+    world = makeWorld()
+    const { opp } = await unknownItem()
+    const card = await world.core.router.call('opportunities.resolveUnknown', { id: opp.id, outcome: 'published' })
+    expect(card.lastAction).toMatchObject({ state: 'confirmed', resultUrl: null })
+  })
+
+  it('not_published: fails the attempt with the owner\'s statement and returns the item to review; a fresh approval is required', async () => {
+    world = makeWorld()
+    const { opp, action } = await unknownItem()
+
+    const card = await world.core.router.call('opportunities.resolveUnknown', { id: opp.id, outcome: 'not_published' })
+
+    expect(card.lastAction).toMatchObject({ id: action.id, state: 'failed', error: 'Owner confirmed it was not published' })
+    expect(card.opportunity.state).toBe('awaiting_approval')
+    expect(card.opportunity.reason).toMatch(/not published/)
+    expect(card.approval).toBeNull()
+    expect(logs().some((m) => /Owner confirmed that the unknown send .* was not published/.test(m))).toBe(true)
+    expect((await sendBlocked(world.opportunity(opp.id))).code).toBe('not_ready')
+
+    await world.core.router.call('opportunities.approve', { id: opp.id })
+    expect((await sending().send(opp.id)).state).toBe('confirmed')
+    expect(publishCalls()).toBe(2)
+  })
+
+  it('also settles an attempt a stopped application left in "sending"', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    const draft = world.core.repos.latestDraft(opp.id)!
+    const approval = world.card(opp.id).approval!
+    world.core.db
+      .prepare(
+        `INSERT INTO send_actions (id, opportunity_id, draft_id, approval_id, content_hash, account_id, destination, state, attempted_at, authorization_basis)
+         VALUES ('crashed', ?, ?, ?, ?, ?, ?, 'sending', ?, 'user approval x')`
+      )
+      .run(opp.id, draft.id, approval.id, approval.contentHash, world.account.id, approval.destination, world.clock.now().toISOString())
+    world.store.updateOpportunity(opp.id, { state: 'sending' })
+
+    const card = await world.core.router.call('opportunities.resolveUnknown', { id: opp.id, outcome: 'not_published' })
+    expect(card.lastAction?.state).toBe('failed')
+  })
+
+  it.each([
+    ['an item that was never sent', async () => (await world.readyReply()).id],
+    ['an item that was already confirmed', async () => { const o = await world.readyReply(); await sending().send(o.id); return o.id }],
+    ['an item whose attempt failed', async () => { world.connector.publishScript.push({ kind: 'fail', error: 'Rate limit exceeded' }); const o = await world.readyReply(); await sending().send(o.id); return o.id }]
+  ])('refuses %s', async (_name, make) => {
+    world = makeWorld()
+    const id = await make()
+    await expect(world.core.router.call('opportunities.resolveUnknown', { id, outcome: 'published' })).rejects.toMatchObject({ code: 'invalid_state' })
+    await expect(world.core.router.call('opportunities.resolveUnknown', { id, outcome: 'not_published' })).rejects.toMatchObject({ code: 'invalid_state' })
+  })
+
+  it('refuses a link that is not an http(s) address and leaves the item unknown', async () => {
+    world = makeWorld()
+    const { opp } = await unknownItem()
+    await expect(world.core.router.call('opportunities.resolveUnknown', { id: opp.id, outcome: 'published', url: 'javascript:alert(1)' })).rejects.toMatchObject({ code: 'invalid_input' })
+    expect(world.opportunity(opp.id).state).toBe('unknown_result')
+  })
+
+  it('works even when the platform cannot be checked at all', async () => {
+    world = makeWorld()
+    const { opp } = await unknownItem()
+    world.connector.findPublishedError = new Error('login expired')
+    world.clock.advance(60 * 60_000)
+    expect((await sending().reconcile(opp.id))?.state).toBe('unknown')
+    expect((await world.core.router.call('opportunities.resolveUnknown', { id: opp.id, outcome: 'not_published' })).opportunity.state).toBe('awaiting_approval')
+  })
+})
+
+describe('limits are the account\'s budget, shared by all its channels (REQ-004 criterion 5)', () => {
+  it('compares each channel\'s own ceiling with what the whole account has sent', async () => {
+    world = makeWorld({ settings: { limits: { perHour: 5, perDay: 50 } } })
+    const strict = world.addChannel({ target: 'r/strict', settings: { limits: { perHour: 1, perDay: 50 } } })
+
+    expect((await sending().send((await world.readyReply()).id)).state).toBe('confirmed') // via the generous channel
+
+    // The strict channel has sent nothing itself, but the account already used its one allowed send there.
+    const blocked = await sendBlocked(await world.readyReply({ channel: strict }))
+    expect(blocked.code).toBe('limit_hour')
+    expect(blocked.reasons.join(' ')).toMatch(/1 send\(s\) across all its channels/)
+
+    // The generous channel keeps going: 1 of its 5.
+    expect((await sending().send((await world.readyReply()).id)).state).toBe('confirmed')
+    expect(publishCalls()).toBe(2)
+  })
+
+  it('an account of its own has its own budget', async () => {
+    world = makeWorld({ settings: { limits: { perHour: 1, perDay: 5 } } })
+    const other = world.addAccount({ label: 'Other', identity: 'other_acc' })
+    const separate = world.addChannel({ accountId: other.id, target: 'r/separate' })
+
+    expect((await sending().send((await world.readyReply()).id)).state).toBe('confirmed')
+    // The main account used up its hour; a second send from it is held back ...
+    expect((await sendBlocked(await world.readyReply())).code).toBe('limit_hour')
+    // ... while the other account has not sent anything yet.
+    expect((await sending().send((await world.readyReply({ channel: separate })).id)).state).toBe('confirmed')
+    expect(publishCalls()).toBe(2)
   })
 })
 

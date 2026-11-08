@@ -3,6 +3,7 @@ import { DraftingFlow } from './drafting'
 import { registerFlowApi } from './flow-api'
 import { SendGate } from './gate'
 import { Ingestor } from './ingest'
+import { LoginWatch } from './login-watch'
 import { MonitorFlow } from './monitor'
 import { PublicationsFlow } from './publications'
 import { ReviewFlow } from './review'
@@ -19,8 +20,9 @@ export function registerFlow(core: Core): void {
   const review = new ReviewFlow(core, store)
   const ingestor = new Ingestor(core, store, review)
   const gate = new SendGate(core, store)
-  const sending = new SendingFlow(core, store, gate, review, ingestor)
-  const monitor = new MonitorFlow(core, store, ingestor)
+  const watch = new LoginWatch(core, store)
+  const sending = new SendingFlow(core, store, gate, review, ingestor, watch)
+  const monitor = new MonitorFlow(core, store, ingestor, watch)
   const drafting = new DraftingFlow(core, store, review, sending)
   const publications = new PublicationsFlow(core, store)
 

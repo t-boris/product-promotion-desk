@@ -131,7 +131,7 @@ describe('approve, reject and defer', () => {
     expect(card.approval?.ruleId).toBeNull()
     expect(card.approval?.accountId).toBe(world.account.id)
     expect(card.approval?.destination).toBe(destination)
-    expect(card.approval?.contentHash).toBe(contentHash(draft, world.account.id, destination))
+    expect(card.approval?.contentHash).toBe(contentHash(draft, world.account, destination))
     expect(card.opportunity.state).toBe('ready')
   })
 
@@ -147,7 +147,7 @@ describe('approve, reject and defer', () => {
     world = makeWorld()
     const opp = await world.readyReply()
     const draft = world.core.repos.latestDraft(opp.id)!
-    expect(() => world.store.insertApproval({ draftId: draft.id, contentHash: 'x', accountId: world.account.id, destination: 'd', approvedBy: 'user', ruleId: null })).toThrow(/UNIQUE/)
+    expect(() => world.store.insertApproval({ draftId: draft.id, contentHash: 'x', accountId: world.account.id, identity: null, destination: 'd', approvedBy: 'user', ruleId: null })).toThrow(/UNIQUE/)
   })
 
   it('needs a draft, and a freshly discovered item cannot be approved at all', async () => {

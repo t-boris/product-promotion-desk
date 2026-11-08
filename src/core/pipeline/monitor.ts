@@ -9,6 +9,7 @@ import type { Core } from '../core'
 import { TakeoverError, type Connector, type ConnectorContext } from '../ports'
 import type { MonitorOutcome, MonitorService } from '../services'
 import type { Ingestor } from './ingest'
+import type { LoginWatch } from './login-watch'
 import type { FlowStore } from './store'
 import { errorMessage, minutesFrom } from './util'
 
@@ -25,7 +26,8 @@ export class MonitorFlow implements MonitorService {
   constructor(
     private readonly core: Core,
     private readonly store: FlowStore,
-    private readonly ingestor: Ingestor
+    private readonly ingestor: Ingestor,
+    private readonly watch: LoginWatch
   ) {}
 
   async runChannel(channelId: string): Promise<MonitorOutcome> {
@@ -64,6 +66,15 @@ export class MonitorFlow implements MonitorService {
       ;({ connector, ctx } = this.core.connectorContext(channelId))
     } catch (error) {
       return this.fail(channel, errorMessage(error))
+    }
+
+    // Reading works without a login, so an expired session would only show up when a reply is about to go out.
+    // Channels that can send therefore check the login now and then (throttled per account).
+    if (channel.mode === 'approval' || channel.mode === 'auto') {
+      const verdict = await this.watch.checkIfDue(connector, ctx, account.id)
+      if (verdict === 'takeover') return this.suspend(channel, 'You are controlling the browser; the check resumes when you hand it back')
+      if (verdict === 'login') return this.suspend(channel, `Account "${account.label}" is signed out: sign in again to resume`, 'login_required')
+      if (verdict === 'captcha') return this.suspend(channel, `The site asks for a CAPTCHA on account "${account.label}": solve it to resume`, 'captcha')
     }
 
     let discussions
@@ -126,15 +137,11 @@ export class MonitorFlow implements MonitorService {
       lastRunAt: now.toISOString(),
       nextCheckAt: minutesFrom(now, channel.settings.checkIntervalMin)
     })
-    if (accountStatus) this.setAccountStatus(channel.accountId, accountStatus)
+    if (accountStatus) this.watch.setAccountStatus(channel.accountId, accountStatus)
     this.core.events.changed('attention')
     return { status: 'suspended', summary: detail, newOpportunities: 0 }
   }
 
-  private setAccountStatus(accountId: string, status: AccountStatus): void {
-    this.core.db.prepare('UPDATE accounts SET status = ? WHERE id = ?').run(status, accountId)
-    this.core.events.changed('accounts')
-  }
 
   // ───────────── error classification ─────────────
 

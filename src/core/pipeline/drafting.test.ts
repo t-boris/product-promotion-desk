@@ -551,6 +551,200 @@ describe('explicit draft preparation (opportunities.prepareDraft)', () => {
   })
 })
 
+describe('automatic replies do not lean on the AI\'s own label (REQ-003 criterion 4)', () => {
+  const SPANISH_REFUND = 'Quiero que me devuelvan mi dinero ahora mismo'
+  type Case = { name: string; comment: string; answer: string; state: 'awaiting_approval' | 'needs_user'; reason: RegExp }
+  const thanks = (text: string, extra: Partial<Parameters<typeof reply>[0]> = {}) => reply({ category: 'thanks', reply: text, rationale: 'thanks', usedClaimIds: [], ...extra })
+  const cases: Case[] = [
+    { name: 'a shortened link in a thank-you', comment: 'Thanks, great app!', answer: thanks('Glad you like it! More at bit.ly/x'), state: 'awaiting_approval', reason: /link, an address or a mention/ },
+    { name: 'a bare domain in a factual answer', comment: 'Does it work on Android?', answer: reply({ reply: 'Visit example.co for Android and iPhone', usedClaimIds: ['c2'] }), state: 'needs_user', reason: /example\.co/ },
+    { name: 'an amount in a thank-you', comment: 'Thanks a lot!', answer: thanks('Glad you like it, only $5 a month!'), state: 'needs_user', reason: /price/ },
+    { name: 'a digit in a thank-you', comment: 'Thanks a lot!', answer: thanks('Glad you like it, enjoy version 2'), state: 'awaiting_approval', reason: /number or an amount/ },
+    { name: 'an answer the cited claim does not support', comment: 'Does it work on Android?', answer: reply({ reply: 'It works on Android and gives lifelong coaching sessions', usedClaimIds: ['c2'] }), state: 'awaiting_approval', reason: /goes beyond what the cited claims say/ },
+    { name: 'a non-English answer with no overlap with the (English) claims', comment: SPANISH_REFUND, answer: reply({ category: 'product_question', reply: 'Le devolveremos su dinero hoy mismo', usedClaimIds: ['c2'] }), state: 'awaiting_approval', reason: /goes beyond what the cited claims say/ },
+    { name: 'a comment that contains a link', comment: 'Does it work on Android? See https://rival.example/app', answer: reply({ reply: 'It works on iPhone and Android.', usedClaimIds: ['c2'] }), state: 'awaiting_approval', reason: /comment contains a link/ },
+    { name: 'a very long comment', comment: `Does it work on Android? ${'And I have lots more to say about it. '.repeat(25)}`, answer: reply({ reply: 'It works on iPhone and Android.', usedClaimIds: ['c2'] }), state: 'awaiting_approval', reason: /comment is long/ },
+    { name: 'a thank-you for a comment that asks something', comment: 'Thanks! Can you also cancel my order?', answer: thanks('Glad you like it!'), state: 'awaiting_approval', reason: /asks a question|sensitive/ },
+    { name: 'a thank-you that cites product facts', comment: 'Thanks, nice!', answer: thanks('Glad you like it, it works on iPhone and Android', { usedClaimIds: ['c2'] }), state: 'awaiting_approval', reason: /plain thank-you/ }
+  ]
+
+  it.each(cases)('keeps $name away from the platform', async ({ comment, answer, state, reason }) => {
+    world = makeWorld(AUTO)
+    world.engine.on('draft.reply', answer)
+    const opp = await discovered(comment)
+
+    await world.drafting.processChannel(world.channel.id)
+
+    const after = world.opportunity(opp.id)
+    expect(publishCalls()).toBe(0)
+    expect(after.state).toBe(state)
+    expect(after.reason).toMatch(reason)
+    expect(world.card(opp.id).approval).toBeNull()
+  })
+
+  it('still sends the plain cases, so the guards do not just block everything', async () => {
+    world = makeWorld(AUTO)
+    world.engine.on('draft.reply', thanks('Glad you like it, enjoy!'))
+    const a = await discovered('Thanks, great app!')
+    world.engine.on('draft.reply', reply({ reply: 'It works on iPhone and Android.', usedClaimIds: ['c2'] }))
+    const b = await discovered('Does it work on Android?')
+    // Distinct drafting passes: the script is per label, so run them one after the other.
+    world.engine.on('draft.reply', (task) => (task.prompt.includes('Thanks, great app!') ? thanks('Glad you like it, enjoy!') : reply({ reply: 'It works on iPhone and Android.', usedClaimIds: ['c2'] })))
+    await world.drafting.processChannel(world.channel.id)
+    expect(world.opportunity(a.id).state).toBe('confirmed')
+    expect(world.opportunity(b.id).state).toBe('confirmed')
+  })
+})
+
+describe('automatic replies need a tool-free engine', () => {
+  const REASON = 'Automatic replies need a tool-free AI engine; the selected engine can use tools, so this reply waits for you'
+  const thanksAnswer = reply({ category: 'thanks', reply: 'Glad you like it, enjoy!', rationale: 'thanks', usedClaimIds: [] })
+
+  it('queues an otherwise eligible reply for approval when the engine can use tools', async () => {
+    world = makeWorld(AUTO)
+    world.engine.toolFree = false
+    world.engine.on('draft.reply', thanksAnswer)
+    const opp = await discovered('Thanks, great app!')
+
+    const summary = await world.drafting.processChannel(world.channel.id)
+
+    expect(summary).toEqual({ prepared: 1, autoSent: 0, needsUser: 0 })
+    expect(publishCalls()).toBe(0)
+    const after = world.opportunity(opp.id)
+    expect(after.state).toBe('awaiting_approval')
+    expect(after.reason).toBe(REASON)
+    expect(world.card(opp.id).approval).toBeNull()
+  })
+
+  it('sends the very same reply when the engine is tool-free', async () => {
+    world = makeWorld(AUTO)
+    world.engine.on('draft.reply', thanksAnswer)
+    const opp = await discovered('Thanks, great app!')
+    await world.drafting.processChannel(world.channel.id)
+    expect(world.opportunity(opp.id).state).toBe('confirmed')
+  })
+
+  it('does not affect channels that never send without you', async () => {
+    world = makeWorld({ mode: 'approval' })
+    world.engine.toolFree = false
+    world.engine.on('draft.reply', thanksAnswer)
+    const opp = await discovered('Thanks, great app!')
+    await world.drafting.processChannel(world.channel.id)
+    expect(world.opportunity(opp.id).state).toBe('awaiting_approval')
+    expect(world.opportunity(opp.id).reason).toBe('')
+  })
+
+  it('takes back an automatic approval that is still waiting when the selected engine can use tools', async () => {
+    world = makeWorld(AUTO)
+    world.engine.on('draft.reply', thanksAnswer)
+    const opp = await discovered('Thanks, great app!')
+    world.core.settings.setRaw('automation.paused', true)
+    await world.drafting.processChannel(world.channel.id)
+    expect(world.opportunity(opp.id).state).toBe('ready')
+
+    world.engine.toolFree = false
+    world.core.settings.setRaw('automation.paused', false)
+    await world.drafting.processChannel(world.channel.id)
+
+    expect(world.opportunity(opp.id).state).toBe('awaiting_approval')
+    expect(world.opportunity(opp.id).reason).toBe(REASON)
+    expect(world.card(opp.id).approval).toBeNull()
+    expect(publishCalls()).toBe(0)
+  })
+})
+
+describe('facts that change while the AI is working', () => {
+  const answer = reply()
+  const rows = (opp: Opportunity) => world.core.db.prepare('SELECT COUNT(*) c FROM drafts WHERE opportunity_id = ?').pluck().get(opp.id)
+
+  it('drops a draft prepared on an older knowledge version and prepares it again on the new one', async () => {
+    world = makeWorld({ mode: 'approval' })
+    const opp = await discovered()
+    let first = true
+    world.engine.on('draft.reply', () => {
+      if (first) {
+        first = false
+        world.knowledge.version = 'pv-2' // a new passport version became active during the call
+      }
+      return answer
+    })
+
+    const summary = await world.drafting.processChannel(world.channel.id)
+
+    expect(summary.prepared).toBe(0)
+    expect(rows(opp)).toBe(0)
+    expect(world.opportunity(opp.id).state).toBe('discovered')
+    expect(world.opportunity(opp.id).reason).toMatch(/knowledge changed/)
+
+    await world.drafting.processChannel(world.channel.id)
+    expect(world.opportunity(opp.id).state).toBe('awaiting_approval')
+    expect(world.card(opp.id).draft?.knowledgeVersionId).toBe('pv-2')
+  })
+
+  it('drops a draft whose cited claim was edited or withdrawn within the same version', async () => {
+    world = makeWorld({ mode: 'approval' })
+    const edited = await discovered('first question?')
+    world.engine.on('draft.reply', () => {
+      world.knowledge.approved = [makeClaim('c1', 'Natal Mystic no longer builds natal charts.'), world.knowledge.approved[1]]
+      return answer
+    })
+    await world.drafting.processChannel(world.channel.id)
+    expect(rows(edited)).toBe(0)
+    expect(world.opportunity(edited.id).state).toBe('discovered')
+
+    world = makeWorld({ mode: 'approval' })
+    const withdrawn = await discovered('second question?')
+    world.engine.on('draft.reply', () => {
+      world.knowledge.approved = world.knowledge.approved.filter((c) => c.id !== 'c1')
+      return answer
+    })
+    await world.drafting.processChannel(world.channel.id)
+    expect(rows(withdrawn)).toBe(0)
+    expect(world.opportunity(withdrawn.id).state).toBe('discovered')
+  })
+
+  it('keeps a draft when only a claim it did not cite changed', async () => {
+    world = makeWorld({ mode: 'approval' })
+    const opp = await discovered()
+    world.engine.on('draft.reply', () => {
+      world.knowledge.approved = [world.knowledge.approved[0], makeClaim('c2', 'The app works on iPhone only.', { lineageId: 'lin-c2' })]
+      return answer
+    })
+    await world.drafting.processChannel(world.channel.id)
+    expect(world.opportunity(opp.id).state).toBe('awaiting_approval')
+  })
+
+  it('never auto-sends a reply built on facts that changed during the call', async () => {
+    world = makeWorld(AUTO)
+    const opp = await discovered('Does it work on Android?')
+    world.engine.on('draft.reply', () => {
+      world.knowledge.version = 'pv-2'
+      return reply({ reply: 'It works on iPhone and Android.', usedClaimIds: ['c2'] })
+    })
+    // Only the first call changes the version; later passes find it stable.
+    await world.drafting.processChannel(world.channel.id)
+    expect(publishCalls()).toBe(0)
+    expect(world.opportunity(opp.id).state).not.toBe('confirmed')
+  })
+
+  it('invalidateForChangedFacts also restarts an analysis that is in flight', async () => {
+    world = makeWorld({ mode: 'approval' })
+    const opp = await discovered()
+    let affected = -1
+    world.engine.on('draft.reply', () => {
+      affected = world.core.services.pipeline!.invalidateForChangedFacts(world.product.id, ['lin-c1'])
+      return answer
+    })
+
+    await world.drafting.processChannel(world.channel.id)
+
+    expect(affected).toBe(1)
+    expect(rows(opp)).toBe(0)
+    expect(world.opportunity(opp.id).state).toBe('discovered')
+    expect(world.opportunity(opp.id).reason).toBe('Product facts changed; review again')
+  })
+})
+
 function makeWorldCapabilities(status: 'needs_check') {
   return ['read_posts', 'read_comments', 'detect_changes', 'publish_post', 'publish_reply', 'verify_send', 'metrics', 'rules'].map((key) => ({ key: key as never, status, detail: '', checkedAt: null }))
 }

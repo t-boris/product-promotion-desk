@@ -178,6 +178,122 @@ describe('monitor: changed comments (SRC-001 section 4: thread changes before se
   })
 })
 
+describe('monitor: login expiry is noticed before the next send, not at send time (REQ-005)', () => {
+  const loginChecks = (): number => world.connector.calls.filter((c) => c === 'checkLogin').length
+  const signedOut = { loggedIn: false, identity: null, captcha: false }
+  const scopesSeen = (): string[] => {
+    const scopes: string[] = []
+    world.core.events.subscribe((e) => {
+      if (e.type === 'changed') scopes.push(e.scope)
+    })
+    return scopes
+  }
+
+  it('asks the connector about the login of an approval channel even when reading works without it', async () => {
+    world = makeWorld({ mode: 'approval' })
+    world.connector.login = signedOut
+    const scopes = scopesSeen()
+
+    const outcome = await world.monitor.runChannel(world.channel.id)
+
+    expect(outcome.status).toBe('suspended')
+    expect(world.connector.calls).not.toContain('fetchActivity')
+    expect(world.core.repos.account(world.account.id).status).toBe('login_required')
+    expect(world.refresh().status).toBe('needs_user')
+    expect(world.refresh().statusDetail).toBe('Account "Main" is signed out: sign in again to resume')
+    expect(scopes).toEqual(expect.arrayContaining(['accounts', 'attention']))
+  })
+
+  it('does the same for an automatic channel and reports a CAPTCHA as such', async () => {
+    world = makeWorld({ mode: 'auto' })
+    world.connector.login = { loggedIn: true, identity: 'brand_account', captcha: true }
+
+    expect((await world.monitor.runChannel(world.channel.id)).status).toBe('suspended')
+
+    expect(world.core.repos.account(world.account.id).status).toBe('captcha')
+    expect(world.refresh().statusDetail).toBe('The site asks for a CAPTCHA on account "Main": solve it to resume')
+  })
+
+  it.each(['observe', 'draft'] as const)('does not check the login of a %s channel, which never sends', async (mode) => {
+    world = makeWorld({ mode })
+    world.connector.login = signedOut
+    expect((await world.monitor.runChannel(world.channel.id)).status).toBe('ok')
+    expect(loginChecks()).toBe(0)
+    expect(world.core.repos.account(world.account.id).status).toBe('ready')
+  })
+
+  it('checks an account at most once in 15 minutes and again after that', async () => {
+    world = makeWorld({ mode: 'approval' })
+
+    await world.monitor.runChannel(world.channel.id)
+    world.clock.advance(60_000)
+    await world.monitor.runChannel(world.channel.id)
+    world.clock.advance(13 * 60_000)
+    await world.monitor.runChannel(world.channel.id)
+    expect(loginChecks()).toBe(1)
+
+    world.clock.advance(60_000 + 1)
+    await world.monitor.runChannel(world.channel.id)
+    expect(loginChecks()).toBe(2)
+
+    // The session expired in between: the next due check is what notices it.
+    world.connector.login = signedOut
+    world.clock.advance(15 * 60_000)
+    expect((await world.monitor.runChannel(world.channel.id)).status).toBe('suspended')
+    expect(loginChecks()).toBe(3)
+  })
+
+  it('shares the throttle between the channels of one account', async () => {
+    world = makeWorld({ mode: 'approval' })
+    const second = world.addChannel({ target: 'r/second', mode: 'approval' })
+    await world.monitor.runChannel(world.channel.id)
+    await world.monitor.runChannel(second.id)
+    expect(loginChecks()).toBe(1)
+
+    const other = world.addAccount({ label: 'Other' })
+    const elsewhere = world.addChannel({ accountId: other.id, target: 'r/elsewhere', mode: 'approval' })
+    await world.monitor.runChannel(elsewhere.id)
+    expect(loginChecks()).toBe(2)
+  })
+
+  it('checks again at once after a problem was reported, so signing in takes effect on the next tick', async () => {
+    world = makeWorld({ mode: 'approval' })
+    world.connector.login = signedOut
+    await world.monitor.runChannel(world.channel.id)
+    expect(world.core.repos.account(world.account.id).status).toBe('login_required')
+
+    // The owner signs in (the accounts module resets the status); no 15-minute wait is needed.
+    world.core.db.prepare("UPDATE accounts SET status = 'ready' WHERE id = ?").run(world.account.id)
+    world.connector.login = { loggedIn: true, identity: 'brand_account', captcha: false }
+    world.clock.advance(60_000)
+
+    expect((await world.monitor.runChannel(world.channel.id)).status).toBe('ok')
+    expect(loginChecks()).toBe(2)
+    expect(world.refresh().status).toBe('active')
+  })
+
+  it('does not suspend on a login check that itself failed, and tries again next time', async () => {
+    world = makeWorld({ mode: 'approval' })
+    world.connector.checkLoginError = new Error('page did not load')
+
+    expect((await world.monitor.runChannel(world.channel.id)).status).toBe('ok')
+    expect(world.core.repos.account(world.account.id).status).toBe('ready')
+
+    world.connector.checkLoginError = null
+    world.clock.advance(60_000)
+    await world.monitor.runChannel(world.channel.id)
+    expect(loginChecks()).toBe(2)
+  })
+
+  it('suspends without touching the account when the owner holds the browser during the check', async () => {
+    world = makeWorld({ mode: 'approval' })
+    world.connector.checkLoginError = new TakeoverError()
+    expect((await world.monitor.runChannel(world.channel.id)).status).toBe('suspended')
+    expect(world.core.repos.account(world.account.id).status).toBe('ready')
+    expect(world.refresh().status).toBe('needs_user')
+  })
+})
+
 describe('monitor: failures never throw and never affect other channels (REQ-005)', () => {
   it('suspends the channel and marks the account when the login expired', async () => {
     world = makeWorld()
@@ -277,17 +393,18 @@ describe('monitor: failures never throw and never affect other channels (REQ-005
     expect((await world.monitor.runChannel(world.channel.id)).status).toBe('skipped')
 
     world.core.db.prepare("UPDATE channels SET status = 'active' WHERE id = ?").run(world.channel.id)
-    let release!: () => void
+    const gate: { release: (() => void) | null } = { release: null }
     world.connector.fetchActivityError = null
     const originalFetch = world.connector.fetchActivity.bind(world.connector)
     world.connector.fetchActivity = async (ctx, options) => {
-      await new Promise<void>((resolve) => (release = resolve))
+      await new Promise<void>((resolve) => (gate.release = resolve))
       return originalFetch(ctx, options)
     }
     const running = world.monitor.runChannel(world.channel.id)
-    await Promise.resolve()
+    // Wait until the first check is really inside the platform read (it checks the login first).
+    while (!gate.release) await new Promise((resolve) => setTimeout(resolve, 1))
     expect((await world.monitor.runChannel(world.channel.id)).status).toBe('skipped')
-    release()
+    gate.release?.()
     expect((await running).status).toBe('ok')
   })
 

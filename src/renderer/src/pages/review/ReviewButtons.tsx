@@ -2,6 +2,7 @@ import type { DraftInput } from '../../../../shared/api'
 import type { OpportunityCard } from '../../../../shared/types'
 import { Button } from '../../ui'
 import { LOCKED_STATES, PREPARABLE_STATES } from './labels'
+import { ResolveUnknown } from './ResolveUnknown'
 import type { ReviewActions } from './useReviewActions'
 
 interface Props {
@@ -22,11 +23,14 @@ export function ReviewButtons({ card, actions, dirty, input }: Props) {
 
   if (opp.state === 'unknown_result') {
     return (
-      <div className="row">
-        <Button variant="primary" onClick={() => void actions.reconcile(id)} disabled={busy} data-testid="reconcile">
-          Check the platform
-        </Button>
-        <span className="muted small">Looks for the reply on the platform. It is never sent a second time before the result is known.</span>
+      <div className="stack">
+        <div className="row">
+          <Button variant="primary" onClick={() => void actions.reconcile(id)} disabled={busy} data-testid="reconcile">
+            Check the platform
+          </Button>
+          <span className="muted small">Looks for the reply on the platform. It is never sent a second time before the result is known.</span>
+        </div>
+        <ResolveUnknown id={id} actions={actions} />
       </div>
     )
   }
