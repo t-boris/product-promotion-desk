@@ -21,7 +21,8 @@
     "rebuild:node": "npm rebuild better-sqlite3",
     "rebuild:electron": "electron-builder install-app-deps",
     "dist": "npm run build && npm run rebuild:electron && electron-builder --mac --arm64 --dir",
-    "verify": "npm run typecheck && npm run lint && npm test && npm run build"
+    "verify": "npm run typecheck && npm run lint && npm test && npm run build",
+    "deploy:local": "npm run dist && node scripts/deploy-local.mjs"
   },
   "dependencies": {
     "better-sqlite3": "13.0.3"

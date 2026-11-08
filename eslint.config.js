@@ -18,6 +18,11 @@ export default tseslint.config(
     }
   },
   {
+    // Plain Node scripts (deploy helper) run outside the bundlers.
+    files: ['scripts/**'],
+    languageOptions: { globals: { process: 'readonly', console: 'readonly' } }
+  },
+  {
     // Core, AI adapters, connectors and shared code must stay testable without Electron.
     files: ['src/core/**', 'src/ai/**', 'src/connectors/**', 'src/shared/**'],
     rules: { 'no-restricted-imports': ['error', electronBan] }

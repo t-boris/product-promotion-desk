@@ -155,6 +155,9 @@ export interface RemoteDiscussion {
   body: string
   postedAt: IsoTime | null
   comments: RemoteComment[]
+  /** Thread no longer accepts replies (locked or archived); the SendGate refuses to send into it. */
+  locked?: boolean
+  archived?: boolean
 }
 
 export interface ActivityBatch {
