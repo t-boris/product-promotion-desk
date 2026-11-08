@@ -1,6 +1,6 @@
 // Wording and small pure rules for the Channels screen. Kept apart from the components so they stay easy to read.
 
-import type { AccountStatus, Capability, CapabilityKey, CapabilityStatus, Channel, ChannelMode, ChannelStatus, ChannelSuggestion, PlatformInfo } from '../../../../shared/types'
+import type { Account, AccountStatus, Capability, CapabilityKey, CapabilityStatus, Channel, ChannelMode, ChannelStatus, ChannelSuggestion, PlatformInfo } from '../../../../shared/types'
 import type { Tone } from '../../ui'
 
 /** The name of a platform for people: the connector's own label, from platforms.list. */
@@ -13,6 +13,29 @@ export function platformLabel(platform: string, platforms: PlatformInfo[]): stri
 /** What to type as a channel address on a platform: prepared platforms know their own short forms; any other site needs a web address. */
 export function addressExample(info: PlatformInfo | undefined): string {
   return info && !info.prepared ? 'https://forum.example.com/c/general' : 'Community name or web address'
+}
+
+/** An address written the way people write it, reduced so that "r/Astrology", "reddit.com/r/astrology/" and the full link compare equal. */
+function plainAddress(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
+    .replace(/^(www\.|old\.|new\.|m\.)/, '')
+    .replace(/^reddit\.com\//, '')
+    .replace(/[?#].*$/, '')
+    .replace(/\/+$/, '')
+}
+
+/** Whether the typed address is the one of a channel that exists already (as its short form or as its link). */
+export function isSameAddress(typed: string, channel: Channel): boolean {
+  const wanted = plainAddress(typed)
+  return wanted !== '' && (wanted === plainAddress(channel.target) || wanted === plainAddress(channel.url))
+}
+
+/** "Name (Platform) — role", so the owner picks the voice as well as the login. */
+export function accountOptionLabel(account: Account, platforms: PlatformInfo[]): string {
+  return `${account.label} (${platformLabel(account.platform, platforms)})${account.role ? ` — ${account.role.name}` : ''}`
 }
 
 export function isWebAddress(text: string): boolean {

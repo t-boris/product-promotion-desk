@@ -27,5 +27,15 @@ UPDATE accounts SET product_id = (
 ALTER TABLE accounts ADD COLUMN last_identity TEXT;
 UPDATE accounts SET last_identity = identity WHERE identity IS NOT NULL;
 `
+  },
+  {
+    id: 202,
+    name: 'channels: logins may have a role with its own voice (DEC-010)',
+    sql: `
+-- A role is a short name plus a voice (how the login writes, what it may talk about). Both are NULL for a login
+-- without a role; the shared Account shows role = null when role_name is empty.
+ALTER TABLE accounts ADD COLUMN role_name TEXT;
+ALTER TABLE accounts ADD COLUMN role_voice TEXT;
+`
   }
 ]

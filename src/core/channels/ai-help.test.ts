@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { PlatformInfo } from '../../shared/types'
 import { AiError } from '../ports'
 import { FakeEngine } from '../testing/fakes'
-import { draftSiteProfile, manualInstructions, suggestChannels, type DraftProfileInput, type SuggestInput, type ValidateDefinition } from './ai-help'
+import { draftSiteProfile, manualInstructions, suggestChannels, suggestRoles, type DraftProfileInput, type RoleSuggestInput, type SuggestInput, type ValidateDefinition } from './ai-help'
 
 const platforms: PlatformInfo[] = [
   { connectorId: 'reddit', platform: 'reddit', label: 'Reddit', prepared: true, loginUrl: 'https://www.reddit.com/login' },
@@ -43,7 +43,8 @@ describe('suggestChannels', () => {
     expect(prompt).toContain('- r/astrology')
     // The rules the owner relies on.
     expect(prompt).toMatch(/Do NOT invent addresses/)
-    expect(prompt).toMatch(/not sure/)
+    expect(prompt).toMatch(/leave that idea out/)
+    expect(prompt).toMatch(/never a description or a sentence/)
     expect(prompt).toMatch(/rules need checking/)
     expect(prompt).toMatch(/at most 8/)
     expect(system).toMatch(/single JSON object/)
@@ -191,6 +192,49 @@ describe('suggestChannels', () => {
       throw new AiError('timeout', 'too slow')
     })
     await expect(suggestChannels(timeout, suggestInput)).rejects.toMatchObject({ kind: 'timeout' })
+  })
+})
+
+describe('suggestChannels: an idea must be an address, not a description', () => {
+  it('for an unknown site the target must be a full web address', async () => {
+    const engine = suggestEngine(
+      json({
+        suggestions: [
+          idea('other', 'forum.example.com'),
+          idea('other', 'A forum for astrology readers'),
+          idea('other', 'www.forum.example.com/astrology'),
+          idea('other', 'https://forum.example.com/ sign up here'),
+          idea('other', 'ftp://forum.example.com/'),
+          idea('other', 'HTTP://forum.example.com/astrology'),
+          idea('other', 'https://other.example.com/')
+        ]
+      })
+    )
+    expect((await suggestChannels(engine, suggestInput)).map((r) => r.target)).toEqual(['HTTP://forum.example.com/astrology', 'https://other.example.com/'])
+  })
+
+  it('for a known platform the target may not be a sentence (more than 3 words)', async () => {
+    const engine = suggestEngine(
+      json({
+        suggestions: [
+          idea('reddit', 'Reddit: a subreddit for beginner birth chart readings'),
+          idea('reddit', 'a subreddit for beginners'),
+          idea('reddit', 'one two three four'),
+          idea('reddit', 'r/tarot'),
+          idea('reddit', 'r/tarot readers club'), // three words: still allowed, the connector decides later
+          idea('universal', 'https://forum.example.com/c/astrology'),
+          idea('universal', 'Some forum about astrology and charts')
+        ]
+      })
+    )
+    expect((await suggestChannels(engine, suggestInput)).map((r) => r.target)).toEqual(['r/tarot', 'r/tarot readers club', 'https://forum.example.com/c/astrology'])
+  })
+
+  it('asks for addresses only and leaves unsure ideas out', async () => {
+    const engine = suggestEngine(json({ suggestions: [] }))
+    await suggestChannels(engine, suggestInput)
+    expect(engine.calls[0].prompt).toMatch(/never a description or a sentence/)
+    expect(engine.calls[0].prompt).toMatch(/leave that idea out/)
   })
 })
 
@@ -424,5 +468,232 @@ describe('manualInstructions', () => {
     const odd = manualInstructions('evil\n\u0007host', 'r')
     // eslint-disable-next-line no-control-regex
     expect(odd.join('')).not.toMatch(/[\u0000-\u001f]/)
+  })
+})
+
+// ───────────────────────────── suggestRoles ─────────────────────────────
+
+const roleInput: RoleSuggestInput = {
+  product: suggestInput.product,
+  claims: [
+    { section: 'offer', text: 'Calculates a natal chart from birth data' },
+    { section: 'identity', text: 'Built by a solo developer who studies astrology' },
+    { section: 'audience', text: 'Hobby astrologers' }
+  ],
+  platform: platforms[0],
+  existingRoles: ['Astrologer: writes about charts and houses']
+}
+
+const role = (over: Partial<{ name: string; voice: string; usernameIdeas: unknown; reason: string }> = {}) => ({
+  name: 'developer',
+  voice: 'Writes in the first person as the maker of the tool and talks about how charts are calculated.',
+  usernameIdeas: ['chart_maker', 'natal_dev'],
+  reason: 'The maker can answer technical questions honestly.',
+  ...over
+})
+
+function rolesEngine(answer: string | ((n: number) => string)): FakeEngine {
+  let n = 0
+  const script = () => (typeof answer === 'string' ? answer : answer(++n))
+  return new FakeEngine().on('channels.roles', script).on('channels.roles.repair', script)
+}
+
+describe('suggestRoles', () => {
+  it('returns the roles of a good answer, and tells the engine the rules of honest roles', async () => {
+    const engine = rolesEngine(json({ roles: [role(), role({ name: 'support', voice: 'Answers questions about using the tool.', usernameIdeas: ['@natal_help'], reason: 'Users ask how to read results.' })] }))
+    const result = await suggestRoles(engine, roleInput)
+    expect(result).toEqual([
+      {
+        name: 'developer',
+        voice: 'Writes in the first person as the maker of the tool and talks about how charts are calculated.',
+        usernameIdeas: ['chart_maker', 'natal_dev'],
+        reason: 'The maker can answer technical questions honestly.'
+      },
+      { name: 'support', voice: 'Answers questions about using the tool.', usernameIdeas: ['natal_help'], reason: 'Users ask how to read results.' }
+    ])
+    expect(engine.calls).toHaveLength(1)
+    const { prompt, system } = engine.calls[0]
+    expect(prompt).toContain('Natal Mystic')
+    expect(prompt).toContain('offer: Calculates a natal chart from birth data')
+    expect(prompt).toContain('Platform: reddit (Reddit)')
+    expect(prompt).toContain('- Astrologer: writes about charts and houses')
+    expect(prompt).toMatch(/at most 4 roles/)
+    expect(prompt).toMatch(/honest voice of a person connected with the product/)
+    expect(prompt).toMatch(/never a fake independent customer/)
+    expect(prompt).toMatch(/say that it is connected with the product whenever it mentions the product/)
+    expect(prompt).toMatch(/claim credentials, qualifications or experiences .* that the approved statements above do not support/)
+    expect(prompt).toMatch(/neutral third party/)
+    expect(prompt).toMatch(/Do not repeat or rephrase a role that already exists/)
+    expect(prompt).toMatch(/No real people's names/)
+    expect(prompt).toMatch(/birth year/)
+    expect(prompt).toMatch(/never include passwords, keys or other credentials, instructions to automate posting or replying, or promises/)
+    expect(prompt).toMatch(/owner creates the logins by hand/)
+    expect(system).toMatch(/single JSON object/)
+  })
+
+  it('reads fenced JSON and an empty list', async () => {
+    const body = json({ roles: [role()] })
+    expect(await suggestRoles(rolesEngine('```json\n' + body + '\n```'), roleInput)).toHaveLength(1)
+    expect(await suggestRoles(rolesEngine(`Here you go:\n${body}`), roleInput)).toHaveLength(1)
+    expect(await suggestRoles(rolesEngine(json({ roles: [] })), roleInput)).toEqual([])
+  })
+
+  it('asks once more after an unusable answer, then fails with invalid_output', async () => {
+    const good = rolesEngine((n) => (n === 1 ? 'Roles are a great idea!' : json({ roles: [role()] })))
+    expect(await suggestRoles(good, roleInput)).toHaveLength(1)
+    expect(good.calls.map((c) => c.label)).toEqual(['channels.roles', 'channels.roles.repair'])
+    expect(good.calls[1].prompt).toContain('Roles are a great idea!')
+
+    const bad = rolesEngine('still no json')
+    const error = await suggestRoles(bad, roleInput).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(AiError)
+    expect(error).toMatchObject({ kind: 'invalid_output' })
+    expect(bad.calls).toHaveLength(2)
+  })
+
+  it('treats a wrong overall shape as unusable and repairs it', async () => {
+    const engine = rolesEngine((n) => (n === 1 ? json({ roles: 'developer' }) : json({ roles: [role()] })))
+    expect(await suggestRoles(engine, roleInput)).toHaveLength(1)
+    expect(engine.calls[1].prompt).toMatch(/"roles" must be an array/)
+  })
+
+  it('caps the list at 4, the name at 40 and the voice and reason at 280 and 200 plain characters', async () => {
+    const many = Array.from({ length: 7 }, (_, i) => role({ name: `role ${i}`, voice: `Voice number ${i} of the product`, usernameIdeas: [`login_${i}x`] }))
+    expect(await suggestRoles(rolesEngine(json({ roles: many })), roleInput)).toHaveLength(4)
+
+    const words = 'word '.repeat(120)
+    const result = await suggestRoles(
+      rolesEngine(
+        json({
+          roles: [
+            role({ name: 'a role name that is far too long to be called short' }), // dropped
+            role({ name: '   ' }),
+            role({ name: '**Maker**', voice: `[Talks](https://x.example) about <b>charts</b>\n\n${words}`, reason: `Fits. ${words}` })
+          ]
+        })
+      ),
+      roleInput
+    )
+    expect(result).toHaveLength(1)
+    expect(result[0].name).toBe('Maker')
+    expect(result[0].voice.length).toBeLessThanOrEqual(280)
+    expect(result[0].reason.length).toBeLessThanOrEqual(200)
+    for (const text of [result[0].voice, result[0].reason]) expect(text).not.toMatch(/[*<>\n[\]]/)
+    expect(result[0].voice.startsWith('Talks about charts')).toBe(true)
+  })
+
+  it('keeps only login-name ideas of 3 to 24 letters, digits and underscores, without birth years or an official look', async () => {
+    const result = await suggestRoles(
+      rolesEngine(
+        json({
+          roles: [
+            role({
+              usernameIdeas: ['ab', 'with space', 'dash-name', 'a'.repeat(25), 'astro1985', 'maker_2001', 'Natal_Official', 'site_admin', 'Chart_Maker', 'chart_maker', '@Okay_One', 'fine_two', 'fine_three', 'fine_four', 42, null]
+            })
+          ]
+        })
+      ),
+      roleInput
+    )
+    // Duplicates (any case) are removed and at most four remain.
+    expect(result[0].usernameIdeas).toEqual(['Chart_Maker', 'Okay_One', 'fine_two', 'fine_three'])
+  })
+
+  it('drops a role without any usable login-name idea, or without the list at all', async () => {
+    const result = await suggestRoles(
+      rolesEngine(json({ roles: [role({ usernameIdeas: ['x', 'born_1990'] }), role({ name: 'second', voice: 'Another voice.', usernameIdeas: 'chart_maker' }), role({ name: 'third', voice: 'A third voice.' })] })),
+      roleInput
+    )
+    expect(result.map((r) => r.name)).toEqual(['third'])
+  })
+
+  it('drops roles that duplicate an existing role by name or voice, in any letter case', async () => {
+    const result = await suggestRoles(
+      rolesEngine(
+        json({
+          roles: [
+            role({ name: 'ASTROLOGER', voice: 'Something entirely different.' }),
+            role({ name: 'chart writer', voice: 'Writes about charts and houses' }),
+            role({ name: 'whole entry', voice: 'x', usernameIdeas: ['abc_1'] }),
+            role({ name: 'Developer', voice: 'Maker voice.' }),
+            role({ name: 'developer', voice: 'Another maker voice.' }), // same name as the one above
+            role({ name: 'tester', voice: 'MAKER VOICE.' }) // same voice as the one above
+          ]
+        })
+      ),
+      { ...roleInput, existingRoles: ['Astrologer: writes about charts and houses', 'whole entry'] }
+    )
+    expect(result.map((r) => r.name)).toEqual(['Developer'])
+  })
+
+  it('drops roles whose credentials the approved statements do not support, and keeps supported ones', async () => {
+    const result = await suggestRoles(
+      rolesEngine(
+        json({
+          roles: [
+            role({ name: 'certified astrologer', voice: 'Reads charts for clients.' }),
+            role({ name: 'veteran', voice: 'Has 15 years of practice reading charts.' }),
+            role({ name: 'doctor of astrology', voice: 'Explains the science.' }),
+            role({ name: 'studies astrology', voice: 'A developer who studies astrology and builds the tool.', usernameIdeas: ['maker_one'] })
+          ]
+        })
+      ),
+      roleInput
+    )
+    expect(result.map((r) => r.name)).toEqual(['studies astrology'])
+
+    const withCredential = await suggestRoles(
+      rolesEngine(json({ roles: [role({ name: 'certified astrologer', voice: 'Reads charts for clients.' })] })),
+      { ...roleInput, claims: [...roleInput.claims, { section: 'identity', text: 'The author is a certified astrologer' }] }
+    )
+    expect(withCredential.map((r) => r.name)).toEqual(['certified astrologer'])
+  })
+
+  it('drops anything that presents the login as an independent third party', async () => {
+    const result = await suggestRoles(
+      rolesEngine(
+        json({
+          roles: [
+            role({ name: 'happy customer', voice: 'Shares how much the tool helped.' }),
+            role({ name: 'reviewer', voice: 'An independent reviewer comparing tools.' }),
+            role({ name: 'bystander', voice: 'A neutral voice recommending it.' }),
+            role({ name: 'regular user', voice: 'Talks about everyday use.' }),
+            role({ name: 'maker', voice: 'Says up front that it built the tool and answers questions.', usernameIdeas: ['maker_two'] })
+          ]
+        })
+      ),
+      roleInput
+    )
+    expect(result.map((r) => r.name)).toEqual(['maker'])
+  })
+
+  it('never passes on credentials, automation instructions or promises', async () => {
+    const result = await suggestRoles(
+      rolesEngine(
+        json({
+          roles: [
+            role({ name: 'poster', voice: 'Use a bot to post replies every hour.' }),
+            role({ name: 'closer', voice: 'Guaranteed to bring hundreds of users.' }),
+            role({ name: 'keeper', voice: 'Log in with password: hunter2 on the site.' }),
+            role({ name: 'secret', voice: 'Key sk-abcdefghijklmnopqrstuvwxyz123456 is used.' }),
+            role({ name: 'honest', voice: 'Says it is the maker.', reason: 'Will definitely get you users.' }),
+            role({ name: 'fine', voice: 'Says it is the maker and talks about home automation gadgets.', usernameIdeas: ['fine_one'] })
+          ]
+        })
+      ),
+      roleInput
+    )
+    expect(result.map((r) => r.name)).toEqual(['fine'])
+  })
+
+  it('propagates a cancel and other engine failures untouched', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    await expect(suggestRoles(rolesEngine(json({ roles: [] })), roleInput, { signal: controller.signal })).rejects.toMatchObject({ kind: 'cancelled' })
+
+    const unavailable = rolesEngine(json({ roles: [] }))
+    unavailable.installed = false
+    await expect(suggestRoles(unavailable, roleInput)).rejects.toMatchObject({ kind: 'unavailable' })
+    expect(unavailable.calls).toHaveLength(1)
   })
 })

@@ -1,6 +1,6 @@
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
-import { chooseLinks, OUTLINE_MAX_CHARS, outlineScript, parsePageOutline, publicSite, sameSite, type PageOutline } from './site-outline'
+import { chooseLinks, countScript, OUTLINE_MAX_CHARS, outlineScript, parsePageOutline, publicSite, sameSite, type PageOutline } from './site-outline'
 
 // A tiny DOM: enough to run the outline script and see what it reports.
 interface Spec {
@@ -251,5 +251,37 @@ describe('which links are worth reading next', () => {
   it('counts a repeated link once and accepts the www form of the same site', () => {
     const chosen = chooseLinks([link('https://www.forum.example.com/c/a', 'Community'), link('https://www.forum.example.com/c/a', 'Community')], here, host)
     expect(chosen).toEqual(['https://www.forum.example.com/c/a'])
+  })
+})
+
+describe('counting what a selector matches', () => {
+  const run = (selector: string, sandbox: Record<string, unknown> = {}): unknown => {
+    const asked: string[] = []
+    const document = {
+      querySelectorAll: (given: string) => {
+        asked.push(given)
+        if (given.startsWith('!')) throw new Error('SyntaxError: not a selector')
+        return { length: given === 'li.topic' ? 3 : 0 }
+      }
+    }
+    const result = runInNewContext(countScript(selector), { document, ...sandbox })
+    return { result, asked }
+  }
+
+  it('counts the matches, 0 for none, and -1 for a selector the page rejects', () => {
+    expect(run('li.topic')).toEqual({ result: 3, asked: ['li.topic'] })
+    expect(run('[data-discussion]')).toEqual({ result: 0, asked: ['[data-discussion]'] })
+    expect(run('!!bad')).toEqual({ result: -1, asked: ['!!bad'] })
+  })
+
+  it('treats the selector as data: quotes and code in it cannot break out of the script', () => {
+    const hostile = '"); globalThis.pwned = true; ("'
+    const sandbox: Record<string, unknown> = {}
+    expect(run(hostile, sandbox)).toEqual({ result: 0, asked: [hostile] })
+    expect(sandbox.pwned).toBeUndefined()
+  })
+
+  it('only reads', () => {
+    expect(countScript('li.topic')).not.toMatch(/\.click\(|\.submit\(|dispatchEvent|\.value\s*=|innerHTML|setAttribute|fetch\(|location\./)
   })
 })

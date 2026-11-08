@@ -3,6 +3,7 @@ import type { Account, PlatformInfo } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
 import { Badge, Button, ErrorNote } from '../../ui'
 import { ACCOUNT_STATUS_LABEL, ACCOUNT_STATUS_TONE, platformLabel } from './model'
+import { RoleEditor } from './RoleEditor'
 
 /** One account: its sign-in state and the controls for the browser hand-off. */
 export function AccountRow({ account, channelCount, platforms }: { account: Account; channelCount: number; platforms: PlatformInfo[] }) {
@@ -42,6 +43,7 @@ export function AccountRow({ account, channelCount, platforms }: { account: Acco
           </Button>
         </div>
       </div>
+      <RoleEditor account={account} />
       <div className="row">
         <Button onClick={() => void take()} disabled={taking.busy} data-testid={`account-take-${account.id}`} title="Stops the app from using this browser until you give it back">
           Take control

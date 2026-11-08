@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import type { ChannelSuggestion } from '../../../../shared/types'
+import type { ChannelSuggestion, RoleSuggestion } from '../../../../shared/types'
 import { useQuery } from '../../hooks'
 import { EmptyState, ErrorNote, Loading } from '../../ui'
 import { AccountsCard } from './AccountsCard'
 import { ChannelDetail } from './ChannelDetail'
 import { ChannelList } from './ChannelList'
 import { ConnectChannel, type Prefill } from './ConnectChannel'
+import type { RolePrefill } from './CreateAccount'
+import { SuggestRoles } from './SuggestRoles'
 import { SuggestChannels } from './SuggestChannels'
 import './channels.css'
 
@@ -20,6 +22,7 @@ export function ChannelsPanel({ productId }: { productId: string }) {
   const engines = useQuery('engines.list', undefined, ['settings'])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [prefill, setPrefill] = useState<Prefill | null>(null)
+  const [rolePrefill, setRolePrefill] = useState<RolePrefill | null>(null)
 
   const channelList = channels.data ?? []
   const accountList = accounts.data ?? []
@@ -30,20 +33,29 @@ export function ChannelsPanel({ productId }: { productId: string }) {
   const productName = (id: string | null): string => allProducts.find((p) => p.id === id)?.name ?? 'another product'
   const selected = channelList.find((c) => c.id === selectedId) ?? (channelList.length === 1 ? channelList[0] : undefined)
 
+  const blockedReason = suggestionBlockedReason({
+    approved: product ? product.activePassportVersionId !== null : null,
+    engineId: settings.data?.engineId,
+    engines: engines.data,
+    ready: !settings.loading && !engines.loading
+  })
+
   return (
     <div className="stack" data-testid="channels-panel">
       <ErrorNote error={accounts.error ?? channels.error ?? products.error ?? platforms.error} />
       {(accounts.loading && !accounts.data) || (channels.loading && !channels.data) ? <Loading what="Loading channels" /> : null}
-      <AccountsCard productId={productId} accounts={accountList} channels={channelList} platforms={platformList} />
+      <AccountsCard productId={productId} accounts={accountList} channels={channelList} platforms={platformList} rolePrefill={rolePrefill} />
+      <SuggestRoles productId={productId} blockedReason={blockedReason} onUse={(suggestion: RoleSuggestion) => setRolePrefill({ suggestion })} />
       <SuggestChannels
         productId={productId}
         platforms={platformList}
-        blockedReason={suggestionBlockedReason({ approved: product ? product.activePassportVersionId !== null : null, engineId: settings.data?.engineId, engines: engines.data, ready: !settings.loading && !engines.loading })}
+        blockedReason={blockedReason}
         onUse={(suggestion: ChannelSuggestion) => setPrefill({ suggestion })}
       />
       <ConnectChannel
         product={product}
         accounts={accountList}
+        channels={channelList}
         sharedAccounts={sharedAccounts}
         platforms={platformList}
         productName={productName}

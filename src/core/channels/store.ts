@@ -1,6 +1,6 @@
 // Persistence for accounts and channels. Rows are mapped by the shared mappers in ../repos.
 
-import type { Account, AccountStatus, Capability, Channel, ChannelMode, ChannelSettings, ChannelStatus } from '../../shared/types'
+import type { Account, AccountRole, AccountStatus, Capability, Channel, ChannelMode, ChannelSettings, ChannelStatus } from '../../shared/types'
 import { newId, toJson, type Db } from '../db/database'
 import type { Clock } from '../ports'
 import type { Repos } from '../repos'
@@ -34,13 +34,21 @@ export class ChannelsStore {
 
   // ───────────── accounts ─────────────
 
-  insertAccount(productId: string, platform: string, label: string): Account {
+  insertAccount(productId: string, platform: string, label: string, role: AccountRole | null = null): Account {
     const id = newId()
     // The prefix makes the browser session persistent: cookies survive restarts.
     const partition = `persist:ppd-account-${id}`
     this.db
-      .prepare("INSERT INTO accounts (id, product_id, platform, label, identity, partition, status, created_at) VALUES (?, ?, ?, ?, NULL, ?, 'login_required', ?)")
-      .run(id, productId, platform, label, partition, this.clock.now().toISOString())
+      .prepare(
+        "INSERT INTO accounts (id, product_id, platform, label, identity, partition, status, created_at, role_name, role_voice) VALUES (?, ?, ?, ?, NULL, ?, 'login_required', ?, ?, ?)"
+      )
+      .run(id, productId, platform, label, partition, this.clock.now().toISOString(), role?.name ?? null, role?.voice ?? null)
+    return this.repos.account(id)
+  }
+
+  /** Sets, changes or (null) removes the role of a login. */
+  setRole(id: string, role: AccountRole | null): Account {
+    this.db.prepare('UPDATE accounts SET role_name = ?, role_voice = ? WHERE id = ?').run(role?.name ?? null, role?.voice ?? null, id)
     return this.repos.account(id)
   }
 

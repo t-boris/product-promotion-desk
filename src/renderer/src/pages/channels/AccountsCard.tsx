@@ -1,13 +1,13 @@
 import type { Account, Channel, PlatformInfo } from '../../../../shared/types'
 import { Card, EmptyState } from '../../ui'
 import { AccountRow } from './AccountRow'
-import { CreateAccount } from './CreateAccount'
+import { CreateAccount, type RolePrefill } from './CreateAccount'
 
 /**
  * The logins of one product and the sign-in hand-off. The one rule worth repeating on screen: passwords are typed on the
  * platform's own page in the account's browser, never into this application.
  */
-export function AccountsCard({ productId, accounts, channels, platforms }: { productId: string; accounts: Account[]; channels: Channel[]; platforms: PlatformInfo[] }) {
+export function AccountsCard({ productId, accounts, channels, platforms, rolePrefill }: { productId: string; accounts: Account[]; channels: Channel[]; platforms: PlatformInfo[]; rolePrefill: RolePrefill | null }) {
   return (
     <Card title="Accounts">
       <div className="note" data-testid="login-instructions">
@@ -23,7 +23,7 @@ export function AccountsCard({ productId, accounts, channels, platforms }: { pro
         </div>
       )}
       <h3 style={{ margin: '16px 0 0' }}>Add an account</h3>
-      <CreateAccount productId={productId} platforms={platforms} />
+      <CreateAccount productId={productId} platforms={platforms} prefill={rolePrefill} />
     </Card>
   )
 }

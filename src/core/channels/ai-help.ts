@@ -3,6 +3,7 @@
 //  - suggestChannels: from the owner's approved passport, ideas for where the audience talks. Input is trusted.
 //    The answer is untrusted text from a model, so it is validated and filtered; every address is only an idea
 //    that the application verifies later when the channel is assessed.
+//  - suggestRoles: from the same passport, honest voices (roles) and login-name ideas for one platform (DEC-010).
 //  - draftSiteProfile: for an unknown website the AI prepares a declarative profile for the universal connector.
 //    The website outline is UNTRUSTED (prompt injection), so this only runs on an engine that has no tools, the
 //    outline sits in a delimited data block, and the result is JSON that the connector's validator must accept.
@@ -11,11 +12,11 @@
 // Neither function stores or sends anything. Engine failures never crash the caller: suggestChannels reports them as
 // AiError, draftSiteProfile turns them into manual instructions. A cancel is always rethrown.
 
-import type { ChannelSuggestion, PassportSection, PlatformInfo, SiteProfileDraft } from '../../shared/types'
+import type { ChannelSuggestion, PassportSection, PlatformInfo, RoleSuggestion, SiteProfileDraft } from '../../shared/types'
 import { AiError, type AiEngine, type AiRunOptions, type AiTask } from '../ports'
 import { extractJson, JsonExtractError } from '../passports/ai-json'
 import { redactSecrets } from '../passports/redact'
-import { collapseWhitespace, truncate } from '../passports/text'
+import { collapseWhitespace, normalizeForCompare, truncate } from '../passports/text'
 
 // ───────────────────────────── shared helpers ─────────────────────────────
 
@@ -75,9 +76,23 @@ const SUGGEST_SYSTEM = [
   'Reply with a single JSON object and nothing else.'
 ].join(' ')
 
+/** The owner's own product data, fenced as data. */
+function productBlock(product: SuggestInput['product'], claimList: SuggestInput['claims']): string {
+  const claims = claimList.slice(0, MAX_CLAIMS_IN_PROMPT).map((c) => `- ${c.section}: ${oneLine(c.text, MAX_CLAIM_TEXT)}`)
+  return fence(
+    'product_data',
+    [
+      `Name: ${oneLine(product.name, 120)}`,
+      `Website: ${product.websiteUrl ? oneLine(product.websiteUrl, 200) : 'not provided'}`,
+      `Description: ${product.description ? oneLine(product.description, 600) : 'not provided'}`,
+      '',
+      'Approved statements (section: text):',
+      claims.length > 0 ? claims.join('\n') : '(none yet)'
+    ].join('\n')
+  )
+}
+
 function suggestPrompt(input: SuggestInput): AiTask {
-  const { product } = input
-  const claims = input.claims.slice(0, MAX_CLAIMS_IN_PROMPT).map((c) => `- ${c.section}: ${oneLine(c.text, MAX_CLAIM_TEXT)}`)
   const platforms = input.platforms.map((p) => `- ${p.platform}: ${oneLine(p.label, 60)}${p.prepared ? '' : ' (any site needs its own profile)'}`)
   const connected = input.connected.map((c) => `- ${oneLine(c, 120)}`).slice(0, 60)
   return {
@@ -85,17 +100,7 @@ function suggestPrompt(input: SuggestInput): AiTask {
     system: SUGGEST_SYSTEM,
     timeoutMs: SUGGEST_TIMEOUT_MS,
     prompt: [
-      fence(
-        'product_data',
-        [
-          `Name: ${oneLine(product.name, 120)}`,
-          `Website: ${product.websiteUrl ? oneLine(product.websiteUrl, 200) : 'not provided'}`,
-          `Description: ${product.description ? oneLine(product.description, 600) : 'not provided'}`,
-          '',
-          'Approved statements (section: text):',
-          claims.length > 0 ? claims.join('\n') : '(none yet)'
-        ].join('\n')
-      ),
+      productBlock(input.product, input.claims),
       '',
       'Platforms the application can connect. Use the key before the colon exactly, or "other" for any site not listed:',
       platforms.length > 0 ? platforms.join('\n') : '(none)',
@@ -107,8 +112,8 @@ function suggestPrompt(input: SuggestInput): AiTask {
       'Rules:',
       '- Prefer well-known, active communities where the topic is on topic.',
       '- Do NOT invent addresses. Name only a community or address you are sure exists; the application verifies every address later.',
-      '- If you are not sure a specific address exists, give a short descriptive target (for example the platform and a topic) and say in the reason what to look for.',
-      `- "target" is the address or short form, for example "r/astrology" or "https://forum.example.com/" (at most ${MAX_TARGET} characters).`,
+      '- Every idea needs a real address in "target". If you are not sure a specific community exists, leave that idea out instead of describing it.',
+      `- "target" is only the address: "r/name" for Reddit, or a full "https://..." address for any other site, never a description or a sentence (at most ${MAX_TARGET} characters).`,
       `- "reason" is one plain sentence (at most ${MAX_REASON} characters) on why it may fit. Mention that the community rules need checking before anything is posted.`,
       '- Never include passwords, keys or other credentials, instructions to automate posting or replying, or promises about results.',
       '',
@@ -160,22 +165,31 @@ function usableTarget(target: string): boolean {
   return true
 }
 
-/** Plain words only: no markup, no emphasis marks, one line, within the limit. */
-function plainReason(reason: string): string {
+/** Plain words only: no markup, no emphasis marks, one line, cut at a word boundary to at most `max` characters. */
+function plainText(raw: string, max: number): string {
   const text = oneLine(
-    reason
+    raw
       .replace(/<[^>]*>/g, ' ')
       .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
       .replace(/[`*#>~]+/g, ' '),
     10_000
   )
-  if (text.length <= MAX_REASON) return text
-  const cut = text.slice(0, MAX_REASON - 1)
+  if (text.length <= max) return text
+  const cut = text.slice(0, max - 1)
   const lastSpace = cut.lastIndexOf(' ')
-  return `${(lastSpace > MAX_REASON / 2 ? cut.slice(0, lastSpace) : cut).replace(/[\s.,;:!-]+$/, '')}…`
+  return `${(lastSpace > max / 2 ? cut.slice(0, lastSpace) : cut).replace(/[\s.,;:!-]+$/, '')}…`
 }
 
 type Parsed<T> = { ok: true; value: T } | { ok: false; error: string }
+
+/**
+ * An idea must be an address, not a description. For an unknown site that means a full web address; for a known
+ * platform a short form such as "r/name", never a sentence (the platform's connector reads the exact form later).
+ */
+function addressShaped(platform: string, target: string): boolean {
+  if (platform === 'other') return /^https?:\/\/\S+$/i.test(target)
+  return target.split(' ').length <= 3
+}
 
 function readSuggestions(raw: unknown, input: SuggestInput): Parsed<ChannelSuggestion[]> {
   if (!isRecord(raw)) return { ok: false, error: 'the answer must be a JSON object' }
@@ -194,8 +208,8 @@ function readSuggestions(raw: unknown, input: SuggestInput): Parsed<ChannelSugge
     const platform = keys.get(item.platform.trim().toLowerCase())
     if (!platform) continue
     const target = collapseWhitespace(item.target).replace(/^["'`]+|["'`]+$/g, '')
-    const reason = plainReason(item.reason)
-    if (!usableTarget(target) || !reason) continue
+    const reason = plainText(item.reason, MAX_REASON)
+    if (!usableTarget(target) || !addressShaped(platform, target) || !reason) continue
     if (unsafe(target) || unsafe(reason)) continue
     const normalized = normalizeTarget(target)
     if (!normalized || already.has(normalized)) continue
@@ -208,12 +222,11 @@ function readSuggestions(raw: unknown, input: SuggestInput): Parsed<ChannelSugge
 }
 
 /**
- * Asks the engine where this product's audience talks. Unverified ideas only: nothing is connected or assessed here.
- * Rejects with AiError: 'invalid_output' when two answers in a row are unusable, otherwise whatever the engine raised
- * ('cancelled' included).
+ * Runs `task` and reads the JSON answer with `read`. A wrong answer gets exactly one repair attempt that hands the
+ * problem back; after that it fails with AiError('invalid_output'). Every other engine failure (cancelled included)
+ * is rethrown untouched.
  */
-export async function suggestChannels(engine: AiEngine, input: SuggestInput, options: AiRunOptions = {}): Promise<ChannelSuggestion[]> {
-  const task = suggestPrompt(input)
+async function askWithRepair<T>(engine: AiEngine, task: AiTask, read: (raw: unknown) => Parsed<T>, options: AiRunOptions): Promise<T> {
   let attempt = task
   let problem = ''
   for (let tries = 0; tries < 2; tries++) {
@@ -228,7 +241,7 @@ export async function suggestChannels(engine: AiEngine, input: SuggestInput, opt
       continue
     }
     try {
-      const parsed = readSuggestions(extractJson(answer), input)
+      const parsed = read(extractJson(answer))
       if (parsed.ok) return parsed.value
       problem = parsed.error
     } catch (error) {
@@ -239,6 +252,157 @@ export async function suggestChannels(engine: AiEngine, input: SuggestInput, opt
     options.onProgress?.('The answer was not in the expected format; asking once more')
   }
   throw new AiError('invalid_output', `The AI answered in a form that could not be used (${problem}). Try again.`)
+}
+
+/**
+ * Asks the engine where this product's audience talks. Unverified ideas only: nothing is connected or assessed here.
+ * Rejects with AiError: 'invalid_output' when two answers in a row are unusable, otherwise whatever the engine raised
+ * ('cancelled' included).
+ */
+export async function suggestChannels(engine: AiEngine, input: SuggestInput, options: AiRunOptions = {}): Promise<ChannelSuggestion[]> {
+  return askWithRepair(engine, suggestPrompt(input), (raw) => readSuggestions(raw, input), options)
+}
+
+// ───────────────────────────── role suggestions (DEC-010) ─────────────────────────────
+
+export interface RoleSuggestInput {
+  product: { name: string; websiteUrl: string | null; description: string | null }
+  claims: { section: PassportSection; text: string }[]
+  platform: PlatformInfo
+  existingRoles: string[]
+}
+
+const MAX_ROLES = 4
+const MAX_ROLE_NAME = 40
+const MAX_VOICE = 280
+const MAX_USERNAMES = 4
+
+const ROLES_SYSTEM = [
+  'You help a product owner think up honest voices (roles) for logins that the owner will create by hand on a platform.',
+  'The product data below is the owner\'s own approved information.',
+  'You cannot browse, run code or use tools. Do not ask questions.',
+  'Reply with a single JSON object and nothing else.'
+].join(' ')
+
+function rolesPrompt(input: RoleSuggestInput): AiTask {
+  const existing = input.existingRoles.map((r) => `- ${oneLine(r, 200)}`).slice(0, 20)
+  return {
+    label: 'channels.roles',
+    system: ROLES_SYSTEM,
+    timeoutMs: SUGGEST_TIMEOUT_MS,
+    prompt: [
+      productBlock(input.product, input.claims),
+      '',
+      `Platform: ${input.platform.platform} (${oneLine(input.platform.label, 60)})`,
+      '',
+      'Roles this product already has (do not repeat or rephrase them):',
+      existing.length > 0 ? existing.join('\n') : '(none)',
+      '',
+      `Suggest at most ${MAX_ROLES} roles: different voices in which people connected with this product could honestly take part in discussions on this platform.`,
+      'Rules:',
+      '- A role is an honest voice of a person connected with the product (for example its creator, a developer, someone who supports users, a practitioner who uses it and says so). It is never a fake independent customer or a neutral bystander.',
+      '- Every role must be able to say that it is connected with the product whenever it mentions the product.',
+      '- Do not suggest roles that claim credentials, qualifications or experiences (certified, licensed, expert, years of practice, degrees) that the approved statements above do not support.',
+      '- Do not suggest anything that praises the product as a neutral third party: no "happy customer", "independent reviewer", "just a user" or similar.',
+      '- Do not repeat or rephrase a role that already exists.',
+      `- "name" is short (at most ${MAX_ROLE_NAME} characters), for example "developer".`,
+      `- "voice" is plain words (at most ${MAX_VOICE} characters) on how this login writes and what it may talk about.`,
+      `- "usernameIdeas" has 1 to ${MAX_USERNAMES} login names: 3 to 24 characters, letters, digits and underscore only. No real people's names, no imitation of another brand, company or official account, no numbers that look like a birth year.`,
+      `- "reason" is one plain sentence (at most ${MAX_REASON} characters) on why this voice fits the audience.`,
+      '- The owner creates the logins by hand; never include passwords, keys or other credentials, instructions to automate posting or replying, or promises about results.',
+      '',
+      'Answer with JSON of exactly this shape (use [] if you have no honest suggestion):',
+      '{"roles":[{"name":"developer","voice":"...","usernameIdeas":["example_dev"],"reason":"..."}]}'
+    ].join('\n')
+  }
+}
+
+// Wording that presents a login as an independent third party, which a role must never do.
+const NEUTRAL_THIRD_PARTY =
+  /\b(?:independent|neutral|unbiased|impartial|third[- ]party)\b|\b(?:happy|satisfied|loyal|ordinary|regular|normal)\s+(?:customer|user|client)s?\b|\bjust\s+(?:an?\s+)?(?:\w+\s+)?(?:user|customer)\b/i
+// Credentials and experience a role may claim only when an approved statement says the same.
+const CREDENTIAL_CLAIM = /\b(?:certified|licensed|accredited|qualified|professional|expert|doctor|ph\.?d|degrees?|\d+\+?\s+years?)\b/gi
+// Login names that look official or like a birth year are not offered.
+const USERNAME_SHAPE = /^[A-Za-z0-9_]{3,24}$/
+const BIRTH_YEAR = /(?:19|20)\d{2}/
+const OFFICIAL_LOOK = /official|admin|moderator|verified/i
+
+/** Keys under which an existing role can be recognised: the whole entry, or its name and voice parts. */
+function existingRoleKeys(existing: string[]): Set<string> {
+  const keys = new Set<string>()
+  for (const entry of existing) {
+    keys.add(normalizeForCompare(entry))
+    const parts = /^(.*?)\s*(?::|—|–|\s-\s)\s*(.+)$/s.exec(entry)
+    if (parts) {
+      keys.add(normalizeForCompare(parts[1]))
+      keys.add(normalizeForCompare(parts[2]))
+    }
+  }
+  keys.delete('')
+  return keys
+}
+
+function unsupportedCredential(text: string, claims: RoleSuggestInput['claims']): boolean {
+  const claimed = text.match(CREDENTIAL_CLAIM) ?? []
+  if (claimed.length === 0) return false
+  const evidence = claims.map((c) => c.text.toLowerCase()).join('\n')
+  return claimed.some((c) => !evidence.includes(c.toLowerCase()))
+}
+
+function usernameIdeas(raw: unknown[]): string[] {
+  const ideas: string[] = []
+  const seen = new Set<string>()
+  for (const item of raw) {
+    if (typeof item !== 'string') continue
+    const idea = item.trim().replace(/^@/, '')
+    if (!USERNAME_SHAPE.test(idea) || BIRTH_YEAR.test(idea) || OFFICIAL_LOOK.test(idea) || unsafe(idea)) continue
+    if (seen.has(idea.toLowerCase())) continue
+    seen.add(idea.toLowerCase())
+    ideas.push(idea)
+    if (ideas.length >= MAX_USERNAMES) break
+  }
+  return ideas
+}
+
+function readRoles(raw: unknown, input: RoleSuggestInput): Parsed<RoleSuggestion[]> {
+  if (!isRecord(raw)) return { ok: false, error: 'the answer must be a JSON object' }
+  if (!Array.isArray(raw.roles)) return { ok: false, error: '"roles" must be an array' }
+
+  const taken = existingRoleKeys(input.existingRoles)
+  const names = new Set<string>()
+  const voices = new Set<string>()
+  const result: RoleSuggestion[] = []
+
+  for (const item of raw.roles) {
+    if (result.length >= MAX_ROLES) break
+    // A single bad idea is dropped; only a wrong overall shape asks the engine to try again.
+    if (!isRecord(item) || typeof item.name !== 'string' || typeof item.voice !== 'string' || typeof item.reason !== 'string' || !Array.isArray(item.usernameIdeas)) continue
+    const name = plainText(item.name, 10_000)
+    const voice = plainText(item.voice, MAX_VOICE)
+    const reason = plainText(item.reason, MAX_REASON)
+    if (!name || name.length > MAX_ROLE_NAME || !voice || !reason) continue
+    if (unsafe(name) || unsafe(voice) || unsafe(reason)) continue
+    if (NEUTRAL_THIRD_PARTY.test(name) || NEUTRAL_THIRD_PARTY.test(voice)) continue
+    if (unsupportedCredential(`${name}\n${voice}`, input.claims)) continue
+    const nameKey = normalizeForCompare(name)
+    const voiceKey = normalizeForCompare(voice)
+    if (taken.has(nameKey) || taken.has(voiceKey) || names.has(nameKey) || voices.has(voiceKey)) continue
+    const ideas = usernameIdeas(item.usernameIdeas)
+    if (ideas.length === 0) continue
+    names.add(nameKey)
+    voices.add(voiceKey)
+    result.push({ name, voice, usernameIdeas: ideas, reason })
+  }
+  return { ok: true, value: result }
+}
+
+/**
+ * Proposes up to four honest roles (a name, a voice and login-name ideas) for a login on one platform. Ideas only: the
+ * application never registers accounts, and the owner creates the real login by hand. Failures behave as in
+ * suggestChannels: one repair retry, then AiError('invalid_output'); a cancel is rethrown.
+ */
+export async function suggestRoles(engine: AiEngine, input: RoleSuggestInput, options: AiRunOptions = {}): Promise<RoleSuggestion[]> {
+  return askWithRepair(engine, rolesPrompt(input), (raw) => readRoles(raw, input), options)
 }
 
 // ───────────────────────────── site profile draft ─────────────────────────────

@@ -102,7 +102,11 @@ describe('platforms and site profiles (DEC-009)', () => {
     core.db.prepare('INSERT INTO products (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)').run(productId, 'Natal Mystic', now, now)
     const account = await core.router.call('accounts.create', { productId, platform: 'web', label: 'Forum login' })
     const page = new FakePage()
-    page.responses = [{ match: 'const MAX', value: { title: 'Example forum', outline: 'body\n  ul.topics\n    li.topic', links: [] } }]
+    // The outline script, then the counts of the draft's selectors (li.topic is what the example profile uses for discussions).
+    page.responses = [
+      { match: 'const MAX', value: { title: 'Example forum', outline: 'body\n  ul.topics\n    li.topic', links: [] } },
+      { match: '"selector":"li.topic"', value: 4 }
+    ]
     t.browser.pages.set(account.id, page)
     return { t, core, productId, account, page }
   }
@@ -134,6 +138,7 @@ describe('platforms and site profiles (DEC-009)', () => {
     expect(draft).toMatchObject({ host: 'forum.example.com', valid: true, problems: [], instructions: [] })
     expect(draft.summary.join('\n')).toMatch(/Channel pages: https:\/\/forum\.example\.com\/c\/\*/)
     expect(draft.summary.join('\n')).toMatch(/Can publish a new post in 6 steps/)
+    expect(draft.summary).toContain('Found 4 discussions on the page that was read.')
     expect(page.log.filter((entry) => /^(fill|click|upload)\b/.test(entry))).toEqual([])
     expect(core.repos.listChannels()).toEqual([])
     expect(await core.router.call('channels.saveProfile', { host: 'forum.example.com', definition: draft.definition })).toMatchObject({ version: 1, valid: true })
@@ -162,5 +167,25 @@ describe('platforms and site profiles (DEC-009)', () => {
     expect(draft).toMatchObject({ valid: false, definition: null })
     expect(draft.instructions[0]).toMatch(/tools on this computer/)
     expect(page.log).toEqual([])
+  })
+
+  it('does not accept a draft whose selectors match nothing on the pages that were read, and saves nothing', async () => {
+    const { t, core, productId, account, page } = await forumWorld()
+    // What an AI wrote for a page with no discussions at all: selectors that exist nowhere on it.
+    const ungrounded = validProfileDefinition({
+      login: { loggedInSelector: '[data-logged-in=true]' },
+      discussions: { containerSelector: 'body', itemSelector: '[data-discussion]', id: { attr: 'data-id' }, title: { selector: 'a' } },
+      comments: { containerSelector: 'body', itemSelector: '[data-comment]', id: { attr: 'data-id' }, body: { selector: 'p' } }
+    })
+    page.responses.push({ match: '"selector":"[data-discussion]"', value: 0 }, { match: '"selector":"[data-comment]"', value: 0 })
+    t.engine.on('channels.site_profile', JSON.stringify(ungrounded))
+
+    const draft = await core.router.call('channels.draftProfile', { productId, accountId: account.id, url: FORUM })
+
+    const reason = 'The draft names parts of the page that do not exist on the pages that were read: [data-discussion]'
+    expect(draft).toMatchObject({ host: 'forum.example.com', valid: false, problems: [reason], summary: [] })
+    expect(draft.instructions[0]).toBe(reason)
+    expect(page.log.filter((entry) => /^(fill|click|upload)\b/.test(entry))).toEqual([])
+    expect(core.db.prepare('SELECT COUNT(*) AS n FROM connector_profiles').get()).toEqual({ n: 0 })
   })
 })

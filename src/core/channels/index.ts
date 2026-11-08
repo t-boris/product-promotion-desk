@@ -7,10 +7,11 @@ import type { Core } from '../core'
 import type { Clock, Connector } from '../ports'
 import type { Db } from '../db/database'
 import { AccountsService } from './accounts'
-import { draftSiteProfile, suggestChannels } from './ai-help'
+import { draftSiteProfile, suggestChannels, suggestRoles } from './ai-help'
 import { ChannelService } from './channel-service'
 import { listPlatforms } from './platforms'
 import { ProfileService } from './profiles'
+import { RoleSuggestionService } from './roles'
 import { ChannelsStore } from './store'
 import { SuggestionService } from './suggestions'
 
@@ -31,6 +32,7 @@ export function register(core: Core): void {
   const channels = new ChannelService(core, store, accounts)
   const profiles = new ProfileService(core, accounts, { draftSiteProfile })
   const suggestions = new SuggestionService(core, { suggestChannels })
+  const roles = new RoleSuggestionService(core, { suggestRoles })
 
   core.services.channels = {
     markCapabilityVerified: (channelId, key, detail) => channels.markCapabilityVerified(channelId, key, detail)
@@ -40,6 +42,8 @@ export function register(core: Core): void {
     'accounts.list': (args) => accounts.list(args),
     'accounts.create': (args) => accounts.create(args),
     'accounts.remove': (args) => accounts.remove(args.id),
+    'accounts.setRole': (args) => accounts.setRole(args),
+    'accounts.suggestRoles': (args) => roles.suggest(args),
     'platforms.list': () => listPlatforms(core.connectors),
     'accounts.openBrowser': (args) => accounts.openBrowser(args),
     'accounts.takeControl': (args) => accounts.takeControl(args.accountId),

@@ -18,7 +18,13 @@ const GOOD = { schema: 1, name: 'Example forum', host: 'forum.example.com' }
 
 class SiteConnector extends FakeConnector {
   readonly saved: { host: string; definition: unknown; version: number }[] = []
-  readonly authoring: ProfileAuthoring = {
+  readonly authoring: ProfileAuthoring & { partsOnPage(definition: unknown, url: string): { discussions: string | null; comments: string | null } } = {
+    // The stand-in profile may name the item selectors it relies on; comments only matter on pages like /t/1.
+    partsOnPage: (definition, url) => {
+      const d = (typeof definition === 'object' && definition !== null ? definition : {}) as { discussions?: unknown; comments?: unknown }
+      const pick = (value: unknown): string | null => (typeof value === 'string' ? value : null)
+      return { discussions: pick(d.discussions), comments: url.includes('/t/') ? pick(d.comments) : null }
+    },
     describeFormat: () => 'FORMAT: a profile has schema, name and host. Never include code.',
     validateDefinition: (definition) => {
       const d = typeof definition === 'object' && definition !== null ? (definition as Record<string, unknown>) : null
@@ -54,6 +60,10 @@ class SitePage extends FakePage {
   readonly timeouts: (number | undefined)[] = []
   onGoto: () => void = () => undefined
   failOn = new Set<string>()
+  /** url → selector → how many elements match; a selector that is not listed matches nothing. */
+  matches: Record<string, Record<string, number>> = {}
+  /** What a count answers instead of a number (to see how an unusable answer is handled). */
+  countAnswer: unknown = undefined
   constructor(readonly site: Record<string, SiteSpec>, readonly redirects: Record<string, string> = {}) {
     super()
   }
@@ -66,6 +76,12 @@ class SitePage extends FakePage {
   }
   override async read<T>(script: string): Promise<T> {
     this.log.push(`read ${script.slice(0, 20)}`)
+    if (script.includes('querySelectorAll(cfg.selector)')) {
+      this.log.push('count')
+      if (this.countAnswer !== undefined) return this.countAnswer as T
+      const selector = JSON.parse(/\}\)\(\{"selector":("(?:[^"\\]|\\.)*")\}\)$/.exec(script)?.[1] ?? '""') as string
+      return (this.matches[this.currentUrl]?.[selector] ?? 0) as T
+    }
     const spec = this.site[this.currentUrl]
     return (spec ? { title: spec.title ?? 'Page', outline: spec.outline, links: spec.links ?? [] } : null) as T
   }
@@ -98,14 +114,14 @@ interface Setup {
   profiles: ProfileService
 }
 
-async function setup(options: { site?: Record<string, SiteSpec>; redirects?: Record<string, string>; ai?: ConstructorParameters<typeof ProfileService>[2]; now?: () => number } = {}): Promise<Setup> {
+async function setup(options: { site?: Record<string, SiteSpec>; redirects?: Record<string, string>; ai?: ConstructorParameters<typeof ProfileService>[2]; now?: () => number; groundingBudgetMs?: number } = {}): Promise<Setup> {
   const connector = new SiteConnector()
   const w = makeWorld({ extra: [connector] })
   const web = await w.call('accounts.create', { productId: w.productId, platform: 'web', label: 'Forum login' })
   const page = new SitePage(options.site ?? FORUM_SITE, options.redirects)
   w.t.browser.pages.set(web.id, page)
   const store = new ChannelsStore(w.core.db, w.core.clock, w.core.repos)
-  const profiles = new ProfileService(w.core, new AccountsService(w.core, store), options.ai ?? { draftSiteProfile }, { now: options.now })
+  const profiles = new ProfileService(w.core, new AccountsService(w.core, store), options.ai ?? { draftSiteProfile }, { now: options.now, groundingBudgetMs: options.groundingBudgetMs })
   return { w, connector, accountId: web.id, page, profiles }
 }
 
@@ -423,5 +439,179 @@ describe('channels.draftProfile: the answer is checked again here', () => {
     const draft = await s.w.call('channels.draftProfile', draftArgs(s))
     const saved = await s.w.call('channels.saveProfile', { host: draft.host, definition: draft.definition })
     expect(saved).toMatchObject({ host: 'forum.example.com', version: 1, valid: true })
+  })
+})
+
+// ───────────────────────────── the draft must be about this site (grounding) ─────────────────────────────
+
+describe('channels.draftProfile: a draft must name parts that exist on the pages that were read', () => {
+  const THREAD = 'https://forum.example.com/t/1'
+  const GROUNDED = { ...GOOD, discussions: '[data-discussion]', comments: '[data-comment]' }
+  const reads = (page: FakePage): number => page.log.filter((entry) => entry === 'count').length
+
+  /** The forum's front page (with a topic link) and one thread, so a discussion page is read as well. */
+  const withThread = (): Record<string, SiteSpec> => ({
+    [HOME]: { title: 'Example forum', outline: 'body\n  ul.topics', links: [{ href: THREAD, text: 'Topic one' }] },
+    [THREAD]: { title: 'Topic one', outline: 'body\n  div.posts' }
+  })
+
+  async function drafted(s: Setup, definition: unknown = GROUNDED) {
+    s.w.t.engine.on('channels.site_profile', JSON.stringify(definition))
+    return s.profiles.draftProfile(draftArgs(s))
+  }
+
+  it('a page with no discussions at all: selectors that match nothing make the draft invalid, with the reason first', async () => {
+    const s = await setup({ site: { 'https://example.com/': { title: 'Example Domain', outline: 'body\n  div\n    h1 "Example Domain"\n    p "This domain is for use in documentation."' } } })
+    const definition = { ...GROUNDED, host: 'example.com', discussions: '[data-discussion]', comments: '[data-comment]', login: '[data-logged-in=true]' }
+    s.w.t.engine.on('channels.site_profile', JSON.stringify(definition))
+    const draft = await s.w.call('channels.draftProfile', draftArgs(s, 'https://example.com/'))
+
+    const reason = 'The draft names parts of the page that do not exist on the pages that were read: [data-discussion]'
+    expect(draft).toMatchObject({ host: 'example.com', definition, valid: false, problems: [reason], summary: [] })
+    expect(draft.instructions[0]).toBe(reason)
+    expect(draft.instructions.length).toBeGreaterThan(3)
+    expect(s.connector.saved).toEqual([]) // nothing is saved
+    expect(writes(s.page)).toEqual([])
+    expect(s.w.core.log.list(10, 'warn').some((e) => e.message.includes(reason))).toBe(true)
+  })
+
+  it('selectors that match give a summary line the owner can check, and the draft stays valid', async () => {
+    const s = await setup()
+    s.page.matches[HOME] = { '[data-discussion]': 12 }
+    const draft = await drafted(s)
+    expect(draft).toMatchObject({ valid: true, problems: [], instructions: [] })
+    expect(draft.summary).toEqual(['Site: Example forum (forum.example.com)', 'Reads discussions', 'Found 12 discussions on the page that was read.'])
+    expect(writes(s.page)).toEqual([])
+    expect(s.page.log.every((entry) => /^(goto|read|wait|url|count)\b/.test(entry))).toBe(true)
+  })
+
+  it('says "1 discussion" for one match', async () => {
+    const s = await setup()
+    s.page.matches[HOME] = { '[data-discussion]': 1 }
+    expect((await drafted(s)).summary).toContain('Found 1 discussion on the page that was read.')
+  })
+
+  it('a selector that matches on any one of the pages that were read is enough', async () => {
+    const s = await setup()
+    s.page.matches['https://forum.example.com/c/general'] = { '[data-discussion]': 3 }
+    const draft = await drafted(s)
+    expect(draft.valid).toBe(true)
+    expect(draft.summary).toContain('Found 3 discussions on the page that was read.')
+  })
+
+  it('looks at the pages that were read again, and only those', async () => {
+    const s = await setup()
+    s.page.matches[HOME] = { '[data-discussion]': 2 }
+    await drafted(s)
+    const visits = opened(s.page)
+    expect(visits.slice(0, 3)).toEqual([HOME, 'https://forum.example.com/new-topic', 'https://forum.example.com/c/general'])
+    expect(visits.slice(3)).toEqual([HOME, 'https://forum.example.com/new-topic', 'https://forum.example.com/c/general'])
+    expect(reads(s.page)).toBe(3)
+  })
+
+  it('counts comments on a discussion page that was read', async () => {
+    const s = await setup({ site: withThread() })
+    s.page.matches[HOME] = { '[data-discussion]': 4 }
+    s.page.matches[THREAD] = { '[data-comment]': 7 }
+    const draft = await drafted(s)
+    expect(draft.valid).toBe(true)
+    expect(draft.summary).toEqual(expect.arrayContaining(['Found 4 discussions on the page that was read.', 'Found 7 comments on the discussion page that was read.']))
+  })
+
+  it('a discussion page without comments is said, not held against the draft (a thread without replies is normal)', async () => {
+    const s = await setup({ site: withThread() })
+    s.page.matches[HOME] = { '[data-discussion]': 4 }
+    const draft = await drafted(s)
+    expect(draft.valid).toBe(true)
+    expect(draft.summary.at(-1)).toMatch(/^No comments were visible on the discussion page that was read/)
+  })
+
+  it('does not look for comments when no discussion page was read', async () => {
+    const s = await setup()
+    s.page.matches[HOME] = { '[data-discussion]': 4 }
+    const draft = await drafted(s)
+    expect(draft.summary.join(' ')).not.toMatch(/comment/i)
+  })
+
+  it('a profile that names no selectors is left as it is, and the pages are not opened again', async () => {
+    const s = await setup()
+    const draft = await drafted(s, GOOD)
+    expect(draft.valid).toBe(true)
+    expect(opened(s.page)).toHaveLength(3)
+    expect(reads(s.page)).toBe(0)
+  })
+
+  it('a selector the page rejects matches nothing', async () => {
+    const s = await setup()
+    s.page.countAnswer = -1
+    const draft = await drafted(s)
+    expect(draft.valid).toBe(false)
+    expect(draft.problems).toEqual(['The draft names parts of the page that do not exist on the pages that were read: [data-discussion]'])
+  })
+
+  it('does not call a draft wrong when it could not be checked: an unusable answer, a page that will not load, a site that moved', async () => {
+    const unusable = await setup()
+    unusable.page.countAnswer = 'about:blank'
+    expect((await drafted(unusable)).problems).toEqual(['The draft could not be checked against the site. Try again.'])
+
+    const broken = await setup()
+    let gotos = 0
+    broken.page.onGoto = () => {
+      gotos += 1
+      if (gotos > 3) throw new Error('net::ERR_FAILED')
+    }
+    const draft = await drafted(broken)
+    expect(draft.valid).toBe(false)
+    expect(draft.problems).toEqual(['The draft could not be checked against the site. Try again.'])
+    expect(draft.instructions[0]).toBe(draft.problems[0])
+
+    const moved = await setup()
+    moved.page.onGoto = () => {
+      if (opened(moved.page).length > 3) moved.page.redirects[HOME] = 'https://elsewhere.example.org/'
+    }
+    moved.page.matches[HOME] = { '[data-discussion]': 5 }
+    moved.page.matches['https://elsewhere.example.org/'] = { '[data-discussion]': 5 }
+    const redirected = await drafted(moved)
+    expect(redirected.valid).toBe(false) // a count on another site proves nothing about this one
+  })
+
+  it('when the person takes the browser while the draft is checked, the draft is held back, not accepted', async () => {
+    const s = await setup()
+    s.page.matches[HOME] = { '[data-discussion]': 5 }
+    s.page.onGoto = () => {
+      if (opened(s.page).length === 4) s.w.t.browser.sessions.get(s.accountId)?.takeControl()
+    }
+    const draft = await drafted(s)
+    expect(draft.valid).toBe(false)
+    expect(draft.problems[0]).toMatch(/could not be checked against the site/)
+    expect(s.connector.saved).toEqual([])
+  })
+
+  it('checking has its own budget: when it is used up before anything was counted, the draft is reported as not checked', async () => {
+    const s = await setup({ groundingBudgetMs: 500 })
+    s.page.matches[HOME] = { '[data-discussion]': 5 }
+    const draft = await drafted(s)
+    expect(draft.valid).toBe(false)
+    expect(draft.problems).toEqual(['The draft could not be checked against the site. Try again.'])
+    expect(reads(s.page)).toBe(0)
+  })
+
+  it('a match found before the checking budget ran out is enough', async () => {
+    let clock = 0
+    const s = await setup({ now: () => clock })
+    s.page.matches[HOME] = { '[data-discussion]': 5 }
+    s.page.onGoto = () => (clock += 20_000) // reading takes 60 s in all; checking has 30 s, so only two pages are reached
+    const draft = await drafted(s)
+    expect(draft.valid).toBe(true)
+    expect(draft.summary).toContain('Found 5 discussions on the page that was read.')
+  })
+
+  it('what the AI says about its own check is not trusted: a draft it calls valid is still checked', async () => {
+    const s = await setup({
+      ai: { draftSiteProfile: async () => ({ host: 'forum.example.com', definition: GROUNDED, valid: true, problems: [], summary: ['The AI says it found 40 discussions'], instructions: [] }) }
+    })
+    const draft = await s.profiles.draftProfile(draftArgs(s))
+    expect(draft.valid).toBe(false)
+    expect(draft.summary).toEqual([])
   })
 })

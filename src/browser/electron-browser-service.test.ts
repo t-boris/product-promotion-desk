@@ -21,7 +21,8 @@ const account = (id: string, partition = `persist:ppd-${id}`): Account => ({
   partition,
   status: 'ready',
   createdAt: '2026-11-08T00:00:00.000Z',
-  productId: null
+  productId: null,
+  role: null
 })
 
 function setup() {

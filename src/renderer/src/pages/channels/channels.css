@@ -131,3 +131,9 @@ textarea.input.short {
 .note p {
   margin: 4px 0;
 }
+
+.role-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

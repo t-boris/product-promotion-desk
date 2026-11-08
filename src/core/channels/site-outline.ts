@@ -77,6 +77,14 @@ export function outlineScript(): string {
 })()`
 }
 
+/**
+ * A script for BrowserPage.read(): how many elements on the page match a selector (-1 when it is not a valid selector).
+ * The selector comes from an AI draft and is only ever data: it is passed as a JSON literal and never run as code.
+ */
+export function countScript(selector: string): string {
+  return `((cfg) => { try { return document.querySelectorAll(cfg.selector).length; } catch (e) { return -1; } })(${JSON.stringify({ selector })})`
+}
+
 export interface PageOutline {
   title: string
   outline: string

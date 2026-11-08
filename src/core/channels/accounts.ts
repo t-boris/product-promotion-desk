@@ -2,12 +2,13 @@
 // Passwords are typed by the person on the site's own page; nothing here reads, requests or stores credentials.
 
 import { ApiError } from '../../shared/api'
-import type { Account, Channel } from '../../shared/types'
+import type { Account, AccountRole, Channel } from '../../shared/types'
 import { DEFAULT_CHANNEL_SETTINGS } from '../../shared/types'
 import type { Core } from '../core'
 import type { BrowserService, Connector, ConnectorContext } from '../ports'
 import { browserError, found, requireText } from './errors'
 import { loginOutcome } from './login'
+import { parseRole, sameRoleName } from './roles'
 import { blankCapabilities } from './capabilities'
 import type { ChannelsStore } from './store'
 import { parseBrowserUrl } from './urls'
@@ -51,7 +52,7 @@ export class AccountsService {
   }
 
   /** An account belongs to one product and has its own login and browser session (DEC-009). */
-  create(args: { productId: string; platform: string; label: string }): Account {
+  create(args: { productId: string; platform: string; label: string; role?: AccountRole | null }): Account {
     const productId = requireText(args.productId, 'The product')
     const product = found(() => this.core.repos.product(productId), 'The product')
     const platform = requireText(args.platform, 'The platform').toLowerCase()
@@ -61,10 +62,34 @@ export class AccountsService {
     if (!known.includes(platform)) {
       throw new ApiError('invalid_input', `Unknown platform "${platform}". Available: ${known.join(', ') || 'none'}.`)
     }
-    const account = this.store.insertAccount(product.id, platform, label)
-    this.core.log.info('accounts', `Account created for "${product.name}": ${label} (${platform}). Sign in through the account browser.`)
+    const role = parseRole(args.role)
+    if (role) this.requireFreeRoleName(product.id, platform, role.name)
+    const account = this.store.insertAccount(product.id, platform, label, role)
+    this.core.log.info('accounts', `Account created for "${product.name}": ${label} (${platform})${role ? `, role "${role.name}"` : ''}. Sign in through the account browser.`)
     this.core.events.changed('accounts', 'attention')
     return account
+  }
+
+  /** Sets, changes or removes (null) the role of a login (DEC-010). The role belongs to the account, whichever product uses it. */
+  setRole(args: { accountId: string; role: AccountRole | null }): Account {
+    const account = this.account(args.accountId)
+    const role = parseRole(args.role)
+    if (role) this.requireFreeRoleName(account.productId, account.platform, role.name, account.id)
+    if (role?.name === account.role?.name && role?.voice === account.role?.voice) return account
+    const updated = this.store.setRole(account.id, role)
+    this.core.log.info('accounts', role ? `Role of ${account.label} set to "${role.name}".` : `Role of ${account.label} removed.`)
+    this.core.events.changed('accounts')
+    return updated
+  }
+
+  /** Two logins of one product on one platform may not play the same role (compared without regard to case). */
+  private requireFreeRoleName(productId: string | null, platform: string, name: string, exceptAccountId?: string): void {
+    const clash = this.core.repos
+      .listAccounts()
+      .find((a) => a.id !== exceptAccountId && a.productId === productId && a.platform === platform && a.role !== null && sameRoleName(a.role.name, name))
+    if (clash) {
+      throw new ApiError('role_exists', `Another login of this product on the same platform (${clash.label}) already has the role "${clash.role?.name}". Give this login a different role name.`)
+    }
   }
 
   async remove(id: unknown): Promise<void> {

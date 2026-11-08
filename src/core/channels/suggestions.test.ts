@@ -4,7 +4,9 @@ import { describe, expect, it } from 'vitest'
 import type { Claim } from '../../shared/types'
 import type { KnowledgeProvider } from '../services'
 import { AiError } from '../ports'
-import { SuggestionService, type SuggestHelp } from './suggestions'
+import { Connectors } from '../connector-registry'
+import type { Connector } from '../ports'
+import { SuggestionService, connectableSuggestions, type SuggestHelp } from './suggestions'
 import { suggestChannels } from './ai-help'
 import { makeReadyWorld, type World } from './test-helpers'
 
@@ -127,5 +129,44 @@ describe('channels.suggest', () => {
     )
     const suggestions = await w.call('channels.suggest', { productId: w.productId })
     expect(suggestions.map((s) => s.target)).toEqual(['r/astrology'])
+  })
+
+  it('leaves out ideas whose address the connector cannot read', async () => {
+    const w = await world()
+    w.core.services.knowledge = knowledge([claim('c1', 'identity', 'Makes birth chart reports')])
+    const service = new SuggestionService(w.core, {
+      suggestChannels: async () => [
+        { platform: 'fake', target: 'r/astrology', reason: 'Real address.' },
+        { platform: 'fake', target: 'Reddit: a subreddit for beginner birth chart readings', reason: 'A description, not an address.' },
+        { platform: 'other', target: 'https://forum.example.com/', reason: 'No universal connector is registered here.' },
+        { platform: 'nowhere', target: 'r/x', reason: 'Unknown platform.' }
+      ]
+    })
+    expect(await service.suggest({ productId: w.productId })).toEqual([{ platform: 'fake', target: 'r/astrology', reason: 'Real address.' }])
+  })
+})
+
+describe('connectableSuggestions', () => {
+  const site = (id: string, platform: string, matches: (s: string) => boolean): Connector =>
+    ({
+      id,
+      platform,
+      version: '1',
+      matches,
+      normalizeTarget: (input: string) => {
+        if (!/^https?:\/\//i.test(input)) throw new Error('not an address')
+        return { target: input, url: input }
+      }
+    }) as unknown as Connector
+
+  it('accepts web addresses for other sites through the universal connector only, and never bare words or other schemes', () => {
+    const registry = new Connectors([site('universal', 'other', (s) => /^https?:\/\//i.test(s))])
+    const ideas = [
+      { platform: 'other', target: 'https://www.quora.com/topic/Astrology', reason: 'a' },
+      { platform: 'other', target: 'astro.com forum', reason: 'b' },
+      { platform: 'other', target: 'ftp://files.example.com/', reason: 'c' },
+      { platform: 'other', target: 'Astrodienst (astro.com) user forum or community section', reason: 'd' }
+    ]
+    expect(connectableSuggestions(registry, ideas).map((i) => i.target)).toEqual(['https://www.quora.com/topic/Astrology'])
   })
 })

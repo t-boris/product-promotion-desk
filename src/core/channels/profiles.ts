@@ -12,15 +12,26 @@ import { TakeoverError, type BrowserPage, type Connector, type ProfileAuthoring 
 import type { AccountsService } from './accounts'
 import { manualInstructions, type draftSiteProfile } from './ai-help'
 import { browserError, found, requireText } from './errors'
-import { chooseLinks, outlineScript, parsePageOutline, publicSite, sameSite } from './site-outline'
+import { chooseLinks, countScript, outlineScript, parsePageOutline, publicSite, sameSite } from './site-outline'
 
 /** About how long reading the whole site may take. */
 export const DRAFT_BUDGET_MS = 60_000
 const PAGE_LOAD_MS = 30_000
 const MAX_PAGES = 3
 
+/** About how long checking a draft against the pages that were read may take. */
+export const GROUNDING_BUDGET_MS = 30_000
+
+/** What was counted on one page; a missing number was not asked for or could not be counted. */
+interface PageCount {
+  discussions?: number
+  comments?: number
+}
+
 export interface ProfileServiceOptions {
   budgetMs?: number
+  /** How long checking the draft against the pages may take. */
+  groundingBudgetMs?: number
   /** Milliseconds clock for the reading budget (tests replace it). */
   now?: () => number
 }
@@ -38,6 +49,7 @@ export interface ProfileHelp {
 
 export class ProfileService {
   private readonly budgetMs: number
+  private readonly groundingBudgetMs: number
   private readonly now: () => number
 
   constructor(
@@ -47,6 +59,7 @@ export class ProfileService {
     options: ProfileServiceOptions = {}
   ) {
     this.budgetMs = options.budgetMs ?? DRAFT_BUDGET_MS
+    this.groundingBudgetMs = options.groundingBudgetMs ?? GROUNDING_BUDGET_MS
     this.now = options.now ?? Date.now
   }
 
@@ -124,7 +137,85 @@ export class ProfileService {
     } catch (error) {
       return unusable(host, `The AI could not prepare a profile (${error instanceof Error ? error.message : String(error)}).`)
     }
-    return this.checked(draft, host, authoring)
+    const checked = this.checked(draft, host, authoring)
+    if (!checked.valid || pages.length === 0 || !authoring.partsOnPage) return checked
+    return this.grounded(checked, account, host, pages, authoring.partsOnPage.bind(authoring))
+  }
+
+  // ───────────── is the draft about this site? ─────────────
+
+  /**
+   * A draft that passes the schema can still describe a site that does not exist: selectors that match nothing on the pages
+   * that were read. They are tried again on those pages (counting matches, read-only). A discussions selector that matches
+   * nothing anywhere makes the draft invalid; matches become a summary line the owner can check.
+   */
+  private async grounded(draft: SiteProfileDraft, account: Account, host: string, pages: ReadPage[], partsOnPage: NonNullable<ProfileAuthoring['partsOnPage']>): Promise<SiteProfileDraft> {
+    const wanted = pages.map((page) => ({ url: page.url, ...partsOnPage(draft.definition, page.url) }))
+    const discussionSelector = wanted.find((w) => w.discussions !== null)?.discussions ?? null
+    const commentSelector = wanted.find((w) => w.comments !== null)?.comments ?? null
+    if (discussionSelector === null && commentSelector === null) return draft
+
+    let counts: PageCount[]
+    try {
+      counts = await this.core.browser.session(account).withAgentControl(`ground:${host}`, (page) => this.countParts(page, wanted, host))
+    } catch (error) {
+      return this.ungrounded(draft, `The draft could not be checked against the site (${error instanceof Error ? error.message : String(error)}). Try again.`)
+    }
+
+    const summary = [...draft.summary]
+    if (discussionSelector !== null) {
+      const counted = counts.flatMap((c) => (c.discussions === undefined ? [] : [c.discussions]))
+      const most = Math.max(0, ...counted)
+      if (most === 0) {
+        const asked = wanted.filter((w) => w.discussions !== null).length
+        if (counted.length < asked) return this.ungrounded(draft, 'The draft could not be checked against the site. Try again.')
+        return this.ungrounded(draft, `The draft names parts of the page that do not exist on the pages that were read: ${discussionSelector}`)
+      }
+      summary.push(`Found ${most} discussion${most === 1 ? '' : 's'} on the page that was read.`)
+    }
+    if (commentSelector !== null) {
+      // A discussion without replies is normal, so comments that are not there are said, not held against the draft.
+      const most = Math.max(0, ...counts.flatMap((c) => (c.comments === undefined ? [] : [c.comments])))
+      summary.push(most > 0 ? `Found ${most} comment${most === 1 ? '' : 's'} on the discussion page that was read.` : 'No comments were visible on the discussion page that was read, so the comment part of the profile is not confirmed.')
+    }
+    return { ...draft, summary }
+  }
+
+  /** The draft as the owner sees it when it could not be tied to the site: not valid, nothing to save, the reason first. */
+  private ungrounded(draft: SiteProfileDraft, reason: string): SiteProfileDraft {
+    this.core.log.warn('channels', `A draft profile for ${draft.host} was not accepted: ${reason}`)
+    return { host: draft.host, definition: draft.definition, valid: false, problems: [reason], summary: [], instructions: manualInstructions(draft.host, reason) }
+  }
+
+  /** Opens the pages that were read once more and counts matches of the draft's selectors: goto and read only. */
+  private async countParts(page: BrowserPage, wanted: { url: string; discussions: string | null; comments: string | null }[], host: string): Promise<PageCount[]> {
+    const deadline = this.now() + this.groundingBudgetMs
+    const counts: PageCount[] = []
+    for (const target of wanted) {
+      const remaining = deadline - this.now()
+      const count: PageCount = {}
+      counts.push(count)
+      if (remaining <= 1_000) continue
+      try {
+        await page.goto(target.url, { timeoutMs: Math.min(PAGE_LOAD_MS, remaining) })
+        await page.waitForSelector('body', Math.min(3_000, Math.max(0, deadline - this.now())))
+        const landed = hostOf(await page.url())
+        if (!landed || !sameSite(landed, host)) continue // another site says nothing about this one
+        if (target.discussions !== null) count.discussions = await this.matches(page, target.discussions)
+        if (target.comments !== null) count.comments = await this.matches(page, target.comments)
+      } catch (error) {
+        if (error instanceof TakeoverError) throw error
+        // A page that does not load again stays unchecked; the others still count.
+      }
+    }
+    return counts
+  }
+
+  /** How many elements match; undefined when the page gave no usable number. A selector the page rejects matches nothing. */
+  private async matches(page: BrowserPage, selector: string): Promise<number | undefined> {
+    const value = await page.read<unknown>(countScript(selector))
+    if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+    return value > 0 ? Math.floor(value) : 0
   }
 
   /** The draft as the owner will see it: validated again here, whatever the AI helper claimed, and tied to the site that was read. */

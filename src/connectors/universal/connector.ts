@@ -72,7 +72,14 @@ export class UniversalConnector implements Connector {
       const saved = this.store.save(definition)
       return { id: saved.id, host: saved.host, version: saved.version, valid: saved.valid, errors: saved.errors }
     },
-    hasValidProfile: (host) => Boolean(this.profiles?.forHost(host).valid)
+    hasValidProfile: (host) => Boolean(this.profiles?.forHost(host).valid),
+    // What the core checks a draft against: the item selectors the profile relies on for this page. Comments only matter
+    // on the pages the profile itself calls discussion pages.
+    partsOnPage: (definition, url) => {
+      const profile = validateProfile(definition).profile
+      if (!profile) return { discussions: null, comments: null }
+      return { discussions: profile.discussions.itemSelector, comments: matchesAnyGlob(profile.discussionUrls, url) ? profile.comments.itemSelector : null }
+    }
   }
 
   private profiles: ProfileProvider | null = null
