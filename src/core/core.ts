@@ -4,6 +4,7 @@ import { openDatabase, type Db } from './db/database'
 import { EngineRegistry } from './engines'
 import { EventBus } from './events'
 import { Logger } from './logger'
+import type { AgentBridge } from './mcp/protocol'
 import {
   systemClock,
   type AiEngine,
@@ -38,6 +39,8 @@ export interface CoreDeps {
   /** Where passwords are kept; without one the vault is unavailable and says so (DEC-014). */
   secrets?: SecretStore
   clipboard?: SecretClipboard
+  /** Offers the AI's tools to an engine run through the app's MCP server (DEC-018); without it the AI browser agent is unavailable. */
+  agentBridge?: AgentBridge
   /** Waits for a page to react between steps; tests supply one that does not wait. */
   sleep?: (ms: number) => Promise<void>
   echoLogs?: boolean
@@ -57,6 +60,7 @@ export class Core {
   readonly browser: BrowserService
   readonly secrets: SecretStore
   readonly clipboard: SecretClipboard | null
+  readonly agentBridge: AgentBridge | null
   readonly sleep: (ms: number) => Promise<void>
   readonly tickets: TicketAuthority
   readonly router = new ApiRouter()
@@ -84,6 +88,7 @@ export class Core {
     this.tickets = new TicketAuthority(this.clock, deps.secret)
     this.secrets = deps.secrets ?? new UnavailableSecretStore()
     this.clipboard = deps.clipboard ?? null
+    this.agentBridge = deps.agentBridge ?? null
     this.sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
     this.browser = typeof deps.browser === 'function' ? deps.browser(this.tickets) : deps.browser
     registerModules(this)

@@ -263,6 +263,18 @@ export interface AgentReadiness {
   reason: string | null
 }
 
+/** What the AI asked the owner and is waiting for (a CAPTCHA, a code): shown as a pop-up on any screen. */
+export interface AgentQuestion {
+  text: string
+  askedAt: IsoTime
+}
+
+/** A question of a run, with the account it is about, for the pop-up that appears on any screen. */
+export interface AgentAsk extends AgentQuestion {
+  accountId: Id
+  accountLabel: string
+}
+
 /** One run of the browser agent on one account: what it is doing or why it stopped, and what it did. Kept in memory; no secret is ever in it. */
 export interface AgentRun {
   accountId: Id
@@ -274,6 +286,8 @@ export interface AgentRun {
   lines: string[]
   /** Plain values the AI chose itself on the site (names, a birth date): the owner may need them later. */
   typed: { label: string; value: string }[]
+  /** Set while the AI waits for the owner's answer; the pop-up shows it. */
+  question: AgentQuestion | null
   startedAt: IsoTime
   finishedAt: IsoTime | null
 }

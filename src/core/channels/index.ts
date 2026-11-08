@@ -74,6 +74,8 @@ export function register(core: Core): void {
     'agent.start': (args) => agent.start(args),
     'agent.state': (args) => agent.state(args.accountId),
     'agent.stop': (args) => agent.stop(args.accountId),
+    'agent.answer': (args) => agent.answer(args),
+    'agent.questions': () => agent.questions(),
     'vault.status': () => vault.status(),
     'vault.savePassword': (args) => vault.savePassword(args),
     'vault.removePassword': (args) => vault.removePassword(args.accountId),

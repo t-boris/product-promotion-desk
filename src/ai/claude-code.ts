@@ -12,11 +12,16 @@ import { CliEngine, type CliEngineOptions } from './cli-engine'
  * init event listed tools=[], mcp_servers=[], skills=[] and slash_commands=[] for exactly this argument list. The
  * listed agents are not callable because the tool that starts them is among the disabled built-ins. A future CLI
  * version that changed these flags would invalidate this claim, so the flags and this value must change together.
+ *
+ * An agent mission (`task.agent`, DEC-018) is a different run: the engine gets FULL ACCESS (`--dangerously-skip-permissions`, as MarkView
+ * starts its agents) and only the application's MCP server (`--strict-mcp-config`, so the owner's other servers, among them other
+ * browsers, are not loaded). `--mcp-config` takes several values, so it is the last option; the goal goes on stdin.
  */
 export class ClaudeCodeEngine extends CliEngine {
   readonly id = 'claude' as const
   readonly label = 'Claude Code'
   readonly toolFree = true
+  readonly supportsAgent = true
   protected readonly binaryName = 'claude'
 
   constructor(options: CliEngineOptions = {}) {
@@ -24,6 +29,12 @@ export class ClaudeCodeEngine extends CliEngine {
   }
 
   protected buildArgs(task: AiTask): string[] {
+    if (task.agent) {
+      const config = { mcpServers: { [task.agent.server]: { command: task.agent.launch.command, args: task.agent.launch.args, env: task.agent.launch.env } } }
+      const args = ['-p', '--output-format', 'text', '--dangerously-skip-permissions', '--disable-slash-commands', '--no-session-persistence']
+      if (task.system) args.push('--system-prompt', task.system)
+      return [...args, '--strict-mcp-config', '--mcp-config', JSON.stringify(config)]
+    }
     const args = [
       '-p',
       '--output-format',

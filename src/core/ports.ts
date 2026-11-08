@@ -14,6 +14,7 @@ import type {
   MetricReading,
   PageReport
 } from '../shared/types'
+import type { McpLaunch } from './mcp/protocol'
 
 export interface Clock {
   now(): Date
@@ -31,6 +32,11 @@ export interface AiTask {
   /** Working directory for the engine process; read-only analysis only. */
   cwd?: string
   timeoutMs?: number
+  /**
+   * An agent run (DEC-018): the engine owns a goal and works for as long as it needs by calling the tools of this MCP server. It then runs with
+   * FULL ACCESS, as the owner decided (like MarkView's agents). Without it the engine only answers with text, and a tool-free engine has no tools.
+   */
+  agent?: { server: string; launch: McpLaunch }
 }
 
 export type AiErrorKind = 'unavailable' | 'failed' | 'cancelled' | 'timeout' | 'invalid_output'
@@ -58,6 +64,8 @@ export interface AiEngine {
    * browse). Automatic replies are allowed only with a tool-free engine, because comment text is untrusted input.
    */
   readonly toolFree: boolean
+  /** True when the engine can run an agent mission (`AiTask.agent`): it works the application's browser through the MCP server it is given. */
+  readonly supportsAgent?: boolean
   check(): Promise<EngineStatus>
   /** Resolves with the final text. A failure of the engine process rejects with AiError and never crashes the app. */
   run(task: AiTask, options?: AiRunOptions): Promise<string>
@@ -190,6 +198,11 @@ export interface BrowserService {
   session(account: Account): BrowserSession
   /** Shows the account's browser to the user at `url` (login handoff) and gives them control. */
   openForUser(account: Account, url?: string): Promise<{ tabId: string }>
+  /**
+   * Optional (DEC-018): shows the account's own browser, the one the AI works in, in a window of its own without taking control or focus,
+   * so the owner watches the AI work. Closing that window only hides it.
+   */
+  showAgentBrowser?(account: Account): void
   /**
    * Set by the core: called when the person's window for an account has opened or closed, so the screen shows who holds the
    * browser and the account is looked at once when the person is done.

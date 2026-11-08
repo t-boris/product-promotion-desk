@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import type { Account, EngineId, EngineStatus, PageReport } from '../../shared/types'
 import { ControlledSession, type RawPage } from '../browser-session'
 import { Core, type CoreDeps } from '../core'
+import type { AgentBridge, McpLaunch, McpToolHost } from '../mcp/protocol'
 import {
   AiError,
   type AiEngine,
@@ -74,6 +75,8 @@ export class FakeEngine implements AiEngine {
   installed = true
   /** Tests flip this to prove that automatic replies are refused for engines that are not tool-free. */
   toolFree = true
+  /** Tests flip this to prove that an agent mission is refused for an engine that cannot run one. */
+  supportsAgent = true
 
   constructor(
     readonly id: EngineId = 'claude',
@@ -106,6 +109,21 @@ export class FakeEngine implements AiEngine {
     if (script === undefined) throw new AiError('failed', `No scripted answer for ${task.label}`)
     options?.onProgress?.(`running ${task.label}`)
     return typeof script === 'function' ? script(task) : script
+  }
+}
+
+/** Stands in for the main process's socket: remembers the tool host of each run and says it was closed; tests call the tools through `host`. */
+export class FakeAgentBridge implements AgentBridge {
+  readonly opened: McpToolHost[] = []
+  closed = 0
+  get host(): McpToolHost {
+    const host = this.opened.at(-1)
+    if (!host) throw new Error('no run has opened its tools yet')
+    return host
+  }
+  async open(host: McpToolHost): Promise<{ launch: McpLaunch; close: () => void }> {
+    this.opened.push(host)
+    return { launch: { command: '/fake/ppd', args: ['/fake/shim.js'], env: { PPD_MCP_TOKEN: 'fake-token' } }, close: () => void (this.closed += 1) }
   }
 }
 
@@ -163,6 +181,8 @@ export class FakeBrowserService implements BrowserService {
   readonly pages = new Map<string, FakePage>()
   readonly sessions = new Map<string, ControlledSession>()
   readonly opened: { accountId: string; url?: string }[] = []
+  /** Accounts whose browser was shown to the owner while the AI worked in it. */
+  readonly agentShown: string[] = []
   private core: Core | null = null
 
   attach(core: Core): void {
@@ -200,6 +220,10 @@ export class FakeBrowserService implements BrowserService {
     return this.pageReports.get(account.id) ?? null
   }
 
+  showAgentBrowser(account: Account): void {
+    this.agentShown.push(account.id)
+  }
+
   async openForUser(account: Account, url?: string): Promise<{ tabId: string }> {
     this.opened.push({ accountId: account.id, url })
     this.session(account).takeControl()
@@ -233,6 +257,7 @@ export interface TestCore {
   browser: FakeBrowserService
   secrets: MemorySecretStore
   clipboard: FakeClipboard
+  bridge: FakeAgentBridge
 }
 
 /** In-memory core with a fake clock, a scripted AI engine and a fake browser. */
@@ -242,6 +267,7 @@ export function makeTestCore(overrides: Partial<CoreDeps> & { connectors?: Conne
   const browser = new FakeBrowserService()
   const secrets = new MemorySecretStore()
   const clipboard = new FakeClipboard()
+  const bridge = new FakeAgentBridge()
   const core = new Core({
     dbPath: ':memory:',
     dataDir: mkdtempSync(join(tmpdir(), 'ppd-test-')),
@@ -252,10 +278,11 @@ export function makeTestCore(overrides: Partial<CoreDeps> & { connectors?: Conne
     connectors: [],
     secrets,
     clipboard,
+    agentBridge: bridge,
     sleep: async () => undefined,
     ...overrides
   })
   browser.attach(core)
   core.settings.updateApp({ engineId: engine.id })
-  return { core, clock, engine, browser, secrets, clipboard }
+  return { core, clock, engine, browser, secrets, clipboard, bridge }
 }

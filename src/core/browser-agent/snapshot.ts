@@ -171,17 +171,3 @@ export function renderElements(snapshot: PageSnapshot): string {
     })
     .join('\n')
 }
-
-/** Changes whenever something a step could have changed did: used to tell a page that did not react from one that did. */
-export function snapshotSignature(snapshot: PageSnapshot): string {
-  const host = (() => {
-    try {
-      const url = new URL(snapshot.url)
-      return `${url.host}${url.pathname}`
-    } catch {
-      return snapshot.url
-    }
-  })()
-  const parts = snapshot.elements.map((e) => `${e.role}|${e.name}|${e.value ?? ''}|${e.checked ?? ''}|${e.disabled ?? ''}`)
-  return [host, snapshot.title, snapshot.alerts.join('/'), snapshot.humanCheck, ...parts].join('\n')
-}

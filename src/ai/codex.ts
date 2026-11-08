@@ -11,11 +11,16 @@ import { CliEngine, type CliEngineOptions } from './cli-engine'
  * and `--disable <FEATURE>` / `-c` need feature names we cannot enumerate or verify. Until Codex can run with no
  * tools at all, it must not answer untrusted text (comments) automatically. As damage control it always runs in a
  * fresh empty scratch directory (a caller-supplied cwd is ignored), never in the user's home or a project.
+ *
+ * An agent mission (`task.agent`, DEC-018) is a different run: FULL ACCESS (`--dangerously-bypass-approvals-and-sandbox`, as MarkView starts
+ * its agents; it also lets MCP tools run in exec mode, checked against 0.167) and the application's MCP server given with `-c`. The user's
+ * own configuration stays ignored, so their other MCP servers (other browsers) are not loaded.
  */
 export class CodexEngine extends CliEngine {
   readonly id = 'codex' as const
   readonly label = 'Codex'
   readonly toolFree = false
+  readonly supportsAgent = true
   protected readonly binaryName = 'codex'
 
   constructor(options: CliEngineOptions = {}) {
@@ -26,7 +31,8 @@ export class CodexEngine extends CliEngine {
     return false
   }
 
-  protected buildArgs(_task: AiTask, cwd: string): string[] {
+  protected buildArgs(task: AiTask, cwd: string): string[] {
+    if (task.agent) return this.agentArgs(task.agent, cwd)
     return [
       'exec',
       '--sandbox',
@@ -39,6 +45,32 @@ export class CodexEngine extends CliEngine {
       'never',
       '--cd',
       cwd,
+      '-'
+    ]
+  }
+
+  private agentArgs(agent: NonNullable<AiTask['agent']>, cwd: string): string[] {
+    // TOML basic strings are JSON strings for everything that can appear in a path, an argument or an environment value.
+    const toml = (text: string): string => JSON.stringify(text)
+    const env = Object.entries(agent.launch.env).map(([key, value]) => `${key}=${toml(value)}`).join(',')
+    const server = `mcp_servers.${agent.server}`
+    return [
+      'exec',
+      '--dangerously-bypass-approvals-and-sandbox',
+      '--ignore-user-config',
+      '--ignore-rules',
+      '--skip-git-repo-check',
+      '--ephemeral',
+      '--color',
+      'never',
+      '--cd',
+      cwd,
+      '-c',
+      `${server}.command=${toml(agent.launch.command)}`,
+      '-c',
+      `${server}.args=[${agent.launch.args.map(toml).join(',')}]`,
+      '-c',
+      `${server}.env={${env}}`,
       '-'
     ]
   }

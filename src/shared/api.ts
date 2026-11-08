@@ -3,6 +3,7 @@
 // Electron IPC or over the loopback HTTP server is invisible to it.
 
 import type {
+  AgentAsk,
   AgentReadiness,
   AgentRun,
   AgentTaskKind,
@@ -147,6 +148,10 @@ export interface ApiMethods {
   'agent.start': [{ accountId: Id; kind: AgentTaskKind }, AgentRun]
   'agent.state': [{ accountId: Id }, AgentRun | null]
   'agent.stop': [{ accountId: Id }, AgentRun | null]
+  /** The owner answers the AI's question (the pop-up): a text, or "done" for "I did it". */
+  'agent.answer': [{ accountId: Id; answer: string }, AgentRun | null]
+  /** Every question an AI is waiting on now, for the pop-up that appears on any screen. */
+  'agent.questions': [void, AgentAsk[]]
   'accounts.takeControl': [{ accountId: Id }, void]
   /** Gives the browser back to the app. The person's window, when open, is closed: it would still say that the person is in control. */
   'accounts.releaseControl': [{ accountId: Id }, void]

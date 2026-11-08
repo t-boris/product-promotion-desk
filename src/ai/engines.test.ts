@@ -160,6 +160,52 @@ describe('Claude Code run', () => {
   })
 })
 
+const LAUNCH = { command: '/Apps/PPD.app/Contents/MacOS/PPD', args: ['/Apps/PPD.app/Contents/Resources/app.asar/out/main/mcp-shim.js'], env: { ELECTRON_RUN_AS_NODE: '1', PPD_MCP_SOCKET: '/tmp/ppd.sock', PPD_MCP_TOKEN: 'tok"1' } }
+
+describe('agent missions (DEC-018)', () => {
+  it('Claude Code gets full access and only the application\'s MCP server, the goal on stdin and the server last', async () => {
+    const engine = new ClaudeCodeEngine({ searchPaths: [binDir], env: env('ok') })
+    expect(engine.supportsAgent).toBe(true)
+    await engine.run({ label: 'agent', prompt: 'create the account', system: 'be brief', agent: { server: 'ppd', launch: LAUNCH } })
+    expect(read('stdin')).toBe('create the account')
+    const argv = read('argv').split('\n').filter(Boolean)
+    expect(argv).toContain('[-p]')
+    expect(argv).toContain('[--dangerously-skip-permissions]')
+    expect(argv).toContain('[--strict-mcp-config]')
+    expect(argv.join('')).toContain('[--system-prompt][be brief]')
+    expect(argv.join(' ')).not.toMatch(/--tools|dontAsk/)
+    const index = argv.indexOf('[--mcp-config]')
+    expect(index).toBe(argv.length - 2)
+    const config = JSON.parse((argv.at(-1) as string).slice(1, -1))
+    expect(config).toEqual({ mcpServers: { ppd: { command: LAUNCH.command, args: LAUNCH.args, env: LAUNCH.env } } })
+  })
+
+  it('Codex gets full access, ignores the user\'s configuration and receives the server through -c', async () => {
+    const engine = new CodexEngine({ searchPaths: [binDir], env: env('ok') })
+    expect(engine.supportsAgent).toBe(true)
+    await engine.run({ label: 'agent', prompt: 'create the account', agent: { server: 'ppd', launch: LAUNCH } })
+    const argv = read('argv').split('\n').filter(Boolean)
+    expect(argv[0]).toBe('[exec]')
+    expect(argv).toContain('[--dangerously-bypass-approvals-and-sandbox]')
+    expect(argv).toContain('[--ignore-user-config]')
+    expect(argv.join(' ')).not.toContain('--sandbox')
+    expect(argv.at(-1)).toBe('[-]')
+    const overrides = argv.filter((a, i) => argv[i - 1] === '[-c]').map((a) => a.slice(1, -1))
+    expect(overrides).toEqual([
+      `mcp_servers.ppd.command="${LAUNCH.command}"`,
+      `mcp_servers.ppd.args=["${LAUNCH.args[0]}"]`,
+      'mcp_servers.ppd.env={ELECTRON_RUN_AS_NODE="1",PPD_MCP_SOCKET="/tmp/ppd.sock",PPD_MCP_TOKEN="tok\\"1"}'
+    ])
+  })
+
+  it('keeps the text-only runs exactly as they were: no agent, no full access', async () => {
+    await new ClaudeCodeEngine({ searchPaths: [binDir], env: env('ok') }).run({ label: 't', prompt: 'x' })
+    expect(read('argv')).not.toMatch(/dangerously|\[--mcp-config\]/)
+    await new CodexEngine({ searchPaths: [binDir], env: env('ok') }).run({ label: 't', prompt: 'x' })
+    expect(read('argv')).not.toMatch(/dangerously|mcp_servers/)
+  })
+})
+
 describe('tool-free flag', () => {
   it('Claude Code is tool-free only because every tool and MCP server is switched off', async () => {
     const engine = new ClaudeCodeEngine({ searchPaths: [binDir], env: env('ok') })
