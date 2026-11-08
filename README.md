@@ -22,6 +22,8 @@ The confirmed brief, decisions and requirements are in [`docs/features/product-p
 - REQ-004 Controlled and verifiable sending
 - REQ-005 Resilient local operation
 - REQ-006 Personal workspace and results
+- REQ-008 Product-scoped channels, accounts and results with AI help for new channels
+- REQ-010 Login roles, one voice per discussion and disclosed affiliation
 
 ## Development
 

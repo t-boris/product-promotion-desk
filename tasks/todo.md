@@ -45,18 +45,18 @@ Invariants:
 
 ## Work items (map to implementation/plan.md; one commit group each)
 
-- [ ] 0. Branch from origin/main, commit spec edits and this plan (evidence: git log).
-- [ ] 1. Scaffold: package.json (version 0.1.0), TypeScript strict, electron-vite, ESLint, Vitest, electron-builder, CI workflow.
-- [ ] 2. I-2 Local workspace + AI adapters + navigation shell (REQ-006).
-- [ ] 3. I-1 Product passports (REQ-001).
-- [ ] 4. I-3 Accounts, browser service, Reddit connector prototype, capability assessment (REQ-002, REQ-004).
-- [ ] 5. I-4 Monitoring, baseline, dedup, own-comment suppression (REQ-003, REQ-005).
-- [ ] 6. I-5 Drafting, modes, review queues, approval binding (REQ-001, REQ-003, REQ-004).
-- [ ] 7. I-6 SendGate, limits, attempt log, reconciliation, action history (REQ-003..006).
-- [ ] 8. I-7 Background lifecycle, pause, recovery, run log (REQ-005, DEC-003).
-- [ ] 9. I-8 Goals and platform metrics, README alignment with DEC-002 and DEC-004, Reddit acceptance (REQ-002, REQ-006).
-- [x] 10. I-9 Product-scoped channels, accounts and results, AI help for new channels (REQ-008, DEC-009). Added 2026-11-08 after the owner's remark; see "Scope change" below. Implemented and committed; walkthrough in progress.
-- [ ] 11. I-10 Login roles with a voice, one login per discussion, disclosed affiliation (REQ-010, DEC-010; GitHub #10). Added later the same day; see "Scope change 2" below.
+- [x] 0. Branch from origin/main, commit spec edits and this plan (evidence: git log).
+- [x] 1. Scaffold: package.json (version 0.1.0), TypeScript strict, electron-vite, ESLint, Vitest, electron-builder, CI workflow.
+- [x] 2. I-2 Local workspace + AI adapters + navigation shell (REQ-006).
+- [x] 3. I-1 Product passports (REQ-001).
+- [x] 4. I-3 Accounts, browser service, Reddit connector prototype, capability assessment (REQ-002, REQ-004).
+- [x] 5. I-4 Monitoring, baseline, dedup, own-comment suppression (REQ-003, REQ-005).
+- [x] 6. I-5 Drafting, modes, review queues, approval binding (REQ-001, REQ-003, REQ-004).
+- [x] 7. I-6 SendGate, limits, attempt log, reconciliation, action history (REQ-003..006).
+- [x] 8. I-7 Background lifecycle, pause, recovery, run log (REQ-005, DEC-003).
+- [x] 9. I-8 Goals and platform metrics, README alignment with DEC-002 and DEC-004, Reddit acceptance (REQ-002, REQ-006).
+- [x] 10. I-9 Product-scoped channels, accounts and results, AI help for new channels (REQ-008, DEC-009). Added 2026-11-08 after the owner's remark; see "Scope change" below. Implemented, committed and walked through in the running app.
+- [x] 11. I-10 Login roles with a voice, one login per discussion, disclosed affiliation (REQ-010, DEC-010; GitHub #10). Added later the same day; see "Scope change 2" below.
 
 ## Scope change 2 (owner remark, three answers, recorded as DEC-010 and REQ-010)
 
@@ -65,11 +65,11 @@ Records checked: SRC-001 section 1, DEC-009, REQ-003, REQ-004 and the current co
 Found in the I-9 walkthrough and fixed with it: (a) AI channel ideas with a description instead of an address reached the "Use this" button (prompt now demands an address; the server drops anything the connector cannot read); (b) a site-profile draft for a page with nothing on it still named selectors that match nothing (to ground: selectors are dry-run on the pages that were read).
 
 Plan:
-- [ ] a. Contract: `Account.role`, `RoleSuggestion`, `accounts.setRole`, `accounts.suggestRoles`, `accounts.create` takes a role.
-- [ ] b. Channels: migration for the role, API, UI (show and edit role, suggest roles, explanation when two logins share a community); site-profile selector grounding.
-- [ ] c. AI help: `suggestRoles` in ai-help.ts; disclosure and voice wording for draft prompts.
-- [ ] d. Pipeline: voice and disclosure in drafting; comments of every login of the product are own; one login per discussion in monitoring, drafting and the SendGate; tests.
-- [ ] e. Walkthrough, REQ-010 criteria ticked only when verified.
+- [x] a. Contract: `Account.role`, `RoleSuggestion`, `accounts.setRole`, `accounts.suggestRoles`, `accounts.create` takes a role.
+- [x] b. Channels: migration for the role, API, UI (show and edit role, suggest roles, explanation when two logins share a community); site-profile selector grounding.
+- [x] c. AI help: `suggestRoles` in ai-help.ts; disclosure and voice wording for draft prompts.
+- [x] d. Pipeline: voice and disclosure in drafting; comments of every login of the product are own; one login per discussion in monitoring, drafting and the SendGate; tests.
+- [x] e. Walkthrough, REQ-010 criteria ticked only when verified. Ticked: 1, 2, 5, 6, 7, 8. Left open on purpose: 3 (drafts in the role's voice) and 4 (disclosure in the text) depend on what the real model writes and are confirmed in the live Reddit run with the owner (DEC-008).
 
 ## Scope change 2026-11-08 (owner remark, answered in three questions, recorded as DEC-009 and REQ-008)
 
@@ -81,20 +81,30 @@ Decided with the owner:
 3. AI suggests channels from the approved passport and drafts a universal-connector profile for an unknown site (validated, versioned, saved only after review, never executed); manual instructions as fallback.
 
 Plan (architecture unchanged: shared contract, core without Electron, renderer only imports src/shared):
-- [ ] a. Core data: migration adds `accounts.product_id` (existing accounts attach to the product of their channels; unattached ones stay usable and flagged shared); `accounts.create` takes `productId`; `accounts.list` and `channels.list` accept `productId`; `channels.connect` refuses an account of another product unless `reuseAccount: true`; `results.get` is product-scoped. Tests with the in-memory core.
-- [ ] b. Platform catalog: new `platforms.list` from the connector registry (replaces the hard-coded list in the UI).
-- [ ] c. AI channel help: `channels.suggest` (passport to suggestions, unverified) and `channels.draftProfile` / `channels.saveProfile` (read the site through the account browser, schema-validated draft, versioned save after review); manual-instruction fallback; tests with FakeEngine and fake connectors.
-- [ ] d. Renderer: Channels and Results as product tabs, menu without them, product filter on Opportunities and Publications, suggestion and profile-review UI.
-- [ ] e. Spec housekeeping: tick REQ-008 criteria only when verified; keep REQ-002 live criteria unticked until the owner confirms the live Reddit run (DEC-008).
-- [ ] f. GitHub issue for I-9, comments on the affected issues, commit with the `Feature: product-promotion-desk` trailer.
+- [x] a. Core data: migration adds `accounts.product_id` (existing accounts attach to the product of their channels; unattached ones stay usable and flagged shared); `accounts.create` takes `productId`; `accounts.list` and `channels.list` accept `productId`; `channels.connect` refuses an account of another product unless `reuseAccount: true`; `results.get` is product-scoped. Tests with the in-memory core.
+- [x] b. Platform catalog: new `platforms.list` from the connector registry (replaces the hard-coded list in the UI).
+- [x] c. AI channel help: `channels.suggest` (passport to suggestions, unverified) and `channels.draftProfile` / `channels.saveProfile` (read the site through the account browser, schema-validated draft, versioned save after review); manual-instruction fallback; tests with FakeEngine and fake connectors.
+- [x] d. Renderer: Channels and Results as product tabs, menu without them, product filter on Opportunities and Publications, suggestion and profile-review UI.
+- [x] e. Spec housekeeping: tick REQ-008 criteria only when verified (ticked 1-6, 8, 9; criterion 7, saving an accepted profile as a version, is confirmed on the deployed app); keep REQ-002 live criteria unticked until the owner confirms the live Reddit run (DEC-008).
+- [x] f. GitHub issue for I-9, comments on the affected issues, commit with the `Feature: product-promotion-desk` trailer.
 
 ## Definition of done (from the goal)
 
-- [ ] branch from origin/main  - [ ] records current as I work  - [ ] GitHub issues in step
-- [ ] tests + build green      - [ ] everything committed        - [ ] PR with test plan
-- [ ] CI green                 - [ ] PR merged, main has the work - [ ] version bumped
+- [x] branch from origin/main  - [x] records current as I work  - [ ] GitHub issues in step
+- [x] tests + build green      - [x] everything committed        - [ ] PR with test plan
+- [ ] CI green                 - [ ] PR merged, main has the work - [x] version bumped (0.0.0 to 0.1.0, DEC-007)
 - [ ] release built + deployed, version confirmed  - [ ] walkthrough in a MarkView browser tab
 
 ## Review
 
-(filled in at the end)
+Written before the PR; the results of CI, merge, release and deploy are in the PR and the final report.
+
+**Result.** All eight plan items plus I-9 (product-scoped channels, accounts and results, AI help for new channels, REQ-008) and I-10 (login roles, one voice per discussion, disclosed affiliation, REQ-010) are implemented on `feat/product-promotion-desk`, in commit groups per item. `npm run verify` (typecheck, lint, tests, build): 59 test files, 1220 tests, green.
+
+**Walked through in the running app (packaged build, loopback web mode, real Claude Code).** Migration of older data, menu without Channels and Results, product tabs, per-product lists, shared-login consent and the server's refusal without it, AI channel ideas as real addresses, AI role ideas, creating a login with a role and its display, role validation and the duplicate-name refusal, the explanation for a second login in one community, the site-profile draft rejected when its selectors match nothing on the page that was read, product filters on Opportunities and Publications, version 0.1.0 under About.
+
+**Defects found in the walkthrough and fixed with a test.** (1) AI channel ideas arrived as sentences instead of addresses: the prompt asked for it; now an address-only prompt, a parser check and a server filter. (2) A site-profile draft for a page with no discussions was reported valid: selectors are now re-counted on the pages that were read, `ProfileAuthoring.partsOnPage` is part of the port.
+
+**Not proven here, on purpose.** The live Reddit behaviour (selectors, JSON, sending), the Electron-only parts (tray, notifications, the user window, debugger upload, power events) and the model-dependent REQ-010 criteria 3 and 4 need the owner's live run (DEC-008). The one-login-per-discussion guard itself is covered by automated tests with fake connectors (mutation-checked), not by two real Reddit logins.
+
+**Known gaps.** `accounts.suggestRoles` takes the platform of the product's latest login, not the one picked in the form; no API tells whether a host already has a valid profile, so the profile button shows for any web address on a non-prepared platform; attachments are referenced by absolute path; the renderer has no UI tests; the startup reconcile and digest run while paused; the price and discount safety patterns cover English and currency symbols only; `AttentionItem` has no `productId` (the UI resolves it through channels, accounts and products).

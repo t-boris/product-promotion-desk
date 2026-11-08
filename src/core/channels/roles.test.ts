@@ -136,6 +136,20 @@ describe('accounts.setRole', () => {
     await expect(w.call('accounts.setRole', { accountId: other.id, role: DEVELOPER })).resolves.toMatchObject({ role: DEVELOPER })
   })
 
+  it('lets a second login of the product connect to the same community; each channel keeps its own login and role', async () => {
+    const w = await makeReadyWorld()
+    const other = await w.addAccount('Developer login')
+    await w.call('accounts.setRole', { accountId: w.account.id, role: ASTROLOGER })
+    await w.call('accounts.setRole', { accountId: other.id, role: DEVELOPER })
+    const first = await w.call('channels.connect', { productId: w.productId, accountId: w.account.id, target: 'r/astrology' })
+    const second = await w.call('channels.connect', { productId: w.productId, accountId: other.id, target: 'r/astrology' })
+    const channels = await w.call('channels.list', { productId: w.productId })
+    expect(channels.filter((c) => c.target === first.target).map((c) => c.accountId).sort()).toEqual([w.account.id, other.id].sort())
+    expect(second.id).not.toBe(first.id)
+    expect(w.core.repos.account(second.accountId).role).toEqual(DEVELOPER)
+    expect(w.core.repos.account(first.accountId).role).toEqual(ASTROLOGER)
+  })
+
   it('a login of another product (a shared one) is not special: the role is the account\'s', async () => {
     const w = await makeReadyWorld()
     const second = w.addProduct('Tarot Deck')
