@@ -19,6 +19,8 @@ export class ScriptedEngine implements AiEngine {
   readonly calls: AiTask[] = []
   private readonly handlers = new Map<string, Handler>()
   installed = true
+  /** A scripted engine returns text only and has no tools. */
+  readonly toolFree = true
 
   constructor(
     readonly id: EngineId = 'claude',

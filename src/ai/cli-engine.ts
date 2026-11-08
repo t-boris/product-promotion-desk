@@ -55,6 +55,8 @@ function lastLines(text: string, maxChars = 600): string {
 export abstract class CliEngine implements AiEngine {
   abstract readonly id: EngineId
   abstract readonly label: string
+  /** See AiEngine.toolFree. Each adapter must justify its value next to the flags it passes. */
+  abstract readonly toolFree: boolean
   /** Executable name looked up in the search directories. */
   protected abstract readonly binaryName: string
 
@@ -65,6 +67,21 @@ export abstract class CliEngine implements AiEngine {
   /** What is written to the CLI's stdin. */
   protected buildInput(task: AiTask): string {
     return task.prompt
+  }
+
+  /**
+   * Whether `task.cwd` may choose the folder the engine runs in. An engine that can read files must never be pointed at
+   * a real folder by a caller, so it overrides this with false and always gets an empty scratch directory.
+   */
+  protected honorsTaskCwd(): boolean {
+    return true
+  }
+
+  /** Appended to every availability message so the user can see whether this engine can act at all. */
+  private toolNote(): string {
+    return this.toolFree
+      ? ' Tool-free: it can only return text.'
+      : ' Not tool-free: it can read files on this computer, so it is not used for automatic replies.'
   }
 
   protected searchDirs(): string[] {
@@ -107,7 +124,7 @@ export abstract class CliEngine implements AiEngine {
     try {
       const located = this.locate()
       if (!located) {
-        return { ...status, detail: `${this.binaryName} was not found. Install ${this.label}, then re-check.` }
+        return { ...status, detail: `${this.binaryName} was not found. Install ${this.label}, then re-check.${this.toolNote()}` }
       }
       status.installed = true
       status.path = located.display
@@ -120,11 +137,11 @@ export abstract class CliEngine implements AiEngine {
       const version = result.outcome === 'exited' && result.exitCode === 0 ? parseVersion(result.stdout) : null
       if (!version) {
         const why = result.outcome === 'timeout' ? 'it did not answer in time' : lastLines(result.stderr || result.stdout) || `exit code ${result.exitCode ?? 'none'}`
-        return { ...status, detail: `Found ${located.display}, but "--version" failed: ${why}` }
+        return { ...status, detail: `Found ${located.display}, but "--version" failed: ${why}${this.toolNote()}` }
       }
-      return { ...status, version, ready: true, detail: `${this.label} ${version} is installed and answers.` }
+      return { ...status, version, ready: true, detail: `${this.label} ${version} is installed and answers.${this.toolNote()}` }
     } catch (error) {
-      return { ...status, detail: `Could not check ${this.label}: ${error instanceof Error ? error.message : String(error)}` }
+      return { ...status, detail: `Could not check ${this.label}: ${error instanceof Error ? error.message : String(error)}${this.toolNote()}` }
     }
   }
 
@@ -133,10 +150,12 @@ export abstract class CliEngine implements AiEngine {
     const located = this.locate()
     if (!located) throw new AiError('unavailable', `${this.label} is not installed (${this.binaryName} was not found).`)
 
-    // Unless the caller needs a specific folder, run in an empty scratch directory so the engine has nothing to read
-    // by accident (no project instruction files, no repository).
-    const scratch = task.cwd ? null : mkdtempSync(join(tmpdir(), 'ppd-ai-'))
-    const cwd = task.cwd ?? scratch ?? tmpdir()
+    // Unless the caller needs a specific folder (and the engine may be pointed at one), run in an empty scratch
+    // directory so the engine has nothing to read by accident (no project instruction files, no repository, not the
+    // user's home).
+    const requested = this.honorsTaskCwd() ? task.cwd : undefined
+    const scratch = requested ? null : mkdtempSync(join(tmpdir(), 'ppd-ai-'))
+    const cwd = requested ?? scratch ?? tmpdir()
     options.onProgress?.(`Starting ${this.label}: ${task.label}`)
     try {
       const result = await runProcess({

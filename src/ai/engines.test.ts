@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { homedir, tmpdir } from 'node:os'
+import { basename, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AiError } from '../core/ports'
 import { createEngines } from './index'
@@ -25,6 +25,7 @@ input=$(cat)
 if [ -n "$LOG" ]; then
   printf '%s' "$input" > "$LOG/stdin"
   pwd > "$LOG/cwd"
+  ls -A . > "$LOG/cwdlist"
 fi
 case "$FAKE_MODE" in
   ok) printf 'ANSWER:%s\\n' "$input" ;;
@@ -159,6 +160,38 @@ describe('Claude Code run', () => {
   })
 })
 
+describe('tool-free flag', () => {
+  it('Claude Code is tool-free only because every tool and MCP server is switched off', async () => {
+    const engine = new ClaudeCodeEngine({ searchPaths: [binDir], env: env('ok') })
+    expect(engine.toolFree).toBe(true)
+    await engine.run({ label: 't', prompt: 'x' })
+    const argv = read('argv').split('\n').filter(Boolean).join('')
+    expect(argv).toContain('[--tools][]')
+    expect(argv).toContain('[--strict-mcp-config]')
+    expect(argv).not.toContain('--mcp-config')
+    expect((await engine.check()).detail).toMatch(/Tool-free: it can only return text/)
+  })
+
+  it('Codex is not tool-free: its sandbox limits changes, not what it can read', async () => {
+    const engine = new CodexEngine({ searchPaths: [binDir], env: env('ok') })
+    expect(engine.toolFree).toBe(false)
+    const detail = (await engine.check()).detail
+    expect(detail).toMatch(/Not tool-free/)
+    expect(detail).not.toMatch(/Tool-free: it can only/)
+  })
+
+  it('says so in the message even when the engine is missing or broken', async () => {
+    const empty = join(dir, 'empty')
+    mkdirSync(empty)
+    expect((await new CodexEngine({ searchPaths: [empty], env: env('ok') }).check()).detail).toMatch(/Not tool-free/)
+    expect((await new ClaudeCodeEngine({ searchPaths: [binDir], env: env('badversion') }).check()).detail).toMatch(/Tool-free/)
+  })
+
+  it('exposes the flag through createEngines', () => {
+    expect(Object.fromEntries(createEngines().map((e) => [e.id, e.toolFree]))).toEqual({ claude: true, codex: false })
+  })
+})
+
 describe('Codex run', () => {
   it('uses exec with a read-only sandbox and never a permissive mode', async () => {
     const engine = new CodexEngine({ searchPaths: [binDir], env: env('ok') })
@@ -169,6 +202,47 @@ describe('Codex run', () => {
     expect(argv.join('')).toContain('[--sandbox][read-only]')
     expect(argv.at(-1)).toBe('[-]')
     expect(argv.join(' ')).not.toMatch(/danger-full-access|workspace-write|dangerously|bypass/i)
+  })
+})
+
+describe('Codex isolation', () => {
+  it('starts in a fresh empty temp directory, hands the same folder to --cd, and removes it afterwards', async () => {
+    const engine = new CodexEngine({ searchPaths: [binDir], env: env('ok') })
+    await engine.run({ label: 't', prompt: 'x' })
+    const cwd = read('cwd').trim()
+    expect(cwd.startsWith(realpathSync(tmpdir()))).toBe(true)
+    expect(cwd).not.toBe(realpathSync(process.cwd()))
+    expect(cwd).not.toBe(realpathSync(homedir()))
+    expect(read('cwdlist').trim()).toBe('') // nothing in it to read
+    const argv = read('argv').split('\n').filter(Boolean)
+    // --cd gets the same folder (macOS reports the physical path, so compare the unique folder name).
+    const cd = argv[argv.indexOf('[--cd]') + 1].slice(1, -1)
+    expect(basename(cd)).toBe(basename(cwd))
+    expect(existsSync(cwd)).toBe(false) // removed
+  })
+
+  it('removes the temp directory when the run fails', async () => {
+    const engine = new CodexEngine({ searchPaths: [binDir], env: env('fail') })
+    await expect(engine.run({ label: 't', prompt: 'x' })).rejects.toMatchObject({ kind: 'failed' })
+    expect(existsSync(read('cwd').trim())).toBe(false)
+  })
+
+  it('ignores a caller-supplied folder: the engine can read files, so it is never pointed at a real one', async () => {
+    const project = join(dir, 'project')
+    mkdirSync(project)
+    writeFileSync(join(project, 'secret.txt'), 'x')
+    const engine = new CodexEngine({ searchPaths: [binDir], env: env('ok') })
+    await engine.run({ label: 't', prompt: 'x', cwd: project })
+    expect(read('cwd').trim()).not.toBe(realpathSync(project))
+    expect(read('cwdlist').trim()).toBe('')
+    expect(read('argv')).not.toContain(project)
+  })
+
+  it('keeps the read-only sandbox and ignores the user configuration that could enable MCP servers or tools', async () => {
+    await new CodexEngine({ searchPaths: [binDir], env: env('ok') }).run({ label: 't', prompt: 'x' })
+    const argv = read('argv')
+    expect(argv).toContain('[--sandbox]\n[read-only]')
+    expect(argv).toContain('[--ignore-user-config]')
   })
 })
 
