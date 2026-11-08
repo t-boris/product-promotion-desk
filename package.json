@@ -1,7 +1,7 @@
 {
   "name": "product-promotion-desk",
   "productName": "Product Promotion Desk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Personal macOS application that helps promote products using an installed Codex or Claude Code as the AI engine.",
   "private": true,
   "type": "module",
