@@ -115,7 +115,7 @@ export function makeWorld(options: WorldOptions = {}): World {
   const productId = newId()
   const now = core.clock.now().toISOString()
   core.db
-    .prepare('INSERT INTO products (id, name, website_url, description, goal_json, active_passport_version_id, analysis_status, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?)')
+    .prepare('INSERT INTO products (id, name, website_url, description, goals_json, active_passport_version_id, analysis_status, created_at, updated_at) VALUES (?, ?, ?, ?, json_array(), ?, ?, ?, ?)')
     .run(productId, 'Natal Mystic', 'https://natalmystic.com', 'Astrology app', 'pv-1', 'complete', now, now)
 
   const world = {} as World
@@ -129,7 +129,7 @@ export function makeWorld(options: WorldOptions = {}): World {
     sequence += 1
     const id = newId()
     core.db
-      .prepare('INSERT INTO products (id, name, website_url, description, goal_json, active_passport_version_id, analysis_status, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?)')
+      .prepare('INSERT INTO products (id, name, website_url, description, goals_json, active_passport_version_id, analysis_status, created_at, updated_at) VALUES (?, ?, ?, ?, json_array(), ?, ?, ?, ?)')
       .run(id, name ?? `Product ${sequence}`, `https://product-${sequence}.test`, 'Another product', 'pv-1', 'complete', now, now)
     return core.repos.product(id)
   }

@@ -110,3 +110,17 @@ Written before the PR, extended after the release.
 **Known gaps.** `accounts.suggestRoles` takes the platform of the product's latest login, not the one picked in the form; no API tells whether a host already has a valid profile, so the profile button shows for any web address on a non-prepared platform; attachments are referenced by absolute path; the renderer has no UI tests; the startup reconcile and digest run while paused; the price and discount safety patterns cover English and currency symbols only; `AttentionItem` has no `productId` (the UI resolves it through channels, accounts and products).
 
 **After the merge.** PR #11 merged as 9969548 with green CI on the PR and on main; tag `v0.1.0`; `npm run deploy:local` installed 0.1.0 into /Applications (ad-hoc signed) and the installed app reported 0.1.0. The walkthrough on the installed app found one more defect: after saving a site profile the badge still read "Draft, not saved" next to "Saved as version 1". Fixed in 0.1.1 (badge follows the state), with lesson 7. The same walkthrough confirmed the positive grounding path on a real site (Hacker News: selectors found 30 discussions on the page that was read, profile saved as version 1) and closed REQ-008 criterion 7.
+
+## 0.1.6: several promotion goals per product (DEC-012)
+
+Owner question: "Can there not be several goals? Why only one?" Answer: no technical limit; I had stored one goal object per product. The owner chose a plain list of goals (not a main goal, not a goal per channel).
+
+- [x] Types: `PromotionGoal` has an id, `Product.goals` is a list, `ResultsView.goals[].goals` is a list.
+- [x] Migration 101: `goals_json`, the old goal becomes the first item, `goal_json` dropped. Tested on an old-shape row and on a copy of the owner's real database.
+- [x] API: `products.saveGoal` (add or edit one goal, target action required, at most 20) and `products.removeGoal` replace `products.setGoal`.
+- [x] Goal tab: one card per goal (save, remove with confirmation), "Add a goal", an open empty card when there is none; one visible confirmation on the goal saved last.
+- [x] Results tab lists every goal of the product.
+- [x] REQ-006 text and criterion 5, DEC-012, tests (1223 pass), 12-screen sweep (382 buttons, all 36 px).
+
+Review: the first version lost the "Goal saved" message exactly when a new goal was added, because its card was replaced by the stored goal's card; found by running the flow, fixed by keeping the state in the tab.
+

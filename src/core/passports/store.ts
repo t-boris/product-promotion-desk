@@ -10,6 +10,7 @@ import type {
   Product,
   ProductSource,
   PromotionGoal,
+  PromotionGoalInput,
   SourceScope
 } from '../../shared/types'
 import { newId, parseJson, toJson, type Db } from '../db/database'
@@ -84,9 +85,27 @@ export class ProductStore {
     return this.product(id)
   }
 
-  setGoal(id: Id, goal: PromotionGoal): Product {
-    this.product(id)
-    this.db.prepare('UPDATE products SET goal_json = ?, updated_at = ? WHERE id = ?').run(toJson(goal), this.now(), id)
+  /** Adds a goal (no id) or replaces the goal with that id, keeping its place in the list. */
+  saveGoal(id: Id, input: PromotionGoalInput): Product {
+    const goals = [...this.product(id).goals]
+    if (input.id === undefined) {
+      goals.push({ ...input, id: newId() })
+    } else {
+      const at = goals.findIndex((g) => g.id === input.id)
+      if (at < 0) throw new ApiError('not_found', 'This goal no longer exists.')
+      goals[at] = { ...input, id: input.id }
+    }
+    return this.writeGoals(id, goals)
+  }
+
+  removeGoal(id: Id, goalId: Id): Product {
+    const goals = this.product(id).goals
+    if (!goals.some((g) => g.id === goalId)) throw new ApiError('not_found', 'This goal no longer exists.')
+    return this.writeGoals(id, goals.filter((g) => g.id !== goalId))
+  }
+
+  private writeGoals(id: Id, goals: PromotionGoal[]): Product {
+    this.db.prepare('UPDATE products SET goals_json = ?, updated_at = ? WHERE id = ?').run(toJson(goals), this.now(), id)
     return this.product(id)
   }
 

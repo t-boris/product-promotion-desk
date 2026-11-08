@@ -35,7 +35,7 @@ import type {
   PlatformInfo,
   Product,
   ProductSource,
-  PromotionGoal,
+  PromotionGoalInput,
   ResultsView,
   RoleSuggestion,
   MetricSnapshot,
@@ -90,7 +90,8 @@ export interface ApiMethods {
   'products.create': [{ name: string; websiteUrl?: string; description?: string }, Product]
   'products.update': [{ id: Id; name?: string; websiteUrl?: string | null; description?: string | null }, Product]
   'products.delete': [{ id: Id }, void]
-  'products.setGoal': [{ id: Id; goal: PromotionGoal }, Product]
+  'products.saveGoal': [{ id: Id; goal: PromotionGoalInput }, Product]
+  'products.removeGoal': [{ id: Id; goalId: Id }, Product]
   'sources.add': [{ productId: Id; kind: SourceKind; ref: string; label?: string; scope?: SourceScope | null }, ProductSource]
   'sources.remove': [{ id: Id }, void]
   'sources.preview': [{ kind: SourceKind; ref: string; scope?: SourceScope | null }, SourcePreview]

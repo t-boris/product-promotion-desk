@@ -42,11 +42,16 @@ export interface ProductSource {
   addedAt: IsoTime
 }
 
+/** One promotion goal of a product; a product may have several (REQ-006, DEC-012). */
 export interface PromotionGoal {
+  id: Id
   targetAction: string
   successMetrics: string[]
   notes: string
 }
+
+/** A goal as the owner edits it: no id yet while it is new. */
+export type PromotionGoalInput = Omit<PromotionGoal, 'id'> & { id?: Id }
 
 export type AnalysisStatus = 'idle' | 'running' | 'paused' | 'failed' | 'complete'
 
@@ -55,7 +60,7 @@ export interface Product {
   name: string
   websiteUrl: string | null
   description: string | null
-  goal: PromotionGoal | null
+  goals: PromotionGoal[]
   /** Currently approved passport version (null until the first approval). */
   activePassportVersionId: Id | null
   analysisStatus: AnalysisStatus
@@ -578,7 +583,7 @@ export interface OpportunityCard {
 }
 
 export interface ResultsView {
-  goals: { productId: Id; productName: string; goal: PromotionGoal | null }[]
+  goals: { productId: Id; productName: string; goals: PromotionGoal[] }[]
   channels: { channel: Channel; metrics: MetricSnapshot[] }[]
   /** Version 1 never measures business conversions; the UI must say so (REQ-006, DEC-002). */
   businessConversions: 'not_measured'

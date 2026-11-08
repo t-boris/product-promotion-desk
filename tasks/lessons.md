@@ -62,3 +62,14 @@
 19. Every save shows a result the owner cannot miss: a visible confirmation with a way forward ("Show on Results"), the button disabled while there is nothing to save, and a reason when it cannot be pressed. A quiet label next to the button is not feedback.
 20. Every field or tab states its purpose in plain words, including what it does not do in this version (here: the goal is a note, it does not steer the AI and does not count conversions). Say it on the screen, not only in the specification.
 21. "Nothing happens" is a report about what the owner saw, not about the data: test it in the running app from the owner's point of view (what is visible after the click), not only with the API.
+
+## 2026-11-08 (later): "Can there not be several goals?"
+
+**What happened.** The owner asked why a product can have only one promotion goal. The specification already said "promotion goals" in the plural; I had stored a single object because it was the shortest thing to build.
+
+**Rules for myself.**
+
+22. When the specification or the domain counts something in the plural, model a list from the start. A singular field is a decision the owner never made; if I choose it for speed, I say so and ask.
+23. When one card is replaced by another (a draft becomes a stored item), any state the owner must see, such as "saved", lives in the parent. Otherwise it disappears at the moment it matters. Run the add flow in the app, not only the edit flow.
+24. A change of the stored shape is tested twice: on a row in the old shape, and on a copy of the owner's real database, before it is deployed. Back the real database up first.
+

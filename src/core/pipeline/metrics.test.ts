@@ -47,14 +47,16 @@ describe('Platform metrics (REQ-006, DEC-002)', () => {
 
   it('results.get returns promotion goals, the latest metrics per channel and the explicit "not measured" marker', async () => {
     const { h, channel } = setup()
-    const goalProduct = seedProduct(h.core, { name: 'Other product', goal: { targetAction: 'Sign up', successMetrics: ['signups'], notes: 'v1' } })
+    const goalProduct = seedProduct(h.core, { name: 'Other product', goals: [{ targetAction: 'Sign up', successMetrics: ['signups'], notes: 'v1' }, { targetAction: 'Return on day two', successMetrics: [], notes: '' }] })
     await h.core.router.call('results.refresh', { channelId: channel.id })
 
     const view = await h.core.router.call('results.get', {})
 
     expect(view.businessConversions).toBe('not_measured')
-    expect(view.goals.find((g) => g.productId === goalProduct)).toMatchObject({ productName: 'Other product', goal: { targetAction: 'Sign up' } })
-    expect(view.goals.find((g) => g.productId === h.productId)?.goal).toBeNull()
+    const other = view.goals.find((g) => g.productId === goalProduct)!
+    expect(other.productName).toBe('Other product')
+    expect(other.goals.map((g) => g.targetAction)).toEqual(['Sign up', 'Return on day two'])
+    expect(view.goals.find((g) => g.productId === h.productId)?.goals).toEqual([])
     const entry = view.channels.find((c) => c.channel.id === channel.id)!
     expect(entry.metrics.map((m) => m.key).sort()).toEqual(['clicks', 'comments', 'reach', 'subscribers', 'upvotes'])
     expect(entry.metrics.find((m) => m.key === 'subscribers')).toMatchObject({ value: null, available: false })
@@ -86,8 +88,8 @@ describe('Platform metrics (REQ-006, DEC-002)', () => {
 
   it('scoped to a product, returns only that product\'s goals, channels and metrics and nothing of the others (DEC-009, REQ-008)', async () => {
     const { h, channel: mine } = setup()
-    h.core.db.prepare('UPDATE products SET goal_json = ? WHERE id = ?').run(JSON.stringify({ targetAction: 'Install the app', successMetrics: [], notes: '' }), h.productId)
-    const otherProduct = seedProduct(h.core, { name: 'Other product', goal: { targetAction: 'Sign up', successMetrics: ['signups'], notes: '' } })
+    h.core.db.prepare('UPDATE products SET goals_json = ? WHERE id = ?').run(JSON.stringify([{ id: 'g-1', targetAction: 'Install the app', successMetrics: [], notes: '' }]), h.productId)
+    const otherProduct = seedProduct(h.core, { name: 'Other product', goals: [{ targetAction: 'Sign up', successMetrics: ['signups'], notes: '' }] })
     const theirs = seedChannel(h.core, { productId: otherProduct, accountId: h.account.id, target: 'r/other' })
     await h.core.router.call('results.refresh', { channelId: mine.id })
     await h.core.router.call('results.refresh', { channelId: theirs.id })
@@ -95,7 +97,7 @@ describe('Platform metrics (REQ-006, DEC-002)', () => {
     const view = await h.core.router.call('results.get', { productId: h.productId })
 
     expect(view.goals).toHaveLength(1)
-    expect(view.goals[0]).toMatchObject({ productId: h.productId, goal: { targetAction: 'Install the app' } })
+    expect(view.goals[0]).toMatchObject({ productId: h.productId, goals: [{ targetAction: 'Install the app' }] })
     expect(view.channels.map((c) => c.channel.id)).toEqual([mine.id])
     expect(view.channels[0].metrics.length).toBeGreaterThan(0)
     expect(view.channels[0].metrics.every((m) => m.channelId === mine.id)).toBe(true)

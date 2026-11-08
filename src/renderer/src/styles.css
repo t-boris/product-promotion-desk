@@ -380,6 +380,24 @@ textarea.input {
   border: 1px dashed var(--border);
   border-radius: var(--radius);
 }
+/* One goal of a product on the Goal tab, and its line on the Results tab. */
+.goal-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+}
+.goal-card textarea.input {
+  min-height: 64px;
+}
+.goal-line + .goal-line {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
 /* A message inside a page: information (default), warning, or a confirmation that something was done. */
 .note {
   background: var(--info-bg);

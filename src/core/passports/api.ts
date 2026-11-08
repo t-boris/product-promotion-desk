@@ -1,7 +1,7 @@
 // API handlers: products.*, sources.*, analysis.*, passport.* (src/shared/api.ts).
 
 import { ApiError } from '../../shared/api'
-import type { Product, PromotionGoal } from '../../shared/types'
+import type { Product, PromotionGoalInput } from '../../shared/types'
 import { tx } from '../db/database'
 import type { Core } from '../core'
 import type { PassportModule } from './module'
@@ -40,11 +40,17 @@ function parseOptionalDescription(value: unknown): string | null | undefined {
   return text || null
 }
 
-function parseGoal(value: unknown): PromotionGoal {
-  const goal = (value ?? {}) as Partial<PromotionGoal>
+/** A product can have several goals, but not an unbounded number: the Results tab shows them all. */
+const MAX_GOALS = 20
+
+function parseGoal(value: unknown): PromotionGoalInput {
+  const goal = (value ?? {}) as Partial<PromotionGoalInput>
   const metrics = Array.isArray(goal.successMetrics) ? goal.successMetrics : []
+  const targetAction = typeof goal.targetAction === 'string' ? goal.targetAction.trim().slice(0, 500) : ''
+  if (!targetAction) throw new ApiError('invalid_input', 'A goal needs a target action: what a person should do.')
   return {
-    targetAction: typeof goal.targetAction === 'string' ? goal.targetAction.trim().slice(0, 500) : '',
+    ...(typeof goal.id === 'string' && goal.id ? { id: goal.id } : {}),
+    targetAction,
     successMetrics: metrics.filter((m): m is string => typeof m === 'string').map((m) => m.trim().slice(0, 300)).filter(Boolean).slice(0, 30),
     notes: typeof goal.notes === 'string' ? goal.notes.trim().slice(0, 5000) : ''
   }
@@ -125,9 +131,20 @@ export function registerHandlers(core: Core, mod: PassportModule): void {
       mod.touch()
     },
 
-    'products.setGoal': (args) => {
+    'products.saveGoal': (args) => {
       const id = requireId(args?.id, 'The product')
-      const product = store.setGoal(id, parseGoal(args.goal))
+      const goal = parseGoal(args.goal)
+      if (goal.id === undefined && store.product(id).goals.length >= MAX_GOALS) {
+        throw new ApiError('conflict', `A product can have at most ${MAX_GOALS} goals. Remove one before adding another.`)
+      }
+      const product = store.saveGoal(id, goal)
+      mod.touch()
+      return product
+    },
+
+    'products.removeGoal': (args) => {
+      const id = requireId(args?.id, 'The product')
+      const product = store.removeGoal(id, requireId(args?.goalId, 'The goal'))
       mod.touch()
       return product
     },

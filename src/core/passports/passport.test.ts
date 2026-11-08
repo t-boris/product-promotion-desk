@@ -92,14 +92,51 @@ describe('products and sources (REQ-001)', () => {
     await expect(h.call('sources.preview', { kind: 'url', ref: 'ftp://example.com' })).rejects.toMatchObject({ code: 'invalid_input' })
   })
 
-  it('retains the promotion goal and shows it again (REQ-006)', async () => {
+  it('retains several promotion goals and shows them again (REQ-006, DEC-012)', async () => {
     const h = makeHarness()
     const productId = await newProduct(h)
-    const goal = { targetAction: 'Create the first natal chart', successMetrics: ['Charts created', '  ', 'Return visits'], notes: 'Start with Reddit' }
-    const product = await h.call('products.setGoal', { id: productId, goal })
-    expect(product.goal).toEqual({ targetAction: 'Create the first natal chart', successMetrics: ['Charts created', 'Return visits'], notes: 'Start with Reddit' })
-    expect((await h.call('products.list', undefined))[0].goal).toEqual(product.goal)
-    expect((await h.call('passport.get', { productId })).product.goal).toEqual(product.goal)
+    expect((await h.call('products.list', undefined))[0].goals).toEqual([])
+
+    const first = await h.call('products.saveGoal', { id: productId, goal: { targetAction: 'Create the first natal chart', successMetrics: ['Charts created', '  ', 'Return visits'], notes: 'Start with Reddit' } })
+    expect(first.goals).toHaveLength(1)
+    expect(first.goals[0]).toMatchObject({ targetAction: 'Create the first natal chart', successMetrics: ['Charts created', 'Return visits'], notes: 'Start with Reddit' })
+    const second = await h.call('products.saveGoal', { id: productId, goal: { targetAction: 'Join the newsletter', successMetrics: [], notes: '' } })
+    expect(second.goals.map((g) => g.targetAction)).toEqual(['Create the first natal chart', 'Join the newsletter'])
+    expect(new Set(second.goals.map((g) => g.id)).size).toBe(2)
+
+    expect((await h.call('products.list', undefined))[0].goals).toEqual(second.goals)
+    expect((await h.call('passport.get', { productId })).product.goals).toEqual(second.goals)
+  })
+
+  it('edits a goal in place, removes one, and rejects an empty target action or an unknown goal', async () => {
+    const h = makeHarness()
+    const productId = await newProduct(h)
+    await h.call('products.saveGoal', { id: productId, goal: { targetAction: 'Create a chart', successMetrics: [], notes: '' } })
+    const two = await h.call('products.saveGoal', { id: productId, goal: { targetAction: 'Join the waitlist', successMetrics: [], notes: '' } })
+    const [a, b] = two.goals
+
+    const edited = await h.call('products.saveGoal', { id: productId, goal: { id: a.id, targetAction: 'Create a chart and share it', successMetrics: ['shares'], notes: 'week 1' } })
+    expect(edited.goals.map((g) => g.id)).toEqual([a.id, b.id])
+    expect(edited.goals[0]).toMatchObject({ targetAction: 'Create a chart and share it', successMetrics: ['shares'], notes: 'week 1' })
+
+    await expect(h.call('products.saveGoal', { id: productId, goal: { targetAction: '   ', successMetrics: [], notes: '' } })).rejects.toMatchObject({ code: 'invalid_input' })
+    await expect(h.call('products.saveGoal', { id: productId, goal: { id: 'missing', targetAction: 'x', successMetrics: [], notes: '' } })).rejects.toMatchObject({ code: 'not_found' })
+    await expect(h.call('products.removeGoal', { id: productId, goalId: 'missing' })).rejects.toMatchObject({ code: 'not_found' })
+
+    const left = await h.call('products.removeGoal', { id: productId, goalId: a.id })
+    expect(left.goals.map((g) => g.id)).toEqual([b.id])
+    expect((await h.call('products.removeGoal', { id: productId, goalId: b.id })).goals).toEqual([])
+  })
+
+  it('limits the number of goals of one product', async () => {
+    const h = makeHarness()
+    const productId = await newProduct(h)
+    for (let i = 1; i <= 20; i += 1) await h.call('products.saveGoal', { id: productId, goal: { targetAction: `Goal ${i}`, successMetrics: [], notes: '' } })
+    await expect(h.call('products.saveGoal', { id: productId, goal: { targetAction: 'One too many', successMetrics: [], notes: '' } })).rejects.toMatchObject({ code: 'conflict' })
+    const all = (await h.call('products.list', undefined))[0].goals
+    expect(all).toHaveLength(20)
+    // An existing goal can still be edited at the limit.
+    expect((await h.call('products.saveGoal', { id: productId, goal: { id: all[0].id, targetAction: 'Renamed', successMetrics: [], notes: '' } })).goals[0].targetAction).toBe('Renamed')
   })
 })
 
@@ -450,7 +487,7 @@ describe('products with history and persistence', () => {
     const first = makeTestCore({ dbPath })
     const call1 = first.core.router.call.bind(first.core.router)
     const product = await call1('products.create', { name: 'Natal Mystic', description: 'Natal charts' })
-    await call1('products.setGoal', { id: product.id, goal: { targetAction: 'Create a chart', successMetrics: ['charts'], notes: '' } })
+    await call1('products.saveGoal', { id: product.id, goal: { targetAction: 'Create a chart', successMetrics: ['charts'], notes: '' } })
     const claim = await call1('passport.claim.save', { productId: product.id, claim: { section: 'offer', text: 'Calculates a natal chart' } })
     await call1('passport.claim.setStatus', { claimId: claim.id, status: 'approved' })
     await call1('passport.approve', { productId: product.id })
@@ -460,7 +497,7 @@ describe('products with history and persistence', () => {
     const second = makeTestCore({ dbPath })
     const viewAfter = await second.core.router.call('passport.get', { productId: product.id })
     expect(viewAfter).toEqual(viewBefore)
-    expect(viewAfter.product.goal?.targetAction).toBe('Create a chart')
+    expect(viewAfter.product.goals.map((g) => g.targetAction)).toEqual(['Create a chart'])
     expect(second.core.services.knowledge?.approvedClaims(product.id).map((c) => c.text)).toEqual(['Calculates a natal chart'])
     await second.core.shutdown()
   })

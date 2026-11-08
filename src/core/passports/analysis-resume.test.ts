@@ -297,7 +297,7 @@ describe('switching the AI engine keeps all product data (REQ-006)', () => {
     const h = makeHarness([claude, codex])
     const site = await openSite()
     const productId = await productWithSite(h, site)
-    await h.call('products.setGoal', { id: productId, goal: { targetAction: 'Create a chart', successMetrics: ['charts'], notes: '' } })
+    await h.call('products.saveGoal', { id: productId, goal: { targetAction: 'Create a chart', successMetrics: ['charts'], notes: '' } })
     await start(h, productId)
 
     // The user reviews and approves part of the passport.
@@ -334,7 +334,7 @@ describe('switching the AI engine keeps all product data (REQ-006)', () => {
     expect(h.core.services.knowledge?.activeVersionId(productId)).toBe(v1.id)
     expect(h.core.services.knowledge?.approvedClaims(productId)).toEqual(before.approved)
     expect((await h.call('passport.versions', { productId })).find((v) => v.id === v1.id)).toMatchObject({ status: 'approved' })
-    expect((await h.call('products.list', undefined))[0].goal?.targetAction).toBe('Create a chart')
+    expect((await h.call('products.list', undefined))[0].goals.map((g) => g.targetAction)).toEqual(['Create a chart'])
   })
 
   it('re-analysis shows new findings as proposals to review; nothing approved is overwritten', async () => {

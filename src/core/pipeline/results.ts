@@ -19,7 +19,7 @@ export function buildResultsView(core: Core, productId?: Id): ResultsView {
   }
   const ids = new Set(products.map((p) => p.id))
   return {
-    goals: products.map((p) => ({ productId: p.id, productName: p.name, goal: p.goal })),
+    goals: products.map((p) => ({ productId: p.id, productName: p.name, goals: p.goals })),
     channels: core.repos
       .listChannels()
       .filter((c) => ids.has(c.productId))

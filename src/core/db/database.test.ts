@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { newId, openDatabase } from './database'
+import Database from 'better-sqlite3'
+import { migrate, newId, openDatabase } from './database'
+import { MIGRATIONS } from './migrations'
 
 function seed(db: ReturnType<typeof openDatabase>) {
   const now = new Date().toISOString()
@@ -34,6 +36,26 @@ function insertAction(db: ReturnType<typeof openDatabase>, s: ReturnType<typeof 
 }
 
 describe('database', () => {
+  it('carries the single goal of an older database over as the first of several goals (DEC-012)', () => {
+    // A database as version 0.1.5 left it: migrations before 101 applied, one product with a goal and one without.
+    const db = new Database(':memory:')
+    db.exec('CREATE TABLE schema_migrations (id INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)')
+    for (const m of MIGRATIONS.filter((x) => x.id < 101)) {
+      db.exec(m.sql)
+      db.prepare('INSERT INTO schema_migrations (id, name, applied_at) VALUES (?, ?, ?)').run(m.id, m.name, 'then')
+    }
+    const goal = { targetAction: 'Create the first natal chart', successMetrics: ['charts created', 'sign-ups'], notes: 'Launch month' }
+    db.prepare('INSERT INTO products (id, name, goal_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run('with-goal', 'A', JSON.stringify(goal), 'then', 'then')
+    db.prepare('INSERT INTO products (id, name, goal_json, created_at, updated_at) VALUES (?, ?, NULL, ?, ?)').run('no-goal', 'B', 'then', 'then')
+
+    migrate(db)
+
+    const goals = (id: string) => JSON.parse((db.prepare('SELECT goals_json g FROM products WHERE id = ?').get(id) as { g: string }).g) as unknown[]
+    expect(goals('with-goal')).toEqual([{ ...goal, id: expect.stringMatching(/^[0-9a-f]{32}$/) }])
+    expect(goals('no-goal')).toEqual([])
+    expect(db.prepare("SELECT COUNT(*) c FROM pragma_table_info('products') WHERE name = 'goal_json'").get()).toEqual({ c: 0 })
+  })
+
   it('applies migrations once and is idempotent', () => {
     const db = openDatabase(':memory:')
     const count = (db.prepare('SELECT COUNT(*) c FROM schema_migrations').get() as { c: number }).c

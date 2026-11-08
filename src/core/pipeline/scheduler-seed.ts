@@ -20,11 +20,12 @@ import type {
 
 const iso = (core: Core): string => core.clock.now().toISOString()
 
-export function seedProduct(core: Core, overrides: { name?: string; goal?: PromotionGoal | null } = {}): Id {
+export function seedProduct(core: Core, overrides: { name?: string; goals?: Omit<PromotionGoal, 'id'>[] } = {}): Id {
   const id = newId()
+  const goals: PromotionGoal[] = (overrides.goals ?? []).map((g) => ({ ...g, id: newId() }))
   core.db
-    .prepare('INSERT INTO products (id, name, goal_json, analysis_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(id, overrides.name ?? 'Natal Mystic', overrides.goal ? JSON.stringify(overrides.goal) : null, 'idle', iso(core), iso(core))
+    .prepare('INSERT INTO products (id, name, goals_json, analysis_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(id, overrides.name ?? 'Natal Mystic', JSON.stringify(goals), 'idle', iso(core), iso(core))
   return id
 }
 
