@@ -184,3 +184,10 @@ Design (layout in the approval question):
 - [ ] Separate finding: "Sign in with saved password" on Reddit answered "The sign-in form was not found or did not accept the values". Diagnose on the real login page (Reddit builds its form from web components) and fix the script or document the limit.
 
 Result: 1311 tests; scratch app driven through the real screen (add with a proposed address, Propose and Cancel create nothing, password generate/cancel/save, role carried from the product page through the address, remove through More); sweep of 15 routes plus every account and the mailboxes tab, menu open and closed (40 checks): equal button heights, nothing past the edge, no window scroll. Found while driving it and fixed for the whole app: a button inside a form submitted the form (the shared Button now defaults to type button). NOT checked: the layout in a window narrower than 900 px, "Create account on <platform>" in the real window, and the Reddit sign-in finding below (still open, next after this release).
+
+## 0.3.2 (PLAN, awaiting approval): statuses that say what and when (owner question "what captcha?")
+
+- [ ] Store when an account's sign-in was last checked and what the check saw (migration 206: `accounts.status_checked_at`, `accounts.status_detail`); show "Last checked <time>: <what was seen>" in the Sign-in block, with the Check sign-in button next to it.
+- [ ] The Reddit/universal gate probe reports which signal fired (visible CAPTCHA frame, hidden frame, page text, challenge title) and counts only visible CAPTCHA elements as a wall; a hidden frame is logged but does not set the status to "CAPTCHA to solve".
+- [ ] Re-check the sign-in once when the owner gives the browser back or closes its window (today the status stays as it was until the owner presses Check sign-in).
+- [ ] Then the Reddit sign-in diagnosis (the saved-password sign-in answered "form not found"): the same page may be a human-check wall without a form; verify on the real login page.

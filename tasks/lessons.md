@@ -129,3 +129,12 @@
 43. Long explanations are not a substitute for layout: one sentence next to the control it explains, never a paragraph above the list.
 44. A feature that failed in real use is a finding even when it was listed as not verified: the owner pressed "Sign in with saved password" on Reddit and got "form not found". Diagnose it with the real page before claiming the sign-in works on any platform.
 45. A button inside a form submits it unless it says `type="button"`. The shared Button now defaults to type button and a submit says so. Every new form is tested by pressing each of its buttons once (not only the submit), because "Propose" and "Cancel" created an account half-way through filling in the form.
+
+## 2026-11-08 (later): "what CAPTCHA?"
+
+**What happened.** The owner saw "CAPTCHA to solve" on the account and asked what captcha. The label came from one "Check sign-in" at 17:31 (log: "The site asks for a human check") and was never refreshed; the screen shows it as if it were the present state, without saying what was seen or when. A clean browser session in the scratch app reads Reddit as "Not signed in", with no captcha, so the label is not Reddit always demanding one.
+
+**Rules for myself.**
+
+46. A remembered status is shown with what was seen and when it was seen ("last checked 17:31: a CAPTCHA frame on the page"), and with the one button that refreshes it. A bare label reads as a current fact and the owner cannot tell a real wall from an old one.
+47. A detector that can fire on something the owner cannot see (a hidden CAPTCHA frame, a page text) must say which signal fired; otherwise a false positive cannot be told from a real wall.
