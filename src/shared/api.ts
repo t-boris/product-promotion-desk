@@ -6,6 +6,7 @@ import type {
   Account,
   AccountRole,
   BrowserState,
+  PageReport,
   Mailbox,
   SignInResult,
   VaultStatus,
@@ -134,6 +135,11 @@ export interface ApiMethods {
   'accounts.browser': [{ accountId: Id }, BrowserState]
   /** Brings the person's open window for the account to the front, without changing the page. `shown` is false when no window is open. */
   'accounts.showBrowser': [{ accountId: Id }, { shown: boolean }]
+  /**
+   * What the account's page shows and did (DEC-016): its alerts, readable text, a screenshot, the requests it made and the errors
+   * of its console. Only when asked. `null` when the account has no page open. A form field's value is never read.
+   */
+  'accounts.pageReport': [{ accountId: Id }, PageReport | null]
   'accounts.takeControl': [{ accountId: Id }, void]
   /** Gives the browser back to the app. The person's window, when open, is closed: it would still say that the person is in control. */
   'accounts.releaseControl': [{ accountId: Id }, void]

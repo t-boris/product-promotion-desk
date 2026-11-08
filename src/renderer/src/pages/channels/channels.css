@@ -229,3 +229,13 @@ textarea.input.short {
     justify-content: flex-start;
   }
 }
+
+/* What an account's page showed (DEC-016) */
+.page-report .bad {
+  color: var(--bad);
+}
+.page-shot {
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}

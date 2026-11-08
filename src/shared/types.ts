@@ -210,6 +210,42 @@ export interface BrowserState {
   windowOpen: boolean
 }
 
+/** One request the page made that is worth knowing about: what was sent to where, and what came back. Never a query string, header or body. */
+export interface PageRequestNote {
+  method: string
+  /** Electron's resource type: mainFrame, subFrame, xhr (fetch too), ping ... */
+  kind: string
+  /** Host and path only. */
+  target: string
+  status: number | null
+  error: string | null
+  /** The same request, repeated one after another. */
+  count: number
+}
+
+/**
+ * What an account's page shows and did, taken when the owner asks (DEC-016). Text comes from what a person can read on the page;
+ * the value of a form field is never read, so a password typed there is not in it.
+ */
+export interface PageReport {
+  takenAt: IsoTime
+  /** Whose page: the owner's own window, or the page the app works in. */
+  where: 'owner_window' | 'app_page'
+  /** Host and path only. */
+  address: string
+  title: string
+  /** Visible messages a site shows for a problem or a state (alerts, live regions). */
+  alerts: string[]
+  /** The start of the readable text of the page. */
+  text: string
+  requests: PageRequestNote[]
+  consoleErrors: string[]
+  /** PNG as a data URL; null when the page could not be captured. */
+  screenshot: string | null
+  /** The file the report was also saved to (screenshot and details), or null. */
+  savedAs: string | null
+}
+
 export interface SignInResult {
   account: Account
   /** `signed_in`: the site confirmed the sign-in. `needs_you`: a check or a changed page needs the owner in the account browser. */

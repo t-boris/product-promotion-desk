@@ -1,8 +1,11 @@
-import { BaseWindow, session as electronSession, WebContentsView, type Session } from 'electron'
-import type { Account } from '../shared/types'
+import { BaseWindow, session as electronSession, WebContentsView, type Session, type WebContents } from 'electron'
+import type { Account, PageReport } from '../shared/types'
 import { ControlledSession } from '../core/browser-session'
-import type { BrowserService, BrowserSession, TicketVerifier } from '../core/ports'
+import type { BrowserService, BrowserSession, PageObserver, TicketVerifier } from '../core/ports'
 import { ElectronRawPage, type AgentSurface } from './agent-page'
+import { pageReadingScript, type PageReading } from './page-scripts'
+import { PageRecorder } from './page-recorder'
+import { addressOf, forgetReports, saveReport } from './page-report'
 import { cleanUserAgent, normalizeBrowserUrl, persistentPartition } from './targets'
 import { UserControl } from './toolbar-state'
 import { UserBrowserWindow } from './user-window'
@@ -15,6 +18,7 @@ interface AccountBrowser {
   agent: ElectronRawPage
   partition: string
   userWindow: UserBrowserWindow | null
+  recorder: PageRecorder
 }
 
 /**
@@ -26,13 +30,20 @@ interface AccountBrowser {
  *    partition and taking it stops the agent at once (ControlledSession);
  *  - this is the only place besides src/main that imports Electron.
  */
-export class ElectronBrowserService implements BrowserService {
+export class ElectronBrowserService implements BrowserService, PageObserver {
   private readonly accounts = new Map<string, AccountBrowser>()
   private readonly configured = new Set<string>()
   /** Set by the core: the person's window for an account opened or closed. */
   onUserWindowChange?: (accountId: string, change: 'opened' | 'closed') => void
+  /** Set by the core: a request of the page failed or was refused by the site. */
+  onPageNote?: (accountId: string, note: string) => void
+  private readonly recorders = new Map<string, PageRecorder>()
 
-  constructor(private readonly tickets: TicketVerifier) {}
+  /** `options.diagnosticsDir`: where page reports are saved (DEC-016); without it they are only returned. */
+  constructor(
+    private readonly tickets: TicketVerifier,
+    private readonly options: { diagnosticsDir?: string } = {}
+  ) {}
 
   session(account: Account): BrowserSession {
     return this.entry(account).session
@@ -47,8 +58,14 @@ export class ElectronBrowserService implements BrowserService {
       partition,
       agent,
       userWindow: null,
+      recorder: new PageRecorder(
+        () => Date.now(),
+        () => this.pageHost(entry),
+        (note) => this.onPageNote?.(account.id, note)
+      ),
       session: new ControlledSession(account.id, async () => agent, this.tickets)
     }
+    this.recorders.set(partition, entry.recorder)
     this.accounts.set(account.id, entry)
     return entry
   }
@@ -83,8 +100,58 @@ export class ElectronBrowserService implements BrowserService {
       control.release()
       throw error
     }
+    this.watchConsole(entry.userWindow.siteContents(), entry.recorder)
     this.onUserWindowChange?.(account.id, 'opened')
     return { tabId }
+  }
+
+  /** The page the account is on now: the owner's window while it is open, else the page the app works in. */
+  private livePage(entry: AccountBrowser): { contents: WebContents; where: PageReport['where'] } | null {
+    const window = entry.userWindow
+    if (window && !window.isClosed() && !window.siteContents().isDestroyed()) return { contents: window.siteContents(), where: 'owner_window' }
+    const contents = entry.agent.existingContents()
+    return contents ? { contents, where: 'app_page' } : null
+  }
+
+  private pageHost(entry: AccountBrowser): string {
+    try {
+      return new URL(this.livePage(entry)?.contents.getURL() ?? '').host
+    } catch {
+      return ''
+    }
+  }
+
+  private watchConsole(contents: WebContents, recorder: PageRecorder): void {
+    contents.on('console-message', (event) => recorder.logged(String(event.level), event.message))
+  }
+
+  /**
+   * What the account's page shows and did (DEC-016), taken when the owner asks: the readable text and the messages the site shows,
+   * a screenshot, and the requests and console errors the page produced. Read-only: nothing is clicked or typed, and the value of a
+   * form field is never read.
+   */
+  async pageReport(account: Account): Promise<PageReport | null> {
+    const entry = this.accounts.get(account.id)
+    const page = entry ? this.livePage(entry) : null
+    if (!entry || !page) return null
+    const { contents, where } = page
+    const reading = (await contents.executeJavaScript(pageReadingScript()).catch(() => null)) as PageReading | null
+    const image = await contents.capturePage().catch(() => null)
+    const png = image && !image.isEmpty() ? image.toPNG() : null
+    const report: PageReport = {
+      takenAt: new Date().toISOString(),
+      where,
+      address: addressOf(contents.getURL()),
+      title: reading?.title ?? '',
+      alerts: reading?.alerts ?? [],
+      text: reading?.text ?? '',
+      requests: entry.recorder.recentRequests(),
+      consoleErrors: entry.recorder.consoleErrors(),
+      screenshot: png && image ? image.resize({ width: Math.min(image.getSize().width, 1000) }).toDataURL() : null,
+      savedAs: null
+    }
+    if (this.options.diagnosticsDir) report.savedAs = await saveReport(this.options.diagnosticsDir, account.id, report, png)
+    return report
   }
 
   /** True while the person's window for this account is open (the toolbar there shows who holds the browser). */
@@ -114,6 +181,8 @@ export class ElectronBrowserService implements BrowserService {
     entry?.session.takeControl() // nothing may start on a session that is being erased
     entry?.agent.dispose()
     this.accounts.delete(account.id)
+    this.recorders.delete(partition)
+    if (this.options.diagnosticsDir) await forgetReports(this.options.diagnosticsDir, account.id)
     const ses = electronSession.fromPartition(partition)
     await ses.clearStorageData()
     await ses.clearCache()
@@ -138,6 +207,8 @@ export class ElectronBrowserService implements BrowserService {
       if (!win.isDestroyed()) win.destroy()
     }
     contents.setAudioMuted(true)
+    const recorder = this.recorders.get(partition)
+    if (recorder) this.watchConsole(contents, recorder)
     contents.setWindowOpenHandler(() => ({ action: 'deny' }))
     contents.on('will-navigate', (event, url) => {
       if (!/^https?:\/\//.test(url)) event.preventDefault()
@@ -156,5 +227,8 @@ export class ElectronBrowserService implements BrowserService {
     ses.setPermissionCheckHandler(() => false)
     ses.on('will-download', (event) => event.preventDefault())
     ses.setUserAgent(cleanUserAgent(ses.getUserAgent()))
+    // Notifications only: they change nothing about a request. What the page asked for and what the site answered (DEC-016).
+    ses.webRequest.onCompleted((details) => this.recorders.get(partition)?.completed(details))
+    ses.webRequest.onErrorOccurred((details) => this.recorders.get(partition)?.failed(details))
   }
 }

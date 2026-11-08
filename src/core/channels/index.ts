@@ -63,6 +63,7 @@ export function register(core: Core): void {
     'accounts.openBrowser': (args) => accounts.openBrowser(args),
     'accounts.browser': (args) => accounts.browserState(args.accountId),
     'accounts.showBrowser': (args) => accounts.showBrowser(args.accountId),
+    'accounts.pageReport': (args) => accounts.pageReport(args.accountId),
     'accounts.takeControl': (args) => accounts.takeControl(args.accountId),
     'accounts.releaseControl': (args) => accounts.releaseControl(args.accountId),
     'accounts.checkLogin': (args) => accounts.checkLogin(args.accountId),

@@ -12,6 +12,19 @@ export class FakeSession {
   cacheCleared = 0
   downloadPrevented = false
   private readonly emitter = new EventEmitter()
+  private completedListener: ((details: Record<string, unknown>) => void) | null = null
+  private errorListener: ((details: Record<string, unknown>) => void) | null = null
+  webRequest = {
+    onCompleted: (listener: (details: Record<string, unknown>) => void): void => void (this.completedListener = listener),
+    onErrorOccurred: (listener: (details: Record<string, unknown>) => void): void => void (this.errorListener = listener)
+  }
+  /** Tests: the network layer finished a request / failed one. */
+  emitRequest(details: { method?: string; resourceType?: string; url: string; statusCode?: number }): void {
+    this.completedListener?.({ method: 'GET', resourceType: 'xhr', statusCode: 200, ...details })
+  }
+  emitRequestError(details: { method?: string; resourceType?: string; url: string; error: string }): void {
+    this.errorListener?.({ method: 'GET', resourceType: 'xhr', ...details })
+  }
   setPermissionRequestHandler(handler: FakeSession['permissionRequest']): void {
     this.permissionRequest = handler
   }
@@ -52,6 +65,8 @@ export class FakeWebContents extends EventEmitter {
   wentBack = 0
   canGoBack = false
   muted = false
+  /** What capturePage returns: null means an empty image (a page that could not be drawn). */
+  picture: { width: number } | null = { width: 1200 }
   windowOpenHandler: ((details: { url: string }) => { action: string }) | null = null
   debugger = { isAttached: () => false, attach: () => undefined, detach: () => undefined, sendCommand: async () => ({}) }
   navigationHistory = { canGoBack: () => this.canGoBack, goBack: () => void (this.wentBack += 1) }
@@ -84,6 +99,17 @@ export class FakeWebContents extends EventEmitter {
   }
   setWindowOpenHandler(handler: (details: { url: string }) => { action: string }): void {
     this.windowOpenHandler = handler
+  }
+  async capturePage(): Promise<unknown> {
+    const picture = this.picture
+    const image = {
+      isEmpty: () => picture === null,
+      toPNG: () => Buffer.from('png-bytes'),
+      getSize: () => ({ width: picture?.width ?? 0, height: 800 }),
+      resize: () => image,
+      toDataURL: () => 'data:image/png;base64,cG5nLWJ5dGVz'
+    }
+    return image
   }
   async executeJavaScript(script: string): Promise<unknown> {
     this.scripts.push(script)

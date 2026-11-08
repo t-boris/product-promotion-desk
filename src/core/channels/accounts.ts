@@ -2,10 +2,10 @@
 // Passwords are typed by the person on the site's own page; nothing here reads, requests or stores credentials.
 
 import { ApiError } from '../../shared/api'
-import type { Account, AccountRole, BrowserState, Channel } from '../../shared/types'
+import type { Account, AccountRole, BrowserState, Channel, PageReport } from '../../shared/types'
 import { DEFAULT_CHANNEL_SETTINGS } from '../../shared/types'
 import type { Core } from '../core'
-import { TakeoverError, type BrowserService, type Connector, type ConnectorContext } from '../ports'
+import { TakeoverError, type BrowserService, type Connector, type ConnectorContext, type PageObserver } from '../ports'
 import { browserError, found, requireText } from './errors'
 import { parseEmail } from './mailboxes'
 import { loginOutcome } from './login'
@@ -47,6 +47,8 @@ const showUserWindow = (service: BrowserService, account: Account): boolean => {
   return typeof aware.showUserWindow === 'function' && aware.showUserWindow(account)
 }
 
+const observe = (service: BrowserService): Partial<PageObserver> => service as Partial<PageObserver>
+
 const closeUserWindow = (service: BrowserService, account: Account): void => {
   const aware = service as Partial<UserWindowAware>
   if (typeof aware.closeUserWindow === 'function') aware.closeUserWindow(account)
@@ -61,6 +63,7 @@ export class AccountsService {
     private readonly store: ChannelsStore
   ) {
     core.browser.onUserWindowChange = (accountId, change) => this.userWindowChanged(accountId, change)
+    core.browser.onPageNote = (accountId, note) => this.pageNote(accountId, note)
   }
 
   /** Every account: they are one library, shared by all products (DEC-015). */
@@ -188,7 +191,7 @@ export class AccountsService {
     const url = args.url !== undefined && args.url.trim() ? parseBrowserUrl(args.url) : parseBrowserUrl(this.defaultUrl(account))
     try {
       const result = await this.core.browser.openForUser(account, url)
-      this.core.log.info('accounts', `Browser opened for ${account.label} on ${new URL(url).host}. The app does not touch the page while you have control.`)
+      this.core.log.info('accounts', `Browser opened for ${account.label} on ${new URL(url).host}. The app does not click or type while you have control.`)
       this.core.events.changed('accounts')
       return result
     } catch (error) {
@@ -220,6 +223,31 @@ export class AccountsService {
   browserState(accountId: unknown): BrowserState {
     const account = this.account(accountId)
     return { holder: this.core.browser.session(account).control().holder, windowOpen: hasOpenUserWindow(this.core.browser, account) }
+  }
+
+  /** What the page of the account shows and did, taken now because the owner asked (DEC-016). `null`: nothing is open. */
+  async pageReport(accountId: unknown): Promise<PageReport | null> {
+    const account = this.account(accountId)
+    const observer = observe(this.core.browser)
+    if (typeof observer.pageReport !== 'function') return null
+    try {
+      const report = await observer.pageReport(account)
+      if (report) this.core.log.info('accounts', `Page report of ${account.label} (${report.address}): ${report.alerts.length} message(s) on the page, ${report.requests.length} request(s) noted, ${report.consoleErrors.length} console error(s).${report.savedAs ? ` Saved as ${report.savedAs}.` : ''}`)
+      return report
+    } catch (error) {
+      throw browserError(error, { code: 'page_report_failed', message: (reason) => `Could not read the page: ${reason}` })
+    }
+  }
+
+  /** A request of the account's page failed or was refused: one short line, so a silent refusal by a site shows up in the log. */
+  private pageNote(accountId: string, note: string): void {
+    let label = accountId
+    try {
+      label = this.account(accountId).label
+    } catch {
+      // The account is gone; the note still helps.
+    }
+    this.core.log.info('accounts', `Page of ${label}: ${note}`)
   }
 
   /** Brings the open window to the front (the main window is usually on top of it and hides it). */

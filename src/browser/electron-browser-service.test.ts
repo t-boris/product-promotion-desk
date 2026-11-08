@@ -1,7 +1,10 @@
 // Runs the service's own logic against a fake 'electron' module (see fake-electron.ts). It verifies how the
 // service uses sessions, windows and control; it cannot prove that Electron behaves as assumed.
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtemp, readdir, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', async () => await import('./fake-electron'))
 
@@ -399,5 +402,102 @@ describe('removing an account', () => {
     expect(created.views.every((v) => v.webContents.destroyed)).toBe(true)
     const ses = created.sessions.get('persist:ppd-a')!
     expect([ses.cleared, ses.cacheCleared]).toEqual([1, 1])
+  })
+})
+
+describe('what the account\'s page shows and did (DEC-016)', () => {
+  const dirs: string[] = []
+  afterEach(async () => {
+    while (dirs.length) await rm(dirs.pop()!, { recursive: true, force: true })
+  })
+  const reading = { title: 'Facebook', text: 'Get started', alerts: ['We could not create your account'] }
+
+  it('has nothing to report while no page is open', async () => {
+    const { service } = setup()
+    expect(await service.pageReport(account('a'))).toBeNull()
+    service.session(account('a'))
+    expect(await service.pageReport(account('a'))).toBeNull()
+  })
+
+  it('reports the owner\'s window: its messages, a screenshot, the requests and the console errors; the query is dropped', async () => {
+    const { service } = setup()
+    const acc = account('a')
+    await service.openForUser(acc, 'https://www.facebook.com/r.php?token=secret')
+    const site = created.views[0].webContents
+    site.results = [reading]
+    created.sessions.get('persist:ppd-a')!.emitRequest({ method: 'POST', url: 'https://www.facebook.com/reg/submit/?x=1', statusCode: 200 })
+    site.emit('console-message', { level: 'error', message: 'Uncaught TypeError' })
+
+    const report = await service.pageReport(acc)
+    expect(report).toMatchObject({
+      where: 'owner_window',
+      address: 'www.facebook.com/r.php',
+      title: 'Facebook',
+      alerts: ['We could not create your account'],
+      requests: [{ method: 'POST', target: 'www.facebook.com/reg/submit/', status: 200 }],
+      consoleErrors: ['Uncaught TypeError'],
+      screenshot: 'data:image/png;base64,cG5nLWJ5dGVz',
+      savedAs: null
+    })
+    expect(JSON.stringify(report)).not.toContain('secret')
+  })
+
+  it('runs a script in the owner\'s window only when asked, and only the reading script', async () => {
+    const { service } = setup()
+    const acc = account('a')
+    await service.openForUser(acc, 'https://www.facebook.com/r.php')
+    const site = created.views[0].webContents
+    site.results = [reading]
+    created.sessions.get('persist:ppd-a')!.emitRequest({ method: 'POST', url: 'https://www.facebook.com/ajax/bz', statusCode: 500 })
+    site.emit('console-message', { level: 'error', message: 'x' })
+    expect(site.scripts).toEqual([]) // watching the network and the console runs nothing in the page
+    await service.pageReport(acc)
+    expect(site.scripts).toHaveLength(1)
+    expect(site.scripts[0]).toContain('page-reading')
+  })
+
+  it('reports the page the app works in when the owner has no window, and says so', async () => {
+    const { service } = setup()
+    const acc = account('a')
+    await service.session(acc).withAgentControl('t', async (page) => page.goto('https://www.reddit.com/'))
+    agentContents().results = [reading]
+    expect((await service.pageReport(acc))?.where).toBe('app_page')
+  })
+
+  it('still reports when the page could not be drawn or read', async () => {
+    const { service } = setup()
+    const acc = account('a')
+    await service.openForUser(acc, 'https://www.facebook.com/r.php')
+    const site = created.views[0].webContents
+    site.picture = null
+    site.executeJavaScript = async () => {
+      throw new Error('page crashed')
+    }
+    expect(await service.pageReport(acc)).toMatchObject({ title: '', alerts: [], screenshot: null })
+  })
+
+  it('tells the core when the site refuses a request of the page, once, without the query', async () => {
+    const { service } = setup()
+    const notes: string[] = []
+    service.onPageNote = (_id, note) => notes.push(note)
+    const acc = account('a')
+    await service.openForUser(acc, 'https://www.facebook.com/r.php')
+    created.sessions.get('persist:ppd-a')!.emitRequest({ method: 'POST', url: 'https://www.facebook.com/reg/submit/?x=1', statusCode: 400 })
+    created.sessions.get('persist:ppd-a')!.emitRequest({ method: 'POST', url: 'https://tracker.example.net/p', statusCode: 500 })
+    expect(notes).toEqual(['POST www.facebook.com/reg/submit/ answered 400 (xhr)'])
+  })
+
+  it('saves the report to the diagnostics folder and removes it with the account', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'ppd-diag-'))
+    dirs.push(dir)
+    const service = new ElectronBrowserService(new TicketAuthority(new FakeClock()), { diagnosticsDir: dir })
+    const acc = account('a')
+    await service.openForUser(acc, 'https://www.facebook.com/r.php')
+    created.views[0].webContents.results = [reading]
+    const report = await service.pageReport(acc)
+    expect(report?.savedAs?.startsWith(join(dir, 'a'))).toBe(true)
+    expect((await readdir(join(dir, 'a'))).sort()).toHaveLength(2)
+    await service.forgetAccount(acc)
+    expect(await readdir(dir)).toEqual([])
   })
 })

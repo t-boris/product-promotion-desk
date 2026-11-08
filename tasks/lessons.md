@@ -155,3 +155,14 @@
 54. When the owner has described the behaviour they expect, build that behaviour; do not turn a gap in my own implementation into a menu of mechanisms. Ask only when two readings of their words lead to different behaviour for them.
 55. A check that must work before anything is configured (an account with no channel yet) cannot depend on configuration that is made later (a site profile). Look at what the check really needs (a page and a way to read it) and build it from that.
 56. A "signed in" answer must be earned by a signal that a signed-out visitor does not show; run the real detection loop signed out on every platform to see that it says "signed out" for each, and say in the report that the "signed in" side still needs the owner's real login.
+
+## 2026-11-08 (later): "you can open the debug window in this browser and see what happens"
+
+**What happened.** The owner reported that the Facebook registration form spins and returns. I answered with a list of guesses and asked for a screenshot. The owner's reply: the browser is the product's main function, I take screenshots and read them myself, so I can open the debug window; I did not finish the function and that is why I do not use it. They were right: the app's page could goto/read/fill/click but had no screenshot, console or network, and the owner's window recorded nothing. I had also run separate probe scripts instead of the app's own browser, which hid that gap.
+
+**Rules for myself.**
+
+57. When something fails in the app's own browser, the first question is "can the app show me what happened?". If it cannot, building that view is the fix; a list of guesses and a request for the owner's screenshot is not an answer.
+58. A feature that is the product's main function (the browser) is used by me for my own diagnosis. If I reach for a side script because the feature cannot do it, the feature has a gap: record it and close it.
+59. Observation has levels: network metadata and console can be watched always (they are not the page's content); text and screenshots only on request; field values never. Say which level a new feature uses before building it.
+

@@ -1,6 +1,7 @@
 // The window the user gets for login hand-off and takeover: the account's site on top of its persistent session,
-// under a slim toolbar. Nothing here reads the page: passwords are typed by the user on the site's own page and
-// are never read, logged or stored by the application.
+// under a slim toolbar. Nothing here runs a script in the page by itself: passwords are typed by the user on the site's own
+// page and are never read, logged or stored by the application. The page is read only when the owner asks (DEC-016), and
+// then never the value of a form field.
 
 import { BaseWindow, WebContentsView, type WebContents } from 'electron'
 import { normalizeBrowserUrl } from './targets'
@@ -67,6 +68,11 @@ export class UserBrowserWindow {
 
   isClosed(): boolean {
     return this.closed
+  }
+
+  /** The site's contents, for the service to listen to and, when the owner asks, to read (DEC-016). Nothing here runs a script. */
+  siteContents(): WebContents {
+    return this.site.webContents
   }
 
   /** Brings the window above the application's own window, which is usually in front of it and hides it. */

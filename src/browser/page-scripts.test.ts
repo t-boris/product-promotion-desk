@@ -1,6 +1,6 @@
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
-import { clickScript, describeFailure, existsScript, fileInputScript, fillScript, signInScript } from './page-scripts'
+import { clickScript, describeFailure, existsScript, fileInputScript, fillScript, pageReadingScript, signInScript, type PageReading } from './page-scripts'
 
 // A tiny DOM: enough to run the injected scripts and observe what they do.
 class FakeEvent {
@@ -180,5 +180,65 @@ describe('signInScript (DEC-014)', () => {
     const answers = [...signInScript(form).matchAll(/return \{ ([^}]*) \}/g)].map((m) => m[1])
     expect(answers.length).toBeGreaterThan(0)
     for (const answer of answers) expect(answer).toMatch(/^status: /)
+  })
+})
+
+describe('pageReadingScript: what a person can read, never what they typed', () => {
+  interface Node {
+    innerText: string
+    value?: string
+    rect: { width: number; height: number }
+    style?: Record<string, string>
+  }
+  const read = (nodes: Node[], body: string, title = 'Facebook'): PageReading => {
+    const element = (n: Node) => ({
+      innerText: n.innerText,
+      value: n.value,
+      shadowRoot: null,
+      parentElement: null,
+      nodeType: 1,
+      style: n.style ?? {},
+      getBoundingClientRect: () => n.rect
+    })
+    const els = nodes.map(element)
+    const document = {
+      title,
+      body: { innerText: body },
+      querySelectorAll: (selector: string) => (selector === '*' ? [] : els)
+    }
+    const getComputedStyle = (el: { style: Record<string, string> }) => ({ display: 'block', visibility: 'visible', opacity: '1', ...el.style })
+    return runInNewContext(pageReadingScript(), { document, getComputedStyle }) as PageReading
+  }
+  const box = { width: 300, height: 40 }
+
+  it('returns the title, the start of the text and the visible messages', () => {
+    const out = read([{ innerText: 'We could   not create\nyour account', rect: box }], 'Get started on Facebook', '  Facebook  ')
+    expect(out).toEqual({ title: 'Facebook', text: 'Get started on Facebook', alerts: ['We could not create your account'] })
+  })
+
+  it('leaves out messages nobody can see, very short ones and repeats', () => {
+    const out = read(
+      [
+        { innerText: 'Hidden error', rect: { width: 0, height: 0 } },
+        { innerText: 'Gone', rect: box, style: { display: 'none' } },
+        { innerText: 'ok', rect: box },
+        { innerText: 'Invalid e-mail address', rect: box },
+        { innerText: 'Invalid e-mail address', rect: box }
+      ],
+      'body'
+    )
+    expect(out.alerts).toEqual(['Invalid e-mail address'])
+  })
+
+  it('never reads the value of a field: a typed password is not in the result', () => {
+    const out = read([{ innerText: 'Check the form', value: 'hunter2-secret', rect: box }], 'Name Password')
+    expect(JSON.stringify(out)).not.toContain('hunter2')
+    expect(pageReadingScript()).not.toMatch(/\.value\b/)
+  })
+
+  it('cuts a long page and a long message', () => {
+    const out = read([{ innerText: 'm'.repeat(500), rect: box }], 'x'.repeat(5000))
+    expect(out.text).toHaveLength(1500)
+    expect(out.alerts[0]).toHaveLength(200)
   })
 })

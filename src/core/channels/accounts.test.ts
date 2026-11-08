@@ -95,6 +95,24 @@ describe('login hand-off (REQ-002: the person types passwords on the site)', () 
       expect(w.t.browser.opened).toHaveLength(1)
     })
 
+    it('gives the page report of the account, and null while nothing is open (DEC-016)', async () => {
+      const w = await makeReadyWorld()
+      expect(await w.call('accounts.pageReport', { accountId: w.account.id })).toBeNull()
+      const report = { takenAt: '2026-11-08T20:00:00.000Z', where: 'owner_window' as const, address: 'www.facebook.com/r.php', title: 'Facebook', alerts: ['We could not create your account'], text: '', requests: [], consoleErrors: [], screenshot: null, savedAs: '/data/diagnostics/a.png' }
+      w.t.browser.pageReports.set(w.account.id, report)
+      expect(await w.call('accounts.pageReport', { accountId: w.account.id })).toEqual(report)
+      const lines = (await w.call('logs.list', {})).map((e) => e.message)
+      expect(lines.some((m) => m.includes('Page report of') && m.includes('1 message(s) on the page') && m.includes('/data/diagnostics/a.png'))).toBe(true)
+      expect(JSON.stringify(lines)).not.toContain('We could not create your account') // the text of the page stays out of the log
+    })
+
+    it('writes a refusal by the site as one line of the log, under the account\'s name', async () => {
+      const w = await makeReadyWorld()
+      w.t.browser.onPageNote?.(w.account.id, 'POST www.facebook.com/reg/submit/ answered 400 (xhr)')
+      const lines = (await w.call('logs.list', {})).map((e) => e.message)
+      expect(lines).toContain(`Page of ${w.account.label}: POST www.facebook.com/reg/submit/ answered 400 (xhr)`)
+    })
+
     it('tells the screen when the window opens and closes', async () => {
       const w = await makeReadyWorld()
       const seen: string[] = []

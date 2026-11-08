@@ -230,3 +230,29 @@ Owner's model (their words, 2026-11-08): the account browser keeps the login in 
 - [ ] Proposed, awaiting approval: log what the account window's page requests did (failed requests and HTTP >= 400 on the page's own host, host + path only, never query, headers, bodies or cookies) to the Log screen, so a silent refusal by a site becomes visible (lesson 47/49).
 - [ ] Possible product consequence: platforms with strong anti-abuse (Facebook) may need the account made in the owner's usual browser, then signed in here; the sign-up steps should say so once confirmed.
 
+## 0.3.5: the window of an account can be looked at (owner: "you can open the debug window in the browser and see what happens; I think you did not finish this function")
+
+Owner's remark, 2026-11-08. The agent page had goto/read/fill/click/signIn only: no screenshot, no console, no network, and the owner's window recorded nothing, so a site that refuses silently could not be explained by anyone. Decision DEC-016, REQ-012 criteria 14-15.
+
+- [x] `PageRecorder` (pure): requests that were sent or refused (host + path, method, status; never query/header/cookie/body), folded repeats, console errors, one throttled log line per refusal on the page's own site.
+- [x] `ElectronBrowserService`: `webRequest` notifications and `console-message` of the owner's window and the app's page; `pageReport(account)` (reading script, screenshot, recorded requests); reports saved as files (`<data>/diagnostics/<account>/`, newest six, removed with the account).
+- [x] `pageReadingScript`: title, start of the text, visible alerts; never a field value (tested with a typed secret).
+- [x] API `accounts.pageReport`, log line per report (without the page text), button "What does the page show?" while the owner's window is open, `PageReportView`.
+- [x] The owner's window still runs no script by itself (existing test) and the log text now says "does not click or type".
+- [x] Verified on the real page (nothing submitted): the report of Facebook's registration form in the scratch app has the title, the readable text, the screenshot, the POSTs of the page (`ajax/qm`, `ajax/bz`, `ajax/webstorage/process_keys`, all 200) and three console errors (Permissions-Policy headers); the button and the view work on the Accounts screen; the report was saved as files.
+- [ ] Waiting for the owner's next real attempt: what the Facebook Submit request answers (the log line or the report).
+
+## PLAN (not started, owner's flow of 2026-11-08, REQ-016): the AI registers the account and solves the problems it sees
+
+Owner: after the account has its e-mail and password, the AI opens the account's browser, goes in and fills in every value it considers right; questions and problems it solves itself because it sees the page.
+Understood "паспорт" as "пароль" (password); to be confirmed.
+
+Steps (each a release, none started):
+1. Eyes (done in 0.3.5): text, alerts, screenshot, network, console.
+2. Hands: an action layer on the app's page: `fill`, `click`, `select` by what the AI saw (a field label or role from a page outline, not a hand-made selector). The AI answers with actions, the app carries them out and refuses another site, a password field it was not given, or a second submit without a change. The page outline already exists for site profiles (`site-outline.ts`); a form outline is needed (labels, types, required, current state, never values).
+3. Loop: outline + report -> AI action list -> execute -> report -> ... with a step limit, the same-refusal stop and the hand-off for CAPTCHA/codes. Engine adapters are tool-free today, which fits: the AI only answers text.
+4. Values: e-mail from the account, password typed from the vault with a placeholder in the prompt, the rest (name, birth date, gender, user name) from the role and the passport or proposed by the AI and recorded on the account.
+5. After the form: the app checks the sign-in itself (0.3.4).
+
+Open questions for the owner: (a) may the AI submit the form with values it made up, or must the owner see them first? (b) a code sent to the account's e-mail: until the mail reader (0.4.0, needs `mailparser`) exists the owner types it; (c) which engine drives it (the selected one).
+

@@ -44,6 +44,12 @@ export class ElectronRawPage implements RawPage {
     return contents && !contents.isDestroyed() ? contents.getURL() || null : null
   }
 
+  /** The page's contents when it exists, without creating one: for looking at the page, never for acting on it. */
+  existingContents(): WebContents | null {
+    const contents = this.surface?.contents
+    return contents && !contents.isDestroyed() ? contents : null
+  }
+
   dispose(): void {
     this.surface?.dispose()
     this.surface = null

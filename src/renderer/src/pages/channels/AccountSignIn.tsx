@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import type { Account, PlatformInfo, SignInResult } from '../../../../shared/types'
+import type { Account, PageReport, PlatformInfo, SignInResult } from '../../../../shared/types'
 import { call, useAction, useQuery } from '../../hooks'
 import { Badge, Button, ErrorNote } from '../../ui'
 import { AccountBlock } from './AccountBlock'
 import { CopyButton } from './CopyButton'
 import { ACCOUNT_STATUS_LABEL, ACCOUNT_STATUS_TONE } from './model'
+import { PageReportView } from './PageReportView'
 
 /**
  * Signing in (REQ-012, DEC-014, DEC-015): create the account on the platform if it does not exist yet, sign in in the account's own
@@ -13,6 +14,7 @@ import { ACCOUNT_STATUS_LABEL, ACCOUNT_STATUS_TONE } from './model'
  */
 export function AccountSignIn({ account, info, vaultAvailable, hasPassword }: { account: Account; info: PlatformInfo | undefined; vaultAvailable: boolean; hasPassword: boolean }) {
   const [signedIn, setSignedIn] = useState<SignInResult | null>(null)
+  const [pageReport, setPageReport] = useState<{ report: PageReport | null } | null>(null)
   const [open, opening] = useAction(() => call('accounts.openBrowser', { accountId: account.id }))
   const [check, checking] = useAction(() => call('accounts.checkLogin', { accountId: account.id }))
   const [signIn, signingIn] = useAction(async () => {
@@ -24,7 +26,8 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword }: { 
   const browser = useQuery('accounts.browser', { accountId: account.id }, ['accounts'])
   const [show, showing] = useAction(() => call('accounts.showBrowser', { accountId: account.id }))
   const [done, finishing] = useAction(() => call('accounts.releaseControl', { accountId: account.id }))
-  const error = opening.error ?? checking.error ?? signingIn.error ?? signingUp.error ?? copying.error ?? showing.error ?? finishing.error
+  const [look, looking] = useAction(async () => setPageReport({ report: await call('accounts.pageReport', { accountId: account.id }) }))
+  const error = opening.error ?? checking.error ?? signingIn.error ?? signingUp.error ?? copying.error ?? showing.error ?? finishing.error ?? looking.error
   // While the person holds the browser the app waits, so nothing that needs the browser is offered: the screen says what to do instead.
   const yours = browser.data?.holder === 'user'
   const windowOpen = browser.data?.windowOpen === true
@@ -54,10 +57,16 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword }: { 
                 Show the window
               </Button>
             )}
+            {windowOpen && (
+              <Button onClick={() => void look()} disabled={looking.busy} data-testid={`page-report-${account.id}`}>
+                {looking.busy ? 'Looking…' : 'What does the page show?'}
+              </Button>
+            )}
             <Button onClick={() => void done()} disabled={finishing.busy} data-testid={`browser-done-${account.id}`}>
               {windowOpen ? 'Done, close the window' : 'Give control back'}
             </Button>
           </div>
+          {pageReport && <PageReportView report={pageReport.report} testId={`page-report-view-${account.id}`} />}
         </>
       ) : (
         <div className="row">

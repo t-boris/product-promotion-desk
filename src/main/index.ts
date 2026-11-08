@@ -30,7 +30,7 @@ async function start(): Promise<void> {
     dataDir,
     appVersion: app.getVersion(),
     engines: createEngines(),
-    browser: (tickets) => new ElectronBrowserService(tickets),
+    browser: (tickets) => new ElectronBrowserService(tickets, { diagnosticsDir: join(dataDir, 'diagnostics') }),
     connectors: createConnectors(),
     // Passwords: encrypted by the system keychain, in a file of their own next to the database (DEC-014).
     secrets: new FileVault(join(dataDir, 'vault.bin'), safeStorage),

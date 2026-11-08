@@ -171,3 +171,47 @@ export function signInScript(form: { username: string; password: string; hosts: 
   return { status: submit(pass.form) ? 'submitted' : 'no_form' };
 })()`
 }
+
+export interface PageReading {
+  title: string
+  /** The start of the readable text. */
+  text: string
+  /** Visible messages the site shows for a problem or a state. */
+  alerts: string[]
+}
+
+/**
+ * Reads what a person can read on the page: the title, the start of the text and the messages a site shows for a problem or a state
+ * (alerts, live regions, error blocks). Read-only, and it never touches the value of a form field, so a typed password is not in it.
+ */
+export function pageReadingScript(): string {
+  return `(() => {
+  /* page-reading */
+  const all = (selector, root) => {
+    const found = [...root.querySelectorAll(selector)];
+    for (const el of root.querySelectorAll('*')) if (el.shadowRoot) found.push(...all(selector, el.shadowRoot));
+    return found;
+  };
+  const shown = (el) => {
+    const r = el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return false;
+    for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+      const s = getComputedStyle(n);
+      if (s.display === 'none' || s.visibility === 'hidden' || s.opacity === '0') return false;
+    }
+    return true;
+  };
+  const clean = (value) => String(value || '').replace(/\\s+/g, ' ').trim();
+  const seen = new Set();
+  const alerts = [];
+  for (const el of all('[role=alert],[role=status],[aria-live=assertive],[aria-live=polite],[data-error],[class*=error i],[id*=error i]', document)) {
+    if (alerts.length >= 8) break;
+    if (!shown(el)) continue;
+    const text = clean(el.innerText).slice(0, 200);
+    if (text.length < 3 || seen.has(text)) continue;
+    seen.add(text);
+    alerts.push(text);
+  }
+  return { title: clean(document.title).slice(0, 120), text: clean(document.body ? document.body.innerText : '').slice(0, 1500), alerts: alerts };
+})()`
+}

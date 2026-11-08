@@ -3,7 +3,7 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Account, EngineId, EngineStatus } from '../../shared/types'
+import type { Account, EngineId, EngineStatus, PageReport } from '../../shared/types'
 import { ControlledSession, type RawPage } from '../browser-session'
 import { Core, type CoreDeps } from '../core'
 import {
@@ -182,6 +182,13 @@ export class FakeBrowserService implements BrowserService {
   readonly windows = new Set<string>()
   readonly shown: string[] = []
   onUserWindowChange?: (accountId: string, change: 'opened' | 'closed') => void
+  onPageNote?: (accountId: string, note: string) => void
+  /** What the page of an account shows right now (tests set it); an account without an entry has no page open. */
+  readonly pageReports = new Map<string, PageReport>()
+
+  async pageReport(account: Account): Promise<PageReport | null> {
+    return this.pageReports.get(account.id) ?? null
+  }
 
   async openForUser(account: Account, url?: string): Promise<{ tabId: string }> {
     this.opened.push({ accountId: account.id, url })

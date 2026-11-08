@@ -11,7 +11,8 @@ import type {
   EngineStatus,
   Id,
   IsoTime,
-  MetricReading
+  MetricReading,
+  PageReport
 } from '../shared/types'
 
 export interface Clock {
@@ -168,6 +169,16 @@ export interface BrowserService {
    * browser and the account is looked at once when the person is done.
    */
   onUserWindowChange?: (accountId: Id, change: 'opened' | 'closed') => void
+  /**
+   * Set by the core: a request of the account's page failed or was refused by the site (host, path and status only). Throttled, so a
+   * page that keeps failing is one line in the log, not hundreds.
+   */
+  onPageNote?: (accountId: Id, note: string) => void
+}
+
+/** Optional capability of a browser service (DEC-016): what an account's page shows and did, when the owner asks. */
+export interface PageObserver {
+  pageReport(account: Account): Promise<PageReport | null>
 }
 
 // ───────────────────────────── Connectors (REQ-002) ─────────────────────────────
