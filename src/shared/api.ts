@@ -4,6 +4,7 @@
 
 import type {
   Account,
+  AccountRole,
   AppInfo,
   AppSettings,
   AttentionItem,
@@ -36,6 +37,7 @@ import type {
   ProductSource,
   PromotionGoal,
   ResultsView,
+  RoleSuggestion,
   MetricSnapshot,
   Run,
   SavedSiteProfile,
@@ -105,7 +107,11 @@ export interface ApiMethods {
   /** `productId` limits the list to that product's accounts (and unassigned legacy ones); omitted lists all. */
   'accounts.list': [{ productId?: Id } | undefined, Account[]]
   /** The account belongs to `productId` and gets its own login and browser session (DEC-009). */
-  'accounts.create': [{ productId: Id; platform: string; label: string }, Account]
+  'accounts.create': [{ productId: Id; platform: string; label: string; role?: AccountRole | null }, Account]
+  /** Sets, changes or removes (null) the role of a login (DEC-010). Name and voice are trimmed and length-limited. */
+  'accounts.setRole': [{ accountId: Id; role: AccountRole | null }, Account]
+  /** AI ideas for roles and login names for this product, from its approved passport. Nothing is created. */
+  'accounts.suggestRoles': [{ productId: Id }, RoleSuggestion[]]
   'accounts.remove': [{ id: Id }, void]
   /** Platforms the application can connect, from the registered connectors (DEC-009). */
   'platforms.list': [void, PlatformInfo[]]

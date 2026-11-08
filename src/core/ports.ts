@@ -226,6 +226,12 @@ export interface ProfileAuthoring {
   saveDefinition(host: string, definition: unknown): { id: Id; host: string; version: number; valid: boolean; errors: string[] }
   /** Whether a valid profile already exists for this host (or its parent domain). */
   hasValidProfile(host: string): boolean
+  /**
+   * The item selectors the definition relies on for the page at `url`: discussion items on any page, comment items only
+   * on pages the profile calls discussion pages. The core counts them (read-only) on pages it really read, so an AI draft
+   * whose selectors match nothing is never presented as a valid profile.
+   */
+  partsOnPage?(definition: unknown, url: string): { discussions: string | null; comments: string | null }
 }
 
 export interface Connector {

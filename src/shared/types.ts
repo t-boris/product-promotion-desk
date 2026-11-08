@@ -172,6 +172,28 @@ export interface Account {
    * shared-account rules (aggregate limits, one controller of the session) apply.
    */
   productId: Id | null
+  /**
+   * Who this login speaks as (DEC-010): a short name and the voice (how it writes, what it may talk about). Null
+   * means no role: drafts use the channel's reply style. A role never presents itself as an independent user.
+   */
+  role: AccountRole | null
+}
+
+export interface AccountRole {
+  /** Short name, e.g. "astrologer" or "developer". */
+  name: string
+  /** How this login writes and what it may talk about, in plain words. */
+  voice: string
+}
+
+/** An idea for a role and a login name for a product. The owner creates the real login on the platform. */
+export interface RoleSuggestion {
+  name: string
+  voice: string
+  /** A few ideas for the login name on the platform; the application never registers accounts. */
+  usernameIdeas: string[]
+  /** Why this role fits the product's audience. */
+  reason: string
 }
 
 /** A platform the application can connect, taken from the registered connectors (DEC-009). */
