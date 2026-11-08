@@ -68,3 +68,13 @@ export function schedulableChannels(core: Core): Channel[] {
   const accounts = new Map(core.repos.listAccounts().map((a) => [a.id, a]))
   return core.repos.listChannels().filter((c) => RUNNABLE.includes(c.status) && permissionProblem(c, accounts.get(c.accountId)) === null)
 }
+
+/**
+ * Accounts that currently have at least one runnable channel which can send ('approval' or 'auto'). Only these
+ * need a live sign-in check at startup: observing and drafting never act on the account's behalf, and an account
+ * without any such channel has nothing a lapsed login could break.
+ */
+export function sendingAccounts(core: Core): Account[] {
+  const sending = new Set(core.repos.listChannels().filter((c) => RUNNABLE.includes(c.status) && (c.mode === 'approval' || c.mode === 'auto')).map((c) => c.accountId))
+  return core.repos.listAccounts().filter((a) => sending.has(a.id))
+}

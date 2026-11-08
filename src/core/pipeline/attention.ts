@@ -22,7 +22,7 @@ function excerpt(text: string): string {
 
 function opportunityItems(core: Core, db: Db, targets: Map<Id, string>): AttentionItem[] {
   const rows = db
-    .prepare("SELECT * FROM opportunities WHERE state IN ('awaiting_approval', 'draft', 'needs_user') ORDER BY updated_at DESC")
+    .prepare("SELECT * FROM opportunities WHERE state IN ('awaiting_approval', 'ready', 'draft', 'needs_user') ORDER BY updated_at DESC")
     .all() as Row[]
   return rows.map((row): AttentionItem => {
     const opp: Opportunity = mapOpportunity(row)
@@ -32,6 +32,9 @@ function opportunityItems(core: Core, db: Db, targets: Map<Id, string>): Attenti
     const detail = draftText ? excerpt(draftText) : excerpt(opp.reason)
     const base = { refType: 'opportunity' as const, refId: opp.id, createdAt: opp.updatedAt }
     if (opp.state === 'awaiting_approval') return { id: `approval:${opp.id}`, kind: 'approval', title: `Approve ${what} in ${where}`, detail, ...base }
+    // Approved but not sent: normally momentary, but a blocked send (gate, limit, sign-in) would otherwise vanish from
+    // every list. Its own id keeps it a separate item from the approval request it grew out of.
+    if (opp.state === 'ready') return { id: `ready:${opp.id}`, kind: 'approval', title: 'Approved, not sent yet', detail: excerpt(opp.reason) || `The ${what} to ${where} is approved and waiting to be sent.`, ...base }
     if (opp.state === 'draft') return { id: `draft:${opp.id}`, kind: 'draft', title: `Review draft ${what} in ${where}`, detail, ...base }
     return { id: `question:${opp.id}`, kind: 'question', title: `Needs your input in ${where}`, detail: excerpt(opp.reason) || detail, ...base }
   })

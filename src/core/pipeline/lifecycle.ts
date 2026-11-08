@@ -11,7 +11,7 @@ import type { AutomationState } from '../../shared/types'
 import type { Core } from '../core'
 import { AttentionWatcher } from './attention'
 import { AttentionNotifier, silentSink, type NotificationSink } from './attention-notify'
-import { SHUTDOWN_KEY, recoverOnStart, type RecoveryReport, type ShutdownMarker } from './lifecycle-recovery'
+import { SHUTDOWN_KEY, recheckSignIns, recoverOnStart, type RecoveryReport, type ShutdownMarker } from './lifecycle-recovery'
 import { DEFAULT_SCHEDULER, PAUSE_KEY, Scheduler, isPaused, type SchedulerOptions } from './scheduler'
 import { DEFAULT_PERIODIC, PeriodicTasks, type PeriodicOptions } from './scheduler-periodic'
 import { ScheduleStore } from './scheduler-state'
@@ -87,6 +87,9 @@ export class Automation {
     core.onShutdown(() => this.stop())
 
     this.recovery = recoverOnStart(core, this.store)
+    // Stored state first, then a bounded live look at who is still signed in, both before anything is scheduled.
+    this.recovery = await recheckSignIns(core, this.store, this.recovery, schedulerOptions.timers)
+    if (this.stopped) return
     const notifier = new AttentionNotifier(core, sink)
     this.attention.onItems = (items) => notifier.consider(items)
     this.attention.start()

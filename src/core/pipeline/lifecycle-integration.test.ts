@@ -93,6 +93,35 @@ describe('Lifecycle with the real pipeline services', () => {
     expect(w.refresh(stuck).lastSuccessAt).not.toBeNull()
   })
 
+  it('notices at launch that a session expired while the app was closed, before the first cycle, using the real sign-in check', async () => {
+    const w = (world = makeWorld())
+    // Stored state still says "ready"; the platform no longer agrees.
+    w.connector.login = { loggedIn: false, identity: null, captcha: false }
+    const timers = new ManualTimers(w.clock)
+    const automation = await startAutomation(w.core, { scheduler: { ...TEST_SCHEDULER, timers } })
+    await automation.idle()
+
+    expect(w.core.repos.account(w.account.id).status).toBe('login_required')
+    expect(w.refresh().status).toBe('needs_user')
+    expect(w.connector.calls).toContain('checkLogin')
+    expect(w.connector.calls).not.toContain('fetchActivity')
+    expect(automation.recovery?.signIns.notReady).toEqual([w.account.id])
+    expect((await w.core.router.call('attention.list', undefined)).some((i) => i.kind === 'login')).toBe(true)
+  })
+
+  it('checks the sign-in first and then runs normally when the session is still valid', async () => {
+    const w = (world = makeWorld())
+    const timers = new ManualTimers(w.clock)
+    const automation = await startAutomation(w.core, { scheduler: { ...TEST_SCHEDULER, timers } })
+    await automation.idle()
+
+    expect(w.connector.calls[0]).toBe('checkLogin')
+    expect(w.connector.calls).toContain('fetchActivity')
+    expect(w.refresh().status).toBe('active')
+    expect(automation.recovery?.signIns).toMatchObject({ notReady: [], failed: 0, timedOut: false })
+    expect(automation.recovery?.signIns.checked).toEqual([w.account.id])
+  })
+
   it('records a normal cycle for a new comment as one run with a short result', async () => {
     const w = (world = makeWorld())
     w.connector.addDiscussion({ externalId: 'd1' })

@@ -20,6 +20,7 @@ describe('attention.list (SRC-001 "Требует внимания")', () => {
     const question = seedOpportunity(h.core, channel.id, { state: 'needs_user', reason: 'Which price should I quote?', updatedAt: ago(h, 3 * HOUR) })
     const unknownOpp = seedOpportunity(h.core, channel.id, { state: 'unknown_result', updatedAt: ago(h, 4 * HOUR) })
     const { actionId } = seedSend(h.core, { opportunityId: unknownOpp, accountId: h.account.id, state: 'unknown', completedAt: null, attemptedAt: ago(h, 4 * HOUR) })
+    const blocked = seedOpportunity(h.core, channel.id, { state: 'ready', reason: 'Waiting: the daily limit for r/astrology is reached.', updatedAt: ago(h, 90 * MINUTE_MS) })
     seedOpportunity(h.core, channel.id, { state: 'discovered' })
     seedOpportunity(h.core, channel.id, { state: 'confirmed' })
     const expired = seedAccount(h.core, { label: 'Old login', status: 'login_required' })
@@ -28,7 +29,7 @@ describe('attention.list (SRC-001 "Требует внимания")', () => {
     const stuck = h.channel({ target: 'r/stuck', status: 'needs_user', statusDetail: 'Rules forbid bots' })
     // Explained by the expired account's own item: must not appear a second time.
     h.channel({ target: 'r/dup', accountId: expired.id, status: 'needs_user' })
-    return { approval, draft, question, unknownOpp, actionId, expired, captcha, broken, stuck }
+    return { approval, blocked, draft, question, unknownOpp, actionId, expired, captcha, broken, stuck }
   }
 
   it('aggregates approvals, drafts, questions, unknown results, logins, CAPTCHAs and channel problems', async () => {
@@ -40,6 +41,14 @@ describe('attention.list (SRC-001 "Требует внимания")', () => {
     const byId = new Map(items.map((i) => [i.id, i]))
     expect(byId.get(`approval:${s.approval}`)).toMatchObject({ kind: 'approval', refType: 'opportunity', refId: s.approval, title: 'Approve reply in r/astrology' })
     expect(byId.get(`approval:${s.approval}`)?.detail).toContain('Natal Mystic builds charts')
+    // An approved send that is blocked stays visible, with the reason it is not going out.
+    expect(byId.get(`ready:${s.blocked}`)).toMatchObject({
+      kind: 'approval',
+      refType: 'opportunity',
+      refId: s.blocked,
+      title: 'Approved, not sent yet',
+      detail: 'Waiting: the daily limit for r/astrology is reached.'
+    })
     expect(byId.get(`draft:${s.draft}`)).toMatchObject({ kind: 'draft', refType: 'opportunity', title: 'Review draft publication in r/astrology' })
     expect(byId.get(`question:${s.question}`)).toMatchObject({ kind: 'question', detail: 'Which price should I quote?' })
     expect(byId.get(`unknown_result:${s.actionId}`)).toMatchObject({ kind: 'unknown_result', refType: 'opportunity', refId: s.unknownOpp })
@@ -48,7 +57,7 @@ describe('attention.list (SRC-001 "Требует внимания")', () => {
     expect(byId.get(`error:${s.broken.id}`)).toMatchObject({ kind: 'error', refType: 'channel', detail: 'Page structure changed' })
     expect(byId.get(`connection:${s.stuck.id}`)).toMatchObject({ kind: 'connection', refType: 'channel', detail: 'Rules forbid bots' })
     // discovered / confirmed opportunities and the duplicate channel row are not attention items.
-    expect(items).toHaveLength(8)
+    expect(items).toHaveLength(9)
   })
 
   it('uses stable ids and lists the newest item first', async () => {
@@ -66,6 +75,50 @@ describe('attention.list (SRC-001 "Требует внимания")', () => {
     // A long-standing login problem keeps the time it was first seen instead of looking new on every refresh.
     const login = (items: typeof first) => items.find((i) => i.kind === 'login')!.createdAt
     expect(login(second)).toBe(login(first))
+  })
+
+  it('keeps an approved but unsent opportunity visible until it is sent, under its own stable id', async () => {
+    const h = makeHarness()
+    const channel = h.channel({ target: 'r/astrology', nextCheckAt: new Date(h.clock.now().getTime() + 24 * HOUR).toISOString() })
+    await h.start()
+    const id = seedOpportunity(h.core, channel.id, { state: 'awaiting_approval', kind: 'standalone' })
+    expect((await list(h)).map((i) => i.id)).toEqual([`approval:${id}`])
+
+    // Approved, but nothing says why it has not gone out: the item still explains itself.
+    h.core.db.prepare("UPDATE opportunities SET state = 'ready' WHERE id = ?").run(id)
+    h.core.events.changed('opportunities')
+    await flush()
+    const waiting = await list(h)
+    expect(waiting).toHaveLength(1)
+    expect(waiting[0]).toMatchObject({ id: `ready:${id}`, kind: 'approval', title: 'Approved, not sent yet', refType: 'opportunity', refId: id })
+    expect(waiting[0].detail).toContain('publication')
+    expect(waiting[0].detail).toContain('r/astrology')
+    expect(h.automation.attentionCount()).toBe(1)
+
+    h.core.db.prepare("UPDATE opportunities SET reason = 'Waiting for the sign-in of Main.' WHERE id = ?").run(id)
+    expect((await list(h))[0]).toMatchObject({ id: `ready:${id}`, detail: 'Waiting for the sign-in of Main.' })
+
+    h.core.db.prepare("UPDATE opportunities SET state = 'sending' WHERE id = ?").run(id)
+    expect(await list(h)).toEqual([])
+  })
+
+  it('announces a blocked approved send once, even though its approval request was announced before', async () => {
+    const h = makeHarness()
+    const channel = h.channel({ nextCheckAt: new Date(h.clock.now().getTime() + 24 * HOUR).toISOString() })
+    await h.start()
+    const id = seedOpportunity(h.core, channel.id, { state: 'awaiting_approval' })
+    h.core.events.changed('opportunities')
+    await flush()
+    expect(h.sink.sent.map((n) => n.id)).toEqual([`approval:${id}`])
+
+    h.core.db.prepare("UPDATE opportunities SET state = 'ready', reason = 'Daily limit reached.' WHERE id = ?").run(id)
+    h.core.events.changed('opportunities')
+    await flush()
+    h.core.events.changed('opportunities')
+    await flush()
+
+    expect(h.sink.sent.map((n) => n.id)).toEqual([`approval:${id}`, `ready:${id}`])
+    expect(h.sink.sent[1]).toMatchObject({ title: 'Approved, not sent yet', body: 'Daily limit reached.' })
   })
 
   it('suggests a channel that keeps failing even though its status is still active', async () => {
