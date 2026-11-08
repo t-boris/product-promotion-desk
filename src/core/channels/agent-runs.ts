@@ -194,7 +194,7 @@ export class AgentRunService {
     const facts = this.contextFacts(account, platform)
     facts.push(...profileFacts(profile))
     return {
-      goal: `The account on ${platform} already exists and is signed in. Open its profile settings and fill in the profile below: the display name, the about-text, the place, the website (only where the site has those fields) and the picture.`,
+      goal: `The account on ${platform} already exists and is signed in. Find where this site lets the account edit its own profile (look for it yourself: the avatar or the account menu, "Profile", "Edit profile", "Settings", "Account"; no address is given) and fill in every profile field the site has from the profile below: the display name, the first and last name, the about-text (bio, description, headline), the place, the website, the birthday, the gender and the picture.`,
       facts,
       startUrl: target.url,
       hosts: target.hosts,
@@ -203,7 +203,9 @@ export class AgentRunService {
       rules: [
         'Change only the profile fields named in the facts. Do not change the e-mail address, the password, the user name or any privacy or security setting.',
         'If the site shows a sign-in page instead of the account, the account is not signed in: report needs_owner and say so.',
-        'A field the site does not have is skipped without a word; do not hunt for it. Save the profile if the site has a save button, then look at the profile page again to confirm the values are shown.'
+        'Every site keeps its profile in another place and names the fields differently (bio, about, description, headline, location, link, avatar, photo): match each value of the profile to the site\'s field by its meaning, and put a value only where it fits.',
+        'The picture goes through browser_upload into a file input of the page (listed as input:file, even when the site hides it behind a button). Never click a photo button that opens a file chooser.',
+        'A field the site does not have is skipped without a word; do not hunt for it. Save the profile if the site has a save button, then open the public profile page again and confirm the values are shown. Record what you filled with note_value.'
       ]
     }
   }
