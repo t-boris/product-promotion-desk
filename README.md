@@ -55,4 +55,4 @@ Closing the window keeps monitoring running; the menu-bar item shows the status 
 
 ## Versioning
 
-The version is the `version` field of `package.json`, following [Semantic Versioning](https://semver.org/). `0.1.0` is the first feature release. After a change is merged, the release is tagged in git as `vX.Y.Z` (for example `v0.1.0`), matching `package.json` exactly (DEC-007).
+The version is the `version` field of `package.json`, following [Semantic Versioning](https://semver.org/). `0.1.0` is the first feature release. After a change is merged, the release is tagged in git as `vX.Y.Z` (for example `v0.1.0`), matching `package.json` exactly (DEC-007). While the project is bootstrapping (DEC-011) work goes straight to `main`, and every change bumps the version (patch by default, minor for a new capability), is tagged, and is installed with `npm run deploy:local`, so the installed version always tells which build runs.

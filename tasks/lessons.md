@@ -20,3 +20,13 @@
 5. When a model has an entity that stands for a person on a platform, ask early what distinguishes several of them (voice, topics) and what must never happen between them (answering each other, speaking in the same thread). Put the guard in the SendGate, not only in drafting.
 6. When something an AI produces is shown to the owner as ready to use (a channel address, a site profile), check it against reality before it reaches the button: a real address the connector can parse, selectors that match something on the page that was read. A valid shape is not a correct answer.
 7. A label that names a state must follow the state. In a walkthrough, after each action (save, discard, send, connect) re-read every badge and note on the screen, not only the message the action produced: the saved site profile kept the badge "Draft, not saved" next to "Saved as version 1".
+
+## 2026-11-08 (later): bootstrapping rules from the owner (DEC-011)
+
+**What happened.** While I was waiting for CI on a follow-up PR the owner said that during bootstrapping everything goes straight to main without branches or CI waiting, that the installer matters most, and that every change must bump the version.
+
+**Rules for myself.**
+
+8. Follow the owner's latest process instruction over the earlier goal text when they conflict, and record it (decision, README, memory) so the next session does not undo it.
+9. Every change that reaches main bumps the version (patch by default), gets a tag vX.Y.Z and is installed with `npm run deploy:local`; check the installed version against package.json. Do not leave main and the installed build on different numbers.
+10. Speed does not drop the safety rules of the product: nothing is published without explicit in-app approval, and the app never handles passwords.
