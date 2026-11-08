@@ -1,57 +1,115 @@
+import { useEffect, useState } from 'react'
 import { useQuery } from '../hooks'
-import { Card, EmptyState, ErrorNote, Loading, Page } from '../ui'
-import { AccountRow } from './channels/AccountRow'
+import { accountsNewHref, parseAccountsHash, type AccountsRoute } from '../route'
+import { Button, Card, EmptyState, ErrorNote, Loading, Page } from '../ui'
+import { AccountDetail } from './channels/AccountDetail'
+import { AccountList } from './channels/AccountList'
 import { CreateAccount } from './channels/CreateAccount'
 import { MailboxesCard } from './channels/MailboxesCard'
 import './channels/channels.css'
 
+type Tab = 'accounts' | 'mailboxes'
+
+function useAccountsRoute(): AccountsRoute {
+  const [hash, setHash] = useState(() => window.location.hash)
+  useEffect(() => {
+    const onChange = (): void => setHash(window.location.hash)
+    window.addEventListener('hashchange', onChange)
+    return () => window.removeEventListener('hashchange', onChange)
+  }, [])
+  return parseAccountsHash(hash)
+}
+
 /**
- * The account library (DEC-015, REQ-014): every account the owner promotes from, whichever product uses it. An account is created
- * on its own, given an e-mail address, signed in, and only then linked to channels of any product.
+ * The account library (DEC-015, REQ-014): every account the owner promotes from. An account is added here, given a role, an
+ * e-mail address and a password, and signed in. It is only about the account: channels and products are not shown here; an
+ * account is chosen where a channel is connected.
  */
 export function AccountsPage() {
   const accounts = useQuery('accounts.list', undefined, ['accounts'])
-  const channels = useQuery('channels.list', undefined, ['channels'])
-  const products = useQuery('products.list', undefined, ['products'])
   const platforms = useQuery('platforms.list', undefined, [])
   const mailboxes = useQuery('mailboxes.list', undefined, ['accounts'])
   const vault = useQuery('vault.status', undefined, ['accounts'])
+  const route = useAccountsRoute()
+  const [tab, setTab] = useState<Tab>('accounts')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const list = accounts.data ?? []
-  const allChannels = channels.data ?? []
-  const loading = (accounts.loading && !accounts.data) || (channels.loading && !channels.data)
+  const loading = accounts.loading && !accounts.data
+  const selected = list.find((a) => a.id === selectedId) ?? list[0]
+  // With no account at all the form is the only useful thing to show.
+  const adding = tab === 'accounts' && (route.adding || (!loading && !accounts.error && list.length === 0))
+
+  useEffect(() => {
+    if (route.adding) setTab('accounts')
+  }, [route.adding])
+
+  const goNew = (): void => {
+    setTab('accounts')
+    window.location.hash = accountsNewHref()
+  }
+  const closeNew = (): void => {
+    window.location.hash = '#/accounts'
+  }
 
   return (
-    <Page title="Accounts" subtitle="Your logins on the platforms, with an e-mail address and a saved password for each. Any product can use any of them.">
-      <ErrorNote error={accounts.error ?? channels.error ?? products.error ?? platforms.error ?? mailboxes.error} />
+    <Page
+      title="Accounts"
+      subtitle="Your logins on the platforms: a role, an e-mail address, a password and the sign-in for each."
+      actions={
+        <Button variant="primary" onClick={goNew} data-testid="account-add">
+          Add account
+        </Button>
+      }
+    >
+      <ErrorNote error={accounts.error ?? platforms.error ?? mailboxes.error} />
+      <div className="tabs" role="tablist" aria-label="Accounts sections">
+        {(
+          [
+            ['accounts', 'Accounts'],
+            ['mailboxes', 'Mailboxes']
+          ] as const
+        ).map(([id, label]) => (
+          <button key={id} role="tab" aria-selected={tab === id} className={`tab ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)} data-testid={`accounts-tab-${id}`}>
+            {label}
+          </button>
+        ))}
+      </div>
       {loading && <Loading what="Loading accounts" />}
-      <div className="stack">
-        <MailboxesCard mailboxes={mailboxes.data ?? []} />
-        <Card title="Your accounts">
-          <div className="note" data-testid="login-instructions">
-            <strong>How signing in works.</strong> Either sign in yourself: press “Open browser to sign in” and sign in on the site, in the window that opens; the app does not touch the page while you are in control. When you are done, press “Give control back to the app” in that window (or close it), then “Check sign-in”. Or save the account’s password under “Password”: it is encrypted by the macOS keychain and stays on this Mac, and the app uses it only to fill in the sign-in form of this account’s own browser, once. A CAPTCHA, a code or any other check is always yours: the app stops and tells you. The sign-in stays saved for this account between restarts.
-          </div>
-          {list.length === 0 && !loading ? (
-            <EmptyState title="No accounts yet">Add the first account below. If it does not exist on the platform yet, the app opens the registration page for you.</EmptyState>
-          ) : (
-            <div className="stack">
-              {list.map((account) => (
-                <AccountRow
-                  key={account.id}
-                  account={account}
-                  channels={allChannels.filter((c) => c.accountId === account.id)}
-                  products={products.data ?? []}
-                  platforms={platforms.data ?? []}
-                  mailboxes={mailboxes.data ?? []}
-                  vault={vault.data}
-                />
-              ))}
+      {tab === 'mailboxes' && <MailboxesCard mailboxes={mailboxes.data ?? []} />}
+      {tab === 'accounts' && (
+        <>
+          {adding && (
+            <Card title="New account">
+              <CreateAccount
+                key={JSON.stringify(route.role)}
+                platforms={platforms.data ?? []}
+                mailboxes={mailboxes.data ?? []}
+                role={route.role}
+                onCreated={(account) => {
+                  setSelectedId(account.id)
+                  closeNew()
+                }}
+                onCancel={list.length > 0 ? closeNew : undefined}
+              />
+            </Card>
+          )}
+          {list.length > 0 && (
+            <div className="accounts-layout">
+              <aside>
+                <AccountList accounts={list} platforms={platforms.data ?? []} selectedId={selected?.id ?? null} onSelect={setSelectedId} />
+              </aside>
+              <div className="acct-detail-wrap">
+                {selected ? (
+                  <AccountDetail key={selected.id} account={selected} platforms={platforms.data ?? []} mailboxes={mailboxes.data ?? []} vault={vault.data} />
+                ) : (
+                  <EmptyState title="Select an account">Pick an account to see what it still needs.</EmptyState>
+                )}
+              </div>
             </div>
           )}
-          <h3 style={{ margin: '16px 0 0' }}>Add an account</h3>
-          <CreateAccount platforms={platforms.data ?? []} mailboxes={mailboxes.data ?? []} prefill={null} />
-        </Card>
-      </div>
+        </>
+      )}
     </Page>
   )
 }

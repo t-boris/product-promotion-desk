@@ -116,3 +116,16 @@
 37. A fixed `max-width` on the page and a fixed-width menu are decisions the owner feels at once. The sweep now also checks that the page width follows the window and that the menu can be hidden, with the menu open and closed.
 38. A one-off page-wide control (hide the menu) needs its state kept in browser storage behind try/catch, and the renderer file that holds the logic stays free of browser globals so the node tests can import it.
 39. When the owner adds a request in the middle of a task, record it at once as a draft requirement with the open question (here: how icons are made), do the small fix that was clearly asked for now, and do not start the big new feature before the choice is made.
+
+## 2026-11-08 (later): the Accounts screen was not understandable
+
+**What happened.** The owner looked at the finished Accounts screen (screenshot) and said the UI is very badly made: it is not clear how to add an account, a password or a role, and an account screen must not mention channels at all (an account is used by channels, but that is shown where a channel is connected). I had stacked every control of every account into one long scroll, in no order, and kept "used by <product> (n channels)" and a multi-product warning on the account.
+
+**Rules for myself.**
+
+40. A new screen is shown to the owner as a layout (a small mock) before it is built, with the question "can you do X without reading anything?" answered for each task the screen exists for (here: add an account, give it an address, save a password, give it a role, sign in).
+41. A screen about one kind of thing shows only that thing. Links to other kinds (channels, products) belong on the screen of the other kind, where the link is made. Cross-references on a library screen are noise even when they are true.
+42. Order the controls of an entity in the order the owner does things (who it is, address, password, sign in) and say what comes next ("Next: give it an e-mail address") instead of showing every button at once. Rare controls (take control, remove) go behind a fold.
+43. Long explanations are not a substitute for layout: one sentence next to the control it explains, never a paragraph above the list.
+44. A feature that failed in real use is a finding even when it was listed as not verified: the owner pressed "Sign in with saved password" on Reddit and got "form not found". Diagnose it with the real page before claiming the sign-in works on any platform.
+45. A button inside a form submits it unless it says `type="button"`. The shared Button now defaults to type button and a submit says so. Every new form is tested by pressing each of its buttons once (not only the submit), because "Propose" and "Cancel" created an account half-way through filling in the form.

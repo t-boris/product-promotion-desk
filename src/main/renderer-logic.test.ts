@@ -2,10 +2,11 @@
 // tested from here. The modules under test import only src/shared, which keeps these plain unit tests.
 
 import { describe, expect, it } from 'vitest'
-import type { AttentionItem, Channel, Product } from '../shared/types'
+import type { Account, AttentionItem, Channel, Product } from '../shared/types'
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from '../renderer/src/menu-state'
 import { fixLinkFor } from '../renderer/src/pages/attention-links'
-import { MOVED_PAGES, parseHash, productHref } from '../renderer/src/route'
+import { nextStep } from '../renderer/src/pages/channels/next-step'
+import { MOVED_PAGES, accountsNewHref, parseAccountsHash, parseHash, productHref } from '../renderer/src/route'
 
 describe('hash routes (DEC-009)', () => {
   it('reads plain pages and ignores the leading characters', () => {
@@ -106,5 +107,37 @@ describe('the main menu can be hidden and the choice is remembered', () => {
     expect(readMenuOpen(broken)).toBe(true)
     expect(() => saveMenuOpen(broken, false)).not.toThrow()
     expect(() => saveMenuOpen(undefined, false)).not.toThrow()
+  })
+})
+
+describe('the new-account form of the Accounts section', () => {
+  it('is reached by a link, with or without a role', () => {
+    expect(accountsNewHref()).toBe('#/accounts/new')
+    expect(parseAccountsHash('#/accounts')).toEqual({ adding: false, role: null })
+    expect(parseAccountsHash('#/accounts/new')).toEqual({ adding: true, role: null })
+    expect(parseAccountsHash('#/products/p1/channels')).toEqual({ adding: false, role: null })
+  })
+
+  it('carries a role through the address, whatever characters it holds', () => {
+    const role = { name: 'Astro & Co', voice: 'Calm, "plain" words: no jargon / no ?marks=1' }
+    expect(parseAccountsHash(accountsNewHref(role))).toEqual({ adding: true, role })
+    expect(parseAccountsHash('#/accounts/new?name=%20&voice=x')).toEqual({ adding: true, role: null })
+    expect(parseAccountsHash('#/accounts?name=Dev')).toEqual({ adding: false, role: null })
+  })
+})
+
+describe('the next step of an account', () => {
+  const account = (over: Partial<Account>): Account => ({ id: 'a', platform: 'reddit', label: 'A', identity: null, partition: 'p', status: 'login_required', createdAt: '', productId: null, role: null, loginName: null, email: null, mailboxId: null, ...over })
+
+  it('goes through address, password and sign-in, in that order', () => {
+    expect(nextStep(account({}), false, true).block).toBe('email')
+    expect(nextStep(account({ email: 'a@b.co' }), false, true).block).toBe('password')
+    expect(nextStep(account({ email: 'a@b.co' }), true, true)).toMatchObject({ block: 'signin' })
+    expect(nextStep(account({ email: 'a@b.co', status: 'captcha' }), true, true).text).toMatch(/check/)
+    expect(nextStep(account({ email: 'a@b.co', status: 'ready' }), true, true)).toMatchObject({ block: null })
+  })
+
+  it('does not ask for a password where the Mac keeps none', () => {
+    expect(nextStep(account({ email: 'a@b.co' }), false, false).block).toBe('signin')
   })
 })

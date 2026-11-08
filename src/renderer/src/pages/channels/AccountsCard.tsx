@@ -1,36 +1,27 @@
-import type { Account, Channel, Mailbox, PlatformInfo } from '../../../../shared/types'
-import { Badge, Card, EmptyState } from '../../ui'
-import { CreateAccount, type RolePrefill } from './CreateAccount'
+import type { Account, Channel, PlatformInfo } from '../../../../shared/types'
+import { accountsNewHref } from '../../route'
+import { Badge, Button, Card, EmptyState } from '../../ui'
 import { ACCOUNT_STATUS_LABEL, ACCOUNT_STATUS_TONE, platformLabel } from './model'
 
 /**
- * The accounts this product works with (DEC-015): those its channels use and those that were made for it. Accounts themselves are
- * one library in the Accounts section, where they are signed in, given addresses and passwords; here they are only listed, and a
- * new one can be added with a role suggested for this product.
+ * The accounts this product works with (DEC-015): those its channels use and those that were made for it. Accounts are one
+ * library with its own section, where they are added, signed in, given an address and a password; here they are only listed.
  */
-export function AccountsCard({
-  productId,
-  accounts,
-  channels,
-  platforms,
-  mailboxes,
-  rolePrefill
-}: {
-  productId: string
-  accounts: Account[]
-  /** The channels of this product. */
-  channels: Channel[]
-  platforms: PlatformInfo[]
-  mailboxes: Mailbox[]
-  rolePrefill: RolePrefill | null
-}) {
+export function AccountsCard({ accounts, channels, platforms }: { accounts: Account[]; /** The channels of this product. */ channels: Channel[]; platforms: PlatformInfo[] }) {
   return (
-    <Card title="Accounts of this product" actions={<a href="#/accounts">Open the Accounts section</a>}>
+    <Card
+      title="Accounts of this product"
+      actions={
+        <Button onClick={() => (window.location.hash = accountsNewHref())} data-testid="product-add-account">
+          Add a new account
+        </Button>
+      }
+    >
       <p className="muted small" data-testid="product-accounts-note">
-        Accounts are kept in one library, in the <a href="#/accounts">Accounts section</a>, and any product can use any of them. Sign in, set the e-mail address or the password there. Here you see the ones this product uses.
+        Accounts live in the <a href="#/accounts">Accounts section</a>, and any product can use any of them. Here you see the ones this product uses.
       </p>
       {accounts.length === 0 ? (
-        <EmptyState title="No accounts yet">Add an account below, or connect a channel through an account that already exists in the library.</EmptyState>
+        <EmptyState title="No accounts yet">Add an account, or connect a channel through one that already exists.</EmptyState>
       ) : (
         <div className="stack">
           {accounts.map((account) => {
@@ -50,8 +41,6 @@ export function AccountsCard({
           })}
         </div>
       )}
-      <h3 style={{ margin: '16px 0 0' }}>Add an account</h3>
-      <CreateAccount productId={productId} platforms={platforms} mailboxes={mailboxes} prefill={rolePrefill} />
     </Card>
   )
 }

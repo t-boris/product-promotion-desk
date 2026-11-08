@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import type { Account, Mailbox } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
 import { Button, ErrorNote, Field } from '../../ui'
+import { AccountBlock } from './AccountBlock'
 import { CopyButton } from './CopyButton'
 
 /**
@@ -12,14 +13,17 @@ export function AccountEmail({ account, mailboxes }: { account: Account; mailbox
   const [editing, setEditing] = useState(false)
   const [address, setAddress] = useState(account.email ?? '')
   const [chosenMailbox, setChosenMailbox] = useState<string>(account.mailboxId ?? '')
-  // Derived, not copied at mount: the mailbox list can arrive after this row was first drawn.
+  // Derived, not copied at mount: the mailbox list can arrive after this block was first drawn.
   const mailboxId = mailboxes.some((m) => m.id === chosenMailbox) ? chosenMailbox : (mailboxes[0]?.id ?? '')
   const [fromMailbox, setFromMailbox] = useState<string | null>(null)
   const [save, saving] = useAction(async () => {
     await call('accounts.setEmail', { accountId: account.id, email: address.trim() || null, mailboxId: fromMailbox })
     setEditing(false)
   })
-  const [clear, clearing] = useAction(() => call('accounts.setEmail', { accountId: account.id, email: null }))
+  const [clear, clearing] = useAction(async () => {
+    await call('accounts.setEmail', { accountId: account.id, email: null })
+    setEditing(false)
+  })
   const [propose, proposing] = useAction(async () => {
     const result = await call('accounts.proposeEmail', { mailboxId, platform: account.platform })
     setAddress(result.address)
@@ -33,22 +37,42 @@ export function AccountEmail({ account, mailboxes }: { account: Account; mailbox
     if (address.trim() !== '') void save()
   }
 
+  const summary = account.email ? (
+    <span data-testid={`email-state-${account.id}`}>
+      <strong>{account.email}</strong>
+      {mailbox ? <span className="muted"> · an address of {mailbox.address}</span> : null}
+    </span>
+  ) : (
+    <span className="muted" data-testid={`email-state-${account.id}`}>
+      No address yet. The platform writes to it, and mail for this account can be told apart from the others.
+    </span>
+  )
+
   return (
-    <div className="password-box" data-testid={`email-${account.id}`}>
-      <div className="password-head">
-        <strong>E-mail</strong>
-        {account.email ? (
-          <span className="muted small" data-testid={`email-state-${account.id}`}>
-            <strong>{account.email}</strong>
-            {mailbox ? ` · an address of ${mailbox.address}` : ''}
-          </span>
-        ) : (
-          <span className="muted small" data-testid={`email-state-${account.id}`}>
-            No address yet. Give one so the platform can write to this account.
-          </span>
-        )}
-      </div>
-      {editing ? (
+    <AccountBlock
+      step={2}
+      title="E-mail"
+      summary={summary}
+      testId={`email-${account.id}`}
+      actions={
+        !editing && (
+          <>
+            {account.email && <CopyButton text={account.email} testId={`email-copy-${account.id}`} />}
+            <Button
+              onClick={() => {
+                setAddress(account.email ?? '')
+                setFromMailbox(account.mailboxId)
+                setEditing(true)
+              }}
+              data-testid={`email-edit-${account.id}`}
+            >
+              {account.email ? 'Change' : 'Set an address'}
+            </Button>
+          </>
+        )
+      }
+    >
+      {editing && (
         <form onSubmit={submit} className="stack" data-testid={`email-form-${account.id}`}>
           <Field label="Address of this account" hint="Each account should have an address of its own.">
             <input
@@ -62,7 +86,7 @@ export function AccountEmail({ account, mailboxes }: { account: Account; mailbox
               data-testid={`email-input-${account.id}`}
             />
           </Field>
-          {mailboxes.length > 0 && (
+          {mailboxes.length > 0 ? (
             <div className="pick-row">
               <select className="input" value={mailboxId} onChange={(e) => setChosenMailbox(e.target.value)} aria-label="Base mailbox" data-testid={`email-mailbox-${account.id}`}>
                 {mailboxes.map((m) => (
@@ -72,14 +96,21 @@ export function AccountEmail({ account, mailboxes }: { account: Account; mailbox
                 ))}
               </select>
               <Button onClick={() => void propose()} disabled={proposing.busy || mailboxId === ''} data-testid={`email-propose-${account.id}`}>
-                Propose an address
+                Propose an address from this mailbox
               </Button>
             </div>
+          ) : (
+            <p className="muted small">To get proposed addresses, add your own mailbox on the “Mailboxes” tab.</p>
           )}
           <div className="row">
             <Button variant="primary" type="submit" disabled={saving.busy || address.trim() === ''} data-testid={`email-save-${account.id}`}>
               {saving.busy ? 'Saving…' : 'Save address'}
             </Button>
+            {account.email && (
+              <Button onClick={() => void clear()} disabled={clearing.busy} data-testid={`email-clear-${account.id}`}>
+                Remove address
+              </Button>
+            )}
             <Button
               onClick={() => {
                 setEditing(false)
@@ -90,27 +121,8 @@ export function AccountEmail({ account, mailboxes }: { account: Account; mailbox
             </Button>
           </div>
         </form>
-      ) : (
-        <div className="row">
-          {account.email && <CopyButton text={account.email} testId={`email-copy-${account.id}`} />}
-          <Button
-            onClick={() => {
-              setAddress(account.email ?? '')
-              setFromMailbox(account.mailboxId)
-              setEditing(true)
-            }}
-            data-testid={`email-edit-${account.id}`}
-          >
-            {account.email ? 'Change' : 'Set an address'}
-          </Button>
-          {account.email && (
-            <Button variant="danger" onClick={() => void clear()} disabled={clearing.busy} data-testid={`email-clear-${account.id}`}>
-              Remove address
-            </Button>
-          )}
-        </div>
       )}
       <ErrorNote error={error} />
-    </div>
+    </AccountBlock>
   )
 }

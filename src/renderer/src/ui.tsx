@@ -31,8 +31,12 @@ export function Card({ title, actions, children, className = '' }: { title?: str
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'ghost' | 'danger' }
 
-export function Button({ variant = 'ghost', className = '', ...rest }: ButtonProps) {
-  return <button {...rest} className={`btn btn-${variant} ${className}`} />
+/**
+ * A button never submits a form unless it says so (`type="submit"`). A browser button inside a form submits it by default, which
+ * made "Propose" and "Cancel" create an account in the middle of filling in its form.
+ */
+export function Button({ variant = 'ghost', className = '', type = 'button', ...rest }: ButtonProps) {
+  return <button {...rest} type={type} className={`btn btn-${variant} ${className}`} />
 }
 
 export type Tone = 'neutral' | 'good' | 'warn' | 'bad' | 'info'

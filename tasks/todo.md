@@ -168,3 +168,19 @@ DEC-008, REQ-002 and REQ-010 say "no credentials are requested or stored by the 
 3. Some platforms reject `+` aliases; then use a domain address.
 4. Auto-fill depends on how a site marks its fields; it will break when a site changes. The copy buttons are the fallback.
 5. Platforms may treat automated login and sign-up as a policy breach; the app keeps to one attempt, the owner's browser profile and the owner passing every check.
+
+## 0.3.1: the Accounts screen redone (owner remark on 0.3.0; layout approved by the owner)
+
+Owner: the UI is very badly made; it is not clear how to add accounts, passwords or roles; an account screen must contain no channels (the same account can be used by many channels, but that is chosen where a channel is connected).
+
+Design (layout in the approval question):
+- [x] Accounts section: header with one primary "Add account" button; tabs "Accounts" and "Mailboxes" (the base mailbox moves to its own tab).
+- [x] Accounts tab: a list on the left (name, platform, status dot); the chosen account on the right.
+- [x] The account card in the order the owner works: a "Next step" line (first thing still missing: address, password, sign-in), then four blocks, each with its current value in one line and one or two buttons: Role, E-mail, Password, Sign-in (create on the platform / open browser / check / sign in with saved password). Take control, give control back and Remove account behind "More".
+- [x] Add account: a short form (platform, name, e-mail typed or proposed, role) at the top of the section; after adding, the new account is selected and "Next step" guides.
+- [x] No channels, no products, no "used by" and no sharing warning anywhere in the Accounts section (the sharing warning stays in the channel connect form). The long "How signing in works" paragraph goes; each block explains itself in one line.
+- [x] Product Channels tab: the compact account list stays (accounts the product uses), the "Add an account" form moves out: a link "Add a new account" and "Use this role" open the Accounts section with the role filled in (carried in the address).
+- [x] Sweep with the new screen: every task (add, address, password, role, sign in) reachable in two clicks from the section; equal control heights; nothing past the edge.
+- [ ] Separate finding: "Sign in with saved password" on Reddit answered "The sign-in form was not found or did not accept the values". Diagnose on the real login page (Reddit builds its form from web components) and fix the script or document the limit.
+
+Result: 1311 tests; scratch app driven through the real screen (add with a proposed address, Propose and Cancel create nothing, password generate/cancel/save, role carried from the product page through the address, remove through More); sweep of 15 routes plus every account and the mailboxes tab, menu open and closed (40 checks): equal button heights, nothing past the edge, no window scroll. Found while driving it and fixed for the whole app: a button inside a form submitted the form (the shared Button now defaults to type button). NOT checked: the layout in a window narrower than 900 px, "Create account on <platform>" in the real window, and the Reddit sign-in finding below (still open, next after this release).

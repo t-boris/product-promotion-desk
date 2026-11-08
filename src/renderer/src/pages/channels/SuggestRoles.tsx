@@ -3,7 +3,7 @@ import type { RoleSuggestion } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
 import { Button, Card, ErrorNote } from '../../ui'
 
-/** Ideas from the AI for roles and login names. Nothing is created and nothing is registered anywhere: "Use this role" only fills the form. */
+/** Ideas from the AI for roles and login names. Nothing is created and nothing is registered anywhere: "Use this role" only opens the form with the role filled in. */
 export function SuggestRoles({ productId, blockedReason, onUse }: { productId: string; blockedReason: string | null; onUse: (suggestion: RoleSuggestion) => void }) {
   const [ideas, setIdeas] = useState<RoleSuggestion[] | null>(null)
   const [suggest, state] = useAction(() => call('accounts.suggestRoles', { productId }))
@@ -23,7 +23,7 @@ export function SuggestRoles({ productId, blockedReason, onUse }: { productId: s
       }
     >
       <p className="muted small">
-        A role gives a login its own voice, for example an astrologer or a developer. The AI proposes roles and login names from the approved passport. You create the real login on the platform yourself: the app never registers accounts and never sees your password.
+        A role gives an account its own voice, for example an astrologer or a developer. The AI proposes roles and login names from the approved passport. “Use this role” opens the new-account form in the Accounts section with the role filled in; you create the real account on the platform yourself, the app never registers it for you.
       </p>
       {blockedReason && (
         <div className="note warn" data-testid="suggest-roles-blocked">

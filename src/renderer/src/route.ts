@@ -54,3 +54,26 @@ export function productHref(productId: string | null | undefined, tab?: ProductT
   const base = `#/products/${encodeURIComponent(productId)}`
   return tab ? `${base}/${tab}` : base
 }
+
+/** What the Accounts section was asked to show: the new-account form, possibly with a role already filled in. */
+export interface AccountsRoute {
+  adding: boolean
+  role: { name: string; voice: string } | null
+}
+
+/** Link to the new-account form of the Accounts section; "Use this role" on the product page passes the role along. */
+export function accountsNewHref(role?: { name: string; voice: string }): string {
+  if (!role) return '#/accounts/new'
+  return `#/accounts/new?${new URLSearchParams({ name: role.name, voice: role.voice }).toString()}`
+}
+
+/** Reads `#/accounts` and `#/accounts/new?name=…&voice=…`. */
+export function parseAccountsHash(hash: string): AccountsRoute {
+  const body = hash.replace(/^#\/?/, '')
+  const at = body.indexOf('?')
+  const segments = (at < 0 ? body : body.slice(0, at)).split('/').filter((segment) => segment !== '')
+  const adding = segments[0] === 'accounts' && segments[1] === 'new'
+  const params = new URLSearchParams(at < 0 ? '' : body.slice(at + 1))
+  const name = params.get('name')?.trim() ?? ''
+  return { adding, role: adding && name ? { name, voice: params.get('voice')?.trim() ?? '' } : null }
+}

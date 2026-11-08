@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import type { ChannelSuggestion, RoleSuggestion } from '../../../../shared/types'
 import { useQuery } from '../../hooks'
+import { accountsNewHref } from '../../route'
 import { EmptyState, ErrorNote, Loading } from '../../ui'
 import { AccountsCard } from './AccountsCard'
 import { ChannelDetail } from './ChannelDetail'
 import { ChannelList } from './ChannelList'
 import { ConnectChannel, type Prefill } from './ConnectChannel'
-import type { RolePrefill } from './CreateAccount'
 import { SuggestRoles } from './SuggestRoles'
 import { SuggestChannels } from './SuggestChannels'
 import './channels.css'
@@ -16,14 +16,12 @@ export function ChannelsPanel({ productId }: { productId: string }) {
   const accounts = useQuery('accounts.list', undefined, ['accounts'])
   const channels = useQuery('channels.list', { productId }, ['channels'])
   const everyChannel = useQuery('channels.list', undefined, ['channels'])
-  const mailboxes = useQuery('mailboxes.list', undefined, ['accounts'])
   const products = useQuery('products.list', undefined, ['products', 'passport'])
   const platforms = useQuery('platforms.list', undefined, [])
   const settings = useQuery('app.settings.get', undefined, ['settings'])
   const engines = useQuery('engines.list', undefined, ['settings'])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [prefill, setPrefill] = useState<Prefill | null>(null)
-  const [rolePrefill, setRolePrefill] = useState<RolePrefill | null>(null)
 
   const channelList = channels.data ?? []
   const accountList = accounts.data ?? []
@@ -46,8 +44,8 @@ export function ChannelsPanel({ productId }: { productId: string }) {
     <div className="stack" data-testid="channels-panel">
       <ErrorNote error={accounts.error ?? channels.error ?? products.error ?? platforms.error} />
       {(accounts.loading && !accounts.data) || (channels.loading && !channels.data) ? <Loading what="Loading channels" /> : null}
-      <AccountsCard productId={productId} accounts={productAccounts} channels={channelList} platforms={platformList} mailboxes={mailboxes.data ?? []} rolePrefill={rolePrefill} />
-      <SuggestRoles productId={productId} blockedReason={blockedReason} onUse={(suggestion: RoleSuggestion) => setRolePrefill({ suggestion })} />
+      <AccountsCard accounts={productAccounts} channels={channelList} platforms={platformList} />
+      <SuggestRoles productId={productId} blockedReason={blockedReason} onUse={(suggestion: RoleSuggestion) => (window.location.hash = accountsNewHref({ name: suggestion.name, voice: suggestion.voice }))} />
       <SuggestChannels
         productId={productId}
         platforms={platformList}
