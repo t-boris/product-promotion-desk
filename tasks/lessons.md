@@ -187,3 +187,12 @@
 65. A refusal belongs next to the control that caused it, and the reason belongs before the click: the core answers "can this start, and if not, why" in one place, and the screen disables the control and prints the reason beside it. An error at the bottom of a scrolling block is the same as no error.
 66. "Does nothing" means: look at the owner's real window (screenshot by window id) and at the log before guessing. Here both showed the cause within a minute.
 
+## 2026-11-08 (later): "Codex cannot open websites? It calls an MCP of the browser built into my app"
+
+**What happened.** The screen said Codex "is never shown a website". The owner read it as "Codex cannot open sites" and objected: the engine does not open anything, the app's own browser does, and MarkView already shows an engine driving a browser through an MCP. The message named the symptom (a website) instead of the rule (an engine that can run commands on this computer is not given text written by a stranger, because that text can carry instructions to it).
+
+**Rules for myself.**
+
+67. When a restriction comes from a security rule, the screen and my report say the rule and its reason in the owner's terms ("this engine can run commands, and a web page is text from a stranger"), not a capability claim that the owner can see is false. Say what is allowed instead.
+68. If the owner proposes another architecture (the engine drives the app's browser through an MCP, as in MarkView), it is a decision to put in front of them with its trade-offs, not something to explain away. Their model of the product is the specification.
+
