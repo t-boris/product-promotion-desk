@@ -1,11 +1,14 @@
 import { join } from 'node:path'
-import { BrowserWindow, app, ipcMain, shell } from 'electron'
+import { BrowserWindow, app, ipcMain, powerMonitor, shell } from 'electron'
 import { ApiError, IPC_EVENT, IPC_INVOKE, type ApiMethod } from '../shared/api'
 import { createEngines } from '../ai'
 import { ElectronBrowserService } from '../browser/electron-browser-service'
 import { createConnectors } from '../connectors'
 import { createCore } from '../core/core'
+import { getAutomation, startAutomation } from '../core/pipeline'
 import { installLifecycle } from './lifecycle'
+import { createNotificationSink } from './notifications'
+import { createTray } from './tray'
 import { WebModeController } from './web-mode'
 
 app.setName('Product Promotion Desk')
@@ -90,8 +93,15 @@ async function start(): Promise<void> {
     else void win.loadFile(join(import.meta.dirname, '../renderer/index.html'))
   }
 
-  installLifecycle({ app, core, showWindow, windowCount: () => BrowserWindow.getAllWindows().length })
+  // Background operation (DEC-003): menu-bar status/pause/Quit, sleep and wake, notifications. Automation itself
+  // starts only after the window is up, because its startup recovery may take a while.
+  const automation = getAutomation(core)
+  const lifecycle = installLifecycle({ app, core, showWindow, windowCount: () => BrowserWindow.getAllWindows().length, automation, powerMonitor })
+  createTray({ core, automation, showWindow, quit: lifecycle.quit })
   app.on('second-instance', showWindow)
   core.log.info('app', `Product Promotion Desk ${app.getVersion()} started`)
   showWindow()
+  startAutomation(core, { notifier: createNotificationSink(showWindow) }).catch((error: unknown) => {
+    core.log.error('lifecycle', `Automation could not start: ${error instanceof Error ? error.message : String(error)}`)
+  })
 }
