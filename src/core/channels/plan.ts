@@ -42,9 +42,7 @@ export class ChannelPlanService {
       goals: product.goals.map((g) => ({ targetAction: g.targetAction, successMetrics: g.successMetrics, notes: g.notes })),
       platform,
       channel: { target: channel.target, url: channel.url },
-      roles: this.core.repos
-        .listAccounts()
-        .flatMap((a) => (a.productId === product.id && a.platform === channel.platform && a.role ? [a.role] : [])),
+      roles: this.core.repos.accountsOfProduct(product.id).flatMap((a) => (a.platform === channel.platform && a.role ? [a.role] : [])),
       abilities: channel.capabilities.map((c) => ({ key: c.key, status: c.status }))
     }
     try {

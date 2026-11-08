@@ -42,7 +42,7 @@ export class ChannelService {
 
   // ───────────── connect ─────────────
 
-  connect(args: { productId: string; accountId: string; target: string; reuseAccount?: boolean }): Channel {
+  connect(args: { productId: string; accountId: string; target: string }): Channel {
     const productId = requireText(args.productId, 'The product')
     const product = found(() => this.core.repos.product(productId), 'The product')
     const account = this.accounts.account(args.accountId)
@@ -73,7 +73,8 @@ export class ChannelService {
     if (this.store.findDuplicate(productId, account.id, normalized.target)) {
       throw new ApiError('duplicate', `${normalized.target} is already connected for this product with ${account.label}.`)
     }
-    this.claimAccount(account, product, args.reuseAccount === true)
+    this.requireFreeRole(account, product)
+    this.noteSharedUse(account, product)
     const channel = this.store.insertChannel({
       productId,
       accountId: account.id,
@@ -90,27 +91,30 @@ export class ChannelService {
     return channel
   }
 
+  /** Two logins of one product on one platform may not play the same role (DEC-010, checked here since DEC-015). */
+  private requireFreeRole(account: Account, product: Product): void {
+    if (!account.role) return
+    const clash = this.accounts.roleClash(product.id, account.platform, account.id, account.role.name)
+    if (clash) {
+      throw new ApiError(
+        'role_exists',
+        `${clash.label}, another login of "${product.name}" on the same platform, already has the role "${clash.role?.name}". Give ${account.label} a different role, or choose another login.`
+      )
+    }
+  }
+
   /**
-   * Each product has its own login (DEC-009). An unassigned legacy account is adopted by the first product that uses
-   * it. Another product's login is used only on the owner's explicit choice; the shared-account rules then apply
-   * unchanged: the SendGate counts limits per account across all its channels, and the account has one browser
-   * session that only one party (the app for one channel at a time, or the person) controls.
+   * Accounts are one library (DEC-015): any product's channel may use any account. When the account already serves another
+   * product, the shared-account rules apply unchanged: the SendGate counts limits per account across all its channels, and
+   * the account has one browser session that only one party (the app for one channel at a time, or the person) controls.
    */
-  private claimAccount(account: Account, product: Product, reuseAccount: boolean): void {
-    if (account.productId === null) {
-      this.store.assignAccount(account.id, product.id)
-      this.core.log.info('accounts', `${account.label} now belongs to "${product.name}".`)
-      this.core.events.changed('accounts')
-      return
-    }
-    if (account.productId === product.id) return
-    const owner = this.core.repos.product(account.productId)
-    if (!reuseAccount) {
-      throw new ApiError('account_other_product', `This login belongs to "${owner.name}". Use a separate login for this product, or confirm that you want to share it.`)
-    }
+  private noteSharedUse(account: Account, product: Product): void {
+    const others = this.core.repos.listChannels().filter((c) => c.accountId === account.id && c.productId !== product.id)
+    if (others.length === 0) return
+    const names = [...new Set(others.map((c) => this.core.repos.product(c.productId).name))].join('", "')
     this.core.log.warn(
       'channels',
-      `${account.label} belongs to "${owner.name}" but is now also used by "${product.name}". Their sends share one allowance and only one of them can control its browser at a time.`
+      `${account.label} also serves "${names}" and is now used by "${product.name}". Their sends share one allowance and only one of them can control its browser at a time.`
     )
   }
 

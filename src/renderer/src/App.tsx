@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAutomation, useQuery } from './hooks'
+import { readMenuOpen, saveMenuOpen, type MenuStorage } from './menu-state'
 import { PAGES } from './pages'
 import { MOVED_PAGES, parseHash } from './route'
 import { Badge, Button } from './ui'
@@ -27,8 +28,22 @@ function useHashRoute(): string {
   return route
 }
 
+/** The browser's storage, or undefined where the browser refuses even to hand it out. */
+function browserStorage(): MenuStorage | undefined {
+  try {
+    return window.localStorage
+  } catch {
+    return undefined
+  }
+}
+
 export function App() {
   const route = useHashRoute()
+  const [menuOpen, setMenuOpen] = useState(() => readMenuOpen(browserStorage()))
+  const showMenu = (open: boolean): void => {
+    setMenuOpen(open)
+    saveMenuOpen(browserStorage(), open)
+  }
   const { state, setPaused } = useAutomation()
   const attention = useQuery('attention.list', undefined, ['attention', 'opportunities', 'channels', 'accounts'])
   const accounts = useQuery('accounts.list', undefined, ['accounts'])
@@ -40,30 +55,42 @@ export function App() {
   const attentionCount = attention.data?.length ?? 0
 
   return (
-    <div className="shell">
-      <aside className="sidebar">
-        <div className="brand">Promotion Desk</div>
-        <nav aria-label="Work areas">
-          {PAGES.map((page) => (
-            <a
-              key={page.id}
-              href={`#/${page.id}`}
-              className={`nav-item ${page.id === route ? 'active' : ''}`}
-              onClick={(e) => {
-                // Already here: keep the open product and tab instead of resetting the hash to the bare page.
-                if (page.id === route) e.preventDefault()
-              }}
-              data-testid={`nav-${page.id}`}
-            >
-              <span>{page.label}</span>
-              {page.id === 'attention' && attentionCount > 0 && <span className="count">{attentionCount}</span>}
-            </a>
-          ))}
-        </nav>
-      </aside>
+    <div className={`shell ${menuOpen ? '' : 'menu-closed'}`} data-testid="shell">
+      {menuOpen && (
+        <aside className="sidebar" data-testid="sidebar">
+          <div className="brand">Promotion Desk</div>
+          <nav aria-label="Work areas">
+            {PAGES.map((page) => (
+              <a
+                key={page.id}
+                href={`#/${page.id}`}
+                className={`nav-item ${page.id === route ? 'active' : ''}`}
+                onClick={(e) => {
+                  // Already here: keep the open product and tab instead of resetting the hash to the bare page.
+                  if (page.id === route) e.preventDefault()
+                }}
+                data-testid={`nav-${page.id}`}
+              >
+                <span>{page.label}</span>
+                {page.id === 'attention' && attentionCount > 0 && <span className="count">{attentionCount}</span>}
+              </a>
+            ))}
+          </nav>
+          <div className="sidebar-foot">
+            <Button onClick={() => showMenu(false)} title="Hide the menu to give the page the whole window" data-testid="menu-hide">
+              Hide menu
+            </Button>
+          </div>
+        </aside>
+      )}
       <div className="main">
         <header className="topbar" data-testid="topbar">
           <div className="row">
+            {!menuOpen && (
+              <Button onClick={() => showMenu(true)} title="Show the menu" data-testid="menu-show">
+                Menu{attentionCount > 0 ? ` · ${attentionCount}` : ''}
+              </Button>
+            )}
             <span className="muted small">AI engine</span>
             {engine ? <Badge tone={engine.ready ? 'good' : 'warn'}>{engine.label}</Badge> : <Badge tone="warn">None selected</Badge>}
             <span className="muted small sep">Accounts</span>

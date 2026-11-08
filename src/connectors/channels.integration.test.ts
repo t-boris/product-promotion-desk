@@ -126,7 +126,7 @@ describe('platforms and site profiles (DEC-009)', () => {
   it('lists the platforms the connectors offer: Reddit is prepared, any other site needs its own profile', async () => {
     const { core } = await forumWorld()
     const platforms = await core.router.call('platforms.list', undefined)
-    expect(platforms[0]).toEqual({ connectorId: 'reddit', platform: 'reddit', label: 'Reddit', prepared: true, loginUrl: 'https://www.reddit.com/login/' })
+    expect(platforms[0]).toEqual({ connectorId: 'reddit', platform: 'reddit', label: 'Reddit', prepared: true, loginUrl: 'https://www.reddit.com/login/', signupUrl: 'https://www.reddit.com/register/' })
     expect(platforms.at(-1)).toEqual({ connectorId: 'universal', platform: 'web', label: 'Other website', prepared: false, loginUrl: '' })
     // Between them: the named platforms the universal connector serves (DEC-013), each needing its own site profile.
     expect(platforms.slice(1, -1).map((p) => p.platform)).toEqual(['facebook', 'instagram', 'linkedin', 'pinterest', 'telegram', 'threads', 'tiktok', 'x', 'youtube'])

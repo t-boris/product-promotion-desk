@@ -275,10 +275,12 @@ describe('channels.draftProfile: what is checked first', () => {
     expect(s.page.log).toEqual([])
   })
 
-  it('refuses a login that belongs to another product, and one of another platform', async () => {
+  it('refuses a login of another platform; a login first made for another product is fine (DEC-015)', async () => {
     const s = await setup()
     const second = s.w.addProduct('Tarot Deck')
-    expect(await refused(s.w.call('channels.draftProfile', { ...draftArgs(s), productId: second }))).toBe('account_other_product')
+    s.w.t.engine.on('channels.site_profile', JSON.stringify(GOOD))
+    await expect(s.w.call('channels.draftProfile', { ...draftArgs(s), productId: second })).resolves.toBeDefined()
+    s.page.log.length = 0
     const fakeAccount = await s.w.addAccount('Fake platform login')
     expect(await refused(s.w.call('channels.draftProfile', { ...draftArgs(s), accountId: fakeAccount.id }))).toBe('platform_mismatch')
     expect(s.page.log).toEqual([])

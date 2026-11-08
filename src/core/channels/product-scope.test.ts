@@ -30,17 +30,25 @@ describe('accounts belong to a product', () => {
     expect(new Set(accounts.map((a) => a.partition)).size).toBe(2)
   })
 
-  it('lists one product\'s accounts plus the unassigned ones; without an argument, all', async () => {
+  it('lists every account, whichever product it was made for (DEC-015)', async () => {
     const w = makeWorld()
     const second = w.addProduct('Second')
     const mine = await w.addAccount('Mine')
     const theirs = await w.addAccount('Theirs', second)
     const legacy = await w.addAccount('Legacy')
     w.core.db.prepare('UPDATE accounts SET product_id = NULL WHERE id = ?').run(legacy.id)
-    const ids = async (productId?: string) => (await w.call('accounts.list', productId ? { productId } : undefined)).map((a) => a.id).sort()
-    expect(await ids(w.productId)).toEqual([mine.id, legacy.id].sort())
-    expect(await ids(second)).toEqual([theirs.id, legacy.id].sort())
-    expect(await ids()).toEqual([mine.id, theirs.id, legacy.id].sort())
+    expect((await w.call('accounts.list', undefined)).map((a) => a.id).sort()).toEqual([mine.id, theirs.id, legacy.id].sort())
+  })
+
+  it('creates an account without a product, and a product\'s accounts are those its channels use or were made for', async () => {
+    const w = makeWorld()
+    const second = w.addProduct('Second')
+    const free = await w.call('accounts.create', { platform: 'fake', label: 'Free' })
+    expect(free.productId).toBeNull()
+    const made = await w.addAccount('Made for first')
+    await w.call('channels.connect', { productId: second, accountId: free.id, target: 'r/tarot' })
+    expect(w.core.repos.accountsOfProduct(second).map((a) => a.id)).toEqual([free.id])
+    expect(w.core.repos.accountsOfProduct(w.productId).map((a) => a.id)).toEqual([made.id])
   })
 })
 
@@ -58,56 +66,42 @@ describe('channels belong to a product', () => {
   })
 })
 
-describe('using another product\'s login', () => {
+describe('using an account that serves another product (DEC-015)', () => {
   async function twoProducts() {
     const w = await makeReadyWorld()
     const second = w.addProduct('Tarot Deck')
     return { w, second }
   }
 
-  it('is refused without confirmation, with a message that names the owner and the way out', async () => {
+  it('needs no confirmation, logs a warning naming both products, and leaves the account as it was', async () => {
     const { w, second } = await twoProducts()
-    const error = await w.call('channels.connect', { productId: second, accountId: w.account.id, target: 'r/tarot' }).catch((e: unknown) => e)
-    expect(error).toMatchObject({
-      code: 'account_other_product',
-      message: 'This login belongs to "Natal Mystic". Use a separate login for this product, or confirm that you want to share it.'
-    })
-    expect(await w.call('channels.list', { productId: second })).toEqual([])
-  })
-
-  it('is refused when reuseAccount is anything but true', async () => {
-    const { w, second } = await twoProducts()
-    const args = { productId: second, accountId: w.account.id, target: 'r/tarot' }
-    expect(await w.refusal('channels.connect', { ...args, reuseAccount: false })).toBe('account_other_product')
-  })
-
-  it('proceeds with consent, logs a warning naming both products, and leaves the owner unchanged', async () => {
-    const { w, second } = await twoProducts()
-    const channel = await w.call('channels.connect', { productId: second, accountId: w.account.id, target: 'r/tarot', reuseAccount: true })
+    await w.call('channels.connect', { productId: w.productId, accountId: w.account.id, target: 'r/astrology' })
+    const channel = await w.call('channels.connect', { productId: second, accountId: w.account.id, target: 'r/tarot' })
     expect(channel.productId).toBe(second)
     expect(w.core.repos.account(w.account.id).productId).toBe(w.productId)
     const warning = w.core.log.list(50, 'warn').find((e) => e.message.includes('Tarot Deck'))
     expect(warning?.message).toMatch(/Natal Mystic.*Tarot Deck|Tarot Deck.*Natal Mystic/)
   })
 
-  it('needs no consent for the product that owns the login', async () => {
+  it('says nothing when the account serves only this product', async () => {
     const { w } = await twoProducts()
-    await expect(w.call('channels.connect', { productId: w.productId, accountId: w.account.id, target: 'r/astrology' })).resolves.toMatchObject({ productId: w.productId })
+    await w.call('channels.connect', { productId: w.productId, accountId: w.account.id, target: 'r/astrology' })
+    expect(w.core.log.list(50, 'warn').filter((e) => e.message.includes('also serves'))).toEqual([])
   })
 
-  it('adopts an unassigned (legacy) account for the product that first uses it, and keeps it afterwards', async () => {
+  it('an account made without a product is used by whichever product connects it first, and stays unowned', async () => {
     const { w, second } = await twoProducts()
     w.core.db.prepare('UPDATE accounts SET product_id = NULL WHERE id = ?').run(w.account.id)
     await w.call('channels.connect', { productId: second, accountId: w.account.id, target: 'r/tarot' })
-    expect(w.core.repos.account(w.account.id).productId).toBe(second)
-    expect(await w.refusal('channels.connect', { productId: w.productId, accountId: w.account.id, target: 'r/astrology' })).toBe('account_other_product')
+    await w.call('channels.connect', { productId: w.productId, accountId: w.account.id, target: 'r/astrology' })
+    expect(w.core.repos.account(w.account.id).productId).toBeNull()
   })
 
-  it('does not adopt or change anything when the connection itself is refused', async () => {
+  it('changes nothing when the connection itself is refused', async () => {
     const { w, second } = await twoProducts()
-    w.core.db.prepare('UPDATE accounts SET product_id = NULL WHERE id = ?').run(w.account.id)
     expect(await w.refusal('channels.connect', { productId: second, accountId: w.account.id, target: '   ' })).toBe('invalid_input')
-    expect(w.core.repos.account(w.account.id).productId).toBeNull()
+    expect(await w.call('channels.list', { productId: second })).toEqual([])
+    expect(w.core.log.list(50, 'warn').filter((e) => e.message.includes('also serves'))).toEqual([])
   })
 
   describe('the shared-account rules still hold (REQ-004)', () => {
@@ -116,7 +110,7 @@ describe('using another product\'s login', () => {
       const w = await makeReadyWorld({ fake: probe })
       const second = w.addProduct('Tarot Deck')
       const a = await w.call('channels.connect', { productId: w.productId, accountId: w.account.id, target: 'r/astrology' })
-      const b = await w.call('channels.connect', { productId: second, accountId: w.account.id, target: 'r/tarot', reuseAccount: true })
+      const b = await w.call('channels.connect', { productId: second, accountId: w.account.id, target: 'r/tarot' })
       expect(w.core.connectorContext(a.id).ctx.session).toBe(w.core.connectorContext(b.id).ctx.session)
       await Promise.all([w.call('channels.assess', { channelId: a.id }), w.call('channels.assess', { channelId: b.id })])
       expect(probe.maxActive).toBe(1)
@@ -127,7 +121,7 @@ describe('using another product\'s login', () => {
       const w = await makeReadyWorld()
       const second = w.addProduct('Tarot Deck')
       const a = await w.call('channels.connect', { productId: w.productId, accountId: w.account.id, target: 'r/astrology' })
-      const b = await w.call('channels.connect', { productId: second, accountId: w.account.id, target: 'r/tarot', reuseAccount: true })
+      const b = await w.call('channels.connect', { productId: second, accountId: w.account.id, target: 'r/tarot' })
       await w.call('accounts.takeControl', { accountId: w.account.id })
       for (const channel of [a, b]) {
         await expect(w.core.connectorContext(channel.id).ctx.session.withAgentControl('monitor', async () => 1)).rejects.toMatchObject({ name: 'TakeoverError' })
@@ -140,7 +134,7 @@ describe('using another product\'s login', () => {
       const w = await makeReadyWorld()
       const second = w.addProduct('Tarot Deck')
       await w.call('channels.connect', { productId: w.productId, accountId: w.account.id, target: 'r/astrology' })
-      await w.call('channels.connect', { productId: second, accountId: w.account.id, target: 'r/tarot', reuseAccount: true })
+      await w.call('channels.connect', { productId: second, accountId: w.account.id, target: 'r/tarot' })
       const rows = w.core.db.prepare('SELECT DISTINCT account_id FROM channels').all()
       expect(rows).toEqual([{ account_id: w.account.id }])
     })

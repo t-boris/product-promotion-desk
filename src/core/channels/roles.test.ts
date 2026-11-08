@@ -68,18 +68,27 @@ describe('accounts.create with a role', () => {
     expect(await w.call('accounts.list', undefined)).toHaveLength(1)
   })
 
-  it('does not let two logins of a product on one platform play the same role, whatever the case', async () => {
-    const w = makeWorld({ extra: [new OtherConnector()] })
+  it('lets an account be made with any role: the same-role rule applies when a channel is connected (DEC-015)', async () => {
+    const w = makeWorld()
     await w.call('accounts.create', { productId: w.productId, platform: 'fake', label: 'A', role: ASTROLOGER })
-    const error = await w.call('accounts.create', { productId: w.productId, platform: 'fake', label: 'B', role: { name: 'ASTROLOGER ', voice: 'other voice' } }).catch((e: unknown) => e)
+    await expect(w.call('accounts.create', { productId: w.productId, platform: 'fake', label: 'B', role: { name: 'ASTROLOGER ', voice: 'other voice' } })).resolves.toMatchObject({ label: 'B' })
+  })
+
+  it('does not let two logins of a product on one platform play the same role in its channels, whatever the case', async () => {
+    const w = makeWorld({ extra: [new OtherConnector()] })
+    const a = await w.call('accounts.create', { productId: w.productId, platform: 'fake', label: 'A', role: ASTROLOGER })
+    const b = await w.call('accounts.create', { productId: w.productId, platform: 'fake', label: 'B', role: { name: 'ASTROLOGER ', voice: 'other voice' } })
+    await w.call('channels.connect', { productId: w.productId, accountId: a.id, target: 'r/astrology' })
+    const error = await w.call('channels.connect', { productId: w.productId, accountId: b.id, target: 'r/tarot' }).catch((e: unknown) => e)
     expect(error).toMatchObject({ code: 'role_exists' })
-    expect((error as Error).message).toMatch(/\(A\) already has the role "Astrologer"/)
-    expect(await w.call('accounts.list', undefined)).toHaveLength(1)
+    expect((error as Error).message).toMatch(/A, another login of "Natal Mystic".*"Astrologer"/)
+    expect(await w.call('channels.list', { productId: w.productId })).toHaveLength(1)
 
     // Another platform, or another product, may use the same role name.
-    await expect(w.call('accounts.create', { productId: w.productId, platform: 'other', label: 'C', role: ASTROLOGER })).resolves.toMatchObject({ role: ASTROLOGER })
+    const c = await w.call('accounts.create', { productId: w.productId, platform: 'other', label: 'C', role: ASTROLOGER })
+    await expect(w.call('channels.connect', { productId: w.productId, accountId: c.id, target: 'https://other.test/forum' })).resolves.toMatchObject({ accountId: c.id })
     const second = w.addProduct('Tarot Deck')
-    await expect(w.call('accounts.create', { productId: second, platform: 'fake', label: 'D', role: ASTROLOGER })).resolves.toMatchObject({ productId: second })
+    await expect(w.call('channels.connect', { productId: second, accountId: b.id, target: 'r/tarot' })).resolves.toMatchObject({ productId: second })
   })
 
   it('logs the role name, not the voice', async () => {
@@ -126,10 +135,12 @@ describe('accounts.setRole', () => {
     expect(w.core.repos.account(w.account.id).role).toBeNull()
   })
 
-  it('does not let a login take the role name of another login of the product on the same platform', async () => {
+  it('does not let a login take the role name of another login of a product it works for on the same platform', async () => {
     const w = await makeReadyWorld()
     const other = await w.addAccount('Second login')
     await w.call('accounts.setRole', { accountId: w.account.id, role: ASTROLOGER })
+    await w.call('channels.connect', { productId: w.productId, accountId: w.account.id, target: 'r/astrology' })
+    await w.call('channels.connect', { productId: w.productId, accountId: other.id, target: 'r/tarot' })
     expect(await w.refusal('accounts.setRole', { accountId: other.id, role: { name: 'astrologer', voice: '' } })).toBe('role_exists')
     // Its own name is never a clash: changing only the case or the voice is fine.
     await expect(w.call('accounts.setRole', { accountId: w.account.id, role: { name: 'ASTROLOGER', voice: 'Louder.' } })).resolves.toMatchObject({ role: { name: 'ASTROLOGER' } })
@@ -153,7 +164,7 @@ describe('accounts.setRole', () => {
   it('a login of another product (a shared one) is not special: the role is the account\'s', async () => {
     const w = await makeReadyWorld()
     const second = w.addProduct('Tarot Deck')
-    await w.call('channels.connect', { productId: second, accountId: w.account.id, target: 'r/tarot', reuseAccount: true })
+    await w.call('channels.connect', { productId: second, accountId: w.account.id, target: 'r/tarot' })
     await expect(w.call('accounts.setRole', { accountId: w.account.id, role: ASTROLOGER })).resolves.toMatchObject({ productId: w.productId, role: ASTROLOGER })
     expect((await w.call('accounts.list', undefined)).find((a) => a.id === w.account.id)?.role).toEqual(ASTROLOGER)
   })

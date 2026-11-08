@@ -14,7 +14,8 @@ export function platformInfo(connector: Connector): PlatformInfo {
     platform: connector.platform,
     label: connector.label?.trim() || capitalize(connector.platform),
     prepared: connector.id !== UNIVERSAL_CONNECTOR_ID,
-    loginUrl: connector.loginUrl()
+    loginUrl: connector.loginUrl(),
+    ...(connector.signupUrl ? { signupUrl: connector.signupUrl() } : {})
   }
 }
 
@@ -31,6 +32,7 @@ export function listPlatforms(connectors: ConnectorRegistry): PlatformInfo[] {
         label: p.label,
         prepared: false,
         loginUrl: p.loginUrl,
+        signupUrl: p.signupUrl,
         hint: p.hint,
         example: p.example,
         handleUrl: p.handleUrl,

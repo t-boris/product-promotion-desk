@@ -55,5 +55,22 @@ ALTER TABLE channels ADD COLUMN plan_json TEXT;
 ALTER TABLE accounts ADD COLUMN login_name TEXT;
 ALTER TABLE accounts ADD COLUMN last_login_attempt_at TEXT;
 `
+  },
+  {
+    id: 205,
+    name: 'channels: accounts are one library with an e-mail address each; base mailboxes (DEC-015)',
+    sql: `
+-- accounts.product_id stays as information about the product an account was first created for; it restricts nothing.
+-- email is the address the account signs up with; mailbox_id is the base mailbox it was proposed from (or NULL).
+ALTER TABLE accounts ADD COLUMN email TEXT;
+ALTER TABLE accounts ADD COLUMN mailbox_id TEXT;
+-- A base mailbox: an ordinary mailbox of the owner from which addresses for accounts are made. Its IMAP connection comes later.
+CREATE TABLE mailboxes (
+  id TEXT PRIMARY KEY,
+  address TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  kind TEXT NOT NULL DEFAULT 'existing',
+  created_at TEXT NOT NULL
+);
+`
   }
 ]

@@ -6,7 +6,6 @@ import { accountOptionLabel, addressExample, isSameAddress, isWebAddress, platfo
 import { PrepareSiteProfile } from './PrepareSiteProfile'
 
 export const ONE_LOGIN_SPEAKS = 'Only one login of this product speaks in a discussion. The other logins stay quiet in it.'
-export const SHARE_CONSENT = 'I want to share this login: limits are shared and only one party controls its browser'
 
 /** What a suggestion asks to fill in; a new object each time, so choosing the same idea twice fills the form again. */
 export interface Prefill {
@@ -15,36 +14,37 @@ export interface Prefill {
 
 interface Props {
   product: Product | undefined
-  /** This product's logins (and unassigned ones). */
+  /** Every account of the library (DEC-015): any of them can serve this product. */
   accounts: Account[]
   /** This product's channels, to explain what happens when a second login joins the same community. */
   channels: Channel[]
-  /** Logins of other products; using one needs the owner's explicit consent. */
-  sharedAccounts: Account[]
+  /** The channels of every product, to say which other products an account already serves. */
+  allChannels: Channel[]
   platforms: PlatformInfo[]
   productName: (productId: string | null) => string
   prefill: Prefill | null
   onConnected: (channel: Channel) => void
 }
 
-/** Connects this product to a channel address through one of its logins. Nothing is posted and nothing is read yet. */
-export function ConnectChannel({ product, accounts, channels, sharedAccounts, platforms, productName, prefill, onConnected }: Props) {
+/** Connects this product to a channel address through an account of the library. Nothing is posted and nothing is read yet. */
+export function ConnectChannel({ product, accounts, channels, allChannels, platforms, productName, prefill, onConnected }: Props) {
   const [accountId, setAccountId] = useState('')
   const [target, setTarget] = useState('')
-  const [consent, setConsent] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [justJoined, setJustJoined] = useState(false)
-  const [connect, state] = useAction((args: { productId: string; accountId: string; target: string; reuseAccount?: boolean }) => call('channels.connect', args))
+  const [connect, state] = useAction((args: { productId: string; accountId: string; target: string }) => call('channels.connect', args))
 
-  const everyAccount = [...accounts, ...sharedAccounts]
-  const account = everyAccount.find((a) => a.id === accountId) ?? accounts[0]
-  const shared = account !== undefined && sharedAccounts.some((a) => a.id === account.id)
-  const info = platforms.find((p) => p.platform === account?.platform)
   const productId = product?.id ?? ''
+  // The product's own accounts come first: the ones its channels use and the ones made for it.
+  const mine = accounts.filter((a) => a.productId === productId || channels.some((c) => c.accountId === a.id))
+  const others = accounts.filter((a) => !mine.includes(a))
+  const account = accounts.find((a) => a.id === accountId) ?? mine[0] ?? others[0]
+  const info = platforms.find((p) => p.platform === account?.platform)
   // A handle on a named platform stands for an address; the rest of this form works with that address.
   const address = typedAddress(info, target)
-  const ready = productId !== '' && account !== undefined && target.trim() !== '' && (!shared || consent)
-  const sharedOwner = shared && account ? productName(account.productId) : ''
+  const ready = productId !== '' && account !== undefined && target.trim() !== ''
+  // The other products this account already serves: a warning, not a block.
+  const alsoServes = account ? [...new Set(allChannels.filter((c) => c.accountId === account.id && c.productId !== productId).map((c) => productName(c.productId)))] : []
   // Another login of this product is already in that community: say how discussions are shared between logins.
   const otherLoginThere = account !== undefined && target.trim() !== '' && channels.some((c) => c.productId === productId && c.accountId !== account.id && isSameAddress(address, c))
 
@@ -52,15 +52,14 @@ export function ConnectChannel({ product, accounts, channels, sharedAccounts, pl
   useEffect(() => {
     if (!prefill) return
     const wanted = platformOfSuggestion(prefill.suggestion, platforms)
-    const match = wanted ? (accounts.find((a) => a.platform === wanted.platform) ?? sharedAccounts.find((a) => a.platform === wanted.platform)) : undefined
+    const match = wanted ? (mine.find((a) => a.platform === wanted.platform) ?? accounts.find((a) => a.platform === wanted.platform)) : undefined
     setTarget(prefill.suggestion.target)
     setJustJoined(false)
-    setConsent(false)
     if (match) {
       setAccountId(match.id)
       setNotice(null)
     } else {
-      setNotice(`Add a ${platformLabel(prefill.suggestion.platform, platforms)} account above first, then choose it here.`)
+      setNotice(`Add a ${platformLabel(prefill.suggestion.platform, platforms)} account first (in the Accounts section), then choose it here.`)
     }
     // Only a new suggestion should refill the form, not later changes of the account lists.
   }, [prefill])
@@ -68,11 +67,10 @@ export function ConnectChannel({ product, accounts, channels, sharedAccounts, pl
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault()
     if (!ready || !account) return
-    const channel = await connect({ productId, accountId: account.id, target: target.trim(), ...(shared ? { reuseAccount: true } : {}) })
+    const channel = await connect({ productId, accountId: account.id, target: target.trim() })
     if (channel) {
       setJustJoined(otherLoginThere)
       setTarget('')
-      setConsent(false)
       setNotice(null)
       onConnected(channel)
     }
@@ -81,34 +79,31 @@ export function ConnectChannel({ product, accounts, channels, sharedAccounts, pl
   return (
     <Card title="Connect a channel">
       {!product && <p className="muted">This product was not found.</p>}
-      {product && accounts.length === 0 && sharedAccounts.length === 0 && <p className="muted">Add an account above first.</p>}
+      {product && accounts.length === 0 && (
+        <p className="muted">
+          There is no account yet. Add one <a href="#/accounts">in the Accounts section</a> or above.
+        </p>
+      )}
       {product && <p className="muted small">The channel is for <strong>{product.name}</strong>.</p>}
       <form onSubmit={(e) => void submit(e)} data-testid="connect-form">
         <div className="settings-grid">
           <Field label="Account">
-            <select
-              className="input"
-              value={account?.id ?? ''}
-              onChange={(e) => {
-                setAccountId(e.target.value)
-                setConsent(false)
-              }}
-              disabled={everyAccount.length === 0}
-              data-testid="connect-account"
-            >
+            <select className="input" value={account?.id ?? ''} onChange={(e) => setAccountId(e.target.value)} disabled={accounts.length === 0} data-testid="connect-account">
               {account === undefined && <option value="">Choose an account</option>}
-              <optgroup label={sharedAccounts.length > 0 ? 'Logins of this product' : 'This product'}>
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {accountOptionLabel(a, platforms)}
-                  </option>
-                ))}
-              </optgroup>
-              {sharedAccounts.length > 0 && (
-                <optgroup label="Another product’s login (shared)">
-                  {sharedAccounts.map((a) => (
+              {mine.length > 0 && (
+                <optgroup label={others.length > 0 ? 'Used by this product' : 'Accounts'}>
+                  {mine.map((a) => (
                     <option key={a.id} value={a.id}>
-                      {accountOptionLabel(a, platforms)} — {productName(a.productId)}
+                      {accountOptionLabel(a, platforms)}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {others.length > 0 && (
+                <optgroup label={mine.length > 0 ? 'Other accounts of the library' : 'Accounts'}>
+                  {others.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {accountOptionLabel(a, platforms)}
                     </option>
                   ))}
                 </optgroup>
@@ -128,14 +123,11 @@ export function ConnectChannel({ product, accounts, channels, sharedAccounts, pl
             />
           </Field>
         </div>
-        {shared && (
+        {alsoServes.length > 0 && (
           <div className="note warn" data-testid="share-notice">
             <p>
-              This login belongs to “{sharedOwner}”. A separate login for this product is safer: a shared login has one set of limits for all its channels, and only one party (you or the app) controls its browser at a time.
+              This account also serves {alsoServes.map((n) => `“${n}”`).join(', ')}. That is allowed, but it has one set of limits for all its channels, only one party (you or the app) controls its browser at a time, and a platform may see one account promoting several things as spam.
             </p>
-            <label className="consent">
-              <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} data-testid="share-consent" /> <span>{SHARE_CONSENT}</span>
-            </label>
           </div>
         )}
         {(otherLoginThere || justJoined) && (
@@ -153,12 +145,7 @@ export function ConnectChannel({ product, accounts, channels, sharedAccounts, pl
           {state.busy ? 'Connecting…' : 'Connect channel'}
         </Button>
       </form>
-      {account && info && !info.prepared && isWebAddress(address) && !shared && <PrepareSiteProfile key={`${account.id}|${address}`} productId={productId} accountId={account.id} url={address} />}
-      {account && info && !info.prepared && isWebAddress(address) && shared && (
-        <p className="muted small" data-testid="profile-needs-own-login">
-          To prepare a site profile, use a login of this product.
-        </p>
-      )}
+      {account && info && !info.prepared && isWebAddress(address) && <PrepareSiteProfile key={`${account.id}|${address}`} productId={productId} accountId={account.id} url={address} />}
     </Card>
   )
 }

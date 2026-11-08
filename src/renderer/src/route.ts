@@ -7,6 +7,9 @@ export type ProductTab = (typeof PRODUCT_TABS)[number]
 
 export const DEFAULT_PRODUCT_TAB: ProductTab = 'sources'
 
+/** The account library (DEC-015). */
+export const ACCOUNTS_HREF = '#/accounts'
+
 /** Menu entries that moved into the product page. Old links and bookmarks still land somewhere useful. */
 export const MOVED_PAGES: Record<string, string> = { channels: 'products', results: 'products' }
 

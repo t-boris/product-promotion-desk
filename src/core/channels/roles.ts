@@ -57,7 +57,7 @@ export class RoleSuggestionService {
   async suggest(args: { productId: string }): Promise<RoleSuggestion[]> {
     const { product, engine, claims } = await prepareSuggestion(this.core, args.productId)
     const platforms = listPlatforms(this.core.connectors)
-    const accounts = this.core.repos.listAccounts().filter((account) => account.productId === product.id)
+    const accounts = this.core.repos.accountsOfProduct(product.id)
     // The platform the owner is working on: the one of the most recent login, else the first prepared platform.
     const latest = accounts.reduce<(typeof accounts)[number] | null>((best, account) => (best === null || account.createdAt >= best.createdAt ? account : best), null)
     const platform: PlatformInfo | undefined = platforms.find((p) => p.platform === latest?.platform) ?? platforms.find((p) => p.prepared) ?? platforms[0]

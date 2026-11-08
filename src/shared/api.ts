@@ -5,6 +5,7 @@
 import type {
   Account,
   AccountRole,
+  Mailbox,
   SignInResult,
   VaultStatus,
   AppInfo,
@@ -107,10 +108,18 @@ export interface ApiMethods {
   'passport.approve': [{ productId: Id }, PassportVersion]
 
   // accounts and channels (REQ-002)
-  /** `productId` limits the list to that product's accounts (and unassigned legacy ones); omitted lists all. */
-  'accounts.list': [{ productId?: Id } | undefined, Account[]]
-  /** The account belongs to `productId` and gets its own login and browser session (DEC-009). */
-  'accounts.create': [{ productId: Id; platform: string; label: string; role?: AccountRole | null }, Account]
+  /** Every account: they are one library, not tied to a product (DEC-015). */
+  'accounts.list': [void, Account[]]
+  /** Creates an account with its own login and browser session. `productId` only records what it was created for. */
+  'accounts.create': [{ productId?: Id; platform: string; label: string; role?: AccountRole | null; email?: string | null; mailboxId?: Id | null }, Account]
+  /** Sets or clears (null) the e-mail address of an account. */
+  'accounts.setEmail': [{ accountId: Id; email: string | null; mailboxId?: Id | null }, Account]
+  /** An address of its own for a new account on `platform`, made from a base mailbox (an alias), different from every address in use. */
+  'accounts.proposeEmail': [{ mailboxId: Id; platform: string }, { address: string }]
+  'mailboxes.list': [void, Mailbox[]]
+  'mailboxes.add': [{ address: string }, Mailbox]
+  /** Removes a base mailbox; the addresses already given to accounts stay. */
+  'mailboxes.remove': [{ id: Id }, void]
   /** Sets, changes or removes (null) the role of a login (DEC-010). Name and voice are trimmed and length-limited. */
   'accounts.setRole': [{ accountId: Id; role: AccountRole | null }, Account]
   /** AI ideas for roles and login names for this product, from its approved passport. Nothing is created. */
@@ -136,10 +145,10 @@ export interface ApiMethods {
   'accounts.signIn': [{ accountId: Id }, SignInResult]
   'channels.list': [{ productId?: Id } | undefined, Channel[]]
   /**
-   * Fails with `account_other_product` when the account belongs to another product unless `reuseAccount` is true
-   * (the owner's explicit choice; shared-account rules then apply). An unassigned legacy account is adopted.
+   * Connects a channel of the product through any account of the platform (DEC-015). Fails with `role_exists` when another
+   * login of this product on the platform already plays the same role.
    */
-  'channels.connect': [{ productId: Id; accountId: Id; target: string; reuseAccount?: boolean }, Channel]
+  'channels.connect': [{ productId: Id; accountId: Id; target: string }, Channel]
   /** AI ideas for channels of this product, from its approved passport. Unverified; nothing is connected. */
   'channels.preparePlan': [{ channelId: Id }, Channel]
   'channels.suggest': [{ productId: Id }, ChannelSuggestion[]]

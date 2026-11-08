@@ -63,6 +63,10 @@ export class RedditConnector implements Connector {
     return `${REDDIT_ORIGIN}/login/`
   }
 
+  signupUrl(): string {
+    return `${REDDIT_ORIGIN}/register/`
+  }
+
   async checkLogin(ctx: ConnectorContext): Promise<LoginState> {
     return ctx.session.withAgentControl(`login:${ctx.account.id}`, async (page) => {
       await page.goto(`${REDDIT_ORIGIN}/`, { timeoutMs: 30_000 })

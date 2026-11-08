@@ -7,6 +7,7 @@ import { DEFAULT_CHANNEL_SETTINGS } from '../../shared/types'
 import type { Core } from '../core'
 import type { BrowserService, Connector, ConnectorContext } from '../ports'
 import { browserError, found, requireText } from './errors'
+import { parseEmail } from './mailboxes'
 import { loginOutcome } from './login'
 import { connectorForPlatform, listPlatforms } from './platforms'
 import { hostMatches, presetFor } from './presets'
@@ -46,21 +47,19 @@ export class AccountsService {
     private readonly store: ChannelsStore
   ) {}
 
-  /** All accounts, or (with a product) that product's accounts plus the unassigned ones that predate DEC-009. */
-  list(args?: { productId?: string }): Account[] {
-    const all = this.core.repos.listAccounts()
-    const productId = args?.productId
-    return productId ? all.filter((a) => a.productId === null || a.productId === productId) : all
+  /** Every account: they are one library, shared by all products (DEC-015). */
+  list(): Account[] {
+    return this.core.repos.listAccounts()
   }
 
   account(id: unknown): Account {
     return found(() => this.core.repos.account(requireText(id, 'The account')), 'The account')
   }
 
-  /** An account belongs to one product and has its own login and browser session (DEC-009). */
-  create(args: { productId: string; platform: string; label: string; role?: AccountRole | null }): Account {
-    const productId = requireText(args.productId, 'The product')
-    const product = found(() => this.core.repos.product(productId), 'The product')
+  /** An account has its own login and browser session and is not tied to a product (DEC-015); `productId` only records what it was made for. */
+  create(args: { productId?: string; platform: string; label: string; role?: AccountRole | null; email?: string | null; mailboxId?: string | null }): Account {
+    const productId = args.productId === undefined || args.productId === null ? null : requireText(args.productId, 'The product')
+    const product = productId ? found(() => this.core.repos.product(productId), 'The product') : null
     const platform = requireText(args.platform, 'The platform').toLowerCase()
     const label = requireText(args.label, 'The account name').replace(/\s+/g, ' ')
     if (label.length > MAX_LABEL) throw new ApiError('invalid_input', `The account name is too long (limit ${MAX_LABEL} characters).`)
@@ -69,18 +68,42 @@ export class AccountsService {
       throw new ApiError('invalid_input', `Unknown platform "${platform}". Available: ${known.join(', ') || 'none'}.`)
     }
     const role = parseRole(args.role)
-    if (role) this.requireFreeRoleName(product.id, platform, role.name)
-    const account = this.store.insertAccount(product.id, platform, label, role)
-    this.core.log.info('accounts', `Account created for "${product.name}": ${label} (${platform})${role ? `, role "${role.name}"` : ''}. Sign in through the account browser.`)
+    const email = args.email ? parseEmail(args.email) : null
+    const mailboxId = email && args.mailboxId ? this.knownMailbox(args.mailboxId) : null
+    const account = this.store.insertAccount(product?.id ?? null, platform, label, role, email, mailboxId)
+    this.core.log.info('accounts', `Account created${product ? ` for "${product.name}"` : ''}: ${label} (${platform})${role ? `, role "${role.name}"` : ''}${email ? `, e-mail ${email}` : ''}. Sign in through the account browser.`)
     this.core.events.changed('accounts', 'attention')
     return account
+  }
+
+  private knownMailbox(id: string): string {
+    if (!this.store.listMailboxes().some((m) => m.id === id)) throw new ApiError('not_found', 'The mailbox was not found.')
+    return id
+  }
+
+  /** Sets, changes or clears (null) the e-mail address of an account (DEC-015). */
+  setEmail(args: { accountId: string; email: string | null; mailboxId?: string | null }): Account {
+    const account = this.account(args.accountId)
+    const email = args.email === null || args.email === undefined || String(args.email).trim() === '' ? null : parseEmail(args.email)
+    const mailboxId = email && args.mailboxId ? this.knownMailbox(args.mailboxId) : null
+    if (email === account.email && mailboxId === account.mailboxId) return account
+    const updated = this.store.setEmail(account.id, email, mailboxId)
+    this.core.log.info('accounts', email ? `E-mail of ${account.label} set to ${email}.` : `E-mail of ${account.label} cleared.`)
+    this.core.events.changed('accounts')
+    return updated
   }
 
   /** Sets, changes or removes (null) the role of a login (DEC-010). The role belongs to the account, whichever product uses it. */
   setRole(args: { accountId: string; role: AccountRole | null }): Account {
     const account = this.account(args.accountId)
     const role = parseRole(args.role)
-    if (role) this.requireFreeRoleName(account.productId, account.platform, role.name, account.id)
+    if (role) {
+      // Two logins of one product on one platform may not play the same role: checked for every product that already uses this account.
+      for (const productId of new Set(this.store.channelsOfAccount(account.id).map((c) => c.productId))) {
+        const clash = this.roleClash(productId, account.platform, account.id, role.name)
+        if (clash) throw new ApiError('role_exists', `${clash.label}, another login of the same product on the same platform, already has the role "${clash.role?.name}". Give this login a different role name.`)
+      }
+    }
     if (role?.name === account.role?.name && role?.voice === account.role?.voice) return account
     const updated = this.store.setRole(account.id, role)
     this.core.log.info('accounts', role ? `Role of ${account.label} set to "${role.name}".` : `Role of ${account.label} removed.`)
@@ -88,14 +111,13 @@ export class AccountsService {
     return updated
   }
 
-  /** Two logins of one product on one platform may not play the same role (compared without regard to case). */
-  private requireFreeRoleName(productId: string | null, platform: string, name: string, exceptAccountId?: string): void {
-    const clash = this.core.repos
-      .listAccounts()
-      .find((a) => a.id !== exceptAccountId && a.productId === productId && a.platform === platform && a.role !== null && sameRoleName(a.role.name, name))
-    if (clash) {
-      throw new ApiError('role_exists', `Another login of this product on the same platform (${clash.label}) already has the role "${clash.role?.name}". Give this login a different role name.`)
-    }
+  /**
+   * Another login that already plays `name` for this product on this platform, if there is one (compared without regard to
+   * case). A product's logins are the accounts its channels use; the same role name may exist for different products.
+   */
+  roleClash(productId: string, platform: string, exceptAccountId: string, name: string): Account | undefined {
+    const used = new Set(this.core.repos.listChannels().filter((c) => c.productId === productId && c.platform === platform).map((c) => c.accountId))
+    return this.core.repos.listAccounts().find((a) => a.id !== exceptAccountId && used.has(a.id) && a.role !== null && sameRoleName(a.role.name, name))
   }
 
   async remove(id: unknown): Promise<void> {

@@ -11,11 +11,12 @@ import { SuggestRoles } from './SuggestRoles'
 import { SuggestChannels } from './SuggestChannels'
 import './channels.css'
 
-/** Accounts and channels of one product (DEC-009): the content of the product page's Channels tab. */
+/** Channels of one product and the accounts it works with (DEC-009, DEC-015): the content of the product page's Channels tab. */
 export function ChannelsPanel({ productId }: { productId: string }) {
-  const accounts = useQuery('accounts.list', { productId }, ['accounts'])
-  const everyAccount = useQuery('accounts.list', undefined, ['accounts'])
+  const accounts = useQuery('accounts.list', undefined, ['accounts'])
   const channels = useQuery('channels.list', { productId }, ['channels'])
+  const everyChannel = useQuery('channels.list', undefined, ['channels'])
+  const mailboxes = useQuery('mailboxes.list', undefined, ['accounts'])
   const products = useQuery('products.list', undefined, ['products', 'passport'])
   const platforms = useQuery('platforms.list', undefined, [])
   const settings = useQuery('app.settings.get', undefined, ['settings'])
@@ -26,10 +27,11 @@ export function ChannelsPanel({ productId }: { productId: string }) {
 
   const channelList = channels.data ?? []
   const accountList = accounts.data ?? []
+  // The accounts this product works with: those its channels use and those made for it.
+  const productAccounts = accountList.filter((a) => a.productId === productId || channelList.some((c) => c.accountId === a.id))
   const platformList = platforms.data ?? []
   const allProducts = products.data ?? []
   const product = allProducts.find((p) => p.id === productId)
-  const sharedAccounts = (everyAccount.data ?? []).filter((a) => a.productId !== null && a.productId !== productId)
   const productName = (id: string | null): string => allProducts.find((p) => p.id === id)?.name ?? 'another product'
   const selected = channelList.find((c) => c.id === selectedId) ?? (channelList.length === 1 ? channelList[0] : undefined)
 
@@ -44,7 +46,7 @@ export function ChannelsPanel({ productId }: { productId: string }) {
     <div className="stack" data-testid="channels-panel">
       <ErrorNote error={accounts.error ?? channels.error ?? products.error ?? platforms.error} />
       {(accounts.loading && !accounts.data) || (channels.loading && !channels.data) ? <Loading what="Loading channels" /> : null}
-      <AccountsCard productId={productId} accounts={accountList} channels={channelList} platforms={platformList} rolePrefill={rolePrefill} />
+      <AccountsCard productId={productId} accounts={productAccounts} channels={channelList} platforms={platformList} mailboxes={mailboxes.data ?? []} rolePrefill={rolePrefill} />
       <SuggestRoles productId={productId} blockedReason={blockedReason} onUse={(suggestion: RoleSuggestion) => setRolePrefill({ suggestion })} />
       <SuggestChannels
         productId={productId}
@@ -56,7 +58,7 @@ export function ChannelsPanel({ productId }: { productId: string }) {
         product={product}
         accounts={accountList}
         channels={channelList}
-        sharedAccounts={sharedAccounts}
+        allChannels={everyChannel.data ?? []}
         platforms={platformList}
         productName={productName}
         prefill={prefill}
@@ -68,7 +70,7 @@ export function ChannelsPanel({ productId }: { productId: string }) {
         </aside>
         <div className="channels-detail">
           {selected ? (
-            <ChannelDetail key={selected.id} channel={selected} products={allProducts} accounts={[...accountList, ...sharedAccounts]} platforms={platformList} planBlockedReason={blockedReason} onRemoved={() => setSelectedId(null)} />
+            <ChannelDetail key={selected.id} channel={selected} products={allProducts} accounts={accountList} platforms={platformList} planBlockedReason={blockedReason} onRemoved={() => setSelectedId(null)} />
           ) : (
             <EmptyState title="Select a channel">Pick a channel to see its status and abilities, assess it, and set how the app behaves there.</EmptyState>
           )}

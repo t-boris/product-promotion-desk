@@ -278,6 +278,8 @@ export interface Connector {
   normalizeTarget(input: string): NormalizedTarget
   /** Platform page where the user signs in. */
   loginUrl(): string
+  /** Platform page where a new account is registered (DEC-015). Absent when the connector does not know one. */
+  signupUrl?(): string
   checkLogin(ctx: ConnectorContext): Promise<LoginState>
   /** Inspects the channel without publishing anything. Only actually verified capabilities may be 'verified'. */
   assess(ctx: ConnectorContext): Promise<Capability[]>

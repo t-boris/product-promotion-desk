@@ -2,7 +2,8 @@
 // tested from here. The modules under test import only src/shared, which keeps these plain unit tests.
 
 import { describe, expect, it } from 'vitest'
-import type { Account, AttentionItem, Channel, Product } from '../shared/types'
+import type { AttentionItem, Channel, Product } from '../shared/types'
+import { readMenuOpen, saveMenuOpen, type MenuStorage } from '../renderer/src/menu-state'
 import { fixLinkFor } from '../renderer/src/pages/attention-links'
 import { MOVED_PAGES, parseHash, productHref } from '../renderer/src/route'
 
@@ -48,24 +49,22 @@ describe('attention links to the product page (DEC-009)', () => {
     { id: 'c1', productId: 'p1', accountId: 'a1' },
     { id: 'c2', productId: 'p2', accountId: 'a2' }
   ] as Channel[]
-  const accounts = [
-    { id: 'a1', productId: 'p1' },
-    { id: 'a2', productId: 'p2' },
-    { id: 'legacy', productId: null }
-  ] as Account[]
-  const sources = { channels: [...channels, { id: 'c3', productId: 'p2', accountId: 'legacy' } as Channel], accounts, products }
+  const sources = { channels: [...channels, { id: 'c3', productId: 'p2', accountId: 'legacy' } as Channel], products }
   const item = (refType: AttentionItem['refType'], refId: string): AttentionItem => ({ id: `x:${refId}`, kind: 'login', title: '', detail: '', refType, refId, createdAt: '2026-11-08T00:00:00.000Z' })
 
   it('sends a channel problem to that product\'s Channels tab', () => {
     expect(fixLinkFor(item('channel', 'c2'), sources)).toEqual({ href: '#/products/p2/channels', label: 'Open Other channels', productName: 'Other' })
   })
 
-  it('sends a sign-in problem to the Channels tab of the account\'s product', () => {
-    expect(fixLinkFor(item('account', 'a1'), sources)).toMatchObject({ href: '#/products/p1/channels', productName: 'Natal Mystic' })
+  it('sends a sign-in problem to the Accounts section and names the products that use the account (DEC-015)', () => {
+    expect(fixLinkFor(item('account', 'a1'), sources)).toEqual({ href: '#/accounts', label: 'Open Accounts', productName: 'Natal Mystic' })
+    expect(fixLinkFor(item('account', 'legacy'), sources)).toEqual({ href: '#/accounts', label: 'Open Accounts', productName: 'Other' })
   })
 
-  it('finds the product of an older account through its channels', () => {
-    expect(fixLinkFor(item('account', 'legacy'), sources)).toMatchObject({ href: '#/products/p2/channels' })
+  it('names every product that uses a shared account, and none for an account nothing uses', () => {
+    const shared = { ...sources, channels: [...sources.channels, { id: 'c4', productId: 'p1', accountId: 'legacy' } as Channel] }
+    expect(fixLinkFor(item('account', 'legacy'), shared)).toMatchObject({ productName: 'Other, Natal Mystic' })
+    expect(fixLinkFor(item('account', 'unused'), sources)).toEqual({ href: '#/accounts', label: 'Open Accounts', productName: null })
   })
 
   it('falls back to the product list when the product cannot be resolved, and has no link for decisions', () => {
@@ -76,5 +75,36 @@ describe('attention links to the product page (DEC-009)', () => {
 
   it('opens the product itself for product items', () => {
     expect(fixLinkFor(item('product', 'p1'), sources)).toEqual({ href: '#/products/p1', label: 'Open product', productName: 'Natal Mystic' })
+  })
+})
+
+describe('the main menu can be hidden and the choice is remembered', () => {
+  const memory = (): MenuStorage & { data: Map<string, string> } => {
+    const data = new Map<string, string>()
+    return { data, getItem: (k) => data.get(k) ?? null, setItem: (k, v) => void data.set(k, v) }
+  }
+
+  it('is shown until the owner hides it, then stays hidden until shown again', () => {
+    const storage = memory()
+    expect(readMenuOpen(storage)).toBe(true)
+    saveMenuOpen(storage, false)
+    expect(readMenuOpen(storage)).toBe(false)
+    saveMenuOpen(storage, true)
+    expect(readMenuOpen(storage)).toBe(true)
+  })
+
+  it('is shown whenever the browser gives no usable storage', () => {
+    const broken: MenuStorage = {
+      getItem: () => {
+        throw new Error('blocked')
+      },
+      setItem: () => {
+        throw new Error('full')
+      }
+    }
+    expect(readMenuOpen(undefined)).toBe(true)
+    expect(readMenuOpen(broken)).toBe(true)
+    expect(() => saveMenuOpen(broken, false)).not.toThrow()
+    expect(() => saveMenuOpen(undefined, false)).not.toThrow()
   })
 })

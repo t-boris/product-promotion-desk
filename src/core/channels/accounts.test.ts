@@ -272,7 +272,7 @@ describe('platform and shared accounts', () => {
     const w = await makeReadyWorld({ fake: probe })
     const second = w.addProduct('Second product')
     const a = await w.call('channels.connect', { productId: w.productId, accountId: w.account.id, target: 'r/astrology' })
-    const b = await w.call('channels.connect', { productId: second, accountId: w.account.id, target: 'r/tarot', reuseAccount: true })
+    const b = await w.call('channels.connect', { productId: second, accountId: w.account.id, target: 'r/tarot' })
     await Promise.all([w.call('channels.assess', { channelId: a.id }), w.call('channels.assess', { channelId: b.id })])
     expect(probe.maxActive).toBe(1)
     expect(probe.order).toHaveLength(4)

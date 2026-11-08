@@ -55,11 +55,10 @@ function DecisionCard({ id, stillWaiting, onDismiss, directory }: { id: Id; stil
 export function AttentionPage() {
   const attention = useQuery('attention.list', undefined, ['attention', 'opportunities', 'channels', 'accounts'])
   const directory = useProductDirectory()
-  // Channels and accounts belong to a product, so problems about them link to that product's Channels tab.
+  // A channel problem links to its product's Channels tab; an account problem links to the Accounts section (DEC-015).
   const channels = useQuery('channels.list', undefined, ['channels'])
-  const accounts = useQuery('accounts.list', undefined, ['accounts'])
   const products = useQuery('products.list', undefined, ['products'])
-  const links = { channels: channels.data ?? [], accounts: accounts.data ?? [], products: products.data ?? [] }
+  const links = { channels: channels.data ?? [], products: products.data ?? [] }
   const items = attention.data ?? []
   const decisionIds = [...new Set(items.filter((i) => i.refType === 'opportunity').map((i) => i.refId))]
   const problems = items.filter((i) => i.refType !== 'opportunity')

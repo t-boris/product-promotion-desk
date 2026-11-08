@@ -95,11 +95,8 @@ export class ProfileService {
 
   async draftProfile(args: { productId: string; accountId: string; url: string }): Promise<SiteProfileDraft> {
     const productId = requireText(args.productId, 'The product')
-    const product = found(() => this.core.repos.product(productId), 'The product')
+    found(() => this.core.repos.product(productId), 'The product') // the product must exist; the account may serve any product (DEC-015)
     const account = this.accounts.account(args.accountId)
-    if (account.productId !== null && account.productId !== product.id) {
-      throw new ApiError('account_other_product', 'This login belongs to another product. Choose a login of this product.')
-    }
     const site = publicSite(args.url)
     const connector = this.authoringConnector()
     if (account.platform !== connector.platform && !presetFor(account.platform)) {

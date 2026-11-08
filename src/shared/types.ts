@@ -171,10 +171,9 @@ export interface Account {
   status: AccountStatus
   createdAt: IsoTime
   /**
-   * The product this login belongs to (DEC-009). Each product has its own login and browser session per platform.
-   * Null only for an account created before products owned accounts that had no channel to infer a product from.
-   * Another product's channel may use the account only by explicit choice (`reuseAccount`), and then the
-   * shared-account rules (aggregate limits, one controller of the session) apply.
+   * The product this account was first created for, as information only (DEC-015). Accounts are one library: a channel of
+   * any product may use any account of its platform, and the shared-account rules (aggregate limits, one controller of
+   * the session) apply whenever an account has more than one channel. Null when it was created without a product.
    */
   productId: Id | null
   /**
@@ -184,6 +183,18 @@ export interface Account {
   role: AccountRole | null
   /** The name or e-mail the account signs in with (DEC-014). Not a secret; the password is only in the vault. */
   loginName: string | null
+  /** The e-mail address of this account (DEC-015): what it signs up with and where its mail arrives. Null until given. */
+  email: string | null
+  /** The base mailbox the address was proposed from, if any. */
+  mailboxId: Id | null
+}
+
+/** A base mailbox (DEC-015): an ordinary mailbox of the owner, from which each account gets an address of its own. */
+export interface Mailbox {
+  id: Id
+  address: string
+  kind: 'existing'
+  createdAt: IsoTime
 }
 
 /** What the vault holds, without any secret: whether it can encrypt, and which accounts have a password saved (DEC-014). */
@@ -230,6 +241,8 @@ export interface PlatformInfo {
   /** False for the universal connector and for the named platforms served by it: each site needs a site profile. */
   prepared: boolean
   loginUrl: string
+  /** The platform's registration page, opened in the account's own browser (DEC-015); empty when there is none. */
+  signupUrl?: string
   /** Named platform served by the universal connector (DEC-013): what address to give, what a post holds, what to know. */
   hint?: string
   /** A typical address to type, shown as the placeholder; and the template that turns "@name" into an address (`{handle}`). */

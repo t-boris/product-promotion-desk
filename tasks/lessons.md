@@ -103,3 +103,16 @@
 32. A script that carries a secret never lets its error out: the page operation catches everything and reports in fixed words.
 33. A test page that cannot be reached over https gets the https check lifted in the test server only, never in the shipped script.
 
+
+## 2026-11-08 (later): accounts as a library, and a window that does not grow
+
+**What happened.** The owner asked how to make an account when there is none, and said accounts, roles and mailboxes are separate things used across projects: create an account, then link it to channels. I had modelled an account as owned by one product (DEC-009), so the screen could not even say "an account without a product". Then, mid-turn, the owner wrote that widening the window did not widen the page and the left menu could not be collapsed ("дико раздражает").
+
+**Rules for myself.**
+
+34. When the owner describes things "created separately, then linked", model a library and links, not nested ownership. Ask at the start of a feature whether the thing belongs to one parent or is shared, and keep the parent only as information ("made for") when in doubt.
+35. Changing who owns something means finding every rule that was attached to the owner (here: the same-role rule at account creation, the consent box, the product-scoped account list, the attention link) and moving each to the place where the new relation is made (here: connecting a channel).
+36. Moving state out of a component that renders before its data arrives: derive it from the current props at render time, never copy props into `useState` at mount (the mailbox choice was frozen empty and "Propose" stayed disabled; found only by driving the real screen).
+37. A fixed `max-width` on the page and a fixed-width menu are decisions the owner feels at once. The sweep now also checks that the page width follows the window and that the menu can be hidden, with the menu open and closed.
+38. A one-off page-wide control (hide the menu) needs its state kept in browser storage behind try/catch, and the renderer file that holds the logic stays free of browser globals so the node tests can import it.
+39. When the owner adds a request in the middle of a task, record it at once as a draft requirement with the open question (here: how icons are made), do the small fix that was clearly asked for now, and do not start the big new feature before the choice is made.

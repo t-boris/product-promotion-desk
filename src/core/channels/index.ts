@@ -10,6 +10,7 @@ import { AccountsService } from './accounts'
 import { draftSiteProfile, planChannel, suggestChannels, suggestRoles } from './ai-help'
 import { ChannelService } from './channel-service'
 import { ChannelPlanService } from './plan'
+import { MailboxService } from './mailboxes'
 import { listPlatforms } from './platforms'
 import { ProfileService } from './profiles'
 import { RoleSuggestionService } from './roles'
@@ -38,6 +39,7 @@ export function register(core: Core): void {
   const roles = new RoleSuggestionService(core, { suggestRoles })
   const plans = new ChannelPlanService(core, { planChannel }, store)
   const vault = new VaultService(core, accounts, store)
+  const mailboxes = new MailboxService(core, store)
   const signIn = new SignInService(core, accounts, vault, store)
   // An account found signed out gets one try with its saved password (DEC-014), without holding up the check that found it.
   accounts.onSignedOut = (account) => void signIn.maybeAutomatic(account)
@@ -47,8 +49,13 @@ export function register(core: Core): void {
   }
 
   core.router.register({
-    'accounts.list': (args) => accounts.list(args),
+    'accounts.list': () => accounts.list(),
     'accounts.create': (args) => accounts.create(args),
+    'accounts.setEmail': (args) => accounts.setEmail(args),
+    'accounts.proposeEmail': (args) => mailboxes.proposeEmail(args),
+    'mailboxes.list': () => mailboxes.list(),
+    'mailboxes.add': (args) => mailboxes.add(args),
+    'mailboxes.remove': (args) => mailboxes.remove(args.id),
     'accounts.remove': (args) => accounts.remove(args.id),
     'accounts.setRole': (args) => accounts.setRole(args),
     'accounts.suggestRoles': (args) => roles.suggest(args),

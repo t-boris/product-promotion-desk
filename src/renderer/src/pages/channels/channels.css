@@ -158,3 +158,16 @@ textarea.input.short {
   overflow-wrap: anywhere;
 }
 
+
+/* A choice and the button that acts on it, side by side; they wrap on a narrow window. */
+.pick-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.pick-row .input {
+  flex: 1 1 220px;
+  width: auto;
+  min-width: 0;
+}

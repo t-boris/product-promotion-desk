@@ -11,6 +11,7 @@ import type {
   Comment,
   Discussion,
   Draft,
+  Mailbox,
   Opportunity,
   PassportVersion,
   Product,
@@ -72,8 +73,13 @@ export const mapAccount = (r: Row): Account => ({
   // accounts.role_name / role_voice come with the DEC-010 channels migration; both empty means no role.
   role: r.role_name ? { name: r.role_name as string, voice: (r.role_voice as string | null | undefined) ?? '' } : null,
   // accounts.login_name comes with the DEC-014 channels migration.
-  loginName: (r.login_name as string | null | undefined) ?? null
+  loginName: (r.login_name as string | null | undefined) ?? null,
+  // accounts.email / mailbox_id come with the DEC-015 channels migration.
+  email: (r.email as string | null | undefined) ?? null,
+  mailboxId: (r.mailbox_id as string | null | undefined) ?? null
 })
+
+export const mapMailbox = (r: Row): Mailbox => ({ id: r.id as string, address: r.address as string, kind: 'existing', createdAt: r.created_at as string })
 
 export const mapChannel = (r: Row): Channel => ({
   id: r.id as string,
@@ -242,6 +248,11 @@ export class Repos {
   }
   listChannels(): Channel[] {
     return (this.db.prepare('SELECT * FROM channels ORDER BY created_at').all() as Row[]).map(mapChannel)
+  }
+  /** The accounts a product works with (DEC-015): those its channels use, and those that were first created for it. */
+  accountsOfProduct(productId: string): Account[] {
+    const used = new Set(this.listChannels().filter((c) => c.productId === productId).map((c) => c.accountId))
+    return this.listAccounts().filter((a) => used.has(a.id) || a.productId === productId)
   }
 
   latestDraft(opportunityId: string): Draft | null {

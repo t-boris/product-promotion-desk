@@ -66,7 +66,7 @@ describe('platforms.list', () => {
     const platforms = await w.call('platforms.list', undefined)
     expect(platforms.map((p) => p.label)).toEqual(['Fake', 'Facebook', 'Instagram', 'LinkedIn', 'Pinterest', 'Telegram', 'Threads', 'TikTok', 'X (Twitter)', 'YouTube', 'Other website'])
     const instagram = platforms.find((p) => p.platform === 'instagram')!
-    expect(instagram).toMatchObject({ connectorId: 'universal', prepared: false, loginUrl: 'https://www.instagram.com/accounts/login/', accepts: ['image', 'video'] })
+    expect(instagram).toMatchObject({ connectorId: 'universal', prepared: false, loginUrl: 'https://www.instagram.com/accounts/login/', signupUrl: 'https://www.instagram.com/accounts/emailsignup/', accepts: ['image', 'video'] })
     expect(instagram.hint).toContain('@yourbrand')
     expect(platforms.find((p) => p.platform === 'fake')?.prepared).toBe(true)
   })
@@ -151,5 +151,13 @@ describe('ideas on a named platform', () => {
     const noUniversal = new Connectors()
     noUniversal.register(new FakeConnector())
     expect(connectableSuggestions(noUniversal, [{ platform: 'instagram', target: '@yourbrand', reason: 'r' }])).toEqual([])
+  })
+})
+
+describe('registration pages (DEC-015)', () => {
+  it('every named platform has an https registration page on its own sites or a sign-in provider it uses', () => {
+    for (const preset of PLATFORM_PRESETS) {
+      expect(preset.signupUrl, preset.platform).toMatch(/^https:\/\/[^\s/]+\//)
+    }
   })
 })

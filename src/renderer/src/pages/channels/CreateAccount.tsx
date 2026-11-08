@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import type { AccountRole, PlatformInfo, RoleSuggestion } from '../../../../shared/types'
+import type { AccountRole, Mailbox, PlatformInfo, RoleSuggestion } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
 import { Button, ErrorNote, Field } from '../../ui'
 import { ROLE_NAME_LIMIT, ROLE_VOICE_LIMIT } from './RoleEditor'
@@ -9,13 +9,25 @@ export interface RolePrefill {
   suggestion: RoleSuggestion
 }
 
-/** Creates a login for this product with its own persistent browser. Nothing is entered here but a name and, if wanted, a role. */
-export function CreateAccount({ productId, platforms, prefill }: { productId: string; platforms: PlatformInfo[]; prefill: RolePrefill | null }) {
+/**
+ * Creates an account with its own persistent browser (DEC-015). It belongs to no product: any product's channel can use it.
+ * `productId` only records what it was made for. Nothing is entered here but a name and, if wanted, a role and an address.
+ */
+export function CreateAccount({ productId, platforms, mailboxes, prefill }: { productId?: string; platforms: PlatformInfo[]; mailboxes: Mailbox[]; prefill: RolePrefill | null }) {
   const [chosen, setChosen] = useState('')
   const [label, setLabel] = useState('')
   const [roleName, setRoleName] = useState('')
   const [roleVoice, setRoleVoice] = useState('')
-  const [create, state] = useAction((args: { productId: string; platform: string; label: string; role?: AccountRole }) => call('accounts.create', args))
+  const [email, setEmail] = useState('')
+  const [chosenMailbox, setChosenMailbox] = useState('')
+  const [fromMailbox, setFromMailbox] = useState<string | null>(null)
+  const [create, state] = useAction((args: { productId?: string; platform: string; label: string; role?: AccountRole; email?: string; mailboxId?: string }) => call('accounts.create', args))
+  const mailboxId = chosenMailbox || mailboxes[0]?.id || ''
+  const [propose, proposing] = useAction(async (platformKey: string) => {
+    const result = await call('accounts.proposeEmail', { mailboxId, platform: platformKey })
+    setEmail(result.address)
+    setFromMailbox(mailboxId)
+  })
   const platform = chosen || platforms[0]?.platform || ''
   const roleIncomplete = roleName.trim() === '' && roleVoice.trim() !== ''
 
@@ -31,11 +43,13 @@ export function CreateAccount({ productId, platforms, prefill }: { productId: st
     event.preventDefault()
     if (!label.trim() || !platform || roleIncomplete) return
     const role = roleName.trim() ? { name: roleName.trim(), voice: roleVoice.trim() } : undefined
-    const account = await create({ productId, platform, label: label.trim(), ...(role ? { role } : {}) })
+    const account = await create({ ...(productId ? { productId } : {}), platform, label: label.trim(), ...(role ? { role } : {}), ...(email.trim() ? { email: email.trim(), ...(fromMailbox ? { mailboxId: fromMailbox } : {}) } : {}) })
     if (account) {
       setLabel('')
       setRoleName('')
       setRoleVoice('')
+      setEmail('')
+      setFromMailbox(null)
     }
   }
 
@@ -56,6 +70,36 @@ export function CreateAccount({ productId, platforms, prefill }: { productId: st
         </Field>
       </div>
       <div className="form-row">
+        <Field label="E-mail address (optional)" hint="What the account signs up with. You can also set it later.">
+          <input
+            className="input"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value)
+              setFromMailbox(null)
+            }}
+            autoComplete="off"
+            data-testid="account-email"
+          />
+        </Field>
+        {mailboxes.length > 0 && (
+          <Field label="Or an address from your base mailbox" hint="A separate address for this account, made from the mailbox.">
+            <div className="pick-row">
+              <select className="input" value={mailboxId} onChange={(e) => setChosenMailbox(e.target.value)} aria-label="Base mailbox" data-testid="account-mailbox">
+                {mailboxes.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.address}
+                  </option>
+                ))}
+              </select>
+              <Button onClick={() => void propose(platform)} disabled={proposing.busy || platform === ''} data-testid="account-propose-email">
+                Propose
+              </Button>
+            </div>
+          </Field>
+        )}
+      </div>
+      <div className="form-row">
         <Field label="Role (optional)" hint="For example astrologer or developer.">
           <input className="input" value={roleName} maxLength={ROLE_NAME_LIMIT} onChange={(e) => setRoleName(e.target.value)} data-testid="account-role-name" />
         </Field>
@@ -68,9 +112,9 @@ export function CreateAccount({ productId, platforms, prefill }: { productId: st
         {state.busy ? 'Adding…' : 'Add account'}
       </Button>
       <p className="muted small" data-testid="account-create-note">
-        You create the real login on the platform yourself: the app does not register accounts for you. Once it exists, save its password under the account so the app can sign it in.
+        This adds the account to your library. If it does not exist on the platform yet, press “Create account on …” on it afterwards: the app opens the registration page and keeps the address and password at hand, and you pass the site’s checks yourself. If it exists already, sign in once and save its password so the app can sign it in.
       </p>
-      <ErrorNote error={state.error} />
+      <ErrorNote error={state.error ?? proposing.error} />
     </form>
   )
 }

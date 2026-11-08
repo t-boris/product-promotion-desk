@@ -1,9 +1,9 @@
 // Persistence for accounts and channels. Rows are mapped by the shared mappers in ../repos.
 
-import type { Account, AccountRole, AccountStatus, Capability, Channel, ChannelMode, ChannelPlan, ChannelSettings, ChannelStatus } from '../../shared/types'
+import type { Account, AccountRole, Mailbox, AccountStatus, Capability, Channel, ChannelMode, ChannelPlan, ChannelSettings, ChannelStatus } from '../../shared/types'
 import { newId, toJson, type Db } from '../db/database'
 import type { Clock } from '../ports'
-import type { Repos } from '../repos'
+import { mapMailbox, type Repos } from '../repos'
 
 export interface NewChannel {
   productId: string
@@ -35,15 +35,15 @@ export class ChannelsStore {
 
   // ───────────── accounts ─────────────
 
-  insertAccount(productId: string, platform: string, label: string, role: AccountRole | null = null): Account {
+  insertAccount(productId: string | null, platform: string, label: string, role: AccountRole | null = null, email: string | null = null, mailboxId: string | null = null): Account {
     const id = newId()
     // The prefix makes the browser session persistent: cookies survive restarts.
     const partition = `persist:ppd-account-${id}`
     this.db
       .prepare(
-        "INSERT INTO accounts (id, product_id, platform, label, identity, partition, status, created_at, role_name, role_voice) VALUES (?, ?, ?, ?, NULL, ?, 'login_required', ?, ?, ?)"
+        "INSERT INTO accounts (id, product_id, platform, label, identity, partition, status, created_at, role_name, role_voice, email, mailbox_id) VALUES (?, ?, ?, ?, NULL, ?, 'login_required', ?, ?, ?, ?, ?)"
       )
-      .run(id, productId, platform, label, partition, this.clock.now().toISOString(), role?.name ?? null, role?.voice ?? null)
+      .run(id, productId, platform, label, partition, this.clock.now().toISOString(), role?.name ?? null, role?.voice ?? null, email, mailboxId)
     return this.repos.account(id)
   }
 
@@ -51,6 +51,27 @@ export class ChannelsStore {
   setRole(id: string, role: AccountRole | null): Account {
     this.db.prepare('UPDATE accounts SET role_name = ?, role_voice = ? WHERE id = ?').run(role?.name ?? null, role?.voice ?? null, id)
     return this.repos.account(id)
+  }
+
+  setEmail(id: string, email: string | null, mailboxId: string | null): Account {
+    this.db.prepare('UPDATE accounts SET email = ?, mailbox_id = ? WHERE id = ?').run(email, mailboxId, id)
+    return this.repos.account(id)
+  }
+
+  listMailboxes(): Mailbox[] {
+    return (this.db.prepare('SELECT * FROM mailboxes ORDER BY created_at, rowid').all() as Record<string, unknown>[]).map(mapMailbox)
+  }
+
+  insertMailbox(address: string): Mailbox {
+    const id = newId()
+    this.db.prepare("INSERT INTO mailboxes (id, address, kind, created_at) VALUES (?, ?, 'existing', ?)").run(id, address, this.clock.now().toISOString())
+    return this.listMailboxes().find((m) => m.id === id) as Mailbox
+  }
+
+  /** The addresses already given to accounts stay; only the link to the base mailbox is cut. */
+  deleteMailbox(id: string): void {
+    this.db.prepare('UPDATE accounts SET mailbox_id = NULL WHERE mailbox_id = ?').run(id)
+    this.db.prepare('DELETE FROM mailboxes WHERE id = ?').run(id)
   }
 
   /** The name the account signs in with; not a secret (the password is only in the vault). */
@@ -86,12 +107,6 @@ export class ChannelsStore {
   lastIdentity(id: string): string | null {
     const row = this.db.prepare('SELECT last_identity AS v FROM accounts WHERE id = ?').get(id) as { v: string | null } | undefined
     return row?.v ?? null
-  }
-
-  /** Gives an unassigned (legacy) account to the product that starts using it. */
-  assignAccount(id: string, productId: string): Account {
-    this.db.prepare('UPDATE accounts SET product_id = ? WHERE id = ? AND product_id IS NULL').run(productId, id)
-    return this.repos.account(id)
   }
 
   channelsOfAccount(accountId: string): Channel[] {

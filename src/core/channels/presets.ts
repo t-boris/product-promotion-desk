@@ -9,6 +9,8 @@ export interface PlatformPreset {
   platform: string
   label: string
   loginUrl: string
+  /** The registration page; opened in the account's own browser by "Create account on the platform" (DEC-015). */
+  signupUrl: string
   /** Domains of the platform; an address on any other domain does not belong to it. */
   hosts: string[]
   /** Address of a page from a handle, `{handle}` replaced: "@brand" becomes https://www.instagram.com/brand/. */
@@ -25,6 +27,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     platform: 'instagram',
     label: 'Instagram',
     loginUrl: 'https://www.instagram.com/accounts/login/',
+    signupUrl: 'https://www.instagram.com/accounts/emailsignup/',
     hosts: ['instagram.com'],
     handleUrl: 'https://www.instagram.com/{handle}/',
     example: '@yourbrand',
@@ -36,6 +39,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     platform: 'facebook',
     label: 'Facebook',
     loginUrl: 'https://www.facebook.com/login/',
+    signupUrl: 'https://www.facebook.com/r.php',
     hosts: ['facebook.com', 'fb.com'],
     handleUrl: 'https://www.facebook.com/{handle}',
     example: 'https://www.facebook.com/groups/yourgroup',
@@ -47,6 +51,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     platform: 'tiktok',
     label: 'TikTok',
     loginUrl: 'https://www.tiktok.com/login',
+    signupUrl: 'https://www.tiktok.com/signup',
     hosts: ['tiktok.com'],
     handleUrl: 'https://www.tiktok.com/@{handle}',
     example: '@yourbrand',
@@ -58,6 +63,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     platform: 'x',
     label: 'X (Twitter)',
     loginUrl: 'https://x.com/i/flow/login',
+    signupUrl: 'https://x.com/i/flow/signup',
     hosts: ['x.com', 'twitter.com'],
     handleUrl: 'https://x.com/{handle}',
     example: '@yourbrand',
@@ -69,6 +75,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     platform: 'linkedin',
     label: 'LinkedIn',
     loginUrl: 'https://www.linkedin.com/login',
+    signupUrl: 'https://www.linkedin.com/signup',
     hosts: ['linkedin.com'],
     handleUrl: 'https://www.linkedin.com/company/{handle}/',
     example: 'https://www.linkedin.com/company/yourbrand/',
@@ -80,6 +87,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     platform: 'youtube',
     label: 'YouTube',
     loginUrl: 'https://www.youtube.com/',
+    signupUrl: 'https://accounts.google.com/signup',
     hosts: ['youtube.com', 'youtu.be'],
     handleUrl: 'https://www.youtube.com/@{handle}',
     example: '@yourbrand',
@@ -91,6 +99,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     platform: 'telegram',
     label: 'Telegram',
     loginUrl: 'https://web.telegram.org/',
+    signupUrl: 'https://web.telegram.org/',
     hosts: ['t.me', 'telegram.me', 'web.telegram.org'],
     handleUrl: 'https://t.me/{handle}',
     example: '@yourchannel',
@@ -102,6 +111,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     platform: 'threads',
     label: 'Threads',
     loginUrl: 'https://www.threads.net/login',
+    signupUrl: 'https://www.threads.net/',
     hosts: ['threads.net', 'threads.com'],
     handleUrl: 'https://www.threads.net/@{handle}',
     example: '@yourbrand',
@@ -113,6 +123,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     platform: 'pinterest',
     label: 'Pinterest',
     loginUrl: 'https://www.pinterest.com/login/',
+    signupUrl: 'https://www.pinterest.com/signup/',
     hosts: ['pinterest.com'],
     handleUrl: 'https://www.pinterest.com/{handle}/',
     example: 'https://www.pinterest.com/yourbrand/',
