@@ -1168,6 +1168,86 @@ describe('limits are the account\'s budget, shared by all its channels (REQ-004 
   })
 })
 
+describe('one account reused by two products keeps the shared-account rules (DEC-009 point 1, REQ-004)', () => {
+  /** The world's account belongs to product A; product B deliberately reuses it for a channel of its own. */
+  const twoProducts = (settings = { limits: { perHour: 2, perDay: 10 } }) => {
+    world = makeWorld({ settings })
+    const productB = world.addProduct('Second product')
+    const channelB = world.addChannel({ productId: productB.id, target: 'r/second_product' })
+    expect(channelB.productId).toBe(productB.id)
+    expect(channelB.accountId).toBe(world.account.id)
+    return { channelA: world.channel, channelB }
+  }
+
+  it('counts the sends of both products against one account budget', async () => {
+    const { channelB } = twoProducts({ limits: { perHour: 2, perDay: 10 } })
+
+    expect((await sending().send((await world.readyReply()).id)).state).toBe('confirmed') // product A
+    expect((await sending().send((await world.readyReply({ channel: channelB })).id)).state).toBe('confirmed') // product B
+
+    // Each product has sent one; the account has sent two, so neither product may send a third.
+    for (const channel of [world.channel, channelB]) {
+      const blocked = await sendBlocked(await world.readyReply({ channel }))
+      expect(blocked.code).toBe('limit_hour')
+      expect(blocked.reasons.join(' ')).toMatch(/2 send\(s\) across all its channels/)
+    }
+    expect(publishCalls()).toBe(2)
+  })
+
+  it('applies the daily budget the same way across products', async () => {
+    const { channelB } = twoProducts({ limits: { perHour: 10, perDay: 1 } })
+    expect((await sending().send((await world.readyReply({ channel: channelB })).id)).state).toBe('confirmed')
+    expect((await sendBlocked(await world.readyReply())).code).toBe('limit_day')
+  })
+
+  it('lets only one send of the shared account run at a time, whichever product it belongs to', async () => {
+    const { channelB } = twoProducts({ limits: { perHour: 1, perDay: 5 } })
+    const a = await world.readyReply()
+    const b = await world.readyReply({ channel: channelB })
+
+    const results = await Promise.allSettled([sending().send(a.id), sending().send(b.id)])
+
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+    expect(publishCalls()).toBe(1)
+  })
+
+  it('never runs two publishes of the shared account side by side', async () => {
+    const { channelB } = twoProducts()
+    const a = await world.readyReply()
+    const b = await world.readyReply({ channel: channelB })
+    let release!: () => void
+    world.connector.publishGate = new Promise<void>((resolve) => (release = resolve))
+
+    const first = sending().send(a.id)
+    const second = sending().send(b.id)
+    await new Promise((resolve) => setTimeout(resolve, 25))
+    expect(publishCalls()).toBe(1) // product B waits for product A's send to finish
+    release()
+    await Promise.all([first, second])
+    expect(publishCalls()).toBe(2)
+  })
+
+  it('stops the sends of both products while the owner controls the shared browser session', async () => {
+    const { channelB } = twoProducts()
+    const a = await world.readyReply()
+    const b = await world.readyReply({ channel: channelB })
+    world.browser.session(world.account).takeControl()
+
+    for (const opp of [a, b]) expect((await sendBlocked(opp)).reasons.join(' ')).toMatch(/under your control/)
+    expect(publishCalls()).toBe(0)
+  })
+
+  it('does not let the budget of an account used by one product only spill over to the other product\'s own account', async () => {
+    world = makeWorld({ settings: { limits: { perHour: 1, perDay: 5 } } })
+    const productB = world.addProduct('Second product')
+    const ownAccount = world.addAccount({ label: 'Own login', identity: 'other_acc', productId: productB.id })
+    const channelB = world.addChannel({ productId: productB.id, accountId: ownAccount.id, target: 'r/own_login' })
+
+    expect((await sending().send((await world.readyReply()).id)).state).toBe('confirmed')
+    expect((await sending().send((await world.readyReply({ channel: channelB })).id)).state).toBe('confirmed')
+  })
+})
+
 describe('the owner API surfaces the gate\'s reasons', () => {
   it('opportunities.send reports a blocked send as send_blocked with the explanation', async () => {
     world = makeWorld()

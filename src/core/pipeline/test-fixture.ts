@@ -52,6 +52,8 @@ export class FakeKnowledge implements KnowledgeProvider {
 
 export interface ChannelOptions {
   accountId?: Id
+  /** The product the channel belongs to; defaults to the world's product. */
+  productId?: Id
   target?: string
   mode?: ChannelMode
   status?: Channel['status']
@@ -71,7 +73,10 @@ export interface World extends TestCore {
   monitor: MonitorService
   drafting: DraftingService
   sending: SendingService
-  addAccount(options?: { label?: string; identity?: string | null; status?: AccountStatus }): Account
+  /** `productId` is the product that owns the login (DEC-009); defaults to the world's product, null for a legacy unassigned one. */
+  addAccount(options?: { label?: string; identity?: string | null; status?: AccountStatus; productId?: Id | null }): Account
+  /** A second product, for tests where one account serves channels of several products. */
+  addProduct(name?: string): Product
   addChannel(options?: ChannelOptions): Channel
   /** Adds a brand-new comment, runs one monitor cycle and returns the opportunity it created. */
   newOpportunity(options?: { channel?: Channel; discussionId?: string; commentId?: string; body?: string; author?: string }): Promise<Opportunity>
@@ -118,6 +123,19 @@ export function makeWorld(options: WorldOptions = {}): World {
   world.drafting = core.services.drafting as DraftingService
   world.sending = core.services.sending as SendingService
 
+  world.addProduct = (name) => {
+    sequence += 1
+    const id = newId()
+    core.db
+      .prepare('INSERT INTO products (id, name, website_url, description, goal_json, active_passport_version_id, analysis_status, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?)')
+      .run(id, name ?? `Product ${sequence}`, `https://product-${sequence}.test`, 'Another product', 'pv-1', 'complete', now, now)
+    return core.repos.product(id)
+  }
+
+  // The account's product column belongs to the channels migration (DEC-009); it is filled in as soon as it exists,
+  // so these tests run unchanged before and after that migration.
+  const accountsHaveProduct = (core.db.prepare('PRAGMA table_info(accounts)').all() as { name: string }[]).some((c) => c.name === 'product_id')
+
   world.addAccount = (opts = {}) => {
     sequence += 1
     const id = newId()
@@ -125,6 +143,7 @@ export function makeWorld(options: WorldOptions = {}): World {
     core.db
       .prepare('INSERT INTO accounts (id, platform, label, identity, partition, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .run(id, 'fake', opts.label ?? `Account ${sequence}`, identity, `part-${sequence}-${id}`, opts.status ?? 'ready', now)
+    if (accountsHaveProduct) core.db.prepare('UPDATE accounts SET product_id = ? WHERE id = ?').run(opts.productId === undefined ? productId : opts.productId, id)
     return core.repos.account(id)
   }
 
@@ -142,7 +161,7 @@ export function makeWorld(options: WorldOptions = {}): World {
       )
       .run(
         id,
-        productId,
+        opts.productId ?? productId,
         accountId,
         opts.connectorId ?? 'fake',
         target,

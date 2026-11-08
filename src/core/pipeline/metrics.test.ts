@@ -4,7 +4,7 @@ import { TakeoverError } from '../ports'
 import { MetricsServiceImpl, normalizeReading, refreshTracked } from './metrics'
 import { fakeConnector } from './scheduler-fakes'
 import { makeHarness } from './scheduler-harness'
-import { seedProduct } from './scheduler-seed'
+import { seedChannel, seedProduct } from './scheduler-seed'
 
 const READINGS: MetricReading[] = [
   { key: 'upvotes', label: 'Upvotes', value: 0, available: true },
@@ -82,6 +82,32 @@ describe('Platform metrics (REQ-006, DEC-002)', () => {
     expect(view.goals.map((g) => g.productId)).toEqual([other])
     expect(view.channels).toEqual([])
     await expect(h.core.router.call('results.get', { productId: 'missing' })).rejects.toMatchObject({ code: 'not_found' })
+  })
+
+  it('scoped to a product, returns only that product\'s goals, channels and metrics and nothing of the others (DEC-009, REQ-008)', async () => {
+    const { h, channel: mine } = setup()
+    h.core.db.prepare('UPDATE products SET goal_json = ? WHERE id = ?').run(JSON.stringify({ targetAction: 'Install the app', successMetrics: [], notes: '' }), h.productId)
+    const otherProduct = seedProduct(h.core, { name: 'Other product', goal: { targetAction: 'Sign up', successMetrics: ['signups'], notes: '' } })
+    const theirs = seedChannel(h.core, { productId: otherProduct, accountId: h.account.id, target: 'r/other' })
+    await h.core.router.call('results.refresh', { channelId: mine.id })
+    await h.core.router.call('results.refresh', { channelId: theirs.id })
+
+    const view = await h.core.router.call('results.get', { productId: h.productId })
+
+    expect(view.goals).toHaveLength(1)
+    expect(view.goals[0]).toMatchObject({ productId: h.productId, goal: { targetAction: 'Install the app' } })
+    expect(view.channels.map((c) => c.channel.id)).toEqual([mine.id])
+    expect(view.channels[0].metrics.length).toBeGreaterThan(0)
+    expect(view.channels[0].metrics.every((m) => m.channelId === mine.id)).toBe(true)
+    expect(JSON.stringify(view)).not.toContain('Other product')
+    expect(JSON.stringify(view)).not.toContain(theirs.id)
+    expect(view.businessConversions).toBe('not_measured')
+
+    // The other product sees the mirror image, and an unscoped call still sees both.
+    const mirror = await h.core.router.call('results.get', { productId: otherProduct })
+    expect(mirror.goals.map((g) => g.productId)).toEqual([otherProduct])
+    expect(mirror.channels.map((c) => c.channel.id)).toEqual([theirs.id])
+    expect((await h.core.router.call('results.get', {})).channels).toHaveLength(2)
   })
 
   it('records a refresh as a run, and surfaces a failing platform to the caller', async () => {

@@ -1,4 +1,4 @@
-// Results screen data (REQ-006): promotion goals and the latest platform metrics per channel. Version 1 never
+// Data for the product page's Results tab (REQ-006, DEC-009): promotion goals and the latest platform metrics per channel. Version 1 never
 // measures business conversions (DEC-002), which the view states explicitly instead of leaving it implicit.
 
 import { ApiError } from '../../shared/api'
