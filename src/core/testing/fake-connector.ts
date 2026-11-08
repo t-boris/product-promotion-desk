@@ -74,6 +74,8 @@ export class FakeConnector implements Connector {
   fetchThreadError: Error | null = null
   findPublishedError: Error | null = null
   checkLoginError: Error | null = null
+  /** Runs while a thread is being read, to change the world "during" the read (races between the gate's checks). */
+  onFetchThread: (() => void) | null = null
   /** The requests findPublished received, to check what reconciliation asks the platform. */
   readonly findPublishedRequests: PublishRequest[] = []
   /** Holds every publish call until the promise resolves (concurrency tests). */
@@ -198,6 +200,7 @@ export class FakeConnector implements Connector {
     this.calls.push(`fetchThread ${discussionExternalId}`)
     return this.withBrowser(ctx, 'fake-thread', () => {
       if (this.fetchThreadError) throw this.fetchThreadError
+      this.onFetchThread?.()
       const found = this.discussions.find((d) => d.externalId === discussionExternalId)
       if (!found) return null
       const copy: RemoteDiscussion = structuredClone(found)

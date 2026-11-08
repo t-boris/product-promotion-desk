@@ -77,11 +77,13 @@ export interface World extends TestCore {
   addAccount(options?: { label?: string; identity?: string | null; status?: AccountStatus; productId?: Id | null }): Account
   /** A second product, for tests where one account serves channels of several products. */
   addProduct(name?: string): Product
+  /** Gives the login a role (DEC-010) or removes it with null. */
+  setRole(accountId: Id, role: { name: string; voice: string } | null): void
   addChannel(options?: ChannelOptions): Channel
   /** Adds a brand-new comment, runs one monitor cycle and returns the opportunity it created. */
   newOpportunity(options?: { channel?: Channel; discussionId?: string; commentId?: string; body?: string; author?: string }): Promise<Opportunity>
   /** A reply opportunity with a user draft, approved and ready to send. */
-  readyReply(options?: { channel?: Channel; text?: string; body?: string }): Promise<Opportunity>
+  readyReply(options?: { channel?: Channel; text?: string; body?: string; discussionId?: string }): Promise<Opportunity>
   /** Re-reads the channel row (the services keep nothing in memory). */
   refresh(channel?: Channel): Channel
   opportunity(id: Id): Opportunity
@@ -135,6 +137,15 @@ export function makeWorld(options: WorldOptions = {}): World {
   // The account's product column belongs to the channels migration (DEC-009); it is filled in as soon as it exists,
   // so these tests run unchanged before and after that migration.
   const accountsHaveProduct = (core.db.prepare('PRAGMA table_info(accounts)').all() as { name: string }[]).some((c) => c.name === 'product_id')
+
+  // The role columns come with the channels migration (DEC-010); they are added here only if that migration is not
+  // part of this schema yet, with the names the account mapper reads.
+  world.setRole = (accountId, role) => {
+    const columns = (core.db.prepare('PRAGMA table_info(accounts)').all() as { name: string }[]).map((c) => c.name)
+    if (!columns.includes('role_name')) core.db.exec('ALTER TABLE accounts ADD COLUMN role_name TEXT')
+    if (!columns.includes('role_voice')) core.db.exec('ALTER TABLE accounts ADD COLUMN role_voice TEXT')
+    core.db.prepare('UPDATE accounts SET role_name = ?, role_voice = ? WHERE id = ?').run(role?.name ?? null, role?.voice ?? null, accountId)
+  }
 
   world.addAccount = (opts = {}) => {
     sequence += 1
@@ -205,7 +216,7 @@ export function makeWorld(options: WorldOptions = {}): World {
   }
 
   world.readyReply = async (opts = {}) => {
-    const opp = await world.newOpportunity({ channel: opts.channel, body: opts.body })
+    const opp = await world.newOpportunity({ channel: opts.channel, body: opts.body, discussionId: opts.discussionId })
     await core.router.call('opportunities.saveDraft', { id: opp.id, draft: { text: opts.text ?? 'Thanks for asking! It uses your birth date, time and place.' } })
     await core.router.call('opportunities.approve', { id: opp.id })
     return store.requireOpportunity(opp.id)

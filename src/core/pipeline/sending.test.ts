@@ -1162,8 +1162,8 @@ describe('limits are the account\'s budget, shared by all its channels (REQ-004 
     expect((await sending().send((await world.readyReply()).id)).state).toBe('confirmed')
     // The main account used up its hour; a second send from it is held back ...
     expect((await sendBlocked(await world.readyReply())).code).toBe('limit_hour')
-    // ... while the other account has not sent anything yet.
-    expect((await sending().send((await world.readyReply({ channel: separate })).id)).state).toBe('confirmed')
+    // ... while the other account has not sent anything yet (in another discussion: one login speaks per discussion).
+    expect((await sending().send((await world.readyReply({ channel: separate, discussionId: 'd2' })).id)).state).toBe('confirmed')
     expect(publishCalls()).toBe(2)
   })
 })

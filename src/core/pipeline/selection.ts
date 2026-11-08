@@ -36,7 +36,7 @@ export function selectOlder(core: Core, store: FlowStore, channelId: Id, discuss
         const comments = core.db.prepare('SELECT * FROM comments WHERE discussion_id = ? AND baseline = 1 AND is_own = 0 ORDER BY COALESCE(posted_at, first_seen_at), rowid').all(id) as Row[]
         for (const c of comments) {
           const comment = mapComment(c)
-          if (!store.opportunityForComment(comment.id)) store.createReplyOpportunity(channel, comment)
+          if (!store.opportunityForComment(comment.id)) store.openReplyOpportunity(channel, comment)
         }
       } else {
         core.db

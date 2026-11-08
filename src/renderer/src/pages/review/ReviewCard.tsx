@@ -6,7 +6,19 @@ import { DraftEditor, useDraftForm } from './DraftEditor'
 import { ReviewButtons } from './ReviewButtons'
 import { ScheduleControl } from './ScheduleControl'
 import { ThreadView } from './ThreadView'
-import { CATEGORY_LABEL, DECISION_LABEL, KIND_LABEL, LOCKED_STATES, STATE_HINT, STATE_LABEL, STATE_TONE } from './labels'
+import {
+  CATEGORY_LABEL,
+  DECISION_LABEL,
+  DISCLOSURE_HINT,
+  KIND_LABEL,
+  LOCKED_STATES,
+  LOGIN_CONFLICT_HINT,
+  STATE_HINT,
+  STATE_LABEL,
+  STATE_TONE,
+  isLoginConflict,
+  isUndisclosed
+} from './labels'
 import { useReviewActions } from './useReviewActions'
 
 const EXCERPT = 160
@@ -37,7 +49,9 @@ export function ReviewCard({ card, collapsible = false, defaultOpen = true, prod
   const { form, setForm, dirty, input } = useDraftForm(card.draft, standalone)
   const actions = useReviewActions()
   const locked = LOCKED_STATES.includes(opp.state) || opp.state === 'analyzing' || opp.state === 'cancelled'
-  const hint = STATE_HINT[opp.state]
+  const conflict = isLoginConflict(opp.reason)
+  // A held item must not be told to "prepare a draft" when that is exactly what is refused.
+  const hint = conflict ? LOGIN_CONFLICT_HINT : STATE_HINT[opp.state]
   const summary = standalone ? card.draft?.title || card.draft?.text || 'New publication' : (card.comment?.body ?? 'Comment')
 
   return (
@@ -68,6 +82,11 @@ export function ReviewCard({ card, collapsible = false, defaultOpen = true, prod
         </div>
 
         {!open && <div className="muted" data-testid="card-summary">{excerpt(summary)}</div>}
+        {!open && conflict && (
+          <div className="small" data-testid="card-conflict">
+            {opp.reason}
+          </div>
+        )}
 
         {open && (
           <div className="stack">
@@ -76,7 +95,16 @@ export function ReviewCard({ card, collapsible = false, defaultOpen = true, prod
                 <strong>{opp.reason}</strong>
               </div>
             )}
-            {hint && <div className="muted small">{hint}</div>}
+            {hint && (
+              <div className="muted small" data-testid={conflict ? 'login-conflict-hint' : 'state-hint'}>
+                {hint}
+              </div>
+            )}
+            {isUndisclosed(opp.reason) && (
+              <div className="muted small" data-testid="disclosure-hint">
+                {DISCLOSURE_HINT}
+              </div>
+            )}
             {!standalone && <ThreadView card={card} />}
             {standalone && opp.destination && (
               <div className="muted small">

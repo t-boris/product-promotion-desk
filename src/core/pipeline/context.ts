@@ -1,7 +1,7 @@
 // Builds the context an AI draft is prepared from (REQ-003 criterion 2): the original post, the comment, the
 // parent chain, the account's earlier replies, the approved product knowledge and the channel rules.
 
-import type { Channel, Claim, Id, Opportunity } from '../../shared/types'
+import type { Account, Channel, Claim, Id, Opportunity } from '../../shared/types'
 import type { Core } from '../core'
 import type { FlowStore } from './store'
 
@@ -37,6 +37,12 @@ export interface ChannelView {
   limits: string[]
 }
 
+/** The role of the login a draft is written with (DEC-010): who the author is and how they write. */
+export interface RoleView {
+  name: string
+  voice: string
+}
+
 export interface Knowledge {
   versionId: Id | null
   approved: ClaimView[]
@@ -46,6 +52,8 @@ export interface Knowledge {
 export interface ReplyContext {
   channel: ChannelView
   product: ProductView
+  /** The role of the channel's login; null when it has none (the channel style alone applies). */
+  role: RoleView | null
   discussion: { title: string; author: string; body: string; url: string }
   comment: { id: Id; externalId: string; author: string; body: string; url: string; contentHash: string }
   /** Oldest first, ending with the comment's direct parent. */
@@ -106,6 +114,11 @@ export function channelView(channel: Channel): ChannelView {
   }
 }
 
+/** The login's role, only when one is set. */
+export function roleView(account: Account): RoleView | null {
+  return account.role && account.role.name.trim() ? { name: account.role.name.trim(), voice: account.role.voice.trim() } : null
+}
+
 export function buildReplyContext(core: Core, store: FlowStore, opp: Opportunity): ReplyContext {
   if (!opp.commentId) throw new ContextError('The opportunity has no comment to reply to')
   const comment = store.comment(opp.commentId)
@@ -113,6 +126,7 @@ export function buildReplyContext(core: Core, store: FlowStore, opp: Opportunity
   const channel = store.requireChannel(opp.channelId)
   const discussion = core.repos.discussion(comment.discussionId)
   const product = core.repos.product(opp.productId)
+  const account = core.repos.account(channel.accountId)
 
   // Walk up the parent links stored from earlier reads; the chain ends at the post itself (not a stored comment).
   const ancestors: ContextComment[] = []
@@ -136,6 +150,7 @@ export function buildReplyContext(core: Core, store: FlowStore, opp: Opportunity
   return {
     channel: channelView(channel),
     product: { name: product.name, website: product.websiteUrl, description: product.description },
+    role: roleView(account),
     discussion: { title: discussion.title, author: discussion.author, body: clip(discussion.body), url: discussion.url },
     comment: { id: comment.id, externalId: comment.externalId, author: comment.author, body: clip(comment.body), url: comment.url, contentHash: comment.contentHash },
     ancestors,

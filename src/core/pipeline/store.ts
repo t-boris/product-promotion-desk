@@ -3,6 +3,7 @@
 
 import { ApiError } from '../../shared/api'
 import type {
+  Account,
   Approval,
   Attachment,
   Channel,
@@ -19,7 +20,7 @@ import type {
 } from '../../shared/types'
 import type { Core } from '../core'
 import { newId, toJson, type Db } from '../db/database'
-import { mapAction, mapApproval, mapComment, mapOpportunity } from '../repos'
+import { mapAccount, mapAction, mapApproval, mapComment, mapOpportunity } from '../repos'
 
 type Row = Record<string, unknown>
 type Bindable = string | number | null
@@ -29,6 +30,15 @@ export const OPEN_ACTION_STATES = ['sending', 'unknown', 'confirmed'] as const
 
 /** States in which the content is already out or in flight: it can no longer be edited, rejected or re-drafted. */
 export const SEND_LOCKED_STATES: OpportunityState[] = ['sending', 'confirmed', 'unknown_result']
+
+/**
+ * States in which a login "speaks" in a discussion (DEC-010): it has a draft, an approved item or a message that
+ * is out or in flight. Rejected, deferred, failed and not-yet-drafted items do not hold the discussion.
+ */
+export const SPEAKING_STATES: OpportunityState[] = ['draft', 'awaiting_approval', 'ready', 'sending', 'unknown_result', 'confirmed']
+
+/** Shown wherever a second login of a product is stopped in a discussion another login already speaks in. */
+export const OTHER_LOGIN_SPEAKS_REASON = 'Another login of this product already speaks in this discussion'
 
 export interface OpportunityPatch {
   state?: OpportunityState
@@ -132,6 +142,67 @@ export class FlowStore {
     return new Set(rows.map((r) => r.id))
   }
 
+  /**
+   * Every login the product writes with: the accounts it owns (DEC-009), the accounts its channels use (a login
+   * reused on purpose is still one of its voices) and `alsoAccountId`. Used to recognise the product's own
+   * comments whichever login wrote them (DEC-010).
+   */
+  productAccounts(productId: Id, alsoAccountId: Id): Account[] {
+    const rows = this.db
+      .prepare('SELECT * FROM accounts WHERE product_id = ? OR id = ? OR id IN (SELECT account_id FROM channels WHERE product_id = ?)')
+      .all(productId, alsoAccountId, productId) as Row[]
+    return rows.map(mapAccount)
+  }
+
+  /** Platform ids of confirmed sends by any login of the product in the community (platform + target) of `channel`. */
+  productConfirmedExternalIds(channel: Channel): Set<string> {
+    const rows = this.db
+      .prepare(
+        `SELECT a.result_external_id AS id
+           FROM send_actions a
+           JOIN opportunities o ON o.id = a.opportunity_id
+           JOIN channels c ON c.id = o.channel_id
+          WHERE a.state = 'confirmed' AND a.result_external_id IS NOT NULL
+            AND o.product_id = ? AND c.platform = ? AND c.target = ?`
+      )
+      .all(channel.productId, channel.platform, channel.target) as { id: string }[]
+    return new Set(rows.map((r) => r.id))
+  }
+
+  /**
+   * An opportunity of the same product, on the same platform and in the same discussion (compared by the
+   * platform's own discussion id, across channels), written with a DIFFERENT login and in a speaking state.
+   * Returns null when nobody else speaks there. Standalone posts are their own discussion and never conflict.
+   */
+  otherLoginSpeaking(q: { productId: Id; platform: string; discussionExternalId: string; accountId: Id; exceptOpportunityId?: Id }): Opportunity | null {
+    const row = this.db
+      .prepare(
+        `SELECT o.* FROM opportunities o
+           JOIN channels c ON c.id = o.channel_id
+           JOIN discussions d ON d.id = o.discussion_id
+          WHERE o.kind = 'reply' AND o.product_id = ? AND c.platform = ? AND d.external_id = ? AND c.account_id != ?
+            AND o.id != ? AND o.state IN (${SPEAKING_STATES.map(() => '?').join(', ')})
+          ORDER BY o.updated_at, o.rowid LIMIT 1`
+      )
+      .get(q.productId, q.platform, q.discussionExternalId, q.accountId, q.exceptOpportunityId ?? '', ...SPEAKING_STATES) as Row | undefined
+    return row ? mapOpportunity(row) : null
+  }
+
+  /** The same question for an existing opportunity: does another login of its product already speak in its discussion? */
+  otherLoginSpeakingFor(opp: Opportunity): Opportunity | null {
+    if (opp.kind !== 'reply' || !opp.discussionId) return null
+    const channel = this.requireChannel(opp.channelId)
+    const discussion = this.db.prepare('SELECT external_id FROM discussions WHERE id = ?').get(opp.discussionId) as { external_id: string } | undefined
+    if (!discussion) return null
+    return this.otherLoginSpeaking({
+      productId: opp.productId,
+      platform: channel.platform,
+      discussionExternalId: discussion.external_id,
+      accountId: channel.accountId,
+      exceptOpportunityId: opp.id
+    })
+  }
+
   /** Where the content of `opp` is published: the comment's current address for replies, the channel for posts. */
   resolveDestination(opp: Opportunity, channel: Channel): string {
     if (opp.kind === 'reply' && opp.commentId) {
@@ -162,6 +233,21 @@ export class FlowStore {
   }
 
   // ───────────── opportunities ─────────────
+
+  /**
+   * Opens the reply opportunity of a comment, unless another login of the product already speaks in its discussion
+   * (DEC-010). In that case the opportunity is recorded as cancelled with the reason, so the owner can see why the
+   * comment was not worked on and the comment is never picked up again; the log says it too.
+   */
+  openReplyOpportunity(channel: Channel, comment: Comment): { opportunity: Opportunity; blocked: boolean } {
+    const discussion = this.db.prepare('SELECT external_id FROM discussions WHERE id = ?').get(comment.discussionId) as { external_id: string } | undefined
+    const other = discussion
+      ? this.otherLoginSpeaking({ productId: channel.productId, platform: channel.platform, discussionExternalId: discussion.external_id, accountId: channel.accountId })
+      : null
+    if (!other) return { opportunity: this.createReplyOpportunity(channel, comment), blocked: false }
+    this.core.log.info('guard', `${OTHER_LOGIN_SPEAKS_REASON}; no reply opportunity for comment ${comment.externalId} on ${channel.target}`, channel.id)
+    return { opportunity: this.createReplyOpportunity(channel, comment, 'cancelled', OTHER_LOGIN_SPEAKS_REASON), blocked: true }
+  }
 
   createReplyOpportunity(channel: Channel, comment: Comment, state: OpportunityState = 'discovered', reason = ''): Opportunity {
     return this.insertOpportunity({

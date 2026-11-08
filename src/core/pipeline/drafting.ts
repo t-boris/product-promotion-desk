@@ -14,13 +14,15 @@ import type { Core } from '../core'
 import { AiError } from '../ports'
 import type { DraftingService } from '../services'
 import { buildReplyContext, loadKnowledge, type Knowledge, type ReplyContext } from './context'
+import { withRole } from './role'
 import { buildReplyPrompt, parseReplyProposal, REPLY_LABEL, REPLY_SYSTEM, type ReplyProposal } from './draft-prompt'
+import { DISCLOSURE_REASON, mentionsProduct } from './auto-guard'
 import { SendBlockedError } from './gate'
 import { autoEligibility, TOOL_FREE_REQUIRED_REASON } from './modes'
 import type { ReviewFlow } from './review'
 import { allowedHostsFor, checkDraftSafety } from './safety'
 import type { SendingFlow } from './sending'
-import type { FlowStore } from './store'
+import { OTHER_LOGIN_SPEAKS_REASON, type FlowStore } from './store'
 import { errorMessage } from './util'
 
 export const NO_KNOWLEDGE_REASON = 'no approved product knowledge'
@@ -132,6 +134,16 @@ export class DraftingFlow implements DraftingService {
   async prepareOne(id: Id, options: { explicit: boolean }): Promise<PrepareOutcome> {
     const opp = this.store.requireOpportunity(id)
     if (opp.kind !== 'reply') throw new ApiError('invalid_state', 'Only replies are prepared from comments; standalone posts are suggested per channel.')
+    // One login of a product speaks per discussion (DEC-010). The item keeps its place and is picked up again once the
+    // other login's item is rejected or deferred; the owner is told why nothing happens meanwhile.
+    if (this.store.otherLoginSpeakingFor(opp)) {
+      if (options.explicit) throw new ApiError('invalid_state', OTHER_LOGIN_SPEAKS_REASON)
+      if (opp.reason !== OTHER_LOGIN_SPEAKS_REASON) {
+        this.store.updateOpportunity(id, { reason: OTHER_LOGIN_SPEAKS_REASON })
+        this.store.notify()
+      }
+      return 'skipped'
+    }
     const from: OpportunityState[] = options.explicit ? REDRAFTABLE : ['discovered']
     if (!this.store.transition(id, from, 'analyzing')) {
       if (options.explicit) throw new ApiError('invalid_state', `A draft cannot be prepared while the item is "${opp.state.replace('_', ' ')}".`)
@@ -246,15 +258,40 @@ export class DraftingFlow implements DraftingService {
 
     const eligibility =
       channel.mode === 'auto' && !explicit
-        ? autoEligibility({ channel, category: proposal.category, decision: proposal.decision, commentBody: ctx.comment.body, reply: proposal.reply, usedClaimIds: proposal.usedClaimIds, approved: knowledge.approved, engineToolFree })
+        ? autoEligibility({
+            channel,
+            category: proposal.category,
+            decision: proposal.decision,
+            commentBody: ctx.comment.body,
+            reply: proposal.reply,
+            usedClaimIds: proposal.usedClaimIds,
+            approved: knowledge.approved,
+            engineToolFree,
+            productName: ctx.product.name,
+            disclosesConnection: proposal.disclosesConnection
+          })
         : null
     // Safe defaults: a draft in 'draft' mode stays a draft; everything else waits for approval.
     const mode = explicit ? (channel.mode === 'draft' || channel.mode === 'observe' ? 'draft' : 'approval') : channel.mode
     const target: OpportunityState = mode === 'draft' ? 'draft' : 'awaiting_approval'
+    const verbatim = [TOOL_FREE_REQUIRED_REASON, DISCLOSURE_REASON]
+    // The owner is reminded of the missing disclosure whatever the mode: editing the text is theirs to do before approving.
+    const undisclosed = mentionsProduct(proposal.reply, ctx.product.name) && !proposal.disclosesConnection
     const reason =
-      eligibility && !eligibility.eligible ? (eligibility.why === TOOL_FREE_REQUIRED_REASON ? TOOL_FREE_REQUIRED_REASON : `Waiting for your approval, not sent automatically: ${eligibility.why}.`) : ''
+      eligibility && !eligibility.eligible
+        ? verbatim.includes(eligibility.why)
+          ? eligibility.why
+          : `Waiting for your approval, not sent automatically: ${eligibility.why}.`
+        : undisclosed
+          ? DISCLOSURE_REASON
+          : ''
 
     const saved = this.core.db.transaction(() => {
+      // Another login may have started speaking here while the AI was working: nothing is saved for this one.
+      if (this.store.otherLoginSpeakingFor(opp)) {
+        this.store.transition(opp.id, ['analyzing'], 'discovered', OTHER_LOGIN_SPEAKS_REASON)
+        return null
+      }
       if (!this.store.transition(opp.id, ['analyzing'], target, reason)) return null // the owner acted meanwhile
       this.store.invalidateApprovals(opp.id, 'A new draft was prepared')
       return this.store.insertDraft(
@@ -263,7 +300,7 @@ export class DraftingFlow implements DraftingService {
         {
           knowledgeVersionId: knowledge.versionId,
           usedClaimLineageIds: [...new Set(report.usedClaims.map((c) => c.lineageId))],
-          rationale: proposal.rationale,
+          rationale: withRole(proposal.rationale, ctx.role),
           author: 'ai'
         }
       )

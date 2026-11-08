@@ -28,6 +28,8 @@ function eligible(over: Partial<Parameters<typeof autoEligibility>[0]> = {}) {
     usedClaimIds: ['c2'],
     approved: APPROVED,
     engineToolFree: true,
+    productName: 'Natal Mystic',
+    disclosesConnection: false,
     ...over
   })
 }

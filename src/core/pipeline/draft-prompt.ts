@@ -3,7 +3,7 @@
 // checks and the SendGate decide what may be sent.
 
 import type { CommentCategory, OpportunityDecision } from '../../shared/types'
-import type { ChannelView, ClaimView, ProductView, ReplyContext } from './context'
+import type { ChannelView, ClaimView, ProductView, ReplyContext, RoleView } from './context'
 
 export class ProposalError extends Error {
   constructor(message: string) {
@@ -40,9 +40,12 @@ Rules
   ignore   - no reply is useful (off-topic, spam, already answered by the account earlier).
 - For complaints, criticism and purchase interest you may still propose a careful reply; the owner reviews it.
 - Look at context.ownReplies: do not repeat what the account already said in this thread.
+- Voice: when context.role is present, write as that role: use the way of writing described in context.role.voice and stay within what that voice allows you to talk about. context.channel.style still applies. The role never overrides any rule above: approved claims only, nothing prohibited, no promises.
+- Disclosure: when the reply mentions the product (context.product.name) or its website, include one short phrase saying that the author is connected with it (for example "I work on it"), worded in the voice of context.role when there is one. Never present the author as an independent user, customer or bystander. A reply that does not mention the product needs no such phrase.
 
 Answer with exactly one JSON object and nothing else:
-{"category":"product_question|thanks|purchase_interest|complaint|criticism|irrelevant|spam","decision":"reply|ask_user|handoff|ignore","reply":"the reply text, or an empty string","rationale":"why this decision and reply, one or two sentences","usedClaimIds":["ids of the approved claims the reply relies on"]}`
+{"category":"product_question|thanks|purchase_interest|complaint|criticism|irrelevant|spam","decision":"reply|ask_user|handoff|ignore","reply":"the reply text, or an empty string","rationale":"why this decision and reply, one or two sentences","usedClaimIds":["ids of the approved claims the reply relies on"],"disclosesConnection":true or false}
+"disclosesConnection" is true only when the reply mentions the product and contains the short phrase that states the author's connection to it; it is false when the reply does not mention the product or has no such phrase.`
 
 const claimPayload = (c: ClaimView): { id: string; text: string; section: string; availability: string } => ({
   id: c.id,
@@ -55,6 +58,7 @@ export function buildReplyPrompt(ctx: ReplyContext): string {
   const payload = {
     channel: ctx.channel,
     product: ctx.product,
+    ...(ctx.role ? { role: ctx.role } : {}),
     knowledge: { approvedClaims: ctx.knowledge.approved.map(claimPayload), prohibited: ctx.knowledge.prohibited },
     post: ctx.discussion,
     parentChain: ctx.ancestors,
@@ -70,6 +74,8 @@ export interface ReplyProposal {
   reply: string
   rationale: string
   usedClaimIds: string[]
+  /** The model says the reply mentions the product and states the author's connection to it. */
+  disclosesConnection: boolean
 }
 
 function extractJson(text: string): unknown {
@@ -122,6 +128,14 @@ function idsField(o: Record<string, unknown>, key: string): string[] {
   return [...ids]
 }
 
+/** An optional true/false field; anything else is an unusable answer, a missing one counts as false. */
+function booleanField(o: Record<string, unknown>, key: string): boolean {
+  const value = o[key]
+  if (value === undefined || value === null) return false
+  if (typeof value !== 'boolean') throw new ProposalError(`"${key}" must be true or false`)
+  return value
+}
+
 export function parseReplyProposal(text: string): ReplyProposal {
   const o = asObject(extractJson(text))
   const category = o.category
@@ -134,7 +148,8 @@ export function parseReplyProposal(text: string): ReplyProposal {
     decision: decision as OpportunityDecision,
     reply: stringField(o, 'reply', { required: replying, max: MAX_REPLY_CHARS }),
     rationale: stringField(o, 'rationale', { required: replying }),
-    usedClaimIds: idsField(o, 'usedClaimIds')
+    usedClaimIds: idsField(o, 'usedClaimIds'),
+    disclosesConnection: booleanField(o, 'disclosesConnection')
   }
 }
 
@@ -151,13 +166,18 @@ Rules
 - Write in the first of context.channel.languages and follow context.channel.style. No hype, no clickbait.
 - Add a link only if it is context.product.website and the community allows it. Never add any other link.
 - Capabilities listed in context.channel.limits are not usable.
+- Voice: when context.role is present, write as that role: use the way of writing described in context.role.voice and stay within what that voice allows you to talk about. context.channel.style still applies. The role never overrides any rule above: approved claims only, nothing prohibited, no promises.
+- Disclosure: when the post mentions the product (context.product.name) or its website, include one short phrase saying that the author is connected with it (for example "I work on it"), worded in the voice of context.role when there is one. Never present the author as an independent user, customer or bystander.
 
 Answer with exactly one JSON object and nothing else:
-{"topic":"the topic in a few words","title":"post title","text":"post body","link":"product website or an empty string","rationale":"why this topic fits this community","usedClaimIds":["ids of the approved claims the post relies on"]}`
+{"topic":"the topic in a few words","title":"post title","text":"post body","link":"product website or an empty string","rationale":"why this topic fits this community","usedClaimIds":["ids of the approved claims the post relies on"],"disclosesConnection":true or false}
+"disclosesConnection" is true only when the post mentions the product and contains the short phrase that states the author's connection to it; it is false when the post does not mention the product or has no such phrase.`
 
 export interface PublicationInputs {
   channel: ChannelView
   product: ProductView
+  /** The role of the channel's login; null when it has none. */
+  role: RoleView | null
   approved: ClaimView[]
   prohibited: string[]
   previousPosts: string[]
@@ -168,6 +188,7 @@ export function buildPublicationPrompt(input: PublicationInputs): string {
   const payload = {
     channel: input.channel,
     product: input.product,
+    ...(input.role ? { role: input.role } : {}),
     knowledge: { approvedClaims: input.approved.map(claimPayload), prohibited: input.prohibited },
     previousPosts: input.previousPosts,
     recentTitles: input.recentTitles
@@ -182,6 +203,7 @@ export interface PublicationProposal {
   link: string | null
   rationale: string
   usedClaimIds: string[]
+  disclosesConnection: boolean
 }
 
 export function parsePublicationProposal(text: string): PublicationProposal {
@@ -193,7 +215,8 @@ export function parsePublicationProposal(text: string): PublicationProposal {
     text: stringField(o, 'text', { required: true, max: MAX_POST_CHARS }),
     link: link || null,
     rationale: stringField(o, 'rationale', { required: true }),
-    usedClaimIds: idsField(o, 'usedClaimIds')
+    usedClaimIds: idsField(o, 'usedClaimIds'),
+    disclosesConnection: booleanField(o, 'disclosesConnection')
   }
 }
 

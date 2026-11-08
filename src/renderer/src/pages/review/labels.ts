@@ -75,6 +75,21 @@ export const STATE_HINT: Partial<Record<OpportunityState, string>> = {
   deferred: 'Set aside. Approve it again when you want to send it.'
 }
 
+// The core words these reasons (DEC-010); the card recognises them to say what to do about them.
+const OTHER_LOGIN_REASON = 'Another login of this product already speaks in this discussion'
+const UNDISCLOSED_REASON = 'mentions the product; check that it says you are connected with it'
+
+/** True when the item is held because a different login of the same product already speaks in the discussion. */
+export const isLoginConflict = (reason: string): boolean => reason.startsWith(OTHER_LOGIN_REASON)
+
+/** True when the text names the product without the model vouching that it says the author is connected with it. */
+export const isUndisclosed = (reason: string): boolean => reason.includes(UNDISCLOSED_REASON)
+
+export const LOGIN_CONFLICT_HINT =
+  'Only one login of a product speaks in a discussion. Reject or defer the other login\'s item in this discussion, then prepare or approve this one again.'
+
+export const DISCLOSURE_HINT = 'Edit the text so it says, in a few words, that you are connected with the product (for example "I work on it"), then approve it.'
+
 export function isHttpUrl(value: string | null | undefined): value is string {
   if (!value) return false
   try {

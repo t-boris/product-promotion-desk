@@ -3,8 +3,10 @@
 // Rules enforced here:
 //  - discussions and comments are upserted by (channel_id, external_id); a rediscovered comment only updates its row;
 //  - the first cycle of a channel (baseline) stores everything with baseline = 1 and creates no opportunities;
-//  - the account's own comments are marked is_own and never create opportunities, so the app cannot start an
-//    automatic reply chain with itself;
+//  - a comment written by ANY login of the product (known identity, or the result of a confirmed send) is marked
+//    is_own and never creates an opportunity, so neither the app nor a second login of the product can start a
+//    reply chain with the product's own voices (DEC-010);
+//  - a comment in a discussion where another login of the product already speaks gets no reply opportunity;
 //  - a comment that changes after an opportunity exists sends that opportunity back to review (unless already sent).
 
 import type { Account, Channel, Comment, Id, Opportunity, OpportunityState } from '../../shared/types'
@@ -60,7 +62,11 @@ export class Ingestor {
   private apply(channel: Channel, account: Account, discussions: RemoteDiscussion[], baseline: boolean): IngestResult {
     const now = this.store.now()
     const identity = normalizeIdentity(account.identity)
-    const ownResultIds = this.store.confirmedExternalIds(account.id)
+    // Every login of the product writes as the product, so a comment by any of them is our own, not only the
+    // comments of the login this channel uses.
+    const ownIdentities = new Set(this.store.productAccounts(channel.productId, account.id).map((a) => normalizeIdentity(a.identity)))
+    ownIdentities.delete('')
+    const ownResultIds = new Set([...this.store.confirmedExternalIds(account.id), ...this.store.productConfirmedExternalIds(channel)])
     const result: IngestResult = {
       discussions: 0,
       comments: 0,
@@ -75,15 +81,14 @@ export class Ingestor {
       result.discussions++
       for (const c of remote.comments) {
         result.comments++
-        const isOwn = (identity !== '' && normalizeIdentity(c.author) === identity) || ownResultIds.has(c.externalId)
+        const isOwn = ownIdentities.has(normalizeIdentity(c.author)) || ownResultIds.has(c.externalId)
         const existing = this.store.commentByExternalId(channel.id, c.externalId)
         if (!existing) {
           const stored = this.insertComment(channel.id, discussionId, c, baseline, isOwn, now)
           result.newComments++
           // Never queue work when we cannot recognise our own comments: a reply chain with ourselves would be possible.
           if (!baseline && !isOwn && identity !== '' && !this.store.opportunityForComment(stored.id)) {
-            this.store.createReplyOpportunity(channel, stored)
-            result.newOpportunities++
+            if (!this.store.openReplyOpportunity(channel, stored).blocked) result.newOpportunities++
           }
           continue
         }

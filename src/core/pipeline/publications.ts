@@ -7,9 +7,11 @@ import { ApiError, type DraftInput } from '../../shared/api'
 import type { Id, IsoTime, Opportunity } from '../../shared/types'
 import type { Core } from '../core'
 import { AiError } from '../ports'
-import { channelView, loadKnowledge } from './context'
+import { mentionsProduct, POST_DISCLOSURE_NOTE } from './auto-guard'
+import { channelView, loadKnowledge, roleView } from './context'
 import { normalizeDraftInput, isHttpUrl } from './draft-input'
 import { buildPublicationPrompt, parsePublicationProposal, PUBLICATION_LABEL, PUBLICATION_SYSTEM, type PublicationProposal } from './draft-prompt'
+import { withRole } from './role'
 import { allowedHostsFor, checkDraftSafety } from './safety'
 import { SEND_LOCKED_STATES, type FlowStore } from './store'
 import { errorMessage } from './util'
@@ -43,6 +45,7 @@ export class PublicationsFlow {
     const channel = this.store.requireChannel(channelId)
     const product = this.core.repos.product(channel.productId)
     const knowledge = loadKnowledge(this.core, channel.productId)
+    const role = roleView(this.core.repos.account(channel.accountId))
     if (knowledge.approved.length === 0) {
       throw new ApiError('no_knowledge', 'There is no approved product knowledge yet. Approve claims in the product passport first.')
     }
@@ -64,6 +67,7 @@ export class PublicationsFlow {
         prompt: buildPublicationPrompt({
           channel: channelView(channel),
           product: { name: product.name, website: product.websiteUrl, description: product.description },
+          role,
           approved: knowledge.approved,
           prohibited: knowledge.prohibited,
           previousPosts,
@@ -100,14 +104,17 @@ export class PublicationsFlow {
     }
 
     const opp = this.core.db.transaction(() => {
-      const created = this.store.createStandalone(channel, 'draft', `Suggested topic: ${proposal.topic}`)
+      // Posts always wait for the owner; if the post names the product without the model vouching for a disclosure,
+      // the owner is told to check it while editing.
+      const undisclosed = mentionsProduct(`${proposal.title} ${proposal.text}`, product.name) && !proposal.disclosesConnection
+      const created = this.store.createStandalone(channel, 'draft', `Suggested topic: ${proposal.topic}${undisclosed ? `. ${POST_DISCLOSURE_NOTE}` : ''}`)
       this.store.insertDraft(
         created.id,
         { title: proposal.title, text: proposal.text, link: proposal.link, attachments: [] },
         {
           knowledgeVersionId: knowledge.versionId,
           usedClaimLineageIds: [...new Set(report.usedClaims.map((c) => c.lineageId))],
-          rationale: proposal.rationale,
+          rationale: withRole(proposal.rationale, role),
           author: 'ai'
         }
       )

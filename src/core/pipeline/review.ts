@@ -11,7 +11,7 @@ import type { Core } from '../core'
 import { attachmentProblem } from './attachments'
 import { normalizeDraftInput } from './draft-input'
 import { contentHash, hashedIdentity } from './hash'
-import { SEND_LOCKED_STATES, type FlowStore } from './store'
+import { OTHER_LOGIN_SPEAKS_REASON, SEND_LOCKED_STATES, SPEAKING_STATES, type FlowStore } from './store'
 
 export const FACTS_CHANGED_REASON = 'Product facts changed; review again'
 
@@ -59,6 +59,8 @@ export class ReviewFlow implements PipelineHooks {
       // Re-read inside the transaction: the state may have changed while attachments were being checked.
       const current = this.store.requireOpportunity(id)
       this.assertEditable(current, 'edit the draft')
+      // A draft that is already in review keeps its place; one that is not must not start a second voice.
+      if (!SPEAKING_STATES.includes(current.state) && this.store.otherLoginSpeakingFor(current)) throw new ApiError('invalid_state', OTHER_LOGIN_SPEAKS_REASON)
       this.store.insertDraft(id, content, {
         knowledgeVersionId: previous?.knowledgeVersionId ?? null,
         usedClaimLineageIds: previous?.usedClaimLineageIds ?? [],
@@ -90,6 +92,7 @@ export class ReviewFlow implements PipelineHooks {
     this.core.db.transaction(() => {
       const current = this.store.requireOpportunity(id)
       if (!APPROVABLE.includes(current.state)) throw new ApiError('invalid_state', `This item cannot be approved while it is "${current.state}".`)
+      if (this.store.otherLoginSpeakingFor(current)) throw new ApiError('invalid_state', OTHER_LOGIN_SPEAKS_REASON)
       const latest = this.core.repos.latestDraft(id)
       if (!latest || latest.id !== draft.id) throw new ApiError('conflict', 'The draft changed while you were approving. Review it again.')
       const { hash, accountId, identity, destination } = this.currentHash(current, latest)

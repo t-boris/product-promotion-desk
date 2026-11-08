@@ -13,7 +13,7 @@ import { attachmentProblem } from './attachments'
 import { commentBodyHash, contentHash, hashedIdentity } from './hash'
 import { autoCategoryOf, autoRuleId } from './modes'
 import { buildPublishRequest, publishCapability } from './request'
-import type { FlowStore } from './store'
+import { OTHER_LOGIN_SPEAKS_REASON, type FlowStore } from './store'
 import { errorMessage, normalizeIdentity } from './util'
 
 /**
@@ -92,7 +92,7 @@ export class SendGate {
     const { connector, ctx } = pair
 
     // Cheap local checks first, so the network is not touched for an item that cannot be sent anyway.
-    const early = this.checkApproval(first, req) ?? this.checkAvailability(first, req, ctx) ?? this.checkOpenAction(first)
+    const early = this.checkApproval(first, req) ?? this.checkSingleLogin(first) ?? this.checkAvailability(first, req, ctx) ?? this.checkOpenAction(first)
     if (early) return early
 
     // (c) content on disk and the live thread.
@@ -106,7 +106,7 @@ export class SendGate {
 
     // The owner may have edited or withdrawn the item while the thread was being read: decide on fresh state.
     const now = this.load(req.opportunityId)
-    const late = this.checkApproval(now, req) ?? this.checkAvailability(now, req, ctx) ?? this.checkLimits(now) ?? this.checkOpenAction(now)
+    const late = this.checkApproval(now, req) ?? this.checkSingleLogin(now) ?? this.checkAvailability(now, req, ctx) ?? this.checkLimits(now) ?? this.checkOpenAction(now)
     if (late) return late
 
     const { opp, channel, account, comment } = now
@@ -188,6 +188,19 @@ export class SendGate {
       return block('hold', 'not_automatic', 'This reply was approved by you, so it is sent only when you press Send.')
     }
     return null
+  }
+
+  // ───────────── one login speaks per discussion (DEC-010) ─────────────
+
+  /**
+   * At most one login of a product speaks in a discussion. This is decided from the records at the moment of
+   * sending, so an approval given earlier (or automatically) cannot carry a second login into a discussion that
+   * another login has meanwhile taken. It is not switchable. The approval is withdrawn: after the other login's
+   * item is rejected or deferred, this one is approved again.
+   */
+  private checkSingleLogin(s: Snapshot): GateBlock | null {
+    const other = this.store.otherLoginSpeakingFor(s.opp)
+    return other ? block('review', 'other_login_speaks', OTHER_LOGIN_SPEAKS_REASON) : null
   }
 
   // ───────────── (b) availability and permissions ─────────────
