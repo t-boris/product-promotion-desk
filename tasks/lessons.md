@@ -30,3 +30,13 @@
 8. Follow the owner's latest process instruction over the earlier goal text when they conflict, and record it (decision, README, memory) so the next session does not undo it.
 9. Every change that reaches main bumps the version (patch by default), gets a tag vX.Y.Z and is installed with `npm run deploy:local`; check the installed version against package.json. Do not leave main and the installed build on different numbers.
 10. Speed does not drop the safety rules of the product: nothing is published without explicit in-app approval, and the app never handles passwords.
+
+## 2026-11-08 (later): one UI standard for controls
+
+**What happened.** The owner pointed at two "Use this engine" buttons of different sizes in Settings and asked for one button standard and a more standardized UI. Cause: `.btn` had no fixed height, no `nowrap` and could shrink in a flex row; the primary variant was bolder (wider) and wrapped first; buttons (35 px) and inputs (37 px) disagreed.
+
+**Rules for myself.**
+
+11. Buttons, inputs and selects take their size from the tokens in `styles.css` (`--control-h`, `--control-radius`, `--control-pad-x`, `--control-min-w`); variants change colour only, never size or weight. A button never shrinks or wraps: the text next to it gives way. Font sizes come from the `--fs-*` scale, not from pixel values.
+12. Check a UI standard by measuring every control on every route (heights, wrapped labels, horizontal scroll), not by looking at one screenshot.
+13. The same action keeps the same label in every state (disable it, show the state elsewhere) so its size does not change.

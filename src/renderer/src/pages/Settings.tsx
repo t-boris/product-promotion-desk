@@ -48,7 +48,7 @@ export function SettingsPage() {
                   </div>
                 </div>
                 <Button variant={selected ? 'ghost' : 'primary'} disabled={!engine.installed || selected || selecting.busy} onClick={() => void selectEngine(engine.id)}>
-                  {selected ? 'In use' : 'Use this engine'}
+                  Use this engine
                 </Button>
               </div>
             )
