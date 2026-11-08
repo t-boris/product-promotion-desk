@@ -11,8 +11,11 @@ import {
   type Clock,
   type Connector,
   type ConnectorContext,
+  type SecretClipboard,
+  type SecretStore,
   type TicketVerifier
 } from './ports'
+import { UnavailableSecretStore } from './vault'
 import { Repos } from './repos'
 import { RunRecorder } from './runs'
 import { ApiRouter } from './api/router'
@@ -32,6 +35,11 @@ export interface CoreDeps {
   browser: BrowserService | ((tickets: TicketVerifier) => BrowserService)
   connectors: Connector[]
   secret?: Buffer
+  /** Where passwords are kept; without one the vault is unavailable and says so (DEC-014). */
+  secrets?: SecretStore
+  clipboard?: SecretClipboard
+  /** Waits for a page to react between steps; tests supply one that does not wait. */
+  sleep?: (ms: number) => Promise<void>
   echoLogs?: boolean
 }
 
@@ -47,6 +55,9 @@ export class Core {
   readonly engines: EngineRegistry
   readonly connectors: Connectors
   readonly browser: BrowserService
+  readonly secrets: SecretStore
+  readonly clipboard: SecretClipboard | null
+  readonly sleep: (ms: number) => Promise<void>
   readonly tickets: TicketAuthority
   readonly router = new ApiRouter()
   readonly services: CoreServices = {}
@@ -71,6 +82,9 @@ export class Core {
     this.engines = new EngineRegistry(deps.engines, this.settings)
     this.connectors = new Connectors(deps.connectors)
     this.tickets = new TicketAuthority(this.clock, deps.secret)
+    this.secrets = deps.secrets ?? new UnavailableSecretStore()
+    this.clipboard = deps.clipboard ?? null
+    this.sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
     this.browser = typeof deps.browser === 'function' ? deps.browser(this.tickets) : deps.browser
     registerModules(this)
   }

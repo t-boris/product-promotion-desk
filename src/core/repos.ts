@@ -70,7 +70,9 @@ export const mapAccount = (r: Row): Account => ({
   // accounts.product_id is added by the channels migration (DEC-009); null means unassigned.
   productId: (r.product_id as string | null | undefined) ?? null,
   // accounts.role_name / role_voice come with the DEC-010 channels migration; both empty means no role.
-  role: r.role_name ? { name: r.role_name as string, voice: (r.role_voice as string | null | undefined) ?? '' } : null
+  role: r.role_name ? { name: r.role_name as string, voice: (r.role_voice as string | null | undefined) ?? '' } : null,
+  // accounts.login_name comes with the DEC-014 channels migration.
+  loginName: (r.login_name as string | null | undefined) ?? null
 })
 
 export const mapChannel = (r: Row): Channel => ({

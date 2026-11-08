@@ -5,6 +5,8 @@
 import type {
   Account,
   AccountRole,
+  SignInResult,
+  VaultStatus,
   AppInfo,
   AppSettings,
   AttentionItem,
@@ -121,6 +123,17 @@ export interface ApiMethods {
   'accounts.takeControl': [{ accountId: Id }, void]
   'accounts.releaseControl': [{ accountId: Id }, void]
   'accounts.checkLogin': [{ accountId: Id }, Account]
+  // credential vault and assisted sign-in (REQ-012, DEC-014). No result ever carries a password except revealPassword, which the web mode refuses.
+  'vault.status': [void, VaultStatus]
+  /** Saves the login name and the password of an account. The password goes only to the vault, encrypted by the system keychain. */
+  'vault.savePassword': [{ accountId: Id; loginName: string; password: string }, Account]
+  'vault.removePassword': [{ accountId: Id }, Account]
+  /** Local only: the saved password, for the owner to read. */
+  'vault.revealPassword': [{ accountId: Id }, { password: string }]
+  /** Local only: puts the saved password on the clipboard and clears it after 30 seconds. */
+  'vault.copyPassword': [{ accountId: Id }, void]
+  /** Fills the sign-in form of the account's own browser with the saved password, once. A check or an unexpected page stops it. */
+  'accounts.signIn': [{ accountId: Id }, SignInResult]
   'channels.list': [{ productId?: Id } | undefined, Channel[]]
   /**
    * Fails with `account_other_product` when the account belongs to another product unless `reuseAccount` is true
@@ -178,6 +191,9 @@ export interface ApiMethods {
 }
 
 export type ApiMethod = keyof ApiMethods
+
+/** Methods that return a secret: served over Electron IPC only, never over the loopback web mode (DEC-014). */
+export const LOCAL_ONLY_METHODS: ReadonlySet<string> = new Set<ApiMethod>(['vault.revealPassword', 'vault.copyPassword'])
 export type ApiArgs<M extends ApiMethod> = ApiMethods[M][0]
 export type ApiResult<M extends ApiMethod> = ApiMethods[M][1]
 

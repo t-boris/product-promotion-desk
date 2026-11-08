@@ -136,3 +136,34 @@ Owner request: "more channels than Reddit, Instagram, Facebook, TikTok at least;
 
 Review: the real model answered in the language of the product data (Russian); the labels around the plan stay English.
 
+
+## PLAN (awaiting approval): credential vault, mailboxes and a sign-up assistant (DEC-014, REQ-012..014)
+
+Owner request (2026-11-08): create new accounts mostly; keep passwords and log in automatically; suggest, or even make, an email address for a new account, and let the application read that mailbox and watch its state. Chosen with the owner: system-keychain vault with auto-fill; existing mailbox with aliases AND addresses on the owner's own domain; sign-up assistant where the app fills in and the owner passes the checks. NOT built: fully automatic creation of mailboxes or platform accounts (CAPTCHA and phone checks are anti-abuse measures; getting around them is mass account creation and gets accounts banned).
+
+### What changes in the recorded design (needs a new decision)
+
+DEC-008, REQ-002 and REQ-010 say "no credentials are requested or stored by the assistant; login happens on the site's own page". DEC-014 supersedes that line only: credentials may be stored, but only in the vault below, and the other limits stay (nothing is sent without approval, CAPTCHA/2FA go to the owner).
+
+### Design
+
+- Port `SecretStore` in `core/ports.ts` (`has/get/set/delete`, `available()`), Electron implementation with `safeStorage` (key in the macOS Keychain) writing one encrypted file `vault.bin` in the user data folder, in-memory fake for tests. Core keeps no Electron imports. Without `safeStorage` (web mode, no keychain) the vault is "unavailable" and says so; nothing is stored in plain text.
+- The database holds only non-secret facts: migration 204 adds `accounts.login_name` and `accounts.mailbox_id`; migration 205 adds `mailboxes` (address, provider, IMAP host/port, kind `existing|domain`, status, last_checked_at). Passwords and mailbox secrets live in the vault under `account:<id>` and `mailbox:<id>`.
+- Secrets never leave the main process: not in `accounts.list`, events, logs (the logger redacts known secret values), the loopback web API (which gets "has password" only), AI prompts, backups or exports. The owner may reveal a password with an explicit button; the clipboard copy is cleared after 30 seconds.
+- Auto-fill: `BrowserService.fillLogin(account)` runs on the account's own browser partition only, only on a page whose host belongs to the platform (presets/hosts), submits once, and stops when a CAPTCHA, a second factor or an error appears and hands control to the owner (existing hand-off). At most one automatic attempt per account per hour, so a wrong password cannot lock the account.
+- Mailboxes: read-only IMAP (`imapflow`; message text needs a parser, see 0.3.0) with an app password (Gmail with 2-step verification, iCloud, Fastmail, any IMAP host); status check; aliases `name+platform@gmail.com`; domain addresses by catch-all forwarding set once at the owner's mail provider (no API needed: the app proposes `instagram@yourdomain` and reads it through the connected mailbox). Verification mail: only messages to the account's address, received after the sign-up started, only the code or link is extracted and shown; links are never opened on their own; mail text is data and never reaches the AI.
+- Sign-up assistant: per platform `signupUrl`; the wizard proposes an address and a username (reusing the role ideas), generates a password (CSPRNG, 20 characters), opens the sign-up page in the account browser, fills in e-mail, username and password by standard field hints (`autocomplete=email|username|new-password`), puts the verification code in when the mailbox has it, and saves the credentials in the vault only after the owner confirms the account exists. CAPTCHA, phone and birth date are the owner's.
+
+### Releases (each straight to `main`, as agreed for bootstrapping)
+
+- [x] 0.2.0 Vault and login (DEC-014, REQ-012): `SecretStore` port, `FileVault` over Electron `safeStorage` (`vault.bin`, 0600, one encrypted value per key), migration 204, "Password" box on every account (save, generate, show, copy, change, remove, "Sign in with saved password"), automatic sign-in once an hour when a check finds the account signed out, `BrowserPage.signIn` (the page itself checks the host and https; answers with a status only), `LOCAL_ONLY_METHODS` (reveal and copy refused by the web mode), timed clipboard, on-screen wording corrected, REQ-010 criterion corrected. Checked: 1280 tests; the sign-in script on live pages in Chromium (combined form, two-step, shadow DOM, CAPTCHA, wrong host, hidden or invalid form); the keychain with a build of a different signature (no prompt); the dummy password found nowhere in the data folder, database or log; 12-screen sweep (406 buttons, label tops equal). NOT checked: a real sign-in on Reddit or any other platform (the script is a best-effort reading of standard field hints), "Show" and "Copy" in the real window (only the loopback refusal and the core were exercised), and the clipboard clearing on the real clipboard.
+- [ ] 0.3.0 Mailboxes and one inbox (REQ-013; owner request added during 0.2.0): migrations 205 (mailboxes) and 206 (mail_messages: headers and a preview without codes and links; no bodies stored), IMAP connection test and status, aliases, an "Inbox" screen for all accounts (filter by account and platform, new marker), a plain-text reader that fetches the body on open, "Open in browser" (Gmail: direct link by message id; others: the webmail address the owner gives), verification code lookup, tests against a fake IMAP server. Only mail to an address the app proposed for an account, or from a platform the owner has an account on, is read into the app. NEEDS APPROVAL before this release: a mail parser dependency (mailparser) next to imapflow.
+- [ ] 0.4.0 Sign-up assistant and domain addresses: REQ-014, per-platform sign-up URLs, wizard, tests with fake pages.
+
+### Risks to settle early
+
+1. Keychain prompts: the app is ad-hoc signed and its signature changes with every build, so macOS may ask for Keychain access again after each update, and a "Deny" makes the vault unreadable. Spike first in 0.2.0: install two successive builds and check what the owner sees. If it is unusable: keep the vault key in a file protected by a master password the owner types once per launch.
+2. Outlook/Hotmail personal mailboxes no longer allow app passwords for IMAP (OAuth only); not supported in 0.3.0, and the form says so.
+3. Some platforms reject `+` aliases; then use a domain address.
+4. Auto-fill depends on how a site marks its fields; it will break when a site changes. The copy buttons are the fallback.
+5. Platforms may treat automated login and sign-up as a policy breach; the app keeps to one attempt, the owner's browser profile and the owner passing every check.

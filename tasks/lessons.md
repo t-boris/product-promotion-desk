@@ -91,3 +91,15 @@
 27. An AI feature is checked once with the real engine, not only with the scripted one: the scripted engine proves the parser, only a real answer proves the prompt. The real run showed the plan follows the language of the product data.
 28. When a catalog gets new entries, tests that assert the whole list are updated for what they meant (prepared first, universal last), not just for the new values.
 
+## 2026-11-08 (later): passwords and mail
+
+**What happened.** The owner asked for stored passwords, automatic sign-in, e-mail addresses for new accounts and one inbox for all mail. That reversed a recorded principle (DEC-008, REQ-010: no credentials are stored) and asked for things a platform treats as abuse (creating mailboxes and accounts automatically).
+
+**Rules for myself.**
+
+29. When the owner reverses a recorded principle, first find every place that states it (spec records, on-screen text, code comments) and write one decision that replaces it, naming what stays. Here the old rule was also written on two screens and in a ticked criterion.
+30. A feature that handles secrets is proven by looking for the secret where it must not be (database, log, files, API results, error messages), not by reading the code. The check searches the whole data folder for the dummy password.
+31. Say plainly, before building, what will not be built and why (automatic sign-up needs getting around CAPTCHA and phone checks), and offer what works instead (assisted sign-up, aliases, an address on the owner's own domain).
+32. A script that carries a secret never lets its error out: the page operation catches everything and reports in fixed words.
+33. A test page that cannot be reached over https gets the https check lifted in the test server only, never in the shipped script.
+

@@ -5,8 +5,9 @@ import { stat } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
 import type { WebContents } from 'electron'
 import type { RawPage } from '../core/browser-session'
+import type { SignInForm, SignInStatus } from '../core/ports'
 import { pollUntil, withTimeout } from './poll'
-import { clickScript, describeFailure, existsScript, fileInputScript, fillScript, type ActionResult } from './page-scripts'
+import { clickScript, describeFailure, existsScript, fileInputScript, fillScript, signInScript, type ActionResult } from './page-scripts'
 import { isAbortedNavigation, normalizeBrowserUrl } from './targets'
 
 const DEFAULT_LOAD_TIMEOUT_MS = 30_000
@@ -91,6 +92,22 @@ export class ElectronRawPage implements RawPage {
   async click(selector: string): Promise<void> {
     const result = await this.read<ActionResult | null>(clickScript(selector))
     if (!result?.ok) throw describeFailure('click', selector, result)
+  }
+
+  /**
+   * Fills the sign-in form (DEC-014). The script carries the password, so an error is never passed on with the script's own
+   * text: whatever goes wrong is reported in words that cannot contain the credentials.
+   */
+  async signIn(form: SignInForm): Promise<{ status: SignInStatus }> {
+    let result: { status?: SignInStatus } | null
+    try {
+      result = await this.read<{ status?: SignInStatus } | null>(signInScript(form))
+    } catch {
+      throw new Error('The sign-in page did not answer.')
+    }
+    const status = result?.status
+    if (status !== 'submitted' && status !== 'next_step' && status !== 'no_form' && status !== 'captcha' && status !== 'wrong_host') throw new Error('The sign-in page gave no usable answer.')
+    return { status }
   }
 
   /** Sets the files of an <input type=file> through the DevTools protocol (a script cannot do this). */

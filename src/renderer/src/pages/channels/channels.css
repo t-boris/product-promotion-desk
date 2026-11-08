@@ -130,3 +130,31 @@ textarea.input.short {
   flex-direction: column;
   gap: 8px;
 }
+
+/* The saved password of an account (DEC-014): a quiet box under the account's sign-in controls. */
+.password-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.password-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.secret-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--fs-md);
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--panel-2);
+  user-select: all;
+  overflow-wrap: anywhere;
+}
+

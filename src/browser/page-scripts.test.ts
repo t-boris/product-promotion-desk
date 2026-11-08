@@ -1,6 +1,6 @@
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
-import { clickScript, describeFailure, existsScript, fileInputScript, fillScript } from './page-scripts'
+import { clickScript, describeFailure, existsScript, fileInputScript, fillScript, signInScript } from './page-scripts'
 
 // A tiny DOM: enough to run the injected scripts and observe what they do.
 class FakeEvent {
@@ -155,5 +155,30 @@ describe('failure descriptions', () => {
   it('names the action, the selector and the reason', () => {
     expect(describeFailure('fill', '#x', { ok: false, reason: 'not_found' }).message).toBe('Could not fill "#x": the element was not found.')
     expect(describeFailure('click', '#y', null).message).toMatch(/returned no result/)
+  })
+})
+
+describe('signInScript (DEC-014)', () => {
+  const form = { username: 'natal_bot', password: 'S3cret-Pa$$w0rd!', hosts: ['reddit.com'] }
+
+  it('is valid JavaScript for any password, even one made to break out of a string', () => {
+    for (const password of ['a"b', "a'b", 'a`${x}`b', 'a\\b', 'a</script><script>alert(1)</script>', 'line\u2028sep', 'p'.repeat(256)]) {
+      expect(() => new Function(`return ${signInScript({ ...form, password })}`)).not.toThrow()
+    }
+  })
+
+  it('checks where it is before it touches any field', () => {
+    const script = signInScript(form)
+    const guard = script.indexOf("status: 'wrong_host'")
+    expect(guard).toBeGreaterThan(-1)
+    for (const touch of ['set(user', 'set(pass', '.click()', 'requestSubmit']) expect(script.indexOf(touch)).toBeGreaterThan(guard)
+    expect(script).toContain("location.protocol !== 'https:'")
+    expect(script).toContain('window.top !== window')
+  })
+
+  it('answers with a status only, never with a value', () => {
+    const answers = [...signInScript(form).matchAll(/return \{ ([^}]*) \}/g)].map((m) => m[1])
+    expect(answers.length).toBeGreaterThan(0)
+    for (const answer of answers) expect(answer).toMatch(/^status: /)
   })
 })

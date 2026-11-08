@@ -56,6 +56,21 @@ describe('web mode server', () => {
     expect(JSON.parse(res.body)).toMatchObject({ ok: true, result: { version: '0.0.0-test' } })
   })
 
+  it('never serves a saved password, even to a client with the token (DEC-014)', async () => {
+    const productId = 'p1'
+    t.core.db.prepare('INSERT INTO products (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)').run(productId, 'Natal Mystic', '2026-11-08T00:00:00Z', '2026-11-08T00:00:00Z')
+    const account = await t.core.router.call('accounts.create', { productId, platform: 'web', label: 'x' }).catch(() => null)
+    const accountId = account?.id ?? 'any'
+    for (const method of ['vault.revealPassword', 'vault.copyPassword']) {
+      const res = await http(server.port, { method: 'POST', path: `/api/${method}`, headers: { [WEB_TOKEN_HEADER]: TOKEN }, body: { args: { accountId } } })
+      expect(res.status).toBe(403)
+      expect(JSON.parse(res.body)).toMatchObject({ ok: false, error: { code: 'local_only' } })
+    }
+    // What a web client may ask is only whether passwords exist.
+    const status = await http(server.port, { method: 'POST', path: '/api/vault.status', headers: { [WEB_TOKEN_HEADER]: TOKEN }, body: {} })
+    expect(JSON.parse(status.body)).toMatchObject({ ok: true, result: { available: true, accountIds: [] } })
+  })
+
   it('rejects foreign Host headers (DNS rebinding) and foreign Origins', async () => {
     const host = await http(server.port, { method: 'POST', path: '/api/app.info', headers: { host: 'evil.example:80', [WEB_TOKEN_HEADER]: TOKEN }, body: {} })
     expect(host.status).toBe(403)

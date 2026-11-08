@@ -101,7 +101,38 @@ export class TakeoverError extends Error {
   }
 }
 
+/** What the sign-in step needs: the credentials and the hosts of the platform whose page may receive them. */
+export interface SignInForm {
+  username: string
+  password: string
+  /** Only a page on one of these hosts (or a subdomain) is filled; anything else is refused inside the page itself. */
+  hosts: string[]
+}
+
+export type SignInStatus = 'submitted' | 'next_step' | 'no_form' | 'captcha' | 'wrong_host'
+
+/** Where passwords are kept (DEC-014): encrypted by the operating system, never in the database. The core never sees how. */
+export interface SecretStore {
+  /** False when the system cannot encrypt: nothing can then be stored. */
+  available(): boolean
+  has(key: string): boolean
+  get(key: string): string | null
+  /** Throws if the vault is unavailable; nothing is ever stored in plain text. */
+  set(key: string, value: string): void
+  delete(key: string): void
+}
+
+/** Puts a secret on the clipboard for a limited time. Supplied by the main process. */
+export interface SecretClipboard {
+  copy(text: string, clearAfterMs: number): void
+}
+
 export interface BrowserPage {
+  /**
+   * Fills the sign-in form with the credentials and submits it once. It is the only write-class operation that needs no
+   * SendTicket: it publishes nothing, only the vault's owner reaches it, and it refuses a page outside `form.hosts`.
+   */
+  signIn(form: SignInForm): Promise<{ status: SignInStatus }>
   goto(url: string, options?: { timeoutMs?: number }): Promise<void>
   url(): Promise<string>
   /** Evaluates a read-only script in the page and returns its JSON-serializable result. */

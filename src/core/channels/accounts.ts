@@ -9,9 +9,10 @@ import type { BrowserService, Connector, ConnectorContext } from '../ports'
 import { browserError, found, requireText } from './errors'
 import { loginOutcome } from './login'
 import { connectorForPlatform, listPlatforms } from './platforms'
-import { presetFor } from './presets'
+import { hostMatches, presetFor } from './presets'
 import { parseRole, sameRoleName } from './roles'
 import { blankCapabilities } from './capabilities'
+import { passwordKey } from '../vault'
 import type { ChannelsStore } from './store'
 import { parseBrowserUrl } from './urls'
 
@@ -37,6 +38,9 @@ const hasOpenUserWindow = (service: BrowserService, account: Account): boolean =
 }
 
 export class AccountsService {
+  /** Called when a check finds an account signed out, so a saved password can sign it in again (DEC-014). */
+  onSignedOut: ((account: Account) => void) | null = null
+
   constructor(
     private readonly core: Core,
     private readonly store: ChannelsStore
@@ -110,6 +114,8 @@ export class AccountsService {
       }
     }
     this.store.deleteAccount(account.id)
+    // The password goes with the account: a removed account leaves nothing in the vault.
+    this.core.secrets.delete(passwordKey(account.id))
     this.core.log.info('accounts', `Account removed: ${account.label}. Its stored browser session was erased.`)
     this.core.events.changed('accounts', 'attention')
   }
@@ -127,6 +133,16 @@ export class AccountsService {
     const channel = this.store.channelsOfAccount(account.id)[0]
     if (channel) return channel.url
     throw new ApiError('invalid_input', 'Enter the address of the site to open: this kind of account has no standard sign-in page.')
+  }
+
+  /** The page to sign in on and the hosts it may be on: a password is only ever put on a page of the account's own platform. */
+  signInTarget(account: Account): { url: string; hosts: string[] } {
+    const url = parseBrowserUrl(this.defaultUrl(account))
+    const preset = presetFor(account.platform)
+    const own = new URL(url).hostname.replace(/^www\./, '')
+    const hosts = preset ? [...preset.hosts] : [own]
+    if (!hostMatches(own, hosts)) hosts.push(own)
+    return { url, hosts }
   }
 
   async openBrowser(args: { accountId: string; url?: string }): Promise<{ tabId: string }> {
@@ -245,6 +261,7 @@ export class AccountsService {
     }
     if (switched) this.core.events.changed('channels')
     this.core.events.changed('accounts', 'attention')
+    if (updated.status === 'login_required') this.onSignedOut?.(updated)
     return updated
   }
 }

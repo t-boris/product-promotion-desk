@@ -53,6 +53,22 @@ export class ChannelsStore {
     return this.repos.account(id)
   }
 
+  /** The name the account signs in with; not a secret (the password is only in the vault). */
+  setLoginName(id: string, loginName: string | null): Account {
+    this.db.prepare('UPDATE accounts SET login_name = ? WHERE id = ?').run(loginName, id)
+    return this.repos.account(id)
+  }
+
+  /** When a sign-in with the saved password was last tried, or null. Limits automatic sign-ins to one per hour. */
+  lastLoginAttempt(id: string): string | null {
+    const row = this.db.prepare('SELECT last_login_attempt_at AS v FROM accounts WHERE id = ?').get(id) as { v: string | null } | undefined
+    return row?.v ?? null
+  }
+
+  markLoginAttempt(id: string, at: string): void {
+    this.db.prepare('UPDATE accounts SET last_login_attempt_at = ? WHERE id = ?').run(at, id)
+  }
+
   deleteAccount(id: string): void {
     this.db.prepare('DELETE FROM accounts WHERE id = ?').run(id)
   }

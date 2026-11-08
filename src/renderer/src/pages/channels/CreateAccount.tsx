@@ -68,7 +68,7 @@ export function CreateAccount({ productId, platforms, prefill }: { productId: st
         {state.busy ? 'Adding…' : 'Add account'}
       </Button>
       <p className="muted small" data-testid="account-create-note">
-        You create the real login on the platform yourself. The app never registers accounts and never sees your password.
+        You create the real login on the platform yourself: the app does not register accounts for you. Once it exists, save its password under the account so the app can sign it in.
       </p>
       <ErrorNote error={state.error} />
     </form>

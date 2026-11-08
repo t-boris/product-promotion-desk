@@ -89,3 +89,85 @@ export function describeFailure(action: string, selector: string, result: Action
   }
   return new Error(`Could not ${action} "${selector}": ${why[reason] ?? reason}.`)
 }
+
+/**
+ * Fills the sign-in form of the page and submits it once (DEC-014). The credentials and the allowed hosts are JSON literals.
+ * The page itself checks where it is before touching a field: a top-level https page on one of the hosts, nothing else, so a
+ * redirect between the check made by the caller and this script cannot send the password anywhere. It answers with a
+ * status only, never with a value.
+ *
+ * Forms differ: one page may ask for the name and the password together, another asks for the name first and the password
+ * on the next step (answered with `next_step`, and the caller runs it again). Fields are recognized by their standard
+ * hints (`type`, `autocomplete`, `name`), and open shadow roots are searched too.
+ */
+export function signInScript(form: { username: string; password: string; hosts: string[] }): string {
+  return `(() => {
+  const hosts = ${JSON.stringify(form.hosts)};
+  const username = ${JSON.stringify(form.username)};
+  const password = ${JSON.stringify(form.password)};
+  if (window.top !== window || location.protocol !== 'https:') return { status: 'wrong_host' };
+  const host = location.hostname.toLowerCase();
+  if (!hosts.some((h) => host === h || host.endsWith('.' + h))) return { status: 'wrong_host' };
+
+  const all = (selector, root) => {
+    const found = [...root.querySelectorAll(selector)];
+    for (const el of root.querySelectorAll('*')) if (el.shadowRoot) found.push(...all(selector, el.shadowRoot));
+    return found;
+  };
+  const shown = (el) => {
+    const r = el.getBoundingClientRect();
+    const s = getComputedStyle(el);
+    return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none';
+  };
+  const usable = (el) => shown(el) && !el.disabled && !el.readOnly;
+  const set = (el, value) => {
+    el.scrollIntoView({ block: 'center' });
+    el.focus();
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, value);
+    el.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, inputType: 'insertText', data: value }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    return el.value === value;
+  };
+
+  if (all('iframe[src*="recaptcha"], iframe[src*="hcaptcha"], iframe[src*="arkoselabs"], iframe[src*="challenges.cloudflare.com"], .g-recaptcha, .h-captcha, [data-sitekey]', document).some(shown)) {
+    return { status: 'captcha' };
+  }
+
+  const inputs = all('input', document).filter(usable);
+  const pass = inputs.find((i) => i.type === 'password');
+  const textual = (i) => ['text', 'email', 'tel', ''].includes(i.type) && !/search|query|captcha|otp|code|zip|postal/i.test((i.name || '') + ' ' + (i.id || '') + ' ' + (i.getAttribute('aria-label') || ''));
+  const named = (i) => /username|email|login|user|identifier|phone/i.test((i.autocomplete || '') + ' ' + (i.name || '') + ' ' + (i.id || '') + ' ' + i.type);
+  let candidates = inputs.filter(textual);
+  if (pass) {
+    const scope = pass.form ? candidates.filter((i) => i.form === pass.form) : candidates;
+    candidates = scope.filter((i) => i.compareDocumentPosition(pass) & Node.DOCUMENT_POSITION_FOLLOWING);
+  }
+  const user = candidates.find(named) || candidates[candidates.length - 1];
+
+  const submit = (container) => {
+    // A form the browser itself would refuse to send (a required or malformed field) is left to the owner.
+    if (container && container.checkValidity && !container.checkValidity()) return false;
+    const buttons = all('button, input[type=submit], [role=button]', container || document).filter(usable);
+    const label = (b) => ((b.innerText || b.value || b.getAttribute('aria-label') || '') + '').trim();
+    const wanted = buttons.find((b) => b.type === 'submit' && !/google|apple|facebook|microsoft|forgot|sign ?up|register|create/i.test(label(b)))
+      || buttons.find((b) => /^(log ?in|sign ?in|continue|next|submit)\\b/i.test(label(b)) && !/google|apple|facebook|microsoft/i.test(label(b)));
+    if (wanted) {
+      wanted.click();
+    } else if (container && container.requestSubmit) {
+      container.requestSubmit();
+    } else {
+      return false;
+    }
+    return true;
+  };
+
+  if (!pass) {
+    if (!user || !named(user)) return { status: 'no_form' };
+    if (!set(user, username)) return { status: 'no_form' };
+    return { status: submit(user.form) ? 'next_step' : 'no_form' };
+  }
+  if (user && !set(user, username)) return { status: 'no_form' };
+  if (!set(pass, password)) return { status: 'no_form' };
+  return { status: submit(pass.form) ? 'submitted' : 'no_form' };
+})()`
+}

@@ -182,6 +182,22 @@ export interface Account {
    * means no role: drafts use the channel's reply style. A role never presents itself as an independent user.
    */
   role: AccountRole | null
+  /** The name or e-mail the account signs in with (DEC-014). Not a secret; the password is only in the vault. */
+  loginName: string | null
+}
+
+/** What the vault holds, without any secret: whether it can encrypt, and which accounts have a password saved (DEC-014). */
+export interface VaultStatus {
+  available: boolean
+  accountIds: Id[]
+}
+
+/** The result of "Sign in with saved password" (DEC-014). */
+export interface SignInResult {
+  account: Account
+  /** `signed_in`: the site confirmed the sign-in. `needs_you`: a check or a changed page needs the owner in the account browser. */
+  outcome: 'signed_in' | 'needs_you'
+  detail: string
 }
 
 export interface AccountRole {

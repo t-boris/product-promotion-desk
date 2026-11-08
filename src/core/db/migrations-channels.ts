@@ -45,5 +45,15 @@ ALTER TABLE accounts ADD COLUMN role_voice TEXT;
 -- The plan is advice kept as JSON; nothing in it is executed. NULL until the owner asks for one.
 ALTER TABLE channels ADD COLUMN plan_json TEXT;
 `
+  },
+  {
+    id: 204,
+    name: 'channels: sign-in name and last sign-in attempt of an account (DEC-014)',
+    sql: `
+-- The login name is not a secret. The password is never in the database: it lives in the vault file, encrypted by the
+-- system keychain. last_login_attempt_at limits automatic sign-ins to one per account per hour.
+ALTER TABLE accounts ADD COLUMN login_name TEXT;
+ALTER TABLE accounts ADD COLUMN last_login_attempt_at TEXT;
+`
   }
 ]

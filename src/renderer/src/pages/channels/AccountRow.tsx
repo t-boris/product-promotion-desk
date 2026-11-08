@@ -1,12 +1,23 @@
 import { useState } from 'react'
-import type { Account, PlatformInfo } from '../../../../shared/types'
+import type { Account, PlatformInfo, VaultStatus } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
 import { Badge, Button, ErrorNote } from '../../ui'
 import { ACCOUNT_STATUS_LABEL, ACCOUNT_STATUS_TONE, platformLabel } from './model'
+import { AccountPassword } from './AccountPassword'
 import { RoleEditor } from './RoleEditor'
 
 /** One account: its sign-in state and the controls for the browser hand-off. */
-export function AccountRow({ account, channelCount, platforms }: { account: Account; channelCount: number; platforms: PlatformInfo[] }) {
+export function AccountRow({
+  account,
+  channelCount,
+  platforms,
+  vault
+}: {
+  account: Account
+  channelCount: number
+  platforms: PlatformInfo[]
+  vault: VaultStatus | undefined
+}) {
   const [address, setAddress] = useState('')
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [open, opening] = useAction(() => call('accounts.openBrowser', { accountId: account.id, ...(address.trim() ? { url: address.trim() } : {}) }))
@@ -43,6 +54,7 @@ export function AccountRow({ account, channelCount, platforms }: { account: Acco
           </Button>
         </div>
       </div>
+      {vault && <AccountPassword account={account} vaultAvailable={vault.available} hasPassword={vault.accountIds.includes(account.id)} />}
       <RoleEditor account={account} />
       <div className="row">
         <Button onClick={() => void take()} disabled={taking.busy} data-testid={`account-take-${account.id}`} title="Stops the app from using this browser until you give it back">

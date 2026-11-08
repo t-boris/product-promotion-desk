@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { BrowserWindow, app, ipcMain, powerMonitor, shell } from 'electron'
+import { BrowserWindow, app, clipboard, ipcMain, powerMonitor, safeStorage, shell } from 'electron'
 import { ApiError, IPC_EVENT, IPC_INVOKE, type ApiMethod } from '../shared/api'
 import { createEngines } from '../ai'
 import { ElectronBrowserService } from '../browser/electron-browser-service'
@@ -9,6 +9,7 @@ import { getAutomation, startAutomation } from '../core/pipeline'
 import { installLifecycle } from './lifecycle'
 import { createNotificationSink } from './notifications'
 import { createTray } from './tray'
+import { FileVault, TimedClipboard } from './vault'
 import { WebModeController } from './web-mode'
 
 app.setName('Product Promotion Desk')
@@ -31,6 +32,9 @@ async function start(): Promise<void> {
     engines: createEngines(),
     browser: (tickets) => new ElectronBrowserService(tickets),
     connectors: createConnectors(),
+    // Passwords: encrypted by the system keychain, in a file of their own next to the database (DEC-014).
+    secrets: new FileVault(join(dataDir, 'vault.bin'), safeStorage),
+    clipboard: new TimedClipboard({ writeText: (text) => clipboard.writeText(text), readText: () => clipboard.readText() }),
     echoLogs: !app.isPackaged
   })
 

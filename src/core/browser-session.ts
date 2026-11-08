@@ -3,6 +3,8 @@ import {
   type BrowserPage,
   type BrowserSession,
   type SendTicket,
+  type SignInForm,
+  type SignInStatus,
   type TicketVerifier
 } from './ports'
 
@@ -15,6 +17,7 @@ export interface RawPage {
   fill(selector: string, text: string): Promise<void>
   click(selector: string): Promise<void>
   uploadFile(selector: string, path: string): Promise<void>
+  signIn(form: SignInForm): Promise<{ status: SignInStatus }>
 }
 
 /**
@@ -97,7 +100,8 @@ export class ControlledSession implements BrowserSession {
       waitForSelector: async (selector, timeoutMs) => (alive(), raw.waitForSelector(selector, timeoutMs)),
       fill: async (selector, text, ticket) => (authorized(ticket), alive(), raw.fill(selector, text)),
       click: async (selector, ticket) => (authorized(ticket), alive(), raw.click(selector)),
-      uploadFile: async (selector, path, ticket) => (authorized(ticket), alive(), raw.uploadFile(selector, path))
+      uploadFile: async (selector, path, ticket) => (authorized(ticket), alive(), raw.uploadFile(selector, path)),
+      signIn: async (form) => (alive(), raw.signIn(form))
     }
   }
 }

@@ -13,8 +13,10 @@ import { ChannelPlanService } from './plan'
 import { listPlatforms } from './platforms'
 import { ProfileService } from './profiles'
 import { RoleSuggestionService } from './roles'
+import { SignInService } from './sign-in'
 import { ChannelsStore } from './store'
 import { SuggestionService } from './suggestions'
+import { VaultService } from './vault'
 
 /** Connectors that keep data in the application database (the universal connector's site profiles) opt in with this. */
 interface StorageUser {
@@ -35,6 +37,10 @@ export function register(core: Core): void {
   const suggestions = new SuggestionService(core, { suggestChannels })
   const roles = new RoleSuggestionService(core, { suggestRoles })
   const plans = new ChannelPlanService(core, { planChannel }, store)
+  const vault = new VaultService(core, accounts, store)
+  const signIn = new SignInService(core, accounts, vault, store)
+  // An account found signed out gets one try with its saved password (DEC-014), without holding up the check that found it.
+  accounts.onSignedOut = (account) => void signIn.maybeAutomatic(account)
 
   core.services.channels = {
     markCapabilityVerified: (channelId, key, detail) => channels.markCapabilityVerified(channelId, key, detail)
@@ -51,6 +57,12 @@ export function register(core: Core): void {
     'accounts.takeControl': (args) => accounts.takeControl(args.accountId),
     'accounts.releaseControl': (args) => accounts.releaseControl(args.accountId),
     'accounts.checkLogin': (args) => accounts.checkLogin(args.accountId),
+    'accounts.signIn': (args) => signIn.signIn(args.accountId),
+    'vault.status': () => vault.status(),
+    'vault.savePassword': (args) => vault.savePassword(args),
+    'vault.removePassword': (args) => vault.removePassword(args.accountId),
+    'vault.revealPassword': (args) => vault.reveal(args.accountId),
+    'vault.copyPassword': (args) => vault.copy(args.accountId),
     'channels.list': (args) => channels.list(args),
     'channels.connect': (args) => channels.connect(args),
     'channels.assess': (args) => channels.assess(args.channelId),

@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { readFile, stat } from 'node:fs/promises'
 import { extname, join, normalize, sep } from 'node:path'
-import { ApiError, WEB_TOKEN_HEADER, type ApiEvent, type ApiMethod } from '../shared/api'
+import { ApiError, LOCAL_ONLY_METHODS, WEB_TOKEN_HEADER, type ApiEvent, type ApiMethod } from '../shared/api'
 import type { Core } from '../core/core'
 
 const MAX_BODY = 5 * 1024 * 1024
@@ -94,6 +94,8 @@ export async function startWebServer(options: WebServerOptions): Promise<Running
       const given = req.headers[WEB_TOKEN_HEADER]
       if (!tokenMatches(Array.isArray(given) ? given[0] : given, token)) return send(res, 401, { ok: false, error: { code: 'unauthorized', message: 'Missing or wrong token' } })
       const method = url.pathname.slice('/api/'.length) as ApiMethod
+      // A secret never travels over the loopback web mode (DEC-014); only the Electron window may ask for it.
+      if (LOCAL_ONLY_METHODS.has(method)) return send(res, 403, { ok: false, error: { code: 'local_only', message: 'This is only available in the application window.' } }, { 'content-type': 'application/json' })
       const raw = await readBody(req)
       let args: unknown
       try {

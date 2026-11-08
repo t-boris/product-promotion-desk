@@ -14,8 +14,41 @@ import {
   type BrowserService,
   type BrowserSession,
   type Clock,
-  type Connector
+  type Connector,
+  type SecretClipboard,
+  type SecretStore,
+  type SignInForm,
+  type SignInStatus
 } from '../ports'
+
+/** A vault in memory, for tests. `encryptable = false` plays a system whose keychain cannot encrypt. */
+export class MemorySecretStore implements SecretStore {
+  readonly values = new Map<string, string>()
+  encryptable = true
+  available(): boolean {
+    return this.encryptable
+  }
+  has(key: string): boolean {
+    return this.encryptable && this.values.has(key)
+  }
+  get(key: string): string | null {
+    return this.encryptable ? (this.values.get(key) ?? null) : null
+  }
+  set(key: string, value: string): void {
+    if (!this.encryptable) throw new Error('The password vault is not available on this system.')
+    this.values.set(key, value)
+  }
+  delete(key: string): void {
+    this.values.delete(key)
+  }
+}
+
+export class FakeClipboard implements SecretClipboard {
+  readonly copies: { text: string; clearAfterMs: number }[] = []
+  copy(text: string, clearAfterMs: number): void {
+    this.copies.push({ text, clearAfterMs })
+  }
+}
 
 export class FakeClock implements Clock {
   constructor(private current: Date = new Date('2026-11-08T12:00:00.000Z')) {}
@@ -106,6 +139,14 @@ export class FakePage implements RawPage {
   async uploadFile(selector: string, path: string): Promise<void> {
     this.log.push(`upload ${selector} ${path}`)
   }
+  /** What the sign-in step received (the password is deliberately kept out of `log`), and the statuses it answers with, in order. */
+  readonly signIns: SignInForm[] = []
+  signInAnswers: SignInStatus[] = ['submitted']
+  async signIn(form: SignInForm): Promise<{ status: SignInStatus }> {
+    this.log.push(`signIn ${form.username} on ${form.hosts.join(',')}`)
+    this.signIns.push(form)
+    return { status: this.signInAnswers.length > 1 ? (this.signInAnswers.shift() as SignInStatus) : (this.signInAnswers[0] ?? 'submitted') }
+  }
 }
 
 export class FakeBrowserService implements BrowserService {
@@ -149,6 +190,8 @@ export interface TestCore {
   clock: FakeClock
   engine: FakeEngine
   browser: FakeBrowserService
+  secrets: MemorySecretStore
+  clipboard: FakeClipboard
 }
 
 /** In-memory core with a fake clock, a scripted AI engine and a fake browser. */
@@ -156,6 +199,8 @@ export function makeTestCore(overrides: Partial<CoreDeps> & { connectors?: Conne
   const clock = new FakeClock()
   const engine = new FakeEngine()
   const browser = new FakeBrowserService()
+  const secrets = new MemorySecretStore()
+  const clipboard = new FakeClipboard()
   const core = new Core({
     dbPath: ':memory:',
     dataDir: mkdtempSync(join(tmpdir(), 'ppd-test-')),
@@ -164,9 +209,12 @@ export function makeTestCore(overrides: Partial<CoreDeps> & { connectors?: Conne
     engines: [engine],
     browser,
     connectors: [],
+    secrets,
+    clipboard,
+    sleep: async () => undefined,
     ...overrides
   })
   browser.attach(core)
   core.settings.updateApp({ engineId: engine.id })
-  return { core, clock, engine, browser }
+  return { core, clock, engine, browser, secrets, clipboard }
 }
