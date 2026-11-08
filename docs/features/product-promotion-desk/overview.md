@@ -42,6 +42,7 @@ issues:
   - 7
   - 8
   - 9
+  - 10
 ---
 
 # Product Promotion Desk

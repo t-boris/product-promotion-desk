@@ -55,7 +55,21 @@ Invariants:
 - [ ] 7. I-6 SendGate, limits, attempt log, reconciliation, action history (REQ-003..006).
 - [ ] 8. I-7 Background lifecycle, pause, recovery, run log (REQ-005, DEC-003).
 - [ ] 9. I-8 Goals and platform metrics, README alignment with DEC-002 and DEC-004, Reddit acceptance (REQ-002, REQ-006).
-- [ ] 10. I-9 Product-scoped channels, accounts and results, AI help for new channels (REQ-008, DEC-009). Added 2026-11-08 after the owner's remark; see "Scope change" below.
+- [x] 10. I-9 Product-scoped channels, accounts and results, AI help for new channels (REQ-008, DEC-009). Added 2026-11-08 after the owner's remark; see "Scope change" below. Implemented and committed; walkthrough in progress.
+- [ ] 11. I-10 Login roles with a voice, one login per discussion, disclosed affiliation (REQ-010, DEC-010; GitHub #10). Added later the same day; see "Scope change 2" below.
+
+## Scope change 2 (owner remark, three answers, recorded as DEC-010 and REQ-010)
+
+Records checked: SRC-001 section 1, DEC-009, REQ-003, REQ-004 and the current code. Decided with the owner (all recommended options): a role (name and voice) per login, AI proposes roles and username ideas while the owner creates real logins; at most one login of a product speaks per discussion and logins never answer each other (mandatory, enforced by the SendGate); drafts that mention the product disclose the connection, text editable.
+
+Found in the I-9 walkthrough and fixed with it: (a) AI channel ideas with a description instead of an address reached the "Use this" button (prompt now demands an address; the server drops anything the connector cannot read); (b) a site-profile draft for a page with nothing on it still named selectors that match nothing (to ground: selectors are dry-run on the pages that were read).
+
+Plan:
+- [ ] a. Contract: `Account.role`, `RoleSuggestion`, `accounts.setRole`, `accounts.suggestRoles`, `accounts.create` takes a role.
+- [ ] b. Channels: migration for the role, API, UI (show and edit role, suggest roles, explanation when two logins share a community); site-profile selector grounding.
+- [ ] c. AI help: `suggestRoles` in ai-help.ts; disclosure and voice wording for draft prompts.
+- [ ] d. Pipeline: voice and disclosure in drafting; comments of every login of the product are own; one login per discussion in monitoring, drafting and the SendGate; tests.
+- [ ] e. Walkthrough, REQ-010 criteria ticked only when verified.
 
 ## Scope change 2026-11-08 (owner remark, answered in three questions, recorded as DEC-009 and REQ-008)
 

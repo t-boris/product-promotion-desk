@@ -25,3 +25,7 @@ While looking at the menus the owner pointed out (2026-11-08, translated from Ru
 ### Agent · 2026-11-08
 
 Correction to the previous note: the requirement that carries the criteria of DEC-009 is REQ-008 (there is no REQ-007). It is in draft status; approving it is the owner's decision.
+
+### Owner · 2026-11-08
+
+The owner added (2026-11-08, translated from Russian): for each product there is a channel and the credentials to connect with it, but for the same product on a channel such as Reddit one can connect with different credentials, writing as an astrologer in one case, as a developer in another, and so on; the credentials should be thought up, and there can be several per product. Answers to the follow-up questions: (1) a role with its own voice per login, the AI proposes roles and username ideas, the owner creates the real logins; (2) at most one login of a product per discussion, no replies to its own logins; (3) disclose the connection with the product, text editable. Recorded as DEC-010 and a new requirement; the application never registers accounts or handles passwords.
