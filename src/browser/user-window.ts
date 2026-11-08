@@ -69,9 +69,11 @@ export class UserBrowserWindow {
     return this.closed
   }
 
+  /** Brings the window above the application's own window, which is usually in front of it and hides it. */
   focus(): void {
     if (this.closed) return
     if (this.win.isMinimized()) this.win.restore()
+    this.win.moveTop()
     this.win.focus()
   }
 
@@ -140,7 +142,7 @@ export class UserBrowserWindow {
     else if (command === 'release') this.release()
   }
 
-  /** "Give control back to the app": the agent may use the account again, and this window closes. */
+  /** "Done, close this window": the agent may use the account again, and this window closes. */
   release(): void {
     if (this.closed) return
     this.options.control.release()

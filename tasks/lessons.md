@@ -138,3 +138,8 @@
 
 46. A remembered status is shown with what was seen and when it was seen ("last checked 17:31: a CAPTCHA frame on the page"), and with the one button that refreshes it. A bare label reads as a current fact and the owner cannot tell a real wall from an old one.
 47. A detector that can fire on something the owner cannot see (a hidden CAPTCHA frame, a page text) must say which signal fired; otherwise a false positive cannot be told from a real wall.
+
+48. A state that lives in a window the owner may not see (the account browser) must be shown in the screen the owner is looking at, with a way to bring the window forward. "In your hands" while the window is hidden behind the main window reads as "broken". Look at the real windows (System Events) instead of assuming.
+49. Never guess why a real site fails: run the app's own scripts against the real page in real Chromium (a dry run that fills but sends nothing). Two "mysteries" (a fake CAPTCHA and "form not found") were a hidden frame and a three-second delay.
+50. A script written into a template string must run in a test: a regex `/\/\//` typed with single backslashes inside the template becomes `//`, a comment, and silently breaks the whole script (a test caught it). Keep the fake-DOM test for every page script.
+51. A message that sends the owner to a control must name a control that works there: the error pointed to "Give control back" under More, which refused while the window was open.

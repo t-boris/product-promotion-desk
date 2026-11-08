@@ -29,6 +29,8 @@ interface AccountBrowser {
 export class ElectronBrowserService implements BrowserService {
   private readonly accounts = new Map<string, AccountBrowser>()
   private readonly configured = new Set<string>()
+  /** Set by the core: the person's window for an account opened or closed. */
+  onUserWindowChange?: (accountId: string, change: 'opened' | 'closed') => void
 
   constructor(private readonly tickets: TicketVerifier) {}
 
@@ -74,12 +76,14 @@ export class ElectronBrowserService implements BrowserService {
         control,
         onClosed: () => {
           entry.userWindow = null
+          this.onUserWindowChange?.(account.id, 'closed')
         }
       })
     } catch (error) {
       control.release()
       throw error
     }
+    this.onUserWindowChange?.(account.id, 'opened')
     return { tabId }
   }
 
@@ -87,6 +91,19 @@ export class ElectronBrowserService implements BrowserService {
   hasUserWindow(account: Account): boolean {
     const window = this.accounts.get(account.id)?.userWindow
     return window !== null && window !== undefined && !window.isClosed()
+  }
+
+  /** Brings the person's window for this account to the front. False when it is not open. */
+  showUserWindow(account: Account): boolean {
+    const window = this.accounts.get(account.id)?.userWindow
+    if (!window || window.isClosed()) return false
+    window.focus()
+    return true
+  }
+
+  /** Closes the person's window without a prompt; closing it gives the browser back (UserControl releases once). */
+  closeUserWindow(account: Account): void {
+    this.accounts.get(account.id)?.userWindow?.destroy()
   }
 
   /** Called when an account is deleted: closes its windows and wipes the stored session (cookies, storage). */

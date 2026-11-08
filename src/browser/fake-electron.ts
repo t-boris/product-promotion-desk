@@ -137,6 +137,10 @@ export class BaseWindow extends EventEmitter {
     return false
   }
   restore(): void {}
+  raised = 0
+  moveTop(): void {
+    this.raised += 1
+  }
   focus(): void {
     this.focused += 1
   }

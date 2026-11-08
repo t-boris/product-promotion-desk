@@ -204,6 +204,12 @@ export interface VaultStatus {
 }
 
 /** The result of "Sign in with saved password" (DEC-014). */
+/** Who holds an account's browser, and whether the person's window for it is open. */
+export interface BrowserState {
+  holder: 'agent' | 'user' | 'none'
+  windowOpen: boolean
+}
+
 export interface SignInResult {
   account: Account
   /** `signed_in`: the site confirmed the sign-in. `needs_you`: a check or a changed page needs the owner in the account browser. */

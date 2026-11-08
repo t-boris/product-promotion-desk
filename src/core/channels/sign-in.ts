@@ -67,7 +67,7 @@ export class SignInService {
       if (stopped) return this.needsYou(account, stopped)
       await this.core.sleep(4000)
     } catch (error) {
-      if (error instanceof TakeoverError) throw new ApiError('user_window_open', 'You have the account browser open. Close it or press "Give control back to the app" first.')
+      if (error instanceof TakeoverError) throw new ApiError('user_window_open', 'The account\'s browser window is open. Finish there and close it first, then sign in with the saved password.')
       const failure = browserError(error, { code: 'sign_in_failed', message: (reason) => `Could not sign in: ${reason}` })
       this.core.log.warn('accounts', `Sign-in of ${account.label} failed: ${failure.message}`)
       throw failure

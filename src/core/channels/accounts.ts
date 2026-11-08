@@ -2,10 +2,10 @@
 // Passwords are typed by the person on the site's own page; nothing here reads, requests or stores credentials.
 
 import { ApiError } from '../../shared/api'
-import type { Account, AccountRole, Channel } from '../../shared/types'
+import type { Account, AccountRole, BrowserState, Channel } from '../../shared/types'
 import { DEFAULT_CHANNEL_SETTINGS } from '../../shared/types'
 import type { Core } from '../core'
-import type { BrowserService, Connector, ConnectorContext } from '../ports'
+import { TakeoverError, type BrowserService, type Connector, type ConnectorContext } from '../ports'
 import { browserError, found, requireText } from './errors'
 import { parseEmail } from './mailboxes'
 import { loginOutcome } from './login'
@@ -28,14 +28,28 @@ interface SessionForgetting {
 const canForget = (service: BrowserService): service is BrowserService & SessionForgetting =>
   typeof (service as Partial<SessionForgetting>).forgetAccount === 'function'
 
-/** Implemented by the Electron browser service: whether the person's window for the account is open. */
+/** Implemented by the Electron browser service: the person's window for an account (the one "Open browser" shows). */
 interface UserWindowAware {
   hasUserWindow(account: Account): boolean
+  /** Brings the window to the front; false when it is not open. */
+  showUserWindow(account: Account): boolean
+  /** Closes the window without a prompt; closing it also gives the browser back. */
+  closeUserWindow(account: Account): void
 }
 
 const hasOpenUserWindow = (service: BrowserService, account: Account): boolean => {
   const aware = service as Partial<UserWindowAware>
   return typeof aware.hasUserWindow === 'function' && aware.hasUserWindow(account)
+}
+
+const showUserWindow = (service: BrowserService, account: Account): boolean => {
+  const aware = service as Partial<UserWindowAware>
+  return typeof aware.showUserWindow === 'function' && aware.showUserWindow(account)
+}
+
+const closeUserWindow = (service: BrowserService, account: Account): void => {
+  const aware = service as Partial<UserWindowAware>
+  if (typeof aware.closeUserWindow === 'function') aware.closeUserWindow(account)
 }
 
 export class AccountsService {
@@ -45,7 +59,9 @@ export class AccountsService {
   constructor(
     private readonly core: Core,
     private readonly store: ChannelsStore
-  ) {}
+  ) {
+    core.browser.onUserWindowChange = (accountId, change) => this.userWindowChanged(accountId, change)
+  }
 
   /** Every account: they are one library, shared by all products (DEC-015). */
   list(): Account[] {
@@ -187,16 +203,52 @@ export class AccountsService {
     this.core.events.changed('accounts')
   }
 
+  /**
+   * Gives the browser back to the app. The person's window and its toolbar still say that the person is in control, and
+   * the app must not act on a page the person is looking at, so an open window is closed first: closing it is what hands
+   * the browser back, exactly as the window's own button does.
+   */
   releaseControl(accountId: unknown): void {
     const account = this.account(accountId)
-    // The window and its toolbar still tell the person they are in control; handing the browser to the agent behind
-    // it would let the app act on a page the person is looking at. The window's own button does both at once.
-    if (hasOpenUserWindow(this.core.browser, account)) {
-      throw new ApiError('user_window_open', 'Close the account window or press "Give control back to the app" in it first.')
-    }
+    closeUserWindow(this.core.browser, account)
     this.core.browser.session(account).releaseControl()
     this.core.log.info('accounts', `Control of the browser of ${account.label} returned to the app.`)
     this.core.events.changed('accounts')
+  }
+
+  /** Who holds the account's browser and whether the person's window is open. */
+  browserState(accountId: unknown): BrowserState {
+    const account = this.account(accountId)
+    return { holder: this.core.browser.session(account).control().holder, windowOpen: hasOpenUserWindow(this.core.browser, account) }
+  }
+
+  /** Brings the open window to the front (the main window is usually on top of it and hides it). */
+  showBrowser(accountId: unknown): { shown: boolean } {
+    return { shown: showUserWindow(this.core.browser, this.account(accountId)) }
+  }
+
+  /** The person's window opened or closed: the screen follows, and a closed window means the person is done on the site. */
+  private userWindowChanged(accountId: string, change: 'opened' | 'closed'): void {
+    this.core.events.changed('accounts')
+    if (change === 'closed') void this.checkAfterWindow(accountId)
+  }
+
+  /**
+   * The person closed the account's window: the sign-in is checked once, so nobody has to press "Check sign-in". Only a
+   * look: a saved password is not tried here, the person may just have closed the window on purpose.
+   */
+  private async checkAfterWindow(accountId: string): Promise<void> {
+    try {
+      const account = this.account(accountId)
+      const connector = this.connectorFor(account)
+      if (!connector) return
+      this.applyLogin(account, await connector.checkLogin(this.probeContext(account, connector)), { signInAgain: false })
+    } catch (error) {
+      // The account may have been removed with its window open, or the app may be busy with it: nothing to report.
+      if (!(error instanceof ApiError) && !(error instanceof TakeoverError)) {
+        this.core.log.warn('accounts', `Could not check the sign-in after the browser window was closed: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
   }
 
   // ───────────── login ─────────────
@@ -268,7 +320,7 @@ export class AccountsService {
   }
 
   /** Records a login state seen by any check; emits the changes that put the account on the attention list. */
-  applyLogin(account: Account, state: Parameters<typeof loginOutcome>[0]): Account {
+  applyLogin(account: Account, state: Parameters<typeof loginOutcome>[0], options: { signInAgain?: boolean } = {}): Account {
     const outcome = loginOutcome(state)
     // The account that is expected to be signed in: the last one seen, which survives a logout in between.
     const expected = this.store.lastIdentity(account.id) ?? account.identity
@@ -283,7 +335,7 @@ export class AccountsService {
     }
     if (switched) this.core.events.changed('channels')
     this.core.events.changed('accounts', 'attention')
-    if (updated.status === 'login_required') this.onSignedOut?.(updated)
+    if (updated.status === 'login_required' && options.signInAgain !== false) this.onSignedOut?.(updated)
     return updated
   }
 }

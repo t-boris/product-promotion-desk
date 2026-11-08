@@ -13,6 +13,9 @@ import { isAbortedNavigation, normalizeBrowserUrl } from './targets'
 const DEFAULT_LOAD_TIMEOUT_MS = 30_000
 const READ_TIMEOUT_MS = 45_000
 const POLL_INTERVAL_MS = 250
+/** A sign-in page may draw its form after it has "loaded" (Reddit builds it from web components, a few seconds in). */
+const SIGN_IN_FORM_WAIT_MS = 15_000
+const SIGN_IN_FORM_POLL_MS = 500
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 /** The agent's page and whatever hosts it; `dispose` releases both. */
@@ -99,6 +102,20 @@ export class ElectronRawPage implements RawPage {
    * text: whatever goes wrong is reported in words that cannot contain the credentials.
    */
   async signIn(form: SignInForm): Promise<{ status: SignInStatus }> {
+    let status: SignInStatus = 'no_form'
+    // Only "no form yet" is asked again: nothing was sent then. Any other answer, and any failure of the read, ends it at
+    // once, so a password is never sent twice (a second wrong attempt could lock the account).
+    await pollUntil(
+      async () => {
+        status = await this.signInOnce(form)
+        return status !== 'no_form'
+      },
+      { timeoutMs: SIGN_IN_FORM_WAIT_MS, intervalMs: SIGN_IN_FORM_POLL_MS }
+    )
+    return { status }
+  }
+
+  private async signInOnce(form: SignInForm): Promise<SignInStatus> {
     let result: { status?: SignInStatus } | null
     try {
       result = await this.read<{ status?: SignInStatus } | null>(signInScript(form))
@@ -107,7 +124,7 @@ export class ElectronRawPage implements RawPage {
     }
     const status = result?.status
     if (status !== 'submitted' && status !== 'next_step' && status !== 'no_form' && status !== 'captcha' && status !== 'wrong_host') throw new Error('The sign-in page gave no usable answer.')
-    return { status }
+    return status
   }
 
   /** Sets the files of an <input type=file> through the DevTools protocol (a script cannot do this). */

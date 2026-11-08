@@ -178,10 +178,34 @@ export class FakeBrowserService implements BrowserService {
     return session
   }
 
+  /** Accounts whose window for the person is open, and how many times each was brought to the front. */
+  readonly windows = new Set<string>()
+  readonly shown: string[] = []
+  onUserWindowChange?: (accountId: string, change: 'opened' | 'closed') => void
+
   async openForUser(account: Account, url?: string): Promise<{ tabId: string }> {
     this.opened.push({ accountId: account.id, url })
     this.session(account).takeControl()
+    this.windows.add(account.id)
+    this.onUserWindowChange?.(account.id, 'opened')
     return { tabId: `tab-${account.id}` }
+  }
+
+  hasUserWindow(account: Account): boolean {
+    return this.windows.has(account.id)
+  }
+
+  showUserWindow(account: Account): boolean {
+    if (!this.windows.has(account.id)) return false
+    this.shown.push(account.id)
+    return true
+  }
+
+  /** What closing the real window does: the browser goes back to the app, and the core is told. */
+  closeUserWindow(account: Account): void {
+    if (!this.windows.delete(account.id)) return
+    this.session(account).releaseControl()
+    this.onUserWindowChange?.(account.id, 'closed')
   }
 }
 

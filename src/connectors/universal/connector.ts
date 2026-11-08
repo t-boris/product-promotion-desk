@@ -163,7 +163,7 @@ export class UniversalConnector implements Connector {
       await page.goto(ctx.channel.url, { timeoutMs: 30_000 })
       const gate = await page.read<GateProbe>(gateProbeScript())
       const probe = await page.read<{ loggedIn: boolean; identity: string; captcha: boolean }>(loginProbeScript(profile.login))
-      if (gate.captcha || probe.captcha) return { loggedIn: false, identity: null, captcha: true }
+      if (gate.captcha || probe.captcha) return { loggedIn: false, identity: null, captcha: true, captchaSignal: gate.captcha ? gate.signal : 'the site profile\'s own check marker is on the page' }
       return { loggedIn: probe.loggedIn, identity: probe.loggedIn && probe.identity ? probe.identity : null, captcha: false }
     })
   }

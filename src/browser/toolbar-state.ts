@@ -67,7 +67,8 @@ export function parseToolbarCommand(url: string): ToolbarCommand | null {
   return command === 'back' || command === 'reload' || command === 'release' ? command : null
 }
 
-export const RELEASE_LABEL = 'Give control back to the app'
+/** The window is the person's while it is open; this button says they are done, and the window closes. */
+export const RELEASE_LABEL = 'Done, close this window'
 
 /** Static markup: no dynamic data is interpolated; the view is pushed in through window.ppdUpdate(). */
 export function toolbarHtml(): string {

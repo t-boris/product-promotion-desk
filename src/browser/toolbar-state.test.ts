@@ -46,7 +46,7 @@ describe('toolbar commands and markup', () => {
   it('is static markup with the release button and no interpolated account data', () => {
     const html = toolbarHtml()
     expect(html).toContain(RELEASE_LABEL)
-    expect(html).toContain('Give control back to the app')
+    expect(html).toContain('Done, close this window')
     expect(html).not.toContain(account.label)
     expect(html).toContain("default-src 'none'")
   })

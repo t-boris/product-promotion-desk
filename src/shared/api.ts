@@ -5,6 +5,7 @@
 import type {
   Account,
   AccountRole,
+  BrowserState,
   Mailbox,
   SignInResult,
   VaultStatus,
@@ -129,7 +130,12 @@ export interface ApiMethods {
   'platforms.list': [void, PlatformInfo[]]
   /** Opens the account's persistent browser at `url` and hands control to the user (login handoff). */
   'accounts.openBrowser': [{ accountId: Id; url?: string }, { tabId: string }]
+  /** Who holds the account's browser and whether the person's window is open: the screen shows it instead of failing later. */
+  'accounts.browser': [{ accountId: Id }, BrowserState]
+  /** Brings the person's open window for the account to the front, without changing the page. `shown` is false when no window is open. */
+  'accounts.showBrowser': [{ accountId: Id }, { shown: boolean }]
   'accounts.takeControl': [{ accountId: Id }, void]
+  /** Gives the browser back to the app. The person's window, when open, is closed: it would still say that the person is in control. */
   'accounts.releaseControl': [{ accountId: Id }, void]
   'accounts.checkLogin': [{ accountId: Id }, Account]
   // credential vault and assisted sign-in (REQ-012, DEC-014). No result ever carries a password except revealPassword, which the web mode refuses.

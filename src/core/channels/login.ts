@@ -12,7 +12,8 @@ export interface LoginOutcome {
 
 export function loginOutcome(state: LoginState): LoginOutcome {
   if (state.captcha) {
-    return { status: 'captcha', identity: null, detail: 'The site asks for a human check (CAPTCHA). Open the browser and complete it on the page.' }
+    const seen = state.captchaSignal ? `: ${state.captchaSignal}` : ''
+    return { status: 'captcha', identity: null, detail: `The site asks for a human check (CAPTCHA${seen}). Open the browser and complete it on the page.` }
   }
   if (!state.loggedIn) {
     return { status: 'login_required', identity: null, detail: 'Not signed in. Open the browser and sign in on the site itself.' }

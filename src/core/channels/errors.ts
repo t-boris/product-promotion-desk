@@ -15,7 +15,7 @@ export function found<T>(lookup: () => T, what: string): T {
   }
 }
 
-export const BROWSER_BUSY = 'The account\'s browser is in your hands right now. Give control back to the app, then try again.'
+export const BROWSER_BUSY = 'The account\'s browser is in your hands: its window is open, or you took control. Close the window (or give control back) on the Accounts screen, then try again.'
 
 /** The user holding the browser is an expected state, not a failure of the operation itself. */
 export function browserError(error: unknown, fallback: { code: string; message: (reason: string) => string }): ApiError {

@@ -185,9 +185,19 @@ Design (layout in the approval question):
 
 Result: 1311 tests; scratch app driven through the real screen (add with a proposed address, Propose and Cancel create nothing, password generate/cancel/save, role carried from the product page through the address, remove through More); sweep of 15 routes plus every account and the mailboxes tab, menu open and closed (40 checks): equal button heights, nothing past the edge, no window scroll. Found while driving it and fixed for the whole app: a button inside a form submitted the form (the shared Button now defaults to type button). NOT checked: the layout in a window narrower than 900 px, "Create account on <platform>" in the real window, and the Reddit sign-in finding below (still open, next after this release).
 
-## 0.3.2 (PLAN, awaiting approval): statuses that say what and when (owner question "what captcha?")
+## 0.3.2: the account browser hand-off, and a sign-in that works on Reddit (owner remark: "it does not work, why can't I control the browser, why do I have to press a button?")
 
-- [ ] Store when an account's sign-in was last checked and what the check saw (migration 206: `accounts.status_checked_at`, `accounts.status_detail`); show "Last checked <time>: <what was seen>" in the Sign-in block, with the Check sign-in button next to it.
-- [ ] The Reddit/universal gate probe reports which signal fired (visible CAPTCHA frame, hidden frame, page text, challenge title) and counts only visible CAPTCHA elements as a wall; a hidden frame is logged but does not set the status to "CAPTCHA to solve".
-- [ ] Re-check the sign-in once when the owner gives the browser back or closes its window (today the status stays as it was until the owner presses Check sign-in).
-- [ ] Then the Reddit sign-in diagnosis (the saved-password sign-in answered "form not found"): the same page may be a human-check wall without a form; verify on the real login page.
+What was found (by looking at the running app and by running the app's own scripts in real Chromium, not by guessing):
+- The account window was open but lay completely behind the main window (same size, main window on top). The app held the browser "in your hands" while the owner could not see it; the error pointed to a button under "More" that itself refused while the window was open.
+- "CAPTCHA to solve" was a false alarm: Reddit keeps an invisible reCAPTCHA frame on every page, the probe counted its presence. A clean Reddit front page has no check at all.
+- "The sign-in form was not found" was timing: the sign-in script ran once, right after the page loaded; Reddit draws its form from web components about 3 seconds later. The same script, run 4.5 s after load, finds the form and the "Log In" button (dry run, nothing sent).
+
+- [x] Hand-off: `accounts.browser` (who holds the browser, is the window open), `accounts.showBrowser` (window to the front, page unchanged), `accounts.releaseControl` closes an open window instead of refusing; the window's button now reads "Done, close this window".
+- [x] The Sign-in block shows the state while the person holds the browser: what to do, "Show the window", "Done, close the window"; the buttons that would only fail are not offered.
+- [x] When the window closes the sign-in is checked once automatically (a look only: no saved password is tried behind the person's back).
+- [x] The probe counts only a check a person can see (not an invisible frame, not the reCAPTCHA badge); it names the signal, and the log says what showed ("CAPTCHA: a visible check on the page (...)").
+- [x] The sign-in step waits up to 15 s for the form to be drawn (asks again only on "no form"; never again after a submit or a read failure).
+- [ ] NOT DONE, still open: store when an account's sign-in was last checked and what was seen, and show it ("Last checked 17:31 ...") in the Sign-in block (migration 206).
+- [ ] NOT DONE: live sign-in with the owner's real password on Reddit (only the owner can run it; issue #8).
+
+Result: 1335 tests. Checked in the real app (scratch instance, real windows): open, "Show the window" brings it above the main window, release closes it, the check after the close changed a forced status within 2 s; the same check that kept answering "captcha" now answers "Not signed in". Not checked: typing into the Reddit page in the account window; the form wait end to end (only the dry run in Chromium plus unit tests).

@@ -163,6 +163,64 @@ describe('agent page', () => {
   })
 })
 
+describe('sign-in form that the page draws late (Reddit builds it from web components)', () => {
+  const form = { username: 'natal_bot', password: 'S3cret-Pa$$w0rd!', hosts: ['reddit.com'] }
+  /** Opens the login page, lets the page answer with `results` to successive looks for the form, and signs in. */
+  const signIn = (service: ElectronBrowserService, results: unknown[], prepare?: (contents: FakeWebContents) => void) =>
+    service.session(account('a')).withAgentControl('sign-in', async (page) => {
+      await page.goto('https://www.reddit.com/login/')
+      agentContents().results = results
+      prepare?.(agentContents())
+      return page.signIn(form)
+    })
+
+  it('asks again while there is no form, and answers once the form is there', async () => {
+    vi.useFakeTimers()
+    try {
+      const { service } = setup()
+      const done = signIn(service, [{ status: 'no_form' }, { status: 'no_form' }, { status: 'no_form' }, { status: 'submitted' }])
+      await vi.advanceTimersByTimeAsync(5_000)
+      await expect(done).resolves.toEqual({ status: 'submitted' })
+      expect(agentContents().scripts.length).toBe(4) // the form was sent once, on the fourth look
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('gives up with "no_form" after the wait when the form never appears', async () => {
+    vi.useFakeTimers()
+    try {
+      const { service } = setup()
+      const done = signIn(service, [{ status: 'no_form' }])
+      await vi.advanceTimersByTimeAsync(20_000)
+      await expect(done).resolves.toEqual({ status: 'no_form' })
+      expect(agentContents().scripts.length).toBeGreaterThan(5)
+      expect(agentContents().scripts.length).toBeLessThanOrEqual(35)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each(['submitted', 'next_step', 'captcha', 'wrong_host'] as const)('does not ask again after "%s"', async (answer) => {
+    const { service } = setup()
+    await expect(signIn(service, [{ status: answer }])).resolves.toEqual({ status: answer })
+    expect(agentContents().scripts.length).toBe(1)
+  })
+
+  it('does not ask again when the page fails to answer, and the error cannot contain the password', async () => {
+    const { service } = setup()
+    const error = await signIn(service, [], (contents) => {
+      contents.executeJavaScript = async (script: string) => {
+        contents.scripts.push(script)
+        throw new Error(`boom ${form.password}`)
+      }
+    }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(Error)
+    expect((error as Error).message).toBe('The sign-in page did not answer.')
+    expect(agentContents().scripts.length).toBe(1)
+  })
+})
+
 describe('user takeover and login hand-off', () => {
   it('takes control before showing the window, so the agent stops at once', async () => {
     const { service } = setup()
@@ -188,7 +246,7 @@ describe('user takeover and login hand-off', () => {
     expect(bar.options.webPreferences?.partition).toBe('ppd-toolbar') // not persistent, not shared with any site
     expect(site.webContents.loaded).toEqual(['https://www.reddit.com/login/'])
     expect(bar.webContents.loaded[0]).toMatch(/^data:text\/html/)
-    expect(decodeURIComponent(bar.webContents.loaded[0])).toContain('Give control back to the app')
+    expect(decodeURIComponent(bar.webContents.loaded[0])).toContain('Done, close this window')
     expect(created.windows[0].children).toEqual([site, bar])
   })
 
@@ -222,6 +280,47 @@ describe('user takeover and login hand-off', () => {
     expect(service.hasUserWindow(account('other'))).toBe(false)
     created.windows[0].close()
     expect(service.hasUserWindow(acc)).toBe(false)
+  })
+
+  it('brings the open window above the application window, without loading anything', async () => {
+    const { service } = setup()
+    const acc = account('a')
+    expect(service.showUserWindow(acc)).toBe(false)
+    await service.openForUser(acc, 'https://www.reddit.com/login/')
+    const loaded = [...created.views[0].webContents.loaded]
+    expect(service.showUserWindow(acc)).toBe(true)
+    expect(created.windows[0].raised).toBe(1)
+    expect(created.windows[0].focused).toBe(1)
+    expect(created.views[0].webContents.loaded).toEqual(loaded)
+    created.windows[0].close()
+    expect(service.showUserWindow(acc)).toBe(false)
+  })
+
+  it('closes the window for the app and gives the browser back once', async () => {
+    const { service } = setup()
+    const acc = account('a')
+    await service.openForUser(acc, 'https://www.reddit.com/login/')
+    expect(service.session(acc).control().holder).toBe('user')
+    service.closeUserWindow(acc)
+    expect(created.windows[0].destroyed).toBe(true)
+    expect(service.hasUserWindow(acc)).toBe(false)
+    expect(service.session(acc).control().holder).toBe('none')
+    service.closeUserWindow(acc) // nothing is open any more: no error
+  })
+
+  it('tells the core when the window opens and when it closes, however it was closed', async () => {
+    const { service } = setup()
+    const changes: string[] = []
+    service.onUserWindowChange = (id, change) => changes.push(`${id}:${change}`)
+    const acc = account('a')
+    await service.openForUser(acc, 'https://www.reddit.com/login/')
+    await service.openForUser(acc, 'https://www.reddit.com/settings/') // the same window: not a second "opened"
+    expect(changes).toEqual(['a:opened'])
+    created.windows[0].close()
+    expect(changes).toEqual(['a:opened', 'a:closed'])
+    await service.openForUser(acc, 'https://www.reddit.com/login/')
+    service.closeUserWindow(acc)
+    expect(changes).toEqual(['a:opened', 'a:closed', 'a:opened', 'a:closed'])
   })
 
   it('gives control back when the user simply closes the window', async () => {

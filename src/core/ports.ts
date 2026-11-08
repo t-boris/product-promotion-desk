@@ -131,6 +131,7 @@ export interface BrowserPage {
   /**
    * Fills the sign-in form with the credentials and submits it once. It is the only write-class operation that needs no
    * SendTicket: it publishes nothing, only the vault's owner reaches it, and it refuses a page outside `form.hosts`.
+   * A page that has not drawn its form yet is given some seconds before the answer is "no_form".
    */
   signIn(form: SignInForm): Promise<{ status: SignInStatus }>
   goto(url: string, options?: { timeoutMs?: number }): Promise<void>
@@ -162,6 +163,11 @@ export interface BrowserService {
   session(account: Account): BrowserSession
   /** Shows the account's browser to the user at `url` (login handoff) and gives them control. */
   openForUser(account: Account, url?: string): Promise<{ tabId: string }>
+  /**
+   * Set by the core: called when the person's window for an account has opened or closed, so the screen shows who holds the
+   * browser and the account is looked at once when the person is done.
+   */
+  onUserWindowChange?: (accountId: Id, change: 'opened' | 'closed') => void
 }
 
 // ───────────────────────────── Connectors (REQ-002) ─────────────────────────────
@@ -236,6 +242,8 @@ export interface LoginState {
   loggedIn: boolean
   identity: string | null
   captcha: boolean
+  /** What showed the check ("a visible check on the page (…)"), for the log: a false alarm cannot be told from a wall without it. */
+  captchaSignal?: string
 }
 
 export interface NormalizedTarget {

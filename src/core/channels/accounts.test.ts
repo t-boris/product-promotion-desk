@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../shared/api'
 import type { Account } from '../../shared/types'
 import { FakeConnector } from '../testing/fake-connector'
@@ -76,34 +76,87 @@ describe('login hand-off (REQ-002: the person types passwords on the site)', () 
     await expect(session.withAgentControl('monitor', async () => 1)).resolves.toBe(1)
   })
 
-  describe('while the account window is open', () => {
-    /** The Electron service tells whether the account window is open; the test double is given the same method. */
-    const withWindow = (w: Awaited<ReturnType<typeof makeReadyWorld>>, open: { value: boolean }): void => {
-      Object.assign(w.t.browser, { hasUserWindow: () => open.value })
-    }
+  describe('the account window (the person works there; the app waits)', () => {
+    const state = (w: Awaited<ReturnType<typeof makeReadyWorld>>) => w.call('accounts.browser', { accountId: w.account.id })
 
-    it('refuses to hand control to the agent: the window and its toolbar would still show user control', async () => {
+    it('says who holds the browser: nobody, then the person while the window is open', async () => {
       const w = await makeReadyWorld()
-      const open = { value: true }
-      withWindow(w, open)
+      expect(await state(w)).toEqual({ holder: 'none', windowOpen: false })
+      await w.call('accounts.openBrowser', { accountId: w.account.id })
+      expect(await state(w)).toEqual({ holder: 'user', windowOpen: true })
+    })
+
+    it('brings an open window to the front without opening a page again, and says so when there is none', async () => {
+      const w = await makeReadyWorld()
+      expect(await w.call('accounts.showBrowser', { accountId: w.account.id })).toEqual({ shown: false })
+      await w.call('accounts.openBrowser', { accountId: w.account.id })
+      expect(await w.call('accounts.showBrowser', { accountId: w.account.id })).toEqual({ shown: true })
+      expect(w.t.browser.shown).toEqual([w.account.id])
+      expect(w.t.browser.opened).toHaveLength(1)
+    })
+
+    it('tells the screen when the window opens and closes', async () => {
+      const w = await makeReadyWorld()
+      const seen: string[] = []
+      w.core.events.subscribe((event) => event.type === 'changed' && seen.push(event.scope))
+      await w.call('accounts.openBrowser', { accountId: w.account.id })
+      expect(seen).toContain('accounts')
+      seen.length = 0
+      w.t.browser.closeUserWindow(w.account)
+      expect(seen).toContain('accounts')
+    })
+
+    it('does not refuse to give the browser back while the window is open: it closes the window and returns control', async () => {
+      const w = await makeReadyWorld()
       await w.call('accounts.openBrowser', { accountId: w.account.id })
       const session = w.t.browser.session(w.account)
       expect(session.control().holder).toBe('user')
-      const error = await w.call('accounts.releaseControl', { accountId: w.account.id }).catch((e: unknown) => e)
-      expect(error).toBeInstanceOf(ApiError)
-      expect(error).toMatchObject({ code: 'user_window_open', message: 'Close the account window or press "Give control back to the app" in it first.' })
-      expect(session.control().holder).toBe('user')
-      await expect(session.withAgentControl('monitor', async () => 1)).rejects.toMatchObject({ name: 'TakeoverError' })
+      await w.call('accounts.releaseControl', { accountId: w.account.id })
+      expect(w.t.browser.windows.has(w.account.id)).toBe(false)
+      expect(await state(w)).toMatchObject({ windowOpen: false })
+      await vi.waitFor(async () => expect(await session.withAgentControl('monitor', async () => 1)).toBe(1))
     })
 
-    it('releases once the window is closed', async () => {
+    it('says what to do when an action needs the browser while the window is open', async () => {
       const w = await makeReadyWorld()
-      const open = { value: true }
-      withWindow(w, open)
       await w.call('accounts.openBrowser', { accountId: w.account.id })
-      open.value = false
-      await w.call('accounts.releaseControl', { accountId: w.account.id })
-      expect(w.t.browser.session(w.account).control().holder).toBe('none')
+      const error = await w.call('accounts.checkLogin', { accountId: w.account.id }).catch((e: unknown) => e)
+      expect(error).toMatchObject({ code: 'browser_busy' })
+      expect((error as ApiError).message).toContain('window is open')
+    })
+
+    it('checks the sign-in once when the person closes the window, so no button has to be pressed', async () => {
+      const w = await makeReadyWorld()
+      w.fake.login = { loggedIn: false, identity: null, captcha: false }
+      await w.call('accounts.openBrowser', { accountId: w.account.id })
+      w.fake.login = { loggedIn: true, identity: 'natal_bot', captcha: false }
+      w.fake.calls.length = 0
+      w.t.browser.closeUserWindow(w.account)
+      await vi.waitFor(() => expect(w.fake.calls.filter((c) => c === 'checkLogin')).toHaveLength(1))
+      await vi.waitFor(async () => expect((await w.call('accounts.list', undefined)).find((a) => a.id === w.account.id)?.status).toBe('ready'))
+    })
+
+    it('only looks when the window closes: a saved password is not tried behind the person\'s back', async () => {
+      const w = await makeReadyWorld()
+      await w.call('vault.savePassword', { accountId: w.account.id, loginName: 'natal_bot', password: 'S3cret-Pa$$w0rd!' })
+      w.fake.login = { loggedIn: false, identity: null, captcha: false }
+      await w.call('accounts.openBrowser', { accountId: w.account.id })
+      w.fake.calls.length = 0
+      w.t.browser.closeUserWindow(w.account)
+      await vi.waitFor(() => expect(w.fake.calls.filter((c) => c === 'checkLogin')).toHaveLength(1))
+      await new Promise((r) => setTimeout(r, 20))
+      expect(w.t.browser.page(w.account.id).signIns).toEqual([])
+    })
+
+    it('does nothing, and reports nothing, when the account was removed with its window open', async () => {
+      const w = await makeReadyWorld()
+      await w.call('accounts.openBrowser', { accountId: w.account.id })
+      await w.call('accounts.remove', { id: w.account.id })
+      w.fake.calls.length = 0
+      w.t.browser.closeUserWindow(w.account)
+      await new Promise((r) => setTimeout(r, 20))
+      expect(w.fake.calls).not.toContain('checkLogin')
+      expect(w.core.db.prepare("SELECT message FROM log_events WHERE level = 'warn'").all()).toEqual([])
     })
   })
 
