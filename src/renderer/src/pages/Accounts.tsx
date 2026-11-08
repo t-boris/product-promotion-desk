@@ -6,9 +6,10 @@ import { AccountDetail } from './channels/AccountDetail'
 import { AccountList } from './channels/AccountList'
 import { CreateAccount } from './channels/CreateAccount'
 import { MailboxesCard } from './channels/MailboxesCard'
+import { ProfilesPanel } from './channels/ProfilesPanel'
 import './channels/channels.css'
 
-type Tab = 'accounts' | 'mailboxes'
+type Tab = 'accounts' | 'profiles' | 'mailboxes'
 
 function useAccountsRoute(): AccountsRoute {
   const [hash, setHash] = useState(() => window.location.hash)
@@ -30,9 +31,12 @@ export function AccountsPage() {
   const platforms = useQuery('platforms.list', undefined, [])
   const mailboxes = useQuery('mailboxes.list', undefined, ['accounts'])
   const vault = useQuery('vault.status', undefined, ['accounts'])
+  const profiles = useQuery('profiles.list', undefined, ['accounts'])
+  const products = useQuery('products.list', undefined, ['products'])
   const route = useAccountsRoute()
   const [tab, setTab] = useState<Tab>('accounts')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [profileId, setProfileId] = useState<string | null>(null)
 
   const list = accounts.data ?? []
   const loading = accounts.loading && !accounts.data
@@ -51,22 +55,32 @@ export function AccountsPage() {
   const closeNew = (): void => {
     window.location.hash = '#/accounts'
   }
+  /** From a profile to one of its accounts, and back (DEC-019). */
+  const openAccount = (id: string): void => {
+    setSelectedId(id)
+    setTab('accounts')
+  }
+  const openProfile = (id: string): void => {
+    setProfileId(id)
+    setTab('profiles')
+  }
 
   return (
     <Page
       title="Accounts"
-      subtitle="Your logins on the platforms: a role, an e-mail address, a password and the sign-in for each."
+      subtitle="Your logins on the platforms, and the profiles (people) behind them: a profile has one login per platform."
       actions={
         <Button variant="primary" onClick={goNew} data-testid="account-add">
           Add account
         </Button>
       }
     >
-      <ErrorNote error={accounts.error ?? platforms.error ?? mailboxes.error} />
+      <ErrorNote error={accounts.error ?? platforms.error ?? mailboxes.error ?? profiles.error} />
       <div className="tabs" role="tablist" aria-label="Accounts sections">
         {(
           [
             ['accounts', 'Accounts'],
+            ['profiles', 'Profiles'],
             ['mailboxes', 'Mailboxes']
           ] as const
         ).map(([id, label]) => (
@@ -77,6 +91,17 @@ export function AccountsPage() {
       </div>
       {loading && <Loading what="Loading accounts" />}
       {tab === 'mailboxes' && <MailboxesCard mailboxes={mailboxes.data ?? []} />}
+      {tab === 'profiles' && (
+        <ProfilesPanel
+          profiles={profiles.data ?? []}
+          accounts={list}
+          platforms={platforms.data ?? []}
+          products={products.data ?? []}
+          selectedId={profileId}
+          onSelect={setProfileId}
+          onOpenAccount={openAccount}
+        />
+      )}
       {tab === 'accounts' && (
         <>
           {adding && (
@@ -85,6 +110,8 @@ export function AccountsPage() {
                 key={JSON.stringify(route.role)}
                 platforms={platforms.data ?? []}
                 mailboxes={mailboxes.data ?? []}
+                profiles={profiles.data ?? []}
+                accounts={list}
                 role={route.role}
                 onCreated={(account) => {
                   setSelectedId(account.id)
@@ -101,7 +128,7 @@ export function AccountsPage() {
               </aside>
               <div className="acct-detail-wrap">
                 {selected ? (
-                  <AccountDetail key={selected.id} account={selected} platforms={platforms.data ?? []} mailboxes={mailboxes.data ?? []} vault={vault.data} />
+                  <AccountDetail key={selected.id} account={selected} platforms={platforms.data ?? []} mailboxes={mailboxes.data ?? []} vault={vault.data} onOpenProfile={openProfile} />
                 ) : (
                   <EmptyState title="Select an account">Pick an account to see what it still needs.</EmptyState>
                 )}

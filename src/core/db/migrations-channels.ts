@@ -98,5 +98,47 @@ CREATE TABLE account_profiles (
   updated_at TEXT NOT NULL
 );
 `
+  },
+  {
+    id: 207,
+    name: 'channels: a profile is its own entity; accounts are its logins on platforms (DEC-019)',
+    sql: `
+-- A profile is a person made once for a purpose. Its accounts (logins on platforms) point to it; at most one account per platform for a profile.
+-- The password is never here (the vault). The picture is a file in the data folder, only its name is recorded.
+CREATE TABLE profiles (
+  id TEXT PRIMARY KEY,
+  label TEXT NOT NULL,
+  product_id TEXT REFERENCES products(id) ON DELETE SET NULL,
+  role_name TEXT,
+  role_voice TEXT,
+  platforms_json TEXT NOT NULL DEFAULT '[]',
+  purpose TEXT NOT NULL DEFAULT '',
+  strategy TEXT NOT NULL DEFAULT '',
+  first_name TEXT NOT NULL DEFAULT '',
+  last_name TEXT NOT NULL DEFAULT '',
+  display_name TEXT NOT NULL DEFAULT '',
+  username TEXT NOT NULL DEFAULT '',
+  birth_date TEXT NOT NULL DEFAULT '',
+  gender TEXT NOT NULL DEFAULT 'other',
+  place TEXT NOT NULL DEFAULT '',
+  about TEXT NOT NULL DEFAULT '',
+  website TEXT NOT NULL DEFAULT '',
+  picture_idea TEXT NOT NULL DEFAULT '',
+  reasons_json TEXT NOT NULL DEFAULT '{}',
+  picture_file TEXT,
+  status TEXT NOT NULL DEFAULT 'proposed',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+ALTER TABLE accounts ADD COLUMN profile_id TEXT REFERENCES profiles(id) ON DELETE SET NULL;
+CREATE UNIQUE INDEX accounts_profile_platform ON accounts(profile_id, platform) WHERE profile_id IS NOT NULL;
+
+-- 0.5.0 kept the profile inside the account: each such row becomes a profile of its own, using the account id as the profile id (so the picture folder stays valid).
+INSERT INTO profiles (id, label, product_id, role_name, role_voice, platforms_json, purpose, strategy, first_name, last_name, display_name, username, birth_date, gender, place, about, website, picture_idea, reasons_json, picture_file, status, created_at, updated_at)
+SELECT a.id, CASE WHEN p.display_name != '' THEN p.display_name ELSE a.label END, a.product_id, a.role_name, a.role_voice, json_array(a.platform), p.purpose, p.strategy, p.first_name, p.last_name, p.display_name, p.username, p.birth_date, p.gender, p.place, p.about, p.website, p.picture_idea, p.reasons_json, p.picture_file, p.status, a.created_at, p.updated_at
+FROM account_profiles p JOIN accounts a ON a.id = p.account_id;
+UPDATE accounts SET profile_id = id WHERE id IN (SELECT account_id FROM account_profiles);
+DROP TABLE account_profiles;
+`
   }
 ]

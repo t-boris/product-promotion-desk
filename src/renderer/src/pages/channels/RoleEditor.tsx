@@ -27,6 +27,26 @@ export function RoleEditor({ account }: { account: Account }) {
     if (await save(role)) setEditing(false)
   }
 
+  // A login that belongs to a profile speaks as the profile does: the role is changed there.
+  if (account.profileId) {
+    return (
+      <AccountBlock
+        step={1}
+        title="Role"
+        testId={`account-role-${account.id}`}
+        summary={
+          account.role ? (
+            <>
+              <Badge tone="info">{account.role.name}</Badge> <span>{account.role.voice || 'No voice written yet.'}</span> <span className="muted">· from the profile (step 2)</span>
+            </>
+          ) : (
+            <span className="muted">No role. It is set in the profile (step 2), and then it is the same on every platform of the profile.</span>
+          )
+        }
+      />
+    )
+  }
+
   const summary = account.role ? (
     <>
       <Badge tone="info">{account.role.name}</Badge> <span>{account.role.voice || 'No voice written yet.'}</span>

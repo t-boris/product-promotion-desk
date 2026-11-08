@@ -1,6 +1,6 @@
 // Persistence for accounts and channels. Rows are mapped by the shared mappers in ../repos.
 
-import type { Account, AccountProfile, AccountRole, Mailbox, ProfileFields, ProfileGender, ProfileStatus, AccountStatus, Capability, Channel, ChannelMode, ChannelPlan, ChannelSettings, ChannelStatus } from '../../shared/types'
+import type { Account, Profile, AccountRole, Mailbox, ProfileFields, ProfileGender, ProfileStatus, AccountStatus, Capability, Channel, ChannelMode, ChannelPlan, ChannelSettings, ChannelStatus } from '../../shared/types'
 import { newId, toJson, type Db } from '../db/database'
 import type { Clock } from '../ports'
 import { mapMailbox, type Repos } from '../repos'
@@ -35,15 +35,15 @@ export class ChannelsStore {
 
   // ───────────── accounts ─────────────
 
-  insertAccount(productId: string | null, platform: string, label: string, role: AccountRole | null = null, email: string | null = null, mailboxId: string | null = null): Account {
+  insertAccount(productId: string | null, platform: string, label: string, role: AccountRole | null = null, email: string | null = null, mailboxId: string | null = null, profileId: string | null = null): Account {
     const id = newId()
     // The prefix makes the browser session persistent: cookies survive restarts.
     const partition = `persist:ppd-account-${id}`
     this.db
       .prepare(
-        "INSERT INTO accounts (id, product_id, platform, label, identity, partition, status, created_at, role_name, role_voice, email, mailbox_id) VALUES (?, ?, ?, ?, NULL, ?, 'login_required', ?, ?, ?, ?, ?)"
+        "INSERT INTO accounts (id, product_id, platform, label, identity, partition, status, created_at, role_name, role_voice, email, mailbox_id, profile_id) VALUES (?, ?, ?, ?, NULL, ?, 'login_required', ?, ?, ?, ?, ?, ?)"
       )
-      .run(id, productId, platform, label, partition, this.clock.now().toISOString(), role?.name ?? null, role?.voice ?? null, email, mailboxId)
+      .run(id, productId, platform, label, partition, this.clock.now().toISOString(), role?.name ?? null, role?.voice ?? null, email, mailboxId, profileId)
     return this.repos.account(id)
   }
 
@@ -90,23 +90,25 @@ export class ChannelsStore {
     this.db.prepare('UPDATE accounts SET last_login_attempt_at = ? WHERE id = ?').run(at, id)
   }
 
-  // ───────────── account profiles (DEC-019) ─────────────
+  // ───────────── profiles (DEC-019) ─────────────
 
-  /** The profile of an account and the name of its picture file, or null when none was made yet. */
-  profile(accountId: string): { profile: AccountProfile; pictureFile: string | null } | null {
-    const row = this.db.prepare('SELECT * FROM account_profiles WHERE account_id = ?').get(accountId) as Record<string, unknown> | undefined
-    if (!row) return null
+  private readProfile(row: Record<string, unknown>): { profile: Profile; pictureFile: string | null } {
     const pictureFile = (row.picture_file as string | null) ?? null
-    let reasons: AccountProfile['reasons']
-    try {
-      reasons = JSON.parse(String(row.reasons_json || '{}')) as AccountProfile['reasons']
-    } catch {
-      reasons = {}
+    const json = <T>(text: unknown, fallback: T): T => {
+      try {
+        return JSON.parse(String(text || '')) as T
+      } catch {
+        return fallback
+      }
     }
     return {
       pictureFile,
       profile: {
-        accountId,
+        id: String(row.id),
+        label: String(row.label),
+        productId: (row.product_id as string | null) ?? null,
+        role: row.role_name ? { name: String(row.role_name), voice: String(row.role_voice ?? '') } : null,
+        platforms: json<string[]>(row.platforms_json, []),
         purpose: String(row.purpose),
         strategy: String(row.strategy),
         firstName: String(row.first_name),
@@ -119,32 +121,61 @@ export class ChannelsStore {
         about: String(row.about),
         website: String(row.website),
         pictureIdea: String(row.picture_idea),
-        reasons,
+        reasons: json<Profile['reasons']>(row.reasons_json, {}),
         hasPicture: pictureFile !== null,
         status: row.status as ProfileStatus,
+        createdAt: String(row.created_at),
         updatedAt: String(row.updated_at)
       }
     }
   }
 
-  /** The profiles of the other accounts on a platform, so that a new person differs from them. */
-  profilesOnPlatform(platform: string, exceptAccountId: string): AccountProfile[] {
-    const rows = this.db.prepare('SELECT a.id FROM accounts a JOIN account_profiles p ON p.account_id = a.id WHERE a.platform = ? AND a.id != ?').all(platform, exceptAccountId) as { id: string }[]
-    return rows.flatMap((row) => this.profile(row.id)?.profile ?? [])
+  /** A profile and the name of its picture file, or null when there is none with this id. */
+  profile(id: string): { profile: Profile; pictureFile: string | null } | null {
+    const row = this.db.prepare('SELECT * FROM profiles WHERE id = ?').get(id) as Record<string, unknown> | undefined
+    return row ? this.readProfile(row) : null
   }
 
-  saveProfile(accountId: string, data: { purpose: string; strategy: string; fields: ProfileFields; reasons: AccountProfile['reasons']; status: ProfileStatus; pictureFile: string | null }): AccountProfile {
+  listProfiles(): Profile[] {
+    return (this.db.prepare('SELECT * FROM profiles ORDER BY created_at').all() as Record<string, unknown>[]).map((row) => this.readProfile(row).profile)
+  }
+
+  /** A new, empty profile: the owner names it; the person is proposed afterwards. */
+  insertProfile(data: { label: string; productId: string | null; platforms: string[]; purpose: string }): Profile {
+    const id = newId()
+    const now = this.clock.now().toISOString()
+    this.db
+      .prepare("INSERT INTO profiles (id, label, product_id, platforms_json, purpose, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'proposed', ?, ?)")
+      .run(id, data.label, data.productId, JSON.stringify(data.platforms), data.purpose, now, now)
+    return (this.profile(id) as { profile: Profile }).profile
+  }
+
+  saveProfile(
+    id: string,
+    data: { label: string; productId: string | null; role: AccountRole | null; platforms: string[]; purpose: string; strategy: string; fields: ProfileFields; reasons: Profile['reasons']; status: ProfileStatus; pictureFile: string | null }
+  ): Profile {
     const f = data.fields
     this.db
       .prepare(
-        `INSERT INTO account_profiles (account_id, purpose, strategy, first_name, last_name, display_name, username, birth_date, gender, place, about, website, picture_idea, reasons_json, picture_file, status, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(account_id) DO UPDATE SET purpose = excluded.purpose, strategy = excluded.strategy, first_name = excluded.first_name, last_name = excluded.last_name,
-           display_name = excluded.display_name, username = excluded.username, birth_date = excluded.birth_date, gender = excluded.gender, place = excluded.place, about = excluded.about,
-           website = excluded.website, picture_idea = excluded.picture_idea, reasons_json = excluded.reasons_json, picture_file = excluded.picture_file, status = excluded.status, updated_at = excluded.updated_at`
+        `UPDATE profiles SET label = ?, product_id = ?, role_name = ?, role_voice = ?, platforms_json = ?, purpose = ?, strategy = ?, first_name = ?, last_name = ?, display_name = ?, username = ?,
+           birth_date = ?, gender = ?, place = ?, about = ?, website = ?, picture_idea = ?, reasons_json = ?, picture_file = ?, status = ?, updated_at = ? WHERE id = ?`
       )
-      .run(accountId, data.purpose, data.strategy, f.firstName, f.lastName, f.displayName, f.username, f.birthDate, f.gender, f.place, f.about, f.website, f.pictureIdea, JSON.stringify(data.reasons), data.pictureFile, data.status, this.clock.now().toISOString())
-    return (this.profile(accountId) as { profile: AccountProfile }).profile
+      .run(data.label, data.productId, data.role?.name ?? null, data.role?.voice ?? null, JSON.stringify(data.platforms), data.purpose, data.strategy, f.firstName, f.lastName, f.displayName, f.username, f.birthDate, f.gender, f.place, f.about, f.website, f.pictureIdea, JSON.stringify(data.reasons), data.pictureFile, data.status, this.clock.now().toISOString(), id)
+    return (this.profile(id) as { profile: Profile }).profile
+  }
+
+  deleteProfile(id: string): void {
+    this.db.prepare('DELETE FROM profiles WHERE id = ?').run(id)
+  }
+
+  /** The logins that belong to a profile: at most one per platform. */
+  accountsOfProfile(profileId: string): Account[] {
+    return this.repos.listAccounts().filter((a) => a.profileId === profileId)
+  }
+
+  setAccountProfile(accountId: string, profileId: string | null): Account {
+    this.db.prepare('UPDATE accounts SET profile_id = ? WHERE id = ?').run(profileId, accountId)
+    return this.repos.account(accountId)
   }
 
   deleteAccount(id: string): void {

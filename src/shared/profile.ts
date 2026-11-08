@@ -1,6 +1,6 @@
 // Small pure helpers about an account profile (DEC-019), shared by the core (the age rule) and the screen (the one-line summary).
 
-import type { AccountProfile, ProfileFields } from './types'
+import type { Profile, ProfileFields } from './types'
 
 /** Whole years between a YYYY-MM-DD birth date and `now`; null when the text is not a real date. */
 export function ageOn(birthDate: string, now: Date): number | null {
@@ -23,7 +23,7 @@ export function profileLine(profile: Pick<ProfileFields, 'displayName' | 'firstN
 }
 
 /** The values the owner edits, without the bookkeeping fields of a stored profile. */
-export function fieldsOf(profile: AccountProfile | ProfileFields): ProfileFields {
+export function fieldsOf(profile: Profile | ProfileFields): ProfileFields {
   return {
     firstName: profile.firstName,
     lastName: profile.lastName,

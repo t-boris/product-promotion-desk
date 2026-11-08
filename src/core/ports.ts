@@ -27,6 +27,10 @@ export const systemClock: Clock = { now: () => new Date() }
 export interface AiTask {
   /** Short label for logs, e.g. "passport.synthesize". */
   label: string
+  /** What the progress panel calls this run, in words; without it the panel uses the label's usual name. */
+  title?: string
+  /** What this run is about (a profile id, an account id): the block that started it shows only its own runs. */
+  subject?: string
   prompt: string
   system?: string
   /** Working directory for the engine process; read-only analysis only. */

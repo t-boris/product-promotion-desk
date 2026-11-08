@@ -3,7 +3,7 @@ import { Badge } from '../../ui'
 import { AccountEmail } from './AccountEmail'
 import { AccountMore } from './AccountMore'
 import { AccountPassword } from './AccountPassword'
-import { AccountProfile } from './AccountProfile'
+import { AccountProfileLine } from './AccountProfileLine'
 import { AccountSignIn } from './AccountSignIn'
 import { ACCOUNT_STATUS_LABEL, ACCOUNT_STATUS_TONE, platformLabel } from './model'
 import { nextStep } from './next-step'
@@ -14,7 +14,7 @@ import { RoleEditor } from './RoleEditor'
  * One account, in the order the owner works (DEC-015): what comes next, then its role, its e-mail address, its password and the
  * sign-in. It says nothing about channels or products: an account is only about the account.
  */
-export function AccountDetail({ account, platforms, mailboxes, vault }: { account: Account; platforms: PlatformInfo[]; mailboxes: Mailbox[]; vault: VaultStatus | undefined }) {
+export function AccountDetail({ account, platforms, mailboxes, vault, onOpenProfile }: { account: Account; platforms: PlatformInfo[]; mailboxes: Mailbox[]; vault: VaultStatus | undefined; onOpenProfile: (profileId: string) => void }) {
   const info = platforms.find((p) => p.platform === account.platform)
   const hasPassword = vault?.accountIds.includes(account.id) ?? false
   const step = nextStep(account, hasPassword, vault?.available ?? true)
@@ -36,7 +36,7 @@ export function AccountDetail({ account, platforms, mailboxes, vault }: { accoun
         {step.text}
       </div>
       <RoleEditor account={account} />
-      <AccountProfile account={account} />
+      <AccountProfileLine account={account} onOpenProfile={onOpenProfile} />
       <AccountEmail account={account} mailboxes={mailboxes} />
       {vault && <AccountPassword account={account} vaultAvailable={vault.available} hasPassword={hasPassword} />}
       <AccountSignIn account={account} info={info} vaultAvailable={vault?.available ?? false} hasPassword={hasPassword} />

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AgentQuestionDialog } from './AgentQuestionDialog'
+import { AiPill } from './AiProgress'
 import { useAutomation, useQuery } from './hooks'
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from './menu-state'
 import { PAGES } from './pages'
@@ -107,6 +108,7 @@ export function App() {
             )}
           </div>
           <div className="row">
+            <AiPill />
             {state?.background && <Badge tone="info">Background</Badge>}
             <span className="muted small" data-testid="automation-state">
               Automation {state ? (state.paused ? 'paused' : 'running') : '…'}

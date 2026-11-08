@@ -350,3 +350,11 @@ PART 2. Profile as its own entity (release 0.6.0). The model (to be agreed BEFOR
 Steps: model + migration + tests; service/API; missions; UI; live check; release.
 
 Open questions for the owner: (a) one account per platform for a profile; (b) role/voice on the profile; (c) order: 0.5.1 progress first, then 0.6.0 structure.
+
+#### Review of 0.6.0 (owner: all together, as fast as possible, without tests and PRs)
+
+Done: AI progress at the engine boundary (`AiActivity`, tracked engines, `ai.activity`/`ai.stop`, top-bar pill, `AiProgressPanel` per profile; Codex stderr filtered so its echoed prompt is not shown); Profile as its own entity (migration 207 `profiles` + `accounts.profile_id`, unique per (profile, platform), `account_profiles` rows carried over, `profiles.*` API, `accounts.setProfile`, role lives on the profile and an account of a profile speaks with it, tab "Profiles" with the accounts of a profile per platform, one-line profile in the account card, profile choice in the add-account form).
+
+Checked live (scratch copy of a database with two 0.5.0 profiles, real Codex): migration, both profiles carried over with their role; new profile, proposal with progress panel and pill (20 s), approval, "Make an account" from the profile, the account card showing the profile, one-account-per-platform refusal, removal guard.
+
+NOT done, on the owner's instruction: no tests were written or run for this release. Tests of the old per-account API are now stale and fail to compile: `person-profile.test.ts` (was `account-profile.test.ts`), `agent-runs.test.ts` (profile.* calls, `agent.showBrowser` typing), `profile-proposal.test.ts` (`platform` became `platforms`), `electron-browser-service.test.ts` and `renderer-logic.test.ts` (Account has `profileId`). Port them before the next `npm test`.

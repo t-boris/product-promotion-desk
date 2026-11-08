@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import type { Account, AccountRole, Mailbox, PlatformInfo } from '../../../../shared/types'
+import type { Account, AccountRole, Mailbox, PlatformInfo, Profile } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
 import { Button, ErrorNote, Field } from '../../ui'
 import { ROLE_NAME_LIMIT, ROLE_VOICE_LIMIT } from './RoleEditor'
@@ -11,12 +11,18 @@ import { ROLE_NAME_LIMIT, ROLE_VOICE_LIMIT } from './RoleEditor'
 export function CreateAccount({
   platforms,
   mailboxes,
+  profiles,
+  accounts,
   role,
   onCreated,
   onCancel
 }: {
   platforms: PlatformInfo[]
   mailboxes: Mailbox[]
+  /** The profiles a new login may belong to (DEC-019). */
+  profiles: Profile[]
+  /** Every account, to leave out the profiles that already have a login on the chosen platform. */
+  accounts: Account[]
   /** A role to start from ("Use this role" on the product page). */
   role: AccountRole | null
   onCreated: (account: Account) => void
@@ -24,13 +30,14 @@ export function CreateAccount({
   onCancel?: () => void
 }) {
   const [chosen, setChosen] = useState('')
+  const [profileId, setProfileId] = useState('')
   const [label, setLabel] = useState(role ? `${role.name} account` : '')
   const [roleName, setRoleName] = useState(role?.name ?? '')
   const [roleVoice, setRoleVoice] = useState(role?.voice ?? '')
   const [email, setEmail] = useState('')
   const [chosenMailbox, setChosenMailbox] = useState('')
   const [fromMailbox, setFromMailbox] = useState<string | null>(null)
-  const [create, state] = useAction((args: { platform: string; label: string; role?: AccountRole; email?: string; mailboxId?: string }) => call('accounts.create', args))
+  const [create, state] = useAction((args: { platform: string; label: string; role?: AccountRole; email?: string; mailboxId?: string; profileId?: string }) => call('accounts.create', args))
   const mailboxId = mailboxes.some((m) => m.id === chosenMailbox) ? chosenMailbox : (mailboxes[0]?.id ?? '')
   const [propose, proposing] = useAction(async (platformKey: string) => {
     const result = await call('accounts.proposeEmail', { mailboxId, platform: platformKey })
@@ -39,16 +46,20 @@ export function CreateAccount({
   })
   // No platform is chosen for the owner: a silent default (the first in the list) made a "Facebook" account on Reddit.
   const platform = chosen
-  const roleIncomplete = roleName.trim() === '' && roleVoice.trim() !== ''
+  // A profile that already has a login on this platform cannot take another. A login of a profile speaks with the profile's role.
+  const freeProfiles = profiles.filter((p) => !accounts.some((a) => a.profileId === p.id && a.platform === platform))
+  const profile = freeProfiles.find((p) => p.id === profileId)
+  const roleIncomplete = !profile && roleName.trim() === '' && roleVoice.trim() !== ''
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault()
     if (!label.trim() || !platform || roleIncomplete) return
-    const wanted = roleName.trim() ? { name: roleName.trim(), voice: roleVoice.trim() } : undefined
+    const wanted = !profile && roleName.trim() ? { name: roleName.trim(), voice: roleVoice.trim() } : undefined
     const account = await create({
       platform,
       label: label.trim(),
       ...(wanted ? { role: wanted } : {}),
+      ...(profile ? { profileId: profile.id } : {}),
       ...(email.trim() ? { email: email.trim(), ...(fromMailbox ? { mailboxId: fromMailbox } : {}) } : {})
     })
     if (account) onCreated(account)
@@ -101,6 +112,19 @@ export function CreateAccount({
           </Field>
         )}
       </div>
+      {profiles.length > 0 && (
+        <Field label="Profile (optional)" hint="The person behind this login. It speaks with the profile's role; a profile has one login per platform.">
+          <select className="input" value={profile?.id ?? ''} onChange={(e) => setProfileId(e.target.value)} disabled={platform === ''} data-testid="account-profile">
+            <option value="">{platform === '' ? 'Choose a platform first' : 'No profile'}</option>
+            {freeProfiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+      {!profile && (
       <div className="form-row">
         <Field label="Role (optional)" hint="For example astrologer or developer.">
           <input className="input" value={roleName} maxLength={ROLE_NAME_LIMIT} onChange={(e) => setRoleName(e.target.value)} data-testid="account-role-name" />
@@ -109,6 +133,7 @@ export function CreateAccount({
           <textarea className="input short" value={roleVoice} maxLength={ROLE_VOICE_LIMIT} onChange={(e) => setRoleVoice(e.target.value)} data-testid="account-role-voice" />
         </Field>
       </div>
+      )}
       {roleIncomplete && <p className="muted small">Give the role a name, or clear the voice.</p>}
       <div className="row">
         <Button variant="primary" type="submit" disabled={!label.trim() || !platform || roleIncomplete || state.busy} data-testid="account-create">

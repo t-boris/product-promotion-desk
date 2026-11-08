@@ -57,8 +57,6 @@ const closeUserWindow = (service: BrowserService, account: Account): void => {
 export class AccountsService {
   /** Called when a check finds an account signed out, so a saved password can sign it in again (DEC-014). */
   onSignedOut: ((account: Account) => void) | null = null
-  /** Called after an account was removed, so what belongs to it elsewhere (its profile pictures) goes too. */
-  onRemoved: ((account: Account) => Promise<void>) | null = null
 
   constructor(
     private readonly core: Core,
@@ -78,7 +76,7 @@ export class AccountsService {
   }
 
   /** An account has its own login and browser session and is not tied to a product (DEC-015); `productId` only records what it was made for. */
-  create(args: { productId?: string; platform: string; label: string; role?: AccountRole | null; email?: string | null; mailboxId?: string | null }): Account {
+  create(args: { productId?: string; platform: string; label: string; role?: AccountRole | null; email?: string | null; mailboxId?: string | null; profileId?: string | null }): Account {
     const productId = args.productId === undefined || args.productId === null ? null : requireText(args.productId, 'The product')
     const product = productId ? found(() => this.core.repos.product(productId), 'The product') : null
     const platform = requireText(args.platform, 'The platform').toLowerCase()
@@ -91,10 +89,31 @@ export class AccountsService {
     const role = parseRole(args.role)
     const email = args.email ? parseEmail(args.email) : null
     const mailboxId = email && args.mailboxId ? this.knownMailbox(args.mailboxId) : null
-    const account = this.store.insertAccount(product?.id ?? null, platform, label, role, email, mailboxId)
+    const profileId = args.profileId ? this.profileFor(args.profileId, platform, null) : null
+    const account = this.store.insertAccount(product?.id ?? null, platform, label, role, email, mailboxId, profileId)
     this.core.log.info('accounts', `Account created${product ? ` for "${product.name}"` : ''}: ${label} (${platform})${role ? `, role "${role.name}"` : ''}${email ? `, e-mail ${email}` : ''}. Sign in through the account browser.`)
     this.core.events.changed('accounts', 'attention')
     return account
+  }
+
+  /** The profile a login may belong to: it exists, and has no other login on this platform (one login per platform for a profile). */
+  private profileFor(profileId: string, platform: string, exceptAccountId: string | null): string {
+    const profile = this.store.profile(requireText(profileId, 'The profile'))?.profile
+    if (!profile) throw new ApiError('not_found', 'The profile was not found.')
+    const taken = this.store.accountsOfProfile(profile.id).find((a) => a.platform === platform && a.id !== exceptAccountId)
+    if (taken) throw new ApiError('profile_has_account', `The profile "${profile.label}" already has an account on ${platform}: ${taken.label}. A profile has one account per platform; for another account make another profile.`)
+    return profile.id
+  }
+
+  /** Puts a login into a profile (the person it is), or takes it out (null). */
+  setProfile(args: { accountId: string; profileId: string | null }): Account {
+    const account = this.account(args.accountId)
+    const profileId = args.profileId ? this.profileFor(args.profileId, account.platform, account.id) : null
+    if (profileId === account.profileId) return account
+    const updated = this.store.setAccountProfile(account.id, profileId)
+    this.core.log.info('accounts', profileId ? `${account.label} now belongs to the profile "${this.store.profile(profileId)?.profile.label}".` : `${account.label} no longer belongs to a profile.`)
+    this.core.events.changed('accounts')
+    return updated
   }
 
   private knownMailbox(id: string): string {
@@ -117,6 +136,7 @@ export class AccountsService {
   /** Sets, changes or removes (null) the role of a login (DEC-010). The role belongs to the account, whichever product uses it. */
   setRole(args: { accountId: string; role: AccountRole | null }): Account {
     const account = this.account(args.accountId)
+    if (account.profileId) throw new ApiError('role_from_profile', `${account.label} speaks as its profile does. Change the role in the profile.`)
     const role = parseRole(args.role)
     if (role) {
       // Two logins of one product on one platform may not play the same role: checked for every product that already uses this account.
@@ -159,7 +179,6 @@ export class AccountsService {
     this.store.deleteAccount(account.id)
     // The password goes with the account: a removed account leaves nothing in the vault.
     this.core.secrets.delete(passwordKey(account.id))
-    await this.onRemoved?.(account)
     this.core.log.info('accounts', `Account removed: ${account.label}. Its stored browser session was erased.`)
     this.core.events.changed('accounts', 'attention')
   }

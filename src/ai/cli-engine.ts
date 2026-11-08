@@ -173,7 +173,7 @@ export abstract class CliEngine implements AiEngine {
         signal: options.signal,
         maxStdoutBytes: this.options.maxOutputBytes,
         killGraceMs: this.options.killGraceMs,
-        onStderrLine: options.onProgress ? (line) => options.onProgress?.(line.slice(0, 200)) : undefined
+        onStderrLine: options.onProgress ? this.progressSink(options.onProgress) : undefined
       })
       const text = this.interpret(result, task)
       options.onProgress?.(`Finished ${task.label} in ${Math.round(result.durationMs / 1000)}s`)
@@ -181,6 +181,14 @@ export abstract class CliEngine implements AiEngine {
     } finally {
       if (scratch) rmSync(scratch, { recursive: true, force: true })
     }
+  }
+
+  /**
+   * What reaches the progress panel from the engine's stderr, one line at a time. By default every line; an engine whose stderr
+   * echoes the prompt or its own banner overrides this to show only what the engine is doing.
+   */
+  protected progressSink(forward: (line: string) => void): (line: string) => void {
+    return (line) => forward(line.slice(0, 200))
   }
 
   /** Turns the process result into the answer text, or into the AiError that describes the failure. */

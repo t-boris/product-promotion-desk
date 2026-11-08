@@ -60,6 +60,9 @@ export const mapClaim = (r: Row): Claim => ({
   updatedAt: r.updated_at as string
 })
 
+/** An account with the role of its profile beside its own (the profile's wins, see mapAccount). */
+const ACCOUNT_SELECT = 'SELECT a.*, p.role_name AS prof_role_name, p.role_voice AS prof_role_voice FROM accounts a LEFT JOIN profiles p ON p.id = a.profile_id'
+
 export const mapAccount = (r: Row): Account => ({
   id: r.id as string,
   platform: r.platform as string,
@@ -70,13 +73,19 @@ export const mapAccount = (r: Row): Account => ({
   createdAt: r.created_at as string,
   // accounts.product_id is added by the channels migration (DEC-009); null means unassigned.
   productId: (r.product_id as string | null | undefined) ?? null,
-  // accounts.role_name / role_voice come with the DEC-010 channels migration; both empty means no role.
-  role: r.role_name ? { name: r.role_name as string, voice: (r.role_voice as string | null | undefined) ?? '' } : null,
+  // The role of a login (DEC-010). A login that belongs to a profile speaks as the profile does (DEC-019): the profile's role wins.
+  role: r.prof_role_name
+    ? { name: r.prof_role_name as string, voice: (r.prof_role_voice as string | null | undefined) ?? '' }
+    : r.role_name
+      ? { name: r.role_name as string, voice: (r.role_voice as string | null | undefined) ?? '' }
+      : null,
   // accounts.login_name comes with the DEC-014 channels migration.
   loginName: (r.login_name as string | null | undefined) ?? null,
   // accounts.email / mailbox_id come with the DEC-015 channels migration.
   email: (r.email as string | null | undefined) ?? null,
-  mailboxId: (r.mailbox_id as string | null | undefined) ?? null
+  mailboxId: (r.mailbox_id as string | null | undefined) ?? null,
+  // accounts.profile_id comes with the profile migration (DEC-019).
+  profileId: (r.profile_id as string | null | undefined) ?? null
 })
 
 export const mapMailbox = (r: Row): Mailbox => ({ id: r.id as string, address: r.address as string, kind: 'existing', createdAt: r.created_at as string })
@@ -219,7 +228,9 @@ export class Repos {
     return this.one('products', id, mapProduct, 'Product')
   }
   account(id: string): Account {
-    return this.one('accounts', id, mapAccount, 'Account')
+    const row = this.db.prepare(`${ACCOUNT_SELECT} WHERE a.id = ?`).get(id) as Row | undefined
+    if (!row) throw new Error(`Account not found: ${id}`)
+    return mapAccount(row)
   }
   channel(id: string): Channel {
     return this.one('channels', id, mapChannel, 'Channel')
@@ -244,7 +255,7 @@ export class Repos {
     return (this.db.prepare('SELECT * FROM products ORDER BY created_at').all() as Row[]).map(mapProduct)
   }
   listAccounts(): Account[] {
-    return (this.db.prepare('SELECT * FROM accounts ORDER BY created_at').all() as Row[]).map(mapAccount)
+    return (this.db.prepare(`${ACCOUNT_SELECT} ORDER BY a.created_at`).all() as Row[]).map(mapAccount)
   }
   listChannels(): Channel[] {
     return (this.db.prepare('SELECT * FROM channels ORDER BY created_at').all() as Row[]).map(mapChannel)

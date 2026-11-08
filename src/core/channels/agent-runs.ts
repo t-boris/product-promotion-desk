@@ -9,12 +9,12 @@
 // engine ends, the site's own answer decides (the connector's login check), not the AI's opinion.
 
 import { ApiError } from '../../shared/api'
-import type { Account, AccountProfile, AgentAsk, AgentReadiness, AgentRun, AgentTaskKind } from '../../shared/types'
+import type { Account, Profile, AgentAsk, AgentReadiness, AgentRun, AgentTaskKind } from '../../shared/types'
 import { AiError, TakeoverError, type AiEngine } from '../ports'
 import { missionPrompt, type Mission } from '../browser-agent/mission'
 import { BrowserToolbox, type MissionStatus } from '../browser-agent/toolbox'
 import type { Core } from '../core'
-import type { AccountProfileService } from './account-profile'
+import type { PersonProfileService } from './person-profile'
 import type { AccountsService } from './accounts'
 import { BROWSER_BUSY, found } from './errors'
 import { presetFor } from './presets'
@@ -42,7 +42,7 @@ export class AgentRunService {
     private readonly core: Core,
     private readonly accounts: AccountsService,
     private readonly vault: VaultService,
-    private readonly profiles: AccountProfileService
+    private readonly profiles: PersonProfileService
   ) {}
 
   state(accountId: unknown): AgentRun | null {
@@ -222,8 +222,8 @@ export class AgentRunService {
   }
 
   /** The picture of the profile, when there is one: the AI uploads it by name and never sees a path. */
-  private pictureFiles(account: Account, profile: AccountProfile): Mission['files'] {
-    const path = profile.hasPicture ? this.profiles.pictureFile(account.id) : null
+  private pictureFiles(account: Account, profile: Profile): Mission['files'] {
+    const path = profile.hasPicture ? this.profiles.pictureFile(profile.id) : null
     return path ? { PICTURE: { path, describe: 'the profile picture the owner approved (upload it where the site asks for a profile photo or an avatar)' } } : undefined
   }
 
@@ -248,7 +248,7 @@ export class AgentRunService {
     try {
       opened = await bridge.open(toolbox)
       const said = await engine.run(
-        { label: `agent.${kind}`, prompt: missionPrompt(mission, this.core.clock.now().toISOString().slice(0, 10)), agent: { server: SERVER_NAME, launch: opened.launch }, timeoutMs: RUN_TIMEOUT_MS },
+        { label: `agent.${kind}`, subject: account.profileId ?? account.id, prompt: missionPrompt(mission, this.core.clock.now().toISOString().slice(0, 10)), agent: { server: SERVER_NAME, launch: opened.launch }, timeoutMs: RUN_TIMEOUT_MS },
         { signal: live.abort.signal }
       )
       if (live.run.status !== 'running') return // stopped by the owner while the engine was ending
@@ -339,7 +339,7 @@ export class AgentRunService {
 }
 
 /** The approved profile as facts for the AI: exactly what it types, and why the profile is what it is. */
-function profileFacts(profile: AccountProfile): string[] {
+function profileFacts(profile: Profile): string[] {
   const facts = ['THE PROFILE (the owner approved it; type exactly these values and never invent another personal detail):']
   if (profile.purpose) facts.push(`What the profile is for: ${profile.purpose}`)
   facts.push(`First name: ${profile.firstName}. Last name: ${profile.lastName}. Display name: ${profile.displayName}. User name: ${profile.username}.`)

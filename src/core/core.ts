@@ -1,4 +1,5 @@
 import { ApiError } from '../shared/api'
+import { AiActivity } from './ai-activity'
 import { Connectors } from './connector-registry'
 import { openDatabase, type Db } from './db/database'
 import { EngineRegistry } from './engines'
@@ -56,6 +57,8 @@ export class Core {
   readonly repos: Repos
   readonly runs: RunRecorder
   readonly engines: EngineRegistry
+  /** What every AI run is doing, for the progress panel. */
+  readonly aiActivity: AiActivity
   readonly connectors: Connectors
   readonly browser: BrowserService
   readonly secrets: SecretStore
@@ -83,7 +86,8 @@ export class Core {
     this.settings = new SettingsStore(this.db)
     this.repos = new Repos(this.db)
     this.runs = new RunRecorder(this.db, this.events, this.clock)
-    this.engines = new EngineRegistry(deps.engines, this.settings)
+    this.aiActivity = new AiActivity(this.events, this.clock)
+    this.engines = new EngineRegistry(deps.engines, this.settings, this.aiActivity)
     this.connectors = new Connectors(deps.connectors)
     this.tickets = new TicketAuthority(this.clock, deps.secret)
     this.secrets = deps.secrets ?? new UnavailableSecretStore()
@@ -91,6 +95,10 @@ export class Core {
     this.agentBridge = deps.agentBridge ?? null
     this.sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
     this.browser = typeof deps.browser === 'function' ? deps.browser(this.tickets) : deps.browser
+    this.router.register({
+      'ai.activity': () => this.aiActivity.list(),
+      'ai.stop': (args) => this.aiActivity.stop(args.id)
+    })
     registerModules(this)
   }
 

@@ -4,11 +4,12 @@
 
 import type {
   AgentAsk,
+  AiTaskState,
   AgentReadiness,
   AgentRun,
   AgentTaskKind,
   Account,
-  AccountProfile,
+  Profile,
   AccountRole,
   ProfileFields,
   BrowserState,
@@ -119,7 +120,7 @@ export interface ApiMethods {
   /** Every account: they are one library, not tied to a product (DEC-015). */
   'accounts.list': [void, Account[]]
   /** Creates an account with its own login and browser session. `productId` only records what it was created for. */
-  'accounts.create': [{ productId?: Id; platform: string; label: string; role?: AccountRole | null; email?: string | null; mailboxId?: Id | null }, Account]
+  'accounts.create': [{ productId?: Id; platform: string; label: string; role?: AccountRole | null; email?: string | null; mailboxId?: Id | null; profileId?: Id | null }, Account]
   /** Sets or clears (null) the e-mail address of an account. */
   'accounts.setEmail': [{ accountId: Id; email: string | null; mailboxId?: Id | null }, Account]
   /** An address of its own for a new account on `platform`, made from a base mailbox (an alias), different from every address in use. */
@@ -153,17 +154,27 @@ export interface ApiMethods {
   /** The owner answers the AI's question (the pop-up): a text, or "done" for "I did it". */
   /** Brings the browser the AI works in to the front, for the owner to act in the page the AI waits on (a CAPTCHA). */
   'agent.showBrowser': [{ accountId: Id }, { shown: boolean }]
-  'profile.get': [{ accountId: Id }, AccountProfile | null]
-  /** The AI proposes the whole profile as a strategy for a purpose (a proposal only; the owner approves). */
-  'profile.propose': [{ accountId: Id; purpose?: string }, AccountProfile]
-  'profile.save': [{ accountId: Id; profile: ProfileFields; purpose?: string }, AccountProfile]
-  'profile.approve': [{ accountId: Id }, AccountProfile]
-  'profile.makePicture': [{ accountId: Id }, AccountProfile]
-  'profile.setPicture': [{ accountId: Id; path: string }, AccountProfile]
-  'profile.picture': [{ accountId: Id }, { dataUrl: string } | null]
+  /** The profiles (DEC-019): people made once for a purpose; their accounts are the logins on platforms. */
+  'profiles.list': [void, Profile[]]
+  'profiles.get': [{ id: Id }, Profile]
+  /** A new empty profile: the owner names it and says what it is for; the AI proposes the person afterwards. */
+  'profiles.create': [{ label: string; productId?: Id | null; platforms?: string[]; purpose?: string }, Profile]
+  /** The AI proposes the whole person as a strategy for a purpose (a proposal only; the owner approves). */
+  'profiles.propose': [{ id: Id; purpose?: string }, Profile]
+  'profiles.save': [{ id: Id; profile: ProfileFields; label?: string; purpose?: string; role?: AccountRole | null; platforms?: string[]; productId?: Id | null }, Profile]
+  'profiles.approve': [{ id: Id }, Profile]
+  'profiles.remove': [{ id: Id }, void]
+  'profiles.makePicture': [{ id: Id }, Profile]
+  'profiles.setPicture': [{ id: Id; path: string }, Profile]
+  'profiles.picture': [{ id: Id }, { dataUrl: string } | null]
+  'accounts.setProfile': [{ accountId: Id; profileId: Id | null }, Account]
   'agent.answer': [{ accountId: Id; answer: string }, AgentRun | null]
   /** Every question an AI is waiting on now, for the pop-up that appears on any screen. */
   'agent.questions': [void, AgentAsk[]]
+  /** The AI runs now and those that ended in the last minute, for the progress panel. */
+  'ai.activity': [void, AiTaskState[]]
+  /** Stops one AI run (the engine process is ended). */
+  'ai.stop': [{ id: Id }, void]
   'accounts.takeControl': [{ accountId: Id }, void]
   /** Gives the browser back to the app. The person's window, when open, is closed: it would still say that the person is in control. */
   'accounts.releaseControl': [{ accountId: Id }, void]
@@ -252,6 +263,7 @@ export type ChangeScope =
   | 'logs'
   | 'attention'
   | 'settings'
+  | 'ai'
 
 /** Pushed from the core to every connected UI. */
 export type ApiEvent =

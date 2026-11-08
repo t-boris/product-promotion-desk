@@ -187,6 +187,8 @@ export interface Account {
   email: string | null
   /** The base mailbox the address was proposed from, if any. */
   mailboxId: Id | null
+  /** The profile (person) this login belongs to; null for a login that has none (DEC-019). At most one account per platform for a profile. */
+  profileId: Id | null
 }
 
 /** A base mailbox (DEC-015): an ordinary mailbox of the owner, from which each account gets an address of its own. */
@@ -317,17 +319,27 @@ export interface ProfileFields {
 }
 
 /**
- * The profile of an account (the owner's decision, proposed by the AI). It follows a PURPOSE: what the account is for. `strategy` is the AI's
- * reading of it (the audience on this platform, why this person fits); `reasons` says why for each choice, so the owner can overrule it.
+ * A profile (DEC-019): a person the owner makes up once, for a PURPOSE, and proposed by the AI. Accounts are the logins of a profile on platforms:
+ * one profile has many accounts (one per platform), and a platform can have many profiles. `strategy` is the AI's reading of the purpose (the
+ * audience, why this person fits); `reasons` says why for each choice, so the owner can overrule it.
  */
-export interface AccountProfile extends ProfileFields {
-  accountId: Id
+export interface Profile extends ProfileFields {
+  id: Id
+  /** The owner's own name for it ("Mara, Natal Mystic"). */
+  label: string
+  /** The product the person speaks for, if any: its passport feeds the proposal. */
+  productId: Id | null
+  /** Who this person speaks as: the same voice on every platform. Accounts of the profile use it. */
+  role: AccountRole | null
+  /** The platforms the person is meant for (platform keys): the strategy covers all of them. */
+  platforms: string[]
   purpose: string
   strategy: string
   reasons: Partial<Record<keyof ProfileFields, string>>
   /** A picture exists for this profile (made by the AI or chosen by the owner). */
   hasPicture: boolean
   status: ProfileStatus
+  createdAt: IsoTime
   updatedAt: IsoTime
 }
 
@@ -774,4 +786,20 @@ export interface ResultsView {
   channels: { channel: Channel; metrics: MetricSnapshot[] }[]
   /** Version 1 never measures business conversions; the UI must say so (REQ-006, DEC-002). */
   businessConversions: 'not_measured'
+}
+
+/** One run of an AI engine for the person to watch (progress of every AI help and mission): what it does, for how long, the latest lines. */
+export interface AiTaskState {
+  id: Id
+  /** What it is in words, e.g. "Proposing a profile". */
+  title: string
+  engineLabel: string
+  /** What it is about (a profile, an account), so the block that started it can show only its own. */
+  subject: string | null
+  startedAt: IsoTime
+  finishedAt: IsoTime | null
+  status: 'running' | 'done' | 'failed' | 'stopped'
+  /** The latest lines, oldest first. */
+  lines: string[]
+  error: string | null
 }

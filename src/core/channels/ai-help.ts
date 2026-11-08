@@ -688,12 +688,15 @@ export interface ProfileProposeInput {
   purpose: string
   product: { name: string; websiteUrl: string | null; description: string | null } | null
   claims: { section: PassportSection; text: string }[]
-  platform: { platform: string; label: string }
+  /** The platforms the person is meant for; empty means any platform. */
+  platforms: { platform: string; label: string }[]
   role: AccountRole | null
-  /** The profiles other accounts already have on this platform: a new one must be a different person. */
+  /** The other profiles the owner has: a new one must be a different person. */
   others: { displayName: string; gender: string; birthYear: string; place: string; about: string }[]
   /** Today, YYYY-MM-DD: ages are counted from it. */
   today: string
+  /** What the run is about (the profile id), so the progress panel shows it where it was started. */
+  subject?: string
 }
 
 export interface ProfileProposal {
@@ -722,14 +725,14 @@ const REASON_KEYS: (keyof ProfileFields)[] = ['firstName', 'lastName', 'displayN
 function profilePurposeBlock(input: ProfileProposeInput): string {
   const others = input.others.slice(0, 12).map((o) => `- ${oneLine(o.displayName, 60)}; ${o.gender}; born ${o.birthYear || '?'}; ${oneLine(o.place, 60)}; ${oneLine(o.about, 120)}`)
   return [
-    input.product ? productBlock(input.product, input.claims) : fence('product_data', 'The account is not tied to a product yet.'),
+    input.product ? productBlock(input.product, input.claims) : fence('product_data', 'The profile is not tied to a product yet.'),
     '',
-    `Platform: ${oneLine(input.platform.label, 60)} (${oneLine(input.platform.platform, 40)})`,
-    `Role of the login: ${input.role ? `${oneLine(input.role.name, 60)}: ${oneLine(input.role.voice, 280)}` : 'none chosen'}`,
-    `What the owner says this account is for: ${input.purpose ? oneLine(input.purpose, 400) : '(not said: state it yourself from the product, the platform and the role)'}`,
+    `Platforms the person is meant for: ${input.platforms.length > 0 ? input.platforms.map((p) => oneLine(p.label, 40)).join(', ') : 'not chosen: think of the platforms where this purpose is served best'}`,
+    `Role (the voice of the person): ${input.role ? `${oneLine(input.role.name, 60)}: ${oneLine(input.role.voice, 280)}` : 'none chosen'}`,
+    `What the owner says this person is for: ${input.purpose ? oneLine(input.purpose, 400) : '(not said: state it yourself from the product, the platforms and the role)'}`,
     `Today: ${input.today}`,
     '',
-    'Profiles that already exist on this platform (the new person must clearly differ from every one of them):',
+    'Profiles that already exist (the new person must clearly differ from every one of them):',
     others.length > 0 ? others.join('\n') : '(none)'
   ].join('\n')
 }
@@ -737,21 +740,22 @@ function profilePurposeBlock(input: ProfileProposeInput): string {
 function profileProposePrompt(input: ProfileProposeInput): AiTask {
   return {
     label: 'accounts.profile',
+    subject: input.subject,
     system: PROFILE_PROPOSE_SYSTEM,
     timeoutMs: PERSONA_TIMEOUT_MS,
     prompt: [
       profilePurposeBlock(input),
       '',
       'Task: propose the whole profile of the person who will use this login, thinking it through as a strategy.',
-      'First decide what the account is for and who it must reach on this platform: who the audience is, what they trust, how people of that kind introduce themselves there.',
-      'Then choose the person to fit that: age, gender, place, name, user name, the about-text and the picture. Every choice must serve the purpose and be explainable in one sentence.',
+      'First decide what the profile is for and who it must reach on the platforms named above: who the audience is, what they trust, how people of that kind introduce themselves there.',
+      'Then choose the person to fit that, so that the same person can hold a login on each of those platforms: age, gender, place, name, user name, the about-text and the picture. Every choice must serve the purpose and be explainable in one sentence.',
       'Rules:',
       '- The person is a fictional persona for a login that belongs to the product owner, and the login speaks honestly: the about-text says how the person is connected with the product when it mentions the product at all.',
       '- Do not claim credentials, qualifications, jobs or experience that the approved statements above do not support. Do not present the login as an independent customer or neutral bystander.',
       '- "firstName", "lastName", "displayName", "username", "place" and "website" are typed onto the platform exactly as you give them: only the name, the user name, the city and country or the address itself, with no notes, labels, separators or comments, and never the words fictional, persona, invented or AI.',
       '- Invent a name that belongs to nobody famous. Do not use a real or famous person, brand or company as the name, the look or the story. The user name must not look official.',
-      `- The person is an adult: age ${MIN_AGE} to ${MAX_AGE}. Choose the age and gender that make the purpose credible on this platform, not a default.`,
-      '- Differ clearly from the profiles that already exist on this platform (name, age, place, voice).',
+      `- The person is an adult: age ${MIN_AGE} to ${MAX_AGE}. Choose the age and gender that make the purpose credible on those platforms, not a default.`,
+      '- Differ clearly from the profiles that already exist (name, age, place, voice).',
       '- "birthDate" is YYYY-MM-DD. "gender" is "female", "male" or "other".',
       `- "purpose" is one sentence (at most ${MAX_PURPOSE} characters): what this account is for. "strategy" is at most ${MAX_STRATEGY} characters: the audience, and why this person fits it.`,
       '- "about" is the text of the profile in the person\'s own voice, at most 500 characters, plain words. "website" is an address or "".',
@@ -792,7 +796,7 @@ function readProfileProposal(raw: unknown, input: ProfileProposeInput): Parsed<P
     }
   }
   const sameName = input.others.some((o) => normalizeForCompare(o.displayName) === normalizeForCompare(value.displayName))
-  if (sameName) return { ok: false, error: 'the display name is already used by another profile on this platform; choose a different person' }
+  if (sameName) return { ok: false, error: 'the display name is already used by another profile; choose a different person' }
   return { ok: true, value: { purpose: purpose || oneLine(input.purpose, MAX_PURPOSE), strategy, fields: value, reasons } }
 }
 

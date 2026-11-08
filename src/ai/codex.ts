@@ -86,6 +86,33 @@ export class CodexEngine extends CliEngine {
   }
 
   /** Codex has no separate system-prompt flag in exec mode, so the system text leads the prompt. */
+  /**
+   * `codex exec` prints its banner and then the whole prompt to stderr before it works; showing those lines would put the prompt on the
+   * screen. Only what comes after the prompt is progress: its own messages ("codex"), the commands it runs ("exec") and what they say.
+   */
+  protected override progressSink(forward: (line: string) => void): (line: string) => void {
+    let mode: 'banner' | 'prompt' | 'work' | 'done' = 'banner'
+    return (raw) => {
+      const line = raw.trim()
+      if (mode === 'done') return
+      if (mode === 'banner') {
+        if (line === 'user') mode = 'prompt'
+        return
+      }
+      if (/^tokens used$/i.test(line)) {
+        mode = 'done'
+        return
+      }
+      if (mode === 'prompt') {
+        if (!/^(codex|exec|thinking|tool|mcp\b.*)$/i.test(line)) return
+        mode = 'work'
+      }
+      // The answer itself (JSON) is not progress; it is read by the caller.
+      if (line === '' || line.startsWith('{') || /^(codex|thinking|tool)$/i.test(line)) return
+      forward(line.slice(0, 200))
+    }
+  }
+
   protected override buildInput(task: AiTask): string {
     return task.system ? `${task.system}\n\n${task.prompt}` : task.prompt
   }
