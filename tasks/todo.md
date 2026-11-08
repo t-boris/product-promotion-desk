@@ -286,7 +286,13 @@ Design here:
 
 Steps:
 1. [x] De-risk of the MCP side (2026-11-08): a stub MCP server run from the installed app binary in Node mode is called by Claude Code (`--mcp-config --strict-mcp-config`) and by Codex 0.167 (`-c mcp_servers...`, works with `--ignore-user-config`; `exec` mode needed `default_tools_approval_mode="approve"`). A tool that blocks 90 s was waited for by both.
-2. [ ] Spike for the terminal (scratchpad, no repo change): `node-pty` built for Electron 45.2.3 starts interactive `claude` and `codex` in a PTY from an Electron main process, with the MCP arguments and an initial prompt; output readable; the same in an ad-hoc signed packaged build (`asarUnpack` for the native module and its spawn helper).
+2. [x] Spike for the terminal (2026-11-08, scratchpad, no repo change): `node-pty` 1.1.0 (ships N-API prebuilds for darwin-arm64) inside the Electron 45.2.3 main process starts the real interactive `claude` (2.1.319) and `codex` (0.167.0) in a PTY with the stub MCP in their own arguments, full access (`--dangerously-skip-permissions` / `--dangerously-bypass-approvals-and-sandbox`) and the first prompt as an argument; both called the MCP tool and stayed interactive, ready for the owner to type. Screens were read with a headless xterm. Findings that shape the build:
+   - `prebuilds/darwin-arm64/spawn-helper` is not executable after install: `posix_spawnp failed` until `chmod +x`. The build must set it (afterPack) and unpack node-pty from the asar.
+   - Claude's `--mcp-config` takes many values: the prompt must come BEFORE the options.
+   - Claude asks "trust this folder?" for a new folder and its default is "No, exit": the app answers it (Down, Enter) for its own working folder, or marks the folder trusted.
+   - Codex: `--ignore-user-config` exists only for `exec`; interactive Codex loads the owner's `~/.codex` servers (here `markview_browser`, `markview-control`). The app disables the other servers with `-c mcp_servers.<name>.enabled=false` (key to verify) and the goal says to use only the account's browser. Claude uses `--strict-mcp-config`.
+   - Codex printed "weekly limit: 18% left": long runs spend the owner's subscription.
+   - Not yet checked: the same in the packaged, ad-hoc signed app.
 3. [ ] Repo: dependencies (`node-pty`, `@xterm/xterm`, `@xterm/addon-fit`), electron-builder unpack/rebuild settings; core port `AgentTerminal` (spawn, write, resize, data, exit, kill) with a fake for tests; main adapter; IPC; renderer terminal view.
 4. [ ] MCP server, socket, grants and the tool executor over `BrowserPage` (snapshot, pageStep and checks of 0.4.0 move here), `account_context`, `note_value`, `report_result`.
 5. [ ] Mission service: launch spec per engine, the goal prompt, session state, the end check; `canStart` asks only for an installed, signed-in engine, an e-mail and a vault password.
@@ -294,4 +300,4 @@ Steps:
 7. [ ] Remove the round loop of 0.4.0 (`plan.ts`, `agent.ts`); keep `snapshot.ts` and `pageStep`.
 8. [ ] Tests (JSON-RPC, executor, socket, launch arguments for both CLIs, fake terminal), then a live dry run on the real Facebook form with real Claude Code and real Codex, submit not pressed, then release 0.5.0.
 
-Not verified yet: the PTY spike (step 2); a real submit and what follows (e-mail code, phone check); the cost of a long run against the owner's subscription; how a started interactive CLI accepts a long first prompt (argument or typed into the PTY).
+Not verified yet: node-pty in the packaged, signed app; a real submit and what follows (e-mail code, phone check); the cost of a long run against the owner's subscription; how `-c mcp_servers.<name>.enabled=false` behaves in Codex.
