@@ -501,3 +501,143 @@ describe('what the account\'s page shows and did (DEC-016)', () => {
     expect(await readdir(dir)).toEqual([])
   })
 })
+
+describe('page steps of the browser agent (DEC-017): real input first, a script only as the fallback', () => {
+  const hosts = ['facebook.com']
+  /** Opens a Facebook page, then carries out one step; `results` are the answers of the page's scripts, in order. */
+  const step = async (service: ElectronBrowserService, results: unknown[], page: Parameters<Parameters<ReturnType<ElectronBrowserService['session']>['withAgentControl']>[1]>[0] extends infer P ? (p: P) => Promise<unknown> : never) => {
+    const session = service.session(account('a'))
+    return session.withAgentControl('step', async (raw) => {
+      await raw.goto('https://www.facebook.com/r.php')
+      agentContents().results = results
+      return page(raw)
+    })
+  }
+
+  beforeEach(() => vi.useFakeTimers({ toFake: ['setTimeout'] }))
+  afterEach(() => vi.useRealTimers())
+  const settled = async <T>(pending: Promise<T>): Promise<T> => {
+    await vi.advanceTimersByTimeAsync(2_000)
+    return pending
+  }
+
+  it('clicks with a real mouse click at the centre of the element', async () => {
+    const { service } = setup()
+    const done = step(service, [{ ok: true, x: 120, y: 340, hit: true, tag: 'button' }, { ok: true }, { ok: true }], (page) => page.pageStep({ do: 'click', ref: 'e3' }, hosts))
+    await expect(settled(done)).resolves.toEqual({ status: 'done', detail: 'Clicked e3 with a mouse click.' })
+    expect(agentContents().inputEvents.map((e) => e.type)).toEqual(['mouseMove', 'mouseDown', 'mouseUp'])
+    expect(agentContents().inputEvents[1]).toMatchObject({ x: 120, y: 340, button: 'left', clickCount: 1 })
+  })
+
+  it('clicks by script when the real click did not reach the tab (it is not drawn), and says so', async () => {
+    const { service } = setup()
+    const done = step(service, [{ ok: true, x: 120, y: 340, hit: true }, { ok: true }, { ok: false }, { ok: true }], (page) => page.pageStep({ do: 'click', ref: 'e5' }, hosts))
+    const result = (await settled(done)) as { status: string; detail: string }
+    expect(result.status).toBe('done')
+    expect(result.detail).toMatch(/by script \(a real click does not reach a tab that is not drawn/)
+    expect(agentContents().inputEvents.map((e) => e.type)).toEqual(['mouseMove', 'mouseDown', 'mouseUp'])
+    expect(agentContents().scripts.some((s) => s.includes("'pointerdown'"))).toBe(true)
+  })
+
+  it('clicks by script when something covers the element, and says so', async () => {
+    const { service } = setup()
+    const done = step(service, [{ ok: true, x: 1, y: 1, hit: false }, { ok: true }], (page) => page.pageStep({ do: 'click', ref: 'e3' }, hosts))
+    const result = (await settled(done)) as { status: string; detail: string }
+    expect(result.status).toBe('done')
+    expect(result.detail).toMatch(/by script/)
+    expect(agentContents().inputEvents).toEqual([])
+  })
+
+  it('refuses a disabled button without clicking', async () => {
+    const { service } = setup()
+    const done = step(service, [{ ok: true, x: 1, y: 1, hit: true, disabled: true }], (page) => page.pageStep({ do: 'click', ref: 'e3' }, hosts))
+    await expect(settled(done)).resolves.toEqual({ status: 'refused', detail: 'e3 is disabled.' })
+    expect(agentContents().inputEvents).toEqual([])
+  })
+
+  it('types with real input: the field is focused and selected first, then the text is inserted, then it is checked', async () => {
+    const { service } = setup()
+    const done = step(service, [{ ok: true, x: 5, y: 5, hit: true }, { ok: true }, { ok: true }], (page) => page.pageStep({ do: 'type', ref: 'e1', text: 'Natal' }, hosts))
+    await expect(settled(done)).resolves.toEqual({ status: 'done', detail: 'Typed into e1.' })
+    expect(agentContents().inserted).toEqual(['Natal'])
+    expect(agentContents().focused).toBeGreaterThan(0)
+    expect(agentContents().scripts.some((s) => s.includes('el.select()'))).toBe(true)
+  })
+
+  it('falls back to a script when the typed text did not land, and says so', async () => {
+    const { service } = setup()
+    const done = step(service, [{ ok: true, x: 5, y: 5, hit: true }, { ok: true }, { ok: false }, { ok: true }], (page) => page.pageStep({ do: 'type', ref: 'e1', text: 'Natal' }, hosts))
+    const result = (await settled(done)) as { status: string; detail: string }
+    expect(result).toMatchObject({ status: 'done' })
+    expect(result.detail).toMatch(/by script \(real typing did not take\)/)
+  })
+
+  it('does not put a password anywhere in its answer, and never in an error', async () => {
+    const { service } = setup()
+    const done = step(service, [{ ok: true, x: 5, y: 5, hit: true }, { ok: true }, { ok: false }, { ok: false, reason: 'disabled' }], (page) => page.pageStep({ do: 'type', ref: 'e2', text: 'S3cret-Pa$$w0rd!' }, hosts))
+    const result = await settled(done)
+    expect(JSON.stringify(result)).not.toContain('S3cret')
+    expect(result).toMatchObject({ status: 'refused' })
+  })
+
+  it('chooses an option of a plain list', async () => {
+    const { service } = setup()
+    const chosen = step(service, [{ ok: true, x: 5, y: 5, hit: true }, { ok: true }], (page) => page.pageStep({ do: 'select', ref: 'e4', text: 'March' }, hosts))
+    await expect(settled(chosen)).resolves.toEqual({ status: 'done', detail: 'Chose an option in e4.' })
+  })
+
+  const located = { ok: true, x: 5, y: 5, hit: true }
+  const notAList = { ok: false, reason: 'not_a_list' }
+
+  it('opens a drop-down that is not a plain list, finds the option with that text and clicks it', async () => {
+    const { service } = setup()
+    // locate the drop-down, "not a list", click it (the click arrives), find the option, locate it, click it (arrives).
+    const done = step(service, [located, notAList, { ok: true }, { ok: true }, { ok: true, ref: 'e41' }, located, { ok: true }, { ok: true }], (page) => page.pageStep({ do: 'select', ref: 'e5', text: 'March' }, hosts))
+    await expect(settled(done)).resolves.toEqual({ status: 'done', detail: 'Chose an option in e5.' })
+    expect(agentContents().inputEvents.filter((e) => e.type === 'mouseDown')).toHaveLength(2)
+    expect(agentContents().scripts.some((s) => s.includes('aria-controls') && s.includes('"March"'))).toBe(true)
+  })
+
+  it('clicks the drop-down and its option by script when real clicks do not reach the tab', async () => {
+    const { service } = setup()
+    const done = step(service, [located, notAList, { ok: true }, { ok: false }, { ok: true }, { ok: true, ref: 'e41' }, located, { ok: true }, { ok: false }, { ok: true }], (page) => page.pageStep({ do: 'select', ref: 'e5', text: 'March' }, hosts))
+    await expect(settled(done)).resolves.toEqual({ status: 'done', detail: 'Chose an option in e5.' })
+  })
+
+  it('says what a drop-down offers when it has no option like that, and when it showed none', async () => {
+    const { service } = setup()
+    const missing = step(service, [located, notAList, { ok: true }, { ok: true }, { ok: false, reason: 'no_such_option', options: ['January', 'February'] }], (page) => page.pageStep({ do: 'select', ref: 'e5', text: 'Smarch' }, hosts))
+    expect(await settled(missing)).toMatchObject({ status: 'refused', detail: 'e5 has no option like that. It offers: January, February.' })
+  })
+
+  it('says so when a drop-down showed no options after it was opened', async () => {
+    const { service } = setup()
+    const none = step(service, [located, notAList, { ok: true }, { ok: true }, { ok: false, reason: 'no_options' }], (page) => page.pageStep({ do: 'select', ref: 'e5', text: 'March' }, hosts))
+    expect(await settled(none)).toMatchObject({ status: 'refused', detail: 'e5 showed no options after it was opened.' })
+  })
+
+  it('presses keys with real key events', async () => {
+    const { service } = setup()
+    const done = step(service, [], (page) => page.pageStep({ do: 'key', key: 'Enter' }, hosts))
+    await expect(settled(done)).resolves.toEqual({ status: 'done', detail: 'Pressed Enter.' })
+    expect(agentContents().inputEvents.map((e) => `${e.type}:${e.keyCode}`)).toEqual(['keyDown:Enter', 'char:\r', 'keyUp:Enter'])
+  })
+
+  it('says "not_found" when the element is gone', async () => {
+    const { service } = setup()
+    const done = step(service, [{ ok: false, reason: 'not_found' }], (page) => page.pageStep({ do: 'click', ref: 'e9' }, hosts))
+    expect(await settled(done)).toMatchObject({ status: 'not_found' })
+  })
+
+  it('does nothing on a page outside the hosts of the task', async () => {
+    const { service } = setup()
+    const session = service.session(account('a'))
+    const result = await session.withAgentControl('step', async (raw) => {
+      await raw.goto('https://evil.example.net/login')
+      return raw.pageStep({ do: 'click', ref: 'e1' }, hosts)
+    })
+    expect(result).toMatchObject({ status: 'wrong_host', detail: expect.stringContaining('evil.example.net') })
+    expect(agentContents().scripts).toEqual([])
+    expect(agentContents().inputEvents).toEqual([])
+  })
+})

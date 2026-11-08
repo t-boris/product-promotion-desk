@@ -242,17 +242,15 @@ Owner's remark, 2026-11-08. The agent page had goto/read/fill/click/signIn only:
 - [x] Verified on the real page (nothing submitted): the report of Facebook's registration form in the scratch app has the title, the readable text, the screenshot, the POSTs of the page (`ajax/qm`, `ajax/bz`, `ajax/webstorage/process_keys`, all 200) and three console errors (Permissions-Policy headers); the button and the view work on the Accounts screen; the report was saved as files.
 - [ ] Waiting for the owner's next real attempt: what the Facebook Submit request answers (the log line or the report).
 
-## PLAN (not started, owner's flow of 2026-11-08, REQ-016): the AI registers the account and solves the problems it sees
+## 0.4.0: the AI works in the account's browser (owner: "it is not only a sign-up helper; the AI drives the browser and the system, I only give the user and the password")
 
-Owner: after the account has its e-mail and password, the AI opens the account's browser, goes in and fills in every value it considers right; questions and problems it solves itself because it sees the page.
-Understood "паспорт" as "пароль" (password); to be confirmed.
+Owner's remarks, 2026-11-08: after the e-mail and password are added the AI opens the browser, goes in and fills every value; questions and problems it solves itself because it sees the page; the window opened but nothing was filled in; "look at MarkView Browser, take the implementation". Then: this is the main function of the whole program (all channels, reply, fill in), not a sign-up helper. Decision DEC-017, REQ-016 criteria 1-4 and 8.
 
-Steps (each a release, none started):
-1. Eyes (done in 0.3.5): text, alerts, screenshot, network, console.
-2. Hands: an action layer on the app's page: `fill`, `click`, `select` by what the AI saw (a field label or role from a page outline, not a hand-made selector). The AI answers with actions, the app carries them out and refuses another site, a password field it was not given, or a second submit without a change. The page outline already exists for site profiles (`site-outline.ts`); a form outline is needed (labels, types, required, current state, never values).
-3. Loop: outline + report -> AI action list -> execute -> report -> ... with a step limit, the same-refusal stop and the hand-off for CAPTCHA/codes. Engine adapters are tool-free today, which fits: the AI only answers text.
-4. Values: e-mail from the account, password typed from the vault with a placeholder in the prompt, the rest (name, birth date, gender, user name) from the role and the passport or proposed by the AI and recorded on the account.
-5. After the form: the app checks the sign-in itself (0.3.4).
-
-Open questions for the owner: (a) may the AI submit the form with values it made up, or must the owner see them first? (b) a code sent to the account's e-mail: until the mail reader (0.4.0, needs `mailparser`) exists the owner types it; (c) which engine drives it (the selected one).
-
+- [x] `src/core/browser-agent/`: `snapshot.ts` (page script: labelled elements `e12`, messages, human check; parse and clamp), `plan.ts` (prompt with the untrusted page fenced, `{{NAME}}` placeholders, `checkPlan` against the snapshot), `agent.ts` (the loop: observe, ask, check, carry out; stop on a human check, a page outside the platform, two rounds without a change, round limit, Stop).
+- [x] `BrowserPage.pageStep` (second ticket-less write op, publishes nothing, host-limited): real mouse and keystrokes where the tab takes them, page events as the fallback; a custom drop-down is chosen from in one step.
+- [x] `AgentRunService` (`agent.start` / `agent.state` / `agent.stop`): needs the e-mail, the saved password and a tool-free engine; one run per account; the site's own login check after "done"; no secret in the state, the log or the prompt.
+- [x] UI: "Let the AI create the account" next to the manual button, run panel (summary, steps, values the AI chose, Stop).
+- [x] Verified on the real Facebook registration form (real Electron page, real Claude Code, test values, the submit button blocked, nothing sent): the form filled in 4 rounds. Found and fixed on the way: a real mouse press does not reach the hidden agent tab (delivery is checked, page events are the fallback); Facebook's birthday lists are not native lists.
+- [ ] Not verified: a real Submit and what follows (code to the e-mail, CAPTCHA, phone check); "signed in" recognition on Facebook after a real registration; the agent on a second platform.
+- [ ] Needs the owner: select Claude Code in Settings (the selected engine is Codex, which can act on this computer and is never shown a website).
+- [ ] Next: the same agent for the work in channels (read, reply, set up a profile) through the connectors with tickets; AI-chosen values saved on the account (migration); the mail reader moves from 0.4.0 to 0.5.0 (still needs approval for `mailparser`).

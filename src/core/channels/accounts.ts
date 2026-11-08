@@ -186,6 +186,14 @@ export class AccountsService {
     return { url, hosts }
   }
 
+  /** Where the browser agent starts to register an account and the hosts it may work on. A platform with no web registration says where its accounts are made. */
+  signUpTarget(account: Account): { url: string; hosts: string[] } {
+    const preset = presetFor(account.platform)
+    if (preset && preset.signupUrl === '') throw new ApiError('no_web_signup', preset.signupNote ?? `${preset.label} accounts are not made on the web.`)
+    const target = this.signInTarget(account)
+    return { url: preset ? parseBrowserUrl(preset.signupUrl) : target.url, hosts: target.hosts }
+  }
+
   async openBrowser(args: { accountId: string; url?: string }): Promise<{ tabId: string }> {
     const account = this.account(args.accountId)
     const url = args.url !== undefined && args.url.trim() ? parseBrowserUrl(args.url) : parseBrowserUrl(this.defaultUrl(account))

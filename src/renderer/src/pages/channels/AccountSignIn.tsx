@@ -3,14 +3,15 @@ import type { Account, PageReport, PlatformInfo, SignInResult } from '../../../.
 import { call, useAction, useQuery } from '../../hooks'
 import { Badge, Button, ErrorNote } from '../../ui'
 import { AccountBlock } from './AccountBlock'
+import { AgentRunPanel } from './AgentRunPanel'
 import { CopyButton } from './CopyButton'
 import { ACCOUNT_STATUS_LABEL, ACCOUNT_STATUS_TONE } from './model'
 import { PageReportView } from './PageReportView'
 
 /**
- * Signing in (REQ-012, DEC-014, DEC-015): create the account on the platform if it does not exist yet, sign in in the account's own
- * browser or with the saved password, and check the result. The app fills in nothing on a registration page; every check on a
- * site (a CAPTCHA, a code, a phone number) is the owner's.
+ * Signing in (REQ-012, DEC-014, DEC-015, REQ-016): create the account on the platform if it does not exist yet (the AI does it in the
+ * account's own browser, or the owner does), sign in in the account's own browser or with the saved password, and check the result.
+ * Every check on a site (a CAPTCHA, a code, a phone number) is the owner's: the AI stops and says so.
  */
 export function AccountSignIn({ account, info, vaultAvailable, hasPassword }: { account: Account; info: PlatformInfo | undefined; vaultAvailable: boolean; hasPassword: boolean }) {
   const [signedIn, setSignedIn] = useState<SignInResult | null>(null)
@@ -22,16 +23,26 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword }: { 
     setSignedIn(await call('accounts.signIn', { accountId: account.id }))
   })
   const [signUp, signingUp] = useAction(() => call('accounts.openBrowser', { accountId: account.id, url: info?.signupUrl }))
+  const agent = useQuery('agent.state', { accountId: account.id }, ['accounts'])
+  const [startAgent, startingAgent] = useAction(async () => {
+    setPageReport(null)
+    await call('agent.start', { accountId: account.id, kind: 'signup' })
+  })
+  const [stopAgent, stoppingAgent] = useAction(() => call('agent.stop', { accountId: account.id }))
   const [copyPassword, copying] = useAction(() => call('vault.copyPassword', { accountId: account.id }))
   const browser = useQuery('accounts.browser', { accountId: account.id }, ['accounts'])
   const [show, showing] = useAction(() => call('accounts.showBrowser', { accountId: account.id }))
   const [done, finishing] = useAction(() => call('accounts.releaseControl', { accountId: account.id }))
   const [look, looking] = useAction(async () => setPageReport({ report: await call('accounts.pageReport', { accountId: account.id }) }))
-  const error = opening.error ?? checking.error ?? signingIn.error ?? signingUp.error ?? copying.error ?? showing.error ?? finishing.error ?? looking.error
+  const error = opening.error ?? checking.error ?? signingIn.error ?? signingUp.error ?? copying.error ?? showing.error ?? finishing.error ?? looking.error ?? startingAgent.error ?? stoppingAgent.error
   // While the person holds the browser the app waits, so nothing that needs the browser is offered: the screen says what to do instead.
   const yours = browser.data?.holder === 'user'
   const windowOpen = browser.data?.windowOpen === true
   const ready = account.status === 'ready'
+  const agentRun = agent.data ?? null
+  const agentWorking = agentRun?.status === 'running'
+  // The AI needs what a person would need to register: an e-mail address and the password the account should have.
+  const agentMissing = !account.email ? 'Give the account an e-mail address first (step 2).' : !hasPassword ? 'Save the password the account should have first (step 3).' : null
 
   const summary = (
     <>
@@ -82,19 +93,30 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword }: { 
             {checking.busy ? 'Checking…' : 'Check sign-in'}
           </Button>
           {info?.signupUrl && !ready && (
+            <Button variant={agentMissing === null ? 'primary' : undefined} onClick={() => void startAgent()} disabled={agentMissing !== null || agentWorking || startingAgent.busy} data-testid={`agent-start-${account.id}`}>
+              {startingAgent.busy ? 'Starting…' : 'Let the AI create the account'}
+            </Button>
+          )}
+          {info?.signupUrl && !ready && (
             <Button onClick={() => void signUp()} disabled={signingUp.busy} data-testid={`signup-open-${account.id}`}>
-              {signingUp.busy ? 'Opening…' : `Create account on ${info.label}`}
+              {signingUp.busy ? 'Opening…' : `Create account on ${info.label} myself`}
             </Button>
           )}
         </div>
       )}
+      {!yours && info?.signupUrl && !ready && agentMissing && (
+        <p className="muted small" data-testid={`agent-missing-${account.id}`}>
+          {agentMissing}
+        </p>
+      )}
+      {agentRun && <AgentRunPanel run={agentRun} onStop={() => void stopAgent()} stopping={stoppingAgent.busy} testId={`agent-run-${account.id}`} />}
       <p className="muted small">A CAPTCHA, a code or any other check on the site is always yours: the app stops and tells you.</p>
       {!ready && info && (info.signupUrl || info.signupNote) && (
         <div className="stack" data-testid={`signup-help-${account.id}`}>
           <strong className="small">No account on {info.label} yet?</strong>
           {info.signupUrl ? (
             <ol className="plain-lines" data-testid={`signup-steps-${account.id}`}>
-              <li>Press “Create account on {info.label}”: its registration page opens in this account’s own window.</li>
+              <li>Press “Let the AI create the account”, or do it yourself: “Create account on {info.label} myself” opens its registration page in this account’s own window.</li>
               <li>
                 {account.email ? (
                   <>

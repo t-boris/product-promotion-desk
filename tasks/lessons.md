@@ -166,3 +166,14 @@
 58. A feature that is the product's main function (the browser) is used by me for my own diagnosis. If I reach for a side script because the feature cannot do it, the feature has a gap: record it and close it.
 59. Observation has levels: network metadata and console can be watched always (they are not the page's content); text and screenshots only on request; field values never. Say which level a new feature uses before building it.
 
+## 2026-11-08 (later): "it is not only a sign-up helper; the AI drives the browser"
+
+**What happened.** I named and scoped the new layer after the first task the owner mentioned (a sign-up assistant): a "form step" in the ports, a sign-up service, a sign-up API. The owner corrected me: controlling the browser for a person (all channels, reply, fill in) is one of the main parts of the program; they only give the user and the password. The layer was renamed to a general page step and a general agent before it shipped.
+
+**Rules for myself.**
+
+60. Name and place a capability for what the owner says the product is, not for the first task that needed it. Ask "is this the first of many uses?" before choosing a port, a type or an API name; renaming after release is expensive.
+61. A real input event sent to a tab that is not drawn can be dropped without an error. Never assume delivery: put an observer in the page, look whether the event arrived, and have a fallback that is tested against the real page.
+62. A live dry run on the real site (real engine, real browser, test values, the final button blocked) finds what unit tests cannot: here the hidden tab ignoring the mouse, custom drop-downs, and a duplicated label. Do it before every release of a browser feature, and say what was not sent.
+63. A Stop must be checked at every point where the loop waits for something slow (the engine's answer), not only at the top of the loop; otherwise the answer of a stopped run is still carried out. A test with a promise held open found it.
+

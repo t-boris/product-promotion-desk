@@ -100,6 +100,19 @@ export class FakeWebContents extends EventEmitter {
   setWindowOpenHandler(handler: (details: { url: string }) => { action: string }): void {
     this.windowOpenHandler = handler
   }
+  /** Real input sent to the page (tests read it). */
+  inputEvents: Record<string, unknown>[] = []
+  inserted: string[] = []
+  focused = 0
+  sendInputEvent(event: Record<string, unknown>): void {
+    this.inputEvents.push(event)
+  }
+  async insertText(text: string): Promise<void> {
+    this.inserted.push(text)
+  }
+  focus(): void {
+    this.focused += 1
+  }
   async capturePage(): Promise<unknown> {
     const picture = this.picture
     const image = {

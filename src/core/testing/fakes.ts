@@ -17,6 +17,8 @@ import {
   type Connector,
   type SecretClipboard,
   type SecretStore,
+  type PageStep,
+  type PageStepResult,
   type SignInForm,
   type SignInStatus
 } from '../ports'
@@ -138,6 +140,14 @@ export class FakePage implements RawPage {
   }
   async uploadFile(selector: string, path: string): Promise<void> {
     this.log.push(`upload ${selector} ${path}`)
+  }
+  /** Page steps carried out on this page (tests read them) and what each one answers; the last answer repeats. */
+  readonly steps: { step: PageStep; hosts: string[] }[] = []
+  stepAnswers: PageStepResult[] = [{ status: 'done', detail: 'ok' }]
+  async pageStep(step: PageStep, hosts: string[]): Promise<PageStepResult> {
+    this.log.push(`pageStep ${step.do} ${'ref' in step ? step.ref : step.key}`)
+    this.steps.push({ step, hosts })
+    return this.stepAnswers.length > 1 ? (this.stepAnswers.shift() as PageStepResult) : (this.stepAnswers[0] ?? { status: 'done', detail: 'ok' })
   }
   /** What the sign-in step received (the password is deliberately kept out of `log`), and the statuses it answers with, in order. */
   readonly signIns: SignInForm[] = []

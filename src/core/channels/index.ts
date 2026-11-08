@@ -14,6 +14,7 @@ import { MailboxService } from './mailboxes'
 import { listPlatforms } from './platforms'
 import { ProfileService } from './profiles'
 import { RoleSuggestionService } from './roles'
+import { AgentRunService } from './agent-runs'
 import { SignInService } from './sign-in'
 import { ChannelsStore } from './store'
 import { SuggestionService } from './suggestions'
@@ -41,6 +42,7 @@ export function register(core: Core): void {
   const vault = new VaultService(core, accounts, store)
   const mailboxes = new MailboxService(core, store)
   const signIn = new SignInService(core, accounts, vault, store)
+  const agent = new AgentRunService(core, accounts, vault)
   // An account found signed out gets one try with its saved password (DEC-014), without holding up the check that found it.
   accounts.onSignedOut = (account) => void signIn.maybeAutomatic(account)
 
@@ -68,6 +70,9 @@ export function register(core: Core): void {
     'accounts.releaseControl': (args) => accounts.releaseControl(args.accountId),
     'accounts.checkLogin': (args) => accounts.checkLogin(args.accountId),
     'accounts.signIn': (args) => signIn.signIn(args.accountId),
+    'agent.start': (args) => agent.start(args),
+    'agent.state': (args) => agent.state(args.accountId),
+    'agent.stop': (args) => agent.stop(args.accountId),
     'vault.status': () => vault.status(),
     'vault.savePassword': (args) => vault.savePassword(args),
     'vault.removePassword': (args) => vault.removePassword(args.accountId),

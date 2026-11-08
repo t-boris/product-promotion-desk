@@ -253,6 +253,25 @@ export interface SignInResult {
   detail: string
 }
 
+/** What the browser agent can be asked to do on an account's own browser (DEC-017). More kinds follow: read, answer, set up a profile. */
+export type AgentTaskKind = 'signup'
+export type AgentRunStatus = 'running' | 'done' | 'needs_owner' | 'failed' | 'stopped'
+
+/** One run of the browser agent on one account: what it is doing or why it stopped, and what it did. Kept in memory; no secret is ever in it. */
+export interface AgentRun {
+  accountId: Id
+  kind: AgentTaskKind
+  status: AgentRunStatus
+  /** One sentence for the owner: what it is doing now, or why it stopped and what to do. */
+  summary: string
+  /** What it did, oldest first (a password is named, never shown). */
+  lines: string[]
+  /** Plain values the AI chose itself on the site (names, a birth date): the owner may need them later. */
+  typed: { label: string; value: string }[]
+  startedAt: IsoTime
+  finishedAt: IsoTime | null
+}
+
 export interface AccountRole {
   /** Short name, e.g. "astrologer" or "developer". */
   name: string

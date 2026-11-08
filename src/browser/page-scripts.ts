@@ -215,3 +215,161 @@ export function pageReadingScript(): string {
   return { title: clean(document.title).slice(0, 120), text: clean(document.body ? document.body.innerText : '').slice(0, 1500), alerts: alerts };
 })()`
 }
+
+// ───────────────────────────── Sign-up steps (DEC-017) ─────────────────────────────
+// The page snapshot (src/core/channels/sign-up-page.ts) labels each interactive element with data-ppd-ref="e12". A step names that
+// label, never a selector. The scripts below only find the element and read or set it; the real click and the real keystrokes
+// are sent by the browser itself (see ElectronRawPage.pageStep), because a site tells a person's input from a script's.
+
+const REF = /^e\d{1,4}$/
+
+/** The label of a snapshot element as a selector. Throws for anything that is not a label, so a selector can never get in. */
+function refSelector(ref: string): string {
+  if (!REF.test(ref)) throw new Error(`Not an element label: ${ref}`)
+  return JSON.stringify(`[data-ppd-ref="${ref}"]`)
+}
+
+const FIND_REF = (ref: string): string => `${DEEP_QUERY}
+  const el = deepQuery(${refSelector(ref)}, document);
+  if (!el) return { ok: false, reason: 'not_found' };`
+
+export interface LocatedElement {
+  ok: boolean
+  reason?: 'not_found'
+  x?: number
+  y?: number
+  /** A click at x, y reaches the element (nothing else covers it). */
+  hit?: boolean
+  disabled?: boolean
+  tag?: string
+}
+
+/** Scrolls the element into view and says where its centre is, as MarkView's browser does before a real click. */
+export function locateScript(ref: string): string {
+  return `(() => {${FIND_REF(ref)}
+  el.scrollIntoView({ block: 'center', inline: 'center' });
+  const r = el.getBoundingClientRect();
+  const x = r.left + r.width / 2, y = r.top + r.height / 2;
+  const top = document.elementFromPoint(x, y);
+  const hit = !!top && (top === el || el.contains(top) || top.contains(el) || (top.shadowRoot ? top.shadowRoot.contains(el) : false));
+  return { ok: true, x: x, y: y, hit: hit, disabled: !!el.disabled, tag: el.tagName.toLowerCase() };
+})()`
+}
+
+/** Focuses a field and selects what it holds, so the typing that follows replaces it. */
+export function prepareTypingScript(ref: string): string {
+  return `(() => {${FIND_REF(ref)}
+  if (el.disabled || el.readOnly) return { ok: false, reason: 'disabled' };
+  el.focus();
+  if (el.isContentEditable) {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  } else if ('value' in el && typeof el.select === 'function') {
+    el.select();
+  } else {
+    return { ok: false, reason: 'not_text' };
+  }
+  return { ok: true };
+})()`
+}
+
+/** Whether the field now holds exactly the text (checked in the page, so the text is never sent back). */
+export function typedScript(ref: string, text: string): string {
+  return `(() => {${FIND_REF(ref)}
+  const held = el.isContentEditable ? el.textContent : String(el.value === undefined ? '' : el.value);
+  return { ok: held === ${JSON.stringify(text)} };
+})()`
+}
+
+/** The fallback when real typing did not take: the native setter, then input and change, the way a framework expects. */
+export function setValueScript(ref: string, text: string): string {
+  return `(() => {${FIND_REF(ref)}
+  if (el.disabled || el.readOnly) return { ok: false, reason: 'disabled' };
+  el.focus();
+  const text = ${JSON.stringify(text)};
+  if (el.isContentEditable) {
+    el.textContent = text;
+    el.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  } else if ('value' in el) {
+    const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, text);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  } else {
+    return { ok: false, reason: 'not_text' };
+  }
+  return { ok: true };
+})()`
+}
+
+/** Chooses an option of a native list by its text (a whole-text match first, then a start-of-text match). */
+export function selectOptionScript(ref: string, text: string): string {
+  return `(() => {${FIND_REF(ref)}
+  if (!(el instanceof HTMLSelectElement)) return { ok: false, reason: 'not_a_list' };
+  if (el.disabled) return { ok: false, reason: 'disabled' };
+  const wanted = ${JSON.stringify(text)}.trim().toLowerCase();
+  const options = [...el.options];
+  const label = (o) => (o.textContent || '').trim().toLowerCase();
+  const option = options.find((o) => label(o) === wanted || o.value.toLowerCase() === wanted) || options.find((o) => label(o).startsWith(wanted));
+  if (!option) return { ok: false, reason: 'no_such_option' };
+  el.focus();
+  el.value = option.value;
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  return { ok: true };
+})()`
+}
+
+/** The fallback for a click that a real mouse click cannot make (the tab is not drawn, or something covers the element). */
+export function scriptClickScript(ref: string): string {
+  return `(() => {${FIND_REF(ref)}
+  if (el.disabled) return { ok: false, reason: 'disabled' };
+  if (el.focus) el.focus();
+  for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup']) {
+    el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+  }
+  el.click();
+  return { ok: true };
+})()`
+}
+
+/** Starts counting the real mouse presses the page receives (a page that is not drawn receives none). Observes only. */
+export function mouseWatchScript(): string {
+  return `(() => {
+  window.__ppdMouse = 0;
+  if (!window.__ppdMouseWatched) {
+    window.__ppdMouseWatched = true;
+    window.addEventListener('mousedown', (event) => { if (event.isTrusted) window.__ppdMouse += 1; }, true);
+  }
+  return { ok: true };
+})()`
+}
+
+/** Whether a real mouse press reached the page since `mouseWatchScript`. */
+export function mouseSeenScript(): string {
+  return `(() => ({ ok: (window.__ppdMouse || 0) > 0 }))()`
+}
+
+/**
+ * After a custom drop-down was opened: finds the option with this text among the visible options (the list the drop-down controls
+ * first), labels it like a snapshot element and says which label it got, so that it can be clicked.
+ */
+export function markOptionScript(ref: string, text: string): string {
+  return `(() => {${FIND_REF(ref)}
+  const wanted = ${JSON.stringify(text)}.trim().toLowerCase();
+  const visible = (o) => { const r = o.getBoundingClientRect(); return r.width > 1 && r.height > 1; };
+  const controlled = el.getAttribute('aria-controls') ? document.getElementById(el.getAttribute('aria-controls')) : null;
+  const pool = (controlled ? [...controlled.querySelectorAll('[role=option]')] : []).filter(visible);
+  const options = pool.length > 0 ? pool : [...document.querySelectorAll('[role=option]')].filter(visible);
+  if (options.length === 0) return { ok: false, reason: 'no_options' };
+  const label = (o) => (o.innerText || o.textContent || '').trim().toLowerCase();
+  const option = options.find((o) => label(o) === wanted) || options.find((o) => label(o).startsWith(wanted));
+  if (!option) return { ok: false, reason: 'no_such_option', options: options.slice(0, 12).map((o) => (o.innerText || '').trim().slice(0, 30)) };
+  let mark = option.getAttribute('data-ppd-ref');
+  if (!mark) { window.__ppdRefCounter = (window.__ppdRefCounter || 0) + 1; mark = 'e' + window.__ppdRefCounter; option.setAttribute('data-ppd-ref', mark); }
+  return { ok: true, ref: mark };
+})()`
+}

@@ -2,6 +2,8 @@ import {
   TakeoverError,
   type BrowserPage,
   type BrowserSession,
+  type PageStep,
+  type PageStepResult,
   type SendTicket,
   type SignInForm,
   type SignInStatus,
@@ -18,6 +20,7 @@ export interface RawPage {
   click(selector: string): Promise<void>
   uploadFile(selector: string, path: string): Promise<void>
   signIn(form: SignInForm): Promise<{ status: SignInStatus }>
+  pageStep(step: PageStep, hosts: string[]): Promise<PageStepResult>
 }
 
 /**
@@ -101,7 +104,8 @@ export class ControlledSession implements BrowserSession {
       fill: async (selector, text, ticket) => (authorized(ticket), alive(), raw.fill(selector, text)),
       click: async (selector, ticket) => (authorized(ticket), alive(), raw.click(selector)),
       uploadFile: async (selector, path, ticket) => (authorized(ticket), alive(), raw.uploadFile(selector, path)),
-      signIn: async (form) => (alive(), raw.signIn(form))
+      signIn: async (form) => (alive(), raw.signIn(form)),
+      pageStep: async (step, hosts) => (alive(), raw.pageStep(step, hosts))
     }
   }
 }

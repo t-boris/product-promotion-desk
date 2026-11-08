@@ -112,6 +112,25 @@ export interface SignInForm {
 
 export type SignInStatus = 'submitted' | 'next_step' | 'no_form' | 'captcha' | 'wrong_host'
 
+/**
+ * One thing a person does on a page (DEC-017): type into a field, choose in a list, press a button or a key. `ref` is the label the
+ * page snapshot gave the element ("e12"), never a selector. `text` of a `type` step may be a password: it is never logged.
+ */
+export type PageStep =
+  | { do: 'type'; ref: string; text: string }
+  | { do: 'select'; ref: string; text: string }
+  | { do: 'click'; ref: string }
+  | { do: 'key'; key: 'Enter' | 'Tab' | 'Escape' }
+
+/** `done`: carried out. `wrong_host`: the page is not one of `hosts`. `not_found`: no such element (the page changed). `refused`: the element cannot take it (disabled, not a list, not a field). */
+export type PageStepStatus = 'done' | 'wrong_host' | 'not_found' | 'refused'
+
+export interface PageStepResult {
+  status: PageStepStatus
+  /** What happened, in words, without the typed text. */
+  detail: string
+}
+
 /** Where passwords are kept (DEC-014): encrypted by the operating system, never in the database. The core never sees how. */
 export interface SecretStore {
   /** False when the system cannot encrypt: nothing can then be stored. */
@@ -130,11 +149,18 @@ export interface SecretClipboard {
 
 export interface BrowserPage {
   /**
-   * Fills the sign-in form with the credentials and submits it once. It is the only write-class operation that needs no
-   * SendTicket: it publishes nothing, only the vault's owner reaches it, and it refuses a page outside `form.hosts`.
+   * Fills the sign-in form with the credentials and submits it once. One of two write-class operations that need no
+   * SendTicket (the other is `pageStep`): it publishes nothing, only the vault's owner reaches it, and it refuses a page outside `form.hosts`.
    * A page that has not drawn its form yet is given some seconds before the answer is "no_form".
    */
   signIn(form: SignInForm): Promise<{ status: SignInStatus }>
+  /**
+   * The second write-class operation that needs no SendTicket (DEC-017): one step of the browser agent. It is for work that
+   * publishes nothing (signing up, signing in, looking around, setting up a profile): a task that can publish goes through a
+   * connector with a ticket. It refuses a page outside `hosts` and works only on an element the page snapshot labelled. Typing and
+   * clicking use the browser's own input, as a person's hands would.
+   */
+  pageStep(step: PageStep, hosts: string[]): Promise<PageStepResult>
   goto(url: string, options?: { timeoutMs?: number }): Promise<void>
   url(): Promise<string>
   /** Evaluates a read-only script in the page and returns its JSON-serializable result. */
