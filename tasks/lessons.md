@@ -213,3 +213,12 @@
 
 71. When the owner says "the AI does X", the unit of design is a GOAL the AI owns for a long time, with a way to ask the person and go on; the application provides tools, limits and a view, not the loop. Before proposing a flow, say in one sentence who holds the goal, and check it against the reference the owner pointed at.
 
+## 2026-11-08 (the owner's answers): "A bad architectural decision can never be taken. Write it as a rule."
+
+**What happened.** The owner had said libraries are not changed without their approval. I then offered them a terminal-less panel because the terminal would need two new libraries, and called it the recommendation. The owner called that idiocy: the approval rule is a reason to ASK, never a reason to propose a worse design. They approved `node-pty`, `xterm.js` and any native module, and full access for the agents, like MarkView.
+
+**Rules for myself.**
+
+72. A bad architectural decision is never taken, and never offered as the recommendation. "Needs approval" (a new library, a native module, a changed architecture) is a reason to name the right design and ask for the approval, not a reason to design around it. If two designs differ, the first one I describe is the one I believe is right.
+73. When the owner points at a reference product (MarkView) the default is to match its model, including its permissions, unless I can name a concrete harm in this product; "it is safer" alone is not a reason to take away what the owner asked for. Say the harm once, then follow their decision.
+
