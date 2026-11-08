@@ -221,3 +221,12 @@ Owner's model (their words, 2026-11-08): the account browser keeps the login in 
 - [ ] NOT verified (needs the owner's real login): the "signed in" answer on any real platform; a signed-in Reddit/Facebook session surviving an app restart; sites whose public page never shows a log in prompt (a signed-out visitor could be taken for signed in).
 - [ ] Open: record "last checked time + what was seen" in the Sign-in block (migration 206).
 
+## OPEN after 0.3.4: Facebook registration form in the account window "spins, then Submit is active again, nothing changes" (owner report, 20:35)
+
+- Facts: the app log has nothing after "Browser opened ... www.facebook.com" (20:33:27): the page works on its own, the app cannot see what Facebook answers. The account partition holds only anonymous Facebook cookies (datr, sb, fr, dpr, wd; fr/wd touched 20:35:10-11), no registration cookie, no `c_user`.
+- Checked in real Chromium with the app's session settings, nothing submitted: https://www.facebook.com/r.php loads a one-page "Meta Account" form (name, birthday, gender, mobile/e-mail, password, "Submit"); no blocked requests, no console errors that matter. Differences from a normal Chrome: all permissions answer "denied" (Notification.permission), languages `en-US,ru-US`. Neither is proven to matter.
+- Not known: what the Submit request returns. Candidates (unproven): Facebook refusing a new unknown browser/IP silently; the data typed (an alias address with `+`); an error message above the visible part of a long form.
+- [ ] Needs from the owner: a screenshot of the whole window after Submit (scrolled to the top).
+- [ ] Proposed, awaiting approval: log what the account window's page requests did (failed requests and HTTP >= 400 on the page's own host, host + path only, never query, headers, bodies or cookies) to the Log screen, so a silent refusal by a site becomes visible (lesson 47/49).
+- [ ] Possible product consequence: platforms with strong anti-abuse (Facebook) may need the account made in the owner's usual browser, then signed in here; the sign-up steps should say so once confirmed.
+
