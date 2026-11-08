@@ -380,6 +380,27 @@ textarea.input {
   border: 1px dashed var(--border);
   border-radius: var(--radius);
 }
+/* A message inside a page: information (default), warning, or a confirmation that something was done. */
+.note {
+  background: var(--info-bg);
+  color: var(--info);
+  border-radius: var(--control-radius);
+  padding: 10px 12px;
+  margin: 8px 0;
+}
+.note.warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.note.good {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: var(--good-bg);
+  color: var(--good);
+}
 .error-note {
   background: var(--bad-bg);
   color: var(--bad);

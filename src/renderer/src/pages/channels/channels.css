@@ -24,18 +24,6 @@
   min-width: 0;
 }
 
-.note {
-  background: var(--info-bg);
-  color: var(--info);
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin: 8px 0;
-}
-.note.warn {
-  background: var(--warn-bg);
-  color: var(--warn);
-}
-
 /* Two classes on purpose: the bundle does not guarantee that this file comes after styles.css, and a one-class rule lost to .list-row. */
 .list-row.account-row {
   flex-direction: column;

@@ -46,7 +46,7 @@ export function ProductDetail({ productId, tab, onTabChange, onDeleted }: { prod
       {tab === 'sources' && <SourcesTab view={view} />}
       {tab === 'passport' && <PassportTab view={view} />}
       {tab === 'analysis' && <AnalysisTab view={view} />}
-      {tab === 'goal' && <GoalTab product={view.product} />}
+      {tab === 'goal' && <GoalTab product={view.product} onOpenResults={() => onTabChange('results')} />}
       {tab === 'channels' && <ChannelsPanel productId={productId} />}
       {tab === 'results' && <ResultsPanel productId={productId} />}
     </div>

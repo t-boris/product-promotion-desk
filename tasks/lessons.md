@@ -52,3 +52,13 @@
 16. Do not put `overflow-wrap: anywhere` on a flex item beside content that does not shrink: it collapses to one letter. Narrow columns get a stacked layout instead; a nested two-column layout inside a column is too tight.
 17. The app has its own icon: `scripts/make-icon.py` draws `build/icon.png` and `build/icon.icns`, `electron-builder.yml` sets `mac.icon`. Check the bundle for `Contents/Resources/icon.icns` after a build.
 18. The standard sweep for any UI change: every route, with a short window, measuring button heights, wrapped labels, elements outside the page edge and window scroll.
+
+## 2026-11-08 (later): "Save goal does nothing"
+
+**What happened.** The owner pressed "Save goal" and saw nothing, and did not understand what the goal is for. The save worked (checked through the API), but the only sign was a small grey "Saved" word beside the button, and the screen never said what the goal does.
+
+**Rules for myself.**
+
+19. Every save shows a result the owner cannot miss: a visible confirmation with a way forward ("Show on Results"), the button disabled while there is nothing to save, and a reason when it cannot be pressed. A quiet label next to the button is not feedback.
+20. Every field or tab states its purpose in plain words, including what it does not do in this version (here: the goal is a note, it does not steer the AI and does not count conversions). Say it on the screen, not only in the specification.
+21. "Nothing happens" is a report about what the owner saw, not about the data: test it in the running app from the owner's point of view (what is visible after the click), not only with the API.
