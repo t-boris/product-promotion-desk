@@ -1,7 +1,9 @@
 import type { Core } from '../core'
+import { registerFlow } from './register-flow'
 
-/** Placeholder: minimal automation handlers so the shell works; the pipeline module replaces them. */
+/** Placeholder: minimal automation handlers so the shell works; the lifecycle work replaces them. */
 export function register(core: Core): void {
+  registerFlow(core)
   core.router.register({
     'automation.get': () => ({
       paused: core.settings.getRaw('automation.paused', false),
