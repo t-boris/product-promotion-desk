@@ -2,7 +2,7 @@
 type: feature
 id: product-promotion-desk
 title: Product Promotion Desk
-status: implementing
+status: implemented
 owner: Boris Tsekinovsky
 created: 2026-11-08
 provenance: Created from the new-project intake

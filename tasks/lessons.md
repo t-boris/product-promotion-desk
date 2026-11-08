@@ -19,3 +19,4 @@
 
 5. When a model has an entity that stands for a person on a platform, ask early what distinguishes several of them (voice, topics) and what must never happen between them (answering each other, speaking in the same thread). Put the guard in the SendGate, not only in drafting.
 6. When something an AI produces is shown to the owner as ready to use (a channel address, a site profile), check it against reality before it reaches the button: a real address the connector can parse, selectors that match something on the page that was read. A valid shape is not a correct answer.
+7. A label that names a state must follow the state. In a walkthrough, after each action (save, discard, send, connect) re-read every badge and note on the screen, not only the message the action produced: the saved site profile kept the badge "Draft, not saved" next to "Saved as version 1".
