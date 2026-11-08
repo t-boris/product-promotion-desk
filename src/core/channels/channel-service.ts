@@ -1,7 +1,7 @@
 // Channels: connecting an address, assessing what the account can do there, settings and modes (REQ-002, REQ-003).
 
 import { ApiError } from '../../shared/api'
-import type { CapabilityKey, Channel, ChannelMode, ChannelSettings } from '../../shared/types'
+import type { Account, CapabilityKey, Channel, ChannelMode, ChannelSettings, Product } from '../../shared/types'
 import { DEFAULT_CHANNEL_SETTINGS } from '../../shared/types'
 import type { Core } from '../core'
 import type { Connector, ConnectorContext, NormalizedTarget } from '../ports'
@@ -28,8 +28,10 @@ export class ChannelService {
     private readonly accounts: AccountsService
   ) {}
 
-  list(): Channel[] {
-    return this.core.repos.listChannels()
+  /** All channels, or those of one product (DEC-009: channels belong to the product). */
+  list(args?: { productId?: string }): Channel[] {
+    const all = this.core.repos.listChannels()
+    return args?.productId ? all.filter((c) => c.productId === args.productId) : all
   }
 
   channel(id: unknown): Channel {
@@ -38,10 +40,10 @@ export class ChannelService {
 
   // ───────────── connect ─────────────
 
-  connect(args: { productId: string; accountId: string; target: string }): Channel {
+  connect(args: { productId: string; accountId: string; target: string; reuseAccount?: boolean }): Channel {
     const raw = requireText(args.target, 'The channel address')
     const productId = requireText(args.productId, 'The product')
-    found(() => this.core.repos.product(productId), 'The product')
+    const product = found(() => this.core.repos.product(productId), 'The product')
     const account = this.accounts.account(args.accountId)
 
     const connector = this.core.connectors.resolve(raw)
@@ -63,6 +65,7 @@ export class ChannelService {
     if (this.store.findDuplicate(productId, account.id, normalized.target)) {
       throw new ApiError('duplicate', `${normalized.target} is already connected for this product with ${account.label}.`)
     }
+    this.claimAccount(account, product, args.reuseAccount === true)
     const channel = this.store.insertChannel({
       productId,
       accountId: account.id,
@@ -77,6 +80,30 @@ export class ChannelService {
     this.core.log.info('channels', `Channel connected: ${channel.target} with ${account.label}. Nothing was posted.`, channel.id)
     this.core.events.changed('channels', 'attention')
     return channel
+  }
+
+  /**
+   * Each product has its own login (DEC-009). An unassigned legacy account is adopted by the first product that uses
+   * it. Another product's login is used only on the owner's explicit choice; the shared-account rules then apply
+   * unchanged: the SendGate counts limits per account across all its channels, and the account has one browser
+   * session that only one party (the app for one channel at a time, or the person) controls.
+   */
+  private claimAccount(account: Account, product: Product, reuseAccount: boolean): void {
+    if (account.productId === null) {
+      this.store.assignAccount(account.id, product.id)
+      this.core.log.info('accounts', `${account.label} now belongs to "${product.name}".`)
+      this.core.events.changed('accounts')
+      return
+    }
+    if (account.productId === product.id) return
+    const owner = this.core.repos.product(account.productId)
+    if (!reuseAccount) {
+      throw new ApiError('account_other_product', `This login belongs to "${owner.name}". Use a separate login for this product, or confirm that you want to share it.`)
+    }
+    this.core.log.warn(
+      'channels',
+      `${account.label} belongs to "${owner.name}" but is now also used by "${product.name}". Their sends share one allowance and only one of them can control its browser at a time.`
+    )
   }
 
   // ───────────── assess ─────────────

@@ -20,7 +20,8 @@ const account = (id: string, partition = `persist:ppd-${id}`): Account => ({
   identity: 'natal_bot',
   partition,
   status: 'ready',
-  createdAt: '2026-11-08T00:00:00.000Z'
+  createdAt: '2026-11-08T00:00:00.000Z',
+  productId: null
 })
 
 function setup() {

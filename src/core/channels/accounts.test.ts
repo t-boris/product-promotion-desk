@@ -17,10 +17,10 @@ describe('accounts.create', () => {
 
   it('accepts only platforms that a connector exists for, and sensible names', async () => {
     const w = makeWorld()
-    expect(await w.refusal('accounts.create', { platform: 'myspace', label: 'Old' })).toBe('invalid_input')
-    expect(await w.refusal('accounts.create', { platform: 'fake', label: '   ' })).toBe('invalid_input')
-    expect(await w.refusal('accounts.create', { platform: 'fake', label: 'x'.repeat(81) })).toBe('invalid_input')
-    const account = await w.call('accounts.create', { platform: 'FAKE', label: '  Brand   account ' })
+    expect(await w.refusal('accounts.create', { productId: w.productId, platform: 'myspace', label: 'Old' })).toBe('invalid_input')
+    expect(await w.refusal('accounts.create', { productId: w.productId, platform: 'fake', label: '   ' })).toBe('invalid_input')
+    expect(await w.refusal('accounts.create', { productId: w.productId, platform: 'fake', label: 'x'.repeat(81) })).toBe('invalid_input')
+    const account = await w.call('accounts.create', { productId: w.productId, platform: 'FAKE', label: '  Brand   account ' })
     expect(account).toMatchObject({ platform: 'fake', label: 'Brand account' })
   })
 
@@ -272,7 +272,7 @@ describe('platform and shared accounts', () => {
     const w = await makeReadyWorld({ fake: probe })
     const second = w.addProduct('Second product')
     const a = await w.call('channels.connect', { productId: w.productId, accountId: w.account.id, target: 'r/astrology' })
-    const b = await w.call('channels.connect', { productId: second, accountId: w.account.id, target: 'r/tarot' })
+    const b = await w.call('channels.connect', { productId: second, accountId: w.account.id, target: 'r/tarot', reuseAccount: true })
     await Promise.all([w.call('channels.assess', { channelId: a.id }), w.call('channels.assess', { channelId: b.id })])
     expect(probe.maxActive).toBe(1)
     expect(probe.order).toHaveLength(4)
@@ -283,7 +283,7 @@ describe('platform and shared accounts', () => {
 
   it('keeps accounts of different platforms apart', async () => {
     const w = makeWorld({ extra: [new OtherConnector()] })
-    const other = await w.call('accounts.create', { platform: 'other', label: 'Other site' })
+    const other = await w.call('accounts.create', { productId: w.productId, platform: 'other', label: 'Other site' })
     const fakeAccount = await w.addAccount()
     expect(await w.refusal('channels.connect', { productId: w.productId, accountId: other.id, target: 'r/astrology' })).toBe('platform_mismatch')
     expect(await w.refusal('channels.connect', { productId: w.productId, accountId: fakeAccount.id, target: 'https://other.test/forum' })).toBe('platform_mismatch')

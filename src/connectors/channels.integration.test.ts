@@ -4,8 +4,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Capability, CapabilityKey } from '../shared/types'
 import { newId } from '../core/db/database'
-import { makeTestCore } from '../core/testing/fakes'
+import { FakePage, makeTestCore } from '../core/testing/fakes'
 import { createConnectors } from './index'
+import { validProfileDefinition } from './universal/test-helpers'
 import { RedditFakePage, routeHealthyReddit } from './test-helpers'
 
 async function onboard() {
@@ -14,7 +15,7 @@ async function onboard() {
   const productId = newId()
   const now = core.clock.now().toISOString()
   core.db.prepare('INSERT INTO products (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)').run(productId, 'Natal Mystic', now, now)
-  const account = await core.router.call('accounts.create', { platform: 'reddit', label: 'Natal Mystic Reddit' })
+  const account = await core.router.call('accounts.create', { productId, platform: 'reddit', label: 'Natal Mystic Reddit' })
   const page = new RedditFakePage()
   browser.pages.set(account.id, page)
   routeHealthyReddit(page)
@@ -71,19 +72,95 @@ describe('onboarding a subreddit end to end (REQ-002)', () => {
 
   it('keeps universal-site accounts apart from Reddit accounts', async () => {
     const { core, channel } = await onboard()
-    const web = await core.router.call('accounts.create', { platform: 'web', label: 'Forum account' })
     const product = core.repos.listProducts()[0]
+    const web = await core.router.call('accounts.create', { productId: product.id, platform: 'web', label: 'Forum account' })
     await expect(core.router.call('channels.connect', { productId: product.id, accountId: web.id, target: 'r/test' })).rejects.toMatchObject({ code: 'platform_mismatch' })
     expect(core.repos.listChannels().map((c) => c.id)).toEqual([channel.id])
   })
 
   it('assesses a site without a profile honestly: nothing is read, sent or claimed', async () => {
     const { core } = await onboard()
-    const web = await core.router.call('accounts.create', { platform: 'web', label: 'Forum account' })
     const product = core.repos.listProducts()[0]
+    const web = await core.router.call('accounts.create', { productId: product.id, platform: 'web', label: 'Forum account' })
     const forum = await core.router.call('channels.connect', { productId: product.id, accountId: web.id, target: 'https://forum.example.com/c/general' })
     const assessed = await core.router.call('channels.assess', { channelId: forum.id })
     expect(assessed.capabilities.every((c) => c.status === 'needs_check')).toBe(true)
     expect(assessed.capabilities[0].detail).toMatch(/no site profile/i)
+  })
+})
+
+// ───────────────────────────── DEC-009: platforms and site profiles with the real connectors ─────────────────────────────
+
+describe('platforms and site profiles (DEC-009)', () => {
+  const FORUM = 'https://forum.example.com/'
+
+  async function forumWorld() {
+    const t = makeTestCore({ connectors: createConnectors() })
+    const { core } = t
+    const productId = newId()
+    const now = core.clock.now().toISOString()
+    core.db.prepare('INSERT INTO products (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)').run(productId, 'Natal Mystic', now, now)
+    const account = await core.router.call('accounts.create', { productId, platform: 'web', label: 'Forum login' })
+    const page = new FakePage()
+    page.responses = [{ match: 'const MAX', value: { title: 'Example forum', outline: 'body\n  ul.topics\n    li.topic', links: [] } }]
+    t.browser.pages.set(account.id, page)
+    return { t, core, productId, account, page }
+  }
+
+  it('lists the platforms the connectors offer: Reddit is prepared, any other site needs its own profile', async () => {
+    const { core } = await forumWorld()
+    expect(await core.router.call('platforms.list', undefined)).toEqual([
+      { connectorId: 'reddit', platform: 'reddit', label: 'Reddit', prepared: true, loginUrl: 'https://www.reddit.com/login/' },
+      { connectorId: 'universal', platform: 'web', label: 'Other website', prepared: false, loginUrl: '' }
+    ])
+  })
+
+  it('saves a valid profile as a version and refuses one that contains anything beyond the schema', async () => {
+    const { core } = await forumWorld()
+    expect(await core.router.call('channels.saveProfile', { host: 'forum.example.com', definition: validProfileDefinition() })).toMatchObject({ host: 'forum.example.com', version: 1, valid: true, errors: [] })
+    const error = await core.router.call('channels.saveProfile', { host: 'forum.example.com', definition: validProfileDefinition({ onclick: 'steal()' }) }).catch((e: unknown) => e)
+    expect(error).toMatchObject({ code: 'profile_invalid' })
+    expect((error as Error).message).toMatch(/onclick/)
+    expect(await core.router.call('channels.saveProfile', { host: 'forum.example.com', definition: { not: 'a profile' } }).catch((e: { code: string }) => e.code)).toBe('profile_invalid')
+    expect(await core.router.call('channels.saveProfile', { host: 'other.example.org', definition: validProfileDefinition() }).catch((e: { code: string }) => e.code)).toBe('invalid_input')
+  })
+
+  it('prepares a draft by reading only, shows what it says, and saves it only when asked; capabilities stay unverified', async () => {
+    const { t, core, productId, account, page } = await forumWorld()
+    t.engine.on('channels.site_profile', JSON.stringify(validProfileDefinition()))
+
+    const draft = await core.router.call('channels.draftProfile', { productId, accountId: account.id, url: FORUM })
+
+    expect(draft).toMatchObject({ host: 'forum.example.com', valid: true, problems: [], instructions: [] })
+    expect(draft.summary.join('\n')).toMatch(/Channel pages: https:\/\/forum\.example\.com\/c\/\*/)
+    expect(draft.summary.join('\n')).toMatch(/Can publish a new post in 6 steps/)
+    expect(page.log.filter((entry) => /^(fill|click|upload)\b/.test(entry))).toEqual([])
+    expect(core.repos.listChannels()).toEqual([])
+    expect(await core.router.call('channels.saveProfile', { host: 'forum.example.com', definition: draft.definition })).toMatchObject({ version: 1, valid: true })
+
+    const forum = await core.router.call('channels.connect', { productId, accountId: account.id, target: 'https://forum.example.com/c/general' })
+    expect(forum).toMatchObject({ connectorId: 'universal', platform: 'web' })
+    expect(forum.capabilities.every((c) => c.status === 'needs_check')).toBe(true)
+  })
+
+  it('does not accept a draft that is not in the profile format: the problems and steps are shown instead', async () => {
+    const { t, core, productId, account } = await forumWorld()
+    const dangerous = validProfileDefinition({ onload: 'fetch("https://evil.example")' })
+    t.engine.on('channels.site_profile', JSON.stringify(dangerous))
+    t.engine.on('channels.site_profile.repair', JSON.stringify(dangerous))
+    const draft = await core.router.call('channels.draftProfile', { productId, accountId: account.id, url: FORUM })
+    expect(draft.valid).toBe(false)
+    expect(draft.problems.join(' ')).toMatch(/onload/)
+    expect(draft.summary).toEqual([])
+    expect(draft.instructions.length).toBeGreaterThan(0)
+  })
+
+  it('does not even open the site for an engine that is not tool-free', async () => {
+    const { t, core, productId, account, page } = await forumWorld()
+    t.engine.toolFree = false
+    const draft = await core.router.call('channels.draftProfile', { productId, accountId: account.id, url: FORUM })
+    expect(draft).toMatchObject({ valid: false, definition: null })
+    expect(draft.instructions[0]).toMatch(/tools on this computer/)
+    expect(page.log).toEqual([])
   })
 })

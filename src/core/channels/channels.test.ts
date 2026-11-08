@@ -8,8 +8,8 @@ import { FakeConnector } from '../testing/fake-connector'
 import { makeTestCore } from '../testing/fakes'
 import { makeReadyWorld, type World } from './test-helpers'
 
-async function connect(w: World, target = 'r/astrology', productId = w.productId): Promise<Channel> {
-  return w.call('channels.connect', { productId, accountId: w.account.id, target })
+async function connect(w: World, target = 'r/astrology', productId = w.productId, reuseAccount = false): Promise<Channel> {
+  return w.call('channels.connect', { productId, accountId: w.account.id, target, ...(reuseAccount ? { reuseAccount } : {}) })
 }
 
 describe('channels.connect', () => {
@@ -52,7 +52,7 @@ describe('channels.connect', () => {
     const w = await makeReadyWorld()
     const other = w.addProduct('Another product')
     await connect(w, 'r/astrology')
-    await connect(w, 'r/astrology', other)
+    await connect(w, 'r/astrology', other, true)
     await connect(w, 'r/tarot')
     const channels = await w.call('channels.list', undefined)
     expect(channels).toHaveLength(3)
@@ -258,7 +258,7 @@ describe('persistence across restarts (REQ-002)', () => {
     const first = makeTestCore({ dbPath, connectors: [new FakeConnector()] })
     const now = first.clock.now().toISOString()
     first.core.db.prepare('INSERT INTO products (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)').run('p1', 'Natal Mystic', now, now)
-    const account = await first.core.router.call('accounts.create', { platform: 'fake', label: 'Natal Mystic Reddit' })
+    const account = await first.core.router.call('accounts.create', { productId: 'p1', platform: 'fake', label: 'Natal Mystic Reddit' })
     const channel = await first.core.router.call('channels.connect', { productId: 'p1', accountId: account.id, target: 'r/astrology' })
     await first.core.router.call('channels.updateSettings', { channelId: channel.id, settings: { style: 'warm', checkIntervalMin: 20 } })
     const assessed = await first.core.router.call('channels.assess', { channelId: channel.id })

@@ -39,15 +39,21 @@ export class AccountsService {
     private readonly store: ChannelsStore
   ) {}
 
-  list(): Account[] {
-    return this.core.repos.listAccounts()
+  /** All accounts, or (with a product) that product's accounts plus the unassigned ones that predate DEC-009. */
+  list(args?: { productId?: string }): Account[] {
+    const all = this.core.repos.listAccounts()
+    const productId = args?.productId
+    return productId ? all.filter((a) => a.productId === null || a.productId === productId) : all
   }
 
   account(id: unknown): Account {
     return found(() => this.core.repos.account(requireText(id, 'The account')), 'The account')
   }
 
-  create(args: { platform: string; label: string }): Account {
+  /** An account belongs to one product and has its own login and browser session (DEC-009). */
+  create(args: { productId: string; platform: string; label: string }): Account {
+    const productId = requireText(args.productId, 'The product')
+    const product = found(() => this.core.repos.product(productId), 'The product')
     const platform = requireText(args.platform, 'The platform').toLowerCase()
     const label = requireText(args.label, 'The account name').replace(/\s+/g, ' ')
     if (label.length > MAX_LABEL) throw new ApiError('invalid_input', `The account name is too long (limit ${MAX_LABEL} characters).`)
@@ -55,8 +61,8 @@ export class AccountsService {
     if (!known.includes(platform)) {
       throw new ApiError('invalid_input', `Unknown platform "${platform}". Available: ${known.join(', ') || 'none'}.`)
     }
-    const account = this.store.insertAccount(platform, label)
-    this.core.log.info('accounts', `Account created: ${label} (${platform}). Sign in through the account browser.`)
+    const account = this.store.insertAccount(product.id, platform, label)
+    this.core.log.info('accounts', `Account created for "${product.name}": ${label} (${platform}). Sign in through the account browser.`)
     this.core.events.changed('accounts', 'attention')
     return account
   }
@@ -198,10 +204,12 @@ export class AccountsService {
   /** Records a login state seen by any check; emits the changes that put the account on the attention list. */
   applyLogin(account: Account, state: Parameters<typeof loginOutcome>[0]): Account {
     const outcome = loginOutcome(state)
+    // The account that is expected to be signed in: the last one seen, which survives a logout in between.
+    const expected = this.store.lastIdentity(account.id) ?? account.identity
     const updated = this.store.setLogin(account.id, outcome.status, outcome.identity)
-    const switched = Boolean(account.identity && outcome.identity && account.identity !== outcome.identity)
+    const switched = Boolean(expected && outcome.identity && expected !== outcome.identity)
     if (switched) {
-      this.core.log.warn('accounts', `${account.label} is now signed in as ${outcome.identity} (it was ${account.identity}).`)
+      this.core.log.warn('accounts', `${account.label} is now signed in as ${outcome.identity} (it was ${expected}).`)
       this.holdChannelsForReview(account)
     }
     if (account.status !== updated.status || account.identity !== updated.identity) {

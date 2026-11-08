@@ -40,6 +40,7 @@ export class RedditConnector implements Connector {
   readonly id = 'reddit'
   readonly platform = 'reddit'
   readonly version = REDDIT_CONNECTOR_VERSION
+  readonly label = 'Reddit'
 
   private readonly runtime: RedditRuntime
   private readonly pacingMs: number

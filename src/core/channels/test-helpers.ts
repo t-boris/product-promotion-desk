@@ -53,7 +53,8 @@ export interface World {
   /** The ApiError code a call is refused with. */
   refusal<M extends ApiMethod>(method: M, args: ApiArgs<M>): Promise<string>
   addProduct(name?: string): string
-  addAccount(label?: string): Promise<Account>
+  /** An account for `productId` (the world's own product by default). */
+  addAccount(label?: string, productId?: string): Promise<Account>
 }
 
 export function makeWorld(options: { fake?: FakeConnector; extra?: FakeConnector[] } = {}): World {
@@ -91,7 +92,7 @@ export function makeWorld(options: { fake?: FakeConnector; extra?: FakeConnector
       throw new Error(`${method} was expected to be refused`)
     },
     addProduct,
-    addAccount: (label = 'Natal Mystic Reddit') => call('accounts.create', { platform: fake.platform, label })
+    addAccount: (label = 'Natal Mystic Reddit', productId = world.productId) => call('accounts.create', { productId, platform: fake.platform, label })
   }
   return world
 }

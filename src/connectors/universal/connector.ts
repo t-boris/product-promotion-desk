@@ -8,6 +8,7 @@ import {
   type ConnectorContext,
   type LoginState,
   type NormalizedTarget,
+  type ProfileAuthoring,
   type PublishedRef,
   type PublishOutcome,
   type PublishRequest,
@@ -22,11 +23,13 @@ import { gateProbeScript, type GateProbe } from '../page-scripts'
 import { createdMs, earliestCreation } from '../reconcile'
 import { analyzeRules, quoteRule } from '../rules-text'
 import { comparableText, errorMessage, sameText } from '../text'
+import { describeProfileFormat, summarizeProfile } from './format'
 import { hostBelongsTo, matchGlob, matchesAnyGlob } from './glob'
 import type { ItemReader, PublishFlow, SiteProfile, Step } from './profile'
 import { elementTextScript, extractItemsScript, loginProbeScript, pageTextScript, parseCount, visibleTextScript, type RawItem } from './reader'
 import { ProfileStore, type ProfileProvider, type StoredProfile } from './store'
 import { renderTemplate, type PlaceholderValues } from './templates'
+import { validateProfile } from './validate'
 
 export const UNIVERSAL_VERSION = '1'
 
@@ -52,6 +55,25 @@ export class UniversalConnector implements Connector {
   readonly id = 'universal'
   readonly platform = 'web'
   readonly version = UNIVERSAL_VERSION
+  readonly label = 'Other website'
+
+  /** Lets the core describe, validate and store site profiles (DEC-009) without importing this connector's code. */
+  readonly authoring: ProfileAuthoring = {
+    describeFormat: () => describeProfileFormat(),
+    validateDefinition: (definition) => {
+      const result = validateProfile(definition)
+      const rawHost = typeof (definition as { host?: unknown } | null)?.host === 'string' ? (definition as { host: string }).host.trim().toLowerCase() : ''
+      return { valid: result.valid, errors: result.errors, summary: result.profile ? summarizeProfile(result.profile) : [], host: result.profile?.host ?? (rawHost || null) }
+    },
+    saveDefinition: (host, definition) => {
+      if (!this.store) throw new Error('Profile storage is not available')
+      const declared = typeof (definition as { host?: unknown } | null)?.host === 'string' ? (definition as { host: string }).host.trim().toLowerCase() : ''
+      if (declared !== host.trim().toLowerCase()) throw new Error(`The profile is for ${declared || 'no host'}, not for ${host}.`)
+      const saved = this.store.save(definition)
+      return { id: saved.id, host: saved.host, version: saved.version, valid: saved.valid, errors: saved.errors }
+    },
+    hasValidProfile: (host) => Boolean(this.profiles?.forHost(host).valid)
+  }
 
   private profiles: ProfileProvider | null = null
   private store: ProfileStore | null = null

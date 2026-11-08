@@ -31,6 +31,8 @@ const CODE_VALUE = /<\s*\/?\s*script|javascript\s*:|vbscript\s*:|data\s*:\s*text
 
 const HOST = /^(?=.{3,253}$)[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/
 const ATTR = /^(href|id|datetime|content|title|value|src|alt|data-[a-z0-9-]{1,40}|aria-[a-z]{1,30})$/
+/** Plain-words form of ATTR for the format description given to the AI; format.test.ts keeps the two in step. */
+export const ALLOWED_ATTRIBUTES_TEXT = 'href, id, datetime, content, title, value, src, alt, data-<name> (lower-case letters, digits and hyphens, up to 40) and aria-<name> (lower-case letters, up to 30)'
 const PLACEHOLDER = /\{\{\s*([a-zA-Z]+)\s*\}\}/g
 /** Stateless presence check (the global regex above keeps lastIndex between test() calls). */
 const HAS_PLACEHOLDER = /\{\{/

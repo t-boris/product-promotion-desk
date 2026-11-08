@@ -34,13 +34,13 @@ export class ChannelsStore {
 
   // ───────────── accounts ─────────────
 
-  insertAccount(platform: string, label: string): Account {
+  insertAccount(productId: string, platform: string, label: string): Account {
     const id = newId()
     // The prefix makes the browser session persistent: cookies survive restarts.
     const partition = `persist:ppd-account-${id}`
     this.db
-      .prepare("INSERT INTO accounts (id, platform, label, identity, partition, status, created_at) VALUES (?, ?, ?, NULL, ?, 'login_required', ?)")
-      .run(id, platform, label, partition, this.clock.now().toISOString())
+      .prepare("INSERT INTO accounts (id, product_id, platform, label, identity, partition, status, created_at) VALUES (?, ?, ?, ?, NULL, ?, 'login_required', ?)")
+      .run(id, productId, platform, label, partition, this.clock.now().toISOString())
     return this.repos.account(id)
   }
 
@@ -48,8 +48,24 @@ export class ChannelsStore {
     this.db.prepare('DELETE FROM accounts WHERE id = ?').run(id)
   }
 
+  /**
+   * Records the outcome of a login check. A logout clears `identity` (nobody is signed in) but keeps `last_identity`:
+   * the account that is expected to be signed in, so a later sign-in as somebody else is still noticed.
+   */
   setLogin(id: string, status: AccountStatus, identity: string | null): Account {
-    this.db.prepare('UPDATE accounts SET status = ?, identity = ? WHERE id = ?').run(status, identity, id)
+    this.db.prepare('UPDATE accounts SET status = ?, identity = ?, last_identity = COALESCE(?, last_identity) WHERE id = ?').run(status, identity, identity, id)
+    return this.repos.account(id)
+  }
+
+  /** The identity most recently seen signed in (kept across logouts), or null if none was ever confirmed. */
+  lastIdentity(id: string): string | null {
+    const row = this.db.prepare('SELECT last_identity AS v FROM accounts WHERE id = ?').get(id) as { v: string | null } | undefined
+    return row?.v ?? null
+  }
+
+  /** Gives an unassigned (legacy) account to the product that starts using it. */
+  assignAccount(id: string, productId: string): Account {
+    this.db.prepare('UPDATE accounts SET product_id = ? WHERE id = ? AND product_id IS NULL').run(productId, id)
     return this.repos.account(id)
   }
 

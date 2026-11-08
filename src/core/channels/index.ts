@@ -7,8 +7,12 @@ import type { Core } from '../core'
 import type { Clock, Connector } from '../ports'
 import type { Db } from '../db/database'
 import { AccountsService } from './accounts'
+import { draftSiteProfile, suggestChannels } from './ai-help'
 import { ChannelService } from './channel-service'
+import { listPlatforms } from './platforms'
+import { ProfileService } from './profiles'
 import { ChannelsStore } from './store'
+import { SuggestionService } from './suggestions'
 
 /** Connectors that keep data in the application database (the universal connector's site profiles) opt in with this. */
 interface StorageUser {
@@ -25,24 +29,30 @@ export function register(core: Core): void {
   const store = new ChannelsStore(core.db, core.clock, core.repos)
   const accounts = new AccountsService(core, store)
   const channels = new ChannelService(core, store, accounts)
+  const profiles = new ProfileService(core, accounts, { draftSiteProfile })
+  const suggestions = new SuggestionService(core, { suggestChannels })
 
   core.services.channels = {
     markCapabilityVerified: (channelId, key, detail) => channels.markCapabilityVerified(channelId, key, detail)
   }
 
   core.router.register({
-    'accounts.list': () => accounts.list(),
+    'accounts.list': (args) => accounts.list(args),
     'accounts.create': (args) => accounts.create(args),
     'accounts.remove': (args) => accounts.remove(args.id),
+    'platforms.list': () => listPlatforms(core.connectors),
     'accounts.openBrowser': (args) => accounts.openBrowser(args),
     'accounts.takeControl': (args) => accounts.takeControl(args.accountId),
     'accounts.releaseControl': (args) => accounts.releaseControl(args.accountId),
     'accounts.checkLogin': (args) => accounts.checkLogin(args.accountId),
-    'channels.list': () => channels.list(),
+    'channels.list': (args) => channels.list(args),
     'channels.connect': (args) => channels.connect(args),
     'channels.assess': (args) => channels.assess(args.channelId),
     'channels.updateSettings': (args) => channels.updateSettings(args),
     'channels.setMode': (args) => channels.setMode(args),
-    'channels.remove': (args) => channels.remove(args.id)
+    'channels.remove': (args) => channels.remove(args.id),
+    'channels.suggest': (args) => suggestions.suggest(args),
+    'channels.draftProfile': (args) => profiles.draftProfile(args),
+    'channels.saveProfile': (args) => profiles.saveProfile(args)
   })
 }
