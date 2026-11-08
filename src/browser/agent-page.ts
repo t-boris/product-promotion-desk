@@ -22,6 +22,11 @@ const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 export interface AgentSurface {
   contents: WebContents
   dispose(): void
+  /** Shows the window the page lives in, so the owner watches the AI work in it (DEC-018); `focus` also puts it in front of the owner's windows. */
+  reveal?(focus: boolean): void
+  /** Hides that window again; the page goes on. */
+  conceal?(): void
+  isRevealed?(): boolean
 }
 
 export class ElectronRawPage implements RawPage {
@@ -36,6 +41,19 @@ export class ElectronRawPage implements RawPage {
       this.surface = this.create()
     }
     return this.surface.contents
+  }
+
+  /** Shows the window of the page (creating the page if there is none yet). */
+  reveal(focus: boolean): void {
+    this.live()
+    this.surface?.reveal?.(focus)
+  }
+
+  /** Hides the window of the page; true when it was shown. */
+  conceal(): boolean {
+    const was = this.surface?.isRevealed?.() ?? false
+    this.surface?.conceal?.()
+    return was
   }
 
   /** URL currently loaded, without creating a page. Used to offer the same address to the user. */

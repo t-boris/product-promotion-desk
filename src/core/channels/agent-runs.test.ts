@@ -257,6 +257,32 @@ describe('the AI asks the owner', () => {
     expect(await w.call('agent.questions', undefined)).toEqual([])
   })
 
+  it('puts the open question on the attention list (so a notification reaches the owner), and takes it off when answered', async () => {
+    const w = await ready()
+    asTheAI(w, async (_tools, call) => void (await call('ask_owner', { question: 'Enter the code from the e-mail' })))
+    await start(w)
+    await until(async () => (await state(w))?.question !== null)
+    const items = await w.call('attention.list', undefined)
+    const item = items.find((i) => i.id === `agent-question:${w.account.id}`)
+    expect(item).toMatchObject({ kind: 'question', refType: 'account', refId: w.account.id, detail: 'Enter the code from the e-mail' })
+    expect(item?.title).toContain(w.account.label)
+    await w.call('agent.answer', { accountId: w.account.id, answer: 'done' })
+    await finished(w)
+    expect((await w.call('attention.list', undefined)).some((i) => i.id.startsWith('agent-question:'))).toBe(false)
+  })
+
+  it('brings the browser the AI works in to the front on request, and only while the AI works', async () => {
+    const w = await ready()
+    asTheAI(w, async (_tools, call) => void (await call('ask_owner', { question: 'Solve the CAPTCHA' })))
+    expect(await w.call('agent.showBrowser', { accountId: w.account.id })).toEqual({ shown: false })
+    await start(w)
+    await until(async () => (await state(w))?.question !== null)
+    expect(await w.call('agent.showBrowser', { accountId: w.account.id })).toEqual({ shown: true })
+    expect(w.t.browser.agentFocused).toEqual([w.account.id])
+    await w.call('agent.stop', { accountId: w.account.id })
+    expect(await w.call('agent.showBrowser', { accountId: w.account.id })).toEqual({ shown: false })
+  })
+
   it('tells the AI to wait with ask_owner when the owner has the browser, and lets it work again when they are done', async () => {
     const w = await ready()
     const seen: string[] = []

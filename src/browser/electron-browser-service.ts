@@ -19,6 +19,8 @@ interface AccountBrowser {
   partition: string
   userWindow: UserBrowserWindow | null
   recorder: PageRecorder
+  /** The agent's window was shown to the owner and hidden while their own window is open; it comes back when theirs closes. */
+  resumeWatch: boolean
 }
 
 /**
@@ -53,11 +55,12 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
     const existing = this.accounts.get(account.id)
     if (existing) return existing
     const partition = persistentPartition(account.partition)
-    const agent = new ElectronRawPage(() => this.createAgentSurface(partition))
+    const agent = new ElectronRawPage(() => this.createAgentSurface(partition, account.label))
     const entry: AccountBrowser = {
       partition,
       agent,
       userWindow: null,
+      resumeWatch: false,
       recorder: new PageRecorder(
         () => Date.now(),
         () => this.pageHost(entry),
@@ -68,6 +71,14 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
     this.recorders.set(partition, entry.recorder)
     this.accounts.set(account.id, entry)
     return entry
+  }
+
+  /**
+   * The AI works in the account's own browser and the owner watches (DEC-018): shows the agent's window without taking control.
+   * `focus` brings it to the front, for the moment the owner has to act in the page the AI is waiting on (a CAPTCHA).
+   */
+  showAgentBrowser(account: Account, focus = false): void {
+    this.entry(account).agent.reveal(focus)
   }
 
   async openForUser(account: Account, url?: string): Promise<{ tabId: string }> {
@@ -85,6 +96,8 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
     // The agent stops interacting the moment the user takes the browser, before the window is even shown.
     const control = new UserControl(entry.session)
     control.begin()
+    // Two windows on one account would confuse: the owner's own window replaces the one they watch the AI in.
+    entry.resumeWatch = entry.agent.conceal()
     try {
       entry.userWindow = new UserBrowserWindow({
         account: { label: account.label, identity: account.identity },
@@ -93,6 +106,10 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
         control,
         onClosed: () => {
           entry.userWindow = null
+          if (entry.resumeWatch) {
+            entry.resumeWatch = false
+            entry.agent.reveal(false)
+          }
           this.onUserWindowChange?.(account.id, 'closed')
         }
       })
@@ -192,9 +209,9 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
    * A hidden page in a hidden BaseWindow. BaseWindow (not BrowserWindow) keeps it out of
    * BrowserWindow.getAllWindows(), which the main process uses to tell whether an application window is open.
    */
-  private createAgentSurface(partition: string): AgentSurface {
+  private createAgentSurface(partition: string, label: string): AgentSurface {
     this.configureSession(partition)
-    const win = new BaseWindow({ show: false, ...AGENT_VIEWPORT })
+    const win = new BaseWindow({ show: false, title: `${label} — account browser`, ...AGENT_VIEWPORT })
     const view = new WebContentsView({
       webPreferences: { partition, sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, spellcheck: false }
     })
@@ -206,6 +223,29 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
       if (!contents.isDestroyed()) contents.close()
       if (!win.isDestroyed()) win.destroy()
     }
+    let revealed = false
+    // The owner may close the window they watch the AI in: it is only hidden, the page and the AI's work go on.
+    win.on('close', (event: { preventDefault(): void }) => {
+      event.preventDefault()
+      revealed = false
+      win.hide()
+    })
+    const reveal = (focus: boolean): void => {
+      if (win.isDestroyed()) return
+      win.setTitle(`${label} — the AI is working here`)
+      win.showInactive()
+      revealed = true
+      if (focus) {
+        win.moveTop()
+        win.focus()
+        if (!contents.isDestroyed()) contents.focus()
+      }
+    }
+    const conceal = (): void => {
+      if (win.isDestroyed()) return
+      revealed = false
+      win.hide()
+    }
     contents.setAudioMuted(true)
     const recorder = this.recorders.get(partition)
     if (recorder) this.watchConsole(contents, recorder)
@@ -215,7 +255,7 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
     })
     // A crashed page is dropped; the next operation creates a fresh one.
     contents.on('render-process-gone', dispose)
-    return { contents, dispose }
+    return { contents, dispose, reveal, conceal, isRevealed: () => revealed }
   }
 
   /** Applied once per partition: no permission prompts, no downloads, and a plain-Chromium user agent. */

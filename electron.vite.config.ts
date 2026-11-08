@@ -6,7 +6,8 @@ export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
     build: {
-      rollupOptions: { input: { index: resolve('src/main/index.ts') } }
+      // The second entry is the MCP server an AI engine starts for a mission (src/mcp-shim); it needs nothing but Node.
+      rollupOptions: { input: { index: resolve('src/main/index.ts'), 'mcp-shim': resolve('src/mcp-shim/index.ts') } }
     }
   },
   preload: {

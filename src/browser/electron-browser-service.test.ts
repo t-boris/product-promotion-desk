@@ -92,6 +92,47 @@ describe('agent page', () => {
     expect(agentContents().windowOpenHandler?.({ url: 'https://popup.example/' })).toEqual({ action: 'deny' })
   })
 
+  it('shows the window to the owner on request without taking control, and closing it only hides it (DEC-018)', async () => {
+    const { service } = setup()
+    const a = account('a')
+    service.showAgentBrowser(a)
+    const win = created.windows[0]
+    expect(win.visible).toBe(true)
+    expect(win.focused).toBe(0)
+    expect(service.session(a).control()).toEqual({ holder: 'none', owner: null })
+
+    let prevented = false
+    win.emit('close', { preventDefault: () => (prevented = true) })
+    expect(prevented).toBe(true)
+    expect(win.visible).toBe(false)
+    expect(win.destroyed).toBe(false)
+
+    service.showAgentBrowser(a, true)
+    expect(win.visible).toBe(true)
+    expect(win.focused).toBe(1)
+    expect(win.raised).toBe(1)
+    // The page is the one the AI works in: showing it creates no second page.
+    expect(created.views).toHaveLength(1)
+  })
+
+  it('hides the watched window while the owner has a window of their own, and brings it back when theirs closes', async () => {
+    const { service } = setup()
+    const a = account('a')
+    service.showAgentBrowser(a)
+    const watched = created.windows[0]
+    await service.openForUser(a, 'https://www.reddit.com/')
+    expect(watched.visible).toBe(false)
+    created.windows[1].close()
+    expect(watched.visible).toBe(true)
+
+    // A window that was never shown is not shown by the owner's window closing.
+    const b = account('b')
+    await service.session(b).withAgentControl('t', async (page) => page.goto('https://b.test/'))
+    await service.openForUser(b)
+    created.windows.at(-1)?.close()
+    expect(created.windows[2].visible).toBe(false)
+  })
+
   it('recreates the page after it crashed or was destroyed, and releases the old window', async () => {
     const { service } = setup()
     const session = service.session(account('a'))

@@ -220,8 +220,11 @@ export class FakeBrowserService implements BrowserService {
     return this.pageReports.get(account.id) ?? null
   }
 
-  showAgentBrowser(account: Account): void {
+  /** Accounts whose browser was brought to the front for the owner to act in it. */
+  readonly agentFocused: string[] = []
+  showAgentBrowser(account: Account, focus = false): void {
     this.agentShown.push(account.id)
+    if (focus) this.agentFocused.push(account.id)
   }
 
   async openForUser(account: Account, url?: string): Promise<{ tabId: string }> {

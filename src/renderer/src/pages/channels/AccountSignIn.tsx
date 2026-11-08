@@ -42,7 +42,7 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword }: { 
   const ready = account.status === 'ready'
   const agentRun = agent.data ?? null
   const agentWorking = agentRun?.status === 'running'
-  // What the AI needs (an e-mail, the saved password, an engine that is never given a way to act on this computer) is decided by the core; the screen says it before the click, next to the button.
+  // What the AI needs (an e-mail, the saved password, an engine that can work the browser) is decided by the core; the screen says it before the click, next to the button.
   const agentReady = canStart.data?.ready === true
   const agentWhy = !agentWorking && canStart.data && !canStart.data.ready ? canStart.data.reason : null
 

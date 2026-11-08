@@ -200,9 +200,9 @@ export interface BrowserService {
   openForUser(account: Account, url?: string): Promise<{ tabId: string }>
   /**
    * Optional (DEC-018): shows the account's own browser, the one the AI works in, in a window of its own without taking control or focus,
-   * so the owner watches the AI work. Closing that window only hides it.
+   * so the owner watches the AI work. Closing that window only hides it. `focus` brings it in front of the owner's other windows.
    */
-  showAgentBrowser?(account: Account): void
+  showAgentBrowser?(account: Account, focus?: boolean): void
   /**
    * Set by the core: called when the person's window for an account has opened or closed, so the screen shows who holds the
    * browser and the account is looked at once when the person is done.

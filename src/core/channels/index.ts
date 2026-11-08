@@ -46,6 +46,7 @@ export function register(core: Core): void {
   // An account found signed out gets one try with its saved password (DEC-014), without holding up the check that found it.
   accounts.onSignedOut = (account) => void signIn.maybeAutomatic(account)
 
+  core.services.agent = agent
   core.services.channels = {
     markCapabilityVerified: (channelId, key, detail) => channels.markCapabilityVerified(channelId, key, detail)
   }
@@ -74,6 +75,7 @@ export function register(core: Core): void {
     'agent.start': (args) => agent.start(args),
     'agent.state': (args) => agent.state(args.accountId),
     'agent.stop': (args) => agent.stop(args.accountId),
+    'agent.showBrowser': (args) => agent.showBrowser(args.accountId),
     'agent.answer': (args) => agent.answer(args),
     'agent.questions': () => agent.questions(),
     'vault.status': () => vault.status(),

@@ -159,8 +159,16 @@ export class WebContentsView {
 export class BaseWindow extends EventEmitter {
   readonly children: WebContentsView[] = []
   readonly contentView = { addChildView: (view: WebContentsView) => void this.children.push(view) }
+  private shown = false
   get visible(): boolean {
-    return this.options.show !== false
+    return this.options.show !== false || this.shown
+  }
+  showInactive(): void {
+    this.shown = true
+  }
+  hide(): void {
+    this.shown = false
+    this.options.show = false
   }
   destroyed = false
   focused = 0

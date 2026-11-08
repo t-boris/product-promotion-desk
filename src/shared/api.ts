@@ -149,6 +149,8 @@ export interface ApiMethods {
   'agent.state': [{ accountId: Id }, AgentRun | null]
   'agent.stop': [{ accountId: Id }, AgentRun | null]
   /** The owner answers the AI's question (the pop-up): a text, or "done" for "I did it". */
+  /** Brings the browser the AI works in to the front, for the owner to act in the page the AI waits on (a CAPTCHA). */
+  'agent.showBrowser': [{ accountId: Id }, { shown: boolean }]
   'agent.answer': [{ accountId: Id; answer: string }, AgentRun | null]
   /** Every question an AI is waiting on now, for the pop-up that appears on any screen. */
   'agent.questions': [void, AgentAsk[]]

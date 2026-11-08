@@ -64,7 +64,16 @@ function unknownResultItems(db: Db, targets: Map<Id, string>): AttentionItem[] {
 }
 
 function accountItems(core: Core): AttentionItem[] {
-  const items: AttentionItem[] = []
+  // The AI works on an account and waits for the owner (a CAPTCHA, a code): the question is on the list while it is open (DEC-018).
+  const items: AttentionItem[] = (core.services.agent?.questions() ?? []).map((ask) => ({
+    id: `agent-question:${ask.accountId}`,
+    kind: 'question',
+    title: `The AI is waiting for you on ${ask.accountLabel}`,
+    detail: excerpt(ask.text),
+    refType: 'account',
+    refId: ask.accountId,
+    createdAt: ask.askedAt
+  }))
   for (const account of core.repos.listAccounts()) {
     const base = { refType: 'account' as const, refId: account.id, createdAt: account.createdAt }
     const who = account.identity ? `${account.label} (${account.identity})` : account.label

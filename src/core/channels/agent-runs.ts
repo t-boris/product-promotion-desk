@@ -61,6 +61,15 @@ export class AgentRunService {
     return snapshot(live.run)
   }
 
+  /** Brings the browser the AI works in to the front: the owner acts in the very page the AI waits on (a CAPTCHA). */
+  showBrowser(accountId: unknown): { shown: boolean } {
+    const account = this.accounts.account(accountId)
+    const show = this.core.browser.showAgentBrowser
+    if (!show || this.runs.get(account.id)?.run.status !== 'running') return { shown: false }
+    show.call(this.core.browser, account, true)
+    return { shown: true }
+  }
+
   /** The owner answers the question the AI is waiting on (the pop-up). */
   answer(args: { accountId: string; answer: string }): AgentRun | null {
     const account = this.accounts.account(args.accountId)

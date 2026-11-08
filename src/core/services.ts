@@ -1,7 +1,7 @@
 // Cross-module service contracts. Modules attach their implementation to `core.services` in `register()`
 // and consume other modules only through these interfaces, so they can be built and tested independently.
 
-import type { CapabilityKey, Claim, Id, MetricSnapshot, SendAction } from '../shared/types'
+import type { AgentAsk, CapabilityKey, Claim, Id, MetricSnapshot, SendAction } from '../shared/types'
 
 /** Implemented by the passports module (I-1); consumed by drafting and sending (I-5, I-6). */
 export interface KnowledgeProvider {
@@ -71,7 +71,13 @@ export interface ChannelsService {
   markCapabilityVerified(channelId: Id, key: CapabilityKey, detail: string): void
 }
 
+/** Implemented by the channels module; read by the attention list: an AI working on an account that waits for the owner is something that needs them (DEC-018). */
+export interface AgentQuestions {
+  questions(): AgentAsk[]
+}
+
 export interface CoreServices {
+  agent?: AgentQuestions
   channels?: ChannelsService
   knowledge?: KnowledgeProvider
   pipeline?: PipelineHooks

@@ -1,3 +1,4 @@
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { BrowserWindow, app, clipboard, ipcMain, powerMonitor, safeStorage, shell } from 'electron'
 import { ApiError, IPC_EVENT, IPC_INVOKE, type ApiMethod } from '../shared/api'
@@ -7,6 +8,7 @@ import { createConnectors } from '../connectors'
 import { createCore } from '../core/core'
 import { getAutomation, startAutomation } from '../core/pipeline'
 import { installLifecycle } from './lifecycle'
+import { McpGateway } from './mcp-gateway'
 import { createNotificationSink } from './notifications'
 import { createTray } from './tray'
 import { FileVault, TimedClipboard } from './vault'
@@ -25,6 +27,15 @@ if (!app.requestSingleInstanceLock()) {
 async function start(): Promise<void> {
   await app.whenReady()
 
+  // The tools the AI uses in an account's browser reach it through a socket and a small program the engine starts (DEC-018).
+  const gateway = new McpGateway({
+    socketPath: join(tmpdir(), `ppd-mcp-${process.pid}.sock`),
+    command: process.execPath,
+    shimPath: join(import.meta.dirname, 'mcp-shim.js')
+  })
+  await gateway.start()
+  app.on('quit', () => gateway.stop())
+
   const core = createCore({
     dbPath: join(dataDir, 'ppd.sqlite'),
     dataDir,
@@ -32,6 +43,7 @@ async function start(): Promise<void> {
     engines: createEngines(),
     browser: (tickets) => new ElectronBrowserService(tickets, { diagnosticsDir: join(dataDir, 'diagnostics') }),
     connectors: createConnectors(),
+    agentBridge: gateway,
     // Passwords: encrypted by the system keychain, in a file of their own next to the database (DEC-014).
     secrets: new FileVault(join(dataDir, 'vault.bin'), safeStorage),
     clipboard: new TimedClipboard({ writeText: (text) => clipboard.writeText(text), readText: () => clipboard.readText() }),
