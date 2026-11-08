@@ -1,0 +1,12 @@
+appId: com.t-boris.product-promotion-desk
+productName: Product Promotion Desk
+directories:
+  output: dist
+files:
+  - out/**
+  - package.json
+mac:
+  target: dir
+  category: public.app-category.productivity
+  identity: null
+npmRebuild: true

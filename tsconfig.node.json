@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": { "types": ["node"] },
+  "include": [
+    "src/shared/**/*",
+    "src/core/**/*",
+    "src/ai/**/*",
+    "src/connectors/**/*",
+    "src/browser/**/*",
+    "src/main/**/*",
+    "src/preload/**/*",
+    "electron.vite.config.ts",
+    "vitest.config.ts"
+  ]
+}

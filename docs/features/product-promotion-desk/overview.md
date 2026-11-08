@@ -2,7 +2,7 @@
 type: feature
 id: product-promotion-desk
 title: Product Promotion Desk
-status: exploring
+status: implementing
 owner: Boris Tsekinovsky
 created: 2026-11-08
 provenance: Created from the new-project intake
@@ -32,6 +32,17 @@ understanding_notes:
   Acceptance Criteria: Обязательный сквозной сценарий закреплён за Reddit. Конкретный сабреддит выбирается пользователем; дополнительных ответов для фиксации замысла первой версии не требуется.
 questions_left: 0
 confirmed: 2026-11-08
+issues:
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+  - 9
+  - 10
 ---
 
 # Product Promotion Desk
@@ -46,4 +57,4 @@ Product promotion requires maintaining consistent product knowledge, finding sui
 
 ## Scope
 
-In: a personal macOS application for the project owner and friends, each using an independent installation; Natal Mystic as the first product; approved product passports; channel discovery and onboarding; persistent browser accounts; capability assessment; scheduled monitoring; contextual replies; approval queues; restricted automatic replies; approved standalone publications; available platform metrics and optional business-event connections; logs and recovery. The proposed architecture uses Electron, TypeScript, React, and SQLite, with separate responsibilities for application state, scheduling, AI adapters, browser operation, connectors, authorization, analytics, and storage. Browser implementation remains subject to a real-site prototype. Out: video production and editing, arbitrary generated connector-code execution, automatic standalone publications, automatic handling of sensitive or ambiguous requests, and a shared multi-user service. The mandatory first platform remains open; universal onboarding guarantees only capabilities actually verified.
+In: a personal macOS application for the project owner and friends, each using an independent installation; Natal Mystic as the first product; approved product passports; channel discovery and onboarding; persistent browser accounts; capability assessment; scheduled monitoring; contextual replies; approval queues; restricted automatic replies; approved standalone publications; available platform metrics, with business-event ingestion and analytics connections deferred beyond version 1; logs and recovery. The proposed architecture uses Electron, TypeScript, React, and SQLite, with separate responsibilities for application state, scheduling, AI adapters, browser operation, connectors, authorization, analytics, and storage. Browser implementation remains subject to a real-site prototype. Out: video production and editing, arbitrary generated connector-code execution, automatic standalone publications, automatic handling of sensitive or ambiguous requests, and a shared multi-user service. Reddit, with one user-selected subreddit, is the mandatory first acceptance platform for Natal Mystic; universal onboarding guarantees only capabilities actually verified.

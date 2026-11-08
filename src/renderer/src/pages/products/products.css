@@ -1,0 +1,141 @@
+/* Styles for the Products page. Colors come from the shared tokens in styles.css. */
+
+.products-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.products-list {
+  position: sticky;
+  top: 0;
+}
+.products-detail {
+  min-width: 0;
+}
+
+textarea.input.short {
+  min-height: 56px;
+}
+
+.source-main {
+  min-width: 0;
+}
+.source-ref {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  word-break: break-all;
+}
+
+.scope-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.preview {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  padding: 10px 12px;
+  margin: 8px 0;
+}
+.preview-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.preview-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  max-height: 220px;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.claim {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--panel);
+}
+.claim-approved {
+  border-left: 3px solid var(--good);
+}
+.claim-prohibited {
+  border-left: 3px solid var(--bad);
+}
+.claim-contradiction {
+  border-color: var(--bad);
+  background: var(--bad-bg);
+}
+.claim-rejected {
+  opacity: 0.7;
+}
+.claim-text {
+  margin: 6px 0;
+}
+.claim-text.struck {
+  text-decoration: line-through;
+}
+.claim-sources {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+.claim-actions {
+  margin-top: 8px;
+}
+.claim-form {
+  margin-top: 8px;
+}
+.conflict-box {
+  margin: 6px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+.conflict-box ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+.warn-text {
+  color: var(--warn);
+}
+.warn-note {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 8px 0;
+}
+.warn-note a {
+  color: inherit;
+  font-weight: 600;
+}
+
+.progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  overflow: hidden;
+  margin: 10px 0;
+}
+.progress-bar {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+@media (max-width: 900px) {
+  .products-layout,
+  .scope-grid,
+  .preview-columns {
+    grid-template-columns: 1fr;
+  }
+  .products-list {
+    position: static;
+  }
+}
