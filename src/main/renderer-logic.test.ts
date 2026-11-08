@@ -6,6 +6,7 @@ import type { Account, AttentionItem, Channel, Product } from '../shared/types'
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from '../renderer/src/menu-state'
 import { fixLinkFor } from '../renderer/src/pages/attention-links'
 import { nextStep } from '../renderer/src/pages/channels/next-step'
+import { platformMismatch } from '../renderer/src/pages/channels/platform-hint'
 import { MOVED_PAGES, accountsNewHref, parseAccountsHash, parseHash, productHref } from '../renderer/src/route'
 
 describe('hash routes (DEC-009)', () => {
@@ -139,5 +140,34 @@ describe('the next step of an account', () => {
 
   it('does not ask for a password where the Mac keeps none', () => {
     expect(nextStep(account({ email: 'a@b.co' }), false, false).block).toBe('signin')
+  })
+})
+
+describe('platformMismatch: an account whose name says one platform while it is on another', () => {
+  const platforms = [
+    { platform: 'reddit', label: 'Reddit' },
+    { platform: 'facebook', label: 'Facebook' },
+    { platform: 'x', label: 'X' },
+    { platform: 'web', label: 'Website' }
+  ]
+
+  it('says so when the name mentions another platform (the account the owner added as "Facebook" was on Reddit)', () => {
+    const text = platformMismatch('Natal Mystic @ Facebook', 'reddit', platforms)
+    expect(text).toContain('mentions Facebook')
+    expect(text).toContain('on Reddit')
+    expect(text).toContain('add it again')
+  })
+
+  it('is quiet when the name matches the platform, mentions none, or mentions both', () => {
+    expect(platformMismatch('Natal Mystic @ Facebook', 'facebook', platforms)).toBeNull()
+    expect(platformMismatch('Brand account', 'reddit', platforms)).toBeNull()
+    expect(platformMismatch('Reddit and Facebook voice', 'reddit', platforms)).toBeNull()
+  })
+
+  it('matches whole words in any case and ignores platforms with one- or two-letter names', () => {
+    expect(platformMismatch('natal mystic facebook', 'reddit', platforms)).not.toBeNull()
+    expect(platformMismatch('Facebooking account', 'reddit', platforms)).toBeNull()
+    expect(platformMismatch('Natal Mystic X', 'reddit', platforms)).toBeNull()
+    expect(platformMismatch('Natal Mystic @ Facebook', 'unknown', platforms)).toContain('on unknown')
   })
 })

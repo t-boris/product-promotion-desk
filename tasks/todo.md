@@ -201,3 +201,11 @@ What was found (by looking at the running app and by running the app's own scrip
 - [ ] NOT DONE: live sign-in with the owner's real password on Reddit (only the owner can run it; issue #8).
 
 Result: 1335 tests. Checked in the real app (scratch instance, real windows): open, "Show the window" brings it above the main window, release closes it, the check after the close changed a forced status within 2 s; the same check that kept answering "captcha" now answers "Not signed in". Not checked: typing into the Reddit page in the account window; the form wait end to end (only the dry run in Chromium plus unit tests).
+
+## 0.3.3: the platform of a new account is chosen, not defaulted (owner: "I add a Facebook account and it says Reddit")
+
+- [x] The Platform field starts on "Choose a platform…", the add button stays off until a platform is chosen; the hint says it cannot be changed later.
+- [x] An account whose name mentions another platform than its own says so on its card, with the way out (remove it under More and add it again).
+- [x] Registration pages of the presets opened in a clean window: Facebook, Instagram, Reddit, X, TikTok, LinkedIn, Pinterest and Google open a real registration form; Threads opens its feed (it has no registration of its own), Telegram opens only a QR login (accounts are made in the phone app).
+- [ ] OPEN, needs the owner's decision: "Check sign-in" cannot work on any platform except Reddit ("There is no site profile for this site yet"), so a Facebook account never becomes "Signed in" by itself. Options: a session-cookie check per platform, a button "I am signed in", or leave it to the channel connection.
+- [ ] After that decision: show how to create the account on the platform before the owner presses the button (today the steps appear only after "Create account on ...").

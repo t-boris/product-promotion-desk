@@ -37,7 +37,8 @@ export function CreateAccount({
     setEmail(result.address)
     setFromMailbox(mailboxId)
   })
-  const platform = chosen || platforms[0]?.platform || ''
+  // No platform is chosen for the owner: a silent default (the first in the list) made a "Facebook" account on Reddit.
+  const platform = chosen
   const roleIncomplete = roleName.trim() === '' && roleVoice.trim() !== ''
 
   async function submit(event: FormEvent): Promise<void> {
@@ -56,8 +57,9 @@ export function CreateAccount({
   return (
     <form onSubmit={(e) => void submit(e)} data-testid="create-account-form">
       <div className="form-row">
-        <Field label="Platform" hint={platforms.find((p) => p.platform === platform)?.note}>
+        <Field label="Platform" hint={platforms.find((p) => p.platform === platform)?.note ?? 'The site this account is on. It cannot be changed later.'}>
           <select className="input" value={platform} onChange={(e) => setChosen(e.target.value)} disabled={platforms.length === 0} data-testid="account-platform">
+            <option value="">Choose a platform…</option>
             {platforms.map((p) => (
               <option key={p.connectorId} value={p.platform}>
                 {p.label}

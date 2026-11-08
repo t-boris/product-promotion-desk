@@ -6,6 +6,7 @@ import { AccountPassword } from './AccountPassword'
 import { AccountSignIn } from './AccountSignIn'
 import { ACCOUNT_STATUS_LABEL, ACCOUNT_STATUS_TONE, platformLabel } from './model'
 import { nextStep } from './next-step'
+import { platformMismatch } from './platform-hint'
 import { RoleEditor } from './RoleEditor'
 
 /**
@@ -16,6 +17,7 @@ export function AccountDetail({ account, platforms, mailboxes, vault }: { accoun
   const info = platforms.find((p) => p.platform === account.platform)
   const hasPassword = vault?.accountIds.includes(account.id) ?? false
   const step = nextStep(account, hasPassword, vault?.available ?? true)
+  const mismatch = platformMismatch(account.label, account.platform, platforms)
 
   return (
     <div className="acct-detail stack" data-testid={`account-${account.id}`}>
@@ -24,6 +26,11 @@ export function AccountDetail({ account, platforms, mailboxes, vault }: { accoun
         <span className="muted">{platformLabel(account.platform, platforms)}</span>
         <Badge tone={ACCOUNT_STATUS_TONE[account.status]}>{ACCOUNT_STATUS_LABEL[account.status]}</Badge>
       </div>
+      {mismatch && (
+        <div className="note warn" role="status" data-testid={`account-platform-mismatch-${account.id}`}>
+          {mismatch}
+        </div>
+      )}
       <div className={`note ${step.block === null ? 'good' : ''}`} data-testid={`account-next-step-${account.id}`}>
         {step.text}
       </div>
