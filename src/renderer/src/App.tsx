@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { AgentQuestionDialog } from './AgentQuestionDialog'
 import { useAutomation, useQuery } from './hooks'
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from './menu-state'
 import { PAGES } from './pages'
@@ -119,6 +120,7 @@ export function App() {
           <Current />
         </main>
       </div>
+      <AgentQuestionDialog />
     </div>
   )
 }

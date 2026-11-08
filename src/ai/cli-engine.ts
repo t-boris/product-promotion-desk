@@ -80,8 +80,8 @@ export abstract class CliEngine implements AiEngine {
   /** Appended to every availability message so the user can see whether this engine can act at all. */
   private toolNote(): string {
     return this.toolFree
-      ? ' Tool-free: it can only return text.'
-      : ' Not tool-free: it can read files on this computer, so it is not used for automatic replies.'
+      ? ' Writing: tool-free, it can only return text. Account missions: it works the account\u2019s browser with full access.'
+      : ' Writing: not tool-free (it can read files on this computer), so it is not used for automatic replies. Account missions: it works the account\u2019s browser with full access.'
   }
 
   protected searchDirs(): string[] {

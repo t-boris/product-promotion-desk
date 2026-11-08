@@ -84,23 +84,23 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword }: { 
       ) : (
         <div className="row">
           {hasPassword && (
-            <Button variant={ready ? 'ghost' : 'primary'} onClick={() => void signIn()} disabled={signingIn.busy} data-testid={`password-signin-${account.id}`}>
+            <Button variant={ready ? 'ghost' : 'primary'} onClick={() => void signIn()} disabled={signingIn.busy || agentWorking} data-testid={`password-signin-${account.id}`}>
               {signingIn.busy ? 'Signing in…' : 'Sign in with saved password'}
             </Button>
           )}
-          <Button variant={ready || hasPassword ? 'ghost' : 'primary'} onClick={() => void open()} disabled={opening.busy} data-testid={`account-open-${account.id}`}>
+          <Button variant={ready || hasPassword ? 'ghost' : 'primary'} onClick={() => void open()} disabled={opening.busy || agentWorking} data-testid={`account-open-${account.id}`}>
             Open browser to sign in
           </Button>
-          <Button onClick={() => void check()} disabled={checking.busy} data-testid={`account-check-${account.id}`}>
+          <Button onClick={() => void check()} disabled={checking.busy || agentWorking} data-testid={`account-check-${account.id}`}>
             {checking.busy ? 'Checking…' : 'Check sign-in'}
           </Button>
           {info?.signupUrl && !ready && (
-            <Button variant={agentReady ? 'primary' : undefined} onClick={() => void startAgent()} disabled={!agentReady || startingAgent.busy} data-testid={`agent-start-${account.id}`}>
+            <Button variant={agentReady ? 'primary' : undefined} onClick={() => void startAgent()} disabled={!agentReady || startingAgent.busy || agentWorking} data-testid={`agent-start-${account.id}`}>
               {startingAgent.busy ? 'Starting…' : 'Let the AI create the account'}
             </Button>
           )}
           {info?.signupUrl && !ready && (
-            <Button onClick={() => void signUp()} disabled={signingUp.busy} data-testid={`signup-open-${account.id}`}>
+            <Button onClick={() => void signUp()} disabled={signingUp.busy || agentWorking} data-testid={`signup-open-${account.id}`}>
               {signingUp.busy ? 'Opening…' : `Create account on ${info.label} myself`}
             </Button>
           )}

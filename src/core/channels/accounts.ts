@@ -330,14 +330,15 @@ export class AccountsService {
   }
 
   /** Checks whether the account is signed in and records status and confirmed identity. */
-  async checkLogin(accountId: unknown): Promise<Account> {
+  /** `signInAgain: false`: a check that is part of something else (an AI mission) must not start the automatic sign-in on its own. */
+  async checkLogin(accountId: unknown, options: { signInAgain?: boolean } = {}): Promise<Account> {
     const account = this.account(accountId)
     const connector = this.connectorFor(account)
     if (!connector) throw new ApiError('no_connector', `No connector is available for ${account.platform}.`)
     const ctx = this.probeContext(account, connector)
     try {
       const state = await connector.checkLogin(ctx)
-      return this.applyLogin(account, state)
+      return this.applyLogin(account, state, options)
     } catch (error) {
       const failure = browserError(error, { code: 'login_check_failed', message: (reason) => `Could not check the sign-in: ${reason}` })
       if (failure.code !== 'browser_busy') this.core.log.warn('accounts', failure.message)

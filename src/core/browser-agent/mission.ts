@@ -36,7 +36,7 @@ export function missionPrompt(mission: Mission, today: string): string {
     '',
     'HOW TO WORK:',
     '- You work in the account\'s own browser, which the owner watches in a window, through the tools of the "ppd" MCP server (browser_snapshot, browser_navigate, browser_click, browser_type, browser_select, browser_press_key, browser_evaluate, browser_wait_for, ask_owner, note_value, report_result). Use only those tools for web pages: no other browser, no fetching pages yourself, nothing on this computer.',
-    mission.startUrl ? `- Start with browser_navigate to ${mission.startUrl}, then browser_snapshot.` : '- Start with browser_snapshot.',
+    mission.startUrl ? `- Start by opening this address with browser_navigate: ${mission.startUrl}\n  Then call browser_snapshot.` : '- Start with browser_snapshot.',
     '- You decide the steps. Where the facts do not give a value the site asks for (a first name, a surname, a user name, a birth date), invent a believable one that fits the owner\'s product and the account\'s role, type it, and record it with note_value (label and value) so the owner can find it later.',
     '- Fill every required field. Look at the page after each step that changes it. When the site shows a message about a value (taken, too short, not allowed), change that value and try again; never send the same thing twice.',
     '- When a CAPTCHA, a code sent to a phone or an e-mail, an identity or phone check, or a block appears, call ask_owner and say what the owner must do; the owner answers in a pop-up and may use the browser meanwhile. Continue when they answer. If it is hopeless, report needs_owner.',

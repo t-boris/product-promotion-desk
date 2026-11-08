@@ -189,7 +189,7 @@ describe('a mission', () => {
     expect(task.prompt).toContain('warm and curious')
     expect(task.prompt).toContain('Natal Mystic')
     expect(task.prompt).toContain('{{EMAIL}}')
-    expect(task.prompt).toContain('browser_navigate to https://fake.test/login')
+    expect(task.prompt).toContain('browser_navigate: https://fake.test/login\n')
     expect(task.prompt).not.toContain(EMAIL)
     expect(task.prompt).not.toContain(PASSWORD)
   })
@@ -204,12 +204,25 @@ describe('a mission', () => {
     expect(run.summary).toMatch(/does not show a signed-in account yet/)
   })
 
-  it('hands over what the AI says only a person can do', async () => {
+  it('hands over what the AI says only a person can do, and leaves the page where the person continues (no check, no automatic sign-in)', async () => {
     const w = await ready()
     w.fake.login = { loggedIn: false, identity: null, captcha: false }
     asTheAI(w, async (_tools, call) => void (await call('report_result', { status: 'needs_owner', reason: 'The site sent a code to the e-mail' })))
     await start(w)
     expect(await finished(w)).toMatchObject({ status: 'needs_owner', summary: 'The site sent a code to the e-mail' })
+    expect(w.fake.calls).not.toContain('checkLogin')
+  })
+
+  it('checks the sign-in at the end without starting the automatic sign-in with the saved password', async () => {
+    const w = await ready()
+    w.fake.login = { loggedIn: false, identity: null, captcha: false }
+    asTheAI(w, async (_tools, call) => void (await call('report_result', { status: 'done', reason: 'created' })))
+    await start(w)
+    const run = await finished(w)
+    expect(run.status).toBe('needs_owner')
+    expect(w.fake.calls).toContain('checkLogin')
+    await tick(30)
+    expect(page(w).signIns).toEqual([])
   })
 
   it('trusts the site over the AI when the AI gave up but the account is signed in', async () => {

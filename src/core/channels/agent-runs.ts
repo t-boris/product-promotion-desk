@@ -225,7 +225,14 @@ export class AgentRunService {
   /** The engine has ended: the site's own answer decides whether the account exists, whatever the AI said. */
   private async conclude(account: Account, live: Live): Promise<void> {
     const reported = live.reported
-    const checked = await this.accounts.checkLogin(account.id)
+    // The AI stopped for something only a person can do: the page is where the person continues, so nothing is loaded over it
+    // (the check opens another page) and nothing is signed in on the side.
+    if (reported?.status === 'needs_owner') {
+      this.core.log.info('accounts', `The AI stopped on ${account.label}: ${reported.reason}`)
+      return this.finish(live, 'needs_owner', reported.reason || 'The AI needs you.')
+    }
+    // `signInAgain: false`: the check is part of this mission, it must not start the automatic sign-in with the saved password.
+    const checked = await this.accounts.checkLogin(account.id, { signInAgain: false })
     if (live.run.status !== 'running') return
     if (checked.status === 'ready') {
       this.core.log.info('accounts', `The AI registered ${account.label}${checked.identity ? ` as ${checked.identity}` : ''}.`)

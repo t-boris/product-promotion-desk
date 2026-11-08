@@ -215,22 +215,22 @@ describe('tool-free flag', () => {
     expect(argv).toContain('[--tools][]')
     expect(argv).toContain('[--strict-mcp-config]')
     expect(argv).not.toContain('--mcp-config')
-    expect((await engine.check()).detail).toMatch(/Tool-free: it can only return text/)
+    expect((await engine.check()).detail).toMatch(/Writing: tool-free, it can only return text/)
   })
 
   it('Codex is not tool-free: its sandbox limits changes, not what it can read', async () => {
     const engine = new CodexEngine({ searchPaths: [binDir], env: env('ok') })
     expect(engine.toolFree).toBe(false)
     const detail = (await engine.check()).detail
-    expect(detail).toMatch(/Not tool-free/)
-    expect(detail).not.toMatch(/Tool-free: it can only/)
+    expect(detail).toMatch(/not tool-free/)
+    expect(detail).not.toMatch(/tool-free, it can only/)
   })
 
   it('says so in the message even when the engine is missing or broken', async () => {
     const empty = join(dir, 'empty')
     mkdirSync(empty)
-    expect((await new CodexEngine({ searchPaths: [empty], env: env('ok') }).check()).detail).toMatch(/Not tool-free/)
-    expect((await new ClaudeCodeEngine({ searchPaths: [binDir], env: env('badversion') }).check()).detail).toMatch(/Tool-free/)
+    expect((await new CodexEngine({ searchPaths: [empty], env: env('ok') }).check()).detail).toMatch(/not tool-free/)
+    expect((await new ClaudeCodeEngine({ searchPaths: [binDir], env: env('badversion') }).check()).detail).toMatch(/tool-free/)
   })
 
   it('exposes the flag through createEngines', () => {
