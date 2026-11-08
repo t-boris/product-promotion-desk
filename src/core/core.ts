@@ -13,6 +13,7 @@ import {
   type Clock,
   type Connector,
   type ConnectorContext,
+  type ImageShrinker,
   type SecretClipboard,
   type SecretStore,
   type TicketVerifier
@@ -42,6 +43,8 @@ export interface CoreDeps {
   clipboard?: SecretClipboard
   /** Offers the AI's tools to an engine run through the app's MCP server (DEC-018); without it the AI browser agent is unavailable. */
   agentBridge?: AgentBridge
+  /** Makes a smaller copy of a picture when a site refuses it for its size; without it the AI cannot shrink one. */
+  imageShrinker?: ImageShrinker
   /** Waits for a page to react between steps; tests supply one that does not wait. */
   sleep?: (ms: number) => Promise<void>
   echoLogs?: boolean
@@ -64,6 +67,7 @@ export class Core {
   readonly secrets: SecretStore
   readonly clipboard: SecretClipboard | null
   readonly agentBridge: AgentBridge | null
+  readonly imageShrinker: ImageShrinker | null
   readonly sleep: (ms: number) => Promise<void>
   readonly tickets: TicketAuthority
   readonly router = new ApiRouter()
@@ -93,6 +97,7 @@ export class Core {
     this.secrets = deps.secrets ?? new UnavailableSecretStore()
     this.clipboard = deps.clipboard ?? null
     this.agentBridge = deps.agentBridge ?? null
+    this.imageShrinker = deps.imageShrinker ?? null
     this.sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
     this.browser = typeof deps.browser === 'function' ? deps.browser(this.tickets) : deps.browser
     this.router.register({

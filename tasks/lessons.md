@@ -247,3 +247,5 @@
 
 82. A progress panel is checked with a REAL engine run, not only with the fake one: the first real Codex run showed its echoed prompt as "progress". Read the lines a real run produces, and filter what is not the engine working (banner, prompt, the answer itself).
 83. A restructure that moves data between tables (0.5.0 profile in the account -> 0.6.0 profile entity) is checked on a copy of a real database that has rows, and on the owner's real database after install (the owner had already approved one profile: it was carried over).
+
+84. What the owner answers the AI is a rule for later runs unless it is a one-time answer (a code, "done"). An answer that is forgotten when the run ends makes the owner repeat himself on every account and site. Anything the app asks the owner must have a place where the answer is kept, a way to see and undo it, and a place in the next prompt.

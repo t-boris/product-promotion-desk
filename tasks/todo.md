@@ -358,3 +358,28 @@ Done: AI progress at the engine boundary (`AiActivity`, tracked engines, `ai.act
 Checked live (scratch copy of a database with two 0.5.0 profiles, real Codex): migration, both profiles carried over with their role; new profile, proposal with progress panel and pill (20 s), approval, "Make an account" from the profile, the account card showing the profile, one-account-per-platform refusal, removal guard.
 
 NOT done, on the owner's instruction: no tests were written or run for this release. Tests of the old per-account API are now stale and fail to compile: `person-profile.test.ts` (was `account-profile.test.ts`), `agent-runs.test.ts` (profile.* calls, `agent.showBrowser` typing), `profile-proposal.test.ts` (`platform` became `platforms`), `electron-browser-service.test.ts` and `renderer-logic.test.ts` (Account has `profileId`). Port them before the next `npm test`.
+
+### 0.7.0 (owner, after 0.6.0, 2026-11-08): the AI remembers what the owner taught it ("lessons of the AI")
+
+Owner's words: "I have to remember the lessons. The AI sees it cannot upload a picture over 500 KB and asks me what to do. It must remember what I said: compress the picture. The same with other things: it cannot edit something, I say edit only editable fields, and it must remember that."
+
+Today: `ask_owner(question)` shows a pop-up, the answer goes back to the AI as text, and is forgotten when the run ends. The same question comes back in the next run, on the next account, on the next site. No image shrinking exists in the app.
+
+Design (to be agreed with the owner before any code):
+1. Lesson = one short rule in plain words ("Compress a picture to under 500 KB before uploading it"), a scope (a platform, or every platform), where it came from (the question and the owner's answer), the date, how often it was used, and on/off. Table `agent_lessons` (migration 208). Never holds a password or a personal value.
+2. Capture: after the owner answers a question, the AI is told to call a new tool `remember_lesson(rule, scope)` when the answer is a rule for later runs (not a one-time answer such as a code or "done"). The app saves it and the run shows "Remembered: <rule>" with Undo. The owner sees, edits, switches off and deletes lessons in one list (Settings > "What the AI learned", grouped by platform).
+3. Use: every mission prompt gets a section "WHAT THE OWNER TAUGHT YOU (follow it, do not ask again)": the lessons of this platform and the general ones (at most 20, each at most 200 characters, most used first). A lesson that is used is counted.
+4. A lesson needs a tool to be followable. "Compress the picture" needs one: `browser_upload` takes an optional `shrink_to_kb`; the app makes a smaller copy of the approved picture (Electron built-in `nativeImage` through a port, so the core stays free of Electron, no new library) and uploads that. Other lessons ("edit only editable fields") are rules of behaviour and need no tool.
+5. A lesson the AI cannot follow with its tools: the AI says so in one sentence instead of asking the same question again.
+Steps: migration + store + service + API; `remember_lesson` tool and prompt section; image shrink port and `browser_upload` option; UI (list, Undo line in the run panel); live check with Codex on a scratch copy; release.
+Open questions for the owner: who decides what is saved (the AI saves and the owner can undo, or the owner confirms each); the default scope (this platform, with "all platforms" on request); whether the app may shrink pictures itself.
+
+#### Review of 0.7.0 (lessons of the AI, and profiles made from accounts the owner already has)
+
+Agreed with the owner: the AI saves a rule itself and the owner undoes it; the default scope is the platform; the app may shrink pictures with Electron's own image support.
+
+Done: `agent_lessons` (migration 208) + `LessonService` (`lessons.list|add|save|remove`); tool `remember_lesson` (refuses a rule with a value the owner gave); every signup/profile mission brief gets "WHAT THE OWNER TAUGHT YOU EARLIER" (platform + general, at most 20, most used first, counted); the AI is told to check the rules before asking and to keep a rule right after an answer; `browser_upload` takes `shrink_to_kb` and the app uploads a smaller copy (`ElectronImageShrinker`, port `ImageShrinker`; copies are removed when the mission ends); UI: Settings > "What the AI learned" (add, edit, platform, switch off, remove) and "The AI will remember: ... [Undo]" lines in the run panel. Profiles from existing accounts: `profiles.create` takes `accountIds` (they join the profile, one per platform), "Make a profile from this account" in the account card, "Use an account I already have" in a platform row, and the proposal gets the accounts (platform, name shown, e-mail) with the rule that the person must fit them.
+
+Checked live (scratch copy, real Codex): the shrinker on a 2.5 MB Codex picture (500 KB limit -> 283 KB, 150 KB -> 130 KB, 20 KB -> 19 KB); lessons API and Settings screen; a profile made from a TikTok account `mira.volkova.cooks` with e-mail `mira.volkova.cooks@example.invalid`: the AI proposed "Mira Volkova" with the same user name and said in the reasons that the existing account decided it. Unit tests added and passing: toolbox (shrink, remember) and the mission brief (7 tests in 2 files).
+
+NOT verified: that a real Claude Code / Codex mission actually calls `remember_lesson` after the owner answers, and follows a rule on a later mission (needs a real site that asks a question). Stale tests of the 0.6.0 API still fail to compile (see the 0.6.0 review).

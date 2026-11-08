@@ -10,6 +10,7 @@ import { AccountsService } from './accounts'
 import { draftSiteProfile, planChannel, proposeProfile, suggestChannels, suggestRoles } from './ai-help'
 import { ChannelService } from './channel-service'
 import { ChannelPlanService } from './plan'
+import { LessonService } from './lessons'
 import { MailboxService } from './mailboxes'
 import { listPlatforms } from './platforms'
 import { PersonProfileService } from './person-profile'
@@ -44,7 +45,8 @@ export function register(core: Core): void {
   const mailboxes = new MailboxService(core, store)
   const signIn = new SignInService(core, accounts, vault, store)
   const people = new PersonProfileService(core, store, { proposeProfile })
-  const agent = new AgentRunService(core, accounts, vault, people)
+  const lessons = new LessonService(core)
+  const agent = new AgentRunService(core, accounts, vault, people, lessons)
   // An account found signed out gets one try with its saved password (DEC-014), without holding up the check that found it.
   accounts.onSignedOut = (account) => void signIn.maybeAutomatic(account)
 
@@ -65,6 +67,10 @@ export function register(core: Core): void {
     'accounts.setRole': (args) => accounts.setRole(args),
     'accounts.suggestRoles': (args) => roles.suggest(args),
     'accounts.setProfile': (args) => accounts.setProfile(args),
+    'lessons.list': () => lessons.list(),
+    'lessons.add': (args) => lessons.add(args),
+    'lessons.save': (args) => lessons.save(args),
+    'lessons.remove': (args) => lessons.remove(args),
     'profiles.list': () => people.list(),
     'profiles.get': (args) => people.get(args.id),
     'profiles.create': (args) => people.create(args),

@@ -67,6 +67,7 @@ export function ProfilesPanel({
             <NewProfile
               platforms={platforms}
               products={products}
+              freeAccounts={accounts.filter((a) => a.profileId === null)}
               onCreated={(profile) => (setAdding(false), onSelect(profile.id))}
               onCancel={profiles.length > 0 ? () => setAdding(false) : undefined}
             />
@@ -90,17 +91,19 @@ export function ProfilesPanel({
 }
 
 /** Names a profile and says what it is for; the AI proposes the person afterwards. */
-function NewProfile({ platforms, products, onCreated, onCancel }: { platforms: PlatformInfo[]; products: Product[]; onCreated: (profile: Profile) => void; onCancel?: () => void }) {
+function NewProfile({ platforms, products, freeAccounts, onCreated, onCancel }: { platforms: PlatformInfo[]; products: Product[]; freeAccounts: Account[]; onCreated: (profile: Profile) => void; onCancel?: () => void }) {
   const [label, setLabel] = useState('')
   const [purpose, setPurpose] = useState('')
   const [chosen, setChosen] = useState<string[]>([])
   const [productId, setProductId] = useState('')
-  const [create, state] = useAction((args: { label: string; purpose?: string; platforms: string[]; productId: string | null }) => call('profiles.create', args))
+  const [taken, setTaken] = useState<string[]>([])
+  const [create, state] = useAction((args: { label: string; purpose?: string; platforms: string[]; productId: string | null; accountIds: string[] }) => call('profiles.create', args))
+  const takenPlatforms = new Set(freeAccounts.filter((a) => taken.includes(a.id)).map((a) => a.platform))
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault()
     if (!label.trim()) return
-    const profile = await create({ label: label.trim(), purpose: purpose.trim() || undefined, platforms: chosen, productId: productId || null })
+    const profile = await create({ label: label.trim(), purpose: purpose.trim() || undefined, platforms: chosen, productId: productId || null, accountIds: taken })
     if (profile) onCreated(profile)
   }
 
@@ -124,6 +127,21 @@ function NewProfile({ platforms, products, onCreated, onCancel }: { platforms: P
       <Field label="What is this profile for? (optional)" hint="In your words. The AI plans the person around it.">
         <textarea className="input short" value={purpose} maxLength={400} onChange={(e) => setPurpose(e.target.value)} data-testid="new-profile-purpose" />
       </Field>
+      {freeAccounts.length > 0 && (
+        <Field label="Accounts it already has (optional)" hint="Logins you already made for this person (an Instagram account, any other). They join the profile, and the AI plans the person to fit them: their names and e-mail addresses. One account per platform.">
+          <div className="row" data-testid="new-profile-accounts">
+            {freeAccounts.map((a) => {
+              const on = taken.includes(a.id)
+              const blocked = !on && takenPlatforms.has(a.platform)
+              return (
+                <Button key={a.id} variant={on ? 'primary' : undefined} disabled={blocked} onClick={() => setTaken((t) => (on ? t.filter((x) => x !== a.id) : [...t, a.id]))} aria-pressed={on} data-testid={`new-profile-account-${a.id}`}>
+                  {a.label} · {platformLabel(a.platform, platforms)}
+                </Button>
+              )
+            })}
+          </div>
+        </Field>
+      )}
       <Field label="Platforms (optional)" hint="Where this person will have accounts. You can change it later.">
         <div className="row">
           {platforms.map((p) => (

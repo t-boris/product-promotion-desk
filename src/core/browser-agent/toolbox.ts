@@ -44,6 +44,13 @@ export interface ToolboxDeps {
   ask: (question: string) => Promise<string>
   /** The AI chose a value on the site (a name, a birth date): the owner may need it later. */
   note: (label: string, value: string) => void
+  /**
+   * The AI keeps a rule from what the owner told it, for the next missions (scope: this platform, or every platform). Without it there is
+   * no remember_lesson tool. `known` is true when the same rule was kept before.
+   */
+  remember?: (rule: string, scope: 'platform' | 'all') => { known: boolean }
+  /** Makes a smaller copy of a file's picture, at most `maxBytes`; resolves with the path of the copy. Without it `shrink_to_kb` is refused. */
+  shrink?: (path: string, maxBytes: number) => Promise<string>
   /** The AI says how the mission ended. */
   report: (result: { status: MissionStatus; reason: string }) => void
   signal?: AbortSignal
@@ -61,6 +68,8 @@ const SETTLE_MS = 1000
 const MAX_TEXT_VALUE = 2000
 const MAX_EVALUATE_OUTPUT = 4000
 const MAX_WAIT_MS = 30_000
+const MIN_SHRINK_KB = 20
+const MAX_SHRINK_KB = 10_000
 const REF = /^e\d{1,4}$/
 const PLACEHOLDER_WHOLE = /^\{\{\s*([A-Z_]{1,20})\s*\}\}$/
 const HAS_PLACEHOLDER = /\{\{\s*[A-Z_]{1,20}\s*\}\}/
@@ -100,6 +109,12 @@ const TOOLS: McpTool[] = [
   tool('browser_wait_for', 'Wait until the page shows a text, or for some milliseconds (at most 30000).', { text: { type: 'string' }, ms: { type: 'integer' } }),
   tool('ask_owner', 'Ask the owner for what only a person can do (solve a CAPTCHA, read a code, decide). Shows a pop-up and waits for the answer. If it says the owner has not answered yet, call it again with the same question.', { question: { type: 'string' } }, ['question']),
   tool('note_value', 'Record a value you chose for the account on the site (a display name, a birth date), so the owner can find it later. Never a password.', { label: { type: 'string' }, value: { type: 'string' } }, ['label', 'value']),
+  tool(
+    'remember_lesson',
+    'Keep a rule from what the owner just told you, so that the next missions follow it and the owner is not asked again (for example: the site takes pictures up to 500 KB, so shrink a picture first; edit only the editable fields). One short imperative sentence, in plain words. Not for a one-time answer (a code, a CAPTCHA, "done"), never a password, a code or a personal value.',
+    { rule: { type: 'string', description: 'One short sentence, like: Shrink a picture to under 500 KB before uploading it.' }, scope: { type: 'string', enum: ['platform', 'all'], description: 'platform (default): only this platform. all: only when it is true on every site.' } },
+    ['rule']
+  ),
   tool('report_result', 'Say how the mission ended: done (the account exists and is signed in), needs_owner (a person must continue) or failed. Call it once, last.', { status: { type: 'string', enum: ['done', 'needs_owner', 'failed'] }, reason: { type: 'string', description: 'One short sentence, in plain words' } }, ['status', 'reason'])
 ]
 
@@ -107,7 +122,11 @@ const uploadTool = (names: string[]): McpTool =>
   tool(
     'browser_upload',
     `Put one of the files the owner gave you into a file input of the page (an element listed as input:file; a site often hides it behind a button: use the input itself and never click a button that opens a file chooser). Files: ${names.join(', ')}.`,
-    { ref, file: { type: 'string', enum: names } },
+    {
+      ref,
+      file: { type: 'string', enum: names },
+      shrink_to_kb: { type: 'integer', description: 'Optional. When the site limits the size of a picture, the limit in kilobytes: a smaller copy is uploaded (the original is not changed). Use it when the site refused the picture for its size, or when a rule you were taught says so.' }
+    },
     ['ref', 'file']
   )
 
@@ -141,7 +160,8 @@ export class BrowserToolbox implements McpToolHost {
 
   constructor(private readonly deps: ToolboxDeps) {
     const names = Object.keys(deps.files ?? {})
-    this.tools = names.length > 0 ? [...TOOLS.slice(0, 4), uploadTool(names), ...TOOLS.slice(4)] : TOOLS
+    const withUpload = names.length > 0 ? [...TOOLS.slice(0, 4), uploadTool(names), ...TOOLS.slice(4)] : TOOLS
+    this.tools = deps.remember ? withUpload : withUpload.filter((t) => t.name !== 'remember_lesson')
     this.maxCalls = deps.maxCalls ?? DEFAULT_MAX_CALLS
     this.askWaitMs = deps.askWaitMs ?? DEFAULT_ASK_WAIT_MS
   }
@@ -163,7 +183,7 @@ export class BrowserToolbox implements McpToolHost {
         case 'browser_select':
           return await this.select(str(args.ref), str(args.option))
         case 'browser_upload':
-          return await this.upload(str(args.ref), str(args.file))
+          return await this.upload(str(args.ref), str(args.file), typeof args.shrink_to_kb === 'number' ? args.shrink_to_kb : 0)
         case 'browser_press_key':
           return await this.pressKey(str(args.key))
         case 'browser_evaluate':
@@ -174,6 +194,8 @@ export class BrowserToolbox implements McpToolHost {
           return await this.askOwner(str(args.question))
         case 'note_value':
           return this.noteValue(str(args.label), str(args.value))
+        case 'remember_lesson':
+          return this.rememberLesson(str(args.rule), str(args.scope))
         case 'report_result':
           return this.reportResult(str(args.status), str(args.reason))
         default:
@@ -309,7 +331,7 @@ export class BrowserToolbox implements McpToolHost {
     return result
   }
 
-  private async upload(reference: string, name: string): Promise<McpToolResult> {
+  private async upload(reference: string, name: string, shrinkToKb: number): Promise<McpToolResult> {
     if (!REF.test(reference)) return fail('ref must be a label from browser_snapshot, like e12.')
     const file = this.deps.files?.[name]
     if (!file) return fail(`There is no file called "${name}" (${Object.keys(this.deps.files ?? {}).join(', ') || 'none was given'}).`)
@@ -317,7 +339,19 @@ export class BrowserToolbox implements McpToolHost {
     if (element?.role !== 'input:file') {
       return fail(element ? `${reference} is not a file input (it is ${element.role}). A file goes into an element listed as input:file.` : `Look at the page first (browser_snapshot): ${reference} is not on the page you have seen.`)
     }
-    return this.carryOut({ do: 'upload', ref: reference, path: file.path }, `Uploaded ${file.describe} into "${this.labelOf(reference)}"`, true)
+    let path = file.path
+    let note = ''
+    if (shrinkToKb > 0) {
+      if (shrinkToKb < MIN_SHRINK_KB || shrinkToKb > MAX_SHRINK_KB) return fail(`shrink_to_kb must be between ${MIN_SHRINK_KB} and ${MAX_SHRINK_KB}.`)
+      if (!this.deps.shrink) return fail('The application cannot make a picture smaller here. Report needs_owner and say which size the site wants.')
+      try {
+        path = await this.deps.shrink(file.path, Math.floor(shrinkToKb * 1024))
+        note = ` (made smaller, under ${shrinkToKb} KB)`
+      } catch (error) {
+        return fail(`The picture could not be made smaller: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+    return this.carryOut({ do: 'upload', ref: reference, path }, `Uploaded ${file.describe}${note} into "${this.labelOf(reference)}"`, true)
   }
 
   private async pressKey(key: string): Promise<McpToolResult> {
@@ -371,6 +405,21 @@ export class BrowserToolbox implements McpToolHost {
     if ('error' in waited) return fail('The owner stopped this task. Stop now.')
     this.deps.say('You answered the AI.')
     return ok(`The owner answered: ${waited.text}`)
+  }
+
+  /** Keeps a rule for the next missions. A rule that carries a value the application types (an e-mail address, a name, a password) is refused: a rule is not a place for personal values. */
+  private rememberLesson(rule: string, scope: string): McpToolResult {
+    if (!this.deps.remember) return fail('There is no remember_lesson tool in this mission.')
+    const text = rule.replace(/\s+/g, ' ').trim()
+    if (text.length < 8) return fail('The rule must be a short sentence.')
+    if (HAS_PLACEHOLDER.test(text)) return fail('A rule has no {{NAME}} values in it.')
+    const lower = text.toLowerCase()
+    for (const value of Object.values(this.deps.values)) {
+      if (value.value.length >= 4 && lower.includes(value.value.toLowerCase())) return fail('A rule must not contain an e-mail address, a name, a password or any value the owner gave you: write the rule without it.')
+    }
+    const kept = this.deps.remember(text.slice(0, 200), scope === 'all' ? 'all' : 'platform')
+    this.deps.say(`Remembered: ${oneLine(text, 120)}`)
+    return ok(kept.known ? 'The owner had taught you this already; it stays.' : 'Remembered. The next missions get this rule, and the owner can change or remove it.')
   }
 
   private noteValue(label: string, value: string): McpToolResult {

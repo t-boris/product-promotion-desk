@@ -371,3 +371,12 @@ export interface ConnectorRegistry {
   resolve(input: string): Connector | undefined
   register(connector: Connector): void
 }
+
+/**
+ * Makes a smaller copy of a picture, for a site that refuses a picture for its size. The core has no image tools of its own (and no
+ * Electron): the main process supplies this with Electron's own image support. The original is never changed.
+ */
+export interface ImageShrinker {
+  /** Writes a copy of the image no larger than `maxBytes` into `outDir` and returns its path; rejects when it cannot be made that small. */
+  shrink(source: string, maxBytes: number, outDir: string): Promise<string>
+}

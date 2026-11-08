@@ -1,4 +1,5 @@
 import type { AgentRun } from '../../../../shared/types'
+import { call, useAction, useQuery } from '../../hooks'
 import { Button } from '../../ui'
 
 const TONE: Record<AgentRun['status'], string> = { running: 'note', done: 'note good', needs_owner: 'note warn', failed: 'note warn', stopped: 'note' }
@@ -24,6 +25,7 @@ export function AgentRunPanel({ run, onStop, stopping, testId }: { run: AgentRun
           </Button>
         )}
       </div>
+      <Learned run={run} />
       {run.lines.length > 0 && (
         <details open={run.status === 'running'} data-testid={`${testId}-lines`}>
           <summary className="small">What the AI did ({run.lines.length})</summary>
@@ -46,6 +48,29 @@ export function AgentRunPanel({ run, onStop, stopping, testId }: { run: AgentRun
           </ul>
         </div>
       )}
+    </div>
+  )
+}
+
+/** What the AI kept from the owner's answers during this run, one line each, with Undo: the owner decides what stays (and can edit it in Settings). */
+function Learned({ run }: { run: AgentRun }) {
+  const lessons = useQuery('lessons.list', undefined, ['settings'])
+  const [undo, undoing] = useAction((id: string) => call('lessons.remove', { id }))
+  // A rule the owner already removed (here or in Settings) is not listed.
+  const kept = run.learned.filter((l) => (lessons.data ?? []).some((known) => known.id === l.id))
+  if (kept.length === 0) return null
+  return (
+    <div className="stack" data-testid="agent-learned">
+      {kept.map((l) => (
+        <div className="note good" key={l.id} data-testid={`agent-learned-${l.id}`}>
+          <div>
+            <strong>The AI will remember:</strong> {l.rule}
+          </div>
+          <Button onClick={() => void undo(l.id)} disabled={undoing.busy} data-testid={`agent-learned-undo-${l.id}`}>
+            Undo
+          </Button>
+        </div>
+      ))}
     </div>
   )
 }

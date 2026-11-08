@@ -5,6 +5,7 @@
 import type {
   AgentAsk,
   AiTaskState,
+  AgentLesson,
   AgentReadiness,
   AgentRun,
   AgentTaskKind,
@@ -157,8 +158,8 @@ export interface ApiMethods {
   /** The profiles (DEC-019): people made once for a purpose; their accounts are the logins on platforms. */
   'profiles.list': [void, Profile[]]
   'profiles.get': [{ id: Id }, Profile]
-  /** A new empty profile: the owner names it and says what it is for; the AI proposes the person afterwards. */
-  'profiles.create': [{ label: string; productId?: Id | null; platforms?: string[]; purpose?: string }, Profile]
+  /** A new empty profile: the owner names it, says what it is for and may name accounts the person already has (they are taken into the profile); the AI proposes the person afterwards, fitting those accounts. */
+  'profiles.create': [{ label: string; productId?: Id | null; platforms?: string[]; purpose?: string; accountIds?: Id[] }, Profile]
   /** The AI proposes the whole person as a strategy for a purpose (a proposal only; the owner approves). */
   'profiles.propose': [{ id: Id; purpose?: string }, Profile]
   'profiles.save': [{ id: Id; profile: ProfileFields; label?: string; purpose?: string; role?: AccountRole | null; platforms?: string[]; productId?: Id | null }, Profile]
@@ -167,6 +168,11 @@ export interface ApiMethods {
   'profiles.makePicture': [{ id: Id }, Profile]
   'profiles.setPicture': [{ id: Id; path: string }, Profile]
   'profiles.picture': [{ id: Id }, { dataUrl: string } | null]
+  /** What the AI learned from the owner's answers (and the rules the owner wrote): one list, for every platform or one. */
+  'lessons.list': [void, AgentLesson[]]
+  'lessons.add': [{ rule: string; platform?: string | null }, AgentLesson]
+  'lessons.save': [{ id: Id; rule?: string; platform?: string | null; enabled?: boolean }, AgentLesson]
+  'lessons.remove': [{ id: Id }, void]
   'accounts.setProfile': [{ accountId: Id; profileId: Id | null }, Account]
   'agent.answer': [{ accountId: Id; answer: string }, AgentRun | null]
   /** Every question an AI is waiting on now, for the pop-up that appears on any screen. */

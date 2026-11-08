@@ -10,6 +10,8 @@ import { ACCOUNT_STATUS_LABEL, ACCOUNT_STATUS_TONE } from './model'
  * e-mail, the password and the registration follow in the account card) or has the AI fill in the profile on the site.
  */
 export function ProfileAccounts({ profile, accounts, platforms, onOpenAccount }: { profile: Profile; accounts: Account[]; platforms: PlatformInfo[]; onOpenAccount: (accountId: string) => void }) {
+  const everyAccount = useQuery('accounts.list', undefined, ['accounts'])
+  const free = (everyAccount.data ?? []).filter((a) => a.profileId === null)
   const keys = [...new Set([...profile.platforms, ...accounts.map((a) => a.platform)])]
   return (
     <Card title="Accounts of this profile">
@@ -20,7 +22,7 @@ export function ProfileAccounts({ profile, accounts, platforms, onOpenAccount }:
       ) : (
         <div className="stack" data-testid={`profile-accounts-${profile.id}`}>
           {keys.map((key) => (
-            <PlatformRow key={key} profile={profile} platform={platforms.find((p) => p.platform === key)} platformKey={key} account={accounts.find((a) => a.platform === key)} onOpenAccount={onOpenAccount} />
+            <PlatformRow key={key} profile={profile} platform={platforms.find((p) => p.platform === key)} platformKey={key} account={accounts.find((a) => a.platform === key)} free={free.filter((a) => a.platform === key)} onOpenAccount={onOpenAccount} />
           ))}
         </div>
       )}
@@ -28,12 +30,13 @@ export function ProfileAccounts({ profile, accounts, platforms, onOpenAccount }:
   )
 }
 
-function PlatformRow({ profile, platform, platformKey, account, onOpenAccount }: { profile: Profile; platform: PlatformInfo | undefined; platformKey: string; account: Account | undefined; onOpenAccount: (accountId: string) => void }) {
+function PlatformRow({ profile, platform, platformKey, account, free, onOpenAccount }: { profile: Profile; platform: PlatformInfo | undefined; platformKey: string; account: Account | undefined; free: Account[]; onOpenAccount: (accountId: string) => void }) {
   const name = platform?.label ?? platformKey
   const [create, creating] = useAction(async () => {
     const made = await call('accounts.create', { platform: platformKey, label: `${profile.label} · ${name}`, profileId: profile.id, ...(profile.productId ? { productId: profile.productId } : {}) })
     onOpenAccount(made.id)
   })
+  const [adopt, adopting] = useAction((accountId: string) => call('accounts.setProfile', { accountId, profileId: profile.id }))
   return (
     <div className="stack" data-testid={`profile-platform-row-${platformKey}-${profile.id}`}>
       <div className="list-row">
@@ -48,14 +51,26 @@ function PlatformRow({ profile, platform, platformKey, account, onOpenAccount }:
               Open account
             </Button>
           ) : (
-            <Button variant="primary" onClick={() => void create()} disabled={creating.busy} data-testid={`profile-account-create-${platformKey}-${profile.id}`}>
-              {creating.busy ? 'Making…' : 'Make an account'}
-            </Button>
+            <>
+              {free.length > 0 && (
+                <select className="input" value="" disabled={adopting.busy} onChange={(e) => e.target.value && void adopt(e.target.value)} aria-label={`Use an account you already have on ${name}`} data-testid={`profile-account-adopt-${platformKey}-${profile.id}`}>
+                  <option value="">Use an account I already have…</option>
+                  {free.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <Button variant="primary" onClick={() => void create()} disabled={creating.busy} data-testid={`profile-account-create-${platformKey}-${profile.id}`}>
+                {creating.busy ? 'Making…' : 'Make an account'}
+              </Button>
+            </>
           )}
         </div>
       </div>
       {account && <FillProfile profile={profile} account={account} />}
-      <ErrorNote error={creating.error} />
+      <ErrorNote error={creating.error ?? adopting.error} />
     </div>
   )
 }

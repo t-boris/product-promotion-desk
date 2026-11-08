@@ -251,6 +251,60 @@ describe('toolbox: uploading a file (DEC-019)', () => {
   })
 })
 
+describe('toolbox: shrinking a picture and keeping the owner\'s rules (lessons)', () => {
+  const withFile = (over: Partial<ToolboxDeps> = {}) => {
+    const t = setup({ files: { PICTURE: { path: '/data/profiles/a1/picture.png', describe: 'the profile picture' } }, ...over })
+    t.raw.snapshots = [form({ elements: [...form().elements, { ref: 'e6', role: 'input:file', name: 'Profile photo' }] })]
+    return t
+  }
+
+  it('uploads a smaller copy when the AI gives the size limit, and never the original', async () => {
+    const shrunk: [string, number][] = []
+    const t = withFile({ shrink: async (path, bytes) => (shrunk.push([path, bytes]), '/data/shrunk/a1/picture-500kb.jpg') })
+    await t.toolbox.call('browser_snapshot', {})
+    const result = await t.toolbox.call('browser_upload', { ref: 'e6', file: 'PICTURE', shrink_to_kb: 500 })
+    expect(result.isError).toBeUndefined()
+    expect(shrunk).toEqual([['/data/profiles/a1/picture.png', 512000]])
+    expect(t.raw.steps.at(-1)?.step).toEqual({ do: 'upload', ref: 'e6', path: '/data/shrunk/a1/picture-500kb.jpg' })
+    expect(t.said.at(-1)).toContain('made smaller, under 500 KB')
+  })
+
+  it('refuses to shrink without the application\'s help, with a size that makes no sense, or when the copy fails', async () => {
+    const none = withFile()
+    await none.toolbox.call('browser_snapshot', {})
+    expect(await none.toolbox.call('browser_upload', { ref: 'e6', file: 'PICTURE', shrink_to_kb: 500 })).toMatchObject({ isError: true, text: expect.stringContaining('cannot make a picture smaller') })
+    const t = withFile({ shrink: async () => Promise.reject(new Error('too small to be useful')) })
+    await t.toolbox.call('browser_snapshot', {})
+    expect(await t.toolbox.call('browser_upload', { ref: 'e6', file: 'PICTURE', shrink_to_kb: 5 })).toMatchObject({ isError: true, text: expect.stringContaining('between') })
+    expect(await t.toolbox.call('browser_upload', { ref: 'e6', file: 'PICTURE', shrink_to_kb: 500 })).toMatchObject({ isError: true, text: expect.stringContaining('too small to be useful') })
+    expect(t.raw.steps).toEqual([])
+  })
+
+  it('keeps a rule from the owner\'s answer, once, in the scope the AI names', async () => {
+    const kept: [string, string][] = []
+    const t = setup({ remember: (rule, scope) => (kept.push([rule, scope]), { known: kept.length > 1 }) })
+    expect(t.toolbox.tools.map((tool) => tool.name)).toContain('remember_lesson')
+    const first = await t.toolbox.call('remember_lesson', { rule: 'Shrink a picture to under 500 KB before uploading it.' })
+    expect(first.isError).toBeUndefined()
+    await t.toolbox.call('remember_lesson', { rule: 'Edit only the editable fields.', scope: 'all' })
+    expect(kept).toEqual([
+      ['Shrink a picture to under 500 KB before uploading it.', 'platform'],
+      ['Edit only the editable fields.', 'all']
+    ])
+    expect(t.said).toContain('Remembered: Shrink a picture to under 500 KB before uploading it.')
+  })
+
+  it('has no remember_lesson tool without the application\'s help, and refuses a rule that carries a value the owner gave', async () => {
+    expect(setup().toolbox.tools.map((tool) => tool.name)).not.toContain('remember_lesson')
+    const kept: string[] = []
+    const t = setup({ remember: (rule) => (kept.push(rule), { known: false }) })
+    expect(await t.toolbox.call('remember_lesson', { rule: 'Use natal+fb@example.com as the login.' })).toMatchObject({ isError: true, text: expect.stringContaining('must not contain') })
+    expect(await t.toolbox.call('remember_lesson', { rule: 'Type {{PASSWORD}} twice.' })).toMatchObject({ isError: true })
+    expect(await t.toolbox.call('remember_lesson', { rule: 'short' })).toMatchObject({ isError: true })
+    expect(kept).toEqual([])
+  })
+})
+
 describe('toolbox: the person', () => {
   it('asks once, tells the AI to call again while the person has not answered, then returns the answer', async () => {
     const t = setup()

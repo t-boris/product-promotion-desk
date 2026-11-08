@@ -140,5 +140,24 @@ FROM account_profiles p JOIN accounts a ON a.id = p.account_id;
 UPDATE accounts SET profile_id = id WHERE id IN (SELECT account_id FROM account_profiles);
 DROP TABLE account_profiles;
 `
+  },
+  {
+    id: 208,
+    name: 'channels: what the AI learned from the owner (lessons for the next missions)',
+    sql: `
+-- A rule kept from the owner's answer. platform NULL means every platform. The question and the answer are only the source of the rule.
+CREATE TABLE agent_lessons (
+  id TEXT PRIMARY KEY,
+  platform TEXT,
+  rule TEXT NOT NULL,
+  question TEXT NOT NULL DEFAULT '',
+  answer TEXT NOT NULL DEFAULT '',
+  enabled INTEGER NOT NULL DEFAULT 1,
+  uses INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  last_used_at TEXT
+);
+CREATE INDEX agent_lessons_platform ON agent_lessons(platform);
+`
   }
 ]

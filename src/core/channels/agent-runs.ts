@@ -8,12 +8,16 @@
 // shown to the owner while the AI works in it; the owner may take the browser between two tool calls (a CAPTCHA) and the AI waits; after the
 // engine ends, the site's own answer decides (the connector's login check), not the AI's opinion.
 
+import { statSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
+import { join } from 'node:path'
 import { ApiError } from '../../shared/api'
 import type { Account, Profile, AgentAsk, AgentReadiness, AgentRun, AgentTaskKind } from '../../shared/types'
 import { AiError, TakeoverError, type AiEngine } from '../ports'
 import { missionPrompt, type Mission } from '../browser-agent/mission'
 import { BrowserToolbox, type MissionStatus } from '../browser-agent/toolbox'
 import type { Core } from '../core'
+import type { LessonService } from './lessons'
 import type { PersonProfileService } from './person-profile'
 import type { AccountsService } from './accounts'
 import { BROWSER_BUSY, found } from './errors'
@@ -33,6 +37,8 @@ interface Live {
   answer: { resolve: (text: string) => void; reject: (error: Error) => void } | null
   /** What the AI said about how it ended. */
   reported: { status: MissionStatus; reason: string } | null
+  /** The last question the AI asked and the owner's answer: the source of a rule the AI keeps from it. */
+  exchange: { question: string; answer: string } | null
 }
 
 export class AgentRunService {
@@ -42,7 +48,8 @@ export class AgentRunService {
     private readonly core: Core,
     private readonly accounts: AccountsService,
     private readonly vault: VaultService,
-    private readonly profiles: PersonProfileService
+    private readonly profiles: PersonProfileService,
+    private readonly lessons: LessonService
   ) {}
 
   state(accountId: unknown): AgentRun | null {
@@ -79,6 +86,7 @@ export class AgentRunService {
     if (!live) return null
     if (live.run.status === 'running' && live.answer) {
       const { resolve } = live.answer
+      live.exchange = { question: live.run.question?.text ?? '', answer: args.answer.trim().slice(0, 500) }
       live.answer = null
       live.run.question = null
       this.core.events.changed('accounts', 'attention')
@@ -136,6 +144,7 @@ export class AgentRunService {
       abort: new AbortController(),
       answer: null,
       reported: null,
+      exchange: null,
       run: {
         accountId: account.id,
         kind,
@@ -144,11 +153,13 @@ export class AgentRunService {
         lines: [],
         typed: [],
         question: null,
+        learned: [],
         startedAt: this.core.clock.now().toISOString(),
         finishedAt: null
       }
     }
     this.runs.set(account.id, live)
+    this.lessons.markUsed(this.lessons.forPlatform(account.platform))
     this.core.log.info('accounts', `The AI started to ${kind === 'signup' ? 'register' : 'fill in the profile of'} ${account.label} on ${mission.hosts[0] ?? 'the platform'} (${engine.label}).`)
     this.core.events.changed('accounts')
     // The owner watches the AI work in the account's own browser.
@@ -182,7 +193,8 @@ export class AgentRunService {
       startUrl: target.url,
       hosts: target.hosts,
       values,
-      files: this.pictureFiles(account, profile)
+      files: this.pictureFiles(account, profile),
+      lessons: this.lessons.forPlatform(account.platform).map((l) => l.rule)
     }
   }
 
@@ -200,6 +212,7 @@ export class AgentRunService {
       hosts: target.hosts,
       values: {},
       files: this.pictureFiles(account, profile),
+      lessons: this.lessons.forPlatform(account.platform).map((l) => l.rule),
       rules: [
         'Change only the profile fields named in the facts. Do not change the e-mail address, the password, the user name or any privacy or security setting.',
         'If the site shows a sign-in page instead of the account, the account is not signed in: report needs_owner and say so.',
@@ -224,13 +237,17 @@ export class AgentRunService {
   /** The picture of the profile, when there is one: the AI uploads it by name and never sees a path. */
   private pictureFiles(account: Account, profile: Profile): Mission['files'] {
     const path = profile.hasPicture ? this.profiles.pictureFile(profile.id) : null
-    return path ? { PICTURE: { path, describe: 'the profile picture the owner approved (upload it where the site asks for a profile photo or an avatar)' } } : undefined
+    if (!path) return undefined
+    const kb = sizeInKb(path)
+    return { PICTURE: { path, describe: `the profile picture the owner approved${kb ? ` (${kb} KB)` : ''} (upload it where the site asks for a profile photo or an avatar; when the site limits the size, upload it with shrink_to_kb)` } }
   }
 
   private async drive(account: Account, live: Live, mission: Mission, engine: AiEngine, kind: AgentTaskKind): Promise<void> {
     const bridge = this.core.agentBridge
     if (!bridge) return this.finish(live, 'failed', 'The AI browser agent is not available in this build.')
     const session = this.core.browser.session(account)
+    // Smaller copies of a picture, for a site that limits its size; they are removed when the mission ends.
+    const shrunkDir = join(this.core.dataDir, 'shrunk', account.id)
     const toolbox = new BrowserToolbox({
       // Each call holds the browser only for itself, so the owner can take it between two calls.
       withPage: (work) => session.withAgentControl(`agent-${kind}`, work),
@@ -241,6 +258,8 @@ export class AgentRunService {
       say: (line) => this.say(live, line),
       ask: (question) => this.ask(live, question),
       note: (label, value) => this.note(live, label, value),
+      remember: (rule, scope) => this.remember(account, live, rule, scope),
+      shrink: this.core.imageShrinker ? (path, maxBytes) => this.core.imageShrinker!.shrink(path, maxBytes, shrunkDir) : undefined,
       report: (result) => void (live.reported = result),
       signal: live.abort.signal
     })
@@ -265,6 +284,7 @@ export class AgentRunService {
     } finally {
       this.dropQuestion(live, 'The mission is over.')
       opened?.close()
+      await rm(shrunkDir, { recursive: true, force: true })
     }
   }
 
@@ -314,6 +334,14 @@ export class AgentRunService {
     pending?.reject(new Error(why))
   }
 
+  /** The AI keeps a rule from the owner's answer: it is stored, shown in the run with an Undo, and given to the next missions. */
+  private remember(account: Account, live: Live, rule: string, scope: 'platform' | 'all'): { known: boolean } {
+    const { lesson, known } = this.lessons.remember({ platform: scope === 'all' ? null : account.platform, rule, question: live.exchange?.question ?? '', answer: live.exchange?.answer ?? '' })
+    if (live.run.status === 'running' && !live.run.learned.some((l) => l.id === lesson.id)) live.run.learned.push({ id: lesson.id, rule: lesson.rule })
+    this.core.events.changed('accounts')
+    return { known }
+  }
+
   private note(live: Live, label: string, value: string): void {
     if (live.run.status !== 'running') return
     const existing = live.run.typed.find((t) => t.label === label)
@@ -338,6 +366,15 @@ export class AgentRunService {
   }
 }
 
+/** The size of a file in kilobytes, or 0 when it cannot be read. */
+function sizeInKb(path: string): number {
+  try {
+    return Math.max(1, Math.round(statSync(path).size / 1024))
+  } catch {
+    return 0
+  }
+}
+
 /** The approved profile as facts for the AI: exactly what it types, and why the profile is what it is. */
 function profileFacts(profile: Profile): string[] {
   const facts = ['THE PROFILE (the owner approved it; type exactly these values and never invent another personal detail):']
@@ -350,4 +387,4 @@ function profileFacts(profile: Profile): string[] {
   return facts
 }
 
-const snapshot = (run: AgentRun): AgentRun => ({ ...run, lines: [...run.lines], typed: run.typed.map((t) => ({ ...t })), question: run.question ? { ...run.question } : null })
+const snapshot = (run: AgentRun): AgentRun => ({ ...run, lines: [...run.lines], typed: run.typed.map((t) => ({ ...t })), question: run.question ? { ...run.question } : null, learned: run.learned.map((l) => ({ ...l })) })

@@ -9,6 +9,7 @@ import { createCore } from '../core/core'
 import { getAutomation, startAutomation } from '../core/pipeline'
 import { installLifecycle } from './lifecycle'
 import { McpGateway } from './mcp-gateway'
+import { ElectronImageShrinker } from './image-shrinker'
 import { createNotificationSink } from './notifications'
 import { createTray } from './tray'
 import { FileVault, TimedClipboard } from './vault'
@@ -44,6 +45,7 @@ async function start(): Promise<void> {
     browser: (tickets) => new ElectronBrowserService(tickets, { diagnosticsDir: join(dataDir, 'diagnostics') }),
     connectors: createConnectors(),
     agentBridge: gateway,
+    imageShrinker: new ElectronImageShrinker(),
     // Passwords: encrypted by the system keychain, in a file of their own next to the database (DEC-014).
     secrets: new FileVault(join(dataDir, 'vault.bin'), safeStorage),
     clipboard: new TimedClipboard({ writeText: (text) => clipboard.writeText(text), readText: () => clipboard.readText() }),

@@ -693,6 +693,8 @@ export interface ProfileProposeInput {
   role: AccountRole | null
   /** The other profiles the owner has: a new one must be a different person. */
   others: { displayName: string; gender: string; birthYear: string; place: string; about: string }[]
+  /** The accounts this person already has: they exist, the person must fit them. `identity` is the name the account shows on its platform, when known. */
+  accounts: { platform: string; label: string; identity: string | null; email: string | null }[]
   /** Today, YYYY-MM-DD: ages are counted from it. */
   today: string
   /** What the run is about (the profile id), so the progress panel shows it where it was started. */
@@ -723,6 +725,7 @@ const PROFILE_PROPOSE_SYSTEM = [
 const REASON_KEYS: (keyof ProfileFields)[] = ['firstName', 'lastName', 'displayName', 'username', 'birthDate', 'gender', 'place', 'about', 'website', 'pictureIdea']
 
 function profilePurposeBlock(input: ProfileProposeInput): string {
+  const existing = input.accounts.slice(0, 12).map((a) => `- ${oneLine(a.platform, 40)}: called "${oneLine(a.label, 60)}" by the owner${a.identity ? `; shows the name/user name "${oneLine(a.identity, 60)}"` : ''}${a.email ? `; e-mail address ${oneLine(a.email, 80)}` : ''}`)
   const others = input.others.slice(0, 12).map((o) => `- ${oneLine(o.displayName, 60)}; ${o.gender}; born ${o.birthYear || '?'}; ${oneLine(o.place, 60)}; ${oneLine(o.about, 120)}`)
   return [
     input.product ? productBlock(input.product, input.claims) : fence('product_data', 'The profile is not tied to a product yet.'),
@@ -731,6 +734,9 @@ function profilePurposeBlock(input: ProfileProposeInput): string {
     `Role (the voice of the person): ${input.role ? `${oneLine(input.role.name, 60)}: ${oneLine(input.role.voice, 280)}` : 'none chosen'}`,
     `What the owner says this person is for: ${input.purpose ? oneLine(input.purpose, 400) : '(not said: state it yourself from the product, the platforms and the role)'}`,
     `Today: ${input.today}`,
+    '',
+    'Accounts this person ALREADY has (they exist and are used as they are; the person must fit them):',
+    existing.length > 0 ? existing.join('\n') : '(none)',
     '',
     'Profiles that already exist (the new person must clearly differ from every one of them):',
     others.length > 0 ? others.join('\n') : '(none)'
@@ -756,6 +762,7 @@ function profileProposePrompt(input: ProfileProposeInput): AiTask {
       '- Invent a name that belongs to nobody famous. Do not use a real or famous person, brand or company as the name, the look or the story. The user name must not look official.',
       `- The person is an adult: age ${MIN_AGE} to ${MAX_AGE}. Choose the age and gender that make the purpose credible on those platforms, not a default.`,
       '- Differ clearly from the profiles that already exist (name, age, place, voice).',
+      '- The accounts listed as already existing are real and keep their names. Make the person fit them: where an account shows a name or user name, or an e-mail address that contains a name, the first name, last name, display name and user name you choose must be consistent with it (the same name, or the same base). Never propose a person whose name contradicts an existing account. Say in the reason when an existing account decided a choice.',
       '- "birthDate" is YYYY-MM-DD. "gender" is "female", "male" or "other".',
       `- "purpose" is one sentence (at most ${MAX_PURPOSE} characters): what this account is for. "strategy" is at most ${MAX_STRATEGY} characters: the audience, and why this person fits it.`,
       '- "about" is the text of the profile in the person\'s own voice, at most 500 characters, plain words. "website" is an address or "".',

@@ -12,6 +12,10 @@ export function AccountProfileLine({ account, onOpenProfile }: { account: Accoun
   const profiles = useQuery('profiles.list', undefined, ['accounts'])
   const accounts = useQuery('accounts.list', undefined, ['accounts'])
   const [choose, choosing] = useAction((profileId: string | null) => call('accounts.setProfile', { accountId: account.id, profileId }))
+  const [makeFrom, making] = useAction(async () => {
+    const made = await call('profiles.create', { label: account.label, platforms: [account.platform], accountIds: [account.id] })
+    onOpenProfile(made.id)
+  })
   const list = profiles.data ?? []
   const current = list.find((p) => p.id === account.profileId) ?? null
   // A profile that already has a login on this platform cannot take another (one account per platform).
@@ -58,8 +62,13 @@ export function AccountProfileLine({ account, onOpenProfile }: { account: Accoun
             </option>
           ))}
         </select>
+        {!current && (
+          <Button onClick={() => void makeFrom()} disabled={making.busy} data-testid={`account-profile-make-${account.id}`}>
+            {making.busy ? 'Making…' : 'Make a profile from this account'}
+          </Button>
+        )}
       </div>
-      <ErrorNote error={choosing.error} />
+      <ErrorNote error={choosing.error ?? making.error} />
     </AccountBlock>
   )
 }

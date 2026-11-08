@@ -65,14 +65,33 @@ export class PersonProfileService {
   }
 
   /** A new, empty profile. The AI proposes the person afterwards, from the purpose. */
-  create(args: { label: string; productId?: string | null; platforms?: string[]; purpose?: string }): Profile {
+  create(args: { label: string; productId?: string | null; platforms?: string[]; purpose?: string; accountIds?: string[] }): Profile {
     const label = requireText(args.label, 'The profile name').replace(/\s+/g, ' ')
     if (label.length > MAX_LABEL) throw new ApiError('invalid_input', `The profile name is too long (limit ${MAX_LABEL} characters).`)
     const productId = this.knownProduct(args.productId)
-    const created = this.store.insertProfile({ label, productId, platforms: this.knownPlatforms(args.platforms), purpose: cleanPurpose(args.purpose) })
-    this.core.log.info('accounts', `Profile created: ${label}.`)
+    // Accounts the person already has become its accounts: they are checked first, so a refusal leaves nothing half made.
+    const existing = this.freeAccounts(args.accountIds)
+    const platforms = [...new Set([...this.knownPlatforms(args.platforms), ...existing.map((a) => a.platform)])]
+    const created = this.store.insertProfile({ label, productId, platforms, purpose: cleanPurpose(args.purpose) })
+    for (const account of existing) this.store.setAccountProfile(account.id, created.id)
+    this.core.log.info('accounts', `Profile created: ${label}${existing.length > 0 ? `, with ${existing.length} account${existing.length === 1 ? '' : 's'} it already had` : ''}.`)
     this.core.events.changed('accounts')
     return created
+  }
+
+  /** The accounts named for a new profile: each exists, belongs to no profile yet, and no two are on the same platform. */
+  private freeAccounts(ids: unknown): Account[] {
+    if (ids === undefined || ids === null) return []
+    if (!Array.isArray(ids)) throw new ApiError('invalid_input', 'The accounts must be a list.')
+    const accounts: Account[] = []
+    for (const id of new Set(ids.map((item) => String(item)))) {
+      const account = found(() => this.core.repos.account(requireText(id, 'The account')), 'The account')
+      if (account.profileId) throw new ApiError('in_use', `${account.label} already belongs to a profile. Take it out of that profile first.`)
+      const same = accounts.find((a) => a.platform === account.platform)
+      if (same) throw new ApiError('profile_has_account', `${same.label} and ${account.label} are both on ${account.platform}: a profile has one account per platform. Choose one of them.`)
+      accounts.push(account)
+    }
+    return accounts
   }
 
   private knownProduct(id: unknown): string | null {
@@ -116,6 +135,12 @@ export class PersonProfileService {
         platforms,
         role: current.role,
         others,
+        accounts: this.store.accountsOfProfile(current.id).map((a) => ({
+          platform: presetFor(a.platform)?.label ?? a.platform,
+          label: a.label,
+          identity: a.identity ?? a.loginName,
+          email: a.email
+        })),
         today: this.core.clock.now().toISOString().slice(0, 10),
         subject: current.id
       })

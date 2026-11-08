@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { EngineId } from '../../../shared/types'
 import { call, useAction, useQuery } from '../hooks'
 import { Badge, Button, Card, EmptyState, ErrorNote, Field, Loading, Page } from '../ui'
+import { LessonsCard } from './LessonsCard'
 
 export function SettingsPage() {
   const engines = useQuery('engines.list', undefined, ['settings'])
@@ -55,6 +56,8 @@ export function SettingsPage() {
           })}
         </div>
       </Card>
+
+      <LessonsCard />
 
       <Card title="Notifications">
         <label className="check">

@@ -291,8 +291,30 @@ export interface AgentRun {
   typed: { label: string; value: string }[]
   /** Set while the AI waits for the owner's answer; the pop-up shows it. */
   question: AgentQuestion | null
+  /** Rules the AI kept from the owner's answers during this run (it called remember_lesson); the owner may undo each. */
+  learned: { id: Id; rule: string }[]
   startedAt: IsoTime
   finishedAt: IsoTime | null
+}
+
+/**
+ * A rule the AI keeps from what the owner told it ("compress a picture to under 500 KB before uploading it", "edit only the editable
+ * fields"). Every later mission on that platform gets it in its brief, so the owner is not asked the same thing again.
+ */
+export interface AgentLesson {
+  id: Id
+  /** The platform key it is for, or null for every platform. */
+  platform: string | null
+  /** One short imperative sentence, in plain words. Never a password, a code or a personal value. */
+  rule: string
+  /** What the AI asked and what the owner answered when it was learned; empty for a rule the owner wrote. */
+  question: string
+  answer: string
+  enabled: boolean
+  /** How many missions have been given this rule. */
+  uses: number
+  createdAt: IsoTime
+  lastUsedAt: IsoTime | null
 }
 
 export type ProfileGender = 'female' | 'male' | 'other'
