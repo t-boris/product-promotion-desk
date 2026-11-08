@@ -4,21 +4,22 @@ import { Button, ErrorNote, Loading, Page } from '../ui'
 import { CreateProduct } from './products/CreateProduct'
 import { NothingSelected, ProductDetail } from './products/ProductDetail'
 import { ProductList } from './products/ProductList'
+import { useProductRoute } from './products/useProductRoute'
 import './products/products.css'
 
 export function ProductsPage() {
   const products = useQuery('products.list', undefined, ['products', 'passport'])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const { productId, tab, selectProduct, selectTab } = useProductRoute()
   const [creating, setCreating] = useState(false)
 
   const list = products.data ?? []
-  // A product that was deleted (here or elsewhere) is no longer selected.
-  const selected = list.find((p) => p.id === selectedId)?.id ?? null
+  // A product that was deleted (here or elsewhere), or a link to one that does not exist, selects nothing.
+  const selected = list.find((p) => p.id === productId)?.id ?? null
 
   return (
     <Page
       title="Products"
-      subtitle="Sources, the verified passport, analysis and promotion goal for each product"
+      subtitle="Sources, the verified passport, analysis, goal, channels and results for each product"
       actions={
         <Button variant="primary" onClick={() => setCreating(true)} disabled={creating} data-testid="new-product">
           New product
@@ -31,7 +32,7 @@ export function ProductsPage() {
         <CreateProduct
           onCreated={(product) => {
             setCreating(false)
-            setSelectedId(product.id)
+            selectProduct(product.id, 'sources')
           }}
           onCancel={() => setCreating(false)}
         />
@@ -39,10 +40,10 @@ export function ProductsPage() {
       {products.data && (
         <div className="products-layout">
           <aside className="products-list">
-            <ProductList products={list} selectedId={selected} onSelect={setSelectedId} />
+            <ProductList products={list} selectedId={selected} onSelect={(id) => selectProduct(id)} />
           </aside>
           <div className="products-detail">
-            {selected ? <ProductDetail key={selected} productId={selected} onDeleted={() => setSelectedId(null)} /> : <NothingSelected />}
+            {selected ? <ProductDetail key={selected} productId={selected} tab={tab} onTabChange={selectTab} onDeleted={() => selectProduct(null)} /> : <NothingSelected />}
           </div>
         </div>
       )}

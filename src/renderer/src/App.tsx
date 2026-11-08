@@ -1,12 +1,22 @@
 import { useEffect, useState } from 'react'
 import { useAutomation, useQuery } from './hooks'
 import { PAGES } from './pages'
+import { MOVED_PAGES, parseHash } from './route'
 import { Badge, Button } from './ui'
 
-function useHashRoute(): [string, (id: string) => void] {
+/**
+ * The page is the first segment of the hash; `#/products/<productId>/<tab>` is still the Products page, which reads
+ * the rest itself. Old Channels and Results links are redirected (without a history entry) to the product list.
+ */
+function useHashRoute(): string {
   const read = (): string => {
-    const id = window.location.hash.replace(/^#\/?/, '')
-    return PAGES.some((p) => p.id === id) ? id : PAGES[0].id
+    const { page } = parseHash(window.location.hash)
+    const moved = MOVED_PAGES[page]
+    if (moved) {
+      window.history.replaceState(null, '', `#/${moved}`)
+      return moved
+    }
+    return PAGES.some((p) => p.id === page) ? page : PAGES[0].id
   }
   const [route, setRoute] = useState(read)
   useEffect(() => {
@@ -14,11 +24,11 @@ function useHashRoute(): [string, (id: string) => void] {
     window.addEventListener('hashchange', onChange)
     return () => window.removeEventListener('hashchange', onChange)
   }, [])
-  return [route, (id) => (window.location.hash = `/${id}`)]
+  return route
 }
 
 export function App() {
-  const [route, go] = useHashRoute()
+  const route = useHashRoute()
   const { state, setPaused } = useAutomation()
   const attention = useQuery('attention.list', undefined, ['attention', 'opportunities', 'channels', 'accounts'])
   const accounts = useQuery('accounts.list', undefined, ['accounts'])
@@ -35,7 +45,16 @@ export function App() {
         <div className="brand">Promotion Desk</div>
         <nav aria-label="Work areas">
           {PAGES.map((page) => (
-            <a key={page.id} href={`#/${page.id}`} className={`nav-item ${page.id === route ? 'active' : ''}`} onClick={() => go(page.id)} data-testid={`nav-${page.id}`}>
+            <a
+              key={page.id}
+              href={`#/${page.id}`}
+              className={`nav-item ${page.id === route ? 'active' : ''}`}
+              onClick={(e) => {
+                // Already here: keep the open product and tab instead of resetting the hash to the bare page.
+                if (page.id === route) e.preventDefault()
+              }}
+              data-testid={`nav-${page.id}`}
+            >
               <span>{page.label}</span>
               {page.id === 'attention' && attentionCount > 0 && <span className="count">{attentionCount}</span>}
             </a>

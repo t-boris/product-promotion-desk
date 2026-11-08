@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import type { Account } from '../../../../shared/types'
+import type { Account, PlatformInfo } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
 import { Badge, Button, ErrorNote } from '../../ui'
 import { ACCOUNT_STATUS_LABEL, ACCOUNT_STATUS_TONE, platformLabel } from './model'
 
 /** One account: its sign-in state and the controls for the browser hand-off. */
-export function AccountRow({ account, channelCount }: { account: Account; channelCount: number }) {
+export function AccountRow({ account, channelCount, platforms }: { account: Account; channelCount: number; platforms: PlatformInfo[] }) {
   const [address, setAddress] = useState('')
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [open, opening] = useAction(() => call('accounts.openBrowser', { accountId: account.id, ...(address.trim() ? { url: address.trim() } : {}) }))
@@ -19,7 +19,7 @@ export function AccountRow({ account, channelCount }: { account: Account; channe
     <div className="list-row account-row" data-testid={`account-${account.id}`}>
       <div className="account-main">
         <div>
-          <strong>{account.label}</strong> <span className="muted">{platformLabel(account.platform)}</span>{' '}
+          <strong>{account.label}</strong> <span className="muted">{platformLabel(account.platform, platforms)}</span>{' '}
           <Badge tone={ACCOUNT_STATUS_TONE[account.status]}>{ACCOUNT_STATUS_LABEL[account.status]}</Badge>
           <div className="muted small" data-testid={`account-identity-${account.id}`}>
             {account.identity ? `Signed in as ${account.identity}` : 'Account name on the platform not confirmed yet'} · used by {channelCount} channel{channelCount === 1 ? '' : 's'}

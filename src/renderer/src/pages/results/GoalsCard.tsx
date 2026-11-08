@@ -1,11 +1,13 @@
 import type { ResultsView } from '../../../../shared/types'
+import { productHref } from '../../route'
 import { Card, EmptyState } from '../../ui'
 
-/** Promotion goals are read-only here; they are edited on the product page. */
+/** The promotion goal is read-only here; it is edited on the product's Goal tab. */
 export function GoalsCard({ goals }: { goals: ResultsView['goals'] }) {
+  const only = goals.length === 1 ? goals[0] : null
   return (
-    <Card title="Promotion goals" actions={<a href="#/products" data-testid="goals-edit-link">Edit in Products</a>}>
-      {goals.length === 0 && <EmptyState title="No products yet">Add a product and set its promotion goal on the Products page.</EmptyState>}
+    <Card title={only ? 'Promotion goal' : 'Promotion goals'} actions={<a href={productHref(only?.productId, 'goal')} data-testid="goals-edit-link">Edit on the Goal tab</a>}>
+      {goals.length === 0 && <EmptyState title="Product not found">This product has no goal to show.</EmptyState>}
       <div className="stack">
         {goals.map(({ productId, productName, goal }) => (
           <div key={productId} className="list-row" data-testid={`goal-${productId}`}>
@@ -18,7 +20,7 @@ export function GoalsCard({ goals }: { goals: ResultsView['goals'] }) {
                   {goal.notes && <div className="muted small">{goal.notes}</div>}
                 </>
               ) : (
-                <div className="muted">No promotion goal set. <a href="#/products">Set one on the Products page.</a></div>
+                <div className="muted">No promotion goal set. <a href={productHref(productId, 'goal')}>Set one on the Goal tab.</a></div>
               )}
             </div>
           </div>

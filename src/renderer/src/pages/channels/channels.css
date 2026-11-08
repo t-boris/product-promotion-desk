@@ -106,3 +106,28 @@ textarea.input.short {
     position: static;
   }
 }
+
+.suggestion {
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.consent {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 6px 0 0;
+}
+.site-profile {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.plain-lines {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+.note p {
+  margin: 4px 0;
+}

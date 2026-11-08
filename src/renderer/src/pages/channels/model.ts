@@ -1,16 +1,27 @@
 // Wording and small pure rules for the Channels screen. Kept apart from the components so they stay easy to read.
 
-import type { AccountStatus, Capability, CapabilityKey, CapabilityStatus, Channel, ChannelMode, ChannelStatus } from '../../../../shared/types'
+import type { AccountStatus, Capability, CapabilityKey, CapabilityStatus, Channel, ChannelMode, ChannelStatus, ChannelSuggestion, PlatformInfo } from '../../../../shared/types'
 import type { Tone } from '../../ui'
 
-/** Platforms an account can be created for. The core refuses any platform it has no connector for. */
-export const PLATFORM_OPTIONS: { id: string; label: string; addressHint: string }[] = [
-  { id: 'reddit', label: 'Reddit', addressHint: 'r/astrology or https://www.reddit.com/r/astrology/' },
-  { id: 'web', label: 'Other website (universal connector)', addressHint: 'https://forum.example.com/c/general' }
-]
+/** The name of a platform for people: the connector's own label, from platforms.list. */
+export function platformLabel(platform: string, platforms: PlatformInfo[]): string {
+  const known = platforms.find((p) => p.platform === platform)
+  if (known) return known.label
+  return platform === 'other' ? 'Other website' : platform.charAt(0).toUpperCase() + platform.slice(1)
+}
 
-export function platformLabel(platform: string): string {
-  return PLATFORM_OPTIONS.find((p) => p.id === platform)?.label.split(' (')[0] ?? platform
+/** What to type as a channel address on a platform: prepared platforms know their own short forms; any other site needs a web address. */
+export function addressExample(info: PlatformInfo | undefined): string {
+  return info && !info.prepared ? 'https://forum.example.com/c/general' : 'Community name or web address'
+}
+
+export function isWebAddress(text: string): boolean {
+  return /^https?:\/\/\S+$/i.test(text.trim())
+}
+
+/** The platform a suggestion is meant for: "other" (or an unknown key) means a site the app has no prepared connector for. */
+export function platformOfSuggestion(suggestion: ChannelSuggestion, platforms: PlatformInfo[]): PlatformInfo | undefined {
+  return platforms.find((p) => p.platform === suggestion.platform) ?? platforms.find((p) => !p.prepared)
 }
 
 export const ACCOUNT_STATUS_LABEL: Record<AccountStatus, string> = {

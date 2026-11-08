@@ -3,15 +3,21 @@ import type { Id } from '../../../shared/types'
 import { call, useAction, useQuery } from '../hooks'
 import { Badge, Button, Card, EmptyState, ErrorNote, Field, Loading, Page } from '../ui'
 import { PublicationForm } from './review/PublicationForm'
+import { ProductFilter, useProductDirectory, useProductFilter } from './review/products'
 import { ReviewCard } from './review/ReviewCard'
 
 const CLOSED = ['confirmed', 'cancelled']
 
 export function PublicationsPage() {
-  const channels = useQuery('channels.list', undefined, ['channels'])
+  const directory = useProductDirectory()
+  const [chosenProduct, setProduct] = useProductFilter('publications')
+  const productId = directory.effective(chosenProduct)
+  const inScope = directory.channelsOf(productId)
   const [chosen, setChosen] = useState<Id | ''>('')
-  const channelId = chosen || channels.data?.[0]?.id || ''
-  const channel = channels.data?.find((c) => c.id === channelId)
+  // Publications are written for one channel: the first channel of the chosen product until the owner picks another.
+  const channel = inScope.find((c) => c.id === chosen) ?? inScope[0]
+  const channelId = channel?.id ?? ''
+  const productName = channel ? directory.productNameOfChannel(channel.id) : undefined
   const list = useQuery('opportunities.list', { channelId: channelId || undefined, kind: 'standalone' }, ['opportunities'])
   const [writing, setWriting] = useState(false)
   const [suggest, suggesting] = useAction(async () => {
@@ -29,11 +35,12 @@ export function PublicationsPage() {
     <Page title="Publications" subtitle="Drafts, scheduled and sent material">
       <Card>
         <div className="row">
+          <ProductFilter products={directory.products} value={productId} onChange={setProduct} />
           <Field label="Channel">
             <select className="input" value={channelId} onChange={(e) => setChosen(e.target.value)} data-testid="publication-channel">
-              {channels.data?.map((c) => (
+              {inScope.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.target}
+                  {directory.channelLabel(c)}
                 </option>
               ))}
             </select>
@@ -45,7 +52,7 @@ export function PublicationsPage() {
             Write one myself
           </Button>
         </div>
-        <ErrorNote error={channels.error ?? suggesting.error} />
+        <ErrorNote error={directory.error ?? suggesting.error} />
         {cannotPost && (
           <div className="row" data-testid="post-warning">
             <Badge tone="warn">Posting not available</Badge>
@@ -59,7 +66,11 @@ export function PublicationsPage() {
         </p>
       </Card>
 
-      {channels.data?.length === 0 && <EmptyState title="No channels yet">Connect a channel first; publications are written for a specific channel.</EmptyState>}
+      {directory.ready && inScope.length === 0 && (
+        <EmptyState title="No channels yet">
+          {productId ? 'This product has no channels yet. Add one on the product page; publications are written for a specific channel.' : 'Connect a channel first; publications are written for a specific channel.'}
+        </EmptyState>
+      )}
 
       {writing && channelId && <PublicationForm channelId={channelId} onCreated={() => setWriting(false)} onCancel={() => setWriting(false)} />}
 
@@ -72,14 +83,14 @@ export function PublicationsPage() {
             <h2>Drafts, approved and scheduled</h2>
             {pending.length === 0 && <EmptyState title="No drafts">Ask the AI for a suggestion or write one yourself.</EmptyState>}
             {pending.map((card) => (
-              <ReviewCard key={card.opportunity.id} card={card} collapsible defaultOpen={pending.length === 1} />
+              <ReviewCard key={card.opportunity.id} card={card} collapsible defaultOpen={pending.length === 1} productName={productName} />
             ))}
           </section>
           {sent.length > 0 && (
             <section className="stack" data-testid="sent-publications">
               <h2>Sent</h2>
               {sent.map((card) => (
-                <ReviewCard key={card.opportunity.id} card={card} collapsible defaultOpen={false} />
+                <ReviewCard key={card.opportunity.id} card={card} collapsible defaultOpen={false} productName={productName} />
               ))}
             </section>
           )}
@@ -87,7 +98,7 @@ export function PublicationsPage() {
             <section className="stack">
               <h2>Rejected</h2>
               {cancelled.map((card) => (
-                <ReviewCard key={card.opportunity.id} card={card} collapsible defaultOpen={false} />
+                <ReviewCard key={card.opportunity.id} card={card} collapsible defaultOpen={false} productName={productName} />
               ))}
             </section>
           )}

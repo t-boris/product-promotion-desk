@@ -21,6 +21,8 @@ interface Props {
   /** A compact card shows one line and opens on demand; used in long lists. */
   collapsible?: boolean
   defaultOpen?: boolean
+  /** The product the channel belongs to; shown with the channel because these lists mix products (DEC-009). */
+  productName?: string
 }
 
 /**
@@ -28,7 +30,7 @@ interface Props {
  * draft with its basis, the account and destination an approval is bound to, and the reason for the current
  * state, including why a send was blocked (REQ-003, REQ-004).
  */
-export function ReviewCard({ card, collapsible = false, defaultOpen = true }: Props) {
+export function ReviewCard({ card, collapsible = false, defaultOpen = true, productName }: Props) {
   const [open, setOpen] = useState(defaultOpen || !collapsible)
   const opp = card.opportunity
   const standalone = opp.kind === 'standalone'
@@ -47,7 +49,12 @@ export function ReviewCard({ card, collapsible = false, defaultOpen = true }: Pr
             <Badge>{KIND_LABEL[opp.kind]}</Badge>
             {opp.category && <Badge>{CATEGORY_LABEL[opp.category]}</Badge>}
             {opp.decision && opp.decision !== 'reply' && <Badge tone="warn">{DECISION_LABEL[opp.decision]}</Badge>}
-            <strong>{card.channelTarget}</strong>
+            {productName && (
+              <Badge tone="info">
+                <span data-testid="card-product">{productName}</span>
+              </Badge>
+            )}
+            <strong data-testid="card-channel">{card.channelTarget}</strong>
             <span className="muted small">as {card.accountLabel}</span>
           </div>
           <div className="row">
