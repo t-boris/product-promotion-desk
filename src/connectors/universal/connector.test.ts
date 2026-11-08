@@ -120,7 +120,7 @@ describe('universal connector: assessment with a valid profile', () => {
     a.page.login = { loggedIn: false, identity: '', captcha: false }
     expect((await a.connector.assess(a.ctx)).every((c) => c.status === 'needs_user')).toBe(true)
     const b = setup()
-    b.page.gate = { captcha: true, blocked: false, title: 'Verify' }
+    b.page.gate = { captcha: true, blocked: false, title: 'Verify', signal: 'the page title is a check page' }
     const caps = await b.connector.assess(b.ctx)
     expect(caps.every((c) => c.status === 'needs_user' && /CAPTCHA/.test(c.detail))).toBe(true)
   })
@@ -141,6 +141,51 @@ describe('universal connector: assessment with a valid profile', () => {
     expect(await connector.checkLogin(ctx)).toEqual({ loggedIn: false, identity: null, captcha: false })
     page.login = { loggedIn: false, identity: '', captcha: true }
     expect((await connector.checkLogin(ctx)).captcha).toBe(true)
+  })
+})
+
+describe('universal connector: sign-in check of an account that has no site profile yet', () => {
+  it('says the account is signed out when the page asks to sign in, and what it saw', async () => {
+    const { connector, ctx, page } = setup({ profile: null })
+    page.session = { signedOut: true, signal: 'a password field is shown', textLength: 500 }
+    expect(await connector.checkLogin(ctx)).toEqual({ loggedIn: false, identity: null, captcha: false, signal: 'a password field is shown' })
+    expect(page.sessionLooks).toBe(1) // a sign-in prompt ends the wait at once
+  })
+
+  it('says the session is in when the page never asks to sign in after it had time to draw', async () => {
+    const { connector, ctx, page } = setup({ profile: null })
+    const state = await connector.checkLogin(ctx)
+    expect(state).toMatchObject({ loggedIn: true, identity: null, captcha: false })
+    expect(page.sessionLooks).toBeGreaterThan(3) // forms are drawn late, so it looked more than once
+    expect(page.log.filter((entry) => entry.startsWith('goto ')).length).toBe(1)
+  })
+
+  it('does not claim a session on a page that stayed empty', async () => {
+    const { connector, ctx, page } = setup({ profile: null })
+    page.session = { signedOut: false, signal: '', textLength: 12 }
+    const state = await connector.checkLogin(ctx)
+    expect(state.loggedIn).toBe(false)
+    expect(state.signal).toMatch(/stayed empty/)
+  })
+
+  it('reports a visible human check as such', async () => {
+    const { connector, ctx, page } = setup({ profile: null })
+    page.gate = { captcha: true, blocked: false, title: 'Verify', signal: 'a visible check on the page (google.com/recaptcha)' }
+    expect(await connector.checkLogin(ctx)).toMatchObject({ loggedIn: false, captcha: true, signal: 'a visible check on the page (google.com/recaptcha)' })
+  })
+
+  it('writes nothing and uses no profile', async () => {
+    const { connector, ctx, page } = setup({ profile: null })
+    await connector.checkLogin(ctx)
+    expect(page.writes).toEqual([])
+  })
+
+  it('still uses the profile when there is one, and refuses an invalid one as before', async () => {
+    const withProfile = setup()
+    expect(await withProfile.connector.checkLogin(withProfile.ctx)).toEqual({ loggedIn: true, identity: 'natal', captcha: false })
+    expect(withProfile.page.sessionLooks).toBe(0)
+    const invalid = setup({ profile: { ...validProfileDefinition(), script: 'alert(1)' } })
+    await expect(invalid.connector.checkLogin(invalid.ctx)).rejects.toThrow(/invalid/)
   })
 })
 
@@ -176,7 +221,7 @@ describe('universal connector: reading', () => {
   it('reports a CAPTCHA wall as a recognizable error', async () => {
     const h = setup()
     h.page.site.get(CHANNEL)!.selectors.delete('ul.topics')
-    h.page.gate = { captcha: true, blocked: false, title: 'Just a moment' }
+    h.page.gate = { captcha: true, blocked: false, title: 'Just a moment', signal: 'the page title is a check page' }
     await expect(h.connector.fetchActivity(h.ctx, { limit: 5 })).rejects.toBeInstanceOf(CaptchaRequiredError)
   })
 

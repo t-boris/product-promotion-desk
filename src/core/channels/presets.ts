@@ -9,8 +9,10 @@ export interface PlatformPreset {
   platform: string
   label: string
   loginUrl: string
-  /** The registration page; opened in the account's own browser by "Create account on the platform" (DEC-015). */
+  /** The registration page; opened in the account's own browser by "Create account on the platform" (DEC-015). Empty when the platform has none on the web. */
   signupUrl: string
+  /** Said instead of the registration steps when there is no registration page: where the account is made. */
+  signupNote?: string
   /** Domains of the platform; an address on any other domain does not belong to it. */
   hosts: string[]
   /** Address of a page from a handle, `{handle}` replaced: "@brand" becomes https://www.instagram.com/brand/. */
@@ -99,7 +101,8 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     platform: 'telegram',
     label: 'Telegram',
     loginUrl: 'https://web.telegram.org/',
-    signupUrl: 'https://web.telegram.org/',
+    signupUrl: '',
+    signupNote: 'Telegram accounts are made in the Telegram app on your phone, with your phone number. Then sign in here with the QR code.',
     hosts: ['t.me', 'telegram.me', 'web.telegram.org'],
     handleUrl: 'https://t.me/{handle}',
     example: '@yourchannel',
@@ -111,7 +114,8 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     platform: 'threads',
     label: 'Threads',
     loginUrl: 'https://www.threads.net/login',
-    signupUrl: 'https://www.threads.net/',
+    signupUrl: '',
+    signupNote: 'Threads has no sign-up of its own: it uses an Instagram account. Add an Instagram account first, then sign in to Threads with it.',
     hosts: ['threads.net', 'threads.com'],
     handleUrl: 'https://www.threads.net/@{handle}',
     example: '@yourbrand',

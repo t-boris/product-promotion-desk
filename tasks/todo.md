@@ -207,5 +207,17 @@ Result: 1335 tests. Checked in the real app (scratch instance, real windows): op
 - [x] The Platform field starts on "Choose a platform…", the add button stays off until a platform is chosen; the hint says it cannot be changed later.
 - [x] An account whose name mentions another platform than its own says so on its card, with the way out (remove it under More and add it again).
 - [x] Registration pages of the presets opened in a clean window: Facebook, Instagram, Reddit, X, TikTok, LinkedIn, Pinterest and Google open a real registration form; Threads opens its feed (it has no registration of its own), Telegram opens only a QR login (accounts are made in the phone app).
-- [ ] OPEN, needs the owner's decision: "Check sign-in" cannot work on any platform except Reddit ("There is no site profile for this site yet"), so a Facebook account never becomes "Signed in" by itself. Options: a session-cookie check per platform, a button "I am signed in", or leave it to the channel connection.
-- [ ] After that decision: show how to create the account on the platform before the owner presses the button (today the steps appear only after "Create account on ...").
+- [x] (closed by 0.3.4 below) The sign-in check for platforms other than Reddit, and the sign-up steps shown before the button is pressed.
+
+## 0.3.4: the app itself checks that the account is in (owner: "I log in once, it stays in the cookies, next time you open the known URL and check that you can get in")
+
+Owner's model (their words, 2026-11-08): the account browser keeps the login in its cookies; the app opens the known address; the owner types only what the app cannot know; afterwards the app itself checks that it can get in. No "I am signed in" button, no per-site profile for a plain login check.
+
+- [x] `UniversalConnector.checkLogin` without any site profile for the host opens the platform's page in the account's own browser and looks (up to 8 times, 700 ms apart) whether it asks to sign in: a visible password field, a sign-in address, or a "log in" prompt at the top of the page. A page that has drawn text and never asks is "signed in" (the name stays unknown); an empty page is "not signed in" with the reason. A visible CAPTCHA ends it as "needs you". A site profile, when there is one, is used as before.
+- [x] `LoginState.signal` (renamed from `captchaSignal`) says what the check saw; `loginOutcome` puts it into the status detail and the log for every outcome.
+- [x] Dry run of the real loop in real Chromium, signed out, on Facebook, Instagram, LinkedIn, Pinterest, Threads, TikTok, X, Telegram and YouTube: all nine answered "signed out" within 0.7-2.7 s, each with its signal. The real app answered `login_required` for Facebook, Instagram and X accounts through the loopback API.
+- [x] The auto-check after the account window is closed now gives a real answer for every platform (before, the no-profile error was swallowed).
+- [x] "No account on <platform> yet?" with the four steps is shown at once while the account is not signed in (not only after pressing the button). Telegram and Threads have no web registration: they show a note instead (`signupNote`: the phone app; an Instagram account).
+- [ ] NOT verified (needs the owner's real login): the "signed in" answer on any real platform; a signed-in Reddit/Facebook session surviving an app restart; sites whose public page never shows a log in prompt (a signed-out visitor could be taken for signed in).
+- [ ] Open: record "last checked time + what was seen" in the Sign-in block (migration 206).
+

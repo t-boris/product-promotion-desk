@@ -155,9 +155,22 @@ describe('ideas on a named platform', () => {
 })
 
 describe('registration pages (DEC-015)', () => {
-  it('every named platform has an https registration page on its own sites or a sign-in provider it uses', () => {
+  it('every named platform has an https registration page, or says in words where its accounts are made', () => {
     for (const preset of PLATFORM_PRESETS) {
-      expect(preset.signupUrl, preset.platform).toMatch(/^https:\/\/[^\s/]+\//)
+      if (preset.signupUrl) expect(preset.signupUrl, preset.platform).toMatch(/^https:\/\/[^\s/]+\//)
+      else expect(preset.signupNote?.length, preset.platform).toBeGreaterThan(20)
     }
+  })
+
+  it('offers the sign-up note instead of a registration page for Telegram and Threads', () => {
+    const connectors = new Connectors()
+    connectors.register(new FakeUniversal())
+    const byKey = Object.fromEntries(listPlatforms(connectors).map((p) => [p.platform, p]))
+    expect(byKey.telegram.signupUrl).toBeUndefined()
+    expect(byKey.telegram.signupNote).toMatch(/phone/)
+    expect(byKey.threads.signupUrl).toBeUndefined()
+    expect(byKey.threads.signupNote).toMatch(/Instagram/)
+    expect(byKey.facebook.signupUrl).toBe('https://www.facebook.com/r.php')
+    expect(byKey.facebook.signupNote).toBeUndefined()
   })
 })

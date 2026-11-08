@@ -71,7 +71,7 @@ export class RedditConnector implements Connector {
     return ctx.session.withAgentControl(`login:${ctx.account.id}`, async (page) => {
       await page.goto(`${REDDIT_ORIGIN}/`, { timeoutMs: 30_000 })
       const gate = await page.read<GateProbe>(gateProbeScript())
-      if (gate.captcha) return { loggedIn: false, identity: null, captcha: true, captchaSignal: gate.signal }
+      if (gate.captcha) return { loggedIn: false, identity: null, captcha: true, signal: gate.signal }
       const identity = await new RedditApi(page).me()
       return { loggedIn: identity !== null, identity, captcha: false }
     })

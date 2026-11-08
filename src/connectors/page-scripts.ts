@@ -76,3 +76,44 @@ export function gateProbeScript(): string {
   return { captcha: signal !== '', blocked: blocked, title: title, signal: signal };
 })()`
 }
+
+export interface SessionProbe {
+  /** The page asks the visitor to sign in or sign up (a password field, a sign-in address or a "log in" prompt at the top). */
+  signedOut: boolean
+  /** What showed it, in words for the owner ("" when nothing did). */
+  signal: string
+  /** How much text the page has drawn; a nearly empty page says nothing about the session. */
+  textLength: number
+}
+
+/**
+ * Tells whether the session in the account's own browser is signed in to a site we have no site profile for: the page the
+ * browser lands on either asks the visitor to sign in, or it does not. Read-only. Pages draw their forms late, so the caller
+ * looks again for a few seconds; this reads the page as it is now.
+ */
+export function sessionProbeScript(): string {
+  return `(() => {
+  /* session-probe */
+  const all = (selector, root) => {
+    const found = [...root.querySelectorAll(selector)];
+    for (const el of root.querySelectorAll('*')) if (el.shadowRoot) found.push(...all(selector, el.shadowRoot));
+    return found;
+  };
+  const shown = (el) => {
+    const r = el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return false;
+    for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+      const s = getComputedStyle(n);
+      if (s.display === 'none' || s.visibility === 'hidden' || s.opacity === '0') return false;
+    }
+    return true;
+  };
+  const text = (document.body ? document.body.innerText : '') || '';
+  const path = location.pathname || '/';
+  const signal = all('input[type=password]', document).some(shown) ? 'a password field is shown'
+    : /(^|\\/)(login|log-in|signin|sign-in|signup|sign-up|register|onboarding|checkpoint|flow)(\\/|$)/i.test(path) ? 'the page address is a sign-in page (' + path.slice(0, 40) + ')'
+    : /\\b(log ?in|sign ?in)\\b/i.test(text.slice(0, 800)) ? 'the page offers to log in'
+    : '';
+  return { signedOut: signal !== '', signal: signal, textLength: text.length };
+})()`
+}

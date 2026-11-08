@@ -145,3 +145,13 @@
 51. A message that sends the owner to a control must name a control that works there: the error pointed to "Give control back" under More, which refused while the window was open.
 52. A form never chooses for the owner what the owner must know: the Platform field silently took the first platform (Reddit), so a "Facebook" account was created on Reddit and the whole screen then spoke about Reddit. Required choices start empty, the submit stays off until they are made, and a name that contradicts the choice is flagged.
 53. Before telling the owner that a flow works on a platform, run it on that platform. The sign-in check was only ever run on Reddit; on any other platform it answers "no site profile", so such an account can never become "Signed in". Test each platform of the list, not the one in front of me.
+
+## 2026-11-08 (later): "I log in once, the cookies stay, you check that you are in"
+
+**What happened.** I asked the owner which mechanism should tell that a Facebook account is signed in (cookie check, an "I am signed in" button, both). The owner answered that this is obvious: the internal browser keeps the cookies, the app opens the known URL, asks only for what it cannot know, and then checks by itself that it got in. The question offered mechanisms to someone who had already described the behaviour; the real gap (the check needed a site profile that only exists after a channel) was mine, not a product choice.
+
+**Rules for myself.**
+
+54. When the owner has described the behaviour they expect, build that behaviour; do not turn a gap in my own implementation into a menu of mechanisms. Ask only when two readings of their words lead to different behaviour for them.
+55. A check that must work before anything is configured (an account with no channel yet) cannot depend on configuration that is made later (a site profile). Look at what the check really needs (a page and a way to read it) and build it from that.
+56. A "signed in" answer must be earned by a signal that a signed-out visitor does not show; run the real detection loop signed out on every platform to see that it says "signed out" for each, and say in the report that the "signed in" side still needs the owner's real login.

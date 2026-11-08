@@ -11,13 +11,13 @@ export interface LoginOutcome {
 }
 
 export function loginOutcome(state: LoginState): LoginOutcome {
+  const seen = state.signal ? ` (${state.signal})` : ''
   if (state.captcha) {
-    const seen = state.captchaSignal ? `: ${state.captchaSignal}` : ''
-    return { status: 'captcha', identity: null, detail: `The site asks for a human check (CAPTCHA${seen}). Open the browser and complete it on the page.` }
+    return { status: 'captcha', identity: null, detail: `The site asks for a human check (CAPTCHA)${seen}. Open the browser and complete it on the page.` }
   }
   if (!state.loggedIn) {
-    return { status: 'login_required', identity: null, detail: 'Not signed in. Open the browser and sign in on the site itself.' }
+    return { status: 'login_required', identity: null, detail: `Not signed in${seen}. Open the browser and sign in on the site itself.` }
   }
   const identity = state.identity?.trim() || null
-  return { status: 'ready', identity, detail: identity ? `Signed in as ${identity}.` : 'Signed in, but the site did not reveal the account name.' }
+  return { status: 'ready', identity, detail: identity ? `Signed in as ${identity}.` : `Signed in, but the site did not reveal the account name${seen}.` }
 }

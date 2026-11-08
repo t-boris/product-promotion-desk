@@ -242,8 +242,8 @@ export interface LoginState {
   loggedIn: boolean
   identity: string | null
   captcha: boolean
-  /** What showed the check ("a visible check on the page (…)"), for the log: a false alarm cannot be told from a wall without it. */
-  captchaSignal?: string
+  /** What the check saw ("a password field is shown", "a visible check on the page (…)"), for the log: a wrong reading cannot be told from a right one without it. */
+  signal?: string
 }
 
 export interface NormalizedTarget {

@@ -87,7 +87,10 @@ interface SitePage {
 export class SiteFakePage extends FakePage {
   readonly site = new Map<string, SitePage>()
   login = { loggedIn: true, identity: 'natal', captcha: false }
-  gate = { captcha: false, blocked: false, title: 'Forum' }
+  gate = { captcha: false, blocked: false, title: 'Forum', signal: '' }
+  /** What the session probe sees (a site we have no profile for): by default a drawn page that does not ask to sign in. */
+  session = { signedOut: false, signal: '', textLength: 5000 }
+  sessionLooks = 0
   errors: string[] = []
   /** URL the page lands on after the last click of a flow (simulates the result page). */
   afterSubmitUrl: string | null = null
@@ -133,6 +136,10 @@ export class SiteFakePage extends FakePage {
 
   override async read<T>(script: string): Promise<T> {
     if (script.includes('recaptcha')) return this.gate as T
+    if (script.includes('session-probe')) {
+      this.sessionLooks += 1
+      return this.session as T
+    }
     if (script.includes('loggedInSelector')) return this.login as T
     if (script.includes('cfg.fields')) {
       const config = JSON.parse(script.slice(script.lastIndexOf('})(') + 3, -1)) as { itemSelector: string; limit: number }

@@ -249,6 +249,8 @@ export interface PlatformInfo {
   loginUrl: string
   /** The platform's registration page, opened in the account's own browser (DEC-015); empty when there is none. */
   signupUrl?: string
+  /** Said instead of the registration steps when the platform has no registration page on the web. */
+  signupNote?: string
   /** Named platform served by the universal connector (DEC-013): what address to give, what a post holds, what to know. */
   hint?: string
   /** A typical address to type, shown as the placeholder; and the template that turns "@name" into an address (`{handle}`). */

@@ -19,7 +19,7 @@ import {
 import type { Capability, MetricReading } from '../../shared/types'
 import { CapabilityBuilder } from '../capabilities'
 import { CaptchaRequiredError, LoginRequiredError } from '../errors'
-import { gateProbeScript, type GateProbe } from '../page-scripts'
+import { gateProbeScript, sessionProbeScript, type GateProbe, type SessionProbe } from '../page-scripts'
 import { createdMs, earliestCreation } from '../reconcile'
 import { analyzeRules, quoteRule } from '../rules-text'
 import { comparableText, errorMessage, sameText } from '../text'
@@ -45,6 +45,12 @@ export interface UniversalOptions {
 class LayoutChanged extends Error {}
 
 const failed = (error: string): PublishOutcome => ({ status: 'failed', error })
+
+/** The session check looks at the page this many times, this far apart: Reddit-like sites draw their sign-in form a few seconds after load. */
+const SESSION_LOOKS = 8
+const SESSION_LOOK_MS = 700
+/** Less text than this on a page that has had time to draw says nothing about whether the session is in. */
+const SESSION_MIN_TEXT = 100
 
 /**
  * Connector for sites without a prepared connector. It works only from a validated declarative profile and
@@ -157,13 +163,39 @@ export class UniversalConnector implements Connector {
 
   // ───────────────────────────── Login ─────────────────────────────
 
+  /**
+   * Account-level check without a site profile: open the platform's page in the account's own browser and look whether it asks
+   * to sign in. Forms are drawn late, so the page is looked at several times; a sign-in prompt ends the wait at once, and a page
+   * that never asks for one is a session that is in. The account's name is not known this way.
+   */
+  private async checkSession(ctx: ConnectorContext): Promise<LoginState> {
+    return ctx.session.withAgentControl(`login:${ctx.account.id}`, async (page) => {
+      await page.goto(ctx.channel.url, { timeoutMs: 30_000 })
+      let drawn = 0
+      for (let look = 0; look < SESSION_LOOKS; look++) {
+        const gate = await page.read<GateProbe>(gateProbeScript())
+        if (gate.captcha) return { loggedIn: false, identity: null, captcha: true, signal: gate.signal }
+        const seen = await page.read<SessionProbe>(sessionProbeScript())
+        if (seen.signedOut) return { loggedIn: false, identity: null, captcha: false, signal: seen.signal }
+        drawn = seen.textLength
+        if (look < SESSION_LOOKS - 1) await this.sleep(SESSION_LOOK_MS)
+      }
+      if (drawn < SESSION_MIN_TEXT) return { loggedIn: false, identity: null, captcha: false, signal: 'the page stayed empty, so nothing can be said about the session' }
+      return { loggedIn: true, identity: null, captcha: false, signal: 'the page does not ask to sign in' }
+    })
+  }
+
   async checkLogin(ctx: ConnectorContext): Promise<LoginState> {
+    // An account of a named platform is checked before any channel exists, so before any site profile does: the browser itself
+    // is asked, by looking at where the platform's page lets it in.
+    const { valid, latest } = this.lookup(ctx)
+    if (!valid && !latest) return this.checkSession(ctx)
     const profile = this.requireProfile(ctx)
     return ctx.session.withAgentControl(`login:${ctx.account.id}`, async (page) => {
       await page.goto(ctx.channel.url, { timeoutMs: 30_000 })
       const gate = await page.read<GateProbe>(gateProbeScript())
       const probe = await page.read<{ loggedIn: boolean; identity: string; captcha: boolean }>(loginProbeScript(profile.login))
-      if (gate.captcha || probe.captcha) return { loggedIn: false, identity: null, captcha: true, captchaSignal: gate.captcha ? gate.signal : 'the site profile\'s own check marker is on the page' }
+      if (gate.captcha || probe.captcha) return { loggedIn: false, identity: null, captcha: true, signal: gate.captcha ? gate.signal : 'the site profile\'s own check marker is on the page' }
       return { loggedIn: probe.loggedIn, identity: probe.loggedIn && probe.identity ? probe.identity : null, captcha: false }
     })
   }
