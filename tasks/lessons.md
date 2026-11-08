@@ -204,3 +204,12 @@
 
 69. When the owner names a reference ("see how MarkView does it", "look at the code"), reading that code is the first step, before any design, plan or explanation. Quote what it does (here: the app binary is the MCP server, tool calls travel over a Unix socket to the app, `claude mcp add` / `codex mcp add` register it) and say what is kept and what is changed and why.
 70. A repeated remark means my model of the owner's intent is wrong, not that they need a clearer sentence. Stop defending the current design and re-read their earlier words for what I filtered out.
+
+## 2026-11-08 (still later): "I do not want it to call once. It has a goal, splits it, may ask a person for a CAPTCHA."
+
+**What happened.** The first plan kept my own loop in the application (snapshot, one answer with steps, repeat) and merely swapped the transport for an MCP, with one engine run per task. The owner wanted what MarkView does: the engine itself holds the goal and works for a long time.
+
+**Rule for myself.**
+
+71. When the owner says "the AI does X", the unit of design is a GOAL the AI owns for a long time, with a way to ask the person and go on; the application provides tools, limits and a view, not the loop. Before proposing a flow, say in one sentence who holds the goal, and check it against the reference the owner pointed at.
+
