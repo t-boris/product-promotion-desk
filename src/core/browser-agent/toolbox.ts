@@ -20,6 +20,12 @@ export interface TaskValue {
   secret: boolean
 }
 
+/** A file the application lets the AI put into a file input, by name. The AI never gives a path: only these files can leave this computer. */
+export interface TaskFile {
+  path: string
+  describe: string
+}
+
 export type MissionStatus = 'done' | 'needs_owner' | 'failed'
 
 export interface ToolboxDeps {
@@ -29,6 +35,8 @@ export interface ToolboxDeps {
   hosts: string[]
   /** Values the AI may type by name, `{{EMAIL}}`. */
   values: Record<string, TaskValue>
+  /** Files the AI may upload by name (`PICTURE`); without any, there is no upload tool. */
+  files?: Record<string, TaskFile>
   sleep: (ms: number) => Promise<void>
   /** One short line of progress for the owner. Never a secret. */
   say: (line: string) => void
@@ -95,6 +103,14 @@ const TOOLS: McpTool[] = [
   tool('report_result', 'Say how the mission ended: done (the account exists and is signed in), needs_owner (a person must continue) or failed. Call it once, last.', { status: { type: 'string', enum: ['done', 'needs_owner', 'failed'] }, reason: { type: 'string', description: 'One short sentence, in plain words' } }, ['status', 'reason'])
 ]
 
+const uploadTool = (names: string[]): McpTool =>
+  tool(
+    'browser_upload',
+    `Put one of the files the owner gave you into a file input of the page (an element listed as input:file; a site often hides it behind a button: use the input itself and never click a button that opens a file chooser). Files: ${names.join(', ')}.`,
+    { ref, file: { type: 'string', enum: names } },
+    ['ref', 'file']
+  )
+
 const fail = (text: string): McpToolResult => ({ text, isError: true })
 const ok = (text: string): McpToolResult => ({ text })
 
@@ -114,7 +130,7 @@ const fence = (body: string): string => `<page>\n${body.replace(/<(\/?page)/gi, 
 
 export class BrowserToolbox implements McpToolHost {
   readonly instructions = INSTRUCTIONS
-  readonly tools = TOOLS
+  readonly tools: McpTool[]
   private calls = 0
   private last: PageSnapshot | null = null
   /** The drop-down the AI opened last: an option clicked next belongs to it. */
@@ -124,6 +140,8 @@ export class BrowserToolbox implements McpToolHost {
   private readonly askWaitMs: number
 
   constructor(private readonly deps: ToolboxDeps) {
+    const names = Object.keys(deps.files ?? {})
+    this.tools = names.length > 0 ? [...TOOLS.slice(0, 4), uploadTool(names), ...TOOLS.slice(4)] : TOOLS
     this.maxCalls = deps.maxCalls ?? DEFAULT_MAX_CALLS
     this.askWaitMs = deps.askWaitMs ?? DEFAULT_ASK_WAIT_MS
   }
@@ -144,6 +162,8 @@ export class BrowserToolbox implements McpToolHost {
           return await this.type(str(args.ref), str(args.value), args.submit === true)
         case 'browser_select':
           return await this.select(str(args.ref), str(args.option))
+        case 'browser_upload':
+          return await this.upload(str(args.ref), str(args.file))
         case 'browser_press_key':
           return await this.pressKey(str(args.key))
         case 'browser_evaluate':
@@ -287,6 +307,17 @@ export class BrowserToolbox implements McpToolHost {
     const result = await this.carryOut({ do: 'select', ref: reference, text: option }, `Chose "${oneLine(option, 60)}" in "${this.labelOf(reference)}"`, false)
     if (!result.isError) this.deps.note(this.labelOf(reference), option)
     return result
+  }
+
+  private async upload(reference: string, name: string): Promise<McpToolResult> {
+    if (!REF.test(reference)) return fail('ref must be a label from browser_snapshot, like e12.')
+    const file = this.deps.files?.[name]
+    if (!file) return fail(`There is no file called "${name}" (${Object.keys(this.deps.files ?? {}).join(', ') || 'none was given'}).`)
+    const element = this.last?.elements.find((e) => e.ref === reference)
+    if (element?.role !== 'input:file') {
+      return fail(element ? `${reference} is not a file input (it is ${element.role}). A file goes into an element listed as input:file.` : `Look at the page first (browser_snapshot): ${reference} is not on the page you have seen.`)
+    }
+    return this.carryOut({ do: 'upload', ref: reference, path: file.path }, `Uploaded ${file.describe} into "${this.labelOf(reference)}"`, true)
   }
 
   private async pressKey(key: string): Promise<McpToolResult> {

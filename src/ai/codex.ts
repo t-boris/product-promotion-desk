@@ -15,12 +15,16 @@ import { CliEngine, type CliEngineOptions } from './cli-engine'
  * An agent mission (`task.agent`, DEC-018) is a different run: FULL ACCESS (`--dangerously-bypass-approvals-and-sandbox`, as MarkView starts
  * its agents; it also lets MCP tools run in exec mode, checked against 0.167) and the application's MCP server given with `-c`. The user's
  * own configuration stays ignored, so their other MCP servers (other browsers) are not loaded.
+ *
+ * A picture (`task.makeFiles`, DEC-019) runs in the folder named by the caller with `--sandbox workspace-write`: Codex's own image tool
+ * (`codex features list`: image_generation, stable) makes the file and writes it there. Checked once with the real CLI (a 1254x1254 PNG in 13k tokens).
  */
 export class CodexEngine extends CliEngine {
   readonly id = 'codex' as const
   readonly label = 'Codex'
   readonly toolFree = false
   readonly supportsAgent = true
+  readonly makesImages = true
   protected readonly binaryName = 'codex'
 
   constructor(options: CliEngineOptions = {}) {
@@ -31,12 +35,18 @@ export class CodexEngine extends CliEngine {
     return false
   }
 
+  /** A picture is made in the folder the caller names (the only exception to the scratch folder): the sandbox lets it write there. */
+  protected override taskCwd(task: AiTask): string | undefined {
+    return task.makeFiles?.dir
+  }
+
   protected buildArgs(task: AiTask, cwd: string): string[] {
     if (task.agent) return this.agentArgs(task.agent, cwd)
     return [
       'exec',
       '--sandbox',
-      'read-only',
+      // Making a picture needs to write the file in its folder; everything else may only read.
+      task.makeFiles ? 'workspace-write' : 'read-only',
       '--ignore-user-config',
       '--ignore-rules',
       '--skip-git-repo-check',

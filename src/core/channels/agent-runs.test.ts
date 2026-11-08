@@ -1,5 +1,7 @@
 // The AI agent on an account (DEC-018): what a mission needs, what it never shows the AI, how it asks the owner, how it ends.
 
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { AgentRun } from '../../shared/types'
 import { AiError } from '../ports'
@@ -24,12 +26,29 @@ const form = {
 }
 const home = { ...form, url: 'https://fake.test/home', title: 'Home', elements: [{ ref: 'e9', role: 'button', name: 'Profile' }] }
 
-/** An account with an e-mail and a saved password, and a page that shows the form. */
-async function ready(): Promise<World> {
+const PROFILE = {
+  firstName: 'Selena',
+  lastName: 'Marlowe',
+  displayName: 'Selena Marlowe',
+  username: 'selena.builds',
+  birthDate: '1989-04-02',
+  gender: 'female' as const,
+  place: 'Lisbon, Portugal',
+  about: 'I build Natal Mystic, a natal chart calculator.',
+  website: 'https://natal.example/',
+  pictureIdea: 'A friendly portrait of a woman at a desk'
+}
+
+/** An account with an e-mail and a saved password, and a page that shows the form. The profile is the owner's decision: approved, or absent when asked. */
+async function ready(options: { profile?: boolean } = {}): Promise<World> {
   const w = await makeReadyWorld()
   await w.call('accounts.setEmail', { accountId: w.account.id, email: EMAIL })
   await w.call('vault.savePassword', { accountId: w.account.id, loginName: EMAIL, password: PASSWORD })
   w.t.browser.page(w.account.id).responses = [{ match: 'agent-snapshot', value: form }]
+  if (options.profile !== false) {
+    await w.call('profile.save', { accountId: w.account.id, profile: PROFILE, purpose: 'Be the approachable developer for hobby astrologers' })
+    await w.call('profile.approve', { accountId: w.account.id })
+  }
   return w
 }
 const page = (w: World) => w.t.browser.page(w.account.id)
@@ -96,6 +115,26 @@ describe('what a mission needs before it starts', () => {
     const w = await ready()
     w.t.engine.installed = false
     expect(await w.refusal('agent.start', { accountId: w.account.id, kind: 'signup' })).toBe('engine_unavailable')
+  })
+
+  it('needs the profile the owner approved: none, a proposal and an edited profile are not enough (DEC-019)', async () => {
+    const w = await ready({ profile: false })
+    expect(await w.refusal('agent.start', { accountId: w.account.id, kind: 'signup' })).toBe('no_profile')
+    expect(await w.call('agent.canStart', { accountId: w.account.id, kind: 'signup' })).toMatchObject({ ready: false, reason: expect.stringContaining('no profile') })
+    await w.call('profile.save', { accountId: w.account.id, profile: PROFILE })
+    expect(await w.refusal('agent.start', { accountId: w.account.id, kind: 'signup' })).toBe('profile_not_approved')
+    await w.call('profile.approve', { accountId: w.account.id })
+    expect(await w.call('agent.canStart', { accountId: w.account.id, kind: 'signup' })).toEqual({ ready: true, reason: null })
+    // The owner changes a value: the profile is a proposal again until it is approved on purpose.
+    await w.call('profile.save', { accountId: w.account.id, profile: { ...PROFILE, about: 'Changed' } })
+    expect(await w.refusal('agent.start', { accountId: w.account.id, kind: 'profile' })).toBe('profile_not_approved')
+    expect(w.t.engine.calls).toEqual([])
+    expect(page(w).log).toEqual([])
+  })
+
+  it('does not know any other kind of task', async () => {
+    const w = await ready()
+    expect(await w.refusal('agent.start', { accountId: w.account.id, kind: 'post' as never })).toBe('invalid_input')
   })
 
   it('has no state before a mission, and refuses an account that does not exist', async () => {
@@ -192,6 +231,77 @@ describe('a mission', () => {
     expect(task.prompt).toContain('browser_navigate: https://fake.test/login\n')
     expect(task.prompt).not.toContain(EMAIL)
     expect(task.prompt).not.toContain(PASSWORD)
+  })
+
+  it('gives the AI the owner\'s profile to type, and invents nothing: the user name is a value, the password stays a secret', async () => {
+    const w = await ready()
+    asTheAI(w, async (_tools, call) => void (await call('report_result', { status: 'needs_owner', reason: 'stop' })))
+    await start(w)
+    await finished(w)
+    const prompt = w.t.engine.calls[0].prompt
+    expect(prompt).toContain('THE PROFILE')
+    expect(prompt).toContain('First name: Selena. Last name: Marlowe. Display name: Selena Marlowe. User name: selena.builds.')
+    expect(prompt).toContain('Birth date: 1989-04-02')
+    expect(prompt).toContain('Gender: female')
+    expect(prompt).toContain('Place: Lisbon, Portugal.')
+    expect(prompt).toContain('About-text: I build Natal Mystic, a natal chart calculator.')
+    expect(prompt).toContain('What the profile is for: Be the approachable developer for hobby astrologers')
+    expect(prompt).toContain('{{USERNAME}}')
+    expect(prompt).toContain('never invent a personal detail')
+    expect(prompt).not.toContain('invent a believable one')
+    expect(prompt).not.toContain(PASSWORD)
+    // No picture was made yet: no upload tool and no file are offered.
+    expect(prompt).not.toContain('browser_upload')
+    expect(prompt).not.toContain('PICTURE')
+  })
+
+  it('offers the approved picture by name only, and the AI puts it into a file input without ever seeing a path', async () => {
+    const w = await ready()
+    const png = join(w.core.dataDir, 'mine.png')
+    writeFileSync(png, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'))
+    await w.call('profile.setPicture', { accountId: w.account.id, path: png })
+    await w.call('profile.approve', { accountId: w.account.id })
+    page(w).responses = [
+      { match: 'agent-snapshot', value: { ...form, elements: [...form.elements, { ref: 'e4', role: 'input:file', name: 'Profile photo' }] } }
+    ]
+    let listed: string[] = []
+    let result: { text: string; isError?: boolean } = { text: '' }
+    asTheAI(w, async (tools, call) => {
+      listed = tools.tools.map((t) => t.name)
+      await call('browser_snapshot')
+      result = await call('browser_upload', { ref: 'e4', file: 'PICTURE' })
+      await call('report_result', { status: 'needs_owner', reason: 'stop' })
+    })
+    await start(w)
+    await finished(w)
+    expect(listed).toContain('browser_upload')
+    expect(result.isError).toBeFalsy()
+    const prompt = w.t.engine.calls[0].prompt
+    expect(prompt).toContain('PICTURE')
+    expect(prompt).not.toContain(w.core.dataDir)
+    expect(page(w).steps.at(-1)?.step).toMatchObject({ do: 'upload', ref: 'e4', path: join(w.core.dataDir, 'profiles', w.account.id, 'picture.png') })
+  })
+
+  it('fills in the profile of an account that exists: its own goal, only the profile fields, no password', async () => {
+    const w = await ready()
+    page(w).responses = [{ match: 'agent-snapshot', value: home }]
+    w.t.engine.on('agent.profile', async () => {
+      await w.t.bridge.host.call('report_result', { status: 'done', reason: 'Saved.' })
+      return 'Saved.'
+    })
+    await w.call('agent.start', { accountId: w.account.id, kind: 'profile' })
+    const run = await finished(w)
+    expect(run.kind).toBe('profile')
+    expect(run.status).toBe('done')
+    expect(run.summary).toContain('profile was filled in')
+    const task = w.t.engine.calls[0]
+    expect(task.label).toBe('agent.profile')
+    expect(task.prompt).toContain('already exists and is signed in')
+    expect(task.prompt).toContain('Change only the profile fields')
+    expect(task.prompt).toContain('About-text: I build Natal Mystic, a natal chart calculator.')
+    expect(task.prompt).not.toContain('{{PASSWORD}}')
+    expect(task.prompt).not.toContain(PASSWORD)
+    expect(page(w).signIns).toEqual([])
   })
 
   it('does not call it done when the AI says so but the site does not show a signed-in account', async () => {

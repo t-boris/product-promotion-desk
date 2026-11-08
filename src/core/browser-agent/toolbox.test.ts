@@ -203,6 +203,54 @@ describe('toolbox: acting', () => {
   })
 })
 
+describe('toolbox: uploading a file (DEC-019)', () => {
+  const withFile = (over: Partial<ToolboxDeps> = {}) => {
+    const t = setup({ files: { PICTURE: { path: '/data/profiles/a1/picture.png', describe: 'the profile picture' } }, ...over })
+    t.raw.snapshots = [form({ elements: [...form().elements, { ref: 'e6', role: 'input:file', name: 'Profile photo' }] })]
+    return t
+  }
+
+  it('has no upload tool when the mission has no file', () => {
+    expect(setup().toolbox.tools.map((tool) => tool.name)).not.toContain('browser_upload')
+    const names = withFile().toolbox.tools.map((tool) => tool.name)
+    expect(names).toContain('browser_upload')
+    expect(names.indexOf('browser_upload')).toBeLessThan(names.indexOf('browser_press_key'))
+  })
+
+  it('offers the file names as the only choice, never a path', () => {
+    const upload = withFile().toolbox.tools.find((tool) => tool.name === 'browser_upload')
+    expect(JSON.stringify(upload)).toContain('PICTURE')
+    expect(JSON.stringify(upload)).not.toContain('/data/profiles')
+  })
+
+  it('puts the named file into a file input the AI has seen', async () => {
+    const t = withFile()
+    await t.toolbox.call('browser_snapshot', {})
+    const result = await t.toolbox.call('browser_upload', { ref: 'e6', file: 'PICTURE' })
+    expect(result.isError).toBeUndefined()
+    expect(t.raw.steps.at(-1)?.step).toEqual({ do: 'upload', ref: 'e6', path: '/data/profiles/a1/picture.png' })
+    expect(t.said).toContain('Uploaded the profile picture into "Profile photo"')
+    expect(result.text).not.toContain('/data/profiles')
+  })
+
+  it('refuses a file that was not given, an element that is not a file input and one the AI has not seen', async () => {
+    const t = withFile()
+    await t.toolbox.call('browser_snapshot', {})
+    expect(await t.toolbox.call('browser_upload', { ref: 'e6', file: '/etc/passwd' })).toMatchObject({ isError: true, text: expect.stringContaining('no file called') })
+    expect(await t.toolbox.call('browser_upload', { ref: 'e3', file: 'PICTURE' })).toMatchObject({ isError: true, text: expect.stringContaining('not a file input') })
+    expect(await t.toolbox.call('browser_upload', { ref: 'e99', file: 'PICTURE' })).toMatchObject({ isError: true })
+    expect(await t.toolbox.call('browser_upload', { ref: 'x; alert(1)', file: 'PICTURE' })).toMatchObject({ isError: true })
+    expect(t.raw.steps).toEqual([])
+  })
+
+  it('says so when the page refuses the file, and does not pretend', async () => {
+    const t = withFile()
+    t.raw.stepAnswers = [{ status: 'refused', detail: 'e6 did not take the file (too large)' }]
+    await t.toolbox.call('browser_snapshot', {})
+    expect(await t.toolbox.call('browser_upload', { ref: 'e6', file: 'PICTURE' })).toMatchObject({ isError: true, text: expect.stringContaining('Nothing happened') })
+  })
+})
+
 describe('toolbox: the person', () => {
   it('asks once, tells the AI to call again while the person has not answered, then returns the answer', async () => {
     const t = setup()

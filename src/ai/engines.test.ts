@@ -198,6 +198,25 @@ describe('agent missions (DEC-018)', () => {
     ])
   })
 
+  it('Codex makes a picture in the folder it is given, with the sandbox that lets it write there and nowhere else (DEC-019)', async () => {
+    const out = mkdtempSync(join(tmpdir(), 'ppd-pic-'))
+    try {
+      const engine = new CodexEngine({ searchPaths: [binDir], env: env('ok') })
+      expect(engine.makesImages).toBe(true)
+      expect((new ClaudeCodeEngine({ searchPaths: [binDir], env: env('ok') }) as { makesImages?: boolean }).makesImages).toBeUndefined()
+      await engine.run({ label: 'accounts.picture', prompt: 'a portrait', makeFiles: { dir: out } })
+      const argv = read('argv').split('\n').filter(Boolean)
+      expect(argv.join('')).toContain('[--sandbox][workspace-write]')
+      expect(argv.join('')).toContain(`[--cd][${out}]`)
+      expect(argv.join(' ')).not.toMatch(/dangerously|mcp_servers/)
+      expect(realpathSync(read('cwd').trim())).toBe(realpathSync(out))
+      // The folder is the caller's: the engine does not remove it.
+      expect(existsSync(out)).toBe(true)
+    } finally {
+      rmSync(out, { recursive: true, force: true })
+    }
+  })
+
   it('keeps the text-only runs exactly as they were: no agent, no full access', async () => {
     await new ClaudeCodeEngine({ searchPaths: [binDir], env: env('ok') }).run({ label: 't', prompt: 'x' })
     expect(read('argv')).not.toMatch(/dangerously|\[--mcp-config\]/)

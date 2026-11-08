@@ -88,6 +88,11 @@ describe('snapshotScript: the page as a list of labelled elements', () => {
     expect(JSON.stringify(s)).not.toContain('hunter2')
   })
 
+  it('names a field once when the site repeats its label for screen readers', () => {
+    const s = runSnapshot({ interactive: [{ tag: 'input', attrs: { type: 'password' }, label: 'Password Password' }, { tag: 'input', attrs: { type: 'text' }, label: 'Mobile number or email Mobile number or email' }, { tag: 'button', text: 'Go Go Stop' }] })
+    expect(s.elements.map((e) => e.name)).toEqual(['Password', 'Mobile number or email', 'Go Go Stop'])
+  })
+
   it('keeps the field role of an input that the site calls a combobox, and shows what a drop-down holds', () => {
     const s = runSnapshot({
       interactive: [
@@ -111,6 +116,20 @@ describe('snapshotScript: the page as a list of labelled elements', () => {
       ]
     })
     expect(s.elements.map((e) => e.name)).toEqual(['Next'])
+  })
+
+  it('lists a file input even when the site hides it behind a button, because a file goes into the input itself', () => {
+    const s = runSnapshot({
+      interactive: [
+        { tag: 'input', attrs: { type: 'file' }, label: 'Profile photo', style: { display: 'none' }, rect: { width: 0, height: 0 } },
+        { tag: 'button', text: 'Change photo' },
+        { tag: 'button', text: 'Gone', style: { display: 'none' } }
+      ]
+    })
+    expect(s.elements.map((e) => [e.role, e.name])).toEqual([
+      ['input:file', 'Profile photo'],
+      ['button', 'Change photo']
+    ])
   })
 
   it('reports the messages of the site and a visible human check, and ignores a hidden frame', () => {

@@ -37,6 +37,11 @@ export interface AiTask {
    * FULL ACCESS, as the owner decided (like MarkView's agents). Without it the engine only answers with text, and a tool-free engine has no tools.
    */
   agent?: { server: string; launch: McpLaunch }
+  /**
+   * The engine may create files in this folder and nowhere else (the sandbox allows writing in it): the pictures of account profiles (DEC-019),
+   * made with the engine's own image tool. Only an engine with `makesImages` accepts it.
+   */
+  makeFiles?: { dir: string }
 }
 
 export type AiErrorKind = 'unavailable' | 'failed' | 'cancelled' | 'timeout' | 'invalid_output'
@@ -66,6 +71,8 @@ export interface AiEngine {
   readonly toolFree: boolean
   /** True when the engine can run an agent mission (`AiTask.agent`): it works the application's browser through the MCP server it is given. */
   readonly supportsAgent?: boolean
+  /** True when the engine can make a picture with its own image tool (`AiTask.makeFiles`). */
+  readonly makesImages?: boolean
   check(): Promise<EngineStatus>
   /** Resolves with the final text. A failure of the engine process rejects with AiError and never crashes the app. */
   run(task: AiTask, options?: AiRunOptions): Promise<string>
@@ -127,6 +134,8 @@ export type SignInStatus = 'submitted' | 'next_step' | 'no_form' | 'captcha' | '
 export type PageStep =
   | { do: 'type'; ref: string; text: string }
   | { do: 'select'; ref: string; text: string }
+  /** Puts a file (an absolute path, one the application chose) into a file input: a script cannot do this, the browser's own protocol does. */
+  | { do: 'upload'; ref: string; path: string }
   | { do: 'click'; ref: string }
   | { do: 'key'; key: 'Enter' | 'Tab' | 'Escape' }
 

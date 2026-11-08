@@ -1,6 +1,6 @@
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
-import { clickScript, describeFailure, existsScript, fileInputScript, fillScript, locateScript, mouseSeenScript, mouseWatchScript, pageReadingScript, prepareTypingScript, scriptClickScript, selectOptionScript, setValueScript, signInScript, typedScript, type PageReading } from './page-scripts'
+import { clickScript, describeFailure, existsScript, fileInputByRefScript, fileInputScript, fillScript, locateScript, mouseSeenScript, mouseWatchScript, pageReadingScript, prepareTypingScript, scriptClickScript, selectOptionScript, setValueScript, signInScript, typedScript, type PageReading } from './page-scripts'
 
 // A tiny DOM: enough to run the injected scripts and observe what they do.
 class FakeEvent {
@@ -148,6 +148,13 @@ describe('existence and file input probes', () => {
     const file = Object.assign(new FakeInput(), { type: 'file' })
     expect(run(fileInputScript('input[type="file"]'), makeRoot({ 'input[type="file"]': file }))).toBe(file)
     expect(run(fileInputScript('input'), makeRoot({ input: new FakeInput() }))).toBeNull()
+  })
+
+  it('finds a file input by the label of the snapshot, and nothing else gets in as a selector', () => {
+    const file = Object.assign(new FakeInput(), { type: 'file' })
+    expect(run(fileInputByRefScript('e4'), makeRoot({ '[data-ppd-ref="e4"]': file }))).toBe(file)
+    expect(run(fileInputByRefScript('e4'), makeRoot({ '[data-ppd-ref="e4"]': new FakeInput() }))).toBeNull()
+    expect(() => fileInputByRefScript('e4"],body[x="')).toThrow('Not an element label')
   })
 })
 

@@ -57,6 +57,8 @@ const closeUserWindow = (service: BrowserService, account: Account): void => {
 export class AccountsService {
   /** Called when a check finds an account signed out, so a saved password can sign it in again (DEC-014). */
   onSignedOut: ((account: Account) => void) | null = null
+  /** Called after an account was removed, so what belongs to it elsewhere (its profile pictures) goes too. */
+  onRemoved: ((account: Account) => Promise<void>) | null = null
 
   constructor(
     private readonly core: Core,
@@ -157,6 +159,7 @@ export class AccountsService {
     this.store.deleteAccount(account.id)
     // The password goes with the account: a removed account leaves nothing in the vault.
     this.core.secrets.delete(passwordKey(account.id))
+    await this.onRemoved?.(account)
     this.core.log.info('accounts', `Account removed: ${account.label}. Its stored browser session was erased.`)
     this.core.events.changed('accounts', 'attention')
   }

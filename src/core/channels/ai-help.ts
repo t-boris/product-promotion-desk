@@ -13,11 +13,12 @@
 // Neither function stores or sends anything. Engine failures never crash the caller: suggestChannels reports them as
 // AiError, draftSiteProfile turns them into manual instructions. A cancel is always rethrown.
 
-import type { ChannelPlan, ChannelPlanStep, ChannelSuggestion, PassportSection, PlanFormat, PlatformInfo, RoleSuggestion, SiteProfileDraft } from '../../shared/types'
+import type { AccountRole, ChannelPlan, ChannelPlanStep, ChannelSuggestion, PassportSection, PlanFormat, PlatformInfo, ProfileFields, RoleSuggestion, SiteProfileDraft } from '../../shared/types'
 import { AiError, type AiEngine, type AiRunOptions, type AiTask } from '../ports'
 import { extractJson, JsonExtractError } from '../passports/ai-json'
 import { redactSecrets } from '../passports/redact'
 import { collapseWhitespace, normalizeForCompare, truncate } from '../passports/text'
+import { MAX_AGE, MIN_AGE, missingIdentity, readProfileFields } from './profile-fields'
 
 // ───────────────────────────── shared helpers ─────────────────────────────
 
@@ -678,4 +679,122 @@ function readPlan(raw: unknown, input: PlanInput): Parsed<PlanDraft> {
  */
 export async function planChannel(engine: AiEngine, input: PlanInput, options: AiRunOptions = {}): Promise<PlanDraft> {
   return askWithRepair(engine, planPrompt(input), (raw) => readPlan(raw, input), options)
+}
+
+// ───────────────────────────── account profile (DEC-019) ─────────────────────────────
+
+export interface ProfileProposeInput {
+  /** What the account is for, in the owner's words; may be empty, then the AI states the purpose itself from the product and the role. */
+  purpose: string
+  product: { name: string; websiteUrl: string | null; description: string | null } | null
+  claims: { section: PassportSection; text: string }[]
+  platform: { platform: string; label: string }
+  role: AccountRole | null
+  /** The profiles other accounts already have on this platform: a new one must be a different person. */
+  others: { displayName: string; gender: string; birthYear: string; place: string; about: string }[]
+  /** Today, YYYY-MM-DD: ages are counted from it. */
+  today: string
+}
+
+export interface ProfileProposal {
+  purpose: string
+  strategy: string
+  fields: ProfileFields
+  reasons: Partial<Record<keyof ProfileFields, string>>
+}
+
+const MAX_STRATEGY = 700
+const MAX_PURPOSE = 300
+const MAX_REASON_TEXT = 220
+const PERSONA_TIMEOUT_MS = 180_000
+
+const PROFILE_PROPOSE_SYSTEM = [
+  'You are the strategist of a product owner who runs honest, product-connected logins on online platforms.',
+  'The owner will read your proposal and decide; you only propose.',
+  'You cannot browse, run code or use tools. Do not ask questions.',
+  'Reply with a single JSON object and nothing else.'
+].join(' ')
+
+const REASON_KEYS: (keyof ProfileFields)[] = ['firstName', 'lastName', 'displayName', 'username', 'birthDate', 'gender', 'place', 'about', 'website', 'pictureIdea']
+
+function profilePurposeBlock(input: ProfileProposeInput): string {
+  const others = input.others.slice(0, 12).map((o) => `- ${oneLine(o.displayName, 60)}; ${o.gender}; born ${o.birthYear || '?'}; ${oneLine(o.place, 60)}; ${oneLine(o.about, 120)}`)
+  return [
+    input.product ? productBlock(input.product, input.claims) : fence('product_data', 'The account is not tied to a product yet.'),
+    '',
+    `Platform: ${oneLine(input.platform.label, 60)} (${oneLine(input.platform.platform, 40)})`,
+    `Role of the login: ${input.role ? `${oneLine(input.role.name, 60)}: ${oneLine(input.role.voice, 280)}` : 'none chosen'}`,
+    `What the owner says this account is for: ${input.purpose ? oneLine(input.purpose, 400) : '(not said: state it yourself from the product, the platform and the role)'}`,
+    `Today: ${input.today}`,
+    '',
+    'Profiles that already exist on this platform (the new person must clearly differ from every one of them):',
+    others.length > 0 ? others.join('\n') : '(none)'
+  ].join('\n')
+}
+
+function profileProposePrompt(input: ProfileProposeInput): AiTask {
+  return {
+    label: 'accounts.profile',
+    system: PROFILE_PROPOSE_SYSTEM,
+    timeoutMs: PERSONA_TIMEOUT_MS,
+    prompt: [
+      profilePurposeBlock(input),
+      '',
+      'Task: propose the whole profile of the person who will use this login, thinking it through as a strategy.',
+      'First decide what the account is for and who it must reach on this platform: who the audience is, what they trust, how people of that kind introduce themselves there.',
+      'Then choose the person to fit that: age, gender, place, name, user name, the about-text and the picture. Every choice must serve the purpose and be explainable in one sentence.',
+      'Rules:',
+      '- The person is a fictional persona for a login that belongs to the product owner, and the login speaks honestly: the about-text says how the person is connected with the product when it mentions the product at all.',
+      '- Do not claim credentials, qualifications, jobs or experience that the approved statements above do not support. Do not present the login as an independent customer or neutral bystander.',
+      '- Invent a name that belongs to nobody famous. Do not use a real or famous person, brand or company as the name, the look or the story. The user name must not look official.',
+      `- The person is an adult: age ${MIN_AGE} to ${MAX_AGE}. Choose the age and gender that make the purpose credible on this platform, not a default.`,
+      '- Differ clearly from the profiles that already exist on this platform (name, age, place, voice).',
+      '- "birthDate" is YYYY-MM-DD. "gender" is "female", "male" or "other".',
+      `- "purpose" is one sentence (at most ${MAX_PURPOSE} characters): what this account is for. "strategy" is at most ${MAX_STRATEGY} characters: the audience, and why this person fits it.`,
+      '- "about" is the text of the profile in the person\'s own voice, at most 500 characters, plain words. "website" is an address or "".',
+      '- "pictureIdea" describes the picture in one or two sentences: who or what it shows, the style, the light, the mood, chosen for this audience. It must not show a real person\'s likeness, a logo of another company or any text.',
+      `- "reasons" has one short sentence (at most ${MAX_REASON_TEXT} characters) for each of: ${REASON_KEYS.join(', ')}.`,
+      '- Never include passwords, keys or other credentials.',
+      '',
+      'Answer with JSON of exactly this shape:',
+      '{"purpose":"...","strategy":"...","firstName":"...","lastName":"...","displayName":"...","username":"...","birthDate":"1988-03-14","gender":"female","place":"...","about":"...","website":"","pictureIdea":"...","reasons":{"firstName":"...","lastName":"...","displayName":"...","username":"...","birthDate":"...","gender":"...","place":"...","about":"...","website":"...","pictureIdea":"..."}}'
+    ].join('\n')
+  }
+}
+
+function readProfileProposal(raw: unknown, input: ProfileProposeInput): Parsed<ProfileProposal> {
+  if (!isRecord(raw)) return { ok: false, error: 'the answer must be a JSON object' }
+  const purpose = typeof raw.purpose === 'string' ? plainText(raw.purpose, MAX_PURPOSE) : ''
+  const strategy = typeof raw.strategy === 'string' ? plainText(raw.strategy, MAX_STRATEGY) : ''
+  if (!strategy) return { ok: false, error: '"strategy" is missing: say who the audience is and why this person fits it' }
+  const fields = readProfileFields(raw, new Date(`${input.today}T12:00:00Z`))
+  if (!fields.ok) return { ok: false, error: fields.error }
+  const missing = missingIdentity(fields.value)
+  if (missing.length > 0) return { ok: false, error: `missing: ${missing.join(', ')}` }
+  const value = fields.value
+  // The same backstops as for roles: nothing that claims what the statements do not support, nothing that looks like an outside voice or a secret.
+  for (const [key, text] of Object.entries({ about: value.about, strategy, pictureIdea: value.pictureIdea })) {
+    if (unsafe(text)) return { ok: false, error: `"${key}" contains something that must not be offered (a secret, a promise or an automation instruction)` }
+  }
+  if (unsupportedCredential(`${value.about}\n${value.displayName}`, input.claims)) return { ok: false, error: 'the about-text claims a credential or experience that the approved statements do not support' }
+  if (NEUTRAL_THIRD_PARTY.test(value.about)) return { ok: false, error: 'the about-text presents the login as an independent third party' }
+  const reasons: ProfileProposal['reasons'] = {}
+  if (isRecord(raw.reasons)) {
+    for (const key of REASON_KEYS) {
+      const reason = raw.reasons[key]
+      if (typeof reason === 'string' && reason.trim()) reasons[key] = plainText(reason, MAX_REASON_TEXT)
+    }
+  }
+  const sameName = input.others.some((o) => normalizeForCompare(o.displayName) === normalizeForCompare(value.displayName))
+  if (sameName) return { ok: false, error: 'the display name is already used by another profile on this platform; choose a different person' }
+  return { ok: true, value: { purpose: purpose || oneLine(input.purpose, MAX_PURPOSE), strategy, fields: value, reasons } }
+}
+
+/**
+ * Proposes the whole profile of an account as a strategy for a purpose (DEC-019): the audience first, then the person who fits it.
+ * A proposal only: the owner edits and approves it, and nothing is typed anywhere. Failures behave as in suggestChannels:
+ * one repair attempt, then AiError('invalid_output'); a cancel is rethrown.
+ */
+export async function proposeProfile(engine: AiEngine, input: ProfileProposeInput, options: AiRunOptions = {}): Promise<ProfileProposal> {
+  return askWithRepair(engine, profileProposePrompt(input), (raw) => readProfileProposal(raw, input), options)
 }

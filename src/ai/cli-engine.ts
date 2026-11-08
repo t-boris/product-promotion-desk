@@ -73,6 +73,11 @@ export abstract class CliEngine implements AiEngine {
    * Whether `task.cwd` may choose the folder the engine runs in. An engine that can read files must never be pointed at
    * a real folder by a caller, so it overrides this with false and always gets an empty scratch directory.
    */
+  /** The folder this task runs in, or undefined for an empty scratch folder. */
+  protected taskCwd(task: AiTask): string | undefined {
+    return this.honorsTaskCwd() ? task.cwd : undefined
+  }
+
   protected honorsTaskCwd(): boolean {
     return true
   }
@@ -153,7 +158,7 @@ export abstract class CliEngine implements AiEngine {
     // Unless the caller needs a specific folder (and the engine may be pointed at one), run in an empty scratch
     // directory so the engine has nothing to read by accident (no project instruction files, no repository, not the
     // user's home).
-    const requested = this.honorsTaskCwd() ? task.cwd : undefined
+    const requested = this.taskCwd(task)
     const scratch = requested ? null : mkdtempSync(join(tmpdir(), 'ppd-ai-'))
     const cwd = requested ?? scratch ?? tmpdir()
     options.onProgress?.(`Starting ${this.label}: ${task.label}`)

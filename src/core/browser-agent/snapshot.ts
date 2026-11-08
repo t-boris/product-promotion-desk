@@ -61,6 +61,8 @@ export function snapshotScript(): string {
     return true;
   };
   const clean = (value, max) => String(value || '').replace(/\\s+/g, ' ').trim().slice(0, max);
+  // A site often repeats the label for screen readers ("Password Password"): the name is the text once.
+  const once = (text) => { const w = text.split(' '); const h = w.length / 2; return w.length > 1 && w.length % 2 === 0 && w.slice(0, h).join(' ') === w.slice(h).join(' ') ? w.slice(0, h).join(' ') : text; };
   const selector = 'a[href],button,input,select,textarea,summary,[role=button],[role=link],[role=checkbox],[role=radio],[role=tab],[role=menuitem],[role=switch],[role=combobox],[role=option],[contenteditable=true],[onclick]';
   let counter = window.__ppdRefCounter || 0;
   const elements = [];
@@ -68,9 +70,10 @@ export function snapshotScript(): string {
   let options = 0;
   for (const el of all(selector, document)) {
     if (elements.length >= ${SNAPSHOT_MAX_ELEMENTS}) break;
-    if (!shown(el)) continue;
     const tag = el.tagName.toLowerCase();
     const type = (el.getAttribute('type') || '').toLowerCase();
+    // A site hides its file input behind a nice button: it is listed anyway, because a file goes into the input itself.
+    if (!shown(el) && !(tag === 'input' && type === 'file')) continue;
     if (tag === 'input' && type === 'hidden') continue;
     if (tag === 'a' && ++links > 25) continue;
     if (el.getAttribute('role') === 'option' && ++options > ${MAX_OPTION_ELEMENTS}) continue;
@@ -81,7 +84,7 @@ export function snapshotScript(): string {
     const role = tag === 'input' ? 'input:' + (type || 'text') : tag === 'textarea' || tag === 'select' ? tag : roleAttr || (tag === 'a' ? 'link' : tag);
     const labelledBy = (el.getAttribute('aria-labelledby') || '').split(' ').map((id) => { const t = id && document.getElementById(id); return t ? t.innerText : ''; }).join(' ');
     const label = el.labels && el.labels[0] ? el.labels[0].innerText : '';
-    const name = clean(el.getAttribute('aria-label') || labelledBy || label || el.innerText || el.placeholder || el.title || el.name || (type === 'submit' || type === 'button' ? el.value : ''), ${MAX_NAME});
+    const name = once(clean(el.getAttribute('aria-label') || labelledBy || label || el.innerText || el.placeholder || el.title || el.name || (type === 'submit' || type === 'button' ? el.value : ''), ${MAX_NAME}));
     const item = { ref: ref, role: role, name: name };
     if (tag === 'a') {
       try { const u = new URL(el.getAttribute('href'), location.href); item.to = u.host === location.host ? u.pathname.slice(0, 40) : u.host; } catch (e) { /* not a link we can describe */ }

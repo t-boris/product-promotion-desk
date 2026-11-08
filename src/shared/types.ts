@@ -254,7 +254,8 @@ export interface SignInResult {
 }
 
 /** What the browser agent can be asked to do on an account's own browser (DEC-017). More kinds follow: read, answer, set up a profile. */
-export type AgentTaskKind = 'signup'
+/** `signup`: create the account on the platform. `profile`: fill in the profile of an account that exists (about-text, place, website, picture). */
+export type AgentTaskKind = 'signup' | 'profile'
 export type AgentRunStatus = 'running' | 'done' | 'needs_owner' | 'failed' | 'stopped'
 
 /** Whether the browser agent can start on an account now, and if not, the one thing to do first, in plain words. */
@@ -290,6 +291,44 @@ export interface AgentRun {
   question: AgentQuestion | null
   startedAt: IsoTime
   finishedAt: IsoTime | null
+}
+
+export type ProfileGender = 'female' | 'male' | 'other'
+export type ProfileStatus = 'proposed' | 'approved'
+
+/** The personal values of a profile: what the owner edits and approves, and what every mission takes from the account instead of making things up. */
+export interface ProfileFields {
+  firstName: string
+  lastName: string
+  /** The name shown on the platform. */
+  displayName: string
+  username: string
+  /** YYYY-MM-DD; the person is an adult. */
+  birthDate: string
+  gender: ProfileGender
+  /** City and country, in words. */
+  place: string
+  /** The text "about me" / bio. */
+  about: string
+  /** An address shown on the profile, or empty. */
+  website: string
+  /** What the picture shows and how it looks, as one description; the picture is made from it. */
+  pictureIdea: string
+}
+
+/**
+ * The profile of an account (the owner's decision, proposed by the AI). It follows a PURPOSE: what the account is for. `strategy` is the AI's
+ * reading of it (the audience on this platform, why this person fits); `reasons` says why for each choice, so the owner can overrule it.
+ */
+export interface AccountProfile extends ProfileFields {
+  accountId: Id
+  purpose: string
+  strategy: string
+  reasons: Partial<Record<keyof ProfileFields, string>>
+  /** A picture exists for this profile (made by the AI or chosen by the owner). */
+  hasPicture: boolean
+  status: ProfileStatus
+  updatedAt: IsoTime
 }
 
 export interface AccountRole {

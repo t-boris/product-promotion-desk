@@ -7,7 +7,7 @@ import type { WebContents } from 'electron'
 import type { RawPage } from '../core/browser-session'
 import type { PageStep, PageStepResult, SignInForm, SignInStatus } from '../core/ports'
 import { pollUntil, withTimeout } from './poll'
-import { clickScript, describeFailure, existsScript, fileInputScript, fillScript, locateScript, markOptionScript, mouseSeenScript, mouseWatchScript, prepareTypingScript, scriptClickScript, selectOptionScript, setValueScript, signInScript, typedScript, type ActionResult, type LocatedElement } from './page-scripts'
+import { clickScript, describeFailure, existsScript, fileInputByRefScript, fileInputScript, fillScript, locateScript, markOptionScript, mouseSeenScript, mouseWatchScript, prepareTypingScript, scriptClickScript, selectOptionScript, setValueScript, signInScript, typedScript, type ActionResult, type LocatedElement } from './page-scripts'
 import { isAbortedNavigation, normalizeBrowserUrl } from './targets'
 
 const DEFAULT_LOAD_TIMEOUT_MS = 30_000
@@ -144,6 +144,16 @@ export class ElectronRawPage implements RawPage {
       return { status: 'done', detail: `Pressed ${step.key}.` }
     }
 
+    if (step.do === 'upload') {
+      try {
+        await this.putFile(fileInputByRefScript(step.ref), step.path, step.ref)
+      } catch (error) {
+        return { status: 'refused', detail: `${step.ref} did not take the file (${error instanceof Error ? error.message : String(error)}).` }
+      }
+      await settle()
+      return { status: 'done', detail: `Put the file into ${step.ref}.` }
+    }
+
     const located = await this.read<LocatedElement>(locateScript(step.ref))
     if (!located.ok) return { status: 'not_found', detail: `There is no element ${step.ref} on the page now: it changed since the snapshot.` }
 
@@ -243,6 +253,10 @@ export class ElectronRawPage implements RawPage {
 
   /** Sets the files of an <input type=file> through the DevTools protocol (a script cannot do this). */
   async uploadFile(selector: string, path: string): Promise<void> {
+    await this.putFile(fileInputScript(selector), path, selector)
+  }
+
+  private async putFile(expression: string, path: string, what: string): Promise<void> {
     if (!isAbsolute(path)) throw new Error('Only absolute file paths can be uploaded')
     const info = await stat(path)
     if (!info.isFile()) throw new Error('The upload path is not a file')
@@ -252,11 +266,11 @@ export class ElectronRawPage implements RawPage {
     const attachedHere = !debuggerApi.isAttached()
     if (attachedHere) debuggerApi.attach('1.3')
     try {
-      const evaluated = (await debuggerApi.sendCommand('Runtime.evaluate', { expression: fileInputScript(selector), returnByValue: false })) as {
+      const evaluated = (await debuggerApi.sendCommand('Runtime.evaluate', { expression, returnByValue: false })) as {
         result?: { objectId?: string }
       }
       const objectId = evaluated.result?.objectId
-      if (!objectId) throw new Error(`Could not upload: no file input matches "${selector}".`)
+      if (!objectId) throw new Error(`Could not upload: no file input matches "${what}".`)
       await debuggerApi.sendCommand('DOM.setFileInputFiles', { files: [path], objectId })
     } finally {
       if (attachedHere && debuggerApi.isAttached()) debuggerApi.detach()

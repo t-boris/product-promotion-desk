@@ -222,3 +222,13 @@
 72. A bad architectural decision is never taken, and never offered as the recommendation. "Needs approval" (a new library, a native module, a changed architecture) is a reason to name the right design and ask for the approval, not a reason to design around it. If two designs differ, the first one I describe is the one I believe is right.
 73. When the owner points at a reference product (MarkView) the default is to match its model, including its permissions, unless I can name a concrete harm in this product; "it is safer" alone is not a reason to take away what the owner asked for. Say the harm once, then follow their decision.
 
+
+## 2026-11-08 (after the live dry run): "Name, surname, photo are a strategic choice. Propose a variant and ask. An account is more than a user name and a password."
+
+**What happened.** The live missions (Claude Code and Codex) filled the Facebook form completely, and both made up a name, a surname, a birth date and a gender on their own, with no word from the owner. The owner pointed out that a person for an account is a strategic decision (who this login is, to whom it speaks, what it looks like), not a random pick. The photo has to be made up as well, and an account carries a whole profile.
+
+**Rules for myself.**
+
+74. An invented identity (name, surname, user name, birth date, gender, place, about-text, photo) is never the AI's silent choice. The AI PROPOSES the whole set, built from the account's role, the product and the platform, the owner approves or edits it once, and it is stored on the account; every mission after that uses the stored profile and asks only for what the profile lacks.
+75. "Fill every field" in a goal means "fill every field from the owner's decisions". When a dry run shows the AI deciding something the owner has not seen, that is the finding of the run, not a detail to leave for later.
+76. A profile follows a PURPOSE. Before choosing any detail the AI states what the account is for (the product, the audience on this platform, the role) and every choice (age, gender, place, about-text, picture) is justified by that purpose in a line the owner can read and overrule. A profile with no stated purpose is a random one.

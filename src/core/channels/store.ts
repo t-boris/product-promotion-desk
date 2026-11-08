@@ -1,6 +1,6 @@
 // Persistence for accounts and channels. Rows are mapped by the shared mappers in ../repos.
 
-import type { Account, AccountRole, Mailbox, AccountStatus, Capability, Channel, ChannelMode, ChannelPlan, ChannelSettings, ChannelStatus } from '../../shared/types'
+import type { Account, AccountProfile, AccountRole, Mailbox, ProfileFields, ProfileGender, ProfileStatus, AccountStatus, Capability, Channel, ChannelMode, ChannelPlan, ChannelSettings, ChannelStatus } from '../../shared/types'
 import { newId, toJson, type Db } from '../db/database'
 import type { Clock } from '../ports'
 import { mapMailbox, type Repos } from '../repos'
@@ -88,6 +88,63 @@ export class ChannelsStore {
 
   markLoginAttempt(id: string, at: string): void {
     this.db.prepare('UPDATE accounts SET last_login_attempt_at = ? WHERE id = ?').run(at, id)
+  }
+
+  // ───────────── account profiles (DEC-019) ─────────────
+
+  /** The profile of an account and the name of its picture file, or null when none was made yet. */
+  profile(accountId: string): { profile: AccountProfile; pictureFile: string | null } | null {
+    const row = this.db.prepare('SELECT * FROM account_profiles WHERE account_id = ?').get(accountId) as Record<string, unknown> | undefined
+    if (!row) return null
+    const pictureFile = (row.picture_file as string | null) ?? null
+    let reasons: AccountProfile['reasons']
+    try {
+      reasons = JSON.parse(String(row.reasons_json || '{}')) as AccountProfile['reasons']
+    } catch {
+      reasons = {}
+    }
+    return {
+      pictureFile,
+      profile: {
+        accountId,
+        purpose: String(row.purpose),
+        strategy: String(row.strategy),
+        firstName: String(row.first_name),
+        lastName: String(row.last_name),
+        displayName: String(row.display_name),
+        username: String(row.username),
+        birthDate: String(row.birth_date),
+        gender: row.gender as ProfileGender,
+        place: String(row.place),
+        about: String(row.about),
+        website: String(row.website),
+        pictureIdea: String(row.picture_idea),
+        reasons,
+        hasPicture: pictureFile !== null,
+        status: row.status as ProfileStatus,
+        updatedAt: String(row.updated_at)
+      }
+    }
+  }
+
+  /** The profiles of the other accounts on a platform, so that a new person differs from them. */
+  profilesOnPlatform(platform: string, exceptAccountId: string): AccountProfile[] {
+    const rows = this.db.prepare('SELECT a.id FROM accounts a JOIN account_profiles p ON p.account_id = a.id WHERE a.platform = ? AND a.id != ?').all(platform, exceptAccountId) as { id: string }[]
+    return rows.flatMap((row) => this.profile(row.id)?.profile ?? [])
+  }
+
+  saveProfile(accountId: string, data: { purpose: string; strategy: string; fields: ProfileFields; reasons: AccountProfile['reasons']; status: ProfileStatus; pictureFile: string | null }): AccountProfile {
+    const f = data.fields
+    this.db
+      .prepare(
+        `INSERT INTO account_profiles (account_id, purpose, strategy, first_name, last_name, display_name, username, birth_date, gender, place, about, website, picture_idea, reasons_json, picture_file, status, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(account_id) DO UPDATE SET purpose = excluded.purpose, strategy = excluded.strategy, first_name = excluded.first_name, last_name = excluded.last_name,
+           display_name = excluded.display_name, username = excluded.username, birth_date = excluded.birth_date, gender = excluded.gender, place = excluded.place, about = excluded.about,
+           website = excluded.website, picture_idea = excluded.picture_idea, reasons_json = excluded.reasons_json, picture_file = excluded.picture_file, status = excluded.status, updated_at = excluded.updated_at`
+      )
+      .run(accountId, data.purpose, data.strategy, f.firstName, f.lastName, f.displayName, f.username, f.birthDate, f.gender, f.place, f.about, f.website, f.pictureIdea, JSON.stringify(data.reasons), data.pictureFile, data.status, this.clock.now().toISOString())
+    return (this.profile(accountId) as { profile: AccountProfile }).profile
   }
 
   deleteAccount(id: string): void {

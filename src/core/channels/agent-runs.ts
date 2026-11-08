@@ -9,11 +9,12 @@
 // engine ends, the site's own answer decides (the connector's login check), not the AI's opinion.
 
 import { ApiError } from '../../shared/api'
-import type { Account, AgentAsk, AgentReadiness, AgentRun, AgentTaskKind } from '../../shared/types'
+import type { Account, AccountProfile, AgentAsk, AgentReadiness, AgentRun, AgentTaskKind } from '../../shared/types'
 import { AiError, TakeoverError, type AiEngine } from '../ports'
 import { missionPrompt, type Mission } from '../browser-agent/mission'
 import { BrowserToolbox, type MissionStatus } from '../browser-agent/toolbox'
 import type { Core } from '../core'
+import type { AccountProfileService } from './account-profile'
 import type { AccountsService } from './accounts'
 import { BROWSER_BUSY, found } from './errors'
 import { presetFor } from './presets'
@@ -40,7 +41,8 @@ export class AgentRunService {
   constructor(
     private readonly core: Core,
     private readonly accounts: AccountsService,
-    private readonly vault: VaultService
+    private readonly vault: VaultService,
+    private readonly profiles: AccountProfileService
   ) {}
 
   state(accountId: unknown): AgentRun | null {
@@ -107,9 +109,12 @@ export class AgentRunService {
     }
   }
 
-  /** What a run needs: a known kind, no run going, an engine that can work the browser and is ready, an e-mail and a saved password. */
+  /**
+   * What a run needs: a known kind, no run going, an engine that can work the browser and is ready, an e-mail and a saved password, and the
+   * profile the owner approved (DEC-019): the AI invents no personal detail, it types the owner's decision.
+   */
   private async prerequisites(account: Account, kind: AgentTaskKind): Promise<{ engine: AiEngine; mission: Mission }> {
-    if (kind !== 'signup') throw new ApiError('invalid_input', 'This kind of task is not known.')
+    if (kind !== 'signup' && kind !== 'profile') throw new ApiError('invalid_input', 'This kind of task is not known.')
     if (this.runs.get(account.id)?.run.status === 'running') throw new ApiError('agent_running', `The AI is already working on ${account.label}.`)
 
     const engine = this.core.engines.selected()
@@ -119,22 +124,23 @@ export class AgentRunService {
     const status = await engine.check()
     if (!status.installed || !status.ready) throw new ApiError('engine_unavailable', status.detail || `${engine.label} is not available.`)
 
-    return { engine, mission: this.signUpMission(account) }
+    return { engine, mission: kind === 'signup' ? this.signUpMission(account) : this.profileMission(account) }
   }
 
   /** Starts a mission and returns at once; it goes on in the background and is read with `state`. */
   async start(args: { accountId: string; kind: AgentTaskKind }): Promise<AgentRun> {
     const account = this.accounts.account(args.accountId)
     const { engine, mission } = await this.prerequisites(account, args.kind)
+    const kind = args.kind
     const live: Live = {
       abort: new AbortController(),
       answer: null,
       reported: null,
       run: {
         accountId: account.id,
-        kind: 'signup',
+        kind,
         status: 'running',
-        summary: 'The AI is opening the registration page.',
+        summary: kind === 'signup' ? 'The AI is opening the registration page.' : 'The AI is opening the profile page.',
         lines: [],
         typed: [],
         question: null,
@@ -143,11 +149,11 @@ export class AgentRunService {
       }
     }
     this.runs.set(account.id, live)
-    this.core.log.info('accounts', `The AI started to register ${account.label} on ${mission.hosts[0] ?? 'the platform'} (${engine.label}).`)
+    this.core.log.info('accounts', `The AI started to ${kind === 'signup' ? 'register' : 'fill in the profile of'} ${account.label} on ${mission.hosts[0] ?? 'the platform'} (${engine.label}).`)
     this.core.events.changed('accounts')
     // The owner watches the AI work in the account's own browser.
     this.core.browser.showAgentBrowser?.(account)
-    void this.drive(account, live, mission, engine)
+    void this.drive(account, live, mission, engine, kind)
     return snapshot(live.run)
   }
 
@@ -158,39 +164,77 @@ export class AgentRunService {
     const target = this.accounts.signUpTarget(account)
     const platform = presetFor(account.platform)?.label ?? account.platform
 
-    const facts = [`The account is called "${account.label}" by the owner. It will be used on ${platform}.`]
+    const profile = this.profiles.approved(account)
+
+    const facts = this.contextFacts(account, platform)
+    facts.push(...profileFacts(profile))
+    facts.push('Use the same e-mail address and password everywhere. Do not tick optional boxes about ads, newsletters or contacts; tick only what the site requires to continue.')
+
+    const values: Mission['values'] = {
+      EMAIL: { value: account.email, describe: 'the e-mail address of the account (use it wherever the site asks for an e-mail address or login)', secret: false },
+      PASSWORD: { value: password, describe: 'the password of the account', secret: true },
+      USERNAME: { value: profile.username, describe: 'the user name the account should have, if the site asks for one', secret: false }
+    }
+
+    return {
+      goal: `Create a new account on ${platform} for the owner, with the profile below: fill in everything the site needs, and make sure the account exists and is signed in.`,
+      facts,
+      startUrl: target.url,
+      hosts: target.hosts,
+      values,
+      files: this.pictureFiles(account, profile)
+    }
+  }
+
+  /** The profile of an account that is already signed in: the about-text, the place, the website and the picture (DEC-019). */
+  private profileMission(account: Account): Mission {
+    const profile = this.profiles.approved(account)
+    const target = this.accounts.signInTarget(account)
+    const platform = presetFor(account.platform)?.label ?? account.platform
+    const facts = this.contextFacts(account, platform)
+    facts.push(...profileFacts(profile))
+    return {
+      goal: `The account on ${platform} already exists and is signed in. Open its profile settings and fill in the profile below: the display name, the about-text, the place, the website (only where the site has those fields) and the picture.`,
+      facts,
+      startUrl: target.url,
+      hosts: target.hosts,
+      values: {},
+      files: this.pictureFiles(account, profile),
+      rules: [
+        'Change only the profile fields named in the facts. Do not change the e-mail address, the password, the user name or any privacy or security setting.',
+        'If the site shows a sign-in page instead of the account, the account is not signed in: report needs_owner and say so.',
+        'A field the site does not have is skipped without a word; do not hunt for it. Save the profile if the site has a save button, then look at the profile page again to confirm the values are shown.'
+      ]
+    }
+  }
+
+  /** What the owner knows about the account, the role and the product: the strategy the profile serves. */
+  private contextFacts(account: Account, platform: string): string[] {
+    const facts = [`The account is called "${account.label}" by the owner. It is used on ${platform}.`]
     if (account.role) facts.push(`It speaks as "${account.role.name}": ${account.role.voice}`)
     if (account.productId) {
       const product = found(() => this.core.repos.product(account.productId as string), 'The product')
       facts.push(`It is first used to promote "${product.name}"${product.websiteUrl ? ` (${product.websiteUrl})` : ''}.${product.description ? ` ${product.description.slice(0, MAX_FACT)}` : ''}`)
     }
-    facts.push('Choose a display name that fits the role and the account name, and a birth date that makes the person an adult (30 to 45 years old). Use the same e-mail address and password everywhere.')
-    facts.push('Do not tick optional boxes about ads, newsletters or contacts; tick only what the site requires to continue.')
-
-    const values: Mission['values'] = {
-      EMAIL: { value: account.email, describe: 'the e-mail address of the account (use it wherever the site asks for an e-mail address or login)', secret: false },
-      PASSWORD: { value: password, describe: 'the password of the account', secret: true }
-    }
-    if (account.loginName && account.loginName !== account.email) values.USERNAME = { value: account.loginName, describe: 'the user name the account should have, if the site asks for one', secret: false }
-
-    return {
-      goal: `Create a new account on ${platform} for the owner: fill in everything the site needs, and make sure the account exists and is signed in.`,
-      facts,
-      startUrl: target.url,
-      hosts: target.hosts,
-      values
-    }
+    return facts
   }
 
-  private async drive(account: Account, live: Live, mission: Mission, engine: AiEngine): Promise<void> {
+  /** The picture of the profile, when there is one: the AI uploads it by name and never sees a path. */
+  private pictureFiles(account: Account, profile: AccountProfile): Mission['files'] {
+    const path = profile.hasPicture ? this.profiles.pictureFile(account.id) : null
+    return path ? { PICTURE: { path, describe: 'the profile picture the owner approved (upload it where the site asks for a profile photo or an avatar)' } } : undefined
+  }
+
+  private async drive(account: Account, live: Live, mission: Mission, engine: AiEngine, kind: AgentTaskKind): Promise<void> {
     const bridge = this.core.agentBridge
     if (!bridge) return this.finish(live, 'failed', 'The AI browser agent is not available in this build.')
     const session = this.core.browser.session(account)
     const toolbox = new BrowserToolbox({
       // Each call holds the browser only for itself, so the owner can take it between two calls.
-      withPage: (work) => session.withAgentControl('agent-signup', work),
+      withPage: (work) => session.withAgentControl(`agent-${kind}`, work),
       hosts: mission.hosts,
       values: mission.values,
+      files: mission.files,
       sleep: this.core.sleep,
       say: (line) => this.say(live, line),
       ask: (question) => this.ask(live, question),
@@ -202,19 +246,19 @@ export class AgentRunService {
     try {
       opened = await bridge.open(toolbox)
       const said = await engine.run(
-        { label: 'agent.signup', prompt: missionPrompt(mission, this.core.clock.now().toISOString().slice(0, 10)), agent: { server: SERVER_NAME, launch: opened.launch }, timeoutMs: RUN_TIMEOUT_MS },
+        { label: `agent.${kind}`, prompt: missionPrompt(mission, this.core.clock.now().toISOString().slice(0, 10)), agent: { server: SERVER_NAME, launch: opened.launch }, timeoutMs: RUN_TIMEOUT_MS },
         { signal: live.abort.signal }
       )
       if (live.run.status !== 'running') return // stopped by the owner while the engine was ending
       if (said.trim()) this.say(live, `The AI: ${said.trim().replace(/\s+/g, ' ').slice(0, 240)}`)
-      await this.conclude(account, live)
+      await this.conclude(account, live, kind)
     } catch (error) {
       if (live.run.status !== 'running') return
       if (error instanceof AiError && error.kind === 'cancelled') return this.finish(live, 'stopped', 'The AI was stopped.')
       if (error instanceof AiError && error.kind === 'timeout') return this.finish(live, 'needs_owner', 'The AI did not finish in half an hour and was stopped. Open the browser and look at where it got to.')
       if (error instanceof TakeoverError || (error instanceof ApiError && error.code === 'browser_busy')) return this.finish(live, 'needs_owner', BROWSER_BUSY)
       const reason = error instanceof Error ? error.message : String(error)
-      this.core.log.warn('accounts', `The AI could not register ${account.label}: ${reason}`)
+      this.core.log.warn('accounts', `The AI could not ${kind === 'signup' ? 'register' : 'fill in the profile of'} ${account.label}: ${reason}`)
       this.finish(live, 'failed', `The AI stopped because of an error: ${reason}`)
     } finally {
       this.dropQuestion(live, 'The mission is over.')
@@ -223,7 +267,7 @@ export class AgentRunService {
   }
 
   /** The engine has ended: the site's own answer decides whether the account exists, whatever the AI said. */
-  private async conclude(account: Account, live: Live): Promise<void> {
+  private async conclude(account: Account, live: Live, kind: AgentTaskKind): Promise<void> {
     const reported = live.reported
     // The AI stopped for something only a person can do: the page is where the person continues, so nothing is loaded over it
     // (the check opens another page) and nothing is signed in on the side.
@@ -235,6 +279,10 @@ export class AgentRunService {
     const checked = await this.accounts.checkLogin(account.id, { signInAgain: false })
     if (live.run.status !== 'running') return
     if (checked.status === 'ready') {
+      if (kind === 'profile') {
+        this.core.log.info('accounts', `The AI filled in the profile of ${account.label}.`)
+        return this.finish(live, 'done', 'The profile was filled in. Open the account browser to look at it.')
+      }
       this.core.log.info('accounts', `The AI registered ${account.label}${checked.identity ? ` as ${checked.identity}` : ''}.`)
       return this.finish(live, 'done', checked.identity ? `The account was created and signed in as ${checked.identity}.` : 'The account was created and signed in.')
     }
@@ -286,6 +334,18 @@ export class AgentRunService {
     live.run.finishedAt = this.core.clock.now().toISOString()
     this.core.events.changed('accounts', 'attention')
   }
+}
+
+/** The approved profile as facts for the AI: exactly what it types, and why the profile is what it is. */
+function profileFacts(profile: AccountProfile): string[] {
+  const facts = ['THE PROFILE (the owner approved it; type exactly these values and never invent another personal detail):']
+  if (profile.purpose) facts.push(`What the profile is for: ${profile.purpose}`)
+  facts.push(`First name: ${profile.firstName}. Last name: ${profile.lastName}. Display name: ${profile.displayName}. User name: ${profile.username}.`)
+  facts.push(`Birth date: ${profile.birthDate} (day, month and year as the form asks). Gender: ${profile.gender}.`)
+  if (profile.place) facts.push(`Place: ${profile.place}.`)
+  if (profile.about) facts.push(`About-text: ${profile.about}`)
+  if (profile.website) facts.push(`Website: ${profile.website}`)
+  return facts
 }
 
 const snapshot = (run: AgentRun): AgentRun => ({ ...run, lines: [...run.lines], typed: run.typed.map((t) => ({ ...t })), question: run.question ? { ...run.question } : null })

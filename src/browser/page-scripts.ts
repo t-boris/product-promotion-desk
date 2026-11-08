@@ -78,6 +78,14 @@ export function fileInputScript(selector: string): string {
 })()`
 }
 
+/** The same, for a labelled element of the snapshot: the label is checked, so a selector can never get in. */
+export function fileInputByRefScript(ref: string): string {
+  return `(() => {${DEEP_QUERY}
+  const el = deepQuery(${refSelector(ref)}, document);
+  return el && el.tagName === 'INPUT' && el.type === 'file' ? el : null;
+})()`
+}
+
 export function describeFailure(action: string, selector: string, result: ActionResult | null | undefined): Error {
   const reason = result?.reason ?? 'no_result'
   const why: Record<string, string> = {

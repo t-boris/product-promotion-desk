@@ -8,7 +8,9 @@ import type {
   AgentRun,
   AgentTaskKind,
   Account,
+  AccountProfile,
   AccountRole,
+  ProfileFields,
   BrowserState,
   PageReport,
   Mailbox,
@@ -151,6 +153,14 @@ export interface ApiMethods {
   /** The owner answers the AI's question (the pop-up): a text, or "done" for "I did it". */
   /** Brings the browser the AI works in to the front, for the owner to act in the page the AI waits on (a CAPTCHA). */
   'agent.showBrowser': [{ accountId: Id }, { shown: boolean }]
+  'profile.get': [{ accountId: Id }, AccountProfile | null]
+  /** The AI proposes the whole profile as a strategy for a purpose (a proposal only; the owner approves). */
+  'profile.propose': [{ accountId: Id; purpose?: string }, AccountProfile]
+  'profile.save': [{ accountId: Id; profile: ProfileFields; purpose?: string }, AccountProfile]
+  'profile.approve': [{ accountId: Id }, AccountProfile]
+  'profile.makePicture': [{ accountId: Id }, AccountProfile]
+  'profile.setPicture': [{ accountId: Id; path: string }, AccountProfile]
+  'profile.picture': [{ accountId: Id }, { dataUrl: string } | null]
   'agent.answer': [{ accountId: Id; answer: string }, AgentRun | null]
   /** Every question an AI is waiting on now, for the pop-up that appears on any screen. */
   'agent.questions': [void, AgentAsk[]]

@@ -277,18 +277,47 @@ Design:
 2. MCP server = the app binary in Node mode (`ELECTRON_RUN_AS_NODE=1`, checked), a second main-build entry `mcp-shim`; it relays JSON-RPC lines over one persistent Unix-socket connection (token in the first line) to the app; the app (core, pure) answers `initialize`, `tools/list`, `tools/call`. Core stays Electron-free: the socket lives in main behind a port `AgentBridge.open(handler) -> launch spec`.
 3. Tools: `browser_snapshot` (refs `e12`, alerts, human-check flag), `browser_navigate`, `browser_click`, `browser_type`, `browser_select`, `browser_press_key`, `browser_evaluate`, `browser_screenshot`, `browser_wait_for`; and the app's own `ask_owner(question)` (pop-up; blocks, long-polling about 45 s per call, until the person answers), `note_value(label, value)` (what the AI invented for the account), `report_result(done|needs_owner|failed, reason)`. A password is written `{{PASSWORD}}` and typed by the app into a password field; the real value is never in the transcript or the log.
 4. The server keeps sanity rules (not a security boundary now): navigation and steps only on the platform's hosts, only refs from the last snapshot, a bounded number of calls.
-5. Control: the mission runs inside `withAgentControl`; the owner opening the account's browser (takeover) and Stop still work. The pop-up has "Open the browser" for a CAPTCHA.
-6. End: the engine exits; then the site decides: the connector's login check says whether the account is signed in, whatever the AI claimed.
-7. Progress: the existing panel of the account (steps, Stop) is reused; each tool call becomes a plain line. The pop-up is an app-level modal that appears on any screen when a run asks.
-8. Publishing is unchanged: the AI prepares, the owner approves, the app sends (REQ-004, tickets).
+5. The internal browser is SHOWN: while a mission runs, the account's own browser (the persistent partition the app already has) is opened in a visible window beside the app and the AI works in it, so the owner watches everything it does (owner, 2026-11-08: "every time we do something, we do it inside this browser; only the terminal is not needed"). The window is shown without taking focus; closing it only hides it. Real mouse input should also reach a visible tab (the hidden tab dropped it).
+6. Control: each tool call runs inside its own short `withAgentControl` (so the owner can take the browser between calls: a CAPTCHA, a code), and a call that finds the owner holding the browser answers "the owner has the browser; wait with ask_owner". The pop-up has "Open the browser" and "I am done".
+7. End: the engine exits; then the site decides: the connector's login check says whether the account is signed in, whatever the AI claimed.
+8. Progress: the existing panel of the account (steps, Stop) is reused; each tool call becomes a plain line. The pop-up is an app-level modal that appears on any screen when a run asks.
+9. Publishing is unchanged: the AI prepares, the owner approves, the app sends (REQ-004, tickets).
 
 Steps:
 1. [x] MCP side de-risked (2026-11-08): a stub MCP server run from the installed app binary in Node mode is called by Claude Code and Codex 0.167 in `-p` / `exec` and in interactive PTY sessions; a tool that blocks 90 s is waited for by both. Findings: Claude's `--mcp-config` is variadic (prompt first when it is an argument; with stdin no problem); interactive-only facts (trust dialog, `--ignore-user-config` exec-only, `spawn-helper` needs +x) no longer matter without a PTY; Codex needs `default_tools_approval_mode="approve"` for MCP tools in `exec` unless the bypass flag covers it (to verify); the owner's Codex is at 18% of its weekly limit.
 2. [ ] Core: MCP protocol handler, tool list, executor over `BrowserPage` (snapshot, pageStep and the checks of 0.4.0 move here), port `AgentBridge`, `AiTask.agent` for the engines, mission service (`agent-runs.ts` rewritten), `ask_owner` state and `agent.answer`.
 3. [ ] Engines: argument building for Claude and Codex with full access and the MCP (tests on the exact arguments).
-4. [ ] Main: Unix-socket gateway, the `mcp-shim` entry, wiring in `index.ts`; check that the shim runs from the packaged `app.asar` in Node mode.
+4. [ ] Main: Unix-socket gateway, the `mcp-shim` entry, wiring in `index.ts`; the visible agent window (`BrowserService.showAgent`); check that the shim runs from the packaged `app.asar` in Node mode.
 5. [ ] UI: pop-up for the question, the existing panel; remove "tool-free" wording and gating.
 6. [ ] Remove the round loop of 0.4.0 (`plan.ts`, `agent.ts`); keep `snapshot.ts` and `pageStep`.
 7. [ ] Tests, typecheck, lint; live dry run on the real Facebook form with real Claude Code and real Codex (submit not pressed), including a pretended CAPTCHA through `ask_owner`; then release 0.5.0.
 
 Not verified yet: a real submit and what follows (e-mail code, phone check); the cost of a run against the owner's subscription; Codex `exec` with the bypass flag and MCP approval; the shim from the packaged asar.
+
+### Addendum to 0.5.0 (owner, after the live dry run, 2026-11-08): the account has a PROFILE, and the AI proposes it, the owner decides
+
+Finding of the dry runs (real Claude Code and real Codex on the real Facebook form, nothing submitted): both filled everything in about 20-40 s, and both MADE UP the name, surname, birth date and gender by themselves. Owner: that is a strategic choice, the AI must propose a variant and ask; the photo has to be made up as well; an account is much more than a user name and a password. (Lessons 74, 75.) The pop-up with the question stays as it is, with its answer field (owner: keep it).
+
+The right design (named first, per lesson 72):
+1. Account profile = first name, last name, display name, user name, birth date, gender, place, about-text, website, avatar picture (a file in the app's data folder). Stored on the account in the database (a migration); the password stays in the vault.
+2. `profile.propose(account)`: the text engine builds a proposal from the role, the product, the platform and the e-mail, with one line of reasoning per choice (like `roles.suggest`). The owner edits and approves it once in the account card (a block "Profile"; a layout mock is shown first). A mission without an approved profile does not start; it says so.
+3. The mission takes every value from the profile as a placeholder (`{{FIRST_NAME}}`, `{{LAST_NAME}}`, `{{USERNAME}}`, `{{BIRTH_DATE}}`, ...). A field the site asks for and the profile lacks: the AI proposes a value with `ask_owner`, the answer is saved into the profile.
+4. Picture: made by an image tool, shown to the owner, used only after approval; uploaded into the site by a new tool `browser_upload` (file input) from the profile's folder. Codex lists `image_generation` as a stable enabled feature (checked with `codex features list`; NOT tried in `exec` yet, and Claude Code has none).
+5. After the account exists, a second mission "fill in the profile" (about-text, picture) uses the same stored profile.
+
+Interim rule for the first build (same mechanism, no new screen): the mission prompt tells the AI to PROPOSE every invented personal detail with `ask_owner` and wait for the owner's yes or corrections before typing it.
+
+Owner, same day: "He must have a strategic vision, he must understand what I make this profile for, and choose the matching age, gender and everything else, even the picture." So the profile carries a PURPOSE (the owner's words, prefilled from the product and the role) and a STRATEGY (the AI's reading: the audience on this platform and why this person fits it), and each field has its reason.
+
+Decisions of the owner (2026-11-08): (1) the AI proposes the whole profile, the owner approves; (2) the picture is created by the AI (Codex image generation) or replaced by the owner's own file; (3) 0.5.0 waits and ships together with the profile.
+
+Steps of the addendum:
+A. [x] Core data: `AccountProfile` (purpose, strategy, names, user name, birth date, gender, place, about, website, picture idea, picture file, status proposed|approved, reasons), table `account_profiles` (migration 206), store, validation (adult, lengths, characters).
+B. [x] AI: `proposeProfile` in `ai-help.ts` (from purpose, product passport, platform, role, e-mail, the other profiles so that two accounts are not alike); the answer is validated JSON; tests with a scripted engine.
+C. [x] Service `AccountProfileService` (`src/core/channels/account-profile.ts`) + API: `profile.get | propose | save | approve | setPicture | makePicture | picture`; an edit of an approved profile makes it `proposed` again.
+D. [x] Mission: a signup mission needs an approved profile and takes every personal value from it (the AI invents nothing); new kind `profile` fills the profile on the platform after the account exists (about-text, place, website, picture) with a new tool `browser_upload`.
+E. [x] Picture: NO separate `ImageMaker` port (simpler than planned): an engine that `makesImages` takes `AiTask.makeFiles = {dir}` and Codex runs `--sandbox workspace-write --cd <dir>`; tried once for real (1254x1254 PNG, 13k tokens). The file lives in the app's data folder, the owner's own file replaces it.
+F. [ ] UI: a block "Profile" in the account card (layout mock to the owner first), the proposal with the strategy and the reasons, edit, approve, picture (shown, create again, replace).
+G. [ ] Tests, typecheck, lint, live check (propose on a real engine; one picture with Codex; fill-in mission on a scratch site or the real form without submitting), then release 0.5.0.
+
+Progress 2026-11-08 (core part of the addendum): A-E done and tested (1519 tests green, typecheck and lint clean). Mission without an approved profile is refused (`no_profile`, `profile_not_approved`); the signup mission types the owner's values (`{{USERNAME}}` is a value, the password stays a secret), the `profile` kind fills an existing account; `browser_upload` exists only when the mission has a picture and takes a file NAME (`PICTURE`), never a path; hidden file inputs are listed in the snapshot. Left: F (UI, layout mock first), G (live checks: propose on a real engine, a picture with Codex through the service, the profile mission on a scratch page; release).

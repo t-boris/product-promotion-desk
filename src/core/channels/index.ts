@@ -7,7 +7,8 @@ import type { Core } from '../core'
 import type { Clock, Connector } from '../ports'
 import type { Db } from '../db/database'
 import { AccountsService } from './accounts'
-import { draftSiteProfile, planChannel, suggestChannels, suggestRoles } from './ai-help'
+import { AccountProfileService } from './account-profile'
+import { draftSiteProfile, planChannel, proposeProfile, suggestChannels, suggestRoles } from './ai-help'
 import { ChannelService } from './channel-service'
 import { ChannelPlanService } from './plan'
 import { MailboxService } from './mailboxes'
@@ -42,9 +43,11 @@ export function register(core: Core): void {
   const vault = new VaultService(core, accounts, store)
   const mailboxes = new MailboxService(core, store)
   const signIn = new SignInService(core, accounts, vault, store)
-  const agent = new AgentRunService(core, accounts, vault)
+  const accountProfiles = new AccountProfileService(core, accounts, store, { proposeProfile })
+  const agent = new AgentRunService(core, accounts, vault, accountProfiles)
   // An account found signed out gets one try with its saved password (DEC-014), without holding up the check that found it.
   accounts.onSignedOut = (account) => void signIn.maybeAutomatic(account)
+  accounts.onRemoved = (account) => accountProfiles.forget(account)
 
   core.services.agent = agent
   core.services.channels = {
@@ -62,6 +65,13 @@ export function register(core: Core): void {
     'accounts.remove': (args) => accounts.remove(args.id),
     'accounts.setRole': (args) => accounts.setRole(args),
     'accounts.suggestRoles': (args) => roles.suggest(args),
+    'profile.get': (args) => accountProfiles.get(args.accountId),
+    'profile.propose': (args) => accountProfiles.propose(args),
+    'profile.save': (args) => accountProfiles.save(args),
+    'profile.approve': (args) => accountProfiles.approve(args),
+    'profile.makePicture': (args) => accountProfiles.makePicture(args),
+    'profile.setPicture': (args) => accountProfiles.setPicture(args),
+    'profile.picture': (args) => accountProfiles.picture(args),
     'platforms.list': () => listPlatforms(core.connectors),
     'accounts.openBrowser': (args) => accounts.openBrowser(args),
     'accounts.browser': (args) => accounts.browserState(args.accountId),

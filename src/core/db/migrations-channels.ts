@@ -72,5 +72,31 @@ CREATE TABLE mailboxes (
   created_at TEXT NOT NULL
 );
 `
+  },
+  {
+    id: 206,
+    name: 'channels: the profile of an account, proposed by the AI and approved by the owner (DEC-019)',
+    sql: `
+-- One row per account. The password is never here (the vault). The picture is a file in the data folder, only its existence is recorded.
+CREATE TABLE account_profiles (
+  account_id TEXT PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
+  purpose TEXT NOT NULL DEFAULT '',
+  strategy TEXT NOT NULL DEFAULT '',
+  first_name TEXT NOT NULL DEFAULT '',
+  last_name TEXT NOT NULL DEFAULT '',
+  display_name TEXT NOT NULL DEFAULT '',
+  username TEXT NOT NULL DEFAULT '',
+  birth_date TEXT NOT NULL DEFAULT '',
+  gender TEXT NOT NULL DEFAULT 'other',
+  place TEXT NOT NULL DEFAULT '',
+  about TEXT NOT NULL DEFAULT '',
+  website TEXT NOT NULL DEFAULT '',
+  picture_idea TEXT NOT NULL DEFAULT '',
+  reasons_json TEXT NOT NULL DEFAULT '{}',
+  picture_file TEXT,
+  status TEXT NOT NULL DEFAULT 'proposed',
+  updated_at TEXT NOT NULL
+);
+`
   }
 ]
