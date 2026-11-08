@@ -257,6 +257,12 @@ export interface SignInResult {
 export type AgentTaskKind = 'signup'
 export type AgentRunStatus = 'running' | 'done' | 'needs_owner' | 'failed' | 'stopped'
 
+/** Whether the browser agent can start on an account now, and if not, the one thing to do first, in plain words. */
+export interface AgentReadiness {
+  ready: boolean
+  reason: string | null
+}
+
 /** One run of the browser agent on one account: what it is doing or why it stopped, and what it did. Kept in memory; no secret is ever in it. */
 export interface AgentRun {
   accountId: Id

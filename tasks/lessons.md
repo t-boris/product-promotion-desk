@@ -177,3 +177,13 @@
 62. A live dry run on the real site (real engine, real browser, test values, the final button blocked) finds what unit tests cannot: here the hidden tab ignoring the mouse, custom drop-downs, and a duplicated label. Do it before every release of a browser feature, and say what was not sent.
 63. A Stop must be checked at every point where the loop waits for something slow (the engine's answer), not only at the top of the loop; otherwise the answer of a stopped run is still carried out. A test with a promise held open found it.
 
+## 2026-11-08 (later): "Let the AI create an account does nothing!!!"
+
+**What happened.** I released 0.4.0 knowing that the owner's selected engine (Codex) can never run the agent, and said so in the report. The button still looked ready, and the refusal appeared as a red line at the very bottom of a long block, below the visible part of the window. For the owner it "did nothing". The log had no line for the click, which showed that the start had been refused before anything ran.
+
+**Rules for myself.**
+
+64. Before releasing a feature, run it in the owner's real configuration (their engine, their account, their window size), not in the one I tested with. If it cannot work there, the release is not done: say so on the screen, not only in my report.
+65. A refusal belongs next to the control that caused it, and the reason belongs before the click: the core answers "can this start, and if not, why" in one place, and the screen disables the control and prints the reason beside it. An error at the bottom of a scrolling block is the same as no error.
+66. "Does nothing" means: look at the owner's real window (screenshot by window id) and at the log before guessing. Here both showed the cause within a minute.
+

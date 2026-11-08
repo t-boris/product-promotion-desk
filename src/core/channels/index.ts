@@ -70,6 +70,7 @@ export function register(core: Core): void {
     'accounts.releaseControl': (args) => accounts.releaseControl(args.accountId),
     'accounts.checkLogin': (args) => accounts.checkLogin(args.accountId),
     'accounts.signIn': (args) => signIn.signIn(args.accountId),
+    'agent.canStart': (args) => agent.canStart(args),
     'agent.start': (args) => agent.start(args),
     'agent.state': (args) => agent.state(args.accountId),
     'agent.stop': (args) => agent.stop(args.accountId),

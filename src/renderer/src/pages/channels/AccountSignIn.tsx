@@ -24,6 +24,7 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword }: { 
   })
   const [signUp, signingUp] = useAction(() => call('accounts.openBrowser', { accountId: account.id, url: info?.signupUrl }))
   const agent = useQuery('agent.state', { accountId: account.id }, ['accounts'])
+  const canStart = useQuery('agent.canStart', { accountId: account.id, kind: 'signup' }, ['accounts', 'settings'])
   const [startAgent, startingAgent] = useAction(async () => {
     setPageReport(null)
     await call('agent.start', { accountId: account.id, kind: 'signup' })
@@ -34,15 +35,16 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword }: { 
   const [show, showing] = useAction(() => call('accounts.showBrowser', { accountId: account.id }))
   const [done, finishing] = useAction(() => call('accounts.releaseControl', { accountId: account.id }))
   const [look, looking] = useAction(async () => setPageReport({ report: await call('accounts.pageReport', { accountId: account.id }) }))
-  const error = opening.error ?? checking.error ?? signingIn.error ?? signingUp.error ?? copying.error ?? showing.error ?? finishing.error ?? looking.error ?? startingAgent.error ?? stoppingAgent.error
+  const error = opening.error ?? checking.error ?? signingIn.error ?? signingUp.error ?? copying.error ?? showing.error ?? finishing.error ?? looking.error
   // While the person holds the browser the app waits, so nothing that needs the browser is offered: the screen says what to do instead.
   const yours = browser.data?.holder === 'user'
   const windowOpen = browser.data?.windowOpen === true
   const ready = account.status === 'ready'
   const agentRun = agent.data ?? null
   const agentWorking = agentRun?.status === 'running'
-  // The AI needs what a person would need to register: an e-mail address and the password the account should have.
-  const agentMissing = !account.email ? 'Give the account an e-mail address first (step 2).' : !hasPassword ? 'Save the password the account should have first (step 3).' : null
+  // What the AI needs (an e-mail, the saved password, an engine that is never given a way to act on this computer) is decided by the core; the screen says it before the click, next to the button.
+  const agentReady = canStart.data?.ready === true
+  const agentWhy = !agentWorking && canStart.data && !canStart.data.ready ? canStart.data.reason : null
 
   const summary = (
     <>
@@ -93,7 +95,7 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword }: { 
             {checking.busy ? 'Checking…' : 'Check sign-in'}
           </Button>
           {info?.signupUrl && !ready && (
-            <Button variant={agentMissing === null ? 'primary' : undefined} onClick={() => void startAgent()} disabled={agentMissing !== null || agentWorking || startingAgent.busy} data-testid={`agent-start-${account.id}`}>
+            <Button variant={agentReady ? 'primary' : undefined} onClick={() => void startAgent()} disabled={!agentReady || startingAgent.busy} data-testid={`agent-start-${account.id}`}>
               {startingAgent.busy ? 'Starting…' : 'Let the AI create the account'}
             </Button>
           )}
@@ -104,11 +106,12 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword }: { 
           )}
         </div>
       )}
-      {!yours && info?.signupUrl && !ready && agentMissing && (
-        <p className="muted small" data-testid={`agent-missing-${account.id}`}>
-          {agentMissing}
-        </p>
+      {!yours && info?.signupUrl && !ready && agentWhy && (
+        <div className="note warn" role="status" data-testid={`agent-missing-${account.id}`}>
+          <strong>The AI cannot start yet.</strong> {agentWhy}
+        </div>
       )}
+      <ErrorNote error={startingAgent.error ?? stoppingAgent.error} />
       {agentRun && <AgentRunPanel run={agentRun} onStop={() => void stopAgent()} stopping={stoppingAgent.busy} testId={`agent-run-${account.id}`} />}
       <p className="muted small">A CAPTCHA, a code or any other check on the site is always yours: the app stops and tells you.</p>
       {!ready && info && (info.signupUrl || info.signupNote) && (

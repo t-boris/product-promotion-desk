@@ -254,3 +254,14 @@ Owner's remarks, 2026-11-08: after the e-mail and password are added the AI open
 - [ ] Not verified: a real Submit and what follows (code to the e-mail, CAPTCHA, phone check); "signed in" recognition on Facebook after a real registration; the agent on a second platform.
 - [ ] Needs the owner: select Claude Code in Settings (the selected engine is Codex, which can act on this computer and is never shown a website).
 - [ ] Next: the same agent for the work in channels (read, reply, set up a profile) through the connectors with tickets; AI-chosen values saved on the account (migration); the mail reader moves from 0.4.0 to 0.5.0 (still needs approval for `mailparser`).
+
+## 0.4.1: the AI button says why it cannot start (owner: "Let the AI create an account does nothing!!!")
+
+Cause: the owner's selected engine is Codex (it can act on this computer, so it is never shown a website); the refusal was printed at the bottom of the block, off screen; the button looked ready. Seen in the owner's window and in the log (no "The AI started" line).
+
+- [x] `agent.canStart`: the same prerequisites as `start` in one place (`prerequisites`), answered as a reason in words; nothing is run.
+- [x] The button is disabled until the core says ready, and the reason is shown right under the buttons (a warning note); an error from the click itself is shown there too, not at the bottom.
+- [x] Tests for every missing prerequisite (e-mail, password, engine not tool-free, none selected, not installed).
+- [x] Checked in the scratch app with Codex selected: button disabled, the warning names Codex and says to choose Claude Code in Settings.
+- [ ] Needs the owner: choose Claude Code in Settings (AI engine). I do not change it: it is the engine of the whole app, not only of this button.
+

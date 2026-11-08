@@ -7,8 +7,8 @@
 // (the connector's login check), not the AI's opinion.
 
 import { ApiError } from '../../shared/api'
-import type { Account, AgentRun, AgentTaskKind } from '../../shared/types'
-import { AiError, TakeoverError } from '../ports'
+import type { Account, AgentReadiness, AgentRun, AgentTaskKind } from '../../shared/types'
+import { AiError, TakeoverError, type AiEngine } from '../ports'
 import { runBrowserAgent, type AgentResult, type BrowserTask } from '../browser-agent/agent'
 import type { Core } from '../core'
 import type { AccountsService } from './accounts'
@@ -50,21 +50,37 @@ export class AgentRunService {
     return snapshot(live.run)
   }
 
-  /** Starts a run and returns at once; the run goes on in the background and is read with `state`. */
-  async start(args: { accountId: string; kind: AgentTaskKind }): Promise<AgentRun> {
-    const account = this.accounts.account(args.accountId)
-    if (args.kind !== 'signup') throw new ApiError('invalid_input', 'This kind of task is not known.')
+  /** Whether a run can start now; the same checks as `start`, with the reason in words instead of an error, and nothing done. */
+  async canStart(args: { accountId: string; kind: AgentTaskKind }): Promise<AgentReadiness> {
+    try {
+      await this.prerequisites(this.accounts.account(args.accountId), args.kind)
+      return { ready: true, reason: null }
+    } catch (error) {
+      if (error instanceof ApiError) return { ready: false, reason: error.message }
+      throw error
+    }
+  }
+
+  /** What a run needs: a known kind, no run going, an engine that cannot act on this computer and is ready, an e-mail and a saved password. */
+  private async prerequisites(account: Account, kind: AgentTaskKind): Promise<{ engine: AiEngine; task: BrowserTask }> {
+    if (kind !== 'signup') throw new ApiError('invalid_input', 'This kind of task is not known.')
     if (this.runs.get(account.id)?.run.status === 'running') throw new ApiError('agent_running', `The AI is already working on ${account.label}.`)
 
     const engine = this.core.engines.selected()
     if (!engine) throw new ApiError('no_engine', 'No AI engine is selected. Choose Claude Code in Settings.')
     if (!engine.toolFree) {
-      throw new ApiError('engine_not_tool_free', `${engine.label} can use tools on this computer, so it is never shown a website. Choose Claude Code in Settings to let the AI work in the browser.`)
+      throw new ApiError('engine_not_tool_free', `${engine.label} can use tools on this computer, so it is never shown a website. Choose Claude Code in Settings (AI engine) to let the AI work in the browser.`)
     }
     const status = await engine.check()
     if (!status.installed || !status.ready) throw new ApiError('engine_unavailable', status.detail || `${engine.label} is not available.`)
 
-    const task = this.signUpTask(account)
+    return { engine, task: this.signUpTask(account) }
+  }
+
+  /** Starts a run and returns at once; the run goes on in the background and is read with `state`. */
+  async start(args: { accountId: string; kind: AgentTaskKind }): Promise<AgentRun> {
+    const account = this.accounts.account(args.accountId)
+    const { engine, task } = await this.prerequisites(account, args.kind)
     const live: Live = {
       abort: new AbortController(),
       run: { accountId: account.id, kind: 'signup', status: 'running', summary: 'The AI is opening the registration page.', lines: [], typed: [], startedAt: this.core.clock.now().toISOString(), finishedAt: null }
@@ -107,7 +123,7 @@ export class AgentRunService {
     }
   }
 
-  private async drive(account: Account, live: Live, task: BrowserTask, engine: NonNullable<ReturnType<Core['engines']['selected']>>): Promise<void> {
+  private async drive(account: Account, live: Live, task: BrowserTask, engine: AiEngine): Promise<void> {
     try {
       const result = await this.core.browser.session(account).withAgentControl('agent-signup', (page) =>
         runBrowserAgent(

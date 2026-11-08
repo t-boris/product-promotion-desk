@@ -3,6 +3,7 @@
 // Electron IPC or over the loopback HTTP server is invisible to it.
 
 import type {
+  AgentReadiness,
   AgentRun,
   AgentTaskKind,
   Account,
@@ -142,6 +143,7 @@ export interface ApiMethods {
    * of its console. Only when asked. `null` when the account has no page open. A form field's value is never read.
    */
   'accounts.pageReport': [{ accountId: Id }, PageReport | null]
+  'agent.canStart': [{ accountId: Id; kind: AgentTaskKind }, AgentReadiness]
   'agent.start': [{ accountId: Id; kind: AgentTaskKind }, AgentRun]
   'agent.state': [{ accountId: Id }, AgentRun | null]
   'agent.stop': [{ accountId: Id }, AgentRun | null]

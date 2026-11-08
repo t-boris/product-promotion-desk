@@ -80,6 +80,40 @@ describe('what a run needs before it starts', () => {
   })
 })
 
+describe('what the screen is told before the click', () => {
+  const can = (w: World) => w.call('agent.canStart', { accountId: w.account.id, kind: 'signup' })
+
+  it('says ready when everything is there, and does nothing else', async () => {
+    const w = await ready()
+    expect(await can(w)).toEqual({ ready: true, reason: null })
+    expect(w.t.engine.calls).toEqual([])
+    expect(page(w).log).toEqual([])
+    expect(await state(w)).toBeNull()
+  })
+
+  it('says what is missing, in words, one thing at a time', async () => {
+    const w = await makeReadyWorld()
+    expect(await can(w)).toMatchObject({ ready: false, reason: expect.stringMatching(/Choose Claude Code|e-mail/) })
+    w.t.engine.toolFree = false
+    expect(await can(w)).toMatchObject({ ready: false, reason: expect.stringContaining('Choose Claude Code in Settings') })
+    w.t.engine.toolFree = true
+    expect(await can(w)).toMatchObject({ ready: false, reason: expect.stringContaining('e-mail') })
+    await w.call('accounts.setEmail', { accountId: w.account.id, email: EMAIL })
+    expect(await can(w)).toMatchObject({ ready: false, reason: expect.stringContaining('saved for') })
+    w.t.engine.installed = false
+    expect(await can(w)).toMatchObject({ ready: false })
+    w.core.settings.updateApp({ engineId: null })
+    expect(await can(w)).toEqual({ ready: false, reason: 'No AI engine is selected. Choose Claude Code in Settings.' })
+  })
+
+  it('names the engine that cannot be used, so the owner sees why their choice does not work', async () => {
+    const w = await ready()
+    w.t.engine.toolFree = false
+    const answer = await can(w)
+    expect(answer.reason).toContain(`${w.t.engine.label} can use tools on this computer`)
+  })
+})
+
 describe('a run', () => {
   it('registers: the AI fills the form, the password never reaches it, and the site\'s own login check says it worked', async () => {
     const w = await ready()
