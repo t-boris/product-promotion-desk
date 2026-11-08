@@ -1,7 +1,10 @@
 // The personal values of an account profile (DEC-019): one reader for what the owner types and for what the AI proposes, so both are
 // held to the same rules. It returns the problem in words instead of throwing; the owner's screen shows it, the AI gets it back to repair.
 
+import { ageOn } from '../../shared/profile'
 import type { ProfileFields, ProfileGender } from '../../shared/types'
+
+export { ageOn }
 
 export const MIN_AGE = 18
 export const MAX_AGE = 80
@@ -21,18 +24,6 @@ const hasControl = (text: string): boolean => [...text].some((char) => char.char
 const PERSON_NAME = /^[\p{L}][\p{L}\p{M}' -]*$/u
 const USERNAME = /^[A-Za-z0-9._-]{3,30}$/
 const OFFICIAL_LOOK = /official|admin|moderator|verified/i
-
-/** Whole years between a YYYY-MM-DD birth date and `now`; null when the text is not a real date. */
-export function ageOn(birthDate: string, now: Date): number | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(birthDate)
-  if (!match) return null
-  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])]
-  const date = new Date(Date.UTC(year, month - 1, day))
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null
-  let age = now.getUTCFullYear() - year
-  if (now.getUTCMonth() < month - 1 || (now.getUTCMonth() === month - 1 && now.getUTCDate() < day)) age -= 1
-  return age
-}
 
 function text(source: Record<string, unknown>, key: keyof ProfileFields, max: number, label: string): { ok: true; value: string } | { ok: false; error: string } {
   const raw = source[key]

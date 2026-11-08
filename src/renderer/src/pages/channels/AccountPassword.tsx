@@ -40,7 +40,7 @@ export function AccountPassword({ account, vaultAvailable, hasPassword }: { acco
   if (!vaultAvailable) {
     return (
       <AccountBlock
-        step={3}
+        step={4}
         title="Password"
         testId={`vault-unavailable-${account.id}`}
         summary={<span className="muted">This Mac has no usable system keychain, so the app cannot keep passwords safely and stores none. Sign in on the site itself.</span>}
@@ -65,7 +65,7 @@ export function AccountPassword({ account, vaultAvailable, hasPassword }: { acco
 
   return (
     <AccountBlock
-      step={3}
+      step={4}
       title="Password"
       summary={summary}
       testId={`password-${account.id}`}

@@ -707,6 +707,8 @@ const MAX_STRATEGY = 700
 const MAX_PURPOSE = 300
 const MAX_REASON_TEXT = 220
 const PERSONA_TIMEOUT_MS = 180_000
+/** A note in a value that is typed onto a platform as it is ("Madison, Wisconsin — fictional setting"). */
+const TYPED_NOTE = /\b(fictional|fictitious|persona|invented|made[- ]up|pseudonym|placeholder|ai[- ]generated)\b|[|—–]/i
 
 const PROFILE_PROPOSE_SYSTEM = [
   'You are the strategist of a product owner who runs honest, product-connected logins on online platforms.',
@@ -746,6 +748,7 @@ function profileProposePrompt(input: ProfileProposeInput): AiTask {
       'Rules:',
       '- The person is a fictional persona for a login that belongs to the product owner, and the login speaks honestly: the about-text says how the person is connected with the product when it mentions the product at all.',
       '- Do not claim credentials, qualifications, jobs or experience that the approved statements above do not support. Do not present the login as an independent customer or neutral bystander.',
+      '- "firstName", "lastName", "displayName", "username", "place" and "website" are typed onto the platform exactly as you give them: only the name, the user name, the city and country or the address itself, with no notes, labels, separators or comments, and never the words fictional, persona, invented or AI.',
       '- Invent a name that belongs to nobody famous. Do not use a real or famous person, brand or company as the name, the look or the story. The user name must not look official.',
       `- The person is an adult: age ${MIN_AGE} to ${MAX_AGE}. Choose the age and gender that make the purpose credible on this platform, not a default.`,
       '- Differ clearly from the profiles that already exist on this platform (name, age, place, voice).',
@@ -777,6 +780,9 @@ function readProfileProposal(raw: unknown, input: ProfileProposeInput): Parsed<P
     if (unsafe(text)) return { ok: false, error: `"${key}" contains something that must not be offered (a secret, a promise or an automation instruction)` }
   }
   if (unsupportedCredential(`${value.about}\n${value.displayName}`, input.claims)) return { ok: false, error: 'the about-text claims a credential or experience that the approved statements do not support' }
+  for (const [key, text] of Object.entries({ firstName: value.firstName, lastName: value.lastName, displayName: value.displayName, username: value.username, place: value.place, website: value.website })) {
+    if (TYPED_NOTE.test(text)) return { ok: false, error: `"${key}" is typed onto the platform as it is: give only the value itself, without notes or words like fictional, persona or invented` }
+  }
   if (NEUTRAL_THIRD_PARTY.test(value.about)) return { ok: false, error: 'the about-text presents the login as an independent third party' }
   const reasons: ProfileProposal['reasons'] = {}
   if (isRecord(raw.reasons)) {

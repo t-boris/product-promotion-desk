@@ -50,7 +50,7 @@ export function AccountEmail({ account, mailboxes }: { account: Account; mailbox
 
   return (
     <AccountBlock
-      step={2}
+      step={3}
       title="E-mail"
       summary={summary}
       testId={`email-${account.id}`}

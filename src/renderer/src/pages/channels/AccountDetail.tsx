@@ -3,6 +3,7 @@ import { Badge } from '../../ui'
 import { AccountEmail } from './AccountEmail'
 import { AccountMore } from './AccountMore'
 import { AccountPassword } from './AccountPassword'
+import { AccountProfile } from './AccountProfile'
 import { AccountSignIn } from './AccountSignIn'
 import { ACCOUNT_STATUS_LABEL, ACCOUNT_STATUS_TONE, platformLabel } from './model'
 import { nextStep } from './next-step'
@@ -35,6 +36,7 @@ export function AccountDetail({ account, platforms, mailboxes, vault }: { accoun
         {step.text}
       </div>
       <RoleEditor account={account} />
+      <AccountProfile account={account} />
       <AccountEmail account={account} mailboxes={mailboxes} />
       {vault && <AccountPassword account={account} vaultAvailable={vault.available} hasPassword={hasPassword} />}
       <AccountSignIn account={account} info={info} vaultAvailable={vault?.available ?? false} hasPassword={hasPassword} />

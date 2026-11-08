@@ -239,3 +239,44 @@ textarea.input.short {
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
+
+/* The profile block of an account (DEC-019): the picture on the left, the values on the right. */
+.profile-grid {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.profile-picture {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.profile-thumb {
+  width: 180px;
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  text-align: center;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+}
+.profile-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: calc(var(--radius) - 2px);
+}
+@media (max-width: 900px) {
+  .profile-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* The about-text and the picture description are sentences, not one line. */
+.profile-grid textarea.input {
+  min-height: 96px;
+}

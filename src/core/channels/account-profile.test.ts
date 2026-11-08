@@ -102,6 +102,15 @@ describe('the owner edits and approves', () => {
     expect(edited.reasons.birthDate).toBe(proposed.reasons.birthDate)
   })
 
+  it('drops the reason of a value the owner changed: it would explain the old value', async () => {
+    const w = await world()
+    const proposed = await propose(w, 'x')
+    expect(proposed.reasons.birthDate).toBeTruthy()
+    const edited = await w.call('profile.save', { accountId: w.account.id, profile: { ...proposed, birthDate: '1990-01-01' } })
+    expect(edited.reasons.birthDate).toBeUndefined()
+    expect(edited.reasons).toEqual({})
+  })
+
   it('refuses to approve what is not there or not complete', async () => {
     const w = await world()
     expect(await w.refusal('profile.approve', { accountId: w.account.id })).toBe('no_profile')

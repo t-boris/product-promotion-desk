@@ -56,7 +56,7 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword }: { 
   )
 
   return (
-    <AccountBlock step={4} title="Sign-in" summary={summary} testId={`signin-${account.id}`}>
+    <AccountBlock step={5} title="Sign-in" summary={summary} testId={`signin-${account.id}`}>
       {yours ? (
         <>
           <div className="note warn" role="status" data-testid={`browser-state-${account.id}`}>
@@ -112,7 +112,7 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword }: { 
         </div>
       )}
       <ErrorNote error={startingAgent.error ?? stoppingAgent.error} />
-      {agentRun && <AgentRunPanel run={agentRun} onStop={() => void stopAgent()} stopping={stoppingAgent.busy} testId={`agent-run-${account.id}`} />}
+      {agentRun?.kind === 'signup' && <AgentRunPanel run={agentRun} onStop={() => void stopAgent()} stopping={stoppingAgent.busy} testId={`agent-run-${account.id}`} />}
       <p className="muted small">A CAPTCHA, a code or any other check on the site is always yours: the app stops and tells you.</p>
       {!ready && info && (info.signupUrl || info.signupNote) && (
         <div className="stack" data-testid={`signup-help-${account.id}`}>
@@ -126,7 +126,7 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword }: { 
                     Use the address <strong>{account.email}</strong> <CopyButton text={account.email} testId={`signup-copy-email-${account.id}`} />
                   </>
                 ) : (
-                  'Give the account an e-mail address first (step 2), then use it on the site.'
+                  'Give the account an e-mail address first (step 3), then use it on the site.'
                 )}
               </li>
               <li>
@@ -139,7 +139,7 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword }: { 
                     <span className="muted small">(it leaves the clipboard in 30 seconds)</span>
                   </>
                 ) : vaultAvailable ? (
-                  'Save a password first (step 3), then use it on the site.'
+                  'Save a password first (step 4), then use it on the site.'
                 ) : (
                   'Choose a password yourself and keep it somewhere safe.'
                 )}

@@ -100,6 +100,17 @@ describe('proposeProfile', () => {
     expect(await bad({ about: 'My password: hunter2 for the tool' })).toMatch(/must not be offered/)
   })
 
+  it('does not accept a note inside a value that is typed onto the platform as it is, and asks again', async () => {
+    const e = engine(answer({ place: 'Madison, Wisconsin — fictional setting' }), answer({ displayName: 'Mara | chart basics' }), answer())
+    const proposal = await proposeProfile(e, input).catch((error: unknown) => (error instanceof AiError ? error.message : String(error)))
+    // One repair attempt only: the second answer has a separator in the display name, so the proposal is refused.
+    expect(proposal).toMatch(/displayName.*typed onto the platform/)
+    expect(e.calls[1].prompt).toContain('place')
+    const clean = await proposeProfile(engine(answer({ place: 'Madison, Wisconsin — fictional setting' }), answer()), input)
+    expect(clean.fields.place).toBe('Lisbon, Portugal')
+    expect(e.calls[0].prompt).toContain('typed onto the platform exactly as you give them')
+  })
+
   it('does not accept a made-up reason for a field that is not part of the profile, and keeps the others', async () => {
     const proposal = await proposeProfile(engine(answer({ reasons: { firstName: 'Easy to read.', shoeSize: 'x' } })), input)
     expect(proposal.reasons).toEqual({ firstName: 'Easy to read.' })

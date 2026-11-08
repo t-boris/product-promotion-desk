@@ -6,6 +6,7 @@ import { cp, mkdir, readdir, readFile, rm, stat } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import { ApiError } from '../../shared/api'
 import type { Account, AccountProfile, ProfileFields } from '../../shared/types'
+import { sameFields } from '../../shared/profile'
 import { validateAttachments } from '../pipeline/attachments'
 import type { Core } from '../core'
 import { AiError, type AiEngine } from '../ports'
@@ -105,12 +106,12 @@ export class AccountProfileService {
     if (!read.ok) throw new ApiError('invalid_profile', read.error)
     const existing = this.store.profile(account.id)
     const purpose = typeof args.purpose === 'string' ? args.purpose.trim().slice(0, 400) : (existing?.profile.purpose ?? '')
-    const changed = !existing || purpose !== existing.profile.purpose || fieldsOf(existing.profile) !== fieldsOf(read.value)
+    const changed = !existing || purpose !== existing.profile.purpose || !sameFields(existing.profile, read.value)
     const saved = this.store.saveProfile(account.id, {
       purpose,
       strategy: existing?.profile.strategy ?? '',
       fields: read.value,
-      reasons: existing?.profile.reasons ?? {},
+      reasons: keptReasons(existing?.profile ?? null, read.value),
       status: existing && !changed ? existing.profile.status : 'proposed',
       pictureFile: existing?.pictureFile ?? null
     })
@@ -233,8 +234,15 @@ export class AccountProfileService {
   }
 }
 
-const fieldsOf = (fields: ProfileFields): string =>
-  JSON.stringify([fields.firstName, fields.lastName, fields.displayName, fields.username, fields.birthDate, fields.gender, fields.place, fields.about, fields.website, fields.pictureIdea])
+/** The reasons the AI gave stay only for the values it proposed: a value the owner changed has no reason any more (it would explain the old value). */
+function keptReasons(before: AccountProfile | null, after: ProfileFields): AccountProfile['reasons'] {
+  const kept: AccountProfile['reasons'] = {}
+  if (!before) return kept
+  for (const key of Object.keys(before.reasons) as (keyof ProfileFields)[]) {
+    if (before[key] === after[key] && before.reasons[key]) kept[key] = before.reasons[key]
+  }
+  return kept
+}
 
 /** What the engine is told to make: the owner-approved description and the rules that keep the picture clean. */
 export function picturePrompt(profile: ProfileFields): string {
