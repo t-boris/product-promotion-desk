@@ -85,19 +85,19 @@ Plan (architecture unchanged: shared contract, core without Electron, renderer o
 - [x] b. Platform catalog: new `platforms.list` from the connector registry (replaces the hard-coded list in the UI).
 - [x] c. AI channel help: `channels.suggest` (passport to suggestions, unverified) and `channels.draftProfile` / `channels.saveProfile` (read the site through the account browser, schema-validated draft, versioned save after review); manual-instruction fallback; tests with FakeEngine and fake connectors.
 - [x] d. Renderer: Channels and Results as product tabs, menu without them, product filter on Opportunities and Publications, suggestion and profile-review UI.
-- [x] e. Spec housekeeping: tick REQ-008 criteria only when verified (ticked 1-6, 8, 9; criterion 7, saving an accepted profile as a version, is confirmed on the deployed app); keep REQ-002 live criteria unticked until the owner confirms the live Reddit run (DEC-008).
+- [x] e. Spec housekeeping: tick REQ-008 criteria only when verified (all nine ticked; criterion 7, saving an accepted profile as a version, was confirmed on the deployed app with a real site profile: 30 discussions found, saved as version 1); keep REQ-002 live criteria unticked until the owner confirms the live Reddit run (DEC-008).
 - [x] f. GitHub issue for I-9, comments on the affected issues, commit with the `Feature: product-promotion-desk` trailer.
 
 ## Definition of done (from the goal)
 
-- [x] branch from origin/main  - [x] records current as I work  - [ ] GitHub issues in step
-- [x] tests + build green      - [x] everything committed        - [ ] PR with test plan
-- [ ] CI green                 - [ ] PR merged, main has the work - [x] version bumped (0.0.0 to 0.1.0, DEC-007)
-- [ ] release built + deployed, version confirmed  - [ ] walkthrough in a MarkView browser tab
+- [x] branch from origin/main  - [x] records current as I work  - [x] GitHub issues in step (#1-#7, #9, #10 commented and closed after the merge; #8 commented and left open until the live Reddit run)
+- [x] tests + build green      - [x] everything committed        - [x] PR with test plan (#11)
+- [x] CI green (PR and main)   - [x] PR merged, main has the work (9969548) - [x] version bumped (0.0.0 to 0.1.0, DEC-007)
+- [x] release built + deployed, version confirmed  - [x] walkthrough in a MarkView browser tab
 
 ## Review
 
-Written before the PR; the results of CI, merge, release and deploy are in the PR and the final report.
+Written before the PR, extended after the release.
 
 **Result.** All eight plan items plus I-9 (product-scoped channels, accounts and results, AI help for new channels, REQ-008) and I-10 (login roles, one voice per discussion, disclosed affiliation, REQ-010) are implemented on `feat/product-promotion-desk`, in commit groups per item. `npm run verify` (typecheck, lint, tests, build): 59 test files, 1220 tests, green.
 
@@ -108,3 +108,5 @@ Written before the PR; the results of CI, merge, release and deploy are in the P
 **Not proven here, on purpose.** The live Reddit behaviour (selectors, JSON, sending), the Electron-only parts (tray, notifications, the user window, debugger upload, power events) and the model-dependent REQ-010 criteria 3 and 4 need the owner's live run (DEC-008). The one-login-per-discussion guard itself is covered by automated tests with fake connectors (mutation-checked), not by two real Reddit logins.
 
 **Known gaps.** `accounts.suggestRoles` takes the platform of the product's latest login, not the one picked in the form; no API tells whether a host already has a valid profile, so the profile button shows for any web address on a non-prepared platform; attachments are referenced by absolute path; the renderer has no UI tests; the startup reconcile and digest run while paused; the price and discount safety patterns cover English and currency symbols only; `AttentionItem` has no `productId` (the UI resolves it through channels, accounts and products).
+
+**After the merge.** PR #11 merged as 9969548 with green CI on the PR and on main; tag `v0.1.0`; `npm run deploy:local` installed 0.1.0 into /Applications (ad-hoc signed) and the installed app reported 0.1.0. The walkthrough on the installed app found one more defect: after saving a site profile the badge still read "Draft, not saved" next to "Saved as version 1". Fixed in 0.1.1 (badge follows the state), with lesson 7. The same walkthrough confirmed the positive grounding path on a real site (Hacker News: selectors found 30 discussions on the page that was read, profile saved as version 1) and closed REQ-008 criterion 7.

@@ -43,7 +43,8 @@ export function PrepareSiteProfile({ productId, accountId, url }: { productId: s
       {draft && reviewable && (
         <div className="stack" data-testid="profile-draft">
           <div>
-            <strong>Profile for {draft.host}</strong> <Badge tone="info">Draft, not saved</Badge>
+            <strong>Profile for {draft.host}</strong>{' '}
+            {saved ? <Badge tone="good">Saved, version {saved.version}</Badge> : <Badge tone="info">Draft, not saved</Badge>}
           </div>
           <div className="muted small">What this profile says. Check that it matches the site:</div>
           <ul className="plain-lines" data-testid="profile-summary">
