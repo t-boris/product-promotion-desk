@@ -196,3 +196,11 @@
 67. When a restriction comes from a security rule, the screen and my report say the rule and its reason in the owner's terms ("this engine can run commands, and a web page is text from a stranger"), not a capability claim that the owner can see is false. Say what is allowed instead.
 68. If the owner proposes another architecture (the engine drives the app's browser through an MCP, as in MarkView), it is a decision to put in front of them with its trade-offs, not something to explain away. Their model of the product is the specification.
 
+## 2026-11-08 (later still): "I am shocked you do not understand what I say. Look at the MarkView code."
+
+**What happened.** After the owner said twice that the engine should drive the app's embedded browser through an MCP like MarkView's, I kept reasoning from my own model (the engine returns text, the app clicks) and started to design a variant of it. The owner had pointed at the reference, and I had not opened it.
+
+**Rules for myself.**
+
+69. When the owner names a reference ("see how MarkView does it", "look at the code"), reading that code is the first step, before any design, plan or explanation. Quote what it does (here: the app binary is the MCP server, tool calls travel over a Unix socket to the app, `claude mcp add` / `codex mcp add` register it) and say what is kept and what is changed and why.
+70. A repeated remark means my model of the owner's intent is wrong, not that they need a clearer sentence. Stop defending the current design and re-read their earlier words for what I filtered out.
