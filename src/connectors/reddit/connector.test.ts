@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { makeTestCore } from '../../core/testing/fakes'
+import { CaptchaRequiredError, LoginRequiredError } from '../errors'
 import { aboutJson, commentThing, listing, moreStub, postThing, routeHealthyReddit, seedChannel, threadJson } from '../test-helpers'
 import { RedditConnector } from './connector'
 
@@ -69,6 +70,44 @@ describe('Reddit activity collection', () => {
     expect(batch.discussions[0].comments.map((c) => c.externalId).sort()).toEqual(['t1_c1', 't1_x1'])
   })
 
+  describe('threads that could not be read completely', () => {
+    const manyIds = Array.from({ length: 350 }, (_, i) => `x${i}`) // 4 calls of 100 needed, only 3 are made
+
+    it('flags the discussion when "load more" stubs are left over after the call budget', async () => {
+      const { ctx, page } = setup()
+      page.route('/r/test/comments/p1.json', threadJson({ id: 'p1', numComments: 351 }, [commentThing({ id: 'c1' }), moreStub(manyIds)]))
+      page.route('/api/morechildren.json', { json: { errors: [], data: { things: [commentThing({ id: 'x1', parent: 't1_c1' })] } } })
+      const batch = await connector.fetchActivity(ctx, { limit: 10 })
+      expect(batch.discussions[0].incomplete).toBe(true)
+      expect(page.fetched.filter((p) => p.includes('/api/morechildren.json'))).toHaveLength(3)
+      expect((await connector.fetchThread(ctx, 't3_p1'))?.incomplete).toBe(true)
+    })
+
+    it('flags the discussion when expanding a stub fails, instead of forgetting the ids that were not read', async () => {
+      const { ctx, page } = setup()
+      page.route('/r/test/comments/p1.json', threadJson({ id: 'p1', numComments: 3 }, [commentThing({ id: 'c1' }), moreStub(['x1', 'x2'])]))
+      page.route('/api/morechildren.json', {}, 500)
+      const batch = await connector.fetchActivity(ctx, { limit: 10 })
+      expect(batch.discussions[0].incomplete).toBe(true)
+      expect(batch.discussions[0].comments.map((c) => c.externalId)).toEqual(['t1_c1'])
+    })
+
+    it('flags the discussion when a continue-this-thread stub hides deeper comments', async () => {
+      const { ctx, page } = setup()
+      page.route('/r/test/comments/p1.json', threadJson({ id: 'p1', numComments: 5 }, [commentThing({ id: 'c1', replies: [moreStub(['_'])] })]))
+      expect((await connector.fetchThread(ctx, 't3_p1'))?.incomplete).toBe(true)
+    })
+
+    it('does not flag a thread that was read completely', async () => {
+      const { ctx, page } = setup()
+      page.route('/r/test/comments/p1.json', threadJson({ id: 'p1', numComments: 3 }, [commentThing({ id: 'c1' }), moreStub(['x1'])]))
+      page.route('/api/morechildren.json', { json: { errors: [], data: { things: [commentThing({ id: 'x1', parent: 't3_p1' })] } } })
+      const batch = await connector.fetchActivity(ctx, { limit: 10 })
+      expect(batch.discussions[0].incomplete).toBeUndefined()
+      expect(batch.discussions[0].comments).toHaveLength(2)
+    })
+  })
+
   it('fails the whole batch when a thread cannot be read, so a baseline is never built from partial data', async () => {
     const { ctx, page } = setup()
     page.route('/r/test/comments/p1.json', {}, 500)
@@ -88,6 +127,39 @@ describe('Reddit activity collection', () => {
     expect(await connector.fetchThread(ctx, 't3_gone')).toBeNull()
     page.route('/r/test/comments/rm.json', threadJson({ id: 'rm', removedByCategory: 'moderator' }, []))
     expect(await connector.fetchThread(ctx, 't3_rm')).toBeNull()
+  })
+
+  describe('refusals caused by the session', () => {
+    it('raises a recognizable sign-in error when Reddit refuses the listing and the account is signed out', async () => {
+      const { ctx, page } = setup()
+      page.route('/r/test/new.json', { reason: 'private', error: 403 }, 403)
+      page.route('/api/me.json', { message: 'Forbidden', error: 403 }, 403)
+      await expect(connector.fetchActivity(ctx, { limit: 10 })).rejects.toBeInstanceOf(LoginRequiredError)
+    })
+
+    it('raises a recognizable CAPTCHA error when the refusal comes with a human check', async () => {
+      const { ctx, page } = setup()
+      page.route('/r/test/new.json', {}, 403)
+      page.gate = { captcha: true, blocked: false, title: 'Prove your humanity' }
+      await expect(connector.fetchActivity(ctx, { limit: 10 })).rejects.toBeInstanceOf(CaptchaRequiredError)
+    })
+
+    it('keeps a plain error when the account is signed in (e.g. a private community it was not invited to)', async () => {
+      const { ctx, page } = setup()
+      page.route('/r/test/new.json', { reason: 'private', error: 403 }, 403)
+      const error = await connector.fetchActivity(ctx, { limit: 10 }).catch((e: unknown) => e)
+      expect(error).toBeInstanceOf(Error)
+      expect(error).not.toBeInstanceOf(LoginRequiredError)
+      expect((error as Error).message).toMatch(/access denied \(private\)/)
+    })
+
+    it('applies the same classification to a single thread and to its comments', async () => {
+      const { ctx, page } = setup()
+      page.route('/api/me.json', { message: 'Forbidden', error: 403 }, 403)
+      page.route('/r/test/comments/p1.json', {}, 403)
+      await expect(connector.fetchThread(ctx, 't3_p1')).rejects.toBeInstanceOf(LoginRequiredError)
+      await expect(connector.fetchActivity(ctx, { limit: 10 })).rejects.toBeInstanceOf(LoginRequiredError)
+    })
   })
 
   it('refuses to read while the user holds the browser', async () => {

@@ -26,7 +26,11 @@ export interface PostFixture {
   url?: string
 }
 
-const T0 = 1_762_600_000 // 2025-11-08
+/** Epoch seconds of the fixtures' base time (2025-11-08). */
+export const T0 = 1_762_600_000
+
+/** ISO time `seconds` after the fixtures' base time. */
+export const isoAt = (seconds: number): string => new Date((T0 + seconds) * 1000).toISOString()
 
 export function postThing(p: PostFixture): unknown {
   const sub = p.subreddit ?? 'test'

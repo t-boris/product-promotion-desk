@@ -5,7 +5,8 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { makeTestCore } from '../../core/testing/fakes'
 import { TicketError, type PublishRequest } from '../../core/ports'
-import { commentThing, listing, postThing, routeHealthyReddit, seedChannel, threadJson } from '../test-helpers'
+import { authIssueOf, CaptchaRequiredError, LoginRequiredError } from '../errors'
+import { commentThing, isoAt, listing, postThing, routeHealthyReddit, seedChannel, T0, threadJson } from '../test-helpers'
 import { RedditConnector } from './connector'
 import { SEL } from './selectors'
 
@@ -198,6 +199,16 @@ describe('Reddit publishing: replies', () => {
     expect(h.page.writes).toEqual([])
   })
 
+  it('refuses while the identity of the account is not confirmed yet, instead of sending as whoever is signed in', async () => {
+    const t = makeTestCore({ connectors: [connector] })
+    const seeded = seedChannel(t, { identity: null })
+    routeHealthyReddit(seeded.page)
+    const ticket = t.core.tickets.issue({ actionId: 'act-1', contentHash: 'hash', accountId: seeded.accountId, destination: THREAD_URL })
+    const outcome = await connector.publish(seeded.ctx, ticket, replyRequest())
+    expect(outcome).toMatchObject({ status: 'failed', error: expect.stringMatching(/identity/) })
+    expect(seeded.page.writes).toEqual([])
+  })
+
   it.each([
     ['a destination in another community', replyRequest({ destination: 'https://www.reddit.com/r/other/comments/p1/post/' })],
     ['a missing parent id', replyRequest({ parentExternalId: null })],
@@ -303,29 +314,127 @@ describe('Reddit publishing: images', () => {
   })
 })
 
+describe('Reddit publishing: not signed in and CAPTCHA', () => {
+  it('reports a signed-out account as a recognizable sign-in problem before any write', async () => {
+    const h = setup()
+    armReply(h)
+    h.page.route('/api/me.json', { message: 'Forbidden', error: 403 }, 403)
+    const outcome = await connector.publish(h.ctx, h.ticketFor(THREAD_URL), replyRequest())
+    expect(outcome.status).toBe('failed')
+    expect(authIssueOf(outcome.status === 'failed' ? outcome.error : '')).toBe('login')
+    expect(h.page.writes).toEqual([])
+  })
+
+  it('reports a CAPTCHA wall as a recognizable CAPTCHA problem before any write', async () => {
+    const h = setup()
+    armReply(h)
+    h.page.gate = { captcha: true, blocked: false, title: 'Prove your humanity' }
+    const outcome = await connector.publish(h.ctx, h.ticketFor(THREAD_URL), replyRequest())
+    expect(outcome.status).toBe('failed')
+    expect(authIssueOf(outcome.status === 'failed' ? outcome.error : '')).toBe('captcha')
+    expect(h.page.writes).toEqual([])
+  })
+
+  it('classifies a CAPTCHA demanded by the form after typing as a CAPTCHA problem, still a definite failure', async () => {
+    const h = setup()
+    armPost(h)
+    h.page.afterSubmitUrl = null
+    h.page.formErrors = ['please fill out the CAPTCHA']
+    const outcome = await connector.publish(h.ctx, h.ticketFor(postRequest().destination), postRequest())
+    expect(outcome.status).toBe('failed')
+    expect(authIssueOf(outcome.status === 'failed' ? outcome.error : '')).toBe('captcha')
+  })
+
+  it('has stable error classes the flow worker can recognize by name', () => {
+    expect(new LoginRequiredError('x').name).toBe('LoginRequiredError')
+    expect(new CaptchaRequiredError('x').name).toBe('CaptchaRequiredError')
+    expect(authIssueOf(new LoginRequiredError('x'))).toBe('login')
+    expect(authIssueOf(Object.assign(new Error('boom'), { name: 'CaptchaRequiredError' }))).toBe('captcha')
+    expect(authIssueOf(new Error('rate limited'))).toBeNull()
+  })
+})
+
 describe('Reddit: resolving unknown outcomes', () => {
+  /** The send attempt started 1000 s after the fixtures' base time; anything older cannot be its result. */
+  const attemptedAt = isoAt(1000)
+  const reply = (over: Partial<PublishRequest> = {}): PublishRequest => replyRequest({ attemptedAt, ...over })
+  const post = (over: Partial<PublishRequest> = {}): PublishRequest => postRequest({ attemptedAt, ...over })
+  const mine = (over: { id?: string; parent?: string; body?: string; created?: number } = {}) =>
+    commentThing({ id: over.id ?? 'zz', author: 'natal_bot', parent: over.parent ?? 't1_c1', body: over.body ?? 'Thanks for the question!', created: over.created ?? T0 + 1060 })
+
   it('finds an own reply that matches the request body and parent', async () => {
     const h = setup()
-    h.page.route('/user/natal_bot/comments.json', listing([commentThing({ id: 'zz', author: 'natal_bot', parent: 't1_c1', body: 'Thanks  for the\nquestion!' })]))
-    expect(await connector.findPublished(h.ctx, replyRequest())).toEqual({ url: 'https://www.reddit.com/r/test/comments/p1/post/zz/', externalId: 't1_zz' })
+    h.page.route('/user/natal_bot/comments.json', listing([mine({ body: 'Thanks  for the\nquestion!' })]))
+    expect(await connector.findPublished(h.ctx, reply())).toEqual({ url: 'https://www.reddit.com/r/test/comments/p1/post/zz/', externalId: 't1_zz' })
   })
 
   it('does not match a similar text under a different parent', async () => {
     const h = setup()
-    h.page.route('/user/natal_bot/comments.json', listing([commentThing({ id: 'zz', author: 'natal_bot', parent: 't1_other', body: 'Thanks for the question!' })]))
-    expect(await connector.findPublished(h.ctx, replyRequest())).toBeNull()
+    h.page.route('/user/natal_bot/comments.json', listing([mine({ parent: 't1_other' })]))
+    expect(await connector.findPublished(h.ctx, reply())).toBeNull()
   })
 
-  it('finds an own post by title in this community', async () => {
+  it('never matches an older comment with identical text (a common reply like "Thanks!")', async () => {
     const h = setup()
-    h.page.route('/user/natal_bot/submitted.json', listing([postThing({ id: 'n1', author: 'natal_bot', title: 'A useful birth chart tip', selftext: 'Body of the post' })]))
-    expect(await connector.findPublished(h.ctx, postRequest())).toMatchObject({ externalId: 't3_n1' })
-    expect(await connector.findPublished(h.ctx, postRequest({ title: 'Other title' }))).toBeNull()
+    h.page.route('/user/natal_bot/comments.json', listing([mine({ id: 'old', body: 'Thanks!', created: T0 + 60 })]))
+    expect(await connector.findPublished(h.ctx, reply({ text: 'Thanks!' }))).toBeNull()
+  })
+
+  it('picks the comment created after the attempt, not an older identical one', async () => {
+    const h = setup()
+    h.page.route('/user/natal_bot/comments.json', listing([mine({ id: 'new', created: T0 + 1100 }), mine({ id: 'old', created: T0 + 60 })]))
+    expect(await connector.findPublished(h.ctx, reply())).toMatchObject({ externalId: 't1_new' })
+  })
+
+  it('tolerates a few minutes of clock skew between this computer and Reddit', async () => {
+    const h = setup()
+    h.page.route('/user/natal_bot/comments.json', listing([mine({ created: T0 + 1000 - 120 })])) // 2 minutes "before" the local attempt time
+    expect(await connector.findPublished(h.ctx, reply())).toMatchObject({ externalId: 't1_zz' })
+    h.page.route('/user/natal_bot/comments.json', listing([mine({ created: T0 + 1000 - 600 })])) // 10 minutes before: too old
+    expect(await connector.findPublished(h.ctx, reply())).toBeNull()
+  })
+
+  it('refuses to guess when the time of the attempt is unknown', async () => {
+    const h = setup()
+    h.page.route('/user/natal_bot/comments.json', listing([mine()]))
+    await expect(connector.findPublished(h.ctx, replyRequest())).rejects.toThrow(/time of the send attempt/)
+    await expect(connector.findPublished(h.ctx, reply({ attemptedAt: 'not a date' }))).rejects.toThrow(/time of the send attempt/)
+  })
+
+  it('finds an own post by title in this community, created after the attempt', async () => {
+    const h = setup()
+    h.page.route('/user/natal_bot/submitted.json', listing([postThing({ id: 'n1', author: 'natal_bot', title: 'A useful birth chart tip', selftext: 'Body of the post', created: T0 + 1100 })]))
+    expect(await connector.findPublished(h.ctx, post())).toMatchObject({ externalId: 't3_n1' })
+    expect(await connector.findPublished(h.ctx, post({ title: 'Other title' }))).toBeNull()
+  })
+
+  it('does not match an older post with the same title, or one in another community', async () => {
+    const h = setup()
+    h.page.route(
+      '/user/natal_bot/submitted.json',
+      listing([
+        postThing({ id: 'old', author: 'natal_bot', title: 'A useful birth chart tip', selftext: 'Body of the post', created: T0 + 60 }),
+        postThing({ id: 'elsewhere', author: 'natal_bot', title: 'A useful birth chart tip', selftext: 'Body of the post', created: T0 + 1100, subreddit: 'other' })
+      ])
+    )
+    expect(await connector.findPublished(h.ctx, post())).toBeNull()
+  })
+
+  it('refuses a request whose destination is not in this channel community', async () => {
+    const h = setup()
+    await expect(connector.findPublished(h.ctx, post({ destination: 'https://www.reddit.com/r/other/' }))).rejects.toThrow(/r\/test/)
   })
 
   it('throws instead of returning null when the history cannot be read, so "unreadable" is never "not published"', async () => {
     const h = setup()
     h.page.route('/user/natal_bot/comments.json', {}, 403)
-    await expect(connector.findPublished(h.ctx, replyRequest())).rejects.toThrow(/could not be read/)
+    await expect(connector.findPublished(h.ctx, reply())).rejects.toThrow(/could not be read/)
+  })
+
+  it('throws a recognizable sign-in error when the history is refused because the session is signed out', async () => {
+    const h = setup()
+    h.page.route('/user/natal_bot/comments.json', {}, 403)
+    h.page.route('/api/me.json', { message: 'Forbidden', error: 403 }, 403)
+    await expect(connector.findPublished(h.ctx, reply())).rejects.toBeInstanceOf(LoginRequiredError)
   })
 })

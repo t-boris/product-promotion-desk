@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { makeTestCore } from '../../core/testing/fakes'
 import { TicketError, type PublishRequest } from '../../core/ports'
+import { authIssueOf, CaptchaRequiredError, LoginRequiredError } from '../errors'
 import type { Capability, CapabilityKey } from '../../shared/types'
 import { seedChannel } from '../test-helpers'
 import { UniversalConnector } from './connector'
-import { armForum, SiteFakePage, validProfileDefinition } from './test-helpers'
+import { armForum, item, SiteFakePage, validProfileDefinition } from './test-helpers'
 
 const CHANNEL = 'https://forum.example.com/c/news'
 
@@ -76,6 +77,15 @@ describe('universal connector: assessment with a valid profile', () => {
     expect(caps.publish_reply.status).toBe('needs_check')
     expect(caps.publish_post.detail).toMatch(/first authorized send/)
     expect(page.writes).toEqual([])
+  })
+
+  it('does not rely on the own-content list for reconciliation when it exposes no time', async () => {
+    const def = validProfileDefinition()
+    delete ((def.ownContent as { reader: Record<string, unknown> }).reader).time
+    const h = setup({ profile: def })
+    const caps = byKey(await h.connector.assess(h.ctx))
+    expect(caps.verify_send.status).toBe('needs_check')
+    expect(caps.verify_send.detail).toMatch(/no time/)
   })
 
   it('marks publishing unavailable when the profile has no flow for it', async () => {
@@ -153,6 +163,29 @@ describe('universal connector: reading', () => {
     const { connector, ctx, page } = setup()
     page.at('https://forum.example.com/t/2', { selectors: new Set(), items: {} })
     await expect(connector.fetchActivity(ctx, { limit: 10 })).rejects.toThrow(/was not found/)
+  })
+
+  it('reports a sign-in wall as a recognizable error instead of a changed layout', async () => {
+    const h = setup()
+    h.page.site.get(CHANNEL)!.selectors.delete('ul.topics') // the login wall replaces the list
+    h.page.login = { loggedIn: false, identity: '', captcha: false }
+    await expect(h.connector.fetchActivity(h.ctx, { limit: 5 })).rejects.toBeInstanceOf(LoginRequiredError)
+    await expect(h.connector.fetchThread(h.ctx, 't2')).rejects.toBeInstanceOf(LoginRequiredError)
+  })
+
+  it('reports a CAPTCHA wall as a recognizable error', async () => {
+    const h = setup()
+    h.page.site.get(CHANNEL)!.selectors.delete('ul.topics')
+    h.page.gate = { captcha: true, blocked: false, title: 'Just a moment' }
+    await expect(h.connector.fetchActivity(h.ctx, { limit: 5 })).rejects.toBeInstanceOf(CaptchaRequiredError)
+  })
+
+  it('keeps the layout error when the account is signed in and the container is simply gone', async () => {
+    const h = setup()
+    h.page.site.get(CHANNEL)!.selectors.delete('ul.topics')
+    const error = await h.connector.fetchActivity(h.ctx, { limit: 5 }).catch((e: unknown) => e)
+    expect(authIssueOf(error)).toBeNull()
+    expect((error as Error).message).toMatch(/ul\.topics/)
   })
 
   it('ignores permalinks that leave the profile host', async () => {
@@ -264,6 +297,69 @@ describe('universal connector: publishing', () => {
     expect(h.page.log).toEqual([])
   })
 
+  describe('session checks before the first write', () => {
+    const failureOf = (outcome: Awaited<ReturnType<UniversalConnector['publish']>>): string => (outcome.status === 'failed' ? outcome.error : `not failed: ${outcome.status}`)
+
+    it('refuses with a recognizable sign-in error when the account is not signed in', async () => {
+      const h = setup()
+      h.page.login = { loggedIn: false, identity: '', captcha: false }
+      const outcome = await h.connector.publish(h.ctx, h.ticketFor(CHANNEL), post())
+      expect(outcome.status).toBe('failed')
+      expect(authIssueOf(failureOf(outcome))).toBe('login')
+      expect(h.page.writes).toEqual([])
+    })
+
+    it('refuses with a recognizable CAPTCHA error when the site shows a human check', async () => {
+      const h = setup()
+      h.page.login = { loggedIn: true, identity: 'natal', captcha: true }
+      const outcome = await h.connector.publish(h.ctx, h.ticketFor(CHANNEL), post())
+      expect(authIssueOf(failureOf(outcome))).toBe('captcha')
+      expect(h.page.writes).toEqual([])
+    })
+
+    it('refuses when someone else is signed in than the configured account', async () => {
+      const h = setup()
+      h.page.login = { loggedIn: true, identity: 'someone_else', captcha: false }
+      const outcome = await h.connector.publish(h.ctx, h.ticketFor(CHANNEL), post())
+      expect(failureOf(outcome)).toMatch(/someone_else.*natal/)
+      expect(h.page.writes).toEqual([])
+    })
+
+    it('refuses when the site does not reveal who is signed in although the account has a confirmed identity', async () => {
+      const h = setup()
+      h.page.login = { loggedIn: true, identity: '', captcha: false }
+      const outcome = await h.connector.publish(h.ctx, h.ticketFor(CHANNEL), post())
+      expect(failureOf(outcome)).toMatch(/who is signed in/)
+      expect(h.page.writes).toEqual([])
+    })
+
+    it('refuses when the profile cannot read the signed-in name but the account identity is known', async () => {
+      const def = validProfileDefinition({ login: { loggedInSelector: '#current-user', captchaSelector: '.captcha' } })
+      const h = setup({ profile: def })
+      const outcome = await h.connector.publish(h.ctx, h.ticketFor(CHANNEL), post())
+      expect(failureOf(outcome)).toMatch(/who is signed in/)
+      expect(h.page.writes).toEqual([])
+    })
+
+    it('compares the name ignoring case and spacing, and publishes', async () => {
+      const h = setup()
+      h.page.login = { loggedIn: true, identity: '  NATAL ', captcha: false }
+      h.page.afterSubmitUrl = 'https://forum.example.com/t/77'
+      h.page.at('https://forum.example.com/t/77', { pageText: 'Birth chart basics', selectors: new Set() })
+      expect((await h.connector.publish(h.ctx, h.ticketFor(CHANNEL), post())).status).toBe('confirmed')
+    })
+
+    it('does not block an account whose identity is not known yet', async () => {
+      const h = setup()
+      h.core.db.prepare('UPDATE accounts SET identity = NULL WHERE id = ?').run(h.accountId)
+      h.page.login = { loggedIn: true, identity: 'anyone', captcha: false }
+      h.page.afterSubmitUrl = 'https://forum.example.com/t/77'
+      h.page.at('https://forum.example.com/t/77', { pageText: 'Birth chart basics', selectors: new Set() })
+      const { ctx } = h.core.connectorContext(h.channel.id)
+      expect((await h.connector.publish(ctx, h.ticketFor(CHANNEL), post())).status).toBe('confirmed')
+    })
+  })
+
   it('stops with a definite failure when the profile has no flow for the action', async () => {
     const def = validProfileDefinition()
     delete (def.publish as Record<string, unknown>).post
@@ -273,12 +369,81 @@ describe('universal connector: publishing', () => {
 })
 
 describe('universal connector: resolving unknown outcomes', () => {
-  const request: PublishRequest = { kind: 'reply', destination: 'https://forum.example.com/t/2', parentExternalId: 't2-p1', title: null, text: 'My earlier  reply', link: null, attachments: [] }
+  const attemptedAt = '2026-11-08T11:55:00Z' // the own item "mine-1" was created at 12:00, i.e. after the attempt
+  const request: PublishRequest = { kind: 'reply', destination: 'https://forum.example.com/t/2', parentExternalId: 't2-p1', title: null, text: 'My earlier  reply', link: null, attachments: [], attemptedAt }
+  const OWN = 'https://forum.example.com/u/natal/posts'
+  const ownItems = (h: ReturnType<typeof setup>, items: ReturnType<typeof item>[]): void => {
+    h.page.site.get(OWN)!.items['div.post'] = items
+  }
 
-  it('finds own content that matches the request body', async () => {
+  it('finds own content that matches the request body, parent and time', async () => {
     const { connector, ctx } = setup()
     expect(await connector.findPublished(ctx, request)).toEqual({ url: 'https://forum.example.com/t/2#9', externalId: 'mine-1' })
     expect(await connector.findPublished(ctx, { ...request, text: 'never sent' })).toBeNull()
+  })
+
+  it('never matches older content with identical text', async () => {
+    const h = setup()
+    ownItems(h, [item({ id: 'old', body: 'Thanks!', parentId: 't2-p1', permalink: 'https://forum.example.com/t/2#1', time: '2026-10-01T09:00:00Z' })])
+    expect(await h.connector.findPublished(h.ctx, { ...request, text: 'Thanks!' })).toBeNull()
+  })
+
+  it('does not match a comment under another parent', async () => {
+    const h = setup()
+    ownItems(h, [item({ id: 'x', body: 'My earlier reply', parentId: 't2-p2', permalink: 'https://forum.example.com/t/2#2', time: '2026-11-08T12:00:00Z' })])
+    expect(await h.connector.findPublished(h.ctx, request)).toBeNull()
+  })
+
+  it('picks the new comment among older identical ones', async () => {
+    const h = setup()
+    ownItems(h, [
+      item({ id: 'old', body: 'My earlier reply', parentId: 't2-p1', permalink: 'https://forum.example.com/t/2#1', time: '2026-10-01T09:00:00Z' }),
+      item({ id: 'new', body: 'My earlier reply', parentId: 't2-p1', permalink: 'https://forum.example.com/t/2#3', time: '2026-11-08T12:01:00Z' })
+    ])
+    expect(await h.connector.findPublished(h.ctx, request)).toMatchObject({ externalId: 'new' })
+  })
+
+  it('allows a few minutes of clock skew but not more', async () => {
+    const h = setup()
+    ownItems(h, [item({ id: 'a', body: 'My earlier reply', parentId: 't2-p1', permalink: 'https://forum.example.com/t/2#1', time: '2026-11-08T11:52:00Z' })])
+    expect(await h.connector.findPublished(h.ctx, request)).toMatchObject({ externalId: 'a' })
+    ownItems(h, [item({ id: 'b', body: 'My earlier reply', parentId: 't2-p1', permalink: 'https://forum.example.com/t/2#1', time: '2026-11-08T11:40:00Z' })])
+    expect(await h.connector.findPublished(h.ctx, request)).toBeNull()
+  })
+
+  it('does not match an item whose time is missing or unreadable', async () => {
+    const h = setup()
+    ownItems(h, [item({ id: 'a', body: 'My earlier reply', parentId: 't2-p1', permalink: 'https://forum.example.com/t/2#1', time: 'yesterday-ish' })])
+    expect(await h.connector.findPublished(h.ctx, request)).toBeNull()
+  })
+
+  it('finds a post by title and time, not by title alone', async () => {
+    const h = setup()
+    const postRequest: PublishRequest = { kind: 'post', destination: CHANNEL, parentExternalId: null, title: 'Birth chart basics', text: 'Body', link: null, attachments: [], attemptedAt }
+    ownItems(h, [
+      item({ id: 'old-topic', title: 'Birth chart basics', body: 'Body', permalink: 'https://forum.example.com/t/5', time: '2026-09-01T09:00:00Z' }),
+      item({ id: 'other', title: 'Another title', body: 'Body', permalink: 'https://forum.example.com/t/6', time: '2026-11-08T12:00:00Z' })
+    ])
+    expect(await h.connector.findPublished(h.ctx, postRequest)).toBeNull()
+    ownItems(h, [item({ id: 'fresh', title: 'Birth chart basics', body: 'Body', permalink: 'https://forum.example.com/t/7', time: '2026-11-08T12:00:00Z' })])
+    expect(await h.connector.findPublished(h.ctx, postRequest)).toMatchObject({ externalId: 'fresh' })
+  })
+
+  it('refuses to guess when the time of the attempt is unknown', async () => {
+    const { connector, ctx } = setup()
+    await expect(connector.findPublished(ctx, { ...request, attemptedAt: undefined })).rejects.toThrow(/time of the send attempt/)
+  })
+
+  it('throws when the profile cannot tell new content from old (no time, or no parent for a reply), instead of answering "not published"', async () => {
+    const noTime = validProfileDefinition()
+    delete ((noTime.ownContent as { reader: Record<string, unknown> }).reader).time
+    const a = setup({ profile: noTime })
+    await expect(a.connector.findPublished(a.ctx, request)).rejects.toThrow(/time/)
+
+    const noParent = validProfileDefinition()
+    delete ((noParent.ownContent as { reader: Record<string, unknown> }).reader).parentId
+    const b = setup({ profile: noParent })
+    await expect(b.connector.findPublished(b.ctx, request)).rejects.toThrow(/parent/)
   })
 
   it('throws when the profile cannot look up own content, so "cannot look" is never "not published"', async () => {
@@ -286,5 +451,12 @@ describe('universal connector: resolving unknown outcomes', () => {
     delete def.ownContent
     const { connector, ctx } = setup({ profile: def })
     await expect(connector.findPublished(ctx, request)).rejects.toThrow(/cannot look up/)
+  })
+
+  it('throws a recognizable sign-in error when the own-content page is a login wall', async () => {
+    const h = setup()
+    h.page.site.get(OWN)!.selectors.delete('div.mine')
+    h.page.login = { loggedIn: false, identity: '', captcha: false }
+    await expect(h.connector.findPublished(h.ctx, request)).rejects.toBeInstanceOf(LoginRequiredError)
   })
 })

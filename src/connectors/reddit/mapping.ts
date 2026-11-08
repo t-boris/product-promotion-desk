@@ -30,6 +30,11 @@ export interface MappedComments {
   moreIds: string[]
   /** Deleted or removed comments that were left out. */
   skipped: number
+  /**
+   * Some comments could not be read and cannot be recovered by expanding `moreIds`: a "continue this thread" stub,
+   * nesting cut off by the depth guard, or an unusable morechildren answer.
+   */
+  incomplete: boolean
 }
 
 const DELETED_NAMES = new Set(['[deleted]', '[removed]'])
@@ -104,16 +109,23 @@ function mapComment(data: Record<string, unknown>, fallbackBase: string): Remote
  * comments are skipped (their replies are kept); "load more" stubs are reported in `moreIds`.
  */
 export function flattenComments(listing: unknown, postPermalink: string): MappedComments {
-  const out: MappedComments = { comments: [], moreIds: [], skipped: 0 }
+  const out: MappedComments = { comments: [], moreIds: [], skipped: 0, incomplete: false }
   const seen = new Set<string>()
   const visit = (nodes: unknown[], depth: number): void => {
-    if (depth > 60) return // pathological nesting: stop instead of overflowing the stack
+    if (depth > 60) {
+      // Pathological nesting: stop instead of overflowing the stack, and say that the rest was not read.
+      if (nodes.length > 0) out.incomplete = true
+      return
+    }
     for (const node of nodes) {
       const thing = asRecord(node)
       const data = asRecord(thing?.data)
       if (!thing || !data) continue
       if (thing.kind === 'more') {
-        for (const id of Array.isArray(data.children) ? data.children : []) if (typeof id === 'string' && id && id !== '_') out.moreIds.push(id)
+        const ids = (Array.isArray(data.children) ? data.children : []).filter((id): id is string => typeof id === 'string' && id !== '' && id !== '_')
+        out.moreIds.push(...ids)
+        // A stub without expandable ids ("continue this thread") hides comments that only a deeper page load would show.
+        if (ids.length === 0) out.incomplete = true
         continue
       }
       if (thing.kind !== 't1') continue
@@ -149,10 +161,14 @@ export function mapThread(json: unknown): MappedThread | null {
 export function mapMoreChildren(json: unknown, postPermalink: string): MappedComments {
   const things = asRecord(asRecord(asRecord(json)?.json)?.data)?.things
   const wrapped = { data: { children: Array.isArray(things) ? things : [] } }
-  return flattenComments(wrapped, postPermalink)
+  const mapped = flattenComments(wrapped, postPermalink)
+  // An error answer or an unexpected shape means the requested ids were not delivered.
+  if (!Array.isArray(things)) mapped.incomplete = true
+  return mapped
 }
 
-export function toDiscussion(post: RedditPost, comments: RemoteComment[]): RemoteDiscussion {
+/** `incomplete` is set only when true, so a fully read thread looks exactly like it did before the flag existed. */
+export function toDiscussion(post: RedditPost, comments: RemoteComment[], incomplete = false): RemoteDiscussion {
   return {
     externalId: post.fullname,
     url: post.permalink,
@@ -160,7 +176,8 @@ export function toDiscussion(post: RedditPost, comments: RemoteComment[]): Remot
     author: post.author,
     body: post.body,
     postedAt: post.createdAt,
-    comments
+    comments,
+    ...(incomplete ? { incomplete: true } : {})
   }
 }
 

@@ -13,6 +13,7 @@ import type { ChannelsStore } from './store'
 import { parseBrowserUrl } from './urls'
 
 const MAX_LABEL = 80
+const ACCOUNT_CHANGED_DETAIL = 'The signed-in account changed; review before sending'
 
 /** Implemented by the Electron browser service: wipes the stored session (cookies, storage) of a removed account. */
 interface SessionForgetting {
@@ -21,6 +22,16 @@ interface SessionForgetting {
 
 const canForget = (service: BrowserService): service is BrowserService & SessionForgetting =>
   typeof (service as Partial<SessionForgetting>).forgetAccount === 'function'
+
+/** Implemented by the Electron browser service: whether the person's window for the account is open. */
+interface UserWindowAware {
+  hasUserWindow(account: Account): boolean
+}
+
+const hasOpenUserWindow = (service: BrowserService, account: Account): boolean => {
+  const aware = service as Partial<UserWindowAware>
+  return typeof aware.hasUserWindow === 'function' && aware.hasUserWindow(account)
+}
 
 export class AccountsService {
   constructor(
@@ -107,6 +118,11 @@ export class AccountsService {
 
   releaseControl(accountId: unknown): void {
     const account = this.account(accountId)
+    // The window and its toolbar still tell the person they are in control; handing the browser to the agent behind
+    // it would let the app act on a page the person is looking at. The window's own button does both at once.
+    if (hasOpenUserWindow(this.core.browser, account)) {
+      throw new ApiError('user_window_open', 'Close the account window or press "Give control back to the app" in it first.')
+    }
     this.core.browser.session(account).releaseControl()
     this.core.log.info('accounts', `Control of the browser of ${account.label} returned to the app.`)
     this.core.events.changed('accounts')
@@ -117,7 +133,14 @@ export class AccountsService {
   /** A connector context for an account-level check: a real channel of the account, else a placeholder for its sign-in page. */
   private probeContext(account: Account, connector: Connector): ConnectorContext {
     const channel = this.store.channelsOfAccount(account.id)[0] ?? this.placeholderChannel(account, connector)
-    return { channel, account, session: this.core.browser.session(account), tickets: this.core.tickets, clock: this.core.clock }
+    return {
+      channel,
+      account,
+      session: this.core.browser.session(account),
+      // Only the verifier, exactly as core.connectorContext() hands it out: issuing tickets stays with the SendGate.
+      tickets: { assertValid: (ticket, expect) => this.core.tickets.assertValid(ticket, expect) },
+      clock: this.core.clock
+    }
   }
 
   private placeholderChannel(account: Account, connector: Connector): Channel {
@@ -162,16 +185,29 @@ export class AccountsService {
     }
   }
 
+  /**
+   * Another person's account is signed in where the confirmed one used to be: everything this account does on the
+   * person's behalf waits for a look. (Approvals bound to the old identity are invalidated separately, by the hash.)
+   */
+  private holdChannelsForReview(account: Account): void {
+    for (const channel of this.store.channelsOfAccount(account.id)) {
+      this.store.updateChannel(channel.id, { status: 'needs_user', statusDetail: ACCOUNT_CHANGED_DETAIL })
+    }
+  }
+
   /** Records a login state seen by any check; emits the changes that put the account on the attention list. */
   applyLogin(account: Account, state: Parameters<typeof loginOutcome>[0]): Account {
     const outcome = loginOutcome(state)
     const updated = this.store.setLogin(account.id, outcome.status, outcome.identity)
-    if (account.identity && outcome.identity && account.identity !== outcome.identity) {
+    const switched = Boolean(account.identity && outcome.identity && account.identity !== outcome.identity)
+    if (switched) {
       this.core.log.warn('accounts', `${account.label} is now signed in as ${outcome.identity} (it was ${account.identity}).`)
+      this.holdChannelsForReview(account)
     }
     if (account.status !== updated.status || account.identity !== updated.identity) {
       this.core.log.info('accounts', `${account.label}: ${outcome.detail}`)
     }
+    if (switched) this.core.events.changed('channels')
     this.core.events.changed('accounts', 'attention')
     return updated
   }

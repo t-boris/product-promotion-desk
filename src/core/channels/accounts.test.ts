@@ -76,6 +76,37 @@ describe('login hand-off (REQ-002: the person types passwords on the site)', () 
     await expect(session.withAgentControl('monitor', async () => 1)).resolves.toBe(1)
   })
 
+  describe('while the account window is open', () => {
+    /** The Electron service tells whether the account window is open; the test double is given the same method. */
+    const withWindow = (w: Awaited<ReturnType<typeof makeReadyWorld>>, open: { value: boolean }): void => {
+      Object.assign(w.t.browser, { hasUserWindow: () => open.value })
+    }
+
+    it('refuses to hand control to the agent: the window and its toolbar would still show user control', async () => {
+      const w = await makeReadyWorld()
+      const open = { value: true }
+      withWindow(w, open)
+      await w.call('accounts.openBrowser', { accountId: w.account.id })
+      const session = w.t.browser.session(w.account)
+      expect(session.control().holder).toBe('user')
+      const error = await w.call('accounts.releaseControl', { accountId: w.account.id }).catch((e: unknown) => e)
+      expect(error).toBeInstanceOf(ApiError)
+      expect(error).toMatchObject({ code: 'user_window_open', message: 'Close the account window or press "Give control back to the app" in it first.' })
+      expect(session.control().holder).toBe('user')
+      await expect(session.withAgentControl('monitor', async () => 1)).rejects.toMatchObject({ name: 'TakeoverError' })
+    })
+
+    it('releases once the window is closed', async () => {
+      const w = await makeReadyWorld()
+      const open = { value: true }
+      withWindow(w, open)
+      await w.call('accounts.openBrowser', { accountId: w.account.id })
+      open.value = false
+      await w.call('accounts.releaseControl', { accountId: w.account.id })
+      expect(w.t.browser.session(w.account).control().holder).toBe('none')
+    })
+  })
+
   it('reports an unknown account clearly', async () => {
     const w = makeWorld()
     expect(await w.refusal('accounts.openBrowser', { accountId: 'nope' })).toBe('not_found')
@@ -113,6 +144,61 @@ describe('accounts.checkLogin', () => {
     const w = await makeReadyWorld()
     w.fake.login = { loggedIn: false, identity: 'stale_name', captcha: false }
     expect((await w.call('accounts.checkLogin', { accountId: w.account.id })).identity).toBeNull()
+  })
+
+  describe('when a different account is signed in than the one confirmed before', () => {
+    const CHANGED = 'The signed-in account changed; review before sending'
+
+    async function twoAccountsWithChannels() {
+      const w = await makeReadyWorld()
+      const other = await w.addAccount('Other')
+      const mine = await w.call('channels.connect', { productId: w.productId, accountId: w.account.id, target: 'r/astrology' })
+      const second = await w.call('channels.connect', { productId: w.productId, accountId: w.account.id, target: 'r/tarot' })
+      const elsewhere = await w.call('channels.connect', { productId: w.productId, accountId: other.id, target: 'r/astrology' })
+      w.core.db.prepare("UPDATE channels SET status = 'active', status_detail = '' WHERE id IN (?, ?, ?)").run(mine.id, second.id, elsewhere.id)
+      w.fake.login = { loggedIn: true, identity: 'natal_bot', captcha: false }
+      await w.call('accounts.checkLogin', { accountId: w.account.id })
+      return { w, ids: [mine.id, second.id], elsewhereId: elsewhere.id }
+    }
+
+    it('stops every channel of the account for review and announces it', async () => {
+      const { w, ids, elsewhereId } = await twoAccountsWithChannels()
+      w.changes.length = 0
+      w.fake.login = { loggedIn: true, identity: 'someone_else', captcha: false }
+      expect(await w.call('accounts.checkLogin', { accountId: w.account.id })).toMatchObject({ status: 'ready', identity: 'someone_else' })
+      for (const id of ids) expect(w.core.repos.channel(id)).toMatchObject({ status: 'needs_user', statusDetail: CHANGED })
+      expect(w.core.repos.channel(elsewhereId)).toMatchObject({ status: 'active', statusDetail: '' }) // another account is not affected
+      expect(w.changes).toEqual(expect.arrayContaining(['channels', 'accounts', 'attention']))
+    })
+
+    it('leaves the channels alone when the same account is confirmed again', async () => {
+      const { w, ids } = await twoAccountsWithChannels()
+      await w.call('accounts.checkLogin', { accountId: w.account.id })
+      for (const id of ids) expect(w.core.repos.channel(id)).toMatchObject({ status: 'active', statusDetail: '' })
+    })
+
+    it('does not raise an alarm the first time an identity is learned', async () => {
+      const w = await makeReadyWorld()
+      const channel = await w.call('channels.connect', { productId: w.productId, accountId: w.account.id, target: 'r/astrology' })
+      w.fake.login = { loggedIn: true, identity: 'natal_bot', captcha: false }
+      await w.call('accounts.checkLogin', { accountId: w.account.id })
+      expect(w.core.repos.channel(channel.id).status).toBe('setup')
+    })
+  })
+
+  it('hands connectors only the ticket verifier during a sign-in check, so they cannot mint tickets', async () => {
+    let seen: Record<string, unknown> | null = null
+    class Spy extends FakeConnector {
+      override async checkLogin(ctx: Parameters<FakeConnector['checkLogin']>[0]) {
+        seen = ctx.tickets as unknown as Record<string, unknown>
+        return super.checkLogin(ctx)
+      }
+    }
+    const w = await makeReadyWorld({ fake: new Spy() })
+    await w.call('accounts.checkLogin', { accountId: w.account.id })
+    expect(seen).not.toBeNull()
+    expect(Object.keys(seen as unknown as object)).toEqual(['assertValid'])
+    expect('issue' in (seen as unknown as object)).toBe(false)
   })
 
   it('refuses while the person holds the browser, without changing the account', async () => {

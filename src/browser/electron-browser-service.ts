@@ -83,6 +83,12 @@ export class ElectronBrowserService implements BrowserService {
     return { tabId }
   }
 
+  /** True while the person's window for this account is open (the toolbar there shows who holds the browser). */
+  hasUserWindow(account: Account): boolean {
+    const window = this.accounts.get(account.id)?.userWindow
+    return window !== null && window !== undefined && !window.isClosed()
+  }
+
   /** Called when an account is deleted: closes its windows and wipes the stored session (cookies, storage). */
   async forgetAccount(account: Account): Promise<void> {
     const entry = this.accounts.get(account.id)

@@ -210,6 +210,17 @@ describe('user takeover and login hand-off', () => {
     await expect(session.withAgentControl('monitor', async () => 'resumed')).resolves.toBe('resumed')
   })
 
+  it('tells whether the account window is open, so the app does not release control behind it', async () => {
+    const { service } = setup()
+    const acc = account('a')
+    expect(service.hasUserWindow(acc)).toBe(false)
+    await service.openForUser(acc, 'https://www.reddit.com/login/')
+    expect(service.hasUserWindow(acc)).toBe(true)
+    expect(service.hasUserWindow(account('other'))).toBe(false)
+    created.windows[0].close()
+    expect(service.hasUserWindow(acc)).toBe(false)
+  })
+
   it('gives control back when the user simply closes the window', async () => {
     const { service } = setup()
     const acc = account('a')

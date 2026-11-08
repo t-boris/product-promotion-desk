@@ -17,9 +17,11 @@ import {
 } from '../../core/ports'
 import type { Capability, MetricReading } from '../../shared/types'
 import { CapabilityBuilder } from '../capabilities'
+import { CaptchaRequiredError, LoginRequiredError } from '../errors'
 import { gateProbeScript, type GateProbe } from '../page-scripts'
+import { createdMs, earliestCreation } from '../reconcile'
 import { analyzeRules, quoteRule } from '../rules-text'
-import { errorMessage, sameText } from '../text'
+import { comparableText, errorMessage, sameText } from '../text'
 import { hostBelongsTo, matchGlob, matchesAnyGlob } from './glob'
 import type { ItemReader, PublishFlow, SiteProfile, Step } from './profile'
 import { elementTextScript, extractItemsScript, loginProbeScript, pageTextScript, parseCount, visibleTextScript, type RawItem } from './reader'
@@ -171,7 +173,7 @@ export class UniversalConnector implements Connector {
       let discussions: RawItem[] = []
       let comments: RawItem[] = []
       try {
-        discussions = (await this.readItems(page, profile.discussions, ctx.channel.url, 10)).filter((i) => i.id)
+        discussions = (await this.readItems(page, profile, profile.discussions, ctx.channel.url, 10)).filter((i) => i.id)
         b.set(
           'read_posts',
           discussions.length > 0 ? 'verified' : 'needs_check',
@@ -185,7 +187,7 @@ export class UniversalConnector implements Connector {
       const withLink = discussions.find((d) => this.trustedUrl(profile, d.permalink))
       if (withLink) {
         try {
-          comments = (await this.readItems(page, profile.comments, withLink.permalink, 30)).filter((i) => i.id)
+          comments = (await this.readItems(page, profile, profile.comments, withLink.permalink, 30)).filter((i) => i.id)
           b.set(
             'read_comments',
             comments.length > 0 ? 'verified' : 'needs_check',
@@ -250,8 +252,9 @@ export class UniversalConnector implements Connector {
       // Read-back of own content.
       if (profile.ownContent) {
         try {
-          const own = await this.readItems(page, profile.ownContent.reader, renderTemplate(profile.ownContent.url, sample, 'url'), 5)
-          b.set('verify_send', 'verified', `The account's own content list is readable (${own.length} items), so a sent message can be looked up.`)
+          const own = await this.readItems(page, profile, profile.ownContent.reader, renderTemplate(profile.ownContent.url, sample, 'url'), 5)
+          if (profile.ownContent.reader.time) b.set('verify_send', 'verified', `The account's own content list is readable (${own.length} items), so a sent message can be looked up.`)
+          else b.set('verify_send', 'needs_check', `The account's own content list is readable (${own.length} items) but exposes no time, so an unconfirmed send could not be told from older content. Add a time field to the profile.`)
         } catch (error) {
           if (error instanceof TakeoverError) throw error
           b.set('verify_send', 'needs_check', `The account's own content could not be read: ${errorMessage(error)}.`)
@@ -305,10 +308,26 @@ export class UniversalConnector implements Connector {
     return url
   }
 
-  private async readItems(page: BrowserPage, reader: ItemReader, url: string, limit: number): Promise<RawItem[]> {
+  /** What the profile's login probe sees on the loaded page. */
+  private async probeSession(page: BrowserPage, profile: SiteProfile): Promise<{ loggedIn: boolean; identity: string; captcha: boolean }> {
+    const gate = await page.read<GateProbe>(gateProbeScript())
+    const probe = await page.read<{ loggedIn: boolean; identity: string; captcha: boolean }>(loginProbeScript(profile.login))
+    return { loggedIn: probe.loggedIn, identity: probe.identity, captcha: gate.captcha || probe.captcha }
+  }
+
+  /** A sign-in or CAPTCHA wall on the loaded page as a recognizable error, or null when the page is not one. */
+  private async wallError(page: BrowserPage, profile: SiteProfile): Promise<Error | null> {
+    const seen = await this.probeSession(page, profile)
+    if (seen.captcha) return new CaptchaRequiredError(`${profile.name} shows a human check. Complete it in the account browser, then try again.`)
+    if (!seen.loggedIn) return new LoginRequiredError(`the account is not signed in on ${profile.name}. Sign in in the account browser, then try again.`)
+    return null
+  }
+
+  private async readItems(page: BrowserPage, profile: SiteProfile, reader: ItemReader, url: string, limit: number): Promise<RawItem[]> {
     await page.goto(url, { timeoutMs: 30_000 })
     if (!(await page.waitForSelector(reader.containerSelector, 10_000))) {
-      throw new LayoutChanged(`"${reader.containerSelector}" was not found on ${url}`)
+      // A missing container is either a changed layout or a wall in front of the content; the person must be told which.
+      throw (await this.wallError(page, profile)) ?? new LayoutChanged(`"${reader.containerSelector}" was not found on ${url}`)
     }
     await page.waitForSelector(reader.itemSelector, 3_000) // items may load after their container
     const items = await page.read<RawItem[] | null>(extractItemsScript(reader, limit))
@@ -319,7 +338,7 @@ export class UniversalConnector implements Connector {
   async fetchActivity(ctx: ConnectorContext, options: { limit: number }): Promise<ActivityBatch> {
     const profile = this.requireProfile(ctx)
     return ctx.session.withAgentControl(`monitor:${ctx.channel.id}`, async (page) => {
-      const items = (await this.readItems(page, profile.discussions, ctx.channel.url, options.limit)).filter((i) => i.id)
+      const items = (await this.readItems(page, profile, profile.discussions, ctx.channel.url, options.limit)).filter((i) => i.id)
       const discussions: RemoteDiscussion[] = []
       const seen = new Set<string>()
       for (const item of items) {
@@ -330,7 +349,7 @@ export class UniversalConnector implements Connector {
         if (url !== ctx.channel.url) {
           if (this.pacingMs > 0) await this.sleep(this.pacingMs)
           // A thread that cannot be read fails the batch: a partial baseline would make old comments look new.
-          comments = this.toComments(profile, await this.readItems(page, profile.comments, url, 500), url)
+          comments = this.toComments(profile, await this.readItems(page, profile, profile.comments, url, 500), url)
         }
         discussions.push({ externalId: item.id, url, title: item.title, author: item.author, body: item.body, postedAt: isoTime(item.time), comments })
       }
@@ -409,6 +428,10 @@ export class UniversalConnector implements Connector {
       return await ctx.session.withAgentControl(`publish:${ctx.channel.id}`, async (page) => {
         let submitted = false
         try {
+          // Read-only: confirm the session and who is signed in before anything is typed or clicked.
+          await page.goto(request.destination, { timeoutMs: 30_000 })
+          const problem = await this.sessionProblem(page, profile, ctx.account.identity)
+          if (problem) return failed(problem)
           const lastClick = flow.steps.map((s) => s.type).lastIndexOf('click')
           for (const [index, step] of flow.steps.entries()) {
             if (index === lastClick) submitted = true
@@ -424,6 +447,26 @@ export class UniversalConnector implements Connector {
     } catch (error) {
       return failed(errorMessage(error))
     }
+  }
+
+  /**
+   * Why sending as this account must not start (a message ready to show, recognizable by `authIssueOf` when it is a
+   * sign-in or CAPTCHA problem), or null when the right account is signed in. When the account has a confirmed
+   * identity, the page must prove it: a site whose signed-in name cannot be read cannot be trusted with a send.
+   */
+  private async sessionProblem(page: BrowserPage, profile: SiteProfile, expected: string | null): Promise<string | null> {
+    const seen = await this.probeSession(page, profile)
+    if (seen.captcha) return new CaptchaRequiredError(`${profile.name} shows a human check. Complete it in the account browser, then try again.`).message
+    if (!seen.loggedIn) return new LoginRequiredError(`the account is not signed in on ${profile.name}. Sign in in the account browser, then try again.`).message
+    if (!expected) return null
+    const actual = comparableText(seen.identity)
+    if (!profile.login.identitySelector || !actual) {
+      return `The site does not show who is signed in, so the account ${expected} cannot be confirmed before sending. Nothing was sent.`
+    }
+    if (actual.toLowerCase() !== comparableText(expected).toLowerCase()) {
+      return `Signed in as ${seen.identity.trim()}, not the configured account ${expected}. Nothing was sent.`
+    }
+    return null
   }
 
   private async runStep(page: BrowserPage, profile: SiteProfile, step: Step, values: PlaceholderValues, ticket: SendTicket): Promise<void> {
@@ -470,10 +513,23 @@ export class UniversalConnector implements Connector {
       throw new Error('The site profile cannot look up the account’s own publications; check the site manually.')
     }
     const own = profile.ownContent
+    // Without these fields an old item with the same text cannot be told from the new one, and "not found" would be a guess.
+    const floor = earliestCreation(request)
+    if (!own.reader.time) throw new Error('The profile’s own-content reader has no time field, so new content cannot be told from older content; check the site manually.')
+    if (request.kind === 'reply' && !own.reader.parentId) throw new Error('The profile’s own-content reader has no parent field, so a reply cannot be tied to the comment it answers; check the site manually.')
+    if (request.kind === 'post' && request.title && !own.reader.title) throw new Error('The profile’s own-content reader has no title field, so a post cannot be recognized; check the site manually.')
+
     return ctx.session.withAgentControl(`find:${ctx.channel.id}`, async (page) => {
       const url = this.renderUrl(profile, own.url, { identity: ctx.account.identity ?? '', channelUrl: ctx.channel.url, target: ctx.channel.target })
-      const items = await this.readItems(page, own.reader, url, 50)
-      const hit = items.find((i) => i.id && sameText(i.body, request.text) && (request.kind === 'reply' || !request.title || !i.title || sameText(i.title, request.title)))
+      const items = await this.readItems(page, profile, own.reader, url, 50)
+      const hits = items
+        .filter((i) => i.id && createdMs(i.time) >= floor)
+        .filter((i) => {
+          if (request.kind === 'reply') return i.parentId === request.parentExternalId && sameText(i.body, request.text)
+          return (!request.title || sameText(i.title, request.title)) && (!request.text.trim() || !i.body || sameText(i.body, request.text))
+        })
+        .sort((a, b) => createdMs(a.time) - createdMs(b.time)) // the first thing created after the attempt is the likeliest result of it
+      const hit = hits[0]
       return hit ? { url: this.trustedUrl(profile, hit.permalink) ? hit.permalink : ctx.channel.url, externalId: hit.id } : null
     })
   }

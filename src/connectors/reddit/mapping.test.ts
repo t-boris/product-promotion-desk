@@ -58,11 +58,31 @@ describe('Reddit comment tree flattening', () => {
     expect(result.skipped).toBe(2)
   })
 
-  it('reports "load more" stubs without failing and ignores continue-thread stubs', () => {
+  it('reports "load more" stubs without failing and ignores the placeholder id of continue-thread stubs', () => {
     const tree = listing([commentThing({ id: 'c1', replies: [moreStub(['x1', 'x2'])] }), moreStub(['_']), moreStub(['x3'])])
     const result = flattenComments(tree, permalink)
     expect(result.moreIds).toEqual(['x1', 'x2', 'x3'])
     expect(result.comments).toHaveLength(1)
+  })
+
+  it('marks the tree incomplete when a continue-thread stub hides comments that cannot be expanded by id', () => {
+    const complete = flattenComments(listing([commentThing({ id: 'c1' }), moreStub(['x1'])]), permalink)
+    expect(complete.incomplete).toBe(false) // expandable stubs are the caller's job; they are not "lost" yet
+    const continued = flattenComments(listing([commentThing({ id: 'c1', replies: [moreStub(['_'])] })]), permalink)
+    expect(continued.incomplete).toBe(true)
+    const empty = flattenComments(listing([commentThing({ id: 'c1' }), { kind: 'more', data: { count: 0, children: [] } }]), permalink)
+    expect(empty.incomplete).toBe(true)
+  })
+
+  it('marks the tree incomplete when nesting is cut off instead of silently dropping the deep comments', () => {
+    let deep: unknown[] = [commentThing({ id: 'leaf' })]
+    for (let i = 0; i < 80; i += 1) deep = [commentThing({ id: `n${i}`, replies: deep })]
+    expect(flattenComments(listing(deep), permalink).incomplete).toBe(true)
+  })
+
+  it('treats an unreadable morechildren answer as incomplete', () => {
+    expect(mapMoreChildren({ json: { errors: [['RATELIMIT', 'slow down', 'ratelimit']] } }, permalink).incomplete).toBe(true)
+    expect(mapMoreChildren({ json: { errors: [], data: { things: [] } } }, permalink).incomplete).toBe(false)
   })
 
   it('survives malformed nodes and pathological nesting', () => {

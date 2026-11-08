@@ -208,18 +208,27 @@ describe('channels.remove', () => {
     ).run(action, opp, draft, approval, w.account.id, state, now)
   }
 
-  it('deletes the channel together with its history and frees the account', async () => {
+  it('deletes a channel that never sent anything, together with its discussions, and frees the account', async () => {
     const w = await makeReadyWorld()
     const channel = await connect(w)
-    seedSend(w, channel.id, 'confirmed')
     await w.call('channels.remove', { id: channel.id })
     expect(await w.call('channels.list', undefined)).toEqual([])
-    expect(w.core.db.prepare('SELECT COUNT(*) AS n FROM opportunities').get()).toEqual({ n: 0 })
-    expect(w.core.db.prepare('SELECT COUNT(*) AS n FROM send_actions').get()).toEqual({ n: 0 })
     await w.call('accounts.remove', { id: w.account.id })
   })
 
-  it('refuses while a send has no known result: that record may be the only proof of a publication', async () => {
+  it.each(['confirmed', 'failed'] as const)('refuses to remove a channel with a %s send: the history guards against sending twice', async (state) => {
+    const w = await makeReadyWorld()
+    const channel = await connect(w)
+    seedSend(w, channel.id, state)
+    const error = await w.call('channels.remove', { id: channel.id }).catch((e: unknown) => e)
+    expect(error).toMatchObject({ code: 'has_send_history' })
+    expect((error as Error).message).toMatch(/Pause the channel instead/)
+    expect(w.core.repos.channel(channel.id)).toBeTruthy()
+    expect(w.core.db.prepare('SELECT COUNT(*) AS n FROM send_actions').get()).toEqual({ n: 1 })
+    expect(w.core.db.prepare('SELECT COUNT(*) AS n FROM opportunities').get()).toEqual({ n: 1 })
+  })
+
+  it('refuses while a send has no known result with the more specific reason', async () => {
     const w = await makeReadyWorld()
     for (const state of ['unknown', 'sending'] as const) {
       const channel = await connect(w, `r/room-${state}`)
@@ -229,13 +238,12 @@ describe('channels.remove', () => {
     }
   })
 
-  it('allows removal once the unresolved send has been resolved', async () => {
+  it('keeps refusing after an unresolved send was resolved, because its record is still history', async () => {
     const w = await makeReadyWorld()
     const channel = await connect(w)
     seedSend(w, channel.id, 'unknown')
     w.core.db.prepare("UPDATE send_actions SET state = 'failed'").run()
-    await w.call('channels.remove', { id: channel.id })
-    expect(await w.call('channels.list', undefined)).toEqual([])
+    expect(await w.refusal('channels.remove', { id: channel.id })).toBe('has_send_history')
   })
 
   it('refuses an unknown channel', async () => {

@@ -9,13 +9,25 @@ export function ChannelStatusCard({ channel, product, accountLabel, onRemoved }:
   const [confirmRemove, setConfirmRemove] = useState(false)
   const runs = useQuery('runs.list', { channelId: channel.id, limit: 1 }, ['logs', 'channels'])
   const lastRun = runs.data?.[0]
+  // A channel with send history cannot be removed (that history prevents sending the same thing twice); the reason is
+  // shown here, and pausing is offered instead.
+  const [refusal, setRefusal] = useState<string | null>(null)
   const [activate, activating] = useAction(() => call('channels.activate', { channelId: channel.id }))
-  const [setPaused, pausing] = useAction((paused: boolean) => call('channels.setPaused', { channelId: channel.id, paused }))
+  const [setPaused, pausing] = useAction(async (paused: boolean) => {
+    setRefusal(null)
+    await call('channels.setPaused', { channelId: channel.id, paused })
+  })
   const [remove, removing] = useAction(async () => {
-    await call('channels.remove', { id: channel.id })
+    try {
+      await call('channels.remove', { id: channel.id })
+    } catch (e) {
+      setRefusal(e instanceof Error ? e.message : String(e))
+      setConfirmRemove(false)
+      return
+    }
     onRemoved()
   })
-  const error = activating.error ?? pausing.error ?? removing.error
+  const error = activating.error ?? pausing.error ?? removing.error ?? refusal
 
   const canActivate = channel.status === 'setup' || ((channel.status === 'needs_user' || channel.status === 'error') && channel.baselineDoneAt === null)
   const canPause = channel.status === 'active' || channel.status === 'error' || (channel.status === 'needs_user' && channel.baselineDoneAt !== null)
@@ -51,6 +63,13 @@ export function ChannelStatusCard({ channel, product, accountLabel, onRemoved }:
       </dl>
       {neverAssessed(channel) && channel.status === 'setup' && <p className="muted small">Assess the channel first to see what this account can do here. Then check the settings and activate it.</p>}
       <ErrorNote error={error} />
+      {refusal && canPause && (
+        <div className="row" style={{ marginTop: 8 }}>
+          <Button variant="primary" onClick={() => void setPaused(true)} disabled={pausing.busy} data-testid="channel-pause-instead">
+            Pause this channel instead
+          </Button>
+        </div>
+      )}
       <div className="row" style={{ marginTop: 8 }}>
         {canActivate && (
           <Button variant="primary" onClick={() => void activate()} disabled={activating.busy} data-testid="channel-activate" title="Reads the existing discussions once as a baseline, then starts watching for new activity">
@@ -70,7 +89,7 @@ export function ChannelStatusCard({ channel, product, accountLabel, onRemoved }:
         <span className="sep" />
         {confirmRemove ? (
           <>
-            <span className="muted small">Deletes this channel with its discussions, drafts and history. The account stays.</span>
+            <span className="muted small">Deletes this channel with its discussions and drafts. The account stays. A channel that has already sent something cannot be removed, only paused.</span>
             <Button variant="danger" onClick={() => void remove()} disabled={removing.busy} data-testid="channel-remove-confirm">
               Remove channel
             </Button>

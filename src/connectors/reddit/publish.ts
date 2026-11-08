@@ -13,9 +13,12 @@ import {
   type PublishRequest,
   type SendTicket
 } from '../../core/ports'
+import { CaptchaRequiredError, LoginRequiredError } from '../errors'
 import { sha256OfFile } from '../files'
+import { createdMs, earliestCreation } from '../reconcile'
 import { errorMessage, sameText } from '../text'
 import { ensureRedditOrigin, RedditApi } from './api'
+import { CAPTCHA_HINT, captchaShown, refusalError } from './auth'
 import type { OwnComment, RedditPost } from './mapping'
 import { formErrorsScript, imageSubmitUrl, oldSubmitUrl, oldThreadUrl, postedReplyScript, SEL } from './selectors'
 import { isFullname, parseSubreddit, postIdFromUrl, stripPrefix } from './target'
@@ -42,6 +45,12 @@ export const DEFAULT_RUNTIME: RedditRuntime = {
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024
 
 const failed = (error: string): PublishOutcome => ({ status: 'failed', error })
+
+/** The form's own error messages as a definite failure; a demanded CAPTCHA is reported as such so the person can solve it. */
+function rejection(what: 'post' | 'reply', errors: string[]): string {
+  const text = errors.join('; ')
+  return /captcha/i.test(text) ? new CaptchaRequiredError(`Reddit asks for a CAPTCHA before it accepts the ${what}: ${text}`).message : `Reddit rejected the ${what}: ${text}`
+}
 const unknown = (error: string): PublishOutcome => ({ status: 'unknown', error })
 
 /** Validates what can be checked without touching the page. Returns an error message, or null. */
@@ -88,8 +97,10 @@ export async function publishToReddit(
       try {
         await ensureRedditOrigin(page, ctx.channel.url)
         const api = new RedditApi(page)
+        // Nothing has been typed yet, so a wall in front of Reddit is a definite, recognizable failure.
+        if (await captchaShown(page)) return failed(new CaptchaRequiredError(CAPTCHA_HINT).message)
         const signedIn = await api.me()
-        if (!signedIn) return failed('The account is not signed in to Reddit.')
+        if (!signedIn) return failed(new LoginRequiredError('the account is not signed in to Reddit.').message)
         if (signedIn.toLowerCase() !== identity.toLowerCase()) return failed(`Signed in as u/${signedIn}, not the configured account u/${identity}.`)
         return request.kind === 'reply'
           ? await sendReply(page, api, ticket, request, sub, identity, runtime, markSubmitted)
@@ -187,7 +198,7 @@ async function confirmPost(
       if (postId) break
     }
     const errors = await visibleErrors(page, errorScope)
-    if (errors.length > 0) return failed(`Reddit rejected the post: ${errors.join('; ')}`)
+    if (errors.length > 0) return failed(rejection('post', errors))
     await runtime.sleep(runtime.pollMs)
   }
   if (!postId) return unknown('The submit button was pressed but Reddit showed neither the new post nor an error.')
@@ -258,7 +269,7 @@ async function sendReply(
   let found: PostedReply | null = null
   for (let waited = 0; waited <= runtime.submitTimeoutMs; waited += runtime.pollMs) {
     const errors = await visibleErrors(page, `form[id^="form-${parent}"]`)
-    if (errors.length > 0) return failed(`Reddit rejected the reply: ${errors.join('; ')}`)
+    if (errors.length > 0) return failed(rejection('reply', errors))
     try {
       found = await page.read<PostedReply | null>(postedReplyScript(parent, identity))
     } catch (error) {
@@ -291,29 +302,49 @@ function matchesOwnComment(comment: OwnComment, request: PublishRequest, identit
 
 // ───────────────────────────── Resolving unknown outcomes ─────────────────────────────
 
+/** The oldest of the candidates (the first thing created after the attempt is the most likely result of it). */
+function oldest<T extends { createdAt: string | null }>(items: T[]): T | undefined {
+  return [...items].sort((a, b) => createdMs(a.createdAt) - createdMs(b.createdAt))[0]
+}
+
 /**
  * Looks through the account's own recent posts or comments for the request. `null` means "looked and found
  * nothing"; a failure to look at all throws, so an unreadable history is never mistaken for "not published".
+ *
+ * A match must have been created at or after the attempt (minus a few minutes of clock skew), and must be bound to
+ * the target: a reply to exactly the requested parent; a post in the requested community with the requested title.
+ * Text alone never matches, so an older identical "Thanks!" cannot be mistaken for the new reply.
  */
 export async function findOwnPublication(ctx: ConnectorContext, request: PublishRequest): Promise<PublishedRef | null> {
   const sub = parseSubreddit(ctx.channel.target)
   if (!sub) throw new Error(`Channel target is not a subreddit: ${ctx.channel.target}`)
+  const destinationSub = parseSubreddit(request.destination)
+  if (!destinationSub || destinationSub.toLowerCase() !== sub.toLowerCase()) {
+    throw new Error(`The destination ${request.destination} is not in r/${sub}, so this channel cannot look for it.`)
+  }
+  const floor = earliestCreation(request)
   return ctx.session.withAgentControl(`find:${ctx.channel.id}`, async (page) => {
     await ensureRedditOrigin(page, ctx.channel.url)
     const api = new RedditApi(page)
     const identity = ctx.account.identity ?? (await api.me())
-    if (!identity) throw new Error('The account is not signed in, so its own submissions cannot be searched.')
+    if (!identity) throw new LoginRequiredError('the account is not signed in, so its own submissions cannot be searched.')
 
     if (request.kind === 'reply') {
       const own = await api.ownComments(identity, 50)
-      if (!own.ok) throw new Error(`Own comments could not be read: ${own.reason}`)
-      const hit = own.value.find((c) => c.parentFullname === request.parentExternalId && sameText(c.body, request.text))
+      if (!own.ok) throw await refusalError(page, api, own, `Own comments could not be read: ${own.reason}`)
+      const hit = oldest(own.value.filter((c) => createdMs(c.createdAt) >= floor && c.parentFullname === request.parentExternalId && sameText(c.body, request.text)))
       return hit ? { url: hit.permalink, externalId: hit.fullname } : null
     }
     const own = await api.ownSubmitted(identity, 50)
-    if (!own.ok) throw new Error(`Own posts could not be read: ${own.reason}`)
-    const hit = own.value.find(
-      (p) => p.subreddit.toLowerCase() === sub.toLowerCase() && sameText(p.title, request.title ?? '') && (!request.text.trim() || sameText(p.body, request.text))
+    if (!own.ok) throw await refusalError(page, api, own, `Own posts could not be read: ${own.reason}`)
+    const hit = oldest(
+      own.value.filter(
+        (p) =>
+          createdMs(p.createdAt) >= floor &&
+          p.subreddit.toLowerCase() === sub.toLowerCase() &&
+          sameText(p.title, request.title ?? '') &&
+          (!request.text.trim() || sameText(p.body, request.text))
+      )
     )
     return hit ? { url: hit.permalink, externalId: hit.fullname } : null
   })

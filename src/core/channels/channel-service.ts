@@ -199,6 +199,15 @@ export class ChannelService {
         `${channel.target} has ${open} send${open === 1 ? '' : 's'} whose result is not known yet. Check them with the platform first: removing the channel would erase the only record of a message that may be published.`
       )
     }
+    // Removal cascades to opportunities, drafts, approvals and sends. With them go the duplicate guards and the
+    // sending limits, so the same message could be sent again. A channel with any send is paused, never erased.
+    const sends = this.store.sendCount(channel.id)
+    if (sends > 0) {
+      throw new ApiError(
+        'has_send_history',
+        `${channel.target} has ${sends} recorded send${sends === 1 ? '' : 's'}. Removing the channel would erase that history together with the duplicate checks and sending limits, so the same message could be sent twice. Pause the channel instead.`
+      )
+    }
     this.store.deleteChannel(channel.id)
     this.core.log.info('channels', `Channel removed: ${channel.target}. Its discussions, drafts and history were deleted with it.`)
     this.core.events.changed('channels', 'attention', 'opportunities', 'results')

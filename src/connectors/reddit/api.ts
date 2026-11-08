@@ -80,22 +80,33 @@ export class RedditApi {
     return thread ? { ok: true, value: thread } : { ok: false, status: res.status, reason: 'unexpected thread format' }
   }
 
-  /** Expands "load more" stubs, at most `maxRequests` calls of 100 ids each. Failures keep what was read so far. */
+  /**
+   * Expands "load more" stubs, at most `maxRequests` calls of 100 ids each. Failures keep what was read so far.
+   * `moreIds` of the result lists every id that was NOT read (also those of a failed call), and `incomplete` is set
+   * whenever anything was left unread, so the caller can tell a whole thread from a partial one.
+   */
   async expandMore(postFullname: string, moreIds: string[], postPermalink: string, maxRequests = 3): Promise<MappedComments> {
-    const out: MappedComments = { comments: [], moreIds: [], skipped: 0 }
-    const pending = [...new Set(moreIds)].filter((id) => POST_ID.test(id))
+    const out: MappedComments = { comments: [], moreIds: [], skipped: 0, incomplete: false }
+    const unique = [...new Set(moreIds)]
+    const pending = unique.filter((id) => POST_ID.test(id))
+    if (pending.length < unique.length) out.incomplete = true // ids that cannot be requested at all
     for (let call = 0; call < maxRequests && pending.length > 0; call += 1) {
       const batch = pending.splice(0, 100)
       const res = await this.get(
         `/api/morechildren.json?api_type=json&raw_json=1&link_id=${postFullname}&children=${batch.join(',')}`
       )
-      if (res.status !== 200) break
+      if (res.status !== 200) {
+        pending.unshift(...batch) // not read: must stay visible as unread
+        break
+      }
       const mapped = mapMoreChildren(res.json, postPermalink)
+      if (mapped.incomplete) out.incomplete = true
       out.comments.push(...mapped.comments)
       out.skipped += mapped.skipped
       pending.push(...mapped.moreIds.filter((id) => POST_ID.test(id)))
     }
     out.moreIds = pending
+    if (pending.length > 0) out.incomplete = true
     return out
   }
 

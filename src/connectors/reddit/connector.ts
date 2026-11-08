@@ -1,5 +1,6 @@
 import type {
   ActivityBatch,
+  BrowserPage,
   Connector,
   ConnectorContext,
   LoginState,
@@ -7,12 +8,14 @@ import type {
   PublishedRef,
   PublishOutcome,
   PublishRequest,
+  RemoteComment,
   RemoteDiscussion,
   SendTicket
 } from '../../core/ports'
 import type { Capability, MetricReading } from '../../shared/types'
 import { gateProbeScript, type GateProbe } from '../page-scripts'
 import { ensureRedditOrigin, RedditApi } from './api'
+import { refusalError } from './auth'
 import { assessSubreddit } from './assess'
 import { toDiscussion, REDDIT_ORIGIN, type RedditPost } from './mapping'
 import { collectMetrics } from './metrics'
@@ -79,31 +82,35 @@ export class RedditConnector implements Connector {
       await ensureRedditOrigin(page, ctx.channel.url)
       const api = new RedditApi(page)
       const listing = await api.listing(sub, options.limit)
-      if (!listing.ok) throw new Error(`Could not read the r/${sub} listing: ${listing.reason}`)
+      if (!listing.ok) throw await refusalError(page, api, listing, `Could not read the r/${sub} listing: ${listing.reason}`)
 
       const discussions: RemoteDiscussion[] = []
       for (const post of listing.value.filter((p) => !p.removed).slice(0, options.limit)) {
         // Partial results would make a later cycle look like "new" activity for old comments (REQ-003),
         // so any failure to read a thread fails the whole batch instead of dropping it silently.
-        discussions.push(toDiscussion(post, await this.readComments(api, sub, post, discussions.length > 0)))
+        const read = await this.readComments(page, api, sub, post, discussions.length > 0)
+        discussions.push(toDiscussion(post, read.comments, read.incomplete))
       }
       return { discussions, fetchedAt: ctx.clock.now().toISOString() }
     })
   }
 
-  private async readComments(api: RedditApi, sub: string, post: RedditPost, paced: boolean) {
-    if ((post.numComments ?? 0) === 0) return []
+  /** The comments of a post and whether the read is partial (stubs left unexpanded, nesting cut off, a call failed). */
+  private async readComments(page: BrowserPage, api: RedditApi, sub: string, post: RedditPost, paced: boolean): Promise<{ comments: RemoteComment[]; incomplete: boolean }> {
+    if ((post.numComments ?? 0) === 0) return { comments: [], incomplete: false }
     if (paced && this.pacingMs > 0) await this.runtime.sleep(this.pacingMs)
     const thread = await api.thread(sub, post.fullname)
-    if (!thread.ok) throw new Error(`Could not read comments of ${post.fullname}: ${thread.reason}`)
+    if (!thread.ok) throw await refusalError(page, api, thread, `Could not read comments of ${post.fullname}: ${thread.reason}`)
     const { mapped } = thread.value
     const comments = [...mapped.comments]
+    let incomplete = mapped.incomplete
     if (mapped.moreIds.length > 0) {
       const more = await api.expandMore(post.fullname, mapped.moreIds, post.permalink)
       const seen = new Set(comments.map((c) => c.externalId))
       for (const comment of more.comments) if (!seen.has(comment.externalId)) comments.push(comment)
+      incomplete = incomplete || more.incomplete
     }
-    return comments
+    return { comments, incomplete }
   }
 
   async fetchThread(ctx: ConnectorContext, discussionExternalId: string): Promise<RemoteDiscussion | null> {
@@ -114,11 +121,12 @@ export class RedditConnector implements Connector {
       const thread = await api.thread(sub, discussionExternalId)
       if (!thread.ok) {
         if (thread.status === 404) return null
-        throw new Error(`Could not read the thread ${discussionExternalId}: ${thread.reason}`)
+        throw await refusalError(page, api, thread, `Could not read the thread ${discussionExternalId}: ${thread.reason}`)
       }
       const { post } = thread.value
       if (post.removed) return null
-      return toDiscussion(post, await this.readComments(api, sub, post, false))
+      const read = await this.readComments(page, api, sub, post, false)
+      return toDiscussion(post, read.comments, read.incomplete)
     })
   }
 
