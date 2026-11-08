@@ -1,2 +1,7 @@
 .dde/
 .DS_Store
+node_modules/
+out/
+dist/
+coverage/
+*.log
