@@ -83,7 +83,14 @@ export class Core {
     if (!connector) throw new ApiError('connector_missing', `Connector not available: ${channel.connectorId}`)
     return {
       connector,
-      ctx: { channel, account, session: this.browser.session(account), tickets: this.tickets, clock: this.clock }
+      ctx: {
+        channel,
+        account,
+        session: this.browser.session(account),
+        // Only the verifier: the authority's issue() must stay with the SendGate.
+        tickets: { assertValid: (ticket, expect) => this.tickets.assertValid(ticket, expect) },
+        clock: this.clock
+      }
     }
   }
 

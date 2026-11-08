@@ -130,6 +130,11 @@ export interface ApiMethods {
   'opportunities.send': [{ id: Id }, OpportunityCard]
   /** Re-checks an 'unknown' send with the platform; only then may a new attempt happen. */
   'opportunities.reconcile': [{ id: Id }, OpportunityCard]
+  /**
+   * The owner settles an 'unknown' send by checking the platform themselves: it was published (optionally with its
+   * link) or it was not. Without this an unreachable platform check would lock the item forever.
+   */
+  'opportunities.resolveUnknown': [{ id: Id; outcome: 'published' | 'not_published'; url?: string }, OpportunityCard]
   'publications.suggest': [{ channelId: Id }, OpportunityCard]
   'publications.create': [{ channelId: Id; draft: DraftInput }, OpportunityCard]
   'publications.schedule': [{ id: Id; at: IsoTime | null }, OpportunityCard]

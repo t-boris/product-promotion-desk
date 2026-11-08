@@ -37,6 +37,8 @@ export class FakeEngine implements AiEngine {
   readonly calls: AiTask[] = []
   readonly scripts = new Map<string, Script>()
   installed = true
+  /** Tests flip this to prove that automatic replies are refused for engines that are not tool-free. */
+  toolFree = true
 
   constructor(
     readonly id: EngineId = 'claude',

@@ -52,6 +52,11 @@ export interface AiRunOptions {
 export interface AiEngine {
   readonly id: EngineId
   readonly label: string
+  /**
+   * True only when the adapter can guarantee the engine has no tools at all (cannot read files, run commands or
+   * browse). Automatic replies are allowed only with a tool-free engine, because comment text is untrusted input.
+   */
+  readonly toolFree: boolean
   check(): Promise<EngineStatus>
   /** Resolves with the final text. A failure of the engine process rejects with AiError and never crashes the app. */
   run(task: AiTask, options?: AiRunOptions): Promise<string>
@@ -158,6 +163,11 @@ export interface RemoteDiscussion {
   /** Thread no longer accepts replies (locked or archived); the SendGate refuses to send into it. */
   locked?: boolean
   archived?: boolean
+  /**
+   * The connector could not read the whole thread (e.g. unexpanded "load more" stubs). The SendGate must not
+   * conclude "no reply by the account exists" from an incomplete snapshot.
+   */
+  incomplete?: boolean
 }
 
 export interface ActivityBatch {
@@ -175,6 +185,8 @@ export interface PublishRequest {
   text: string
   link: string | null
   attachments: Attachment[]
+  /** When the attempt being reconciled started; findPublished must ignore anything created before it. */
+  attemptedAt?: IsoTime
 }
 
 export type PublishOutcome =
