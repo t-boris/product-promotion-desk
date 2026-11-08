@@ -14,6 +14,7 @@ import {
   type TicketVerifier
 } from './ports'
 import { Repos } from './repos'
+import { RunRecorder } from './runs'
 import { ApiRouter } from './api/router'
 import type { CoreServices } from './services'
 import { SettingsStore } from './settings'
@@ -42,6 +43,7 @@ export class Core {
   readonly log: Logger
   readonly settings: SettingsStore
   readonly repos: Repos
+  readonly runs: RunRecorder
   readonly engines: EngineRegistry
   readonly connectors: Connectors
   readonly browser: BrowserService
@@ -65,6 +67,7 @@ export class Core {
     this.log = new Logger(this.db, this.events, this.clock, deps.echoLogs ?? false)
     this.settings = new SettingsStore(this.db)
     this.repos = new Repos(this.db)
+    this.runs = new RunRecorder(this.db, this.events, this.clock)
     this.engines = new EngineRegistry(deps.engines, this.settings)
     this.connectors = new Connectors(deps.connectors)
     this.tickets = new TicketAuthority(this.clock, deps.secret)

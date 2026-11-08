@@ -6,7 +6,7 @@ export interface Migration {
   sql: string
 }
 
-export const MIGRATIONS: Migration[] = [
+const BASE: Migration[] = [
   {
     id: 1,
     name: 'initial schema',
@@ -265,3 +265,14 @@ CREATE INDEX idx_metrics_channel ON metric_snapshots(channel_id, captured_at);
 `
   }
 ]
+
+// Each work area appends migrations in its own id range, so parallel work never collides:
+//   passports 100-199, channels/connectors 200-299, pipeline 300-399, lifecycle/results 400-499.
+import { PASSPORT_MIGRATIONS } from './migrations-passports'
+import { CHANNEL_MIGRATIONS } from './migrations-channels'
+import { PIPELINE_MIGRATIONS } from './migrations-pipeline'
+import { LIFECYCLE_MIGRATIONS } from './migrations-lifecycle'
+
+export const MIGRATIONS: Migration[] = [...BASE, ...PASSPORT_MIGRATIONS, ...CHANNEL_MIGRATIONS, ...PIPELINE_MIGRATIONS, ...LIFECYCLE_MIGRATIONS].sort(
+  (a, b) => a.id - b.id
+)
