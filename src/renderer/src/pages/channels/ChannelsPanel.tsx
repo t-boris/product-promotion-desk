@@ -68,7 +68,7 @@ export function ChannelsPanel({ productId }: { productId: string }) {
         </aside>
         <div className="channels-detail">
           {selected ? (
-            <ChannelDetail key={selected.id} channel={selected} products={allProducts} accounts={[...accountList, ...sharedAccounts]} onRemoved={() => setSelectedId(null)} />
+            <ChannelDetail key={selected.id} channel={selected} products={allProducts} accounts={[...accountList, ...sharedAccounts]} platforms={platformList} planBlockedReason={blockedReason} onRemoved={() => setSelectedId(null)} />
           ) : (
             <EmptyState title="Select a channel">Pick a channel to see its status and abilities, assess it, and set how the app behaves there.</EmptyState>
           )}
@@ -78,7 +78,7 @@ export function ChannelsPanel({ productId }: { productId: string }) {
   )
 }
 
-/** Why "Suggest channels with AI" cannot be used right now, in plain words; null when it can (or while the facts are still loading). */
+/** Why the "with AI" buttons (channels, roles, plan) cannot be used right now, in plain words; null when it can (or while the facts are still loading). */
 function suggestionBlockedReason(facts: {
   approved: boolean | null
   engineId: string | null | undefined

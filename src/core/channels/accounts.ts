@@ -8,6 +8,8 @@ import type { Core } from '../core'
 import type { BrowserService, Connector, ConnectorContext } from '../ports'
 import { browserError, found, requireText } from './errors'
 import { loginOutcome } from './login'
+import { connectorForPlatform, listPlatforms } from './platforms'
+import { presetFor } from './presets'
 import { parseRole, sameRoleName } from './roles'
 import { blankCapabilities } from './capabilities'
 import type { ChannelsStore } from './store'
@@ -58,7 +60,7 @@ export class AccountsService {
     const platform = requireText(args.platform, 'The platform').toLowerCase()
     const label = requireText(args.label, 'The account name').replace(/\s+/g, ' ')
     if (label.length > MAX_LABEL) throw new ApiError('invalid_input', `The account name is too long (limit ${MAX_LABEL} characters).`)
-    const known = [...new Set(this.core.connectors.list().map((c) => c.platform))]
+    const known = listPlatforms(this.core.connectors).map((p) => p.platform)
     if (!known.includes(platform)) {
       throw new ApiError('invalid_input', `Unknown platform "${platform}". Available: ${known.join(', ') || 'none'}.`)
     }
@@ -116,11 +118,11 @@ export class AccountsService {
 
   /** The connector responsible for the account's platform. */
   private connectorFor(account: Account): Connector | undefined {
-    return this.core.connectors.list().find((c) => c.platform === account.platform)
+    return connectorForPlatform(this.core.connectors, account.platform)
   }
 
   private defaultUrl(account: Account): string {
-    const login = this.connectorFor(account)?.loginUrl() ?? ''
+    const login = presetFor(account.platform)?.loginUrl ?? this.connectorFor(account)?.loginUrl() ?? ''
     if (login) return login
     const channel = this.store.channelsOfAccount(account.id)[0]
     if (channel) return channel.url
@@ -175,7 +177,7 @@ export class AccountsService {
   }
 
   private placeholderChannel(account: Account, connector: Connector): Channel {
-    const url = connector.loginUrl()
+    const url = presetFor(account.platform)?.loginUrl ?? connector.loginUrl()
     if (!url) {
       throw new ApiError('invalid_input', 'Connect a channel on this site first: the app needs to know which site to check the sign-in on.')
     }
@@ -196,6 +198,7 @@ export class AccountsService {
       lastRunAt: null,
       lastSuccessAt: null,
       nextCheckAt: null,
+      plan: null,
       createdAt: this.core.clock.now().toISOString()
     }
   }

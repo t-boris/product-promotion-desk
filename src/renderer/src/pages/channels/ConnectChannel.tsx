@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import type { Account, Channel, ChannelSuggestion, PlatformInfo, Product } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
 import { Button, Card, ErrorNote, Field } from '../../ui'
-import { accountOptionLabel, addressExample, isSameAddress, isWebAddress, platformLabel, platformOfSuggestion } from './model'
+import { accountOptionLabel, addressExample, isSameAddress, isWebAddress, platformLabel, platformOfSuggestion, typedAddress } from './model'
 import { PrepareSiteProfile } from './PrepareSiteProfile'
 
 export const ONE_LOGIN_SPEAKS = 'Only one login of this product speaks in a discussion. The other logins stay quiet in it.'
@@ -41,10 +41,12 @@ export function ConnectChannel({ product, accounts, channels, sharedAccounts, pl
   const shared = account !== undefined && sharedAccounts.some((a) => a.id === account.id)
   const info = platforms.find((p) => p.platform === account?.platform)
   const productId = product?.id ?? ''
+  // A handle on a named platform stands for an address; the rest of this form works with that address.
+  const address = typedAddress(info, target)
   const ready = productId !== '' && account !== undefined && target.trim() !== '' && (!shared || consent)
   const sharedOwner = shared && account ? productName(account.productId) : ''
   // Another login of this product is already in that community: say how discussions are shared between logins.
-  const otherLoginThere = account !== undefined && target.trim() !== '' && channels.some((c) => c.productId === productId && c.accountId !== account.id && isSameAddress(target, c))
+  const otherLoginThere = account !== undefined && target.trim() !== '' && channels.some((c) => c.productId === productId && c.accountId !== account.id && isSameAddress(address, c))
 
   // "Use this" on a suggestion: fill in the address and pick a login of the suggested platform, if there is one.
   useEffect(() => {
@@ -113,7 +115,7 @@ export function ConnectChannel({ product, accounts, channels, sharedAccounts, pl
               )}
             </select>
           </Field>
-          <Field label="Channel address" hint="Connecting only saves it: nothing is posted.">
+          <Field label="Channel address" hint={address !== target.trim() ? `Address: ${address}. Connecting only saves it: nothing is posted.` : (info?.hint ?? 'Connecting only saves it: nothing is posted.')}>
             <input
               className="input"
               value={target}
@@ -151,8 +153,8 @@ export function ConnectChannel({ product, accounts, channels, sharedAccounts, pl
           {state.busy ? 'Connecting…' : 'Connect channel'}
         </Button>
       </form>
-      {account && info && !info.prepared && isWebAddress(target) && !shared && <PrepareSiteProfile key={`${account.id}|${target.trim()}`} productId={productId} accountId={account.id} url={target.trim()} />}
-      {account && info && !info.prepared && isWebAddress(target) && shared && (
+      {account && info && !info.prepared && isWebAddress(address) && !shared && <PrepareSiteProfile key={`${account.id}|${address}`} productId={productId} accountId={account.id} url={address} />}
+      {account && info && !info.prepared && isWebAddress(address) && shared && (
         <p className="muted small" data-testid="profile-needs-own-login">
           To prepare a site profile, use a login of this product.
         </p>

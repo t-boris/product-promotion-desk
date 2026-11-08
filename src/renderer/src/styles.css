@@ -387,6 +387,11 @@ textarea.input {
   border: 1px dashed var(--border);
   border-radius: var(--radius);
 }
+.plain-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
 /* One goal of a product on the Goal tab, and its line on the Results tab. */
 .goal-card {
   display: flex;

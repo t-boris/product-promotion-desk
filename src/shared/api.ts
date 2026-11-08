@@ -128,6 +128,7 @@ export interface ApiMethods {
    */
   'channels.connect': [{ productId: Id; accountId: Id; target: string; reuseAccount?: boolean }, Channel]
   /** AI ideas for channels of this product, from its approved passport. Unverified; nothing is connected. */
+  'channels.preparePlan': [{ channelId: Id }, Channel]
   'channels.suggest': [{ productId: Id }, ChannelSuggestion[]]
   /**
    * Reads the site at `url` through the account's browser (read-only) and has the AI prepare a draft profile for the

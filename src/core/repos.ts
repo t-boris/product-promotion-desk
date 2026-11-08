@@ -5,6 +5,7 @@ import type {
   Approval,
   Capability,
   Channel,
+  ChannelPlan,
   ChannelSettings,
   Claim,
   Comment,
@@ -89,6 +90,7 @@ export const mapChannel = (r: Row): Channel => ({
   lastRunAt: (r.last_run_at as string | null) ?? null,
   lastSuccessAt: (r.last_success_at as string | null) ?? null,
   nextCheckAt: (r.next_check_at as string | null) ?? null,
+  plan: parseJson<ChannelPlan | null>(r.plan_json as string | null, null),
   createdAt: r.created_at as string
 })
 

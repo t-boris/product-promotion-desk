@@ -124,3 +124,15 @@ Owner question: "Can there not be several goals? Why only one?" Answer: no techn
 
 Review: the first version lost the "Goal saved" message exactly when a new goal was added, because its card was replaced by the stored goal's card; found by running the flow, fixed by keeping the state in the tab.
 
+## 0.1.8: named platforms and an AI plan for each channel (DEC-013, REQ-011)
+
+Owner request: "more channels than Reddit, Instagram, Facebook, TikTok at least; the AI decides what to do in each channel; in principle any channel can be connected". Found: the universal connector with site profiles already covers "any site"; it has no file upload step, and Instagram/TikTok take only photo or video. The owner chose "catalog + AI plan for the channel" (not media upload, not catalog only).
+
+- [x] Catalog: `presets.ts` (Instagram, Facebook, TikTok, X, LinkedIn, YouTube, Telegram, Threads, Pinterest as data), `listPlatforms` shows them between Reddit and Other website; accounts, channels, site profiles, suggestions and the sign-in page understand them; `@handle` is expanded; an address outside the platform's domains is refused.
+- [x] Plan: migration 203 (`channels.plan_json`), `planChannel` (prompt, validation, drops ill-fitting or unsafe steps), `channels.preparePlan`, "What to do here" card on the channel.
+- [x] UI: platform note in the account form, address example and resolved address in the connect form, plan card.
+- [x] Tests (1245 pass), integration test with the real universal connector (named platform assessed as "needs check"), 12-screen sweep (394 buttons, label tops equal), a real Codex run of the plan on a copy of the owner's data.
+- [ ] Not in this version: publishing photos and video (needs an upload step in site profiles and files from the owner); live checks on Instagram, Facebook, TikTok (need real accounts; REQ-002 reports support only as far as it was seen).
+
+Review: the real model answered in the language of the product data (Russian); the labels around the plan stay English.
+

@@ -202,15 +202,25 @@ export interface RoleSuggestion {
 }
 
 /** A platform the application can connect, taken from the registered connectors (DEC-009). */
+/** What a post on a platform can contain. */
+export type PlatformContentKind = 'text' | 'image' | 'video' | 'link'
+
 export interface PlatformInfo {
   /** Connector id, e.g. "reddit" or "universal". */
   connectorId: string
-  /** Key stored on accounts and channels, e.g. "reddit". */
+  /** Key stored on accounts and channels, e.g. "reddit" or "instagram". */
   platform: string
   label: string
-  /** False for the universal connector, which needs a site profile for every site. */
+  /** False for the universal connector and for the named platforms served by it: each site needs a site profile. */
   prepared: boolean
   loginUrl: string
+  /** Named platform served by the universal connector (DEC-013): what address to give, what a post holds, what to know. */
+  hint?: string
+  /** A typical address to type, shown as the placeholder; and the template that turns "@name" into an address (`{handle}`). */
+  example?: string
+  handleUrl?: string
+  accepts?: PlatformContentKind[]
+  note?: string
 }
 
 /** An idea for a channel to connect. Unverified: the address is checked only when the channel is assessed. */
@@ -311,6 +321,8 @@ export interface Channel {
   lastRunAt: IsoTime | null
   lastSuccessAt: IsoTime | null
   nextCheckAt: IsoTime | null
+  /** What the AI proposed to do on this channel; null until the owner asks for it. */
+  plan: ChannelPlan | null
   createdAt: IsoTime
 }
 
@@ -410,6 +422,30 @@ export interface Opportunity {
 }
 
 // ───────────────────────────── Drafts, approvals, sending (REQ-003, REQ-004) ─────────────────────────────
+
+export type PlanFormat = PlatformContentKind | 'other'
+
+/** One thing to do on a channel, as the AI proposed it. */
+export interface ChannelPlanStep {
+  title: string
+  detail: string
+  format: PlanFormat
+  /** What the owner has to prepare first (a photo, a short video, a text), or null when nothing. */
+  youPrepare: string | null
+  frequency: string | null
+}
+
+/**
+ * What to do on one channel, written by the AI from the approved passport, the goals and the platform (DEC-013).
+ * Suggestions only: nothing in it is done by the application, and nothing is published without the owner's approval.
+ */
+export interface ChannelPlan {
+  generatedAt: IsoTime
+  engineId: EngineId
+  summary: string
+  steps: ChannelPlanStep[]
+  watchOut: string[]
+}
 
 export interface Attachment {
   name: string

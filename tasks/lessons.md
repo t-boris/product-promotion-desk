@@ -81,3 +81,13 @@
 
 25. Fields side by side go in `.form-row` (grid, equal columns, labels aligned at the top), never in the button `.row`. After any form change, measure it: in every group of fields that share a row, the label tops must be equal. This is part of the sweep (lesson 18).
 
+## 2026-11-08 (later): more channels than Reddit
+
+**What happened.** The owner asked for Instagram, Facebook, TikTok and "any channel", with the AI deciding what to do in each.
+
+**Rules for myself.**
+
+26. When the owner asks for "any" of something, first find the mechanism that already covers "any" (here the universal connector and site profiles) and extend it with data, not with code per case. Then say plainly what the new thing cannot do (here: no media upload, platforms that restrict automation, nothing verified without live accounts) and let the owner choose the scope.
+27. An AI feature is checked once with the real engine, not only with the scripted one: the scripted engine proves the parser, only a real answer proves the prompt. The real run showed the plan follows the language of the product data.
+28. When a catalog gets new entries, tests that assert the whole list are updated for what they meant (prepared first, universal last), not just for the new values.
+

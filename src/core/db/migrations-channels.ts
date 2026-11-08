@@ -37,5 +37,13 @@ UPDATE accounts SET last_identity = identity WHERE identity IS NOT NULL;
 ALTER TABLE accounts ADD COLUMN role_name TEXT;
 ALTER TABLE accounts ADD COLUMN role_voice TEXT;
 `
+  },
+  {
+    id: 203,
+    name: 'channels: what the AI proposed to do on the channel (DEC-013)',
+    sql: `
+-- The plan is advice kept as JSON; nothing in it is executed. NULL until the owner asks for one.
+ALTER TABLE channels ADD COLUMN plan_json TEXT;
+`
   }
 ]

@@ -9,6 +9,7 @@ import { AiError, type AiEngine, type ConnectorRegistry } from '../ports'
 import type { suggestChannels } from './ai-help'
 import { found, requireText } from './errors'
 import { listPlatforms } from './platforms'
+import { addressOnPlatform, expandHandle, presetFor } from './presets'
 
 /** The AI helper this service calls (ai-help.ts); injectable so tests can script it. */
 export interface SuggestHelp {
@@ -21,15 +22,18 @@ export interface SuggestHelp {
  */
 export function connectableSuggestions(connectors: ConnectorRegistry, suggestions: ChannelSuggestion[]): ChannelSuggestion[] {
   return suggestions.filter((suggestion) => {
+    const preset = presetFor(suggestion.platform)
     const connector =
-      suggestion.platform === 'other'
+      suggestion.platform === 'other' || preset
         ? connectors.get(UNIVERSAL_CONNECTOR_ID)
         : connectors.list().find((c) => c.platform === suggestion.platform && c.id !== UNIVERSAL_CONNECTOR_ID)
     if (!connector) return false
     try {
-      if (!connector.matches(suggestion.target)) return false
-      connector.normalizeTarget(suggestion.target)
-      return true
+      // A named platform takes a handle too ("@brand"), and the address must be on that platform's own domains.
+      const target = preset ? expandHandle(preset, suggestion.target) : suggestion.target
+      if (!connector.matches(target)) return false
+      const normalized = connector.normalizeTarget(target)
+      return preset ? addressOnPlatform(preset, normalized.url) : true
     } catch {
       return false
     }

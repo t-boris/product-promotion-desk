@@ -4,12 +4,14 @@ import { ApiError } from '../../shared/api'
 import type { Account, CapabilityKey, Channel, ChannelMode, ChannelSettings, Product } from '../../shared/types'
 import { DEFAULT_CHANNEL_SETTINGS } from '../../shared/types'
 import type { Core } from '../core'
+import { UNIVERSAL_CONNECTOR_ID } from '../connector-registry'
 import type { Connector, ConnectorContext, NormalizedTarget } from '../ports'
 import type { RunResult } from '../runs'
 import type { AccountsService } from './accounts'
 import { blankCapabilities, blockedCapabilities, find, normalizeAssessment, summarize, withVerified } from './capabilities'
 import { browserError, found, requireText } from './errors'
 import { assertModeAllowed, modeAfterAssessment } from './mode-rules'
+import { addressOnPlatform, expandHandle, presetFor } from './presets'
 import { applySettingsPatch } from './settings'
 import type { ChannelPatch, ChannelsStore } from './store'
 
@@ -41,14 +43,17 @@ export class ChannelService {
   // ───────────── connect ─────────────
 
   connect(args: { productId: string; accountId: string; target: string; reuseAccount?: boolean }): Channel {
-    const raw = requireText(args.target, 'The channel address')
     const productId = requireText(args.productId, 'The product')
     const product = found(() => this.core.repos.product(productId), 'The product')
     const account = this.accounts.account(args.accountId)
+    // A named platform (DEC-013) accepts a short handle: "@brand" is the address of that handle on the platform.
+    const preset = presetFor(account.platform)
+    const typed = requireText(args.target, 'The channel address')
+    const raw = preset ? expandHandle(preset, typed) : typed
 
     const connector = this.core.connectors.resolve(raw)
     if (!connector) throw new ApiError('no_connector', 'No connector can handle this address.')
-    if (connector.platform !== account.platform) {
+    if (preset ? connector.id !== UNIVERSAL_CONNECTOR_ID : connector.platform !== account.platform) {
       throw new ApiError(
         'platform_mismatch',
         `This address belongs to "${connector.platform}", but ${account.label} is a "${account.platform}" account. Create or choose an account for "${connector.platform}".`
@@ -61,6 +66,9 @@ export class ChannelService {
       throw new ApiError('invalid_target', error instanceof Error ? error.message : 'This address cannot be used.')
     }
     if (!normalized.target || !normalized.url) throw new ApiError('invalid_target', 'This address cannot be used.')
+    if (preset && !addressOnPlatform(preset, normalized.url)) {
+      throw new ApiError('platform_mismatch', `This address is not on ${preset.label} (${preset.hosts[0]}), but ${account.label} is a ${preset.label} account. Create or choose an account for the platform the address belongs to.`)
+    }
 
     if (this.store.findDuplicate(productId, account.id, normalized.target)) {
       throw new ApiError('duplicate', `${normalized.target} is already connected for this product with ${account.label}.`)

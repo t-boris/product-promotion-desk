@@ -1,6 +1,6 @@
 // Persistence for accounts and channels. Rows are mapped by the shared mappers in ../repos.
 
-import type { Account, AccountRole, AccountStatus, Capability, Channel, ChannelMode, ChannelSettings, ChannelStatus } from '../../shared/types'
+import type { Account, AccountRole, AccountStatus, Capability, Channel, ChannelMode, ChannelPlan, ChannelSettings, ChannelStatus } from '../../shared/types'
 import { newId, toJson, type Db } from '../db/database'
 import type { Clock } from '../ports'
 import type { Repos } from '../repos'
@@ -23,6 +23,7 @@ export interface ChannelPatch {
   capabilities?: Capability[]
   status?: ChannelStatus
   statusDetail?: string
+  plan?: ChannelPlan | null
 }
 
 export class ChannelsStore {
@@ -110,6 +111,7 @@ export class ChannelsStore {
     if (patch.capabilities !== undefined) add('capabilities_json', toJson(patch.capabilities))
     if (patch.status !== undefined) add('status', patch.status)
     if (patch.statusDetail !== undefined) add('status_detail', patch.statusDetail.slice(0, 500))
+    if (patch.plan !== undefined) add('plan_json', patch.plan === null ? null : toJson(patch.plan))
     if (sets.length > 0) this.db.prepare(`UPDATE channels SET ${sets.join(', ')} WHERE id = ?`).run(...values, id)
     return this.repos.channel(id)
   }

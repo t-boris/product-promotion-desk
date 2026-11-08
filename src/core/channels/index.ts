@@ -7,8 +7,9 @@ import type { Core } from '../core'
 import type { Clock, Connector } from '../ports'
 import type { Db } from '../db/database'
 import { AccountsService } from './accounts'
-import { draftSiteProfile, suggestChannels, suggestRoles } from './ai-help'
+import { draftSiteProfile, planChannel, suggestChannels, suggestRoles } from './ai-help'
 import { ChannelService } from './channel-service'
+import { ChannelPlanService } from './plan'
 import { listPlatforms } from './platforms'
 import { ProfileService } from './profiles'
 import { RoleSuggestionService } from './roles'
@@ -33,6 +34,7 @@ export function register(core: Core): void {
   const profiles = new ProfileService(core, accounts, { draftSiteProfile })
   const suggestions = new SuggestionService(core, { suggestChannels })
   const roles = new RoleSuggestionService(core, { suggestRoles })
+  const plans = new ChannelPlanService(core, { planChannel }, store)
 
   core.services.channels = {
     markCapabilityVerified: (channelId, key, detail) => channels.markCapabilityVerified(channelId, key, detail)
@@ -56,6 +58,7 @@ export function register(core: Core): void {
     'channels.setMode': (args) => channels.setMode(args),
     'channels.remove': (args) => channels.remove(args.id),
     'channels.suggest': (args) => suggestions.suggest(args),
+    'channels.preparePlan': (args) => plans.prepare(args),
     'channels.draftProfile': (args) => profiles.draftProfile(args),
     'channels.saveProfile': (args) => profiles.saveProfile(args)
   })

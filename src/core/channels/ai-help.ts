@@ -4,6 +4,7 @@
 //    The answer is untrusted text from a model, so it is validated and filtered; every address is only an idea
 //    that the application verifies later when the channel is assessed.
 //  - suggestRoles: from the same passport, honest voices (roles) and login-name ideas for one platform (DEC-010).
+//  - planChannel: what to do on one connected channel (DEC-013): steps, formats, what the owner prepares, what to watch out for.
 //  - draftSiteProfile: for an unknown website the AI prepares a declarative profile for the universal connector.
 //    The website outline is UNTRUSTED (prompt injection), so this only runs on an engine that has no tools, the
 //    outline sits in a delimited data block, and the result is JSON that the connector's validator must accept.
@@ -12,7 +13,7 @@
 // Neither function stores or sends anything. Engine failures never crash the caller: suggestChannels reports them as
 // AiError, draftSiteProfile turns them into manual instructions. A cancel is always rethrown.
 
-import type { ChannelSuggestion, PassportSection, PlatformInfo, RoleSuggestion, SiteProfileDraft } from '../../shared/types'
+import type { ChannelPlan, ChannelPlanStep, ChannelSuggestion, PassportSection, PlanFormat, PlatformInfo, RoleSuggestion, SiteProfileDraft } from '../../shared/types'
 import { AiError, type AiEngine, type AiRunOptions, type AiTask } from '../ports'
 import { extractJson, JsonExtractError } from '../passports/ai-json'
 import { redactSecrets } from '../passports/redact'
@@ -549,4 +550,132 @@ export async function draftSiteProfile(engine: AiEngine, input: DraftProfileInpu
 
   const final = last as Checked
   return failure(final.host ?? host, `The AI could not prepare a profile that passes the checks (${oneLine(final.problems[0] ?? 'unknown problem', 200)}).`, final.definition, final.problems, final.summary)
+}
+
+// ───────────────────────────── channel plan (DEC-013) ─────────────────────────────
+
+export interface PlanInput {
+  product: { name: string; websiteUrl: string | null; description: string | null }
+  claims: { section: PassportSection; text: string }[]
+  goals: { targetAction: string; successMetrics: string[]; notes: string }[]
+  platform: PlatformInfo
+  channel: { target: string; url: string }
+  /** Roles of this product's logins on the platform: the voices that may write here. */
+  roles: { name: string; voice: string }[]
+  /** What the application has actually seen for this channel: ability and its state, nothing from the site itself. */
+  abilities: { key: string; status: string }[]
+}
+
+/** The plan as the AI wrote it, checked; the service adds the time and the engine. */
+export type PlanDraft = Pick<ChannelPlan, 'summary' | 'steps' | 'watchOut'>
+
+const MAX_PLAN_STEPS = 8
+const MAX_WATCH_OUT = 6
+const MAX_SUMMARY = 400
+const MAX_STEP_TITLE = 80
+const MAX_STEP_DETAIL = 400
+const MAX_STEP_PREPARE = 200
+const MAX_STEP_FREQUENCY = 80
+const MAX_WATCH = 200
+const PLAN_FORMATS: PlanFormat[] = ['text', 'image', 'video', 'link', 'other']
+
+const PLAN_SYSTEM = [
+  'You help a product owner decide what to do on one online channel where the owner promotes their own product.',
+  'The product data below is the owner\'s own approved information.',
+  'You cannot browse, run code or use tools. Do not ask questions.',
+  'Reply with a single JSON object and nothing else.'
+].join(' ')
+
+function planPrompt(input: PlanInput): AiTask {
+  const goals = input.goals.slice(0, 20).map((g) => `- ${oneLine(g.targetAction, 200)}${g.successMetrics.length > 0 ? ` (judged by: ${oneLine(g.successMetrics.join(', '), 200)})` : ''}`)
+  const roles = input.roles.slice(0, 8).map((r) => `- ${oneLine(r.name, 60)}: ${oneLine(r.voice, 280)}`)
+  const abilities = input.abilities.slice(0, 20).map((a) => `- ${oneLine(a.key, 40)}: ${oneLine(a.status, 40)}`)
+  const accepts = input.platform.accepts ? input.platform.accepts.join(', ') : 'not known'
+  return {
+    label: 'channels.plan',
+    system: PLAN_SYSTEM,
+    timeoutMs: SUGGEST_TIMEOUT_MS,
+    prompt: [
+      productBlock(input.product, input.claims),
+      '',
+      'Promotion goals of the product (the owner\'s own):',
+      goals.length > 0 ? goals.join('\n') : '(none set yet)',
+      '',
+      `Channel: ${oneLine(input.platform.label, 60)}, address ${oneLine(input.channel.url, 200)}`,
+      `A post on this platform can contain: ${accepts}.`,
+      input.platform.note ? `Known about the platform: ${oneLine(input.platform.note, 300)}` : '',
+      '',
+      'Voices (roles) of the logins that may write on this platform:',
+      roles.length > 0 ? roles.join('\n') : '(no role set: the login writes in the channel\'s own reply style)',
+      '',
+      'What the application has actually seen of this channel so far (state per ability):',
+      abilities.length > 0 ? abilities.join('\n') : '(not assessed yet)',
+      '',
+      'Write a plan for what the owner should do on THIS channel to move toward the goals above.',
+      'Rules:',
+      `- At most ${MAX_PLAN_STEPS} steps, most important first. Each step is one concrete thing: what to publish or do, in plain words.`,
+      `- "format" is one of ${PLAN_FORMATS.join(', ')}. Use only formats a post on this platform can contain ("other" is for things that are not a post, such as reading the rules or answering comments).`,
+      '- "youPrepare" says what the owner must make or gather first (a photo, a short video, a text), or null when nothing. The application does not create images or video; the owner brings them.',
+      '- "frequency" is a short rhythm such as "once a week", or null.',
+      '- Be honest: anything that mentions the product comes from someone connected with it and says so. No fake accounts, no pretending to be an independent customer, no bought followers, likes or reviews, no mass messages, no dodging the platform\'s limits or checks.',
+      '- Do not promise results. Do not include passwords, keys or other credentials. Do not tell the owner to automate posting or replying.',
+      `- "watchOut" has at most ${MAX_WATCH_OUT} short points on rules, limits and risks of this platform that the owner should check first.`,
+      `- "summary" is one or two plain sentences (at most ${MAX_SUMMARY} characters) on the idea of the plan.`,
+      '',
+      'Answer with JSON of exactly this shape:',
+      '{"summary":"...","steps":[{"title":"...","detail":"...","format":"video","youPrepare":"a 30 second video","frequency":"once a week"}],"watchOut":["..."]}'
+    ]
+      .filter((line, index, all) => line !== '' || all[index - 1] !== '')
+      .join('\n')
+  }
+}
+
+// Advice that amounts to faking or forcing engagement is dropped whatever the engine answered.
+const FAKE_ENGAGEMENT =
+  /\b(?:buy|purchase|pay\s+for)\s+(?:followers|likes|views|comments|reviews|subscribers)\b|\bfake\s+(?:accounts?|reviews?|followers|engagement|profiles?)\b|\bsock\s?puppets?\b|\b(?:bypass|evade|circumvent|get\s+around)\b|\bcaptchas?\b|\bbots?\b/i
+
+const textOrNull = (value: unknown, max: number): string | null => {
+  if (typeof value !== 'string') return null
+  const text = plainText(value, max)
+  return text === '' ? null : text
+}
+
+function readPlan(raw: unknown, input: PlanInput): Parsed<PlanDraft> {
+  if (!isRecord(raw)) return { ok: false, error: 'the answer must be a JSON object' }
+  if (!Array.isArray(raw.steps)) return { ok: false, error: '"steps" must be an array' }
+  const accepts = input.platform.accepts
+  const steps: ChannelPlanStep[] = []
+  for (const item of raw.steps) {
+    if (steps.length >= MAX_PLAN_STEPS) break
+    // A single bad step is dropped; only a wrong overall shape or an empty result asks the engine to try again.
+    if (!isRecord(item)) continue
+    const title = textOrNull(item.title, MAX_STEP_TITLE)
+    const detail = textOrNull(item.detail, MAX_STEP_DETAIL)
+    if (!title || !detail) continue
+    const format = typeof item.format === 'string' ? (item.format.trim().toLowerCase() as PlanFormat) : 'other'
+    if (!PLAN_FORMATS.includes(format)) continue
+    // A step must fit what a post here can hold: no plain text post on a platform that takes only photos and video.
+    if (format !== 'other' && accepts && !accepts.includes(format)) continue
+    const youPrepare = textOrNull(item.youPrepare, MAX_STEP_PREPARE)
+    const frequency = textOrNull(item.frequency, MAX_STEP_FREQUENCY)
+    if ([title, detail, youPrepare ?? '', frequency ?? ''].some((text) => unsafe(text) || FAKE_ENGAGEMENT.test(text))) continue
+    steps.push({ title, detail, format, youPrepare, frequency })
+  }
+  if (steps.length === 0) return { ok: false, error: 'the plan has no usable step: each needs a title, a detail and a format this platform accepts, and no unsafe advice' }
+
+  const watchOut = (Array.isArray(raw.watchOut) ? raw.watchOut : [])
+    .map((point) => textOrNull(point, MAX_WATCH))
+    .filter((point): point is string => point !== null && !unsafe(point))
+    .slice(0, MAX_WATCH_OUT)
+  const summary = textOrNull(raw.summary, MAX_SUMMARY)
+  if (!summary || unsafe(summary) || FAKE_ENGAGEMENT.test(summary)) return { ok: false, error: '"summary" must be one or two plain sentences' }
+  return { ok: true, value: { summary, steps, watchOut } }
+}
+
+/**
+ * Asks the engine what to do on one channel. Advice only: nothing is done, connected or published here. Rejects with AiError:
+ * 'invalid_output' when two answers in a row are unusable, otherwise whatever the engine raised ('cancelled' included).
+ */
+export async function planChannel(engine: AiEngine, input: PlanInput, options: AiRunOptions = {}): Promise<PlanDraft> {
+  return askWithRepair(engine, planPrompt(input), (raw) => readPlan(raw, input), options)
 }

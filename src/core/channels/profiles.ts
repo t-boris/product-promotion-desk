@@ -12,6 +12,7 @@ import { TakeoverError, type BrowserPage, type Connector, type ProfileAuthoring 
 import type { AccountsService } from './accounts'
 import { manualInstructions, type draftSiteProfile } from './ai-help'
 import { browserError, found, requireText } from './errors'
+import { presetFor } from './presets'
 import { chooseLinks, countScript, outlineScript, parsePageOutline, publicSite, sameSite } from './site-outline'
 
 /** About how long reading the whole site may take. */
@@ -101,7 +102,7 @@ export class ProfileService {
     }
     const site = publicSite(args.url)
     const connector = this.authoringConnector()
-    if (account.platform !== connector.platform) {
+    if (account.platform !== connector.platform && !presetFor(account.platform)) {
       throw new ApiError('platform_mismatch', `${account.label} is a "${account.platform}" account. Site profiles are for "${connector.platform}" accounts.`)
     }
     const { authoring } = connector

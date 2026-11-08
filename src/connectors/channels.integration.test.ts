@@ -87,6 +87,18 @@ describe('onboarding a subreddit end to end (REQ-002)', () => {
     expect(assessed.capabilities.every((c) => c.status === 'needs_check')).toBe(true)
     expect(assessed.capabilities[0].detail).toMatch(/no site profile/i)
   })
+
+  it('serves a named platform (Instagram) by the universal connector and assesses it just as honestly (DEC-013)', async () => {
+    const { core } = await onboard()
+    const product = core.repos.listProducts()[0]
+    const instagram = await core.router.call('accounts.create', { productId: product.id, platform: 'instagram', label: 'Brand on Instagram' })
+    const channel = await core.router.call('channels.connect', { productId: product.id, accountId: instagram.id, target: '@natalmystic' })
+    expect(channel).toMatchObject({ platform: 'instagram', connectorId: 'universal', url: 'https://www.instagram.com/natalmystic/' })
+    const assessed = await core.router.call('channels.assess', { channelId: channel.id })
+    // Nothing is claimed for a platform whose site profile does not exist yet.
+    expect(assessed.capabilities.every((c) => c.status === 'needs_check')).toBe(true)
+    expect(assessed.capabilities[0].detail).toMatch(/no site profile/i)
+  })
 })
 
 // ───────────────────────────── DEC-009: platforms and site profiles with the real connectors ─────────────────────────────
@@ -113,10 +125,12 @@ describe('platforms and site profiles (DEC-009)', () => {
 
   it('lists the platforms the connectors offer: Reddit is prepared, any other site needs its own profile', async () => {
     const { core } = await forumWorld()
-    expect(await core.router.call('platforms.list', undefined)).toEqual([
-      { connectorId: 'reddit', platform: 'reddit', label: 'Reddit', prepared: true, loginUrl: 'https://www.reddit.com/login/' },
-      { connectorId: 'universal', platform: 'web', label: 'Other website', prepared: false, loginUrl: '' }
-    ])
+    const platforms = await core.router.call('platforms.list', undefined)
+    expect(platforms[0]).toEqual({ connectorId: 'reddit', platform: 'reddit', label: 'Reddit', prepared: true, loginUrl: 'https://www.reddit.com/login/' })
+    expect(platforms.at(-1)).toEqual({ connectorId: 'universal', platform: 'web', label: 'Other website', prepared: false, loginUrl: '' })
+    // Between them: the named platforms the universal connector serves (DEC-013), each needing its own site profile.
+    expect(platforms.slice(1, -1).map((p) => p.platform)).toEqual(['facebook', 'instagram', 'linkedin', 'pinterest', 'telegram', 'threads', 'tiktok', 'x', 'youtube'])
+    expect(platforms.slice(1, -1).every((p) => !p.prepared && p.connectorId === 'universal')).toBe(true)
   })
 
   it('saves a valid profile as a version and refuses one that contains anything beyond the schema', async () => {

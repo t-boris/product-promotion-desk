@@ -42,7 +42,7 @@ export function CreateAccount({ productId, platforms, prefill }: { productId: st
   return (
     <form onSubmit={(e) => void submit(e)} data-testid="create-account-form">
       <div className="form-row">
-        <Field label="Platform">
+        <Field label="Platform" hint={platforms.find((p) => p.platform === platform)?.note}>
           <select className="input" value={platform} onChange={(e) => setChosen(e.target.value)} disabled={platforms.length === 0} data-testid="account-platform">
             {platforms.map((p) => (
               <option key={p.connectorId} value={p.platform}>

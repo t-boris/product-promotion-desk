@@ -171,10 +171,12 @@ describe('platforms.list (DEC-009: the catalog comes from the connectors)', () =
     }
     const w = makeWorld({ fake: new Labelled(), extra: [new Universal()] })
     const platforms = await w.call('platforms.list', undefined)
-    expect(platforms.map((p) => [p.label, p.prepared])).toEqual([
-      ['Fancy Forum', true],
-      ['Other website', false]
-    ])
+    // The prepared platform comes first, the universal connector last; the named platforms it serves (DEC-013) sit between, not prepared.
+    expect(platforms[0]).toMatchObject({ label: 'Fancy Forum', prepared: true })
+    expect(platforms.at(-1)).toMatchObject({ label: 'Other website', prepared: false })
+    const between = platforms.slice(1, -1)
+    expect(between.length).toBeGreaterThan(0)
+    expect(between.every((p) => !p.prepared && p.connectorId === 'universal')).toBe(true)
   })
 })
 
