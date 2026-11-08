@@ -213,10 +213,29 @@ export interface NormalizedTarget {
   url: string
 }
 
+/**
+ * Optional capability of a connector that works from declarative site profiles (the universal connector). It lets the
+ * core validate, store and describe profiles without importing the connector's code. Profiles are data, never code.
+ */
+export interface ProfileAuthoring {
+  /** Plain description of the profile format and its rules, given to the AI so its draft matches the validator. */
+  describeFormat(): string
+  /** Validates a definition without storing it. `host` is read from the definition when present. */
+  validateDefinition(definition: unknown): { valid: boolean; errors: string[]; summary: string[]; host: string | null }
+  /** Stores a definition as a new version for `host` (invalid ones are kept with their errors but never used). */
+  saveDefinition(host: string, definition: unknown): { id: Id; host: string; version: number; valid: boolean; errors: string[] }
+  /** Whether a valid profile already exists for this host (or its parent domain). */
+  hasValidProfile(host: string): boolean
+}
+
 export interface Connector {
   readonly id: string
   readonly platform: string
   readonly version: string
+  /** Display name, e.g. "Reddit". When absent the platform key is capitalized. */
+  readonly label?: string
+  /** Present only on connectors driven by declarative site profiles (named to avoid clashing with their own stores). */
+  readonly authoring?: ProfileAuthoring
   /** Whether this connector recognizes the address (URL or short form). */
   matches(input: string): boolean
   normalizeTarget(input: string): NormalizedTarget

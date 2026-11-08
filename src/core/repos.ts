@@ -65,7 +65,9 @@ export const mapAccount = (r: Row): Account => ({
   identity: (r.identity as string | null) ?? null,
   partition: r.partition as string,
   status: r.status as Account['status'],
-  createdAt: r.created_at as string
+  createdAt: r.created_at as string,
+  // accounts.product_id is added by the channels migration (DEC-009); null means unassigned.
+  productId: (r.product_id as string | null | undefined) ?? null
 })
 
 export const mapChannel = (r: Row): Channel => ({

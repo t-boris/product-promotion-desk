@@ -11,6 +11,7 @@ import type {
   Channel,
   ChannelMode,
   ChannelSettings,
+  ChannelSuggestion,
   Claim,
   ClaimKind,
   ClaimSourceRef,
@@ -30,12 +31,15 @@ import type {
   PassportSection,
   PassportVersion,
   PassportView,
+  PlatformInfo,
   Product,
   ProductSource,
   PromotionGoal,
   ResultsView,
   MetricSnapshot,
   Run,
+  SavedSiteProfile,
+  SiteProfileDraft,
   SourceKind,
   SourceScope,
   AnalysisStage
@@ -98,16 +102,34 @@ export interface ApiMethods {
   'passport.approve': [{ productId: Id }, PassportVersion]
 
   // accounts and channels (REQ-002)
-  'accounts.list': [void, Account[]]
-  'accounts.create': [{ platform: string; label: string }, Account]
+  /** `productId` limits the list to that product's accounts (and unassigned legacy ones); omitted lists all. */
+  'accounts.list': [{ productId?: Id } | undefined, Account[]]
+  /** The account belongs to `productId` and gets its own login and browser session (DEC-009). */
+  'accounts.create': [{ productId: Id; platform: string; label: string }, Account]
   'accounts.remove': [{ id: Id }, void]
+  /** Platforms the application can connect, from the registered connectors (DEC-009). */
+  'platforms.list': [void, PlatformInfo[]]
   /** Opens the account's persistent browser at `url` and hands control to the user (login handoff). */
   'accounts.openBrowser': [{ accountId: Id; url?: string }, { tabId: string }]
   'accounts.takeControl': [{ accountId: Id }, void]
   'accounts.releaseControl': [{ accountId: Id }, void]
   'accounts.checkLogin': [{ accountId: Id }, Account]
-  'channels.list': [void, Channel[]]
-  'channels.connect': [{ productId: Id; accountId: Id; target: string }, Channel]
+  'channels.list': [{ productId?: Id } | undefined, Channel[]]
+  /**
+   * Fails with `account_other_product` when the account belongs to another product unless `reuseAccount` is true
+   * (the owner's explicit choice; shared-account rules then apply). An unassigned legacy account is adopted.
+   */
+  'channels.connect': [{ productId: Id; accountId: Id; target: string; reuseAccount?: boolean }, Channel]
+  /** AI ideas for channels of this product, from its approved passport. Unverified; nothing is connected. */
+  'channels.suggest': [{ productId: Id }, ChannelSuggestion[]]
+  /**
+   * Reads the site at `url` through the account's browser (read-only) and has the AI prepare a draft profile for the
+   * universal connector. Never saves anything and never fails because the AI could not help: the draft then carries
+   * manual `instructions`.
+   */
+  'channels.draftProfile': [{ productId: Id; accountId: Id; url: string }, SiteProfileDraft]
+  /** Re-validates the reviewed definition and stores it as a new version for `host`. Only the owner's screen calls it. */
+  'channels.saveProfile': [{ host: string; definition: unknown }, SavedSiteProfile]
   'channels.assess': [{ channelId: Id }, Channel]
   'channels.updateSettings': [{ channelId: Id; settings: Partial<ChannelSettings> }, Channel]
   'channels.setMode': [{ channelId: Id; mode: ChannelMode }, Channel]

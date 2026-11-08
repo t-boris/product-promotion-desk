@@ -165,6 +165,60 @@ export interface Account {
   partition: string
   status: AccountStatus
   createdAt: IsoTime
+  /**
+   * The product this login belongs to (DEC-009). Each product has its own login and browser session per platform.
+   * Null only for an account created before products owned accounts that had no channel to infer a product from.
+   * Another product's channel may use the account only by explicit choice (`reuseAccount`), and then the
+   * shared-account rules (aggregate limits, one controller of the session) apply.
+   */
+  productId: Id | null
+}
+
+/** A platform the application can connect, taken from the registered connectors (DEC-009). */
+export interface PlatformInfo {
+  /** Connector id, e.g. "reddit" or "universal". */
+  connectorId: string
+  /** Key stored on accounts and channels, e.g. "reddit". */
+  platform: string
+  label: string
+  /** False for the universal connector, which needs a site profile for every site. */
+  prepared: boolean
+  loginUrl: string
+}
+
+/** An idea for a channel to connect. Unverified: the address is checked only when the channel is assessed. */
+export interface ChannelSuggestion {
+  /** Platform key from `PlatformInfo.platform`, or "other" for an unknown site. */
+  platform: string
+  /** Address or short form, e.g. "r/astrology" or "https://forum.example.com/". */
+  target: string
+  /** Why it may fit this product, in plain words. */
+  reason: string
+}
+
+/**
+ * Draft of a declarative site profile prepared by the AI for the universal connector. It is never executable
+ * code: it is validated against the connector's schema, shown to the owner, and saved only after the owner accepts.
+ */
+export interface SiteProfileDraft {
+  host: string
+  /** The profile definition in the connector's schema; opaque to the interface, saved back unchanged. */
+  definition: unknown
+  valid: boolean
+  /** Validation problems; empty when valid. */
+  problems: string[]
+  /** What the profile says, in plain lines for the owner to review (pages, sign-in check, what can be published). */
+  summary: string[]
+  /** Set when no usable draft could be made: step-by-step manual instructions, with the reason first. */
+  instructions: string[]
+}
+
+export interface SavedSiteProfile {
+  id: Id
+  host: string
+  version: number
+  valid: boolean
+  errors: string[]
 }
 
 export type CapabilityKey =
