@@ -49,6 +49,7 @@ export function App() {
   const { state, setPaused } = useAutomation()
   const attention = useQuery('attention.list', undefined, ['attention', 'opportunities', 'channels', 'accounts'])
   const accounts = useQuery('accounts.list', undefined, ['accounts'])
+  const info = useQuery('app.info', undefined, [])
   const settings = useQuery('app.settings.get', undefined, ['settings'])
   const engines = useQuery('engines.list', undefined, ['settings'])
   const Current = (PAGES.find((p) => p.id === route) ?? PAGES[0]).component
@@ -93,6 +94,9 @@ export function App() {
                 Menu{attentionCount > 0 ? ` · ${attentionCount}` : ''}
               </Button>
             )}
+            <span title="Version of this application" data-testid="app-version-header">
+              <Badge tone="info">{info.data ? `v${info.data.version}` : 'v…'}</Badge>
+            </span>
             <span className="muted small">AI engine</span>
             {engine ? <Badge tone={engine.ready ? 'good' : 'warn'}>{engine.label}</Badge> : <Badge tone="warn">None selected</Badge>}
             <span className="muted small sep">Accounts</span>

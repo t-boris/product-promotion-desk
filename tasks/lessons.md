@@ -249,3 +249,6 @@
 83. A restructure that moves data between tables (0.5.0 profile in the account -> 0.6.0 profile entity) is checked on a copy of a real database that has rows, and on the owner's real database after install (the owner had already approved one profile: it was carried over).
 
 84. What the owner answers the AI is a rule for later runs unless it is a one-time answer (a code, "done"). An answer that is forgotten when the run ends makes the owner repeat himself on every account and site. Anything the app asks the owner must have a place where the answer is kept, a way to see and undo it, and a place in the next prompt.
+
+85. The version of the application is always visible in the top bar (owner: "it is terrible, it is not clear which version we have"). Anything the owner must be able to tell at a glance (the version, what the AI is doing) lives in the header, not only on a Settings page.
+86. A block that reads another list (the profile of an account) must not say "none" while that list is still loading: show a loading line until it arrives. Found in a screenshot taken a moment after the page opened.

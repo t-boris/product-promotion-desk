@@ -26,6 +26,11 @@ export function AccountProfileLine({ account, onOpenProfile }: { account: Accoun
       <Badge tone={current.status === 'approved' ? 'good' : 'warn'}>{current.status === 'approved' ? 'Approved' : 'Proposed'}</Badge> <strong>{current.label}</strong>
       {current.displayName && <span className="muted"> · {profileLine(current, new Date())}</span>}
     </span>
+  ) : account.profileId ? (
+    // The profile is read from the list: until it arrives the login is not said to have none.
+    <span className="muted" data-testid={`account-profile-state-${account.id}`}>
+      Loading the profile…
+    </span>
   ) : (
     <span className="muted" data-testid={`account-profile-state-${account.id}`}>
       This login has no profile. A profile is the person behind it (name, age, place, picture); the AI fills in registrations and profiles from it.
@@ -62,7 +67,7 @@ export function AccountProfileLine({ account, onOpenProfile }: { account: Accoun
             </option>
           ))}
         </select>
-        {!current && (
+        {!account.profileId && (
           <Button onClick={() => void makeFrom()} disabled={making.busy} data-testid={`account-profile-make-${account.id}`}>
             {making.busy ? 'Making…' : 'Make a profile from this account'}
           </Button>
