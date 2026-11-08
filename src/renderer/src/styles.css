@@ -334,6 +334,13 @@ code {
   gap: 4px;
   margin: 8px 0;
 }
+.form-row {
+  /* Fields side by side: the columns share the width and the labels line up at the top, whatever hint sits below an input. */
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0 12px;
+  align-items: start;
+}
 .field-label {
   font-weight: 600;
   font-size: var(--fs-sm);

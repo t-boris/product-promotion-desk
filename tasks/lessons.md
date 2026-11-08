@@ -73,3 +73,11 @@
 23. When one card is replaced by another (a draft becomes a stored item), any state the owner must see, such as "saved", lives in the parent. Otherwise it disappears at the moment it matters. Run the add flow in the app, not only the edit flow.
 24. A change of the stored shape is tested twice: on a row in the old shape, and on a copy of the owner's real database, before it is deployed. Back the real database up first.
 
+## 2026-11-08 (later): crooked "Add an account" form
+
+**What happened.** The owner sent a screenshot of the Add an account form: the labels of fields in one row stood at different heights and the fields had different widths. Cause: fields in a `.row` that centres its items, where one field has a hint under its input and the next has none.
+
+**Rules for myself.**
+
+25. Fields side by side go in `.form-row` (grid, equal columns, labels aligned at the top), never in the button `.row`. After any form change, measure it: in every group of fields that share a row, the label tops must be equal. This is part of the sweep (lesson 18).
+

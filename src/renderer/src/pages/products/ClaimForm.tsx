@@ -32,7 +32,7 @@ export function ClaimForm({ productId, section, claim, onDone }: { productId: Id
       <Field label="Statement">
         <textarea className="input short" value={text} onChange={(e) => setText(e.target.value)} autoFocus data-testid={`claim-text-${id}`} />
       </Field>
-      <div className="row">
+      <div className="form-row">
         <Field label="Type" hint={KIND_HELP[kind]}>
           <select className="input" value={kind} onChange={(e) => setKind(e.target.value as EditableKind)} data-testid={`claim-kind-${id}`}>
             {KINDS.map((k) => (

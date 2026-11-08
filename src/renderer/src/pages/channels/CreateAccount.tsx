@@ -41,7 +41,7 @@ export function CreateAccount({ productId, platforms, prefill }: { productId: st
 
   return (
     <form onSubmit={(e) => void submit(e)} data-testid="create-account-form">
-      <div className="row">
+      <div className="form-row">
         <Field label="Platform">
           <select className="input" value={platform} onChange={(e) => setChosen(e.target.value)} disabled={platforms.length === 0} data-testid="account-platform">
             {platforms.map((p) => (
@@ -55,7 +55,7 @@ export function CreateAccount({ productId, platforms, prefill }: { productId: st
           <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Brand account" data-testid="account-label" />
         </Field>
       </div>
-      <div className="row">
+      <div className="form-row">
         <Field label="Role (optional)" hint="For example astrologer or developer.">
           <input className="input" value={roleName} maxLength={ROLE_NAME_LIMIT} onChange={(e) => setRoleName(e.target.value)} data-testid="account-role-name" />
         </Field>
