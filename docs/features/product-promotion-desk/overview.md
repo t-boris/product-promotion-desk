@@ -32,6 +32,7 @@ understanding_notes:
   Acceptance Criteria: Обязательный сквозной сценарий закреплён за Reddit. Конкретный сабреддит выбирается пользователем; дополнительных ответов для фиксации замысла первой версии не требуется.
 questions_left: 0
 confirmed: 2026-11-08
+issues: [1, 2, 3, 4, 5, 6, 7, 8]
 ---
 
 # Product Promotion Desk
