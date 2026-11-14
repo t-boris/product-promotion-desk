@@ -5,7 +5,8 @@ import { parseJson, toJson, type Db } from './db/database'
 export const DEFAULT_SETTINGS: AppSettings = {
   engineId: null,
   notifications: true,
-  webMode: { enabled: false, port: DEFAULT_WEB_PORT }
+  webMode: { enabled: false, port: DEFAULT_WEB_PORT },
+  publishWith: 'connector'
 }
 
 /** Key/value settings persisted in SQLite. Also used for small pieces of runtime state (e.g. pause flag). */

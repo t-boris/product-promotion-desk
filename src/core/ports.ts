@@ -41,7 +41,17 @@ export interface AiTask {
    * An agent run (DEC-018): the engine owns a goal and works for as long as it needs by calling the tools of this MCP server. It then runs with
    * FULL ACCESS, as the owner decided (like MarkView's agents). Without it the engine only answers with text, and a tool-free engine has no tools.
    */
-  agent?: { server: string; launch: McpLaunch }
+  agent?: {
+    server: string
+    launch: McpLaunch
+    /**
+     * The post mission (B1): the engine has no power but the tools of this MCP server (no shell, no files, no web of its own), and nothing it
+     * prints on a failure is put into an error message (a failure says only that the engine failed and its exit code): what an engine prints
+     * can echo the pages it worked on, and an error message reaches the log and the owner's lists. An engine that cannot be held to the
+     * tools (`confinesAgent` is not true) refuses such a run. Without it the run has full access, as in DEC-018.
+     */
+    confined?: boolean
+  }
   /**
    * The engine may create files in this folder and nowhere else (the sandbox allows writing in it): the pictures of account profiles (DEC-019),
    * made with the engine's own image tool. Only an engine with `makesImages` accepts it.
@@ -76,6 +86,11 @@ export interface AiEngine {
   readonly toolFree: boolean
   /** True when the engine can run an agent mission (`AiTask.agent`): it works the application's browser through the MCP server it is given. */
   readonly supportsAgent?: boolean
+  /**
+   * True when an agent run can be held to the tools of the application's MCP server and nothing else (`AiTask.agent.confined`): the engine
+   * has no shell, no file access and no web of its own. Only such an engine may publish for the owner (the post mission).
+   */
+  readonly confinesAgent?: boolean
   /** True when the engine can make a picture with its own image tool (`AiTask.makeFiles`). */
   readonly makesImages?: boolean
   check(): Promise<EngineStatus>
@@ -144,7 +159,12 @@ export type PageStep =
   | { do: 'click'; ref: string }
   | { do: 'key'; key: 'Enter' | 'Tab' | 'Escape' }
 
-/** `done`: carried out. `wrong_host`: the page is not one of `hosts`. `not_found`: no such element (the page changed). `refused`: the element cannot take it (disabled, not a list, not a field). */
+/**
+ * `done`: carried out. `wrong_host`: the page is not one of `hosts`. `not_found`: no such element (the page changed). These two are answered
+ * before any input reaches the page, so they say that nothing was done. `refused`: the element cannot take it (disabled, not a list, not a
+ * field), or a click could not be confirmed: it may follow input that already landed (a mouse press, then a page that replaced its own
+ * document), so a caller that must know whether a click happened (a press that publishes) cannot read "nothing happened" from it.
+ */
 export type PageStepStatus = 'done' | 'wrong_host' | 'not_found' | 'refused'
 
 export interface PageStepResult {
@@ -198,11 +218,17 @@ export interface BrowserPage {
   signIn(form: SignInForm): Promise<{ status: SignInStatus }>
   /**
    * The second write-class operation that needs no SendTicket (DEC-017): one step of the browser agent. It is for work that
-   * publishes nothing (signing up, signing in, looking around, setting up a profile): a task that can publish goes through a
-   * connector with a ticket. It refuses a page outside `hosts` and works only on an element the page snapshot labelled. Typing and
-   * clicking use the browser's own input, as a person's hands would.
+   * publishes nothing (signing up, signing in, looking around, setting up a profile): whatever can publish goes through a
+   * connector with a ticket, or through `publishStep`. It refuses a page outside `hosts` and works only on an element the page snapshot
+   * labelled. Typing and clicking use the browser's own input, as a person's hands would.
    */
   pageStep(step: PageStep, hosts: string[]): Promise<PageStepResult>
+  /**
+   * The same step as `pageStep`, but it needs a valid SendTicket of this account (REQ-004): the way the AI browser puts the approved
+   * content into a form and presses the control that publishes it. The guard refuses it without a genuine, unexpired, unused ticket;
+   * the caller (the post mission, see mission-publisher.ts) holds the ticket and has checked that it is bound to exactly this content.
+   */
+  publishStep(step: PageStep, hosts: string[], ticket: SendTicket): Promise<PageStepResult>
   goto(url: string, options?: { timeoutMs?: number }): Promise<void>
   url(): Promise<string>
   /** Evaluates a read-only script in the page and returns its JSON-serializable result. */

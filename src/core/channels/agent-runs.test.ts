@@ -94,6 +94,29 @@ async function until(condition: () => Promise<boolean> | boolean): Promise<void>
   throw new Error('the condition never held')
 }
 
+describe('one mission on an account at a time, also while both are still being prepared', () => {
+  it('lets only one of two starts that both waited for the engine go on', async () => {
+    const w = await ready()
+    let open = (): void => undefined
+    const gate = new Promise<void>((resolve) => (open = resolve))
+    const check = w.t.engine.check.bind(w.t.engine)
+    w.t.engine.check = async () => {
+      await gate
+      return check()
+    }
+    w.t.engine.on('agent.signup', () => new Promise<string>(() => undefined))
+
+    const first = start(w)
+    const second = start(w)
+    const refusal = expect(second).rejects.toMatchObject({ code: 'agent_running' })
+    open()
+    await refusal
+    expect(await first).toMatchObject({ status: 'running' })
+    await tick(5)
+    expect(w.t.engine.calls.filter((c) => c.label === 'agent.signup')).toHaveLength(1)
+  })
+})
+
 describe('what a mission needs before it starts', () => {
   it('needs the e-mail of the account', async () => {
     const w = await makeReadyWorld()
@@ -105,6 +128,13 @@ describe('what a mission needs before it starts', () => {
     const w = await makeReadyWorld()
     await w.call('accounts.setEmail', { accountId: w.account.id, email: EMAIL })
     expect(await w.refusal('agent.start', { accountId: w.account.id, kind: 'signup' })).toBe('no_password')
+  })
+
+  it('does not need an engine that can be held to the browser tools: only the mission that publishes does', async () => {
+    const w = await ready()
+    w.t.engine.confinesAgent = false
+    expect(await w.call('agent.canStart', { accountId: w.account.id, kind: 'signup' })).toEqual({ ready: true, reason: null })
+    expect(await w.call('agent.canStart', { accountId: w.account.id, kind: 'profile' })).not.toMatchObject({ reason: expect.stringContaining('browser tools alone') })
   })
 
   it('needs an engine that can work the browser, and says which ones can', async () => {
@@ -261,6 +291,7 @@ describe('a mission', () => {
     await finished(w)
     const task = w.t.engine.calls[0]
     expect(task.agent).toEqual({ server: 'ppd', launch: { command: '/fake/ppd', args: ['/fake/shim.js'], env: { PPD_MCP_TOKEN: 'fake-token' } } })
+    expect(task.agent).not.toHaveProperty('confined') // only the post mission is confined: the other missions run as they did
     expect(task.timeoutMs).toBe(30 * 60 * 1000)
     expect(task.prompt).toContain('GOAL: Create a new account')
     expect(task.prompt).toContain('Natal Mystic Reddit')

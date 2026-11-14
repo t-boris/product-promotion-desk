@@ -25,7 +25,11 @@ const browserPage = (raw: ScriptedPage): BrowserPage => ({
   click: async () => undefined,
   uploadFile: async () => undefined,
   signIn: (form) => raw.signIn(form),
-  pageStep: (step, hosts) => raw.pageStep(step, hosts)
+  pageStep: (step, hosts) => raw.pageStep(step, hosts),
+  // A mission without a send ticket never publishes: reaching this is a defect.
+  publishStep: async () => {
+    throw new Error('publishStep needs a send ticket')
+  }
 })
 
 const form = (over: Partial<{ url: string; elements: SnapshotElement[]; alerts: string[]; humanCheck: string; text: string }> = {}) => ({
@@ -189,9 +193,24 @@ describe('toolbox: acting', () => {
 
   it('runs a script as an async function body and returns JSON, cut when long', async () => {
     const t = setup()
+    t.raw.currentUrl = 'https://www.facebook.com/r.php'
     const result = await t.toolbox.call('browser_evaluate', { script: 'return document.title' })
     expect(result.text).toBe('{"title":"Facebook"}')
     expect(t.raw.scripts.at(-1)).toContain('return document.title')
+  })
+
+  it('runs a script only on a page of the platform: the same host fence as navigate and every page step', async () => {
+    const t = setup()
+    for (const url of ['https://evil.example/login', 'https://facebook.com.evil.example/', 'about:blank', 'not a url']) {
+      t.raw.currentUrl = url
+      const result = await t.toolbox.call('browser_evaluate', { script: 'return document.cookie' })
+      expect(result).toMatchObject({ isError: true, text: expect.stringContaining('not on the platform') })
+    }
+    expect(t.raw.scripts).toEqual([])
+    // A sub-domain of the platform is the platform.
+    t.raw.currentUrl = 'https://m.facebook.com/home'
+    expect((await t.toolbox.call('browser_evaluate', { script: 'return 1' })).isError).toBeUndefined()
+    expect(t.raw.scripts).toHaveLength(1)
   })
 
   it('waits for a text on the page', async () => {

@@ -25,6 +25,9 @@ class TrackedEngine implements AiEngine {
   get supportsAgent(): boolean | undefined {
     return this.inner.supportsAgent
   }
+  get confinesAgent(): boolean | undefined {
+    return this.inner.confinesAgent
+  }
   get makesImages(): boolean | undefined {
     return this.inner.makesImages
   }

@@ -289,6 +289,11 @@ export interface SignInResult {
 /** What the browser agent can be asked to do on an account's own browser (DEC-017). More kinds follow: read, answer, set up a profile. */
 /** `signup`: create the account on the platform. `profile`: fill in the profile of an account that exists (about-text, place, website, picture). */
 export type AgentTaskKind = 'signup' | 'profile'
+/**
+ * What a run of the browser agent is. The first two are started by the owner (`agent.start`); `post` is started only by the send flow,
+ * for one approved publication, and cannot be started through the API.
+ */
+export type MissionKind = AgentTaskKind | 'post'
 export type AgentRunStatus = 'running' | 'done' | 'needs_owner' | 'failed' | 'stopped'
 
 /** Whether the browser agent can start on an account now, and if not, the one thing to do first, in plain words. */
@@ -312,7 +317,7 @@ export interface AgentAsk extends AgentQuestion {
 /** One run of the browser agent on one account: what it is doing or why it stopped, and what it did. Kept in memory; no secret is ever in it. */
 export interface AgentRun {
   accountId: Id
-  kind: AgentTaskKind
+  kind: MissionKind
   status: AgentRunStatus
   /** One sentence for the owner: what it is doing now, or why it stopped and what to do. */
   summary: string
@@ -403,11 +408,11 @@ export interface AccountRole {
   voice: string
 }
 
-/** An idea for a role and a login name for a product. The owner creates the real login on the platform. */
+/** An idea for a role and a login name for a product. The owner decides which one is used; the AI registers the account in its own browser (DEC-018, DEC-019). */
 export interface RoleSuggestion {
   name: string
   voice: string
-  /** A few ideas for the login name on the platform; the application never registers accounts. */
+  /** A few ideas for the login name on the platform; the owner decides, and the AI registers the account in its own browser with the name the owner approved (DEC-018, DEC-019). */
   usernameIdeas: string[]
   /** Why this role fits the product's audience. */
   reason: string
@@ -797,10 +802,18 @@ export interface AutomationState {
   background: boolean
 }
 
+/** Who carries out an approved publication: the platform's connector (default), or the AI in the account's own browser (B1). */
+export type PublishWith = 'connector' | 'ai_browser'
+
 export interface AppSettings {
   engineId: EngineId | null
   notifications: boolean
   webMode: { enabled: boolean; port: number }
+  /**
+   * Only for what the owner approved themselves and sends with a click of their own; scheduled and rule-driven sends always use the
+   * connector. The approval, the send ticket and the limits are the same either way.
+   */
+  publishWith: PublishWith
 }
 
 export interface AppInfo {

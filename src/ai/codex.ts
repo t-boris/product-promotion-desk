@@ -1,4 +1,4 @@
-import type { AiTask } from '../core/ports'
+import { AiError, type AiTask } from '../core/ports'
 import { CliEngine, type CliEngineOptions } from './cli-engine'
 
 /**
@@ -15,6 +15,11 @@ import { CliEngine, type CliEngineOptions } from './cli-engine'
  * An agent mission (`task.agent`, DEC-018) is a different run: FULL ACCESS (`--dangerously-bypass-approvals-and-sandbox`, as MarkView starts
  * its agents; it also lets MCP tools run in exec mode, checked against 0.167) and the application's MCP server given with `-c`. The user's
  * own configuration stays ignored, so their other MCP servers (other browsers) are not loaded.
+ *
+ * Codex cannot be held to the application's tools (`confinesAgent` is not set): `codex exec --help` (0.169) has no switch that removes the shell
+ * or the file tools. `--sandbox` limits what a command may change, not what it may run or read; `--ask-for-approval` is not an `exec` option;
+ * `--dangerously-bypass-approvals-and-sandbox` is what lets MCP tools run in `exec` mode at all (checked against 0.167); `-c`/`--disable` take
+ * feature names, and `codex features list` has none for the shell. So a confined run (the post mission) is refused, never run with full access.
  *
  * A picture (`task.makeFiles`, DEC-019) runs in the folder named by the caller with `--sandbox workspace-write`: Codex's own image tool
  * (`codex features list`: image_generation, stable) makes the file and writes it there. Checked once with the real CLI (a 1254x1254 PNG in 13k tokens).
@@ -41,6 +46,7 @@ export class CodexEngine extends CliEngine {
   }
 
   protected buildArgs(task: AiTask, cwd: string): string[] {
+    if (task.agent?.confined) throw new AiError('unavailable', 'Codex cannot be held to the browser tools alone (it can also run commands and read files), so it does not publish for you.')
     if (task.agent) return this.agentArgs(task.agent, cwd)
     return [
       'exec',

@@ -6,6 +6,10 @@ import type { Core } from '../core'
 
 /** A web port the server cannot listen on is refused, so no screen, link or script can store one (BUG-044). Nothing of the request is stored then. */
 function checkedPatch(patch: Partial<AppSettings>): Partial<AppSettings> {
+  // Who publishes is a choice of two: anything else is refused, never stored, so an unknown value can never read as "the AI browser".
+  if (patch.publishWith !== undefined && patch.publishWith !== 'connector' && patch.publishWith !== 'ai_browser') {
+    throw new ApiError('invalid_input', 'Publishing is done either by the connector or by the AI browser.')
+  }
   if (patch.webMode?.port === undefined) return patch
   const port = parseWebPort(String(patch.webMode.port))
   if (!port.ok) throw new ApiError('invalid_input', port.message)

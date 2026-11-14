@@ -15,11 +15,12 @@
 import { ApiError } from '../../shared/api'
 import type { Id, SendAction } from '../../shared/types'
 import type { Core } from '../core'
-import { TakeoverError, TicketError, type PublishOutcome, type PublishedRef } from '../ports'
+import { TakeoverError, TicketError, type Connector, type ConnectorContext, type PublishOutcome, type PublishedRef } from '../ports'
 import type { SendingService } from '../services'
 import { SendBlockedError, type GateBlock, type GateGrant, type SendGate } from './gate'
 import type { Ingestor } from './ingest'
 import { isLoginError, type LoginWatch } from './login-watch'
+import { AI_BROWSER_BASIS, MissionPublisher, type Executor, type MissionResult } from './mission-publisher'
 import { buildPublishRequest } from './request'
 import type { ReviewFlow } from './review'
 import { SEND_LOCKED_STATES, type FlowStore } from './store'
@@ -41,8 +42,9 @@ export interface SendOptions {
 /** `loginLike`: the failure is worded like "not signed in", which makes the session worth checking. */
 type AttemptOutcome =
   | { kind: 'confirmed'; url: string; externalId: string }
-  | { kind: 'failed'; error: string; loginLike?: boolean }
-  | { kind: 'unknown'; error: string; loginLike?: boolean }
+  /** `hold`: nothing was submitted and the AI browser could not be used; the approval stays and the owner may press Send again. */
+  | { kind: 'failed'; error: string; note?: string; loginLike?: boolean; hold?: boolean }
+  | { kind: 'unknown'; error: string; note?: string; loginLike?: boolean }
 
 type LoginProblem = 'login' | 'captcha'
 
@@ -62,6 +64,7 @@ export class SendingFlow implements SendingService {
   private readonly inFlight = new Set<string>()
   private readonly reconciling = new Set<string>()
   private readonly lastHold = new Map<string, string>()
+  private readonly missions: MissionPublisher
 
   constructor(
     private readonly core: Core,
@@ -70,7 +73,9 @@ export class SendingFlow implements SendingService {
     private readonly review: ReviewFlow,
     private readonly ingestor: Ingestor,
     private readonly watch: LoginWatch
-  ) {}
+  ) {
+    this.missions = new MissionPublisher(core, gate, store)
+  }
 
   // ───────────── sending ─────────────
 
@@ -86,10 +91,12 @@ export class SendingFlow implements SendingService {
       this.applyBlock(opportunityId, decision)
       throw new SendBlockedError(decision)
     }
+    // Who carries it out is decided before the attempt is written, so the audit row says how it was published.
+    const executor = this.missions.executorFor(decision, automatic)
     try {
-      const action = this.reserve(decision)
+      const action = this.reserve(decision, executor === 'ai_browser' ? `${decision.authorizationBasis}; ${AI_BROWSER_BASIS}` : decision.authorizationBasis)
       this.lastHold.delete(opportunityId)
-      return await this.attempt(decision, action)
+      return await this.attempt(decision, action, executor, automatic)
     } finally {
       // The ticket is single-purpose: it must not outlive the attempt, whatever happened.
       this.core.tickets.revoke(decision.ticket)
@@ -97,7 +104,7 @@ export class SendingFlow implements SendingService {
   }
 
   /** Writes the attempt as 'sending' and marks the opportunity, atomically, before anything leaves the machine. */
-  private reserve(grant: GateGrant): SendAction {
+  private reserve(grant: GateGrant, authorizationBasis: string): SendAction {
     const oppId = grant.opportunity.id
     return this.core.db.transaction(() => {
       if (this.store.openAction(oppId)) throw new SendBlockedError({ allowed: false, effect: 'hold', code: 'in_flight', reasons: ['A send for this item is already in progress or finished.'] })
@@ -107,7 +114,7 @@ export class SendingFlow implements SendingService {
             `INSERT INTO send_actions (id, opportunity_id, draft_id, approval_id, content_hash, account_id, destination, state, attempted_at, completed_at, result_url, result_external_id, authorization_basis, knowledge_version_id, error)
              VALUES (?, ?, ?, ?, ?, ?, ?, 'sending', ?, NULL, NULL, NULL, ?, ?, NULL)`
           )
-          .run(grant.actionId, oppId, grant.draft.id, grant.approval.id, grant.contentHash, grant.account.id, grant.request.destination, this.store.now(), grant.authorizationBasis, grant.draft.knowledgeVersionId)
+          .run(grant.actionId, oppId, grant.draft.id, grant.approval.id, grant.contentHash, grant.account.id, grant.request.destination, this.store.now(), authorizationBasis, grant.draft.knowledgeVersionId)
       } catch (error) {
         if (isUniqueViolation(error)) throw new SendBlockedError({ allowed: false, effect: 'hold', code: 'in_flight', reasons: ['A send for this item is already in progress or finished.'] })
         throw error
@@ -117,13 +124,13 @@ export class SendingFlow implements SendingService {
     })()
   }
 
-  private async attempt(grant: GateGrant, action: SendAction): Promise<SendAction> {
+  private async attempt(grant: GateGrant, action: SendAction, executor: Executor, automatic: boolean): Promise<SendAction> {
     this.inFlight.add(action.id)
     this.store.notify()
     let settled = action
     try {
       await this.core.runs.track('send', { channelId: grant.channel.id, productId: grant.opportunity.productId }, async () => {
-        const outcome = await this.publish(grant)
+        const outcome = await this.publish(grant, action, executor, automatic)
         const problem = await this.loginProblem(grant, outcome)
         settled = this.settle(grant, outcome, problem)
         return { status: outcome.kind === 'confirmed' ? ('ok' as const) : ('failed' as const), summary: this.describe(grant, outcome) }
@@ -135,14 +142,15 @@ export class SendingFlow implements SendingService {
     return settled
   }
 
-  /** The single connector call. Never throws: every way it can end is mapped to confirmed, failed or unknown. */
-  private async publish(grant: GateGrant): Promise<AttemptOutcome> {
+  /** The single connector call (or the single AI browser mission). Never throws: every way it can end is mapped to confirmed, failed or unknown. */
+  private async publish(grant: GateGrant, action: SendAction, executor: Executor, automatic: boolean): Promise<AttemptOutcome> {
     let pair
     try {
       pair = this.core.connectorContext(grant.channel.id)
     } catch (error) {
       return { kind: 'failed', error: errorMessage(error) } // nothing was submitted
     }
+    if (executor === 'ai_browser') return this.publishWithAi(pair, grant, action, automatic)
     try {
       const outcome: PublishOutcome = await pair.connector.publish(pair.ctx, grant.ticket, grant.request)
       return this.normalize(outcome)
@@ -156,6 +164,32 @@ export class SendingFlow implements SendingService {
         error: `The connector stopped with an error, so it is not known whether the content was published: ${errorMessage(error)}.${takeover}`,
         loginLike: isLoginError(error)
       }
+    }
+  }
+
+  /**
+   * One mission of the AI in the account's browser instead of the connector's call. The ticket `authorize` gave is for the connector's one
+   * call and is revoked here, unused: the mission asks the gate for its own single-use ticket at the moment it submits. What the page shows
+   * afterwards is read by the application (`findPublished`); the AI's report never confirms anything.
+   */
+  private async publishWithAi(pair: { connector: Connector; ctx: ConnectorContext }, grant: GateGrant, action: SendAction, automatic: boolean): Promise<AttemptOutcome> {
+    this.core.tickets.revoke(grant.ticket)
+    let result: MissionResult
+    try {
+      result = await this.missions.publish(pair, grant, action.attemptedAt, automatic)
+    } catch (error) {
+      // Not even the mission's own bookkeeping may leave the result open to a guess: it may have been published.
+      return { kind: 'unknown', error: `The AI browser stopped with an error, so it is not known whether the content was published: ${errorMessage(error)}` }
+    }
+    switch (result.status) {
+      case 'confirmed':
+        return this.normalize({ status: 'confirmed', url: result.url, externalId: result.externalId })
+      case 'failed':
+        return { kind: 'failed', error: result.error, note: result.note, loginLike: result.auth !== undefined }
+      case 'unknown':
+        return { kind: 'unknown', error: result.error, note: result.note }
+      case 'not_started':
+        return { kind: 'failed', error: result.error, hold: true }
     }
   }
 
@@ -203,6 +237,8 @@ export class SendingFlow implements SendingService {
   private settle(grant: GateGrant, outcome: AttemptOutcome, problem: LoginProblem | null): SendAction {
     const oppId = grant.opportunity.id
     const now = this.store.now()
+    // What the owner reads: the application's wording, then what the AI or the site said (bounded, see MissionResult). The log gets the wording only.
+    const shown = outcome.kind === 'confirmed' ? '' : outcome.note ? `${outcome.error} ${outcome.note}` : outcome.error
     this.core.db.transaction(() => {
       if (outcome.kind === 'confirmed') {
         this.core.db
@@ -210,17 +246,20 @@ export class SendingFlow implements SendingService {
           .run(now, outcome.url || null, outcome.externalId || null, grant.actionId)
         this.store.updateOpportunity(oppId, { state: 'confirmed', reason: '' })
       } else if (outcome.kind === 'failed') {
-        this.core.db.prepare("UPDATE send_actions SET state = 'failed', completed_at = ?, error = ? WHERE id = ?").run(now, outcome.error, grant.actionId)
+        this.core.db.prepare("UPDATE send_actions SET state = 'failed', completed_at = ?, error = ? WHERE id = ?").run(now, shown, grant.actionId)
         if (problem) {
           // Nothing was submitted and the content is unchanged, so the approval stays; the account is what needs the owner.
           const what = problem === 'captcha' ? 'is waiting for a CAPTCHA' : 'is signed out'
           this.store.updateOpportunity(oppId, { state: 'ready', reason: `Sending is paused: account "${grant.account.label}" ${what}. Fix it, then press Send.` })
+        } else if (outcome.hold) {
+          // Nothing was submitted and the content is unchanged: the approval stays, the owner may press Send again.
+          this.store.updateOpportunity(oppId, { state: 'ready', reason: `Not sent: ${shown} The approval is kept; press Send to try again.` })
         } else {
-          this.review.returnToReview(oppId, `Sending failed: ${outcome.error} Review it before trying again.`, { settlingAttempt: true })
+          this.review.returnToReview(oppId, `Sending failed: ${shown} Review it before trying again.`, { settlingAttempt: true })
         }
       } else {
-        this.core.db.prepare("UPDATE send_actions SET state = 'unknown', completed_at = NULL, error = ? WHERE id = ?").run(outcome.error, grant.actionId)
-        this.store.updateOpportunity(oppId, { state: 'unknown_result', reason: `${outcome.error} No new attempt is possible until this is reconciled with the platform.` })
+        this.core.db.prepare("UPDATE send_actions SET state = 'unknown', completed_at = NULL, error = ? WHERE id = ?").run(shown, grant.actionId)
+        this.store.updateOpportunity(oppId, { state: 'unknown_result', reason: `${shown} No new attempt is possible until this is reconciled with the platform.` })
       }
     })()
     if (outcome.kind === 'confirmed') this.markVerified(grant.channel.id, grant.opportunity.kind === 'standalone', outcome.url || outcome.externalId)
@@ -230,6 +269,7 @@ export class SendingFlow implements SendingService {
     return this.core.repos.action(grant.actionId)
   }
 
+  /** The line for the log and the run list: the application's wording only, never the free text of `note`. */
   private describe(grant: GateGrant, outcome: AttemptOutcome): string {
     const what = grant.opportunity.kind === 'standalone' ? 'Post' : 'Reply'
     if (outcome.kind === 'confirmed') return `${what} sent to ${grant.request.destination}${outcome.url ? ` (${outcome.url})` : ''}`

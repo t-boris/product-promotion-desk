@@ -641,7 +641,7 @@ describe('concurrency: one attempt only (REQ-004 criteria 3 and 5)', () => {
 describe('standalone publications (REQ-003 criterion 5)', () => {
   it('are sent only after the owner approved them, through the same gate, as posts to the channel', async () => {
     world = makeWorld({ mode: 'auto', settings: { autoCategories: ['thanks', 'faq'] } })
-    const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'Hello world', text: 'Our first post', link: 'https://natalmystic.com' } })
+    const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'Hello world', text: 'Our first post. I work on this product.', link: 'https://natalmystic.com' } })
     expect((await sendBlocked(opportunity)).code).toBe('not_ready')
 
     await world.core.router.call('opportunities.approve', { id: opportunity.id })

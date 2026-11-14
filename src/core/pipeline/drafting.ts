@@ -17,6 +17,7 @@ import { buildReplyContext, loadKnowledge, type Knowledge, type ReplyContext } f
 import { withRole } from './role'
 import { buildReplyPrompt, parseReplyProposal, REPLY_LABEL, REPLY_SYSTEM, type ReplyProposal } from './draft-prompt'
 import { DISCLOSURE_REASON, mentionsProduct } from './auto-guard'
+import { disclosureProblem } from './disclosure'
 import { SendBlockedError } from './gate'
 import { autoEligibility, TOOL_FREE_REQUIRED_REASON } from './modes'
 import type { ReviewFlow } from './review'
@@ -268,6 +269,7 @@ export class DraftingFlow implements DraftingService {
             approved: knowledge.approved,
             engineToolFree,
             productName: ctx.product.name,
+            productWebsite: ctx.product.website,
             disclosesConnection: proposal.disclosesConnection
           })
         : null
@@ -276,7 +278,9 @@ export class DraftingFlow implements DraftingService {
     const target: OpportunityState = mode === 'draft' ? 'draft' : 'awaiting_approval'
     const verbatim = [TOOL_FREE_REQUIRED_REASON, DISCLOSURE_REASON]
     // The owner is reminded of the missing disclosure whatever the mode: editing the text is theirs to do before approving.
-    const undisclosed = mentionsProduct(proposal.reply, ctx.product.name) && !proposal.disclosesConnection
+    const undisclosed =
+      (mentionsProduct(proposal.reply, ctx.product.name) && !proposal.disclosesConnection) ||
+      disclosureProblem({ text: proposal.reply }, { name: ctx.product.name, websiteUrl: ctx.product.website }) !== null
     const reason =
       eligibility && !eligibility.eligible
         ? verbatim.includes(eligibility.why)

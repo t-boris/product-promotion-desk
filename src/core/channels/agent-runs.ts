@@ -12,9 +12,11 @@ import { statSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { ApiError } from '../../shared/api'
-import type { Account, Profile, AgentAsk, AgentReadiness, AgentRun, AgentTaskKind } from '../../shared/types'
+import type { Account, Profile, AgentAsk, AgentReadiness, AgentRun, AgentTaskKind, MissionKind } from '../../shared/types'
 import { AiError, TakeoverError, type AiEngine } from '../ports'
 import { missionPrompt, type Mission } from '../browser-agent/mission'
+import { postMissionPrompt } from '../browser-agent/post-mission'
+import type { PostMissionOutcome, PostMissionRequest, PostMissionService } from '../browser-agent/post-submit'
 import { BrowserToolbox, type MissionStatus } from '../browser-agent/toolbox'
 import type { Core } from '../core'
 import type { LessonService } from './lessons'
@@ -30,6 +32,35 @@ const MAX_FACT = 400
 const RUN_TIMEOUT_MS = 30 * 60 * 1000
 const SERVER_NAME = 'ppd'
 
+/** A publication is one form: a quarter of an hour and a hundred calls are generous, and the owner may need that long for a CAPTCHA. */
+const POST_TIMEOUT_MS = 15 * 60 * 1000
+const POST_MAX_CALLS = 100
+/** The least time between two actions on the page in a post mission: a person does not act in milliseconds, and a site notices. */
+const POST_MIN_GAP_MS = 2000
+
+/**
+ * What a kind of mission is: who starts it, how long and how many calls it has, what it says while it opens. A new kind (creating an
+ * account, connecting a channel, scanning one) is one more row here and, if its tools differ, a toolset in the toolbox: the engine run,
+ * the questions to the owner and the stopping are the same for all.
+ */
+interface MissionSpec {
+  /** `owner`: through `agent.start`. `send_flow`: only the send flow starts it, with a ticket for one approved publication in hand. */
+  startedBy: 'owner' | 'send_flow'
+  timeoutMs: number
+  /** Tool calls the mission has; the toolbox's own default when not given. */
+  maxCalls?: number
+  /** What the run says before the AI has said anything. */
+  opening: string
+  /** The log's verb: "The AI started to <doing> <account>". */
+  doing: string
+}
+
+const MISSIONS: Record<MissionKind, MissionSpec> = {
+  signup: { startedBy: 'owner', timeoutMs: RUN_TIMEOUT_MS, opening: 'The AI is opening the registration page.', doing: 'register' },
+  profile: { startedBy: 'owner', timeoutMs: RUN_TIMEOUT_MS, opening: 'The AI is opening the profile page.', doing: 'fill in the profile of' },
+  post: { startedBy: 'send_flow', timeoutMs: POST_TIMEOUT_MS, maxCalls: POST_MAX_CALLS, opening: 'The AI is opening the page to publish.', doing: 'publish for' }
+}
+
 interface Live {
   run: AgentRun
   abort: AbortController
@@ -41,7 +72,7 @@ interface Live {
   exchange: { question: string; answer: string } | null
 }
 
-export class AgentRunService {
+export class AgentRunService implements PostMissionService {
   private readonly runs = new Map<string, Live>()
 
   constructor(
@@ -123,19 +154,44 @@ export class AgentRunService {
    * that the password is saved is a lookup in the vault file, and `mission()` reads it, which only `start` calls (BUG-041).
    */
   private async prerequisites(account: Account, kind: AgentTaskKind): Promise<{ engine: AiEngine; mission: () => Promise<Mission> }> {
-    if (kind !== 'signup' && kind !== 'profile') throw new ApiError('invalid_input', 'This kind of task is not known.')
-    if (this.runs.get(account.id)?.run.status === 'running') throw new ApiError('agent_running', `The AI is already working on ${account.label}.`)
-
-    const engine = this.core.engines.selected()
-    if (!engine) throw new ApiError('no_engine', 'No AI engine is selected. Choose Claude Code or Codex in Settings.')
-    if (!engine.supportsAgent) throw new ApiError('engine_cannot_drive', `${engine.label} cannot work the browser. Choose Claude Code or Codex in Settings (AI engine).`)
-    if (!this.core.agentBridge) throw new ApiError('no_agent_bridge', 'The AI browser agent is not available in this build.')
-    const status = await engine.check()
-    if (!status.installed || !status.ready) throw new ApiError('engine_unavailable', status.detail || `${engine.label} is not available.`)
+    // Only a kind the owner starts: `post` is the send flow's, and anything else is not a kind at all.
+    const spec = Object.hasOwn(MISSIONS, kind) ? MISSIONS[kind] : undefined
+    if (!spec || spec.startedBy !== 'owner') throw new ApiError('invalid_input', 'This kind of task is not known.')
+    const engine = await this.readyEngine(account)
 
     if (kind === 'signup') return { engine, mission: this.signUpMission(account) }
     const mission = this.profileMission(account)
     return { engine, mission: async () => mission }
+  }
+
+  /**
+   * One run at a time on an account. Synchronous on purpose: the caller claims the account (`runs.set`) in the same turn, with nothing
+   * awaited in between, so two starts that were both waiting for the engine cannot both go on.
+   */
+  private assertIdle(account: Account): void {
+    if (this.runs.get(account.id)?.run.status === 'running') throw new ApiError('agent_running', `The AI is already working on ${account.label}.`)
+  }
+
+  /**
+   * No run going on the account, and an engine that can work the browser and is ready: what every kind of mission needs first. A mission
+   * that publishes (`confined`) also needs an engine that can be held to the application's tools alone.
+   */
+  private async readyEngine(account: Account, confined = false): Promise<AiEngine> {
+    this.assertIdle(account)
+
+    const engine = this.core.engines.selected()
+    if (!engine) throw new ApiError('no_engine', 'No AI engine is selected. Choose Claude Code or Codex in Settings.')
+    if (!engine.supportsAgent) throw new ApiError('engine_cannot_drive', `${engine.label} cannot work the browser. Choose Claude Code or Codex in Settings (AI engine).`)
+    if (confined && !engine.confinesAgent) {
+      throw new ApiError(
+        'engine_cannot_confine',
+        `${engine.label} cannot be held to the browser tools alone (it can also run commands and read files), so it is not allowed to publish for you. Choose Claude Code in Settings (AI engine), or send through the connector.`
+      )
+    }
+    if (!this.core.agentBridge) throw new ApiError('no_agent_bridge', 'The AI browser agent is not available in this build.')
+    const status = await engine.check()
+    if (!status.installed || !status.ready) throw new ApiError('engine_unavailable', status.detail || `${engine.label} is not available.`)
+    return engine
   }
 
   /** Starts a mission and returns at once; it goes on in the background and is read with `state`. */
@@ -154,7 +210,7 @@ export class AgentRunService {
         accountId: account.id,
         kind,
         status: 'running',
-        summary: kind === 'signup' ? 'The AI is opening the registration page.' : 'The AI is opening the profile page.',
+        summary: MISSIONS[kind].opening,
         lines: [],
         typed: [],
         question: null,
@@ -163,14 +219,91 @@ export class AgentRunService {
         finishedAt: null
       }
     }
+    // The checks above and the password lookup awaited: another start may have taken the account meanwhile.
+    this.assertIdle(account)
     this.runs.set(account.id, live)
     this.lessons.markUsed(this.lessons.forPlatform(account.platform))
-    this.core.log.info('accounts', `The AI started to ${kind === 'signup' ? 'register' : 'fill in the profile of'} ${account.label} on ${mission.hosts[0] ?? 'the platform'} (${engine.label}).`)
+    this.core.log.info('accounts', `The AI started to ${MISSIONS[kind].doing} ${account.label} on ${mission.hosts[0] ?? 'the platform'} (${engine.label}).`)
     this.core.events.changed('accounts')
     // The owner watches the AI work in the account's own browser.
     this.core.browser.showAgentBrowser?.(account)
     void this.drive(account, live, mission, engine, kind)
     return snapshot(live.run)
+  }
+
+  /**
+   * One approved publication, worked by the AI in the account's browser (B1). Only the send flow calls this, with an authority built from
+   * a gate grant: without one there is no mission, and the mission has no tool that types, presses a key or runs a script (see the
+   * toolbox). Unlike `start` it resolves when the mission is over. What the AI says about how it went is passed on as a note; whether the
+   * control that publishes was pressed is the authority's word, and whether the text is on the site is for the send flow to read back.
+   */
+  async run(request: PostMissionRequest): Promise<PostMissionOutcome> {
+    const account = this.accounts.account(request.accountId)
+    const engine = await this.readyEngine(account, true)
+    const spec = MISSIONS.post
+    const live: Live = {
+      abort: new AbortController(),
+      answer: null,
+      reported: null,
+      exchange: null,
+      run: { accountId: account.id, kind: 'post', status: 'running', summary: spec.opening, lines: [], typed: [], question: null, learned: [], startedAt: this.core.clock.now().toISOString(), finishedAt: null }
+    }
+    // The engine check above awaited: another start may have taken the account meanwhile.
+    this.assertIdle(account)
+    this.runs.set(account.id, live)
+
+    // The moment the owner presses Stop the mission loses the right to press, and so it does when the engine ends, however it ends: a
+    // call of the AI that is still running (a submit in the middle of its typing) cannot press after this run has read `committed`.
+    live.abort.signal.addEventListener('abort', () => request.authority.seal(), { once: true })
+    let ended: PostMissionOutcome['ended'] = 'finished'
+    let error: string | null = null
+    let toolbox: BrowserToolbox | null = null
+    try {
+      // Everything after the claim is inside the try: whatever throws here ends the run as failed, and never leaves it "running".
+      this.core.log.info('accounts', `The AI started to ${spec.doing} ${account.label} on ${request.hosts[0] ?? 'the platform'} (${engine.label}).`)
+      this.core.events.changed('accounts')
+      this.core.browser.showAgentBrowser?.(account)
+      const session = this.core.browser.session(account)
+      toolbox = new BrowserToolbox({
+        withPage: (work) => session.withAgentControl('agent-post', work),
+        hosts: request.hosts,
+        values: {},
+        sleep: this.core.sleep,
+        say: (line) => this.say(live, line),
+        ask: (question) => this.ask(live, question),
+        note: () => undefined,
+        report: (result) => void (live.reported = result),
+        signal: live.abort.signal,
+        maxCalls: spec.maxCalls,
+        post: { authority: request.authority, minGapMs: POST_MIN_GAP_MS, now: () => this.core.clock.now().getTime() }
+      })
+      const said = await this.runEngine(live, engine, toolbox, 'agent.post', account.profileId ?? account.id, postMissionPrompt(request, this.core.clock.now().toISOString().slice(0, 10)), spec.timeoutMs, true)
+      if (said.trim()) this.say(live, `The AI: ${said.trim().replace(/\s+/g, ' ').slice(0, 240)}`)
+    } catch (caught) {
+      if (caught instanceof AiError && caught.kind === 'cancelled') ended = 'stopped'
+      else if (caught instanceof AiError && caught.kind === 'timeout') ended = 'timeout'
+      else {
+        ended = 'error'
+        error = caught instanceof TakeoverError || (caught instanceof ApiError && caught.code === 'browser_busy') ? BROWSER_BUSY : caught instanceof Error ? caught.message : String(caught)
+      }
+    } finally {
+      request.authority.seal()
+      this.dropQuestion(live, 'The mission is over.')
+    }
+    if (live.run.status !== 'running') ended = 'stopped' // the owner stopped it (its run was finished by `stop`)
+
+    const committed = request.authority.committed
+    const reported = live.reported ? { status: live.reported.status, reason: live.reported.reason } : null
+    const observed = toolbox?.observed ?? { humanCheck: null, warning: null }
+    if (live.run.status === 'running') {
+      if (committed) this.finish(live, 'done', 'The AI pressed the button that publishes. The application is checking that the text is on the site.')
+      else if (ended === 'timeout') this.finish(live, 'needs_owner', 'The AI did not finish in a quarter of an hour and was stopped. Nothing was published.')
+      else if (ended === 'error') this.finish(live, 'failed', `The AI stopped because of an error: ${error}`)
+      else this.finish(live, reported?.status === 'failed' ? 'failed' : 'needs_owner', reported?.reason || 'The AI did not publish anything.')
+    }
+    // The AI's own words are shown to the owner in the run; the log keeps a fixed phrase and the status it reported.
+    this.core.log.info('accounts', `The AI ${committed ? 'pressed the button that publishes' : 'did not publish'} for ${account.label}${reported ? ` (it reported "${reported.status}")` : ''}.`)
+    return { ended, committed, reported, humanCheck: observed.humanCheck, warning: observed.warning, error }
   }
 
   /**
@@ -277,13 +410,8 @@ export class AgentRunService {
       report: (result) => void (live.reported = result),
       signal: live.abort.signal
     })
-    let opened: Awaited<ReturnType<typeof bridge.open>> | null = null
     try {
-      opened = await bridge.open(toolbox)
-      const said = await engine.run(
-        { label: `agent.${kind}`, subject: account.profileId ?? account.id, prompt: missionPrompt(mission, this.core.clock.now().toISOString().slice(0, 10)), agent: { server: SERVER_NAME, launch: opened.launch }, timeoutMs: RUN_TIMEOUT_MS },
-        { signal: live.abort.signal }
-      )
+      const said = await this.runEngine(live, engine, toolbox, `agent.${kind}`, account.profileId ?? account.id, missionPrompt(mission, this.core.clock.now().toISOString().slice(0, 10)), MISSIONS[kind].timeoutMs)
       if (live.run.status !== 'running') return // stopped by the owner while the engine was ending
       if (said.trim()) this.say(live, `The AI: ${said.trim().replace(/\s+/g, ' ').slice(0, 240)}`)
       await this.conclude(account, live, kind)
@@ -293,12 +421,23 @@ export class AgentRunService {
       if (error instanceof AiError && error.kind === 'timeout') return this.finish(live, 'needs_owner', 'The AI did not finish in half an hour and was stopped. Open the browser and look at where it got to.')
       if (error instanceof TakeoverError || (error instanceof ApiError && error.code === 'browser_busy')) return this.finish(live, 'needs_owner', BROWSER_BUSY)
       const reason = error instanceof Error ? error.message : String(error)
-      this.core.log.warn('accounts', `The AI could not ${kind === 'signup' ? 'register' : 'fill in the profile of'} ${account.label}: ${reason}`)
+      this.core.log.warn('accounts', `The AI could not ${MISSIONS[kind].doing} ${account.label}: ${reason}`)
       this.finish(live, 'failed', `The AI stopped because of an error: ${reason}`)
     } finally {
       this.dropQuestion(live, 'The mission is over.')
-      opened?.close()
       await rm(shrunkDir, { recursive: true, force: true })
+    }
+  }
+
+  /** Offers the toolbox to the engine, lets the engine work the mission, and closes the tools again, however it ends. Resolves with what the engine said last. */
+  private async runEngine(live: Live, engine: AiEngine, toolbox: BrowserToolbox, label: string, subject: string, prompt: string, timeoutMs: number, confined = false): Promise<string> {
+    const bridge = this.core.agentBridge
+    if (!bridge) throw new ApiError('no_agent_bridge', 'The AI browser agent is not available in this build.')
+    const opened = await bridge.open(toolbox)
+    try {
+      return await engine.run({ label, subject, prompt, agent: { server: SERVER_NAME, launch: opened.launch, ...(confined ? { confined: true } : {}) }, timeoutMs }, { signal: live.abort.signal })
+    } finally {
+      opened.close()
     }
   }
 

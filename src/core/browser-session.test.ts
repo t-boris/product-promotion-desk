@@ -65,4 +65,53 @@ describe('ControlledSession', () => {
     tickets.revoke(ticket)
     await expect(session.withAgentControl('x', (p) => p.fill('#t', 'x', ticket))).rejects.toBeInstanceOf(TicketError)
   })
+
+  describe('publishStep: the page step that can publish needs a ticket (B1)', () => {
+    const typeStep = { do: 'type', ref: 'e1', text: 'hello' } as const
+    const clickStep = { do: 'click', ref: 'e2' } as const
+
+    it('carries a step out with a genuine ticket of this account, and pageStep stays ticket-less', async () => {
+      const { session, page, ticket } = setup()
+      await session.withAgentControl('x', async (p) => {
+        expect(await p.publishStep(typeStep, ['site.test'], ticket)).toEqual({ status: 'done', detail: 'ok' })
+        await p.publishStep(clickStep, ['site.test'], ticket)
+        await p.pageStep(clickStep, ['site.test'])
+      })
+      expect(page.steps.map((s) => s.step)).toEqual([typeStep, clickStep, clickStep])
+      expect(page.steps[0].hosts).toEqual(['site.test'])
+    })
+
+    it('refuses without a ticket, with a forged one, with another account\'s, with a revoked one and with an expired one, and touches nothing', async () => {
+      const clock = new FakeClock()
+      const tickets = new TicketAuthority(clock)
+      const page = new FakePage()
+      const session = new ControlledSession('acc', async () => page, tickets)
+      const issue = (accountId = 'acc') => tickets.issue({ actionId: 'a', contentHash: 'h', accountId, destination: 'd' })
+      const publish = (ticket: ReturnType<typeof issue>) => session.withAgentControl('x', (p) => p.publishStep(clickStep, ['site.test'], ticket))
+
+      await expect(publish(undefined as never)).rejects.toBeInstanceOf(TicketError)
+      await expect(publish({ ...issue(), signature: '00'.repeat(32) })).rejects.toBeInstanceOf(TicketError)
+      await expect(publish({ ...issue(), contentHash: 'other' })).rejects.toBeInstanceOf(TicketError)
+      await expect(publish(issue('someone-else'))).rejects.toBeInstanceOf(TicketError)
+      const spent = issue()
+      tickets.revoke(spent)
+      await expect(publish(spent)).rejects.toBeInstanceOf(TicketError)
+      const old = issue()
+      clock.advance(10 * 60 * 1000)
+      await expect(publish(old)).rejects.toBeInstanceOf(TicketError)
+
+      expect(page.steps).toEqual([])
+    })
+
+    it('stops the moment the owner takes the browser', async () => {
+      const { session, page, ticket } = setup()
+      const run = session.withAgentControl('x', async (p) => {
+        await p.publishStep(typeStep, ['site.test'], ticket)
+        session.takeControl()
+        await p.publishStep(clickStep, ['site.test'], ticket)
+      })
+      await expect(run).rejects.toBeInstanceOf(TakeoverError)
+      expect(page.steps.map((s) => s.step)).toEqual([typeStep])
+    })
+  })
 })

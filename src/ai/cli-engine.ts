@@ -193,10 +193,12 @@ export abstract class CliEngine implements AiEngine {
 
   /** Turns the process result into the answer text, or into the AiError that describes the failure. */
   protected interpret(result: ProcessResult, task: AiTask): string {
+    // A confined run (the post mission) puts nothing the engine or the system printed into an error: only fixed words and the exit code.
+    const confined = task.agent?.confined === true
     switch (result.outcome) {
       case 'spawn_error': {
         const code = result.spawnError?.code
-        throw new AiError('unavailable', `${this.label} could not be started${code ? ` (${code})` : ''}: ${result.spawnError?.message ?? 'unknown error'}`)
+        throw new AiError('unavailable', `${this.label} could not be started${code ? ` (${code})` : ''}${confined ? '.' : `: ${result.spawnError?.message ?? 'unknown error'}`}`)
       }
       case 'timeout':
         throw new AiError('timeout', `${this.label} did not finish "${task.label}" in time and was stopped.`)
@@ -210,10 +212,10 @@ export abstract class CliEngine implements AiEngine {
     if (result.exitCode !== 0) {
       const detail = lastLines(result.stderr || result.stdout)
       if (AUTH_PATTERN.test(detail)) {
-        throw new AiError('unavailable', `${this.label} is not signed in or not authorized: ${detail}`)
+        throw new AiError('unavailable', `${this.label} is not signed in or not authorized${confined ? '.' : `: ${detail}`}`)
       }
       const how = result.exitCode === null ? `was terminated by ${result.signal ?? 'a signal'}` : `exited with code ${result.exitCode}`
-      throw new AiError('failed', `${this.label} ${how}${detail ? `: ${detail}` : ''}`)
+      throw new AiError('failed', `${this.label} ${how}${confined ? '.' : detail ? `: ${detail}` : ''}`)
     }
     const text = result.stdout.trim()
     if (!text) throw new AiError('invalid_output', `${this.label} returned an empty answer.`)
