@@ -782,10 +782,18 @@ export interface AutomationState {
   background: boolean
 }
 
+/** Who carries out an approved publication: the platform's connector (default), or the AI in the account's own browser (B1). */
+export type PublishWith = 'connector' | 'ai_browser'
+
 export interface AppSettings {
   engineId: EngineId | null
   notifications: boolean
   webMode: { enabled: boolean; port: number }
+  /**
+   * Only for what the owner approved themselves and sends with a click of their own; scheduled and rule-driven sends always use the
+   * connector. The approval, the send ticket and the limits are the same either way.
+   */
+  publishWith: PublishWith
 }
 
 export interface AppInfo {
