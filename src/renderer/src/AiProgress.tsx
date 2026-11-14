@@ -96,9 +96,9 @@ export function AiPill() {
   return (
     <div className="ai-pill" data-testid="ai-pill">
       {/* A toolbar capsule, never filled (a toolbar has no filled button): the accent label and a progress ring say it is working. */}
-      <Button variant={lead ? 'secondary' : 'ghost'} className="btn-toolbar ai-pill-btn" onClick={() => setOpen(!open)} aria-expanded={open} data-testid="ai-pill-button">
+      <Button variant={lead ? 'secondary' : 'ghost'} className="btn-toolbar ai-pill-btn" onClick={() => setOpen(!open)} aria-expanded={open} title={label} data-testid="ai-pill-button">
         {lead && <span className="ai-ring" aria-hidden="true" />}
-        {label}
+        <span className="ai-pill-label">{label}</span>
       </Button>
       {open && (
         <div className="ai-pill-panel" data-testid="ai-pill-panel">

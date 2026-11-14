@@ -1164,6 +1164,14 @@ table.table {
   /* The capsule is never filled; while a task runs its label is accent text and a small ring turns before it. */
   min-width: 0;
 }
+/* A long title ("Reading the site to propose the product") must not squeeze the engine and the accounts of the toolbar out of sight
+   (V-05): the label is cut with an ellipsis and its full text is the button's tooltip. */
+.ai-pill-label {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .ai-ring {
   flex: none;
   width: 12px;
