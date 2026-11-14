@@ -382,7 +382,7 @@ Texts are the current ones and do not change.
 |---|---|---|---|
 | Tabs Accounts / Profiles / Mailboxes | Segmented control under the page header | — | — |
 | No accounts / New account (`CreateAccount`) | Group-box form | "Add account" in the form (the header "Add account" is bezel) | the form itself |
-| List + detail (`AccountDetail`) | List + detail; detail = object header, "Next:" note, numbered step group boxes 1 Role, 2 Profile, 3 E-mail, 4 Password, 5 Sign-in, "More" disclosure | the next step only (from `next-step.ts`); other step buttons bezel | — |
+| List + detail (`AccountDetail`) | List + detail; detail = object header, "Next:" note, numbered step group boxes 1 Role, 2 Profile, 3 E-mail, 4 Password, 5 Sign-in (the number sits in a 24 px column, `--step-gutter`; everything below a step's head, in every step, is indented to start under its title), "More" disclosure | the next step only (from `next-step.ts`); other step buttons bezel | — |
 | Profiles (`ProfilesPanel`, `ProfileDetail`, `ProfileAccounts`) | List + detail; "New profile" above the list as a bezel button with a plus glyph; platform toggles as a toggle group (pressed = tint, not filled) | "Make the profile" / "Propose a profile" / "Approve" / "Make an account" — one at a time by stage | no profile: the new-profile form opens by itself (as today); "Select a profile" when none is picked |
 | Mailboxes (`MailboxesCard`) | Group box with rows + add field | "Add mailbox" | today a sentence only; target: the sentence and the add field as the next step |
 

@@ -91,8 +91,10 @@ textarea.input.short {
 
 /* ───────────── Accounts: the numbered steps of an account ───────────── */
 
-/* One step is a group box: a small neutral number, the title, one line of what is set, the control on the right, and a form below. */
+/* One step is a group box: a small neutral number, the title, one line of what is set, the control on the right, and a form below.
+   --step-gutter is the number's column: the head's grid and the indent of everything below the head use it. */
 .step {
+  --step-gutter: 24px;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -102,9 +104,14 @@ textarea.input.short {
 .step > p {
   margin: 0;
 }
+/* What is below the head (a form, a row of buttons, a note) starts under the title, not under the number. It comes after the
+   rule above, which has the same specificity. */
+.step > :not(.step-head) {
+  margin-left: calc(var(--step-gutter) + var(--space-3));
+}
 .step-head {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto;
+  grid-template-columns: var(--step-gutter) minmax(0, 1fr) auto;
   gap: var(--space-3);
   align-items: start;
 }
@@ -112,8 +119,8 @@ textarea.input.short {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: var(--step-gutter);
+  height: var(--step-gutter);
   margin-top: var(--space-half);
   border-radius: 50%;
   background: var(--segment-track);
@@ -149,7 +156,7 @@ textarea.input.short {
 /* In a narrow pane the controls of a step go under its text, in line with the title. */
 @container (max-width: 560px) {
   .step-head {
-    grid-template-columns: 24px minmax(0, 1fr);
+    grid-template-columns: var(--step-gutter) minmax(0, 1fr);
   }
   .step-actions {
     grid-column: 2;
