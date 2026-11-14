@@ -993,6 +993,41 @@ describe('browser_submit: a reply goes only into the reply box of the approved c
   })
 })
 
+describe('a line break is typed only into a field that holds several lines', () => {
+  const refusedBeforeTyping = async (t: Setup, result: Promise<{ isError?: boolean; text: string }>) => {
+    expect(await result).toMatchObject({ isError: true, text: expect.stringContaining('line break') })
+    expect(t.authority.leases).toBe(0)
+    expect(t.page.steps).toEqual([])
+    expect(t.page.posted).toEqual([])
+  }
+
+  it.each(['\n', '\r\n', '\u2028', 'a\nb'])('refuses a title with %j, which a single-line field takes for Enter', async (breaks) => {
+    const t = setup({ ...POST, title: `Why I built${breaks}a chart app` })
+    await look(t)
+    await refusedBeforeTyping(t, submitPost(t))
+  })
+
+  it('refuses a link with a line break, and a text that goes into a single-line field', async () => {
+    const t = setup({ ...POST, link: 'https://natal.example/\nhttps://other.example/' })
+    await look(t)
+    await refusedBeforeTyping(t, submitPost(t))
+    const reply = setup({ ...REPLY, text: 'First line.\nSecond line. I work on Natal Mystic.' })
+    reply.page.items = reply.page.items.map((i) => (i.ref === 'e1' ? { ...i, role: 'input:text' } : i))
+    await look(reply)
+    await refusedBeforeTyping(reply, submitReply(reply))
+  })
+
+  it('types a text with line breaks into a text area and into an editor built on a div', async () => {
+    for (const role of ['textarea', 'textbox']) {
+      const t = setup(POST)
+      t.page.items = t.page.items.map((i) => (i.ref === 'e1' ? { ...i, role } : i))
+      await look(t)
+      expect((await submitPost(t)).isError).toBeUndefined()
+      expect(t.page.posted[0]?.e1).toContain('\n')
+    }
+  })
+})
+
 describe('browser_submit stops without pressing when the form is not as approved', () => {
   it('does not press when a field does not hold the approved text, and then allows no click of the AI\'s own on that page', async () => {
     const t = setup()

@@ -181,6 +181,9 @@ const PUBLISHING_CONTROL =
   'This control publishes what is typed in a form, and in this mission only browser_submit presses such a control: it types the approved content under the owner\'s approval and presses it itself. A click or a choice of your own on it is refused, whatever the page holds. Open the form (a link, or the same address on another layout of the site), look at the page, and call browser_submit with the labels of the fields and of this control.'
 /** What the approved content can be typed into: a text box (the snapshot calls an editable element a text box). Nothing else is a field. */
 const TEXT_ENTRY_ROLE = /^(?:textarea|textbox|input:(?:text|search|url|email|tel))$/
+/** The fields that hold several lines: a line break in any other field is never typed. */
+const MULTI_LINE_ROLE = /^(?:textarea|textbox)$/
+const LINE_BREAK = /[\r\n\u0085\u2028\u2029]/
 /**
  * What can be the control that publishes: a button, or an input that submits; and its name is looked at too (`looksLikeSubmit`). Not a
  * link: a link opens something and does not submit a form, and a hostile comment can carry one named "Reply".
@@ -675,6 +678,10 @@ export class BrowserToolbox implements McpToolHost {
       if (!is) return `${part.ref} is not on the page any more. Look again with browser_snapshot.`
       if (!same(element(this.shown, part.ref), is, fieldNames)) return changed(part.ref)
       if (!TEXT_ENTRY_ROLE.test(is.role)) return `${part.ref} is a ${is.role}, not a field the ${part.name} can be typed into (a text box).`
+      // A line break in a single-line field is what Enter is in a form: the site may take it for "send", and the field cannot hold it anyway.
+      if (LINE_BREAK.test(part.value) && !MULTI_LINE_ROLE.test(is.role)) {
+        return `The ${part.name} has a line break and ${part.ref} is a single-line field (${is.role}): it cannot hold it, and a line break typed into it may be taken for Enter. Nothing was typed.`
+      }
     }
     const control = element(snapshot, submitRef)
     if (!control) return `${submitRef} is not on the page any more. Look again with browser_snapshot.`
