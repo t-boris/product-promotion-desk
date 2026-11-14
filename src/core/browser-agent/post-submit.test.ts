@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { destinationMatches, fieldValueScript, formTextScript, looksLikeSubmit, normalizeText, parseHeldText, platformWarning, sameContent } from './post-submit'
+import { composePageOf, destinationMatches, fieldValueScript, formTextScript, looksLikeSubmit, normalizeText, onComposePage, parseHeldText, platformWarning, replyTarget, sameContent } from './post-submit'
 
 const HOSTS = ['reddit.com']
 const COMMENT = 'https://www.reddit.com/r/astrology/comments/abc123/my_chart/def456/'
@@ -239,5 +239,33 @@ describe('which control is named like one that publishes', () => {
 
   it.each(['', '  ', 'Delete', 'Delete comment', 'Report', 'Report comment', 'Cancel', 'Edit', 'Share', 'Award', 'Comment as u/someone', 'Reply to everyone and notify all of them now', 'Log in', 'Sign up to post', 'Posts', 'Удалить', 'Пожаловаться', 'Отмена', 'Post (disabled)', 'Save to bookmarks and share it'])('is not: "%s"', (name) => {
     expect(looksLikeSubmit(name)).toBe(false)
+  })
+})
+
+describe('the compose page of a community, and what a reply answers', () => {
+  const CHANNEL = 'https://www.reddit.com/r/Astrology'
+  it('is /r/<community>/submit for a destination of Reddit\'s shape, in any of the shapes the connector opens', () => {
+    expect(composePageOf(CHANNEL)).toEqual(['r', 'astrology', 'submit'])
+    for (const page of ['https://old.reddit.com/r/astrology/submit?selftext=true', 'https://www.reddit.com/r/Astrology/submit/?type=IMAGE', 'https://www.reddit.com/r/astrology/submit/', 'https://www.reddit.com/r/astrology/submit#x']) {
+      expect(onComposePage(page, CHANNEL)).toBe(true)
+    }
+    for (const page of ['https://www.reddit.com/r/astrology', 'https://www.reddit.com/r/astrology/new', 'https://www.reddit.com/r/astrology/submit/more', 'https://www.reddit.com/r/astrology/submitted', 'https://www.reddit.com/submit', 'https://www.reddit.com/r/tarot/submit', 'not an address']) {
+      expect(onComposePage(page, CHANNEL)).toBe(false)
+    }
+  })
+
+  it('is not guessed for a destination of another shape: every page is taken for it', () => {
+    expect(composePageOf('https://forum.example.com/c/general')).toBeNull()
+    expect(composePageOf('not an address')).toBeNull()
+    expect(onComposePage('https://forum.example.com/c/general/new', 'https://forum.example.com/c/general')).toBe(true)
+  })
+
+  it('names the post and the comment of a reply destination of Reddit\'s shape, and nothing for another shape', () => {
+    expect(replyTarget('https://www.reddit.com/r/astrology/comments/abc123/my_chart/def456/')).toEqual({ post: 't3_abc123', comment: 't1_def456' })
+    expect(replyTarget('https://old.reddit.com/r/Astrology/comments/ABC123/_/DEF456/?context=3')).toEqual({ post: 't3_abc123', comment: 't1_def456' })
+    expect(replyTarget('https://www.reddit.com/r/astrology/comments/abc123/my_chart/')).toEqual({ post: 't3_abc123', comment: null })
+    expect(replyTarget('https://www.reddit.com/r/astrology')).toBeNull()
+    expect(replyTarget('https://news.ycombinator.com/item?id=4242')).toBeNull()
+    expect(replyTarget('not an address')).toBeNull()
   })
 })

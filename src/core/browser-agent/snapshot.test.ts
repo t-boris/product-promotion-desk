@@ -21,17 +21,33 @@ interface NodeSpec {
   /** The `type` property of a button, and whether it sits in a form (a browser answers `submit` for a button without a type). */
   buttonType?: string
   inForm?: boolean
+  /** What the element sits in, nearest first. Two elements that name the same `key` sit in the same element. */
+  within?: { tag: string; attrs?: Record<string, string>; key?: string }[]
 }
 class FakeNode {
+  /** The containers of one page by key, so that two elements can sit in one form. */
+  static shared = new Map<string, FakeNode>()
   readonly attributes = new Map<string, string>()
   readonly nodeType = 1
   readonly shadowRoot = null
-  readonly parentElement = null
+  parentElement: FakeNode | null = null
   style: Record<string, string>
   constructor(readonly spec: NodeSpec) {
     this.style = spec.style ?? {}
     for (const [k, v] of Object.entries(spec.attrs ?? {})) this.attributes.set(k, v)
     if (spec.src) this.attributes.set('src', spec.src)
+    this.parentElement = FakeNode.chain(spec.within ?? [])
+  }
+  /** The outermost-last chain of containers as one element: the nearest one, whose own parent is the next, and so on. */
+  private static chain(within: NonNullable<NodeSpec['within']>): FakeNode | null {
+    const [nearest, ...rest] = within
+    if (!nearest) return null
+    let node = nearest.key ? FakeNode.shared.get(nearest.key) : undefined
+    if (!node) {
+      node = new FakeNode({ tag: nearest.tag, attrs: nearest.attrs, within: rest })
+      if (nearest.key) FakeNode.shared.set(nearest.key, node)
+    }
+    return node
   }
   get tagName(): string { return this.spec.tag.toUpperCase() }
   get innerText(): string { return this.spec.text ?? '' }
@@ -55,6 +71,7 @@ class FakeNode {
 }
 
 function runSnapshot(page: { interactive?: NodeSpec[]; alerts?: NodeSpec[]; frames?: NodeSpec[]; body?: string }): PageSnapshot {
+  FakeNode.shared = new Map()
   const interactive = (page.interactive ?? []).map((s) => new FakeNode(s))
   const alerts = (page.alerts ?? []).map((s) => new FakeNode(s))
   const frames = (page.frames ?? []).map((s) => new FakeNode(s))
@@ -146,6 +163,34 @@ describe('snapshotScript: the page as a list of labelled elements', () => {
     ])
   })
 
+  it('says which form an element is in (numbered by the look) and which comment or post the site marks around it', () => {
+    const reply = { tag: 'form', key: 'reply' }
+    const top = { tag: 'form', key: 'top' }
+    const thing = { tag: 'div', attrs: { 'data-fullname': 'T1_DEF' }, key: 'def' }
+    const s = runSnapshot({
+      interactive: [
+        { tag: 'textarea', placeholder: 'Reply box', within: [reply, thing] },
+        { tag: 'button', text: 'Reply', inForm: true, within: [reply, thing] },
+        { tag: 'textarea', placeholder: 'Thread box', within: [top] },
+        { tag: 'button', text: 'Save', inForm: true, within: [top] },
+        { tag: 'a', text: 'a link', attrs: { href: '/x' }, within: [{ tag: 'div', attrs: { role: 'form' }, key: 'aria' }] },
+        { tag: 'a', text: 'a link in a nested thing', attrs: { href: '/y' }, within: [{ tag: 'p' }, { tag: 'div', attrs: { 'data-fullname': 't1_inner' } }, thing] },
+        { tag: 'a', text: 'junk', attrs: { href: '/z' }, within: [{ tag: 'div', attrs: { 'data-fullname': 'x"; drop' } }] },
+        { tag: 'a', text: 'bare', attrs: { href: '/w' } }
+      ]
+    })
+    expect(s.elements.map((e) => [e.name, e.form, e.parent])).toEqual([
+      ['Reply box', 1, 't1_def'],
+      ['Reply', 1, 't1_def'],
+      ['Thread box', 2, undefined],
+      ['Save', 2, undefined],
+      ['a link', 3, undefined],
+      ['a link in a nested thing', undefined, 't1_inner'],
+      ['junk', undefined, undefined],
+      ['bare', undefined, undefined]
+    ])
+  })
+
   it('keeps the field role of an input that the site calls a combobox, and shows what a drop-down holds', () => {
     const s = runSnapshot({
       interactive: [
@@ -212,6 +257,8 @@ describe('parseSnapshot and its lines', () => {
     expect(parseSnapshot({ elements: 'x' })).toBeNull()
     const marked = parseSnapshot({ url: 'u', title: 't', text: '', alerts: [], humanCheck: '', elements: [{ ref: 'e1', role: 'button', name: 'a', submits: true }, { ref: 'e2', role: 'button', name: 'b', submits: 'yes' }] })
     expect(marked?.elements.map((e) => e.submits)).toEqual([true, undefined])
+    const placed = parseSnapshot({ url: 'u', title: 't', text: '', alerts: [], humanCheck: '', elements: [{ ref: 'e1', role: 'a', name: 'a', form: 3, parent: 't1_abc' }, { ref: 'e2', role: 'a', name: 'b', form: 0, parent: 'javascript:alert(1)' }, { ref: 'e3', role: 'a', name: 'c', form: 1.5, parent: 7 }, { ref: 'e4', role: 'a', name: 'd', form: 5000, parent: 'T1_ABC' }] })
+    expect(placed?.elements.map((e) => [e.form, e.parent])).toEqual([[3, 't1_abc'], [undefined, undefined], [undefined, undefined], [undefined, undefined]])
   })
 
   it('lists the elements one per line the way MarkView does', () => {

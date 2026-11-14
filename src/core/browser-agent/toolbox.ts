@@ -10,7 +10,7 @@
 
 import { TakeoverError, type BrowserPage, type PageStep } from '../ports'
 import type { McpTool, McpToolHost, McpToolResult } from '../mcp/protocol'
-import { destinationMatches, fieldValueScript, formTextScript, isPublishingControl, looksLikeSubmit, neverClicked, parseHeldText, platformWarning, sameContent, type HeldText, type PostSetup, type SubmitLease } from './post-submit'
+import { destinationMatches, fieldValueScript, formTextScript, isPublishingControl, looksLikeSubmit, neverClicked, onComposePage, composePageOf, parseHeldText, replyTarget, platformWarning, sameContent, type HeldText, type PostSetup, type SubmitLease } from './post-submit'
 import { parseSnapshot, renderElements, snapshotScript, type PageSnapshot, type SnapshotElement } from './snapshot'
 
 export interface TaskValue {
@@ -181,8 +181,11 @@ const PUBLISHING_CONTROL =
   'This control publishes what is typed in a form, and in this mission only browser_submit presses such a control: it types the approved content under the owner\'s approval and presses it itself. A click or a choice of your own on it is refused, whatever the page holds. Open the form (a link, or the same address on another layout of the site), look at the page, and call browser_submit with the labels of the fields and of this control.'
 /** What the approved content can be typed into: a text box (the snapshot calls an editable element a text box). Nothing else is a field. */
 const TEXT_ENTRY_ROLE = /^(?:textarea|textbox|input:(?:text|search|url|email|tel))$/
-/** What can be the control that publishes: a button, a link or an input that submits; and its name is looked at too (`looksLikeSubmit`). */
-const SUBMIT_ROLE = /^(?:button|link|input:(?:submit|button|image))$/
+/**
+ * What can be the control that publishes: a button, or an input that submits; and its name is looked at too (`looksLikeSubmit`). Not a
+ * link: a link opens something and does not submit a form, and a hostile comment can carry one named "Reply".
+ */
+const SUBMIT_ROLE = /^(?:button|input:(?:submit|button|image))$/
 
 interface Part {
   name: 'title' | 'text' | 'link'
@@ -433,11 +436,16 @@ export class BrowserToolbox implements McpToolHost {
   }
 
   /** What is wrong with the page for publishing now (not the platform, not the destination, a human check, a warning of the site), or null. */
-  private pageProblem(snapshot: PageSnapshot): string | null {
+  private pageProblem(snapshot: PageSnapshot, publishing = false): string | null {
     const content = (this.deps.post as PostSetup).authority.content
     if (!hostAllowed(snapshot.url, this.deps.hosts)) return `The page is not on the platform (${this.deps.hosts.join(', ')}). Use browser_navigate to go back.`
     if (!destinationMatches(snapshot.url, content.destination, content.kind, this.deps.hosts)) {
       return `This page is not where the approved ${content.kind} goes (${displayAddress(content.destination)}). Open that page with browser_navigate and find the form there.`
+    }
+    // A new post is published from the community's compose page: the community's own page, or one of its other pages, has no such form.
+    if (publishing && content.kind === 'post' && !onComposePage(snapshot.url, content.destination)) {
+      const compose = composePageOf(content.destination)
+      return `A new post is published from the community's submit page (${compose ? `/${compose.join('/')}` : 'its submit page'}), and this is not it. Open it with browser_navigate (or the "Create post" link), leave the form empty and call browser_submit there.`
     }
     if (snapshot.humanCheck) return `A human check is on the page (${snapshot.humanCheck}). Only a person can do it: call ask_owner, then look at the page again.`
     const warning = platformWarning(snapshot.alerts)
@@ -634,9 +642,9 @@ export class BrowserToolbox implements McpToolHost {
       }
       const before = await this.observe(page)
       if (!before) return fail('The page shows nothing usable yet. Wait a moment and look again.')
-      const wrong = this.pageProblem(before)
+      const wrong = this.pageProblem(before, true)
       if (wrong) return fail(`Nothing was submitted: ${wrong}`)
-      const problem = this.targetProblem(before, parts, submitRef)
+      const problem = this.targetProblem(before, parts, submitRef, true)
       if (problem) return fail(`Nothing was submitted: ${problem}`)
       const foreign = await this.foreignText(page, parts)
       if (foreign) return fail(`Nothing was submitted: ${foreign}`)
@@ -653,20 +661,19 @@ export class BrowserToolbox implements McpToolHost {
 
   /**
    * Whether the labels the AI named are, on the page as it is now (`snapshot`, a fresh look), what it saw when it named them, and are the
-   * right kind of element: the fields text boxes, the control one that publishes, named like one and not disabled. Null when they are.
-   * A label is a number the page gave in this document: a page that was loaded again (the owner, another flow on the same browser)
-   * numbers its elements again, so "e4" may now be another control than the one the AI chose, and only the look tells.
-   * What the snapshot cannot tell, and this therefore does not check: that the text box belongs to the form of the approved comment's
-   * reply. That is found out after the press (the connector's read-back names the parent of what it finds) and ends as "unknown".
+   * right kind of element: the fields text boxes, the control one that publishes, named like one and not disabled, all in one form, and,
+   * for a reply, in the reply box of the approved comment. Null when they are. A label is a number the page gave in this document: a page
+   * that was loaded again (the owner, another flow on the same browser) numbers its elements again, so "e4" may now be another element
+   * than the one the AI chose; a field is therefore compared with what the AI saw by role and, when `fieldNames`, by name too.
    */
-  private targetProblem(snapshot: PageSnapshot, parts: Part[], submitRef: string): string | null {
+  private targetProblem(snapshot: PageSnapshot, parts: Part[], submitRef: string, fieldNames: boolean): string | null {
     const changed = (ref: string): string => `${ref} is not what it was when you looked (the page changed since your browser_snapshot). Look again with browser_snapshot.`
     const same = (was: SnapshotElement | undefined, is: SnapshotElement, name: boolean): boolean => was !== undefined && was.role === is.role && (!name || was.name === is.name)
     const element = (from: PageSnapshot | null, ref: string): SnapshotElement | undefined => from?.elements.find((e) => e.ref === ref)
     for (const part of parts) {
       const is = element(snapshot, part.ref)
       if (!is) return `${part.ref} is not on the page any more. Look again with browser_snapshot.`
-      if (!same(element(this.shown, part.ref), is, false)) return changed(part.ref)
+      if (!same(element(this.shown, part.ref), is, fieldNames)) return changed(part.ref)
       if (!TEXT_ENTRY_ROLE.test(is.role)) return `${part.ref} is a ${is.role}, not a field the ${part.name} can be typed into (a text box).`
     }
     const control = element(snapshot, submitRef)
@@ -675,6 +682,38 @@ export class BrowserToolbox implements McpToolHost {
     if (control.disabled) return `"${control.name}" is disabled. Look at the page for what it waits for.`
     if (!SUBMIT_ROLE.test(control.role) || !looksLikeSubmit(control.name)) {
       return `"${control.name || submitRef}" (${control.role}) is not a control that publishes: submit_ref is the button of the form, named like Post, Reply, Comment, Submit, Publish or Save. When the form has none, call report_result with needs_owner and say so.`
+    }
+    return this.placeProblem(snapshot, parts, control)
+  }
+
+  /**
+   * Whether the fields and the control are one form, and, for a reply, the form of the approved comment. What the page tells (the look
+   * numbers the forms, and carries the name the site marks the nearest comment or post with) is checked; what it does not tell cannot be:
+   * a page that marks no form for the fields and the control is taken at its word (they are one form), and on a page
+   * that marks no comments, a reply is accepted only while the page has one multi-line box, because then no other box can be the target.
+   */
+  private placeProblem(snapshot: PageSnapshot, parts: Part[], control: SnapshotElement): string | null {
+    const content = (this.deps.post as PostSetup).authority.content
+    const fields = parts.map((part) => ({ part, is: snapshot.elements.find((e) => e.ref === part.ref) as SnapshotElement }))
+    const forms = [...fields.map((f) => f.is.form), control.form]
+    if (forms.some((form) => form !== undefined) && new Set(forms).size > 1) {
+      return `The fields and "${control.name}" are not in one form: the control belongs to another form of the page than the fields it should publish. Look at the page and name the button of the form the fields are in.`
+    }
+    if (content.kind !== 'reply') return null
+    const box = fields.find((f) => f.part.name === 'text')?.is
+    const wanted = replyTarget(content.destination)
+    const marked = snapshot.elements.some((e) => e.parent !== undefined)
+    if (wanted && marked && box) {
+      const right = wanted.comment ? box.parent === wanted.comment : box.parent === undefined || box.parent === wanted.post
+      if (!right) {
+        const answers = box.parent ? `another thing on the page (${box.parent})` : 'the post, not the approved comment'
+        return `${box.ref} is a reply box that answers ${answers}, not the approved comment (${wanted.comment ?? wanted.post}). Open the reply form of the approved comment only (its "reply" link), leave other forms closed, look again and name that form's fields.`
+      }
+      return null
+    }
+    // The page does not say which comment a box answers: the only box that cannot be another one is the only one.
+    if (snapshot.elements.filter((e) => e.role === 'textarea' || e.role === 'textbox').length > 1) {
+      return 'More than one text box is on the page and the page does not say which comment each of them answers, so the box of the approved reply cannot be told from the others. Open the page again with browser_navigate so that only the form of the approved reply is open, or call report_result with needs_owner.'
     }
     return null
   }
@@ -717,10 +756,12 @@ export class BrowserToolbox implements McpToolHost {
     if (foreign) return { refused: foreign }
     const now = await this.observe(page)
     if (!now) return { refused: 'the page showed nothing usable just before the control was pressed.' }
-    const wrong = this.pageProblem(now)
+    const wrong = this.pageProblem(now, true)
     if (wrong) return { refused: wrong }
-    // The same checks as before the typing, against this look: a ticket is held, and the control is the one the AI chose.
-    const problem = this.targetProblem(now, parts, submitRef)
+    // The same checks as before the typing, against this look: a ticket is held, and the control is the one the AI chose. A field's name is
+    // not compared again: an editor built on a div has no name of its own and is named by what it holds, which is now the typed text (the
+    // read-back above has found the text in the field that carries the label).
+    const problem = this.targetProblem(now, parts, submitRef, false)
     if (problem) return { refused: problem }
 
     // No wait between this look and the point of no return: whatever ended the mission before it is seen here, and `commit` itself refuses after a seal.

@@ -16,6 +16,8 @@ interface Item {
   name: string
   disabled?: boolean
   submits?: boolean
+  form?: number
+  parent?: string
 }
 
 /** A compose form that behaves like a site: typed text lands in fields, a press of the submit control posts what the fields hold. */
@@ -114,7 +116,7 @@ class FormPage extends FakePage {
       if (this.crashOnClick) throw new Error('the page crashed')
       if (item.disabled) return { status: 'refused', detail: 'disabled' }
       this.clicked.push(step.ref)
-      if (step.ref === 'e4' || step.ref === 'e8') {
+      if (['e4', 'e8', 'e21'].includes(step.ref)) {
         this.posted.push(Object.fromEntries(this.fields))
         // A site empties its form once the comment is posted.
         this.fields.clear()
@@ -647,6 +649,7 @@ describe('browser_submit types only into a text box, presses only a control that
 
   it.each(['textarea', 'textbox', 'input:text', 'input:search', 'input:url', 'input:email'])('types into a %s', async (role) => {
     const t = setup()
+    t.page.items = t.page.items.filter((i) => i.ref !== 'e1') // the page's only box is this one
     t.page.items.push({ ref: 'e7', role, name: 'Add a comment' })
     await look(t)
     expect((await submitReply(t, { text_ref: 'e7' })).isError).toBeUndefined()
@@ -661,6 +664,10 @@ describe('browser_submit types only into a text box, presses only a control that
     ['button', ''],
     ['link', 'Cancel'],
     ['link', 'Log out'],
+    // A link opens something, it does not submit a form, and a hostile comment can carry one named "Reply".
+    ['link', 'Reply'],
+    ['link', 'save'],
+    ['link', 'Post'],
     ['div', 'Post'],
     ['input:checkbox', 'Post'],
     ['textarea', 'Reply']
@@ -677,7 +684,6 @@ describe('browser_submit types only into a text box, presses only a control that
     ['button', 'Post'],
     ['button', 'Add a comment'],
     ['button', 'Post comment'],
-    ['link', 'save'],
     ['input:submit', 'Submit'],
     ['button', 'Publish'],
     ['button', 'Опубликовать']
@@ -735,6 +741,212 @@ describe('browser_submit types only into a text box, presses only a control that
     }
     expect(await submitReply(t)).toMatchObject({ isError: true, text: expect.stringContaining('is disabled') })
     expect(t.page.clicked).toEqual([])
+  })
+})
+
+describe('browser_submit publishes a new post only from the community\'s submit page', () => {
+  const refused = async (t: Setup, why: RegExp) => {
+    expect(await submitPost(t)).toMatchObject({ isError: true, text: expect.stringMatching(why) })
+    expect(t.authority.leases).toBe(0)
+    expect(t.page.steps).toEqual([])
+    expect(t.page.posted).toEqual([])
+  }
+
+  it.each([
+    'https://fake.test/r/test',
+    'https://fake.test/r/test/',
+    'https://fake.test/r/test/new',
+    'https://fake.test/r/test/comments/abc/slug/',
+    'https://fake.test/r/test/submit/extra',
+    'https://fake.test/r/test/submitted'
+  ])('refuses on %s, which is a page of the community and not its submit page', async (url) => {
+    const t = setup(POST)
+    await look(t)
+    t.page.currentUrl = url
+    await refused(t, /submit page/)
+  })
+
+  it.each([
+    'https://fake.test/r/test/submit',
+    'https://fake.test/r/test/submit/',
+    'https://fake.test/r/Test/submit?selftext=true',
+    'https://fake.test/r/test/submit/?type=IMAGE',
+    'https://fake.test/r/test/submit#form'
+  ])('publishes on %s', async (url) => {
+    const t = setup(POST)
+    t.page.currentUrl = url
+    await look(t)
+    expect((await submitPost(t)).isError).toBeUndefined()
+    expect(t.page.posted).toHaveLength(1)
+  })
+
+  it('refuses when the page moves off the submit page while the application types: the last look decides, before the press', async () => {
+    const t = setup(POST)
+    await look(t)
+    t.page.beforeStep = (step) => {
+      if (step.do === 'type' && step.ref === 'e1') t.page.currentUrl = 'https://fake.test/r/test'
+    }
+    expect(await submitPost(t)).toMatchObject({ isError: true, text: expect.stringMatching(/submit page/) })
+    expect(t.page.clicked).toEqual([])
+    expect(t.authority.committed).toBe(false)
+  })
+
+  it('does not guess where another kind of site keeps its compose page: a destination that is not of the /r/<community> shape keeps the rule of the community prefix', async () => {
+    const t = setup({ ...POST, destination: 'https://fake.test/c/general' })
+    t.page.currentUrl = 'https://fake.test/c/general/new'
+    await look(t)
+    expect((await submitPost(t)).isError).toBeUndefined()
+  })
+
+  it('does not apply to a reply, which is written on the thread', async () => {
+    const t = setup()
+    await look(t)
+    expect((await submitReply(t)).isError).toBeUndefined()
+  })
+})
+
+describe('browser_submit: the elements are the ones the AI saw, by role and by name, and they are one form', () => {
+  const refusedBeforeTyping = async (t: Setup, result: Promise<{ isError?: boolean; text: string }>, why: RegExp) => {
+    expect(await result).toMatchObject({ isError: true, text: expect.stringMatching(why) })
+    expect(t.authority.leases).toBe(0)
+    expect(t.page.steps).toEqual([])
+    expect(t.page.posted).toEqual([])
+  }
+
+  it('refuses a field that has the role of what the AI saw and another name: after a reload, e1 can be another text box', async () => {
+    const t = setup()
+    await look(t)
+    t.page.items = t.page.items.map((i) => (i.ref === 'e1' ? { ...i, name: 'Message the moderators' } : i))
+    await refusedBeforeTyping(t, submitReply(t), /not what it was when you looked/)
+  })
+
+  it('refuses a title and a link field with another name too', async () => {
+    const t = setup(POST)
+    await look(t)
+    t.page.items = t.page.items.map((i) => (i.ref === 'e3' ? { ...i, name: 'Search' } : i))
+    await refusedBeforeTyping(t, submitPost(t), /e3 is not what it was/)
+  })
+
+  it('does not hold the name of a field against it after the typing: an editor built on a div is named by what it holds', async () => {
+    const t = setup()
+    t.page.items = t.page.items.map((i) => (i.ref === 'e1' ? { ref: 'e1', role: 'textbox', name: '' } : i))
+    await look(t)
+    t.page.beforeStep = (step) => {
+      if (step.do === 'type' && step.ref === 'e1') t.page.items = t.page.items.map((i) => (i.ref === 'e1' ? { ...i, name: step.text } : i))
+    }
+    expect((await submitReply(t)).isError).toBeUndefined()
+    expect(t.page.posted).toEqual([{ e1: REPLY.text }])
+  })
+
+  it('refuses a control that belongs to another form than the fields', async () => {
+    const t = setup(POST)
+    t.page.items = t.page.items.map((i) => (['e1', 'e2', 'e3'].includes(i.ref) ? { ...i, form: 1 } : i.ref === 'e4' ? { ...i, form: 2 } : i))
+    await look(t)
+    await refusedBeforeTyping(t, submitPost(t), /not in one form/)
+  })
+
+  it('refuses a control that is in no form when the fields are in one, and a field that is in no form when the control is in one', async () => {
+    const a = setup()
+    a.page.items = a.page.items.map((i) => (i.ref === 'e1' ? { ...i, form: 1 } : i))
+    await look(a)
+    await refusedBeforeTyping(a, submitReply(a), /not in one form/)
+    const b = setup()
+    b.page.items = b.page.items.map((i) => (i.ref === 'e4' ? { ...i, form: 1 } : i))
+    await look(b)
+    await refusedBeforeTyping(b, submitReply(b), /not in one form/)
+  })
+
+  it('publishes when the fields and the control are one form, and when the page marks no forms at all', async () => {
+    const a = setup(POST)
+    a.page.items = a.page.items.map((i) => (['e1', 'e2', 'e3', 'e4'].includes(i.ref) ? { ...i, form: 1 } : { ...i, form: 2 }))
+    await look(a)
+    expect((await submitPost(a)).isError).toBeUndefined()
+    const b = setup()
+    await look(b)
+    expect((await submitReply(b)).isError).toBeUndefined()
+  })
+})
+
+describe('browser_submit: a reply goes only into the reply box of the approved comment', () => {
+  const COMMENT = { ...REPLY, destination: 'https://fake.test/r/test/comments/abc/slug/def' }
+  const THREAD = { ...REPLY, destination: 'https://fake.test/r/test/comments/abc/slug/' }
+  /** A thread as old Reddit lays it out: the box of the thread, and a reply box under each comment that was opened, each in a form of its own. */
+  const layout = (t: Setup, boxes: { form: number; parent?: string }[]) => {
+    t.page.items = [
+      { ref: 'e1', role: 'textarea', name: 'Add a comment', form: boxes[0]?.form, parent: boxes[0]?.parent },
+      { ref: 'e4', role: 'button', name: 'Reply', form: boxes[0]?.form, parent: boxes[0]?.parent },
+      { ref: 'e5', role: 'link', name: 'reply', parent: 'T1_DEF' },
+      ...boxes.slice(1).flatMap((box, index) => [
+        { ref: `e${20 + index * 2}`, role: 'textarea', name: 'Add a comment', form: box.form, parent: box.parent },
+        { ref: `e${21 + index * 2}`, role: 'button', name: 'Reply', form: box.form, parent: box.parent }
+      ])
+    ]
+  }
+  const refused = async (t: Setup, call: Promise<{ isError?: boolean; text: string }>, why: RegExp) => {
+    expect(await call).toMatchObject({ isError: true, text: expect.stringMatching(why) })
+    expect(t.authority.leases).toBe(0)
+    expect(t.page.steps).toEqual([])
+    expect(t.page.posted).toEqual([])
+  }
+
+  it('publishes into the box that sits under the approved comment', async () => {
+    const t = setup(COMMENT)
+    layout(t, [{ form: 1, parent: 't1_def' }])
+    await look(t)
+    expect((await submitReply(t)).isError).toBeUndefined()
+  })
+
+  it('refuses the box that sits under another comment, and the box of the thread itself, when the approved reply answers one comment', async () => {
+    const other = setup(COMMENT)
+    layout(other, [{ form: 1, parent: 't1_zzz' }])
+    other.page.items.push({ ref: 'e30', role: 'link', name: 'reply', parent: 't1_def' })
+    await look(other)
+    await refused(other, submitReply(other), /answers another thing/)
+
+    const top = setup(COMMENT)
+    layout(top, [{ form: 1 }, { form: 2, parent: 't1_def' }])
+    await look(top)
+    await refused(top, submitReply(top), /answers the post/)
+    // The box under the approved comment, in the same page, is the one that works.
+    expect((await submitReply(top, { text_ref: 'e20', submit_ref: 'e21' })).isError).toBeUndefined()
+    expect(top.page.posted).toEqual([{ e20: REPLY.text }])
+  })
+
+  it('refuses a text box of one form with the button of the other, though both of them look right alone', async () => {
+    const t = setup(COMMENT)
+    layout(t, [{ form: 1 }, { form: 2, parent: 't1_def' }])
+    await look(t)
+    await refused(t, submitReply(t, { text_ref: 'e20', submit_ref: 'e4' }), /not in one form|answers/)
+  })
+
+  it('for a reply to the thread itself accepts the box of the thread and refuses a box under a comment', async () => {
+    const top = setup(THREAD)
+    layout(top, [{ form: 1 }])
+    await look(top)
+    expect((await submitReply(top)).isError).toBeUndefined()
+
+    const under = setup(THREAD)
+    layout(under, [{ form: 1, parent: 't1_zzz' }])
+    await look(under)
+    await refused(under, submitReply(under), /answers another thing/)
+
+    const post = setup(THREAD)
+    layout(post, [{ form: 1, parent: 't3_abc' }])
+    await look(post)
+    expect((await submitReply(post)).isError).toBeUndefined()
+  })
+
+  it('on a page that marks no comments, accepts the only text box, and refuses when there is more than one', async () => {
+    const one = setup(COMMENT)
+    await look(one)
+    expect((await submitReply(one)).isError).toBeUndefined()
+
+    for (const second of ['textarea', 'textbox']) {
+      const two = setup(COMMENT)
+      two.page.items.push({ ref: 'e30', role: second, name: 'Add a comment' })
+      await look(two)
+      await refused(two, submitReply(two), /More than one text box/)
+    }
   })
 })
 

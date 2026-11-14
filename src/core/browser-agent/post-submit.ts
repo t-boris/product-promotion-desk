@@ -264,6 +264,47 @@ export function looksLikeSubmit(name: string): boolean {
 }
 
 /**
+ * The community a destination of Reddit's shape (/r/<community>) names, and the page where a new post for it is written and published:
+ * /r/<community>/submit (old.reddit.com/r/<sub>/submit, with ?selftext=true for a text post; www.reddit.com/r/<sub>/submit/?type=IMAGE for
+ * a picture post: the shapes the connector opens). Null for a destination of any other shape: the application does not know where such a
+ * site keeps its compose page, and does not guess.
+ */
+export function composePageOf(destination: string): string[] | null {
+  try {
+    const segments = new URL(destination).pathname.split('/').filter((s) => s !== '').map((s) => s.toLowerCase())
+    return segments[0] === 'r' && segments[1] ? ['r', segments[1], 'submit'] : null
+  } catch {
+    return null
+  }
+}
+
+/** Whether `pageUrl` is the compose page `composePageOf` names (the path only: the query, a fragment and a trailing slash do not matter). */
+export function onComposePage(pageUrl: string, destination: string): boolean {
+  const wanted = composePageOf(destination)
+  if (!wanted) return true
+  try {
+    const have = new URL(pageUrl).pathname.split('/').filter((s) => s !== '').map((s) => s.toLowerCase())
+    return have.length === wanted.length && wanted.every((segment, index) => have[index] === segment)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * What a reply's destination says about the thing it answers, when the destination has Reddit's shape (/r/<sub>/comments/<post>/<slug>/
+ * <comment>): the post's own name (t3_...) and, when the address names one, the comment's (t1_...). Null for any other shape.
+ */
+export function replyTarget(destination: string): { post: string; comment: string | null } | null {
+  try {
+    const segments = new URL(destination).pathname.split('/').filter((s) => s !== '').map((s) => s.toLowerCase())
+    if (segments[0] !== 'r' || segments[2] !== 'comments' || !segments[3]) return null
+    return { post: `t3_${segments[3]}`, comment: segments[5] ? `t1_${segments[5]}` : null }
+  } catch {
+    return null
+  }
+}
+
+/**
  * Whether a control is one that a post mission never clicks or chooses itself, whatever the page holds: one the page marks as submitting
  * its form natively (a submit button of a form, an input of type submit or image), or a button or an input button that is named like a
  * control that publishes (`looksLikeSubmit`). A link is not one (it opens a form, and cannot submit one without a script), and neither is

@@ -31,6 +31,10 @@ export interface SnapshotElement {
   to?: string
   /** Pressing it submits its form natively: a submit button of a form, an input of type submit or image. */
   submits?: boolean
+  /** The form the element is in (the nearest form or role=form around it, shadow roots crossed), numbered by this look only: two elements of one look share it when they share the form. Absent when it is in none. */
+  form?: number
+  /** The thing (a comment or a post, Reddit's `data-fullname` like t1_abc) the element sits under, as the site marks it: the nearest marked ancestor. Absent when the page marks none. */
+  parent?: string
 }
 
 export interface PageSnapshot {
@@ -61,6 +65,18 @@ export function snapshotScript(): string {
       if (s.display === 'none' || s.visibility === 'hidden' || s.opacity === '0') return false;
     }
     return true;
+  };
+  // Where an element sits: the form around it (numbered by this look) and the thing, a comment or a post, that the site marks around it.
+  const forms = new Map();
+  const above = (n) => n.parentElement || (n.getRootNode && n.getRootNode().host) || null;
+  const placeOf = (el) => {
+    let form = null;
+    let parent = null;
+    for (let n = el, hops = 0; n && n.nodeType === 1 && hops < 80; n = above(n), hops++) {
+      if (form === null && (n.tagName === 'FORM' || n.getAttribute('role') === 'form')) { if (!forms.has(n)) forms.set(n, forms.size + 1); form = forms.get(n); }
+      if (parent === null) { const id = n.getAttribute('data-fullname') || ''; if (/^t\\d_[a-z0-9]{1,13}$/i.test(id)) parent = id.toLowerCase(); }
+    }
+    return { form: form, parent: parent };
   };
   const clean = (value, max) => String(value || '').replace(/\\s+/g, ' ').trim().slice(0, max);
   // A site often repeats the label for screen readers ("Password Password"): the name is the text once.
@@ -99,6 +115,9 @@ export function snapshotScript(): string {
     if (roleAttr === 'combobox' && tag !== 'input') { const held = clean(el.innerText, ${MAX_VALUE}); if (held && held !== name) item.value = held.replace(name, '').trim() || held; }
     if (tag === 'select') item.options = [...el.options].slice(0, ${MAX_OPTIONS}).map((o) => clean(o.textContent, 40)).filter((t) => t !== '');
     if (((tag === 'button' && el.type === 'submit' && el.form) || (tag === 'input' && (type === 'submit' || type === 'image')))) item.submits = true;
+    const place = placeOf(el);
+    if (place.form !== null) item.form = place.form;
+    if (place.parent !== null) item.parent = place.parent;
     if (el.disabled || el.getAttribute('aria-disabled') === 'true') item.disabled = true;
     if (el.required || el.getAttribute('aria-required') === 'true') item.required = true;
     elements.push(item);
@@ -152,6 +171,8 @@ export function parseSnapshot(raw: unknown): PageSnapshot | null {
     if (Array.isArray(e.options)) element.options = e.options.slice(0, MAX_OPTIONS).map((o) => str(o, 40)).filter((o) => o !== '')
     if (typeof e.to === 'string') element.to = str(e.to, 40)
     if (e.submits === true) element.submits = true
+    if (typeof e.form === 'number' && Number.isInteger(e.form) && e.form >= 1 && e.form <= 999) element.form = e.form
+    if (typeof e.parent === 'string' && /^t\d_[a-z0-9]{1,13}$/.test(e.parent)) element.parent = e.parent
     elements.push(element)
   }
   return {
