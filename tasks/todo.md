@@ -511,3 +511,22 @@ Built on a development build (`npx electron-vite build`, own instance, own `PPD_
 - Known gap: `mainActionOf` (`review/main-action.ts`) has no unit test. A test under `tsconfig.node.json` cannot import it: `labels.ts` has `import type { Tone } from '../../ui'` (a `.tsx` file) and the node config has no `jsx` setting (TS6142). Follow-up: move `Tone` into a plain `.ts` module and re-export it from `ui.tsx`. Until then the QA scenarios check "one filled button per screen" on the final build.
 - Version 0.9.0 (minor: a new visual system and window chrome, not a patch) in its own commit `chore: release 0.9.0`; `npm run deploy:local` installed 0.9.0 and checked it against `package.json`.
 
+
+## QA walk batch BUG-039 … BUG-069 (31 reports, branch `fix/qa-walk-bugs-039-069`, from 6523d40 on top of `feat/macos-design`)
+
+Plan (approved by the owner 2026-11-14; defaults per bug in the plan file of that session):
+- [x] Read all 31 reports; four read-only root-cause investigations on the current tree.
+- [x] Owner decisions: BUG-041 full fix; inline confirm for BUG-059/039; the launch path is the single source of "next" (058/064/065); one commit for 042/068/069.
+- [x] Baseline probe on the installed 0.9.0 (26 of 26 probed checks failed for the reports' reasons).
+- [x] One commit per bug, in the planned order; `branch:` added to every report; clarifications recorded.
+- [x] Independent read-only review of the whole diff; 9 of 10 findings fixed by fixups folded into the owning bug's commit (one did not reproduce: BUG-044 label name).
+- [x] Packaged build (`npm run dist`, not installed) and the same probe on it.
+- [ ] PR, version bump, release: not done; the goal's finish line is the commits (see the owner offer in the final answer).
+
+Review:
+- 29 commits, 31 bugs (BUG-042, 068, 069 share one commit by the owner's choice). Whole suite 83 files / 1678 tests, typecheck, eslint and build clean on the tip.
+- Packaged-build probe: 24 checks PASS, 1 NOT-PROBED (the "Stop the AI" sheet needs a live AI question), 2 FAIL that are stale checks, not defects: BUG-044 (the probe's "new visible line" diff; driving the real field and switch on the packaged app shows the message beside the field, the switch Off, the stored port unchanged for "abc" and "99999", and 8080 + Enter stored and usable) and BUG-050 (the probe computes the gap from a span that now contains the separator; the page reads "Sign-in needed · The account name on the platform is not confirmed yet.").
+- V-18 restored after BUG-064/065 pushed the tab row to 335 px at 980×640: the by-hand link moved into the next-stage row; tab row 308 px again. The Sources "Add source" row still sits 7–26 px below a 640 px window at 980 because of the extra 36 px next-stage row (measured; the only way back is the header action area, which costs the title wrapping: the owner's call).
+- Not verified: BUG-041 against a real keychain prompt (never provoked on the owner's Mac): the spy-encryptor tests prove zero safeStorage calls on open, `canStart` and background sign-in; whether main stays responsive during a real prompt and whether "Always Allow" persists with `PPD_SIGN_IDENTITY` are UNVERIFIED. The Electron typings promise that data from the sync `encryptString` decrypts with `decryptStringAsync`; a vault written by this build is not promised readable by an older build.
+- Known gaps, not fixed: BUG-044 a port already in use (EADDRINUSE) still leaves the switch On; the About panel reads "0.9.0 (0.9.0)" (BUG-048, not in the report); "Stop the AI" has no confirm (decision); AccountEmail "Remove address" and the draft attachment "Remove" stay immediate; the Products list can show zero counts for one frame while the lists load.
+- The tour's 980 runs hide the menu, so its V-18 figure (308) is not the real state (lesson 132): measure with the menu shown.
