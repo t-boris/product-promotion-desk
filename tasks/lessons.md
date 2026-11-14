@@ -272,3 +272,12 @@
 90. Everything said to the owner is in Russian when they ask for it or write in Russian (files, code comments and commit messages stay in English). Switch at once and keep it for the whole session, including the text of questions.
 91. A goal with a lifecycle in a tool (MarkView statuses) is planned with that lifecycle: the checklist at the start lists the status requests, the report sections and the check of the outcome next to the commits, and the last answer says what each status is and why. In this project the bug statuses are only new, active, resolved and closed (no `open`), and `resolved` is refused until the work is merged, checked and released: say that plainly instead of trying to force it.
 92. A GUI app the owner may be using is never the test subject. Run my own instance (own `--user-data-dir` and `PPD_DATA_DIR`), aim every tool at its pid, never at the process name, and note before and after whether the owner's instance is alive. Signal only the pids I started.
+
+## 2026-11-13 (the owner): "You have the right to open a pull request and merge everything you work on, if it does not go against our flow."
+
+**What happened.** I finished the QA bug batch, pushed the branch, opened the pull request and then stopped to ask whether to merge it and cut the release. MarkView moves a bug to `resolved` only after merge, passed checks and a published GitHub release, so stopping at "PR is open" left both bugs open for no reason. The owner answered yes and made it a standing rule.
+
+**Rules for myself.**
+
+93. Work I did myself is delivered by me to the end: pull request, CI green, merge, release, install. I do not ask again for the merge or the release of my own work. The flow: one branch per batch; merge with a merge commit (it keeps one commit per bug with the bug id first); the version bump in its own `chore: release X.Y.Z` commit (DEC-011); tag `vX.Y.Z` on the merge commit; a GitHub release (MarkView needs one); `npm run deploy:local`; then ask MarkView for the status the lifecycle allows. The merged branch is not deleted (the reports name it).
+94. "Against the flow" is where I still stop and ask: CI red or not run; the branch carries work the owner did not name; a destructive step (force-push, deleting data or the owner's branches); a decision that is the owner's first (architecture, a new library, an unapproved design).
