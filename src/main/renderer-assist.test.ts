@@ -34,6 +34,17 @@ describe('assistBlock', () => {
   })
 })
 
+describe('assistBlock for a control repeated on every open card', () => {
+  it('only says that no engine is chosen; it does not judge whether the chosen one is ready', () => {
+    const notReady = { ...base, checkReady: false, engines: undefined }
+    expect(assistBlock(notReady)).toBeNull()
+    expect(assistBlock({ ...notReady, engineId: null })).toMatchObject({ text: 'Choose an AI engine in Settings first.' })
+    // Without the option the same facts do block: the engine list is missing, so the engine is not known to be ready.
+    expect(assistBlock({ ...base, engines: undefined })).not.toBeNull()
+    expect(assistBlock({ ...base, engines: [{ ...READY, ready: false, detail: 'Claude Code was not found.' }], checkReady: false })).toBeNull()
+  })
+})
+
 describe('fieldAction', () => {
   it('writes an empty field and improves a filled one', () => {
     expect(fieldAction('')).toEqual({ kind: 'write', label: 'Suggest with AI' })

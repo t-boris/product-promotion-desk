@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import type { DraftInput } from '../../../../shared/api'
 import type { Attachment, Draft, Id } from '../../../../shared/types'
 import { AiTextField } from '../../assist/AiField'
@@ -32,7 +32,7 @@ const signature = (form: DraftForm, withTitle: boolean): string => {
 }
 
 /** Form state for one draft: resets when a different (newly saved) draft arrives and says whether it was edited. */
-export function useDraftForm(draft: Draft | null, withTitle: boolean): { form: DraftForm; setForm: (form: DraftForm) => void; dirty: boolean; input: DraftInput } {
+export function useDraftForm(draft: Draft | null, withTitle: boolean): { form: DraftForm; setForm: Dispatch<SetStateAction<DraftForm>>; dirty: boolean; input: DraftInput } {
   const [form, setForm] = useState<DraftForm>(() => fromDraft(draft))
   const draftId = draft?.id ?? null
   // Only a different draft row (a new save, or an AI re-draft) replaces what the owner is typing.
@@ -45,7 +45,8 @@ export function useDraftForm(draft: Draft | null, withTitle: boolean): { form: D
 
 interface Props {
   form: DraftForm
-  onChange: (form: DraftForm) => void
+  /** A state setter: a change is applied to the form as it is then, never to the one a slow answer was asked from (lesson 84). */
+  onChange: Dispatch<SetStateAction<DraftForm>>
   withTitle: boolean
   disabled: boolean
   /** Who wrote the saved draft and what it was based on, shown above the text. */
@@ -62,7 +63,8 @@ interface Props {
 /** Editor for a reply or a publication. Editing never changes what was approved: saving creates a new draft. */
 export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFocus = false, ai }: Props) {
   const [path, setPath] = useState('')
-  const { blocked } = useAssistBlock()
+  // One editor per open card, so only "is an engine chosen" is asked here; the refusal after a press says why an engine cannot work.
+  const { blocked } = useAssistBlock({ engineReady: false })
   // The AI is asked for one field of the draft as the editor holds it now; nothing is stored, the owner saves the draft.
   const askFor = (field: 'title' | 'text') => async ({ instruction }: { current: string; instruction: string | undefined }): Promise<string> => {
     const result = await call('drafts.refine', { field, opportunityId: ai?.opportunityId, channelId: ai?.channelId, form: { title: form.title, text: form.text }, instruction })
@@ -70,7 +72,7 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
     if (text === undefined) throw new Error('The AI did not return a text. Try again.')
     return text
   }
-  const set = (patch: Partial<DraftForm>): void => onChange({ ...form, ...patch })
+  const set = (patch: Partial<DraftForm>): void => onChange((current) => ({ ...current, ...patch }))
   const addAttachment = (): void => {
     const trimmed = path.trim()
     if (!trimmed || form.attachments.some((a) => a.path === trimmed)) return

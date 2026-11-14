@@ -683,14 +683,17 @@ the AI's text has to pass before the owner sees it. `drafts.refine` (`src/core/p
 post that has a card, and of a new publication, from the knowledge the AI drafts use (approved facts with their ids, prohibited statements, channel style and limits,
 the role of the login, and for a reply the discussion, the parent chain and the account's earlier replies). The answer passes the checks of an AI draft
 (`checkDraftSafety`: cited facts approved, nothing prohibited, no price, discount or "free" without a cited claim, links only to the product's own addresses), a
-credential check, a length limit (a long answer is sent back, never cut) and the disclosure rule (the product named without saying the author is connected with it;
-read on the finished draft, title and text together; for now the AI's own flag, until the disclosure check of the post mission lands). A failing answer is handed back once with the reasons, then
-refused with them. A new post written from nothing must cite an approved fact. The owner's own text next to the AI's is not checked; what the owner saves is the
-owner's, as before (a check of the owner's own text on save and approve is a separate decision).
+credential check, a length limit (a long answer is sent back, never cut) and the disclosure rule (the product's name or website named without saying the author is
+connected with it; read on the finished draft, title and text together; for now the AI's own flag, until the disclosure check of the post mission lands). A failing
+answer is handed back once with the reasons, then refused with them. A post written from nothing must cite an approved fact; any other text written from nothing
+must cite one when the AI says it states facts about the product (the same trust as the category of an AI reply). If the product knowledge changes while the AI
+writes, the text is refused, not handed over as checked. The owner's text is never cut: a draft too long for the AI to read whole (20,000 characters) is refused. The
+owner's own text next to the AI's is not checked; what the owner saves is the owner's, as before (a check of the owner's own text on save and approve is a separate
+decision). Like the AI drafts, it works with any ready engine; the website-fed helps of §17 refuse engines that are not tool-free.
 
 | Pattern | Markup | Rules |
 |---|---|---|
-| Title and text with AI | `AiTextField` in `DraftEditor` (the §17 field: label row, one secondary button, the wish line, the note and Undo) | The same control as §17: "Suggest with AI" while empty, "Improve with AI" while filled. It is on a card that can still change (not on a sent or locked one), disabled while a save runs, and its state starts over when a new draft row arrives. A reply has the text only. |
+| Title and text with AI | `AiTextField` in `DraftEditor` (the §17 field: label row, one secondary button, the wish line, the note and Undo) | The same control as §17: "Suggest with AI" while empty, "Improve with AI" while filled. It is on a card that can still change (not on a sent or locked one), disabled while a save runs, and its state starts over when a new draft row arrives. A reply has the text only. The AI's text is put into the form as it is when the answer arrives (a change to another field meanwhile is kept). The editor is repeated on every open card, so it only asks whether an engine is chosen; the refusal after a press says if the engine cannot work. |
 | Draft with AI (new publication) | `PostDrafter` (`.field.ai-field`: "What is it about?" with the secondary button "Draft with AI" on the label row, one optional line, a hint) | Offered while the title and the text are both empty, and while its note and Undo are showing; it writes both. It needs an approved passport (the hint names the fix). Typing while it works wins: its post is dropped and the form says so. Undo empties both fields while the owner has not typed over them. |
 | Redo with AI | `ConfirmAction` (secondary, sparkles) when the form holds unsaved changes; the plain button otherwise | A new AI draft replaces the form, so with unsaved changes it asks "The new draft replaces what you changed and did not save." (Replace my changes / Cancel). |
 

@@ -20,11 +20,15 @@ export interface Query<T> {
   reload: () => void
 }
 
-/** Loads data and reloads it whenever the core reports a change in one of `scopes`. */
-export function useQuery<M extends ApiMethod>(method: M, args: ApiArgs<M>, scopes: ChangeScope[] = []): Query<ApiResult<M>> {
+/**
+ * Loads data and reloads it whenever the core reports a change in one of `scopes`. With `skip` it asks for nothing (a screen that does not
+ * need the answer must not pay for it, for example a process spawned to check an engine) and reports `loading: false`.
+ */
+export function useQuery<M extends ApiMethod>(method: M, args: ApiArgs<M>, scopes: ChangeScope[] = [], options: { skip?: boolean } = {}): Query<ApiResult<M>> {
+  const skip = options.skip ?? false
   const [data, setData] = useState<ApiResult<M>>()
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!skip)
   const key = JSON.stringify(args ?? null)
   const argsRef = useRef(args)
   argsRef.current = args
@@ -40,9 +44,11 @@ export function useQuery<M extends ApiMethod>(method: M, args: ApiArgs<M>, scope
       .finally(() => setLoading(false))
   }, [method])
 
-  useEffect(load, [load, key])
+  useEffect(() => {
+    if (!skip) load()
+  }, [load, key, skip])
   useEvents((event) => {
-    if (event.type === 'changed' && scopes.includes(event.scope)) load()
+    if (!skip && event.type === 'changed' && scopes.includes(event.scope)) load()
   })
   return { data, error, loading, reload: load }
 }

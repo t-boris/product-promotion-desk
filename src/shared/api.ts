@@ -275,7 +275,9 @@ export interface ApiMethods {
    * the editor as it is; `about` is what a new post is about. The text passes the checks every AI draft passes (approved facts, nothing
    * prohibited, no price or promotion without a claim, links only to the product's own addresses, the connection disclosed) and is
    * handed back once to be fixed, then refused as suggest_failed with the reasons. Nothing is saved: the owner reads the text and saves the
-   * draft. Refused like every AI help: engine_unavailable; no_knowledge for a new post when no fact is approved yet.
+   * draft. Refused like every AI help: engine_unavailable; no_knowledge for a post written from nothing when no fact is approved yet; invalid_input for
+   * a malformed call or a draft too long to be read whole (never cut). If the product knowledge changes while the AI writes, the text is refused
+   * (suggest_failed). Like the AI drafts, it works with any ready engine.
    */
   'drafts.refine': [{ field: DraftHelpField; opportunityId?: Id; channelId?: Id; form: { title: string; text: string }; instruction?: string; about?: string }, DraftHelpResult]
   'publications.suggest': [{ channelId: Id }, OpportunityCard]

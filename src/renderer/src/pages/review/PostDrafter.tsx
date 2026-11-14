@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { Id } from '../../../../shared/types'
 import { useAssistBlock } from '../../assist/useAssistBlock'
 import { call, useAction } from '../../hooks'
@@ -15,7 +15,7 @@ const post = (form: DraftForm): PostText => ({ title: form.title, text: form.tex
  * them, changes them and saves the draft. "Undo" empties them again while the owner has not typed over them. The AI control is never
  * the filled button (V-10).
  */
-export function PostDrafter({ productId, channelId, form, onChange }: { productId: Id; channelId: Id; form: DraftForm; onChange: (form: DraftForm) => void }) {
+export function PostDrafter({ productId, channelId, form, onChange }: { productId: Id; channelId: Id; form: DraftForm; onChange: Dispatch<SetStateAction<DraftForm>> }) {
   const id = useId()
   const [about, setAbout] = useState('')
   const [applied, setApplied] = useState<PostText | null>(null)
@@ -45,18 +45,25 @@ export function PostDrafter({ productId, channelId, form, onChange }: { productI
       setSkipped(true) // typing meanwhile wins; the AI's post is dropped, not merged
       return
     }
-    onChange({ ...latest.current, title: result.title, text: result.text })
+    onChange((current) => ({ ...current, title: result.title as string, text: result.text as string }))
     setApplied({ title: result.title, text: result.text })
   })
 
   useEffect(() => {
     if (state.busy || !hadFocus.current) return
     hadFocus.current = false
-    if (document.activeElement === document.body) root.current?.querySelector<HTMLButtonElement>('.field-head button, .ai-undo button')?.focus()
+    if (document.activeElement === document.body) root.current?.querySelector<HTMLButtonElement>('.ai-undo button, .field-head button:not(:disabled)')?.focus()
   }, [state.busy])
 
-  if (!showPostHelper(post(form), applied)) return null
   const undoable = postUndoable(post(form), applied)
+  if (!showPostHelper(post(form), applied)) {
+    // The owner has written something of their own: the helper steps aside (its button would write over it), but it still says why its post was not used.
+    return skipped ? (
+      <p className="hint" role="status" data-testid="post-drafter-skipped">
+        You typed while the AI was working, so its post was not used. Clear the title and the text to ask again.
+      </p>
+    ) : null
+  }
 
   return (
     <div className="field ai-field" ref={root} data-testid="post-drafter">
@@ -99,7 +106,7 @@ export function PostDrafter({ productId, channelId, form, onChange }: { productI
       <ErrorNote error={state.error} />
       {skipped && (
         <p className="hint" role="status" data-testid="post-drafter-skipped">
-          You typed while the AI was working, so its post was not used. Ask again to get it.
+          The AI's post was not used. Ask again to get it.
         </p>
       )}
       {undoable && (
@@ -108,7 +115,7 @@ export function PostDrafter({ productId, channelId, form, onChange }: { productI
           <Button
             variant="quiet"
             onClick={() => {
-              onChange({ ...form, title: '', text: '' })
+              onChange((current) => ({ ...current, title: '', text: '' }))
               setApplied(null)
             }}
             data-testid="post-drafter-undo"
