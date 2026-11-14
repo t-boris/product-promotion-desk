@@ -21,6 +21,7 @@ import type {
 import type { Core } from '../core'
 import { newId, toJson, type Db } from '../db/database'
 import { mapAccount, mapAction, mapApproval, mapComment, mapOpportunity } from '../repos'
+import { disclosureProblem } from './disclosure'
 
 type Row = Record<string, unknown>
 type Bindable = string | number | null
@@ -211,6 +212,15 @@ export class FlowStore {
       return opp.destination
     }
     return channel.url
+  }
+
+  /**
+   * Why `draft` must not be approved or sent for lack of a disclosure of the author's connection to the product (DEC-010), or null.
+   * Decided from the text itself, whoever wrote it (see disclosure.ts); a text that does not mention the product is never touched.
+   */
+  disclosureProblemOf(opp: Opportunity, draft: Draft): string | null {
+    const product = this.core.repos.product(opp.productId)
+    return disclosureProblem({ title: draft.title, text: draft.text, link: draft.link }, { name: product.name, websiteUrl: product.websiteUrl })
   }
 
   list(filter: OpportunityFilter = {}): Opportunity[] {

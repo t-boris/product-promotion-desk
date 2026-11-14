@@ -12,6 +12,7 @@
 import type { AutoCategory, Channel, CommentCategory, OpportunityDecision } from '../../shared/types'
 import { autoReplyProblem, DISCLOSURE_REASON, mentionsProduct } from './auto-guard'
 import type { ClaimView } from './context'
+import { disclosureProblem } from './disclosure'
 
 export const TOOL_FREE_REQUIRED_REASON = 'Automatic replies need a tool-free AI engine; the selected engine can use tools, so this reply waits for you'
 
@@ -45,6 +46,8 @@ export interface EligibilityInput {
   /** The selected AI engine cannot use any tools (files, commands, browsing). */
   engineToolFree: boolean
   productName: string
+  /** The product's website, when it has one: a text that names the address names the product. */
+  productWebsite?: string | null
   /** The model's explicit statement that the reply mentions the product and says the author is connected with it. */
   disclosesConnection: boolean
 }
@@ -89,6 +92,8 @@ export function autoEligibility(input: EligibilityInput): Eligibility {
 
   // A reply that names the product speaks for the owner's connection to it; only an explicit disclosure passes.
   if (mentionsProduct(input.reply, input.productName) && !input.disclosesConnection) return no(DISCLOSURE_REASON)
+  // The flag is the model's word about its own text; the text itself must also say it (disclosure.ts). Both are needed.
+  if (disclosureProblem({ text: input.reply }, { name: input.productName, websiteUrl: input.productWebsite })) return no(DISCLOSURE_REASON)
 
   // Automatic sending is allowed only on a reply path that an approved manual send has already proven.
   const capability = channel.capabilities.find((c) => c.key === 'publish_reply')

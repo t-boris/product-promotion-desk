@@ -95,10 +95,9 @@ export const POST_DISCLOSURE_NOTE = 'The post mentions the product; check that i
 const squash = (text: string): string => text.trim().replace(/\s+/g, ' ').toLowerCase()
 
 /**
- * Whether the text names the product (case-insensitive, whitespace-insensitive). Whether a phrase "states a
- * connection" cannot be judged by a language-independent check, so the only automatic path is the model's explicit
- * `disclosesConnection` flag combined with this: a reply that names the product without that flag is not sent
- * without the owner.
+ * Whether the text names the product (case-insensitive, whitespace-insensitive, a plain substring). An automatic reply that
+ * names the product needs BOTH the model's explicit `disclosesConnection` flag and a text that itself states the connection
+ * (disclosure.ts, which every approval and the gate also apply): without either it waits for the owner.
  */
 export function mentionsProduct(text: string, productName: string): boolean {
   const name = squash(productName)

@@ -8,6 +8,7 @@ import type { Id, IsoTime, Opportunity } from '../../shared/types'
 import type { Core } from '../core'
 import { AiError } from '../ports'
 import { mentionsProduct, POST_DISCLOSURE_NOTE } from './auto-guard'
+import { disclosureProblem } from './disclosure'
 import { channelView, loadKnowledge, roleView } from './context'
 import { normalizeDraftInput, isHttpUrl } from './draft-input'
 import { buildPublicationPrompt, parsePublicationProposal, PUBLICATION_LABEL, PUBLICATION_SYSTEM, type PublicationProposal } from './draft-prompt'
@@ -108,7 +109,9 @@ export class PublicationsFlow {
     const opp = this.core.db.transaction(() => {
       // Posts always wait for the owner; if the post names the product without the model vouching for a disclosure,
       // the owner is told to check it while editing.
-      const undisclosed = mentionsProduct(`${proposal.title} ${proposal.text}`, product.name) && !proposal.disclosesConnection
+      const undisclosed =
+        (mentionsProduct(`${proposal.title} ${proposal.text}`, product.name) && !proposal.disclosesConnection) ||
+        disclosureProblem({ title: proposal.title, text: proposal.text, link: proposal.link }, { name: product.name, websiteUrl: product.websiteUrl }) !== null
       const created = this.store.createStandalone(channel, 'draft', `Suggested topic: ${proposal.topic}${undisclosed ? `. ${POST_DISCLOSURE_NOTE}` : ''}`)
       this.store.insertDraft(
         created.id,

@@ -172,6 +172,10 @@ export class SendGate {
       return block('review', 'approval_stale', 'The text, attachments, account or destination changed after approval. Review and approve again.')
     }
 
+    // An approval given before the disclosure check existed, or one that slipped past it, cannot carry an undisclosed text out.
+    const undisclosed = this.store.disclosureProblemOf(opp, draft)
+    if (undisclosed) return block('review', 'disclosure_missing', undisclosed)
+
     if (approval.approvedBy === 'auto_rule') {
       if (opp.kind === 'standalone') return block('review', 'auto_rule_refused', 'Standalone publications always need your own approval; automatic approval is not allowed.')
       if (channel.mode !== 'auto') return block('review', 'auto_rule_refused', 'This channel is not in automatic mode, so an automatic approval is not valid.')
