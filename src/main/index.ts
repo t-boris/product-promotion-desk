@@ -1,5 +1,5 @@
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { BrowserWindow, app, clipboard, ipcMain, powerMonitor, safeStorage, shell } from 'electron'
 import { ApiError, IPC_EVENT, IPC_INVOKE, type ApiMethod } from '../shared/api'
 import { createEngines } from '../ai'
@@ -17,7 +17,12 @@ import { WebModeController } from './web-mode'
 
 app.setName('Product Promotion Desk')
 
-const dataDir = process.env.PPD_DATA_DIR || app.getPath('userData')
+// PPD_DATA_DIR makes a clean, separate instance (a QA baseline, a test run). It must move the whole instance, not only the database: the
+// single-instance lock and the browser profile (the sessions of the accounts) live in Electron's userData. Without this a second launch with
+// another PPD_DATA_DIR found the lock held by the running app, quit silently after a second and left the new folder unused (BUG-001), and the
+// sessions of a test run landed in the real profile. Without the variable the data folder is userData itself, as before.
+if (process.env.PPD_DATA_DIR) app.setPath('userData', resolve(process.env.PPD_DATA_DIR))
+const dataDir = app.getPath('userData')
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
