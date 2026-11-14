@@ -3,7 +3,7 @@
 .products-layout {
   display: grid;
   grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
-  gap: 16px;
+  gap: var(--space-4);
   align-items: start;
 }
 .products-list {
@@ -19,14 +19,14 @@ textarea.input.short {
 }
 
 .source-list {
-  gap: 10px;
+  gap: var(--space-3);
 }
 .source-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  padding: 12px 14px;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel);
@@ -36,12 +36,12 @@ textarea.input.short {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-2);
 }
 .source-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   flex-wrap: wrap;
   justify-content: flex-end;
 }
@@ -72,35 +72,35 @@ textarea.input.short {
 .source-fields {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-  gap: 0 12px;
+  gap: 0 var(--space-3);
   align-items: start;
 }
 .source-add-actions {
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 
 .scope-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .preview {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel-2);
-  padding: 10px 12px;
-  margin: 8px 0;
+  padding: var(--space-3) var(--space-3);
+  margin: var(--space-2) 0;
 }
 .preview-columns {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: var(--space-4);
 }
 /* Paths stay monospace, but 13px, and a long one wraps at a slash or where it must, not in the middle of every word. */
 .preview-list {
-  margin: 6px 0 0;
-  padding-left: 18px;
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
   max-height: 220px;
   overflow: auto;
   font-family: var(--mono);
@@ -115,7 +115,7 @@ textarea.input.short {
 .claim {
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: var(--space-3) var(--space-3);
   background: var(--panel);
 }
 .claim-approved {
@@ -132,31 +132,31 @@ textarea.input.short {
   opacity: 0.7;
 }
 .claim-text {
-  margin: 6px 0;
+  margin: var(--space-2) 0;
 }
 .claim-text.struck {
   text-decoration: line-through;
 }
 .claim-sources {
-  margin: 4px 0 0;
-  padding-left: 18px;
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-5);
 }
 .claim-actions {
-  margin-top: 8px;
+  margin-top: var(--space-2);
 }
 .claim-form {
-  margin-top: 8px;
+  margin-top: var(--space-2);
 }
 .conflict-box {
-  margin: 6px 0;
-  padding: 8px 10px;
+  margin: var(--space-2) 0;
+  padding: var(--space-2) var(--space-3);
   border-radius: 8px;
   background: var(--panel);
   border: 1px solid var(--border);
 }
 .conflict-box ul {
-  margin: 4px 0 0;
-  padding-left: 18px;
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-5);
 }
 .warn-text {
   color: var(--warn);
@@ -165,8 +165,8 @@ textarea.input.short {
   background: var(--warn-bg);
   color: var(--warn);
   border-radius: 8px;
-  padding: 8px 12px;
-  margin: 8px 0;
+  padding: var(--space-2) var(--space-3);
+  margin: var(--space-2) 0;
 }
 .warn-note a {
   color: inherit;
@@ -178,7 +178,7 @@ textarea.input.short {
   border-radius: 999px;
   background: var(--panel-2);
   overflow: hidden;
-  margin: 10px 0;
+  margin: var(--space-3) 0;
 }
 .progress-bar {
   height: 100%;
@@ -200,15 +200,15 @@ textarea.input.short {
 
 /* A section with nothing in it is one slim line; a statement keeps a calm vertical rhythm. */
 .passport-section.compact {
-  padding-top: 8px;
-  padding-bottom: 8px;
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
 }
 .passport-section.compact .card-head {
-  margin-bottom: 2px;
+  margin-bottom: var(--space-half);
 }
 .claim-list {
-  gap: 10px;
-  margin-top: 8px;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
 }
 .blocker {
   font-size: var(--fs-body);
@@ -230,14 +230,14 @@ textarea.input.short {
   line-height: var(--lh-prose);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 /* A stored goal: what to do, how it is judged, and the confirmation next to it. */
 .goal-summary-head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-2);
 }
 .goal-target {
   font-size: var(--fs-title);

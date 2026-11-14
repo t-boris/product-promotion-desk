@@ -64,13 +64,13 @@ export function ChannelStatusCard({ channel, product, accountLabel, onRemoved }:
       {neverAssessed(channel) && channel.status === 'setup' && <p className="muted small">Assess the channel first to see what this account can do here. Then check the settings and activate it.</p>}
       <ErrorNote error={error} />
       {refusal && canPause && (
-        <div className="row" style={{ marginTop: 8 }}>
+        <div className="row actions-row">
           <Button variant="primary" onClick={() => void setPaused(true)} disabled={pausing.busy} data-testid="channel-pause-instead">
             Pause this channel instead
           </Button>
         </div>
       )}
-      <div className="row" style={{ marginTop: 8 }}>
+      <div className="row actions-row">
         {canActivate && (
           <Button variant="primary" onClick={() => void activate()} disabled={activating.busy} data-testid="channel-activate" title="Reads the existing discussions once as a baseline, then starts watching for new activity">
             {activating.busy ? 'Activating…' : 'Activate'}

@@ -41,6 +41,9 @@
   --space-6: 32px;
   --space-7: 48px;
   --titlebar-h: 44px;
+  /* A hairline step for pills and tight lists, and the room the window buttons take at the left of the top bar. */
+  --space-half: 2px;
+  --window-buttons-w: 100px;
   /* Radius. */
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -206,13 +209,13 @@ b {
   font-weight: var(--fw-semibold);
 }
 p {
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-2);
 }
 code {
   font-family: var(--mono);
   font-size: var(--fs-caption);
   background: var(--panel-2);
-  padding: 1px 6px;
+  padding: var(--space-half) var(--space-1);
   border-radius: 6px;
   word-break: break-all;
 }
@@ -226,7 +229,7 @@ code {
 .row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 /* A named group for a screen reader that takes no part in the layout: its children stay flex items of the row. */
@@ -236,10 +239,10 @@ code {
 .stack {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .sep {
-  margin-left: 12px;
+  margin-left: var(--space-3);
 }
 
 .shell {
@@ -255,10 +258,10 @@ code {
 .sidebar {
   background: var(--panel);
   border-right: 1px solid var(--border);
-  padding: 44px 12px 16px;
+  padding: var(--titlebar-h) var(--space-3) var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
   min-height: 0;
   overflow-y: auto;
   -webkit-app-region: drag;
@@ -266,16 +269,16 @@ code {
 .sidebar nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-half);
   -webkit-app-region: no-drag;
 }
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-2);
   font-weight: var(--fw-semibold);
   font-size: var(--fs-title);
-  padding: 0 10px;
+  padding: 0 var(--space-3);
   letter-spacing: -0.01em;
 }
 .brand-mark {
@@ -289,7 +292,7 @@ code {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 7px 10px;
+  padding: var(--space-2) var(--space-3);
   border-radius: 8px;
   color: var(--text);
   text-decoration: none;
@@ -307,7 +310,7 @@ code {
   color: #fff;
   border-radius: 999px;
   font-size: var(--fs-caption);
-  padding: 0 7px;
+  padding: 0 var(--space-2);
   min-width: 20px;
   text-align: center;
 }
@@ -318,7 +321,7 @@ code {
 }
 /* The window's own buttons sit at the top left of the window; without the menu the top bar starts after them. */
 .shell.menu-closed .topbar {
-  padding-left: 100px;
+  padding-left: var(--window-buttons-w);
 }
 .sidebar-foot {
   margin-top: auto;
@@ -339,8 +342,8 @@ code {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  padding: 10px 24px;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-5);
   background: var(--panel);
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
@@ -353,14 +356,14 @@ code {
 .topbar-label {
   font-size: var(--fs-caption);
   color: var(--muted);
-  margin-left: 6px;
-  padding-left: 14px;
+  margin-left: var(--space-2);
+  padding-left: var(--space-3);
   border-left: 1px solid var(--border);
 }
 .status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   font-size: var(--fs-caption);
   font-weight: 500;
   color: var(--text);
@@ -379,33 +382,33 @@ a.btn {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 24px;
+  padding: var(--space-5);
 }
 /* The page fills the window: a fixed width left empty bands on both sides when the window was widened. */
 .page {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 .page-head {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .card {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 16px;
+  padding: var(--space-4);
 }
 .card-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: var(--space-3);
 }
 
 .btn {
@@ -456,7 +459,7 @@ a.btn {
   display: inline-block;
   font-size: var(--fs-caption);
   line-height: var(--lh-prose);
-  padding: 1px 10px;
+  padding: var(--space-half) var(--space-3);
   border-radius: 999px;
   background: var(--panel-2);
   color: var(--muted);
@@ -483,8 +486,8 @@ a.btn {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3);
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel);
@@ -498,7 +501,7 @@ a.btn {
 .list-row.stacked {
   flex-direction: column;
   align-items: stretch;
-  gap: 6px;
+  gap: var(--space-2);
 }
 .list-row.stacked > :first-child {
   flex: none;
@@ -514,14 +517,14 @@ a.btn {
 .field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin: 8px 0;
+  gap: var(--space-1);
+  margin: var(--space-2) 0;
 }
 .form-row {
   /* Fields side by side: the columns share the width and the labels line up at the top, whatever hint sits below an input. */
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0 12px;
+  gap: 0 var(--space-3);
   align-items: start;
 }
 .field-label {
@@ -536,7 +539,7 @@ textarea.input {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--control-radius);
-  padding: 0 10px;
+  padding: 0 var(--space-3);
   width: 100%;
 }
 input.input,
@@ -544,43 +547,34 @@ select.input {
   height: var(--control-h);
 }
 textarea.input {
-  font: inherit;
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 7px 10px;
-  width: 100%;
-}
-textarea.input {
-  padding: 8px 10px;
+  padding: var(--space-2) var(--space-3);
   min-height: 90px;
   resize: vertical;
 }
 .check {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 6px 0;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
 }
 
 .empty {
   text-align: center;
-  padding: 28px 16px;
+  padding: var(--space-5) var(--space-4);
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius);
 }
 .plain-list {
-  margin: 6px 0 0;
-  padding-left: 18px;
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
 }
 
 /* One goal of a product on the Goal tab, and its line on the Results tab. */
 .goal-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
+  gap: var(--space-3);
+  padding: var(--space-3);
   border: 1px solid var(--border);
   border-radius: var(--control-radius);
 }
@@ -588,8 +582,8 @@ textarea.input {
   min-height: 64px;
 }
 .goal-line + .goal-line {
-  margin-top: 8px;
-  padding-top: 8px;
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
   border-top: 1px solid var(--border);
 }
 
@@ -601,17 +595,17 @@ textarea.input {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: var(--space-4);
   background: rgb(0 0 0 / 40%);
 }
 .modal {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
   width: min(520px, 100%);
   max-height: 100%;
   overflow: auto;
-  padding: 18px 20px;
+  padding: var(--space-5) var(--space-5);
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -637,8 +631,8 @@ textarea.input {
   background: var(--info-bg);
   color: var(--info);
   border-radius: var(--control-radius);
-  padding: 10px 12px;
-  margin: 8px 0;
+  padding: var(--space-3) var(--space-3);
+  margin: var(--space-2) 0;
 }
 .note.warn {
   background: var(--warn-bg);
@@ -648,7 +642,7 @@ textarea.input {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
   flex-wrap: wrap;
   background: var(--good-bg);
   color: var(--good);
@@ -657,14 +651,14 @@ textarea.input {
   background: var(--bad-bg);
   color: var(--bad);
   border-radius: 8px;
-  padding: 8px 12px;
-  margin: 8px 0;
+  padding: var(--space-2) var(--space-3);
+  margin: var(--space-2) 0;
 }
 
 .kv {
   display: grid;
   grid-template-columns: 120px 1fr;
-  gap: 6px 12px;
+  gap: var(--space-2) var(--space-3);
   margin: 0;
 }
 .kv dt {
@@ -683,7 +677,7 @@ table.table {
 .table th,
 .table td {
   text-align: left;
-  padding: 8px 10px;
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--border);
   vertical-align: top;
 }
@@ -695,11 +689,11 @@ table.table {
 
 .tabs {
   display: flex;
-  gap: 4px;
+  gap: var(--space-1);
   border-bottom: 1px solid var(--border);
 }
 .tab {
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   border: 0;
   background: none;
   color: var(--muted);
@@ -723,7 +717,7 @@ table.table {
     grid-template-rows: minmax(0, 1fr);
   }
   .sidebar {
-    padding: 12px;
+    padding: var(--space-3);
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }
@@ -732,7 +726,7 @@ table.table {
     overflow-x: auto;
   }
   .content {
-    padding: 16px;
+    padding: var(--space-4);
   }
 }
 
@@ -742,13 +736,13 @@ table.table {
 }
 .ai-pill-panel {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + var(--space-2));
   right: 0;
   z-index: 20;
   width: min(460px, 90vw);
   max-height: 70vh;
   overflow: auto;
-  padding: 8px;
+  padding: var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--panel);
@@ -759,12 +753,12 @@ table.table {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 /* What the AI says while it works is prose: the interface font, never smaller than 13px. */
 .ai-lines {
-  margin: 6px 0 0;
-  padding-left: 18px;
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
   font-size: var(--fs-caption);
   color: var(--muted);
   overflow-wrap: anywhere;
@@ -839,7 +833,7 @@ input[type='radio'] {
 .switch {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   min-height: 36px;
   cursor: pointer;
 }
@@ -890,8 +884,8 @@ input[type='radio'] {
 .segmented {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 4px;
-  padding: 4px;
+  gap: var(--space-1);
+  padding: var(--space-1);
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: calc(var(--control-radius) + 4px);
@@ -901,7 +895,7 @@ input[type='radio'] {
   align-items: center;
   justify-content: center;
   height: 32px;
-  padding: 0 14px;
+  padding: 0 var(--control-pad-x);
   border-radius: var(--control-radius);
   color: var(--muted);
   font-weight: 500;
@@ -934,8 +928,8 @@ input[type='radio'] {
 .disclosure > summary {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
   min-height: 44px;
   cursor: pointer;
   list-style: none;
@@ -964,10 +958,10 @@ input[type='radio'] {
   font-size: var(--fs-caption);
 }
 .disclosure-body {
-  padding: 4px 14px 14px;
+  padding: var(--space-1) var(--space-4) var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 /* The same, as an inline "More about this" under a short line. */
 .more > summary {
@@ -977,19 +971,19 @@ input[type='radio'] {
   width: fit-content;
 }
 .more[open] > summary {
-  margin-bottom: 6px;
+  margin-bottom: var(--space-2);
 }
 
 /* An empty state that offers its one next action. */
 .empty .empty-action {
-  margin-top: 14px;
+  margin-top: var(--space-4);
   display: flex;
   justify-content: center;
-  gap: 8px;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 .empty p {
-  margin: 4px auto 0;
+  margin: var(--space-1) auto 0;
   max-width: 60ch;
 }
 .empty.fill {
@@ -1007,13 +1001,13 @@ input[type='radio'] {
 .menu-pop {
   position: absolute;
   right: 0;
-  top: calc(100% + 4px);
+  top: calc(100% + var(--space-1));
   z-index: 15;
   min-width: 260px;
-  padding: 6px;
+  padding: var(--space-1);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-half);
   background: var(--panel);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
@@ -1023,9 +1017,9 @@ input[type='radio'] {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 1px;
+  gap: var(--space-half);
   width: 100%;
-  padding: 8px 10px;
+  padding: var(--space-2) var(--space-3);
   border: 0;
   border-radius: 8px;
   background: none;
@@ -1072,17 +1066,17 @@ input[type='radio'] {
 /* "Getting started" on an empty Attention page. */
 .start-steps {
   list-style: none;
-  margin: 8px 0 0;
+  margin: var(--space-2) 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 .start-steps li {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 10px 0;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
   border-top: 1px solid var(--border);
 }
 .start-steps li:first-child {
@@ -1118,12 +1112,12 @@ input[type='radio'] {
 /* A product card in the list: it says it can be opened, and which one is open. */
 .product-card {
   position: relative;
-  padding-right: 36px;
+  padding-right: var(--space-6);
 }
 .product-card::after {
   content: '';
   position: absolute;
-  right: 16px;
+  right: var(--space-4);
   top: 50%;
   width: 8px;
   height: 8px;
@@ -1172,7 +1166,7 @@ input[type='radio'] {
 .engine-main {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 .engine-path {
   color: var(--muted);
@@ -1181,7 +1175,7 @@ input[type='radio'] {
 .in-use {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1);
   height: var(--control-h);
   padding: 0 var(--control-pad-x);
   color: var(--good);
@@ -1190,12 +1184,12 @@ input[type='radio'] {
 }
 /* A list under its own heading, apart from the form above it. */
 .list-title {
-  margin: 20px 0 0;
-  padding-top: 16px;
+  margin: var(--space-5) 0 0;
+  padding-top: var(--space-4);
   border-top: 1px solid var(--border);
 }
 .rule-row {
-  padding: 12px;
+  padding: var(--space-3);
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel);
@@ -1204,13 +1198,27 @@ input[type='radio'] {
 /* Spacing after a folded "More" line inside a card, so the next block does not touch it. */
 .card > .more + *,
 .card > .hint + * {
-  margin-top: 12px;
+  margin-top: var(--space-3);
 }
 .card > .hint + .more {
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 
 /* A badge may wrap in a narrow column instead of running out of its card. */
 .kv .badge {
   white-space: normal;
+}
+
+/* A comment in a thread: replies step in by one space unit per level (up to four). */
+.list-row.thread-comment {
+  display: block;
+  margin-left: calc(var(--space-4) * var(--depth, 0));
+}
+.list-row.thread-comment.highlight {
+  border-color: var(--accent);
+}
+.thread-comment-body {
+  margin-top: var(--space-1);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
