@@ -538,15 +538,28 @@ Rule: AI support on every typed field, every "Add ..." and every "Edit ...", thr
 
 Stream A (branch `feat/ai-assist-foundation`, this checkout), release 0.10.0:
 - [x] Core of `goals.suggest` (f5a2973, 19 tests).
-- [ ] Shared assist kit `src/core/assist/` (helpers moved out of `ai-help.ts`, gate with optional passport), behaviour unchanged.
-- [ ] Engine auto-select on first launch (no engine selected and one is ready).
-- [ ] `assist.refine` (free text field: write, or improve with an instruction) with a field table; tests.
-- [ ] Renderer kit: `AiField`, `AiProposal`, `useAssist`, `assist-block.ts` (pure, tested).
-- [ ] Goals UI (propose one at a time, "Use this" fills the form) and Edit with AI.
-- [ ] Create a product from its website (name, description, sources proposed).
-- [ ] Channel settings proposed by the AI.
-- [ ] Rewrite and fix of drafts (reply, post), disclosure and safety wording.
-- [ ] Spec (`docs/design/macos/visual-system.md`), layout shown to the owner before the PR, packaged probe, PR, release 0.10.0.
+- [x] Shared assist kit `src/core/assist/` (helpers moved out of `ai-help.ts`, gate with optional passport), behaviour unchanged.
+- [x] Engine auto-select on first launch (no engine selected and one is ready).
+- [x] `assist.refine` (free text field: write, or improve with an instruction) with a field table; tests.
+- [x] Renderer kit: `AiField`, `AiProposal`, `useAssist`, `assist-block.ts` (pure, tested).
+- [x] Goals UI (propose one at a time, "Use this" fills the form) and Edit with AI.
+- [x] Create a product from its website (name, description, sources proposed).
+- [x] Channel settings proposed by the AI.
+- [ ] Rewrite and fix of drafts (reply, post), disclosure and safety wording: moved to 0.11.0 (see below).
+- [x] Spec (§17), layout shown to the owner, packaged probe (56 checks), tour (76 screens), independent review (10 findings, all but the a11y announcement fixed), PR #20, release 0.10.0 (installed).
 - Later releases: 0.11.0 remaining forms; 0.12.0 "Let the AI do this" per stage and cadence-based post proposals.
 
 Stream B (worktree `../ppd-browser`, branch `feat/ai-browser-missions`, from main): B1 ticket-aware post mission and the honesty fixes; B2 account creation end to end; B3 connect, assess and scan missions.
+
+### 0.11.0: AI in drafts (branch `feat/ai-drafts`)
+
+What exists today (map of 2026-11-14): replies have "Draft with AI" / "Redo with AI" (full redraft, stored, safety-checked); standalone posts have the toolbar "Suggest with AI" (stored, safety-checked) and a manual form with no AI; owner edits (`saveDraft`, `publications.create`, `approve`) are never safety-checked; the disclosure of the connection is a prompt rule plus a model flag (stream B1 adds a code check at approval). `assist.refine` is the wrong tool for drafts (its cleaning strips markdown and links, its guard rejects ordinary words such as "guarantee", it has no thread, claim ids or platform shape).
+
+- [ ] `drafts.refine` (core, `src/core/assist/draft-help.ts`): for a reply (`opportunityId`) or a post (`channelId`): `field` title | text | all, the form as it is, the owner's wish; context from `buildReplyContext` / `channelView` / `roleView` / `loadKnowledge` (the same as the AI drafts); the thread and everything the owner wrote fenced as data; markdown and links kept; length caps 4000 / 20000 / 300; the platform's shape rules (a reply has no link; a Reddit link post has no text). Returns the text, stores nothing, logs only that a text was produced.
+- [ ] The AI's text passes `checkDraftSafety` (claims cited, prohibited claims, amounts, links) and the disclosure rule before the owner sees it; one repair retry with the reasons, then refused with the reasons shown. Same contract as the AI drafts: the AI never hands the owner text the pipeline would have blocked.
+- [ ] Editor: "Suggest with AI" / "Improve with AI" on the text (reply and post) and on the title (post), Undo, the owner's typing wins (the `AiField` pattern). New publication ("Write one myself"): "Draft with AI" with an optional "what is it about?" line fills title and text; nothing is stored until "Save as draft".
+- [ ] "Redo with AI" no longer drops unsaved typing silently (lesson 84): it asks inline when the editor is dirty.
+- [ ] Tests (each checked to fail without its fix), spec §17, packaged probe with the real engine on an own instance, tour, independent review, PR, release.
+- Open decision for the owner (asked, not assumed): owner-written text is still not safety-checked on save or approve; the right design is a warning on approve naming the rule (prohibited claim, link outside the product's hosts, an amount with no claim), blocking only what the gate already blocks. It changes the approval flow, so it waits for the owner's answer.
+- Excluded on purpose (evidence, not prose): passport statements, sources, contradiction resolution. Account e-mail, handle and sign-up belong to stream B2.
+
