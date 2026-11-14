@@ -2,6 +2,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { BrowserWindow, app, clipboard, ipcMain, powerMonitor, safeStorage, shell } from 'electron'
 import { ApiError, IPC_EVENT, IPC_INVOKE, type ApiMethod } from '../shared/api'
+import { APP_NAME } from '../shared/app-name'
 import { createEngines } from '../ai'
 import { ElectronBrowserService } from '../browser/electron-browser-service'
 import { createConnectors } from '../connectors'
@@ -15,7 +16,7 @@ import { createTray } from './tray'
 import { FileVault, TimedClipboard } from './vault'
 import { WebModeController } from './web-mode'
 
-app.setName('Product Promotion Desk')
+app.setName(APP_NAME)
 
 // PPD_DATA_DIR makes a clean, separate instance (a QA baseline, a test run). It must move the whole instance, not only the database: the
 // single-instance lock and the browser profile (the sessions of the accounts) live in Electron's userData. Without this a second launch with
@@ -100,7 +101,7 @@ async function start(): Promise<void> {
       height: 880,
       minWidth: 980,
       minHeight: 640,
-      title: 'Product Promotion Desk',
+      title: APP_NAME,
       titleBarStyle: 'hiddenInset',
       // The window buttons sit on the centre line of the 52px toolbar band (--toolbar-h), 20px from the edge: the red button's
       // centre is 26px from the top (visual-system.md §4.1, V-02).
@@ -134,7 +135,7 @@ async function start(): Promise<void> {
   const lifecycle = installLifecycle({ app, core, showWindow, windowCount: () => BrowserWindow.getAllWindows().length, automation, powerMonitor })
   createTray({ core, automation, showWindow, quit: lifecycle.quit })
   app.on('second-instance', showWindow)
-  core.log.info('app', `Product Promotion Desk ${app.getVersion()} started`)
+  core.log.info('app', `${APP_NAME} ${app.getVersion()} started`)
   showWindow()
   startAutomation(core, { notifier: createNotificationSink(showWindow) }).catch((error: unknown) => {
     core.log.error('lifecycle', `Automation could not start: ${error instanceof Error ? error.message : String(error)}`)

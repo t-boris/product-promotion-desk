@@ -1,4 +1,5 @@
 import { ApiError } from '../../shared/api'
+import { APP_NAME } from '../../shared/app-name'
 import type { AppSettings } from '../../shared/types'
 import { parseWebPort } from '../../shared/web-port'
 import type { Core } from '../core'
@@ -15,7 +16,7 @@ function checkedPatch(patch: Partial<AppSettings>): Partial<AppSettings> {
 export function register(core: Core): void {
   core.router.register({
     'app.info': () => ({
-      name: 'Product Promotion Desk',
+      name: APP_NAME,
       version: core.appVersion,
       platform: process.platform,
       dataDir: core.dataDir,

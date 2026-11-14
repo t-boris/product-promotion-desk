@@ -247,17 +247,24 @@ describe('Menu-bar status (REQ-005: status and pause stay reachable with every w
   const base: AutomationState = { paused: false, running: true, activeRuns: 0, lastTickAt: null, nextDueAt: null, background: true }
 
   it('shows running, active runs, paused and attention items', () => {
-    expect(describeTray(base, 0)).toMatchObject({ statusLine: 'Automation running', pauseLabel: 'Pause automation', attentionLine: null, title: 'PPD' })
+    expect(describeTray(base, 0)).toMatchObject({ statusLine: 'Automation running', pauseLabel: 'Pause automation', attentionLine: null, title: 'Product Promotion Desk' })
     expect(describeTray({ ...base, activeRuns: 2 }, 0).statusLine).toBe('Automation running (2 active)')
-    expect(describeTray({ ...base, paused: true }, 0)).toMatchObject({ statusLine: 'Automation paused', pauseLabel: 'Resume automation', title: 'PPD (paused)' })
-    expect(describeTray(base, 1)).toMatchObject({ attentionLine: '1 item needs attention', title: 'PPD · 1' })
+    expect(describeTray({ ...base, paused: true }, 0)).toMatchObject({ statusLine: 'Automation paused', pauseLabel: 'Resume automation', title: 'Product Promotion Desk (paused)' })
+    expect(describeTray(base, 1)).toMatchObject({ attentionLine: '1 item needs attention', title: 'Product Promotion Desk · 1' })
     expect(describeTray(base, 3).attentionLine).toBe('3 items need attention')
   })
 
   it('always offers opening the app and an explicit Quit', () => {
     const model = describeTray({ ...base, running: false }, 0)
-    expect(model.openLabel).toBe('Open Promotion Desk')
-    expect(model.quitLabel).toBe('Quit Promotion Desk')
+    expect(model.openLabel).toBe('Open Product Promotion Desk')
+    expect(model.quitLabel).toBe('Quit Product Promotion Desk')
     expect(model.statusLine).toBe('Automation starting')
+  })
+
+  it('names the application by its one full name in the title, the items and the tooltip, never an abbreviation (BUG-051)', () => {
+    const model = describeTray({ ...base, paused: true }, 2)
+    expect(model.title).toBe('Product Promotion Desk (paused) · 2')
+    expect(model.tooltip).toBe('Product Promotion Desk - Automation paused - 2 items need attention')
+    for (const text of [model.title, model.openLabel, model.quitLabel, model.tooltip]) expect(text).not.toMatch(/PPD/)
   })
 })
