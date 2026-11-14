@@ -26,6 +26,7 @@ import type {
   ChannelMode,
   ChannelSettings,
   ChannelSuggestion,
+  GoalIdea,
   Claim,
   ClaimKind,
   ClaimSourceRef,
@@ -211,6 +212,11 @@ export interface ApiMethods {
   /** AI ideas for channels of this product, from its approved passport. Unverified; nothing is connected. */
   'channels.preparePlan': [{ channelId: Id }, Channel]
   'channels.suggest': [{ productId: Id }, ChannelSuggestion[]]
+  /**
+   * One AI idea for a promotion goal of this product, from its approved passport; null when the AI had no new safe idea.
+   * `avoid` holds the ideas the owner has already seen, `hint` is the owner's own one-line preference. Nothing is saved.
+   */
+  'goals.suggest': [{ productId: Id; hint?: string; avoid?: string[] }, GoalIdea | null]
   /**
    * Reads the site at `url` through the account's browser (read-only) and has the AI prepare a draft profile for the
    * universal connector. Never saves anything and never fails because the AI could not help: the draft then carries

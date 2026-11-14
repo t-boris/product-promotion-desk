@@ -53,6 +53,14 @@ export interface PromotionGoal {
 /** A goal as the owner edits it: no id yet while it is new. */
 export type PromotionGoalInput = Omit<PromotionGoal, 'id'> & { id?: Id }
 
+/** One goal the AI proposes. Nothing is stored: the owner turns it into a goal by pressing "Use this" and "Add goal". */
+export interface GoalIdea {
+  targetAction: string
+  successMetrics: string[]
+  /** One plain sentence on why this goal fits the product. */
+  reason: string
+}
+
 export type AnalysisStatus = 'idle' | 'running' | 'paused' | 'failed' | 'complete'
 
 export interface Product {
