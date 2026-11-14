@@ -275,6 +275,28 @@ export function isPublishingControl(control: { role: string; name: string; submi
   return /^(?:button|input:button)$/.test(control.role) && looksLikeSubmit(control.name)
 }
 
+/**
+ * Controls whose press does something to the account that no approved content asked for: joining or leaving a community, following,
+ * voting, blocking, deleting, reporting, muting, signing out, and granting a site access to the account (OAuth "Allow", "Authorize"). The
+ * words are the English ones and their Russian translations; a stem catches the state forms ("Joined", "Following" are buttons that undo
+ * what they say). Matched on whole words, so "Followers" and "Reportage" are not caught.
+ */
+const NEVER_CLICKED = new RegExp(
+  '(?<![\\p{L}\\p{N}])(?:' +
+    [
+      'join(?:ed|s)?', 'follow(?:ing|ed)?', 'unfollow(?:ing|ed)?', 'subscribe(?:d)?', 'subscribed', 'unsubscribe', 'vote(?:d|s)?', 'upvote(?:d|s)?', 'downvote(?:d|s)?', 'block(?:ed)?', 'unblock', 'mute(?:d)?',
+      'delete(?:d)?', 'remove(?:d)?', 'report(?:ed)?', 'flag(?:ged)?', 'ban(?:ned)?', 'allow', 'authori[sz]e', 'grant', 'log\\s*out', 'sign\\s*out', 'logout', 'signout',
+      'вступи\\p{L}*', 'присоедин\\p{L}*', 'подпис\\p{L}*', 'отпис\\p{L}*', 'проголос\\p{L}*', 'голосов\\p{L}*', 'заблокир\\p{L}*', 'удал\\p{L}*', 'пожалов\\p{L}*', 'жалоб\\p{L}*', 'разреш\\p{L}*', 'авториз\\p{L}*', 'выйти', 'замьют\\p{L}*'
+    ].join('|') +
+    ')(?![\\p{L}\\p{N}])',
+  'iu'
+)
+
+/** Whether the name of a control says it does something other than publish the approved content (see NEVER_CLICKED): a post mission clicks none of them. */
+export function neverClicked(name: string): boolean {
+  return NEVER_CLICKED.test(name)
+}
+
 const PLATFORM_WARNING =
   /\b(?:too many (?:requests|posts|comments|replies|attempts)|you(?:'|’)re doing that too (?:much|often|fast)|rate[- ]?limit(?:ed)?|slow down|try again (?:later|in)|temporarily (?:blocked|restricted|limited|unavailable)|(?:account|you) (?:has|have|is|are|was|were)\s+(?:been\s+)?(?:suspended|banned|restricted|limited|locked)|unusual activity|suspicious activity|verify (?:your )?(?:identity|account))\b/i
 

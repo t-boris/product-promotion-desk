@@ -343,6 +343,83 @@ describe('a control that publishes is never clicked or chosen by the AI itself, 
   })
 })
 
+describe('a click or a choice of the AI\'s own is made only on the approved destination, and never on a control that does something else to the account', () => {
+  const NOT_HERE = { isError: true, text: expect.stringContaining('not where the approved') }
+
+  it.each([
+    ['a reply on another thread', REPLY, 'https://fake.test/r/test/comments/zzz/other/'],
+    ['a reply on another community', REPLY, 'https://fake.test/r/elsewhere/comments/abc/slug/'],
+    ['a post in another community', POST, 'https://fake.test/r/elsewhere/submit'],
+    ['a post on a page of the platform that is no community page', POST, 'https://fake.test/settings/profile']
+  ])('refuses a click and a choice on %s, and sends nothing to the page', async (_what, content, url) => {
+    const t = setup(content)
+    await look(t)
+    t.page.currentUrl = url
+    expect(await t.toolbox.call('browser_click', { ref: 'e5' })).toMatchObject(NOT_HERE)
+    expect(await t.toolbox.call('browser_select', { ref: 'e5', option: 'x' })).toMatchObject(NOT_HERE)
+    expect(t.page.steps).toEqual([])
+  })
+
+  it('refuses a click and a choice on a page that is not on the platform at all', async () => {
+    const t = setup()
+    await look(t)
+    t.page.currentUrl = 'https://evil.example/r/test/comments/abc/slug/'
+    expect(await t.toolbox.call('browser_click', { ref: 'e5' })).toMatchObject({ isError: true, text: expect.stringContaining('not on the platform') })
+    expect(await t.toolbox.call('browser_select', { ref: 'e5', option: 'x' })).toMatchObject({ isError: true, text: expect.stringContaining('not on the platform') })
+    expect(t.page.steps).toEqual([])
+  })
+
+  it('clicks on the approved page, on its fragment and on its trailing slash', async () => {
+    const t = setup()
+    for (const url of ['https://fake.test/r/test/comments/abc/slug/', 'https://fake.test/r/test/comments/abc/slug/def#c', 'https://fake.test/r/test/comments/abc/slug/def/?context=3']) {
+      t.page.currentUrl = url
+      await look(t)
+      expect((await t.toolbox.call('browser_click', { ref: 'e5' })).isError).toBeUndefined()
+    }
+  })
+
+  it('refuses a click while a human check or a warning of the site is on the page: only a person can go on', async () => {
+    const t = setup()
+    t.page.humanCheck = 'a visible check frame (recaptcha)'
+    await look(t)
+    expect(await t.toolbox.call('browser_click', { ref: 'e5' })).toMatchObject({ isError: true, text: expect.stringContaining('human check') })
+    t.page.humanCheck = ''
+    t.page.alerts = ["You're doing that too much. Try again in 9 minutes."]
+    expect(await t.toolbox.call('browser_select', { ref: 'e5', option: 'x' })).toMatchObject({ isError: true, text: expect.stringContaining('The site shows a warning') })
+    expect(t.page.steps).toEqual([])
+  })
+
+  const NEVER = [
+    'Join', 'Join r/test', 'Joined', 'Follow', 'Following', 'Unfollow', 'Subscribe', 'Unsubscribe', 'Upvote', 'Downvote', 'Vote', 'Block user', 'Unblock', 'Mute',
+    'Delete', 'Delete comment', 'Remove', 'Report', 'Report comment', 'Flag', 'Allow', 'Allow access', 'Authorize app', 'Authorise', 'Grant access', 'Log out', 'Sign out',
+    'Вступить', 'Присоединиться', 'Подписаться', 'Отписаться', 'Проголосовать', 'Заблокировать', 'Удалить', 'Пожаловаться', 'Разрешить', 'Авторизовать', 'Выйти'
+  ]
+  it.each(NEVER)('never clicks or chooses a control named "%s", whatever its role', async (name) => {
+    for (const role of ['button', 'link', 'menuitem', 'div']) {
+      const t = setup()
+      t.page.items.push({ ref: 'e9', role, name })
+      await look(t)
+      expect(await t.toolbox.call('browser_click', { ref: 'e9' })).toMatchObject({ isError: true, text: expect.stringContaining('joins, follows, votes') })
+      expect(await t.toolbox.call('browser_select', { ref: 'e9', option: 'x' })).toMatchObject({ isError: true, text: expect.stringContaining('joins, follows, votes') })
+      expect(t.page.steps).toEqual([])
+    }
+  })
+
+  it.each(['Expand comment', 'Show more', 'Cancel', 'Add flair', 'Followers', 'Reportage', 'Blockquote', 'Allowance', 'Comments', 'Sort by: Best', 'Отмена', 'Показать ещё', 'Пожалуйста, подождите'])('does not take "%s" for one of them', async (name) => {
+    const t = setup()
+    t.page.items.push({ ref: 'e9', role: 'link', name })
+    await look(t)
+    expect((await t.toolbox.call('browser_click', { ref: 'e9' })).isError).toBeUndefined()
+  })
+
+  it('takes a name that has the word in it for one of them, on purpose: the refusal errs on the side of not clicking', async () => {
+    const t = setup()
+    t.page.items.push({ ref: 'e9', role: 'link', name: 'Votes tab' })
+    await look(t)
+    expect((await t.toolbox.call('browser_click', { ref: 'e9' })).isError).toBe(true)
+  })
+})
+
 describe('calls that arrive together are taken in turn, and each one is decided when its turn comes', () => {
   it('a click sent together with browser_submit is refused after the press, and presses nothing a second time', async () => {
     const t = setup()
