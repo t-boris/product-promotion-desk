@@ -286,8 +286,9 @@ export class BrowserToolbox implements McpToolHost {
       try {
         const snapshot = parseSnapshot(await page.read<unknown>(snapshotScript()))
         if (snapshot && snapshot.elements.length > 0) {
-          if (snapshot.humanCheck) this.humanCheckSeen = snapshot.humanCheck
-          this.warningSeen = platformWarning(snapshot.alerts) ?? this.warningSeen
+          // What the last look showed, not what any look ever showed: after the owner solved a check, a later failure is not a CAPTCHA.
+          this.humanCheckSeen = snapshot.humanCheck || null
+          this.warningSeen = platformWarning(snapshot.alerts)
           return (this.last = snapshot)
         }
       } catch (error) {
