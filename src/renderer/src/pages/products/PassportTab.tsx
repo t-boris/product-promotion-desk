@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { PASSPORT_SECTIONS, type PassportSection, type PassportView } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Badge, Button, Card, ErrorNote, Hint, More } from '../../ui'
+import { Badge, Button, Card, ErrorNote, Hint, More, useMainVariant } from '../../ui'
 import { ClaimForm } from './ClaimForm'
 import { ClaimRow } from './ClaimRow'
 import { SECTION_HINTS, SECTION_LABELS } from './labels'
@@ -28,7 +28,7 @@ function Section({ section, view }: { section: PassportSection; view: PassportVi
           {SECTION_HINTS[section]}
           {empty ? ' · nothing here yet' : ''}
         </Hint>
-        <div className="stack claim-list">
+        <div className="rows claim-list">
           {claims.map((claim) => (
             <ClaimRow key={claim.id} claim={claim} all={view.claims} productId={view.product.id} />
           ))}
@@ -83,9 +83,11 @@ export function PassportTab({ view, onOpenAnalysis }: { view: PassportView; /** 
   // No statement and no approved passport: the next step is the analysis, not the approval (BUG-019). A draft emptied by
   // deleting every statement of an approved passport keeps the usual layout, with its version and the approved badge.
   const empty = view.claims.length === 0 && view.product.activePassportVersionId === null
+  // "Approve passport" is the main action of a passport with statements, unless a statement form is open (it owns the filled button).
+  const mainVariant = useMainVariant()
   const approveButton = (
     <Button
-      variant={empty ? 'ghost' : 'primary'}
+      variant={empty ? 'ghost' : mainVariant}
       onClick={() => void approve()}
       disabled={blocker !== null || approving.busy || approvingAll.busy}
       title={blocker ?? 'Make this the passport that drafting and review rely on'}

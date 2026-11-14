@@ -1,7 +1,7 @@
 import type { Id } from '../../../../shared/types'
 import { useEvents, useQuery } from '../../hooks'
 import type { ProductTab } from '../../route'
-import { ErrorNote, Loading } from '../../ui'
+import { ErrorNote, Loading, OpenFormsScope } from '../../ui'
 import { ChannelsPanel } from '../channels/ChannelsPanel'
 import { ResultsPanel } from '../results/ResultsPanel'
 import { AnalysisTab } from './AnalysisTab'
@@ -48,7 +48,8 @@ export function ProductDetail({
   }
 
   return (
-    <div className="stack" data-testid="product-detail">
+    <OpenFormsScope>
+    <div className="pane" data-testid="product-detail">
       <ProductHeader view={view} onDeleted={onDeleted} onOpenTab={onTabChange} />
       <LaunchPath
         stages={launchStages(productId, {
@@ -73,5 +74,6 @@ export function ProductDetail({
       {tab === 'channels' && <ChannelsPanel productId={productId} />}
       {tab === 'results' && <ResultsPanel productId={productId} />}
     </div>
+    </OpenFormsScope>
   )
 }

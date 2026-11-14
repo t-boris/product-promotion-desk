@@ -8,7 +8,7 @@ import { nextProductStep } from './product-status'
 export function ProductList({ products, selectedId, countsOf, onSelect }: { products: Product[]; selectedId: string | null; countsOf: (productId: Id) => LaunchCounts; onSelect: (id: string) => void }) {
   if (products.length === 0) return <EmptyState art="product" title="No products yet">Add the first one with the button above.</EmptyState>
   return (
-    <div className="stack" data-testid="product-list">
+    <div className="panel" data-testid="product-list">
       {products.map((product) => {
         const counts = countsOf(product.id)
         const next = nextProductStep(product, counts)
@@ -19,7 +19,7 @@ export function ProductList({ products, selectedId, countsOf, onSelect }: { prod
             key={product.id}
             role="button"
             tabIndex={0}
-            className={`list-row stacked selectable product-card ${product.id === selectedId ? 'active' : ''}`}
+            className={`panel-row${product.id === selectedId ? ' active' : ''}`}
             aria-current={product.id === selectedId ? 'true' : undefined}
             onClick={() => onSelect(product.id)}
             onKeyDown={(e) => {
@@ -30,19 +30,19 @@ export function ProductList({ products, selectedId, countsOf, onSelect }: { prod
             }}
             data-testid={`product-${product.id}`}
           >
-            <div>
-              <div className="product-card-head">
-                <strong>{product.name}</strong>
-                <LaunchDots stages={stages} testId={`launch-dots-${product.id}`} />
+            <div className="panel-row-top">
+              <span className="panel-row-title">{product.name}</span>
+              <LaunchDots stages={stages} testId={`launch-dots-${product.id}`} />
+            </div>
+            <div className="panel-row-line">{product.websiteUrl ?? 'No website yet'}</div>
+            {/* The passport and the analysis are in the header and in the next step; only a state worth a glance gets a tag here. */}
+            {(product.analysisStatus === 'running' || product.analysisStatus === 'paused' || product.analysisStatus === 'failed') && (
+              <div className="row">
+                <Badge tone={ANALYSIS_TONES[product.analysisStatus]}>{ANALYSIS_LABELS[product.analysisStatus]}</Badge>
               </div>
-              <div className="hint">{product.websiteUrl ?? 'No website yet'}</div>
-            </div>
-            <div className="row">
-              <Badge tone={product.activePassportVersionId ? 'good' : 'warn'}>{product.activePassportVersionId ? 'Passport approved' : 'No approved passport'}</Badge>
-              {product.analysisStatus !== 'idle' && <Badge tone={ANALYSIS_TONES[product.analysisStatus]}>{ANALYSIS_LABELS[product.analysisStatus]}</Badge>}
-            </div>
+            )}
             {next && (
-              <div className="hint" data-testid={`product-next-${product.id}`}>
+              <div className="panel-row-line wrap" data-testid={`product-next-${product.id}`}>
                 {next}
               </div>
             )}

@@ -931,14 +931,11 @@ select.input {
   padding-left: var(--space-5);
 }
 
-/* One goal of a product on the Goal tab, and its line on the Results tab. */
+/* One goal of a product on the Goal tab (a row of its group box), and its line on the Results tab. */
 .goal-card {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: var(--space-3);
-  border: 1px solid var(--line);
-  border-radius: var(--control-radius);
 }
 .goal-card textarea.input {
   min-height: 64px;
@@ -1569,33 +1566,173 @@ input[type='radio'] {
   color: var(--text-1);
 }
 
-/* A product card in the list: it says it can be opened, and which one is open. */
-.product-card {
+/* ───────────── Page patterns (visual-system.md §9) ───────────── */
+
+/* List + detail: a panel of rows beside the object a row opens, side by side down to the minimum window. The detail is a
+   container, so its own narrow rules (the launch path) follow its width and not the window's. */
+.split {
+  display: grid;
+  grid-template-columns: clamp(208px, 27%, 300px) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+.split-list {
+  position: sticky;
+  top: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.split-detail {
+  min-width: 0;
+  container-type: inline-size;
+}
+
+/* A list panel: rows on one surface, the selected one tinted. No card per row. */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+  padding: 6px;
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+.panel-row {
   position: relative;
-  padding-right: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+  min-width: 0;
+  padding: var(--space-2) 10px;
+  border-radius: var(--radius-md);
+  text-align: left;
 }
-.product-card::after {
-  content: '';
-  position: absolute;
-  right: var(--space-4);
-  top: 50%;
-  width: 8px;
-  height: 8px;
-  border-right: 2px solid var(--muted);
-  border-top: 2px solid var(--muted);
-  transform: translateY(-50%) rotate(45deg);
+.panel-row:hover {
+  background: var(--hover-fill);
 }
-.product-card:hover {
-  border-color: var(--border-strong);
-  background: var(--panel-2);
+.panel-row:active {
+  background: var(--press-fill);
 }
-.product-card.active {
-  border-color: var(--accent);
-  background: var(--panel-2);
-  box-shadow: inset 3px 0 0 var(--accent);
+.panel-row.active {
+  background: var(--accent-tint);
 }
-.product-card.active::after {
-  border-color: var(--accent);
+.panel-row-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.panel-row-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: var(--fw-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.panel-row-line {
+  min-width: 0;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.panel-row-line.wrap {
+  white-space: normal;
+}
+
+/* The header of an object (a product, an account, a channel): its name, a meta line, its actions. No box around it. */
+.obj-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  flex-wrap: wrap;
+}
+.obj-head > :first-child {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.obj-head h2 {
+  font-size: var(--fs-section);
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.obj-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-half) var(--space-3);
+  margin-top: var(--space-half);
+  color: var(--text-2);
+}
+.obj-meta .dot-line {
+  color: var(--text-1);
+}
+.obj-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+
+/* Rows inside a group box are split by hairlines; a row is never a bordered box inside the box. */
+.rows {
+  display: flex;
+  flex-direction: column;
+}
+.rows > * {
+  padding: var(--space-3) 0;
+}
+.rows > :first-child {
+  padding-top: var(--space-1);
+}
+.rows > :last-child {
+  padding-bottom: var(--space-1);
+}
+.rows > * + * {
+  border-top: 1px solid var(--line);
+}
+.card .stack:has(> .list-row) {
+  gap: 0;
+}
+.card .list-row {
+  padding: var(--space-3) 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.card .list-row + .list-row {
+  border-top: 1px solid var(--line);
+}
+.card .list-row:first-child {
+  padding-top: var(--space-1);
+}
+.card .list-row:last-child {
+  padding-bottom: var(--space-1);
+}
+
+/* A row of a group with its label on the left and its control on the right (macOS form row). */
+.group-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 44px;
+}
+.group-row > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The status line under a title: dot + words, and a link to the next step. */
+.status-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
 }
 
 /* ───────────── Launch path (BUG-012) ─────────────
@@ -1605,7 +1742,7 @@ input[type='radio'] {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  row-gap: var(--space-2);
+  row-gap: var(--space-1);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1617,9 +1754,8 @@ input[type='radio'] {
 .launch-stage + .launch-stage::before {
   /* The line that joins two stages: green only between two stages that are both done. */
   content: '';
-  width: var(--space-5);
-  height: 2px;
-  margin: 0 var(--space-1);
+  width: 18px;
+  height: 1.5px;
   border-radius: 1px;
   background: var(--line-strong);
 }
@@ -1629,9 +1765,9 @@ input[type='radio'] {
 .launch-stage a {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  min-height: 28px;
-  padding: var(--space-1) var(--space-2);
+  gap: var(--icon-gap);
+  height: var(--control-h);
+  padding: 0 var(--icon-gap);
   border-radius: var(--radius-pill);
   color: var(--text-2);
   text-decoration: none;
@@ -1642,10 +1778,10 @@ input[type='radio'] {
 }
 .launch-mark {
   flex: none;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  border: 2px solid var(--line-strong);
+  border: 1.5px solid var(--line-strong);
 }
 .launch-stage.done a {
   color: var(--text-1);
@@ -1660,18 +1796,30 @@ input[type='radio'] {
   font-weight: var(--fw-semibold);
 }
 .launch-stage.current .launch-mark {
-  border-color: var(--accent);
+  border-color: var(--accent-on-tint);
   background: var(--accent-tint);
   box-shadow: 0 0 0 3px var(--accent-tint);
   animation: ppd-ring var(--dur-base) var(--ease-out);
 }
 .launch-next {
+  height: 20px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--accent-tint);
+  color: var(--accent-on-tint);
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
-  color: var(--accent-on-tint);
-  background: var(--accent-tint);
-  border-radius: var(--radius-pill);
-  padding: 0 var(--space-2);
+  line-height: 20px;
+}
+/* Inside a narrow detail pane the joints and the stage padding give way, so the path stays one row. */
+@container (max-width: 560px) {
+  .launch-stage + .launch-stage::before {
+    width: 10px;
+  }
+  .launch-stage a {
+    padding: 0 3px;
+    gap: 5px;
+  }
 }
 @keyframes ppd-ring {
   from {
@@ -1679,32 +1827,25 @@ input[type='radio'] {
     box-shadow: 0 0 0 0 var(--accent-tint);
   }
 }
-/* The same path as five dots on a product card. */
-.product-card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
+/* The same path as five dots on a product row. */
 .launch-dots {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: var(--space-1);
+  gap: 3px;
 }
 .launch-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  border: 2px solid var(--line-strong);
+  border: 1.5px solid var(--line-strong);
 }
 .launch-dot.done {
   background: var(--success);
   border-color: var(--success);
 }
 .launch-dot.current {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-tint);
+  border-color: var(--accent-on-tint);
 }
 
 /* A button that reads as a link: for the next step beside a status. */
@@ -1826,7 +1967,7 @@ a:not(.btn):not(.badge):not(.nav-item):not(.tb-value):hover,
 .more > summary,
 .menu-item,
 .list-row.selectable,
-.product-card,
+.panel-row,
 .input,
 .segmented-option {
   transition:

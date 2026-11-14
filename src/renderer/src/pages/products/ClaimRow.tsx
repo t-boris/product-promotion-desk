@@ -83,15 +83,15 @@ export function ClaimRow({ claim, all, productId }: { claim: Claim; all: Claim[]
           </Button>
         )}
         {claim.status !== 'proposed' && (
-          <Button onClick={() => void setStatus('proposed')} disabled={busy} data-testid={`claim-reopen-${claim.id}`}>
+          <Button variant="quiet" onClick={() => void setStatus('proposed')} disabled={busy} data-testid={`claim-reopen-${claim.id}`}>
             Back to review
           </Button>
         )}
-        <Button onClick={() => setEditing(true)} disabled={busy} data-testid={`claim-edit-${claim.id}`}>
+        <Button variant="quiet" onClick={() => setEditing(true)} disabled={busy} data-testid={`claim-edit-${claim.id}`}>
           {isContradiction ? 'Settle…' : 'Edit'}
         </Button>
         {/* Reject, Prohibit and Delete are rare and different in weight: they sit in a menu, each with a line on what it does. */}
-        <RowMenu label="More" testId={`claim-more-${claim.id}`}>
+        <RowMenu label="More" variant="quiet" testId={`claim-more-${claim.id}`}>
           {(close) => (
             <>
               {claim.status !== 'rejected' && (

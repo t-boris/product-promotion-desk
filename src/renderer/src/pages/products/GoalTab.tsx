@@ -41,7 +41,7 @@ export function GoalTab({ product, onOpenResults }: { product: Product; onOpenRe
           <Hint>A goal is the one thing you want people to do, and how you will judge it.</Hint>
           <Hint>In this version goals do not change what the AI writes, and they do not count sign-ups or purchases: the app has no access to your own site’s data.</Hint>
         </More>
-      <div className="stack">
+      <div className="rows">
         {goals.map((goal, index) => (
           <GoalCard
             key={goal.id}

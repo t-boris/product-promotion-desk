@@ -2,12 +2,13 @@ import { useState } from 'react'
 import type { PassportView, Product } from '../../../../shared/types'
 import { productHref, type ProductTab } from '../../route'
 import { call, useAction } from '../../hooks'
-import { Badge, Button, Card, ErrorNote, Field } from '../../ui'
+import { Badge, Button, Card, ErrorNote, Field, ObjectHeader, useOpenForm } from '../../ui'
 import { ClampedText } from './ClampedText'
 import { ANALYSIS_LABELS, ANALYSIS_TONES } from './labels'
 import { NOT_ANALYZED_HINT, passportStatus } from './product-status'
 
 function EditDetails({ product, onDone }: { product: Product; onDone: () => void }) {
+  useOpenForm()
   const [name, setName] = useState(product.name)
   const [websiteUrl, setWebsiteUrl] = useState(product.websiteUrl ?? '')
   const [description, setDescription] = useState(product.description ?? '')
@@ -59,21 +60,24 @@ export function ProductHeader({ view, onDeleted, onOpenTab }: { view: PassportVi
   })
 
   return (
-    <Card
-      title={product.name}
-      actions={
-        <>
-          <Button onClick={() => setEditing((v) => !v)} data-testid="edit-product">
-            {editing ? 'Close' : 'Edit details'}
-          </Button>
-          <Button variant="danger" onClick={() => void remove()} disabled={removing.busy} data-testid="delete-product">
-            Delete
-          </Button>
-        </>
-      }
-    >
+    <>
+      <ObjectHeader
+        title={product.name}
+        actions={
+          <>
+            <Button onClick={() => setEditing((v) => !v)} data-testid="edit-product">
+              {editing ? 'Close' : 'Edit details'}
+            </Button>
+            <Button variant="danger" onClick={() => void remove()} disabled={removing.busy} data-testid="delete-product">
+              Delete
+            </Button>
+          </>
+        }
+      />
       {editing ? (
-        <EditDetails product={product} onDone={() => setEditing(false)} />
+        <Card title="Edit details">
+          <EditDetails product={product} onDone={() => setEditing(false)} />
+        </Card>
       ) : (
         <dl className="kv" data-testid="product-details">
           <dt>Website</dt>
@@ -120,6 +124,6 @@ export function ProductHeader({ view, onDeleted, onOpenTab }: { view: PassportVi
         </dl>
       )}
       <ErrorNote error={removing.error} />
-    </Card>
+    </>
   )
 }

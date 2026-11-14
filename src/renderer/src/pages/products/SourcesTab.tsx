@@ -134,7 +134,7 @@ export function SourcesTab({ view }: { view: PassportView }) {
         {view.sources.length === 0 ? (
           <EmptyState art="draft" title="No sources yet">Add a website, notes, a document or a project folder {formFirst ? 'above' : 'below'}.</EmptyState>
         ) : (
-          <div className="stack source-list">
+          <div className="rows source-list">
             {view.sources.map((source) => (
               <SourceRow
                 key={source.id}

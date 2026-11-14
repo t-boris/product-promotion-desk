@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { SourcePreview } from '../../../../shared/api'
 import type { Id, ProductSource, SourceKind } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Badge, Button, Card, ErrorNote, Field, Hint, SegmentedControl } from '../../ui'
+import { Badge, Button, Card, ErrorNote, Field, Hint, SegmentedControl, useMainVariant, useOpenForm } from '../../ui'
 import { SOURCE_LABELS, SOURCE_PLACEHOLDERS } from './labels'
 import { scopeFromText } from './model'
 import { SourcePreviewPanel } from './SourcePreviewPanel'
@@ -37,6 +37,9 @@ interface SourceFormProps {
  */
 export function SourceForm({ productId, source, onSaved, onCancel }: SourceFormProps) {
   const editing = source !== undefined
+  // An edit in place is an on-demand form and owns the filled button; the resting "Add source" steps back while one is open.
+  useOpenForm(editing)
+  const addVariant = useMainVariant()
   // The add form and an open edit form are on the page together: their test ids differ, so a query finds the one it means.
   const tid = (name: string): string => (editing ? `source-edit-${name}` : `source-${name}`)
   const [kind, setKind] = useState<SourceKind>(source?.kind ?? 'url')
@@ -127,7 +130,7 @@ export function SourceForm({ productId, source, onSaved, onCancel }: SourceFormP
             </Button>
           </>
         ) : (
-          <Button variant="primary" onClick={() => void save()} disabled={!ready || saving.busy} data-testid="source-add">
+          <Button variant={addVariant} onClick={() => void save()} disabled={!ready || saving.busy} data-testid="source-add">
             {saving.busy ? 'Adding…' : 'Add source'}
           </Button>
         )}

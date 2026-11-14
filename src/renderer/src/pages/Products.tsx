@@ -52,7 +52,7 @@ export function ProductsPage() {
       title="Products"
       subtitle="Sources, the verified passport, analysis, goal, channels and results for each product"
       actions={
-        <Button variant="primary" onClick={() => setCreating(true)} disabled={creating} data-testid="new-product">
+        <Button icon="plus" onClick={() => setCreating(true)} disabled={creating} data-testid="new-product">
           New product
         </Button>
       }
@@ -83,11 +83,11 @@ export function ProductsPage() {
         </EmptyState>
       )}
       {products.data && list.length > 0 && (
-        <div className="products-layout">
-          <aside className="products-list">
+        <div className="split">
+          <aside className="split-list">
             <ProductList products={list} selectedId={selected} countsOf={countsOf} onSelect={(id) => selectProduct(id)} />
           </aside>
-          <div className="products-detail">
+          <div className="split-detail">
             {selected ? <ProductDetail key={selected} productId={selected} tab={tab} counts={countsOf(selected)} onTabChange={selectTab} onDeleted={() => selectProduct(null)} /> : <Loading what="Opening the product" />}
           </div>
         </div>

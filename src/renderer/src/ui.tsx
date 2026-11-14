@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { EmptyArtwork, type EmptyArt } from './empty-art'
 import { Icon, type IconName } from './icons'
 import type { Tone } from './tone'
@@ -16,6 +16,49 @@ export function Page({ title, subtitle, actions, children }: { title: string; su
       {children}
     </section>
   )
+}
+
+/** The header of an object (a product, an account, a channel): its name, a meta line under it, its actions on the right. No box. */
+export function ObjectHeader({ title, meta, actions, testId }: { title: ReactNode; meta?: ReactNode; actions?: ReactNode; testId?: string }) {
+  return (
+    <div className="obj-head" data-testid={testId}>
+      <div>
+        <h2>{title}</h2>
+        {meta && <div className="obj-meta">{meta}</div>}
+      </div>
+      {actions && <div className="obj-actions">{actions}</div>}
+    </div>
+  )
+}
+
+/**
+ * One filled button per screen (visual-system.md §10): the screen's next step. While a form that was opened on demand (an edit,
+ * "Add statement") is open, the form's own button is the filled one and the resting main action steps back to a bezel. A screen
+ * wraps its content in `OpenFormsScope`; an on-demand form calls `useOpenForm()`; a resting main action reads `useMainVariant()`.
+ */
+const OpenForms = createContext<{ count: number; add: () => () => void } | null>(null)
+
+export function OpenFormsScope({ children }: { children: ReactNode }) {
+  const [count, setCount] = useState(0)
+  const add = useCallback(() => {
+    setCount((c) => c + 1)
+    return () => setCount((c) => c - 1)
+  }, [])
+  const value = useMemo(() => ({ count, add }), [count, add])
+  return <OpenForms.Provider value={value}>{children}</OpenForms.Provider>
+}
+
+/** Called by an on-demand form while it is open (`active`); a form that is only sometimes an on-demand one passes the condition. */
+export function useOpenForm(active = true): void {
+  const scope = useContext(OpenForms)
+  const add = scope?.add
+  useEffect(() => (active ? add?.() : undefined), [add, active])
+}
+
+/** The variant of a resting main action: filled, unless an on-demand form of the same screen is open. */
+export function useMainVariant(): 'primary' | 'ghost' {
+  const scope = useContext(OpenForms)
+  return scope && scope.count > 0 ? 'ghost' : 'primary'
 }
 
 export function Card({ title, actions, children, className = '' }: { title?: string; actions?: ReactNode; children: ReactNode; className?: string }) {
@@ -176,7 +219,7 @@ export function Switch({ checked, onChange, disabled, label, note, testId }: { c
 }
 
 /** A button that opens a small menu under it; it closes on a click elsewhere, on Escape, and after a choice. */
-export function RowMenu({ label, children, testId }: { label: string; children: (close: () => void) => ReactNode; testId?: string }) {
+export function RowMenu({ label, children, testId, variant = 'ghost' }: { label: string; children: (close: () => void) => ReactNode; testId?: string; variant?: 'ghost' | 'quiet' }) {
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -196,7 +239,7 @@ export function RowMenu({ label, children, testId }: { label: string; children: 
   }, [open])
   return (
     <div className="menu" ref={box}>
-      <Button variant="ghost" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)} data-testid={testId}>
+      <Button variant={variant} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)} data-testid={testId}>
         {label}
         <Icon name="chevronDown" small />
       </Button>

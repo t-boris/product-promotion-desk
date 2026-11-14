@@ -12,7 +12,7 @@ export function VersionsCard({ productId }: { productId: Id }) {
     <Card title="Versions">
       {versions.loading && !versions.data && <Loading what="Loading versions" />}
       {versions.data && versions.data.length === 0 && <p className="muted">No version yet. The first version is created when you add or approve a statement.</p>}
-      <div className="stack" data-testid="passport-versions">
+      <div className="rows" data-testid="passport-versions">
         {versions.data?.map((v) => (
           <div key={v.id} className="list-row" data-testid={`version-${v.version}`}>
             <div className="row">
