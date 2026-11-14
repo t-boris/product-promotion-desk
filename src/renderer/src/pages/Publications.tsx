@@ -126,7 +126,7 @@ function PublicationsScreen() {
         </EmptyState>
       )}
 
-      {writing && channelId && <PublicationForm channelId={channelId} onCreated={() => setWriting(false)} onCancel={() => setWriting(false)} />}
+      {writing && channel && <PublicationForm productId={channel.productId} channelId={channel.id} onCreated={() => setWriting(false)} onCancel={() => setWriting(false)} />}
 
       <ErrorNote error={list.error} />
       {list.loading && !list.data && <Loading what="Loading" />}

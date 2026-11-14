@@ -138,7 +138,7 @@ export function ReviewCard({ card, collapsible = false, defaultOpen = true, prod
               </div>
             )}
 
-            <DraftEditor form={form} onChange={setForm} withTitle={standalone} disabled={locked || actions.busy} draft={card.draft} />
+            <DraftEditor form={form} onChange={setForm} withTitle={standalone} disabled={locked || actions.busy} draft={card.draft} ai={locked ? undefined : { opportunityId: opp.id }} />
             {standalone && !locked && <ScheduleControl opportunity={opp} busy={actions.busy} onSchedule={(at) => void actions.schedule(opp.id, at)} />}
 
             <ActionSummary card={card} />

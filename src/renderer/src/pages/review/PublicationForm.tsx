@@ -3,11 +3,12 @@ import type { Id } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
 import { Button, Card, ErrorNote, useOpenForm } from '../../ui'
 import { DraftEditor, toInput, type DraftForm } from './DraftEditor'
+import { PostDrafter } from './PostDrafter'
 
 const EMPTY: DraftForm = { title: '', text: '', link: '', attachments: [] }
 
 /** Write a standalone publication by hand. It is saved as a draft: nothing is published until it is approved. */
-export function PublicationForm({ channelId, onCreated, onCancel }: { channelId: Id; onCreated: () => void; onCancel: () => void }) {
+export function PublicationForm({ productId, channelId, onCreated, onCancel }: { productId: Id; channelId: Id; onCreated: () => void; onCancel: () => void }) {
   // The form is open on demand, so "Save as draft" is the screen's filled button while it is the form opened last.
   const saveVariant = useOpenForm()
   const [form, setForm] = useState<DraftForm>(EMPTY)
@@ -22,7 +23,8 @@ export function PublicationForm({ channelId, onCreated, onCancel }: { channelId:
   return (
     <Card title="New publication">
       <div className="review-body">
-        <DraftEditor form={form} onChange={setForm} withTitle disabled={creating.busy} draft={null} autoFocus />
+        <PostDrafter productId={productId} channelId={channelId} form={form} onChange={setForm} />
+        <DraftEditor form={form} onChange={setForm} withTitle disabled={creating.busy} draft={null} autoFocus ai={{ channelId }} />
         <ErrorNote error={creating.error} />
         <div className="form-actions">
           {empty && (

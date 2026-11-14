@@ -657,7 +657,7 @@ presses the form's own button (DEC-009, DEC-019). The shared kit lives in `src/r
 
 Where the AI helps in 0.10.0: goal ideas (Goal tab), the goal's target action, metrics and notes, a product's description, a new product from its website, a
 channel's style, topics and search queries. The first ready engine is selected on the first launch (Settings shows it as "In use"). The numbers and switches that
-decide what goes out (interval, limits, automatic replies) stay the owner's choice. Rewriting a draft of a reply or a post comes with the disclosure check, in a later release.
+decide what goes out (interval, limits, automatic replies) stay the owner's choice. Rewriting a draft of a reply or a post is §18 (0.11.0).
 
 Two layout facts that come with the AI controls. The AI capsule in the toolbar is bounded (its label is at most 260 px and ends in an ellipsis, the full text is its
 tooltip), and in a toolbar under 840 px it keeps only the ring (working) or a coloured dot (done, failed, stopped), as the automation state does: measured at 980×640
@@ -674,3 +674,29 @@ or a promise of results); the log says that a text was written, never what it sa
 | V-25 | An AI control on a field or form is a secondary or quiet button, 28 px tall, on the label row; no screen shows two filled buttons because of it | tour on Products (Goal, Edit details, New product) and Channels (settings) at both sizes and themes | 0 filled AI buttons; V-06, V-09 hold |
 | V-26 | The AI's text lands in the field, never in storage; Undo restores what was there; typing over the AI's text hides Undo | packaged probe: write, undo, type | as described |
 | V-27 | With the AI capsule showing (working or finished), no toolbar value (engine, accounts) is cut and the capsule is at most 330 px wide; under 840 px it is the ring or a dot | packaged probe at 1320×880 and 980×640, both themes | true |
+
+
+## 18. AI in drafts (0.11.0)
+
+The same direction for the text that goes out: the owner reads, changes and saves; the AI never stores a draft and never approves one (DEC-008). What is new is what
+the AI's text has to pass before the owner sees it. `drafts.refine` (`src/core/pipeline/draft-help.ts`) writes or improves the title or the text of a reply, of a
+post that has a card, and of a new publication, from the knowledge the AI drafts use (approved facts with their ids, prohibited statements, channel style and limits,
+the role of the login, and for a reply the discussion, the parent chain and the account's earlier replies). The answer passes the checks of an AI draft
+(`checkDraftSafety`: cited facts approved, nothing prohibited, no price, discount or "free" without a cited claim, links only to the product's own addresses), a
+credential check, a length limit (a long answer is sent back, never cut) and the disclosure rule (the product named without saying the author is connected with it;
+read on the finished draft, title and text together; for now the AI's own flag, until the disclosure check of the post mission lands). A failing answer is handed back once with the reasons, then
+refused with them. A new post written from nothing must cite an approved fact. The owner's own text next to the AI's is not checked; what the owner saves is the
+owner's, as before (a check of the owner's own text on save and approve is a separate decision).
+
+| Pattern | Markup | Rules |
+|---|---|---|
+| Title and text with AI | `AiTextField` in `DraftEditor` (the §17 field: label row, one secondary button, the wish line, the note and Undo) | The same control as §17: "Suggest with AI" while empty, "Improve with AI" while filled. It is on a card that can still change (not on a sent or locked one), disabled while a save runs, and its state starts over when a new draft row arrives. A reply has the text only. |
+| Draft with AI (new publication) | `PostDrafter` (`.field.ai-field`: "What is it about?" with the secondary button "Draft with AI" on the label row, one optional line, a hint) | Offered while the title and the text are both empty, and while its note and Undo are showing; it writes both. It needs an approved passport (the hint names the fix). Typing while it works wins: its post is dropped and the form says so. Undo empties both fields while the owner has not typed over them. |
+| Redo with AI | `ConfirmAction` (secondary, sparkles) when the form holds unsaved changes; the plain button otherwise | A new AI draft replaces the form, so with unsaved changes it asks "The new draft replaces what you changed and did not save." (Replace my changes / Cancel). |
+
+| Id | Requirement | Method | Pass |
+|---|---|---|---|
+| V-28 | The AI controls of the draft editor are secondary or quiet buttons on the label row, 28 px tall; the card keeps its one filled button | tour on Replies and Publications at both sizes and themes | 0 extra filled buttons; V-06, V-09 hold |
+| V-29 | The AI's draft text lands in the editor, never in storage; Undo restores what was there; typing over it hides Undo; "Redo with AI" with unsaved changes asks first | packaged probe with the real engine on an own instance | as described |
+| V-30 | A text the safety checks refuse is never shown to the owner; the refusal names the reasons | `draft-help.test.ts` (each rule, mutation-checked) and the packaged probe | as described |
+

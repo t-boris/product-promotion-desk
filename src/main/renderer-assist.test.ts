@@ -7,6 +7,7 @@ import { canApply, canUndo, fieldAction, ideaButtonLabel, rememberShown } from '
 import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block'
 import { around, fieldsFromIdea, hasText } from '../renderer/src/pages/products/goal-ideas'
 import { applySiteProposal, proposalFits, siteProposalNote } from '../renderer/src/pages/products/site-proposal'
+import { canApplyPost, postFormEmpty, postUndoable, showPostHelper } from '../renderer/src/pages/review/post-draft'
 
 const READY = { id: 'claude', ready: true, detail: 'ok', label: 'Claude Code' }
 const base: BlockFacts = { productId: 'p1', needsPassport: false, approved: false, engineId: 'claude', engines: [READY], ready: true }
@@ -125,5 +126,37 @@ describe('fill from the website', () => {
     const none = applySiteProposal({ name: 'A', websiteUrl: 'x.test', description: 'B' }, proposal)
     expect(none.form).toMatchObject({ name: 'A', description: 'B' })
     expect(siteProposalNote(none)).toBe('Kept what you wrote. Clear a field to let the site fill it.')
+  })
+})
+
+describe('"Draft with AI" for a new publication', () => {
+  const none = { title: '', text: '' }
+  const wrote = { title: 'How a chart is built', text: 'It needs a birth date.' }
+
+  it('is offered while the title and the text are both empty, and not once the owner has written something', () => {
+    expect(postFormEmpty(none)).toBe(true)
+    expect(postFormEmpty({ title: '  ', text: '\n' })).toBe(true)
+    expect(postFormEmpty({ title: 'T', text: '' })).toBe(false)
+    expect(postFormEmpty({ title: '', text: 'x' })).toBe(false)
+  })
+
+  it('puts the AI\'s post in only if neither field changed while it worked (typing wins)', () => {
+    expect(canApplyPost(none, none)).toBe(true)
+    expect(canApplyPost(none, { title: 'T', text: '' })).toBe(false)
+    expect(canApplyPost(none, { title: '', text: 'x' })).toBe(false)
+  })
+
+  it('offers Undo only while both fields hold exactly what the AI wrote', () => {
+    expect(postUndoable(wrote, wrote)).toBe(true)
+    expect(postUndoable({ ...wrote, text: `${wrote.text} More.` }, wrote)).toBe(false)
+    expect(postUndoable({ ...wrote, title: 'Mine' }, wrote)).toBe(false)
+    expect(postUndoable(wrote, null)).toBe(false)
+  })
+
+  it('stays on the screen while it is offered or while its note and Undo are', () => {
+    expect(showPostHelper(none, null)).toBe(true)
+    expect(showPostHelper(wrote, wrote)).toBe(true)
+    expect(showPostHelper(wrote, null)).toBe(false)
+    expect(showPostHelper({ ...wrote, text: 'edited' }, wrote)).toBe(false)
   })
 })

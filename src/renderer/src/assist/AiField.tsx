@@ -6,36 +6,38 @@ import type { Blocked } from './block'
 import { canApply, canUndo, fieldAction, type AppliedText } from './field-logic'
 import './assist.css'
 
+/** What the AI is asked for one text: the text as it is, and the owner's wish when the field is filled. */
+export interface AskRequest {
+  current: string
+  instruction: string | undefined
+}
+
 /**
  * A text field with the AI beside its label: "Suggest with AI" writes an empty field, "Improve with AI" rewrites a filled one (the
  * owner can say what to change). The text goes into the field, never into storage: the owner reads it and saves the form. "Undo"
  * puts back what was there, for as long as the owner has not typed over the AI's text (the owner's typing is never replaced silently).
- * The AI control is never the filled button (V-10).
+ * The AI control is never the filled button (V-10). `ask` is what makes the text: assist.refine for a field of a form (AiField below),
+ * drafts.refine for the title or the text of a draft.
  */
-export function AiField({
+export function AiTextField({
   label,
   hint,
-  field,
-  productId,
-  channelId,
   value,
   onChange,
-  around,
+  ask,
   blocked,
+  disabled = false,
   testId,
   children
 }: {
   label: string
   hint?: string
-  field: AssistField
-  productId?: string
-  /** For a channel's text: the channel it is written for. */
-  channelId?: string
   value: string
   onChange: (text: string) => void
-  /** What the owner wrote in the other fields of the same form, so the AI fits the field into it. */
-  around?: { label: string; text: string }[]
+  ask: (request: AskRequest) => Promise<string>
   blocked: Blocked | null
+  /** The form is busy with something else (saving): the AI waits; the control stays where it is. */
+  disabled?: boolean
   testId: string
   /** The input itself; it takes the id that ties it to the label. */
   children: (id: string) => ReactNode
@@ -64,7 +66,7 @@ export function AiField({
     const before = value
     hadFocus.current = root.current?.contains(document.activeElement) ?? false
     setSkipped(false)
-    const result = await call('assist.refine', { field, productId, channelId, current: value, instruction: action.kind === 'improve' ? wish : undefined, around })
+    const text = await ask({ current: value, instruction: action.kind === 'improve' ? wish : undefined })
     if (!mounted.current) return // the form was closed: nothing is left to fill
     setWishOpen(false)
     setWish('')
@@ -72,8 +74,8 @@ export function AiField({
       setSkipped(true) // typing meanwhile wins; the AI's text is dropped, not merged
       return
     }
-    onChange(result.text)
-    setApplied({ text: result.text, before })
+    onChange(text)
+    setApplied({ text, before })
   })
 
   useEffect(() => {
@@ -96,7 +98,7 @@ export function AiField({
         <Button
           variant="secondary"
           onClick={start}
-          disabled={blocked !== null || state.busy}
+          disabled={blocked !== null || state.busy || disabled}
           aria-label={`${state.busy ? 'Thinking…' : action.label}: ${label}`}
           aria-describedby={blocked ? `${id}-blocked` : undefined}
           data-testid={`${testId}-ai`}
@@ -158,5 +160,42 @@ export function AiField({
         </div>
       )}
     </div>
+  )
+}
+
+/** A field of a form the AI can write or improve through assist.refine (a product's or a channel's text). */
+export function AiField({
+  label,
+  hint,
+  field,
+  productId,
+  channelId,
+  value,
+  onChange,
+  around,
+  blocked,
+  testId,
+  children
+}: {
+  label: string
+  hint?: string
+  field: AssistField
+  productId?: string
+  /** For a channel's text: the channel it is written for. */
+  channelId?: string
+  value: string
+  onChange: (text: string) => void
+  /** What the owner wrote in the other fields of the same form, so the AI fits the field into it. */
+  around?: { label: string; text: string }[]
+  blocked: Blocked | null
+  testId: string
+  /** The input itself; it takes the id that ties it to the label. */
+  children: (id: string) => ReactNode
+}) {
+  const ask = async ({ current, instruction }: AskRequest): Promise<string> => (await call('assist.refine', { field, productId, channelId, current, instruction, around })).text
+  return (
+    <AiTextField label={label} hint={hint} value={value} onChange={onChange} ask={ask} blocked={blocked} testId={testId}>
+      {children}
+    </AiTextField>
   )
 }
