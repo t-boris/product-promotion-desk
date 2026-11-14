@@ -1,7 +1,7 @@
 // "Fill from the website": the AI reads the front page of a site (and a few related pages) and proposes the product's name and a short
 // description, so the owner does not type what the site already says. The site text is UNTRUSTED (it may carry instructions): it sits in a
-// delimited data block, the engine runs without tools, and the answer is cut to the field rules. Nothing is stored; the owner reads the
-// proposal, changes it and creates the product.
+// delimited data block, an engine that could use tools on this computer is never shown a site (as with the site profile of a channel), and
+// the answer is cut to the field rules. Nothing is stored; the owner reads the proposal, changes it and creates the product.
 
 import { ApiError } from '../../shared/api'
 import type { Core } from '../core'
@@ -108,6 +108,10 @@ export class SiteProductService {
   async draft(args: { url: unknown }): Promise<SiteProductResult | null> {
     const websiteUrl = normalizeHttpUrl(typeof args.url === 'string' ? args.url : '')
     const engine = await readyEngine(this.core)
+    // A page of the internet is shown only to an engine that cannot touch this computer: a hostile page could tell a tool-capable one to read files.
+    if (!engine.toolFree) {
+      throw new ApiError('engine_unavailable', `${engine.label} can use tools on this computer, so it is not shown a website. Choose a tool-free engine in Settings, or type the name and a description yourself.`)
+    }
     const site = await this.read(websiteUrl)
     if (site.pages.length === 0) {
       const why = site.failures[0]?.error

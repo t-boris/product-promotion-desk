@@ -21,6 +21,8 @@ export interface FieldSpec {
    * something to do). `credentials`: only a credential (text about the owner's own product may say "guarantee" or "automatic").
    */
   guard: 'all' | 'credentials'
+  /** `lines` only: a comma also separates two items (the form that saves the field splits it so), so the answer is split on commas too. */
+  splitOnCommas: boolean
 }
 
 export const FIELDS: Record<AssistField, FieldSpec> = {
@@ -31,7 +33,8 @@ export const FIELDS: Record<AssistField, FieldSpec> = {
     max: 300,
     maxLines: 1,
     scope: 'product',
-    guard: 'all'
+    guard: 'all',
+    splitOnCommas: false
   },
   'goal.metrics': {
     label: 'goal success metrics',
@@ -41,7 +44,8 @@ export const FIELDS: Record<AssistField, FieldSpec> = {
     max: 100,
     maxLines: 4,
     scope: 'product',
-    guard: 'all'
+    guard: 'all',
+    splitOnCommas: false
   },
   'goal.notes': {
     label: 'goal notes',
@@ -50,7 +54,8 @@ export const FIELDS: Record<AssistField, FieldSpec> = {
     max: 1000,
     maxLines: 1,
     scope: 'product',
-    guard: 'all'
+    guard: 'all',
+    splitOnCommas: false
   },
   'product.description': {
     label: 'product description',
@@ -59,7 +64,8 @@ export const FIELDS: Record<AssistField, FieldSpec> = {
     max: 600,
     maxLines: 1,
     scope: 'product',
-    guard: 'credentials'
+    guard: 'credentials',
+    splitOnCommas: false
   },
   'channel.style': {
     label: 'style of replies in this channel',
@@ -69,7 +75,8 @@ export const FIELDS: Record<AssistField, FieldSpec> = {
     max: 400,
     maxLines: 1,
     scope: 'channel',
-    guard: 'all'
+    guard: 'credentials',
+    splitOnCommas: false
   },
   'channel.topics': {
     label: 'topics to watch in this channel',
@@ -78,7 +85,8 @@ export const FIELDS: Record<AssistField, FieldSpec> = {
     max: 80,
     maxLines: 8,
     scope: 'channel',
-    guard: 'all'
+    guard: 'all',
+    splitOnCommas: true
   },
   'channel.queries': {
     label: 'search queries for this channel',
@@ -87,7 +95,8 @@ export const FIELDS: Record<AssistField, FieldSpec> = {
     max: 80,
     maxLines: 8,
     scope: 'channel',
-    guard: 'all'
+    guard: 'all',
+    splitOnCommas: true
   }
 }
 

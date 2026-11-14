@@ -103,7 +103,8 @@ export class EngineRegistry {
     const statuses = await this.checkAll()
     const ready = this.all().filter((engine) => statuses.some((status) => status.id === engine.id && status.installed && status.ready))
     const pick = ready.find((engine) => engine.toolFree) ?? ready[0]
-    if (!pick) return null
+    // The checks take a moment: a choice the owner made in the meantime stands.
+    if (!pick || this.selected()) return null
     this.settings.updateApp({ engineId: pick.id })
     return pick
   }

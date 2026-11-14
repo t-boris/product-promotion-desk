@@ -10,9 +10,12 @@ import { extractJson, JsonExtractError } from '../passports/ai-json'
 import { redactSecrets } from '../passports/redact'
 import { collapseWhitespace, truncate } from '../passports/text'
 
-/** Puts untrusted text into a named block and makes sure it cannot close or reopen the block from the inside. */
+/**
+ * Puts untrusted text into a named block and makes sure it cannot close or reopen the block from the inside, nor forge another
+ * block of the prompt (a closing tag of the product data, an opening tag of the owner's wish): every tag-like "<x" or "</x" is defused.
+ */
 export function fence(tag: string, body: string): string {
-  const safe = body.replace(new RegExp(`<(/?${tag})`, 'gi'), '&lt;$1')
+  const safe = body.replace(/<(\/?[A-Za-z])/g, '&lt;$1')
   return `<${tag}>\n${safe}\n</${tag}>`
 }
 
@@ -22,15 +25,24 @@ export function oneLine(text: string, max: number): string {
   return truncate(collapseWhitespace(text.replace(/[\u0000-\u001f\u007f]+/g, ' ')), max)
 }
 
+/**
+ * Removes the marks of markup a model adds (tags, links, emphasis, headings at the start of a line, quote marks) and keeps the characters a
+ * product text really uses: "C#", "#1", "< 2 s", "~5 minutes".
+ */
+export function stripMarkup(raw: string): string {
+  return raw
+    .replace(/<\/?[A-Za-z][^>]*>/g, ' ')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/`+/g, '')
+    .replace(/\*+/g, '')
+    .replace(/~~/g, '')
+    .replace(/^[ \t]*#{1,6}[ \t]+/gm, '')
+    .replace(/^[ \t]*>+[ \t]?/gm, '')
+}
+
 /** Plain words only: no markup, no emphasis marks, one line, cut at a word boundary to at most `max` characters. */
 export function plainText(raw: string, max: number): string {
-  const text = oneLine(
-    raw
-      .replace(/<[^>]*>/g, ' ')
-      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-      .replace(/[`*#>~]+/g, ' '),
-    10_000
-  )
+  const text = oneLine(stripMarkup(raw), 10_000)
   if (text.length <= max) return text
   const cut = text.slice(0, max - 1)
   const lastSpace = cut.lastIndexOf(' ')

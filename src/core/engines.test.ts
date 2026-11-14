@@ -38,6 +38,19 @@ describe('EngineRegistry.autoSelect', () => {
     expect((await registry.autoSelect())?.id).toBe('codex')
   })
 
+  it('does not replace a choice the owner makes while the engines are being checked', async () => {
+    const codex = new FakeEngine('codex', 'Codex')
+    const claude = new FakeEngine('claude', 'Claude Code')
+    const { registry, settings } = await setup([claude, codex])
+    const check = claude.check.bind(claude)
+    claude.check = async () => {
+      settings.updateApp({ engineId: 'codex' })
+      return check()
+    }
+    expect(await registry.autoSelect()).toBeNull()
+    expect(settings.app().engineId).toBe('codex')
+  })
+
   it('never replaces a choice the owner made, even while that engine is not ready', async () => {
     const codex = new FakeEngine('codex', 'Codex')
     codex.installed = false

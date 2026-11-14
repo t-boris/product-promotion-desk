@@ -46,6 +46,14 @@ describe('products.draftFromSite', () => {
     expect(urls).toEqual([])
   })
 
+  it('never shows a website to an engine that can use tools on this computer', async () => {
+    const { w, service, urls } = await setup(reading([page()]))
+    w.t.engine.toolFree = false
+    await expect(service.draft({ url: 'natal.example.com' })).rejects.toMatchObject({ code: 'engine_unavailable', message: expect.stringContaining('can use tools on this computer') })
+    expect(urls).toEqual([])
+    expect(w.t.engine.calls).toEqual([])
+  })
+
   it('says so when the site cannot be read, and does not ask the AI', async () => {
     const { w, service } = await setup(reading([], [{ url: 'https://down.example.com/', error: 'The site did not answer in time.' }]))
     await expect(service.draft({ url: 'https://down.example.com' })).rejects.toMatchObject({ code: 'site_unreadable', message: expect.stringContaining('did not answer in time') })

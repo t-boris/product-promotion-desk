@@ -219,17 +219,18 @@ export interface ApiMethods {
    */
   'goals.suggest': [{ productId: Id; hint?: string; avoid?: string[] }, GoalIdea | null]
   /**
+   * Reads the front page of the site at `url` (and a few related pages) and has the AI propose the product's name and a short description.
+   * Null when the site says nothing usable about a product. Nothing is saved: the owner reads the proposal and creates the product.
+   * Refused with site_unreadable when the site cannot be read, with engine_unavailable when no engine is ready or the engine can use tools
+   * on this computer (such an engine is never shown a website), and like every AI help otherwise.
+   */
+  'products.draftFromSite': [{ url: string }, { name: string; description: string; websiteUrl: string } | null]
+  /**
    * The AI writes the text of one field (`current` empty) or improves it (`current` filled, steered by the owner's `instruction`).
    * A product field takes `productId`; a channel field takes `channelId` (the product is the channel's). `around` is what the owner already
    * wrote in the other fields of the same form. Nothing is saved: the owner reads the text and
    * saves it with the form. Refused like every AI help: engine_unavailable, and not_found or invalid_input for a bad product or field.
    */
-  /**
-   * Reads the front page of the site at `url` (and a few related pages) and has the AI propose the product's name and a short description.
-   * Null when the site says nothing usable about a product. Nothing is saved: the owner reads the proposal and creates the product.
-   * Refused with site_unreadable when the site cannot be read, and like every AI help otherwise.
-   */
-  'products.draftFromSite': [{ url: string }, { name: string; description: string; websiteUrl: string } | null]
   'assist.refine': [{ field: AssistField; productId?: Id; channelId?: Id; current: string; instruction?: string; around?: { label: string; text: string }[] }, { text: string }]
   /**
    * Reads the site at `url` through the account's browser (read-only) and has the AI prepare a draft profile for the
