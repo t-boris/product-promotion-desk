@@ -66,6 +66,7 @@ export function missionHosts(...urls: string[]): string[] {
  */
 export class MissionAuthority implements PostAuthority {
   committed = false
+  sealed = false
   readonly content: ApprovedContent
   private readonly typedHash: string
 
@@ -86,7 +87,12 @@ export class MissionAuthority implements PostAuthority {
     this.typedHash = contentHash({ title: content.title, text: content.text, link: content.link, attachments: typed.attachments }, { id: grant.account.id, identity: grant.account.identity }, content.destination)
   }
 
+  seal(): void {
+    this.sealed = true
+  }
+
   async lease<T>(use: (lease: SubmitLease) => Promise<T>): Promise<LeaseResult<T>> {
+    if (this.sealed) return { ok: false, reason: 'The mission is over; nothing is submitted any more.' }
     if (this.committed) return { ok: false, reason: 'The control was already pressed; nothing more is submitted in this mission.' }
     // A fresh ticket for the attempt that is running, after the gate has looked at everything that can change meanwhile.
     const renewal = this.gate.renewTicket(this.grant, this.automatic)
@@ -102,6 +108,8 @@ export class MissionAuthority implements PostAuthority {
     const lease: SubmitLease = {
       ticket,
       commit: () => {
+        // The last word before a press: a mission that was ended meanwhile (Stop, the engine, the time) presses nothing, however far this step got.
+        if (this.sealed) throw new Error('The mission is over; nothing is pressed.')
         if (this.committed) throw new Error('The control was already pressed.')
         this.committed = true
       },

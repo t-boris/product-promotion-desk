@@ -290,6 +290,38 @@ describe('the ticket of a submit is bound to exactly this content, account and d
     expect(world.connector.published).toHaveLength(1)
   })
 
+  it('presses nothing once the mission is sealed (Stop, the engine ended): no ticket for a new lease, and a lease already given cannot commit', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    const issue = vi.spyOn(world.core.tickets, 'issue')
+    let commitRefused = ''
+    let again: { ok: boolean } | null = null
+    let issuedAfterSeal = -1
+    useMissions(async (request) => {
+      await request.authority.lease(async (lease) => {
+        request.authority.seal() // the owner pressed Stop while this submit was typing
+        try {
+          lease.commit()
+        } catch (error) {
+          commitRefused = (error as Error).message
+        }
+      })
+      const before = issue.mock.calls.length
+      again = await request.authority.lease(async () => undefined)
+      issuedAfterSeal = issue.mock.calls.length - before
+    })
+
+    const action = await sending().send(opp.id)
+
+    expect(commitRefused).toContain('over')
+    expect(again).toMatchObject({ ok: false })
+    expect(issuedAfterSeal).toBe(0) // the gate was not even asked
+    // Nothing was pressed, so the answer is a definite failure, and it stays one.
+    expect(action.state).toBe('failed')
+    expect(actionRow(action.id).error).toContain('Nothing was submitted')
+    expect(world.connector.published).toEqual([])
+  })
+
   it('lets a mission press at most once even when the page did not take the first press back (commit is taken back only by the step that knows)', async () => {
     world = makeWorld()
     const opp = await world.readyReply()

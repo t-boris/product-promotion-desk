@@ -633,6 +633,84 @@ describe('browser_submit stops without pressing when the form is not as approved
   })
 })
 
+describe('stopping a submit that is running', () => {
+  const stopped = { isError: true, text: expect.stringContaining('The owner stopped this task') }
+  const arm = (): { abort: AbortController; t: Setup } => {
+    const abort = new AbortController()
+    return { abort, t: setup(REPLY, { signal: abort.signal }) }
+  }
+
+  it('does not press when the owner pressed Stop while the application was looking at the page just before the press', async () => {
+    const { abort, t } = arm()
+    await look(t)
+    let looks = 0
+    // The second look of the submit is the one right before the press (the first is the one before the typing).
+    t.page.beforeRead = (script) => {
+      if (script.includes('agent-snapshot') && ++looks === 2) abort.abort()
+    }
+    expect(await submitReply(t)).toMatchObject(stopped)
+    expect(t.page.clicked).toEqual([])
+    expect(t.page.posted).toEqual([])
+    expect(t.authority.committed).toBe(false)
+    // The ticket of that submit is gone.
+    expect(() => t.tickets.assertValid(t.authority.issued[0] as SendTicket)).toThrow()
+  })
+
+  it('does not type the rest of the content after Stop, and presses nothing', async () => {
+    const abort = new AbortController()
+    const t = setup(POST, { signal: abort.signal })
+    await look(t)
+    t.page.beforeStep = (step) => {
+      if (step.do === 'type' && step.ref === 'e2') abort.abort()
+    }
+    expect(await submitPost(t)).toMatchObject(stopped)
+    expect(t.page.steps.filter((s) => s.step.do === 'type').map((s) => s.step)).toEqual([{ do: 'type', ref: 'e2', text: POST.title }])
+    expect(t.page.clicked).toEqual([])
+    expect(t.authority.committed).toBe(false)
+  })
+
+  it('does not start the typing when Stop came while it waited for its turn, or for the pause between actions', async () => {
+    const { abort, t } = arm()
+    await look(t)
+    await t.toolbox.call('browser_navigate', { url: 'https://fake.test/r/test/comments/abc/slug/' })
+    // The submit queues behind another call, and Stop comes while it waits.
+    const slow = t.toolbox.call('browser_wait_for', { ms: 10 })
+    const queued = submitReply(t)
+    abort.abort()
+    await slow
+    expect(await queued).toMatchObject(stopped)
+    expect(t.page.steps).toEqual([])
+    expect(t.authority.leases).toBe(0)
+  })
+
+  it('does not press when the mission was ended meanwhile (the engine ended or died): the authority is sealed, and its answer is what counts', async () => {
+    const t = setup()
+    await look(t)
+    let looks = 0
+    t.page.beforeRead = (script) => {
+      if (script.includes('agent-snapshot') && ++looks === 2) t.authority.seal()
+    }
+    expect(await submitReply(t)).toMatchObject({ isError: true, text: expect.stringContaining('This mission is over') })
+    expect(t.page.clicked).toEqual([])
+    expect(t.authority.committed).toBe(false)
+    // Every call after the end is refused, looking included: nothing is going on any more.
+    expect(await look(t)).toMatchObject({ isError: true, text: expect.stringContaining('This mission is over') })
+    expect(await t.toolbox.call('browser_click', { ref: 'e5' })).toMatchObject({ isError: true })
+  })
+
+  it('still reports the press when Stop came after the point of no return: committed is the authority\'s word and it does not go back', async () => {
+    const { abort, t } = arm()
+    await look(t)
+    t.page.beforeStep = (step) => {
+      if (step.do === 'click') abort.abort()
+    }
+    const result = await submitReply(t)
+    expect(result.isError).toBeUndefined() // the press was made, and the call says so
+    expect(t.page.posted).toEqual([{ e1: REPLY.text }])
+    expect(t.authority.committed).toBe(true)
+  })
+})
+
 describe('pacing: a post mission does not act in milliseconds', () => {
   const during = async (t: Setup, work: () => Promise<unknown>): Promise<number[]> => {
     const before = t.sleeps.length

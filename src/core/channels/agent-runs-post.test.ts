@@ -6,6 +6,7 @@ import type { AgentRun } from '../../shared/types'
 import { AiError } from '../ports'
 import type { ApprovedContent, PostMissionOutcome, PostMissionRequest } from '../browser-agent/post-submit'
 import { TestAuthority } from '../browser-agent/post-test-helpers'
+import type { SendTicket } from '../ports'
 import { makeReadyWorld, type World } from './test-helpers'
 
 const REPLY: ApprovedContent = { kind: 'reply', title: null, text: 'Glad it helps. I work on Natal Mystic, so I am biased.', link: null, destination: 'https://fake.test/r/test/comments/abc/slug/def' }
@@ -271,5 +272,101 @@ describe('how a post mission ends: the authority says whether the control was pr
       throw new Error('the engine crashed after the press')
     })
     expect(await run(w, request)).toMatchObject({ ended: 'error', committed: true, error: 'the engine crashed after the press' })
+  })
+})
+
+describe('a mission that ends while a submit of the AI is still running', () => {
+  /** A page that answers a step of this kind only when the test lets it: a submit caught in the middle of its work. */
+  function slowStep(w: World, kind: 'type' | 'click') {
+    const page = w.t.browser.page(w.account.id)
+    const original = page.pageStep.bind(page)
+    let started = false
+    let open!: () => void
+    const gate = new Promise<void>((resolve) => (open = resolve))
+    page.pageStep = async (step, hosts) => {
+      if (step.do === kind) {
+        started = true
+        await gate
+      }
+      return original(step, hosts)
+    }
+    return { open, started: () => started }
+  }
+  const until = async (done: () => boolean): Promise<void> => {
+    for (let i = 0; i < 200 && !done(); i++) await tick()
+    expect(done()).toBe(true)
+  }
+  const pressed = (w: World): boolean => w.t.browser.page(w.account.id).steps.some((s) => s.step.do === 'click')
+
+  /** The AI starts browser_submit and is then killed (by Stop, by the time limit, by its own crash) without waiting for the answer. */
+  function startsASubmitThenDies(w: World, dies: Promise<void>, how: () => Error) {
+    const result: { submit: Promise<{ text: string; isError?: boolean }> | null } = { submit: null }
+    asTheAI(w, async (call) => {
+      await call('browser_snapshot')
+      result.submit = call('browser_submit', { text_ref: 'e1', submit_ref: 'e4' })
+      await dies
+      throw how()
+    })
+    return result
+  }
+
+  it('Stop: the submit does not press afterwards, so the answer "nothing was submitted" stays true', async () => {
+    const { w, authority, request } = await ready()
+    const typing = slowStep(w, 'type')
+    let kill!: () => void
+    const ai = startsASubmitThenDies(w, new Promise<void>((resolve) => (kill = resolve)), () => new AiError('cancelled', 'cancelled'))
+    const running = run(w, request)
+    await until(typing.started)
+
+    expect(await w.call('agent.stop', { accountId: w.account.id })).toMatchObject({ status: 'stopped' })
+    kill()
+    expect(await running).toMatchObject({ ended: 'stopped', committed: false })
+
+    // The page answers the typing now. The submit that was running finds the mission over and presses nothing.
+    typing.open()
+    expect(await ai.submit).toMatchObject({ isError: true })
+    await tick(5)
+    expect(authority.committed).toBe(false)
+    expect(pressed(w)).toBe(false)
+    expect(() => w.core.tickets.assertValid(authority.issued[0] as SendTicket)).toThrow()
+  })
+
+  it.each([
+    ['the time limit', () => new AiError('timeout', 'too slow'), 'timeout'],
+    ['a crash of the engine', () => new Error('the engine fell over'), 'error']
+  ] as const)('%s: the submit does not press afterwards either', async (_name, how, ended) => {
+    const { w, authority, request } = await ready()
+    const typing = slowStep(w, 'type')
+    let kill!: () => void
+    const ai = startsASubmitThenDies(w, new Promise<void>((resolve) => (kill = resolve)), how)
+    const running = run(w, request)
+    await until(typing.started)
+
+    kill()
+    expect(await running).toMatchObject({ ended, committed: false })
+
+    typing.open()
+    expect(await ai.submit).toMatchObject({ isError: true, text: expect.stringContaining('over') })
+    await tick(5)
+    expect(authority.committed).toBe(false)
+    expect(pressed(w)).toBe(false)
+  })
+
+  it('Stop after the press began: the control was pressed, and the application says so (the send flow then reads the page)', async () => {
+    const { w, authority, request } = await ready()
+    const press = slowStep(w, 'click')
+    let kill!: () => void
+    const ai = startsASubmitThenDies(w, new Promise<void>((resolve) => (kill = resolve)), () => new AiError('cancelled', 'cancelled'))
+    const running = run(w, request)
+    await until(press.started)
+
+    await w.call('agent.stop', { accountId: w.account.id })
+    kill()
+    expect(await running).toMatchObject({ ended: 'stopped', committed: true })
+
+    press.open()
+    await ai.submit
+    expect(authority.committed).toBe(true)
+    expect(pressed(w)).toBe(true)
   })
 })

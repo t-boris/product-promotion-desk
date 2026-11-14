@@ -8,6 +8,7 @@ import type { ApprovedContent, LeaseResult, PostAuthority, SubmitLease } from '.
 
 export class TestAuthority implements PostAuthority {
   committed = false
+  sealed = false
   leases = 0
   refuse: string | null = null
   readonly issued: SendTicket[] = []
@@ -16,7 +17,11 @@ export class TestAuthority implements PostAuthority {
     readonly content: ApprovedContent,
     private readonly accountId = 'acc'
   ) {}
+  seal(): void {
+    this.sealed = true
+  }
   async lease<T>(use: (lease: SubmitLease) => Promise<T>): Promise<LeaseResult<T>> {
+    if (this.sealed) return { ok: false, reason: 'the mission is over' }
     if (this.committed) return { ok: false, reason: 'the control was already pressed' }
     if (this.refuse) return { ok: false, reason: this.refuse }
     this.leases += 1
@@ -25,6 +30,7 @@ export class TestAuthority implements PostAuthority {
     const lease: SubmitLease = {
       ticket,
       commit: () => {
+        if (this.sealed) throw new Error('the mission is over')
         if (this.committed) throw new Error('the control was already pressed')
         this.committed = true
       },

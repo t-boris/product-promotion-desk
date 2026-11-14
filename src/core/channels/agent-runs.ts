@@ -249,6 +249,9 @@ export class AgentRunService implements PostMissionService {
       post: { authority: request.authority, minGapMs: POST_MIN_GAP_MS, now: () => this.core.clock.now().getTime() }
     })
 
+    // The moment the owner presses Stop the mission loses the right to press, and so it does when the engine ends, however it ends: a
+    // call of the AI that is still running (a submit in the middle of its typing) cannot press after this run has read `committed`.
+    live.abort.signal.addEventListener('abort', () => request.authority.seal(), { once: true })
     let ended: PostMissionOutcome['ended'] = 'finished'
     let error: string | null = null
     try {
@@ -262,6 +265,7 @@ export class AgentRunService implements PostMissionService {
         error = caught instanceof TakeoverError || (caught instanceof ApiError && caught.code === 'browser_busy') ? BROWSER_BUSY : caught instanceof Error ? caught.message : String(caught)
       }
     } finally {
+      request.authority.seal()
       this.dropQuestion(live, 'The mission is over.')
     }
     if (live.run.status !== 'running') ended = 'stopped' // the owner stopped it (its run was finished by `stop`)

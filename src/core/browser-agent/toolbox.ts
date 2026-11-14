@@ -171,6 +171,7 @@ const postTools = (): McpTool[] => [
 const SUBMITTED =
   'The approved content was submitted: the control was pressed, and nothing more may be clicked, chosen or opened in this mission. Look at the page once (browser_snapshot or browser_wait_for), then call report_result. The application checks by itself that the text is on the site.'
 const STOPPED = 'The owner stopped this task. Stop now and do not call any tool.'
+const ENDED = 'This mission is over. Stop now and do not call any tool.'
 const FORM_HOLDS_TEXT =
   'A field on this page holds text, and nothing is clicked or chosen while a form holds text: a press of yours could publish it, and only browser_submit publishes. Open the page again with browser_navigate to start with an empty form. If the text comes back (the site keeps a draft, or the address fills the form in), call report_result with needs_owner and say so.'
 const FIELDS_UNREADABLE = 'The fields of the page could not be read, so nothing is clicked or chosen: it is not known that the form is empty. Look again with browser_snapshot, or call report_result with needs_owner.'
@@ -224,7 +225,8 @@ export class BrowserToolbox implements McpToolHost {
   }
 
   async call(name: string, args: Record<string, unknown>): Promise<McpToolResult> {
-    if (this.deps.signal?.aborted) return fail(STOPPED)
+    const over = this.overNow()
+    if (over) return fail(over)
     this.calls += 1
     if (this.calls > this.maxCalls) return fail(`This mission used all ${this.maxCalls} tool calls. Call report_result now.`)
     // A post mission has a smaller set of tools, and the set is kept here as well as in the list the AI is shown.
@@ -360,11 +362,16 @@ export class BrowserToolbox implements McpToolHost {
     if (this.deps.post) this.lastActionAt = (this.deps.post.now ?? Date.now)()
   }
 
+  /** Why nothing more is done in this mission (the owner pressed Stop, or the application ended it), in words for the AI, or null. */
+  private overNow(): string | null {
+    if (this.deps.signal?.aborted) return STOPPED
+    if (this.deps.post?.authority.sealed) return ENDED
+    return null
+  }
+
   /** What a post mission refuses to do on the page now, in words for the AI, or null. */
   private refusalNow(): string | null {
-    if (this.deps.signal?.aborted) return STOPPED
-    if (this.deps.post?.authority.committed) return SUBMITTED
-    return null
+    return this.overNow() ?? (this.deps.post?.authority.committed ? SUBMITTED : null)
   }
 
   /**
@@ -633,6 +640,9 @@ export class BrowserToolbox implements McpToolHost {
     const hosts = this.deps.hosts
     for (const part of parts) {
       await this.pace()
+      // The owner may have pressed Stop, or the mission may have ended, while this waited: nothing more is typed.
+      const over = this.overNow()
+      if (over) return { refused: over }
       const typed = await page.publishStep({ do: 'type', ref: part.ref, text: part.value }, hosts, lease.ticket)
       this.touched()
       if (typed.status !== 'done') return { refused: `the ${part.name} could not be typed (${typed.detail}). The form may hold part of it; do not click anything: look again, or open the page again with browser_navigate.` }
@@ -655,6 +665,9 @@ export class BrowserToolbox implements McpToolHost {
     if (control.disabled) return { refused: `"${label}" is disabled.` }
 
     await this.pace()
+    // No wait between this look and the point of no return: whatever ended the mission before it is seen here, and `commit` itself refuses after a seal.
+    const over = this.overNow()
+    if (over) return { refused: over }
     lease.commit()
     const pressed = await page.publishStep({ do: 'click', ref: submitRef }, hosts, lease.ticket)
     this.touched()

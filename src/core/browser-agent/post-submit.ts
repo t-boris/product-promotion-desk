@@ -26,7 +26,7 @@ export interface SubmitLease {
   readonly ticket: SendTicket
   /**
    * Called right before the control that publishes is pressed. From here the content may be out: the mission is over for everything but
-   * looking, and a second press is refused. Throws when a press has been attempted already.
+   * looking, and a second press is refused. Throws when a press has been attempted already, and when the authority was sealed.
    */
   commit(): void
   /** The press definitely did not happen (the page refused the step): the point of no return is taken back, another attempt is possible. */
@@ -40,6 +40,14 @@ export interface PostAuthority {
   readonly content: ApprovedContent
   /** Whether the control that publishes has been pressed, or may have been. */
   readonly committed: boolean
+  /** Whether the mission is over (the owner stopped it, the engine ended, it timed out or died): no ticket is given and no press is accepted from here on. */
+  readonly sealed: boolean
+  /**
+   * Ends the mission's right to press, at once and for good: `lease` refuses, and a lease already given can no longer `commit`. The point
+   * of no return can only move before this, so what `committed` says after it is final (a call still running when the engine ended, or
+   * when the owner pressed Stop, cannot press after the application has read it). Called by whoever ends the mission.
+   */
+  seal(): void
   /**
    * Asks the gate for a ticket for exactly this content, account and destination (a renewal, so everything is checked again now), hands
    * it to `use`, and revokes it when `use` ends, however it ends. Refuses (ok: false) when the gate refuses, when the ticket is not the
