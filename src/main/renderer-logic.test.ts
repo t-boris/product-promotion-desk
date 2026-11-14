@@ -2,9 +2,16 @@
 // tested from here. The modules under test import only src/shared, which keeps these plain unit tests.
 
 import { describe, expect, it } from 'vitest'
-import type { Account, AttentionItem, Channel, Product } from '../shared/types'
+import type { Account, AnalysisStage, AttentionItem, Channel, Claim, Product } from '../shared/types'
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from '../renderer/src/menu-state'
 import { fixLinkFor } from '../renderer/src/pages/attention-links'
+import { startSteps } from '../renderer/src/pages/attention-start'
+import { splitEngineDetail } from '../renderer/src/pages/engine-detail'
+import { describeSources, planStages, progressOf } from '../renderer/src/pages/products/analysis-plan'
+import { approvableClaims } from '../renderer/src/pages/products/model'
+import { nextProductStep, passportStatus } from '../renderer/src/pages/products/product-status'
+import { isMirroredSource } from '../renderer/src/pages/products/source-view'
+import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block'
 import { nextStep } from '../renderer/src/pages/channels/next-step'
 import { platformMismatch } from '../renderer/src/pages/channels/platform-hint'
 import { MOVED_PAGES, accountsNewHref, parseAccountsHash, parseHash, productHref } from '../renderer/src/route'
@@ -194,5 +201,112 @@ describe('status row words (BUG-003)', () => {
     expect(automationText({ paused: true })).toBe('Automation paused')
     expect(automationText(null)).toBe('Automation …')
     expect(automationText(undefined)).toBe('Automation …')
+  })
+})
+
+describe('QA clarity batch: what the screens say', () => {
+  const claim = (over: Partial<Claim>): Claim => ({
+    id: 'c', lineageId: 'l', passportVersionId: 'v', section: 'offer', text: 't', kind: 'fact', status: 'proposed', sources: [], verifiedAt: null, unconfirmedAvailability: false, conflictsWith: [], createdAt: '', updatedAt: '', ...over
+  })
+  const stage = (name: AnalysisStage['name'], status: AnalysisStage['status'] = 'pending'): AnalysisStage => ({ productId: 'p', name, status, detail: '', updatedAt: '' })
+  const ALL_STAGES = [stage('read_site'), stage('analyze_documents'), stage('scan_code'), stage('synthesize'), stage('find_contradictions')]
+
+  it('Attention: the getting-started steps follow the state of the app, and the first open one is the next step', () => {
+    const fresh = startSteps({ products: 0, accounts: 0, paused: true })
+    expect(fresh.map((x) => x.done)).toEqual([false, false, false])
+    expect(fresh.find((x) => !x.done)?.id).toBe('product')
+    const noAccount = startSteps({ products: 2, accounts: 0, paused: true })
+    expect(noAccount.find((x) => !x.done)).toMatchObject({ id: 'account', href: '#/accounts/new' })
+    expect(startSteps({ products: 2, accounts: 1, paused: true }).find((x) => !x.done)?.id).toBe('resume')
+    expect(startSteps({ products: 2, accounts: 1, paused: false }).every((x) => x.done)).toBe(true)
+    // Until the state of the automation arrived nothing claims it is running.
+    expect(startSteps({ products: 1, accounts: 1, paused: undefined }).find((x) => x.id === 'resume')?.done).toBe(false)
+  })
+
+  it('product header: approved, approved with a draft waiting, and not approved agree with the Passport tab', () => {
+    const none = { activePassportVersionId: null }
+    const active = { activePassportVersionId: 'v1' }
+    const draft = { status: 'draft' as const, version: 2 }
+    const claims = [claim({ status: 'approved' }), claim({ id: 'd' }), claim({ id: 'e' })]
+    expect(passportStatus(active, { status: 'approved', version: 1 }, claims)).toEqual({ tone: 'good', label: 'Passport approved' })
+    expect(passportStatus(active, draft, claims)).toMatchObject({ tone: 'info', label: 'Passport approved', detail: 'Draft in progress: 2 to review' })
+    expect(passportStatus(none, { status: 'draft', version: 1 }, claims)).toMatchObject({ tone: 'warn', label: 'No approved passport', detail: 'Draft: 1 approved, 2 to review' })
+    expect(passportStatus(none, null, [])).toEqual({ tone: 'warn', label: 'No approved passport' })
+  })
+
+  it('product list: the next step goes passport, goal, channel', () => {
+    expect(nextProductStep({ activePassportVersionId: null, analysisStatus: 'idle', goals: [] })).toMatchObject({ tab: 'analysis' })
+    expect(nextProductStep({ activePassportVersionId: null, analysisStatus: 'complete', goals: [] })).toMatchObject({ tab: 'passport' })
+    expect(nextProductStep({ activePassportVersionId: 'v', analysisStatus: 'complete', goals: [] })).toMatchObject({ tab: 'goal' })
+    expect(nextProductStep({ activePassportVersionId: 'v', analysisStatus: 'complete', goals: [{ id: 'g', targetAction: 'a', successMetrics: [], notes: '' }] })).toMatchObject({ tab: 'channels' })
+  })
+
+  it('Analysis: a step with nothing to work on says why instead of "Waiting", and is not counted', () => {
+    const planned = planStages(ALL_STAGES, [{ kind: 'text' }])
+    expect(planned.map((p) => p.needed)).toEqual([false, true, false, true, true])
+    expect(planned[0].reason).toBe('No website to read.')
+    expect(planned[2].reason).toBe('No project folder to scan.')
+    expect(progressOf(planned)).toEqual({ done: 0, total: 3 })
+    // With every kind of source all five steps apply.
+    expect(progressOf(planStages(ALL_STAGES, [{ kind: 'url' }, { kind: 'document' }, { kind: 'code_folder' }])).total).toBe(5)
+    // A step that already ran keeps what the core says, even without a source of its kind now.
+    const ran = planStages([stage('read_site', 'done'), ...ALL_STAGES.slice(1)], [{ kind: 'text' }])
+    expect(ran[0].needed).toBe(true)
+    expect(progressOf(ran).done).toBe(1)
+  })
+
+  it('Analysis: says what will be read', () => {
+    expect(describeSources([])).toBe('nothing yet')
+    expect(describeSources([{ kind: 'text' }, { kind: 'text' }, { kind: 'url' }])).toBe('1 website, 2 texts')
+    expect(describeSources([{ kind: 'code_folder' }])).toBe('1 project folder')
+  })
+
+  it('Sources: only the description and the website of the product are marked as mirrored, a text of the owner never', () => {
+    const product = { websiteUrl: 'https://a.example/', description: 'About it' }
+    expect(isMirroredSource({ kind: 'text', ref: 'About it', label: 'Description' }, product)).toBe(true)
+    expect(isMirroredSource({ kind: 'text', ref: 'About it', label: 'My notes' }, product)).toBe(false)
+    expect(isMirroredSource({ kind: 'url', ref: 'https://a.example/', label: 'a.example' }, product)).toBe(true)
+    expect(isMirroredSource({ kind: 'url', ref: 'https://b.example/', label: 'b' }, product)).toBe(false)
+    expect(isMirroredSource({ kind: 'text', ref: 'x', label: 'Description' }, { websiteUrl: null, description: null })).toBe(false)
+  })
+
+  it('Passport: "Approve all" takes proposed facts and assumptions, and leaves what needs a look', () => {
+    const list = [
+      claim({ id: 'fact' }),
+      claim({ id: 'guess', kind: 'assumption' }),
+      claim({ id: 'unknown', kind: 'unknown' }),
+      claim({ id: 'conflict', kind: 'contradiction' }),
+      claim({ id: 'code', unconfirmedAvailability: true }),
+      claim({ id: 'done', status: 'approved' }),
+      claim({ id: 'no', status: 'rejected' })
+    ]
+    const { approve, needLook } = approvableClaims(list)
+    expect(approve.map((c) => c.id)).toEqual(['fact', 'guess'])
+    expect(needLook.map((c) => c.id)).toEqual(['unknown', 'conflict', 'code'])
+  })
+
+  it('Settings: an engine status is split into lines, and "not used for automatic replies" is flagged as a limit', () => {
+    const codex = splitEngineDetail(
+      'Codex 0.169.0 is installed and answers. Writing: not tool-free (it can read files on this computer), so it is not used for automatic replies. Account missions: it works the account’s browser with full access.'
+    )
+    expect(codex.summary).toBe('Codex 0.169.0 is installed and answers.')
+    expect(codex.writing).toMatch(/^Writing: not tool-free/)
+    expect(codex.missions).toMatch(/^Account missions: /)
+    expect(codex.limits).toBe(true)
+    const claude = splitEngineDetail('Claude Code 2.1.325 is installed and answers. Writing: tool-free, it can only return text. Account missions: it works the account’s browser with full access.')
+    expect(claude.limits).toBe(false)
+    expect(splitEngineDetail('Codex was not found.')).toEqual({ summary: 'Codex was not found.', writing: null, missions: null, limits: false })
+  })
+
+  it('Channels (BUG-009): the reason the AI buttons are off names the place that fixes it', () => {
+    const engines = [{ id: 'codex', ready: true, detail: '', label: 'Codex' }, { id: 'claude', ready: false, detail: 'Claude Code was not found.', label: 'Claude Code' }]
+    const base = { productId: 'p1', approved: true, engineId: 'codex', engines, ready: true }
+    expect(suggestionBlock(base)).toBeNull()
+    expect(suggestionBlock({ ...base, approved: false })).toMatchObject({ text: 'Approve the product passport first so the suggestions fit it.', fix: { href: '#/products/p1/passport' } })
+    expect(suggestionBlock({ ...base, engineId: null })).toMatchObject({ text: 'Choose an AI engine in Settings first.', fix: { href: '#/settings' } })
+    expect(suggestionBlock({ ...base, engineId: 'claude' })).toMatchObject({ text: 'Claude Code was not found.', fix: { href: '#/settings' } })
+    // Nothing is blocked on a guess while the settings are still loading.
+    expect(suggestionBlock({ ...base, engineId: undefined, ready: false })).toBeNull()
+    expect(suggestionBlock({ ...base, approved: null })).toBeNull()
   })
 })
