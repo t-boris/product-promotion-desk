@@ -56,9 +56,13 @@ export function AiField({
       mounted.current = false
     }
   }, [])
+  // A button that is disabled while the AI works loses the focus to the page (lesson 138): give it back when the work ends.
+  const root = useRef<HTMLDivElement>(null)
+  const hadFocus = useRef(false)
 
   const [run, state] = useAction(async () => {
     const before = value
+    hadFocus.current = root.current?.contains(document.activeElement) ?? false
     setSkipped(false)
     const result = await call('assist.refine', { field, productId, channelId, current: value, instruction: action.kind === 'improve' ? wish : undefined, around })
     if (!mounted.current) return // the form was closed: nothing is left to fill
@@ -72,13 +76,19 @@ export function AiField({
     setApplied({ text: result.text, before })
   })
 
+  useEffect(() => {
+    if (state.busy || !hadFocus.current) return
+    hadFocus.current = false
+    if (document.activeElement === document.body) root.current?.querySelector<HTMLButtonElement>('.field-head button')?.focus()
+  }, [state.busy])
+
   const start = (): void => {
     if (action.kind === 'improve') setWishOpen((open) => !open)
     else void run()
   }
 
   return (
-    <div className="field ai-field" data-testid={`${testId}-field`}>
+    <div className="field ai-field" ref={root} data-testid={`${testId}-field`}>
       <div className="field-head">
         <label className="field-label" htmlFor={id}>
           {label}
