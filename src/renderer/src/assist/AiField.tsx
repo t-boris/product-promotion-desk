@@ -1,9 +1,9 @@
-import { useId, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import type { AssistField } from '../../../shared/types'
 import { call, useAction } from '../hooks'
 import { Button, ErrorNote, Hint } from '../ui'
 import type { Blocked } from './block'
-import { canUndo, fieldAction, type AppliedText } from './field-logic'
+import { canApply, canUndo, fieldAction, type AppliedText } from './field-logic'
 import './assist.css'
 
 /**
@@ -44,15 +44,32 @@ export function AiField({
   const [wishOpen, setWishOpen] = useState(false)
   const [wish, setWish] = useState('')
   const [applied, setApplied] = useState<AppliedText | null>(null)
+  const [skipped, setSkipped] = useState(false)
   const action = fieldAction(value)
+  // The field as it is when the answer arrives: the owner may keep typing while the AI works, and the form may be closed meanwhile.
+  const latest = useRef(value)
+  latest.current = value
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
 
   const [run, state] = useAction(async () => {
     const before = value
+    setSkipped(false)
     const result = await call('assist.refine', { field, productId, channelId, current: value, instruction: action.kind === 'improve' ? wish : undefined, around })
-    onChange(result.text)
-    setApplied({ text: result.text, before })
+    if (!mounted.current) return // the form was closed: nothing is left to fill
     setWishOpen(false)
     setWish('')
+    if (!canApply(before, latest.current)) {
+      setSkipped(true) // typing meanwhile wins; the AI's text is dropped, not merged
+      return
+    }
+    onChange(result.text)
+    setApplied({ text: result.text, before })
   })
 
   const start = (): void => {
@@ -66,7 +83,15 @@ export function AiField({
         <label className="field-label" htmlFor={id}>
           {label}
         </label>
-        <Button variant="secondary" onClick={start} disabled={blocked !== null || state.busy} data-testid={`${testId}-ai`} aria-expanded={action.kind === 'improve' ? wishOpen : undefined}>
+        <Button
+          variant="secondary"
+          onClick={start}
+          disabled={blocked !== null || state.busy}
+          aria-label={`${state.busy ? 'Thinking…' : action.label}: ${label}`}
+          aria-describedby={blocked ? `${id}-blocked` : undefined}
+          data-testid={`${testId}-ai`}
+          aria-expanded={action.kind === 'improve' ? wishOpen : undefined}
+        >
           {state.busy ? 'Thinking…' : action.label}
         </Button>
       </div>
@@ -97,11 +122,16 @@ export function AiField({
         </div>
       )}
       {blocked && (
-        <Hint tone="warn" data-testid={`${testId}-blocked`}>
+        <Hint tone="warn" id={`${id}-blocked`} data-testid={`${testId}-blocked`}>
           {blocked.text} <a href={blocked.fix.href}>{blocked.fix.label}</a>
         </Hint>
       )}
       <ErrorNote error={state.error} />
+      {skipped && (
+        <p className="hint" role="status" data-testid={`${testId}-skipped`}>
+          You changed the text while the AI was working, so its text was not used. Ask again to get it.
+        </p>
+      )}
       {applied && canUndo(value, applied) && (
         <div className="ai-undo" role="status" data-testid={`${testId}-undo-note`}>
           <span className="hint">The AI wrote this text. Check it before you save.</span>

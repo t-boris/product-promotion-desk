@@ -17,6 +17,11 @@ export function canUndo(value: string, applied: AppliedText | null): boolean {
   return applied !== null && value === applied.text
 }
 
+/** The AI's text is put into a field only if the field still holds what it held when the question was asked: typing meanwhile wins (lesson 84). */
+export function canApply(asked: string, now: string): boolean {
+  return asked === now
+}
+
 const MAX_AVOID = 20
 
 /** The ideas already shown, newest last, without repeats and bounded; the core asks the AI not to repeat them. */

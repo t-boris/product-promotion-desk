@@ -3,10 +3,10 @@
 
 import { describe, expect, it } from 'vitest'
 import { assistBlock, type BlockFacts } from '../renderer/src/assist/block'
-import { canUndo, fieldAction, ideaButtonLabel, rememberShown } from '../renderer/src/assist/field-logic'
+import { canApply, canUndo, fieldAction, ideaButtonLabel, rememberShown } from '../renderer/src/assist/field-logic'
 import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block'
 import { around, fieldsFromIdea, hasText } from '../renderer/src/pages/products/goal-ideas'
-import { applySiteProposal, siteProposalNote } from '../renderer/src/pages/products/site-proposal'
+import { applySiteProposal, proposalFits, siteProposalNote } from '../renderer/src/pages/products/site-proposal'
 
 const READY = { id: 'claude', ready: true, detail: 'ok', label: 'Claude Code' }
 const base: BlockFacts = { productId: 'p1', needsPassport: false, approved: false, engineId: 'claude', engines: [READY], ready: true }
@@ -47,6 +47,14 @@ describe('canUndo', () => {
     expect(canUndo('AI text', applied)).toBe(true)
     expect(canUndo('AI text, and more of mine', applied)).toBe(false)
     expect(canUndo('AI text', null)).toBe(false)
+  })
+})
+
+describe('canApply', () => {
+  it('puts the AI text into a field only if the owner did not type while it worked', () => {
+    expect(canApply('shorten this', 'shorten this')).toBe(true)
+    expect(canApply('shorten this', 'shorten this one')).toBe(false)
+    expect(canApply('', 'typed meanwhile')).toBe(false)
   })
 })
 
@@ -101,6 +109,11 @@ describe('fill from the website', () => {
     expect(applied.form).toEqual({ name: 'Natal Mystic', websiteUrl: 'https://natal.example.com/', description: 'Makes birth chart reports.' })
     expect(applied.filled).toEqual(['name', 'description'])
     expect(siteProposalNote(applied)).toBe('Filled the name and the description from the site. Check them before you create the product.')
+  })
+
+  it('uses a proposal only for the address it was read from', () => {
+    expect(proposalFits('natal.example.com', ' natal.example.com ')).toBe(true)
+    expect(proposalFits('natal.example.com', 'natal.example.org')).toBe(false)
   })
 
   it('never replaces what the owner typed', () => {

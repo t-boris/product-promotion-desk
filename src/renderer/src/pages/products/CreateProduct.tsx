@@ -1,9 +1,9 @@
-import { useId, useState, type FormEvent } from 'react'
+import { useId, useRef, useState, type FormEvent } from 'react'
 import type { Product } from '../../../../shared/types'
 import { useAssistBlock } from '../../assist/useAssistBlock'
 import { call, useAction } from '../../hooks'
 import { Button, Card, ErrorNote, Field, Hint, useOpenForm } from '../../ui'
-import { applySiteProposal, siteProposalNote } from './site-proposal'
+import { applySiteProposal, proposalFits, siteProposalNote } from './site-proposal'
 
 /**
  * A product starts from a website address and/or a description, and a name. The AI can read the site and fill the name and the description
@@ -17,15 +17,23 @@ export function CreateProduct({ onCreated, onCancel }: { onCreated: (product: Pr
   const [description, setDescription] = useState('')
   const [siteNote, setSiteNote] = useState<string | null>(null)
   const { blocked } = useAssistBlock()
+  // The form as it is when the answer arrives, not as it was when the question was asked: the owner may type while the AI reads the site.
+  const latest = useRef({ name, websiteUrl, description })
+  latest.current = { name, websiteUrl, description }
   const [create, state] = useAction((args: Parameters<typeof call<'products.create'>>[1]) => call('products.create', args))
   const [fillFromSite, filling] = useAction(async () => {
     setSiteNote(null)
-    const proposal = await call('products.draftFromSite', { url: websiteUrl })
+    const asked = websiteUrl
+    const proposal = await call('products.draftFromSite', { url: asked })
     if (!proposal) {
       setSiteNote('The site says nothing usable about a product. Type the name and a description yourself.')
       return
     }
-    const applied = applySiteProposal({ name, websiteUrl, description }, proposal)
+    if (!proposalFits(asked, latest.current.websiteUrl)) {
+      setSiteNote('You changed the address while the AI was reading the site, so its proposal was not used. Press "Fill from the website" again.')
+      return
+    }
+    const applied = applySiteProposal(latest.current, proposal)
     setName(applied.form.name)
     setWebsiteUrl(applied.form.websiteUrl)
     setDescription(applied.form.description)

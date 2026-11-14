@@ -24,6 +24,11 @@ export interface Applied {
 
 const isEmpty = (text: string): boolean => text.trim() === ''
 
+/** A proposal belongs to the address it was read from: if the owner changed the address while the AI read the site, it is not used. */
+export function proposalFits(askedUrl: string, currentUrl: string): boolean {
+  return askedUrl.trim() === currentUrl.trim()
+}
+
 export function applySiteProposal(form: ProductForm, proposal: SiteProposal): Applied {
   const filled: Filled[] = []
   const kept: Filled[] = []
