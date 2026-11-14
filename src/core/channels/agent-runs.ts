@@ -172,13 +172,22 @@ export class AgentRunService implements PostMissionService {
     if (this.runs.get(account.id)?.run.status === 'running') throw new ApiError('agent_running', `The AI is already working on ${account.label}.`)
   }
 
-  /** No run going on the account, and an engine that can work the browser and is ready: what every kind of mission needs first. */
-  private async readyEngine(account: Account): Promise<AiEngine> {
+  /**
+   * No run going on the account, and an engine that can work the browser and is ready: what every kind of mission needs first. A mission
+   * that publishes (`confined`) also needs an engine that can be held to the application's tools alone.
+   */
+  private async readyEngine(account: Account, confined = false): Promise<AiEngine> {
     this.assertIdle(account)
 
     const engine = this.core.engines.selected()
     if (!engine) throw new ApiError('no_engine', 'No AI engine is selected. Choose Claude Code or Codex in Settings.')
     if (!engine.supportsAgent) throw new ApiError('engine_cannot_drive', `${engine.label} cannot work the browser. Choose Claude Code or Codex in Settings (AI engine).`)
+    if (confined && !engine.confinesAgent) {
+      throw new ApiError(
+        'engine_cannot_confine',
+        `${engine.label} cannot be held to the browser tools alone (it can also run commands and read files), so it is not allowed to publish for you. Choose Claude Code in Settings (AI engine), or send through the connector.`
+      )
+    }
     if (!this.core.agentBridge) throw new ApiError('no_agent_bridge', 'The AI browser agent is not available in this build.')
     const status = await engine.check()
     if (!status.installed || !status.ready) throw new ApiError('engine_unavailable', status.detail || `${engine.label} is not available.`)
@@ -230,7 +239,7 @@ export class AgentRunService implements PostMissionService {
    */
   async run(request: PostMissionRequest): Promise<PostMissionOutcome> {
     const account = this.accounts.account(request.accountId)
-    const engine = await this.readyEngine(account)
+    const engine = await this.readyEngine(account, true)
     const spec = MISSIONS.post
     const live: Live = {
       abort: new AbortController(),

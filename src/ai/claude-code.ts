@@ -1,5 +1,8 @@
-import type { AiTask } from '../core/ports'
+import { AiError, type AiTask } from '../core/ports'
 import { CliEngine, type CliEngineOptions } from './cli-engine'
+
+/** A server name that is one entry of an allow-list: a space or a comma would make it several, a wildcard would make it more. */
+const PLAIN_SERVER_NAME = /^[A-Za-z0-9_-]+$/
 
 /**
  * Claude Code in print mode. The prompt goes to stdin and the answer comes back as plain text.
@@ -16,12 +19,22 @@ import { CliEngine, type CliEngineOptions } from './cli-engine'
  * An agent mission (`task.agent`, DEC-018) is a different run: the engine gets FULL ACCESS (`--dangerously-skip-permissions`, as MarkView
  * starts its agents) and only the application's MCP server (`--strict-mcp-config`, so the owner's other servers, among them other
  * browsers, are not loaded). `--mcp-config` takes several values, so it is the last option; the goal goes on stdin.
+ *
+ * The post mission (`task.agent.confined`) publishes for the owner, and what the engine reads on the pages is untrusted: there the engine has
+ * NO power but the application's tools. Three flags, each checked against `claude --help` and by a real run (Claude Code 2.1.325, a stand-in
+ * MCP server in an empty folder, the init event of `--output-format stream-json --verbose`):
+ *  - `--tools ""` removes every built-in tool (the init event listed only `mcp__<server>__<tool>`). It is the one that matters: in
+ *    `dontAsk` mode alone `ls` and a read of a file in the folder still ran, because read-only tools need no approval;
+ *  - `--allowedTools mcp__<server>` allows the tools of the application's server and nothing else: without it `dontAsk` denied the toolbox too;
+ *  - `--permission-mode dontAsk` denies whatever is not allowed, so a tool a future version adds despite `--tools ""` is refused, not asked.
+ * `--dangerously-skip-permissions` is not given. These flags and `confinesAgent` must change together.
  */
 export class ClaudeCodeEngine extends CliEngine {
   readonly id = 'claude' as const
   readonly label = 'Claude Code'
   readonly toolFree = true
   readonly supportsAgent = true
+  readonly confinesAgent = true
   protected readonly binaryName = 'claude'
 
   constructor(options: CliEngineOptions = {}) {
@@ -31,7 +44,7 @@ export class ClaudeCodeEngine extends CliEngine {
   protected buildArgs(task: AiTask): string[] {
     if (task.agent) {
       const config = { mcpServers: { [task.agent.server]: { command: task.agent.launch.command, args: task.agent.launch.args, env: task.agent.launch.env } } }
-      const args = ['-p', '--output-format', 'text', '--dangerously-skip-permissions', '--disable-slash-commands', '--no-session-persistence']
+      const args = ['-p', '--output-format', 'text', ...this.accessFlags(task.agent), '--disable-slash-commands', '--no-session-persistence']
       if (task.system) args.push('--system-prompt', task.system)
       return [...args, '--strict-mcp-config', '--mcp-config', JSON.stringify(config)]
     }
@@ -49,5 +62,12 @@ export class ClaudeCodeEngine extends CliEngine {
     ]
     if (task.system) args.push('--system-prompt', task.system)
     return args
+  }
+
+  /** What the engine may do besides calling the application's tools: everything (DEC-018), or, for a confined run, nothing at all. */
+  private accessFlags(agent: NonNullable<AiTask['agent']>): string[] {
+    if (!agent.confined) return ['--dangerously-skip-permissions']
+    if (!PLAIN_SERVER_NAME.test(agent.server)) throw new AiError('failed', 'The name of the tool server is not a plain name, so the engine cannot be held to its tools.')
+    return ['--tools', '', '--permission-mode', 'dontAsk', '--allowedTools', `mcp__${agent.server}`]
   }
 }

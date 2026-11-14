@@ -130,6 +130,13 @@ describe('what a mission needs before it starts', () => {
     expect(await w.refusal('agent.start', { accountId: w.account.id, kind: 'signup' })).toBe('no_password')
   })
 
+  it('does not need an engine that can be held to the browser tools: only the mission that publishes does', async () => {
+    const w = await ready()
+    w.t.engine.confinesAgent = false
+    expect(await w.call('agent.canStart', { accountId: w.account.id, kind: 'signup' })).toEqual({ ready: true, reason: null })
+    expect(await w.call('agent.canStart', { accountId: w.account.id, kind: 'profile' })).not.toMatchObject({ reason: expect.stringContaining('browser tools alone') })
+  })
+
   it('needs an engine that can work the browser, and says which ones can', async () => {
     const w = await ready()
     w.t.engine.supportsAgent = false

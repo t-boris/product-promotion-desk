@@ -225,6 +225,90 @@ describe('agent missions (DEC-018)', () => {
   })
 })
 
+describe('the post mission: the engine has no power but the application\'s tools (H-A)', () => {
+  const CONFINED = { server: 'ppd', launch: LAUNCH, confined: true }
+  const argvOf = (): string[] => read('argv').split('\n').filter(Boolean).map((a) => a.slice(1, -1))
+  const config = { mcpServers: { ppd: { command: LAUNCH.command, args: LAUNCH.args, env: LAUNCH.env } } }
+
+  it('Claude Code starts with no built-in tool, refuses what is not allowed, allows only the application\'s server, and has no skip-permissions flag', async () => {
+    const engine = new ClaudeCodeEngine({ searchPaths: [binDir], env: env('ok') })
+    expect(engine.confinesAgent).toBe(true)
+    await engine.run({ label: 'agent.post', prompt: 'post it', system: 'be brief', agent: CONFINED })
+    expect(read('stdin')).toBe('post it')
+    // The whole list, in order: a flag that is added, removed or moved is a change someone has to look at. `--mcp-config` takes several values, so it is last.
+    expect(argvOf()).toEqual([
+      '-p',
+      '--output-format',
+      'text',
+      '--tools',
+      '',
+      '--permission-mode',
+      'dontAsk',
+      '--allowedTools',
+      'mcp__ppd',
+      '--disable-slash-commands',
+      '--no-session-persistence',
+      '--system-prompt',
+      'be brief',
+      '--strict-mcp-config',
+      '--mcp-config',
+      JSON.stringify(config)
+    ])
+    expect(read('argv')).not.toMatch(/dangerously|bypassPermissions|acceptEdits|--disallowedTools/)
+  })
+
+  it('names the application\'s server and nothing else in the allow-list: no wildcard, no built-in tool', async () => {
+    await new ClaudeCodeEngine({ searchPaths: [binDir], env: env('ok') }).run({ label: 'agent.post', prompt: 'x', agent: { ...CONFINED, server: 'ppd-browser' } })
+    const argv = argvOf()
+    const allowed = argv[argv.indexOf('--allowedTools') + 1]
+    expect(allowed).toBe('mcp__ppd-browser')
+    expect(argv.filter((a) => a === '--allowedTools')).toHaveLength(1)
+    expect(allowed).not.toMatch(/[*\s,]|Bash|Read|Write|Edit|Web/)
+  })
+
+  it.each(['pp d', 'ppd,Bash', 'ppd*', '*', '', 'ppd__x y', 'mcp__ppd Bash'])('does not run when the server name (%j) would make the allow-list say more than one thing', async (server) => {
+    const error = await new ClaudeCodeEngine({ searchPaths: [binDir], env: env('ok') }).run({ label: 'agent.post', prompt: 'x', agent: { ...CONFINED, server } }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(AiError)
+    expect(existsSync(join(logDir, 'argv'))).toBe(false) // the engine was never started
+  })
+
+  it('leaves every other run exactly as it was: the same arguments for the missions of the owner and for the text-only runs', async () => {
+    const engine = new ClaudeCodeEngine({ searchPaths: [binDir], env: env('ok') })
+    await engine.run({ label: 'agent.signup', prompt: 'x', system: 'be brief', agent: { server: 'ppd', launch: LAUNCH } })
+    expect(argvOf()).toEqual([
+      '-p', '--output-format', 'text', '--dangerously-skip-permissions', '--disable-slash-commands', '--no-session-persistence',
+      '--system-prompt', 'be brief', '--strict-mcp-config', '--mcp-config', JSON.stringify(config)
+    ])
+    // `confined: false` is not confined.
+    await engine.run({ label: 'agent.profile', prompt: 'x', agent: { server: 'ppd', launch: LAUNCH, confined: false } })
+    expect(argvOf()).toContain('--dangerously-skip-permissions')
+    expect(argvOf()).not.toContain('--allowedTools')
+    await engine.run({ label: 'draft.reply', prompt: 'x', system: 'be brief' })
+    expect(argvOf()).toEqual(['-p', '--output-format', 'text', '--tools', '', '--permission-mode', 'dontAsk', '--strict-mcp-config', '--disable-slash-commands', '--no-session-persistence', '--system-prompt', 'be brief'])
+  })
+
+  it('Codex cannot be held to the application\'s tools, so a confined run is refused and Codex is never started with full access instead', async () => {
+    const engine = new CodexEngine({ searchPaths: [binDir], env: env('ok') })
+    expect((engine as { confinesAgent?: boolean }).confinesAgent).toBeUndefined()
+    const error = await engine.run({ label: 'agent.post', prompt: 'post it', agent: CONFINED }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(AiError)
+    expect(error).toMatchObject({ kind: 'unavailable', message: expect.stringMatching(/^Codex cannot be held to the browser tools alone .* so it does not publish for you\.$/) })
+    expect(existsSync(join(logDir, 'argv'))).toBe(false) // the CLI was never started: no full-access run in its place
+  })
+
+  it('leaves the Codex missions of the owner and its text-only runs as they were', async () => {
+    const engine = new CodexEngine({ searchPaths: [binDir], env: env('ok') })
+    await engine.run({ label: 'agent.signup', prompt: 'x', agent: { server: 'ppd', launch: LAUNCH } })
+    expect(read('argv')).toContain('[--dangerously-bypass-approvals-and-sandbox]')
+    await engine.run({ label: 'draft.reply', prompt: 'x' })
+    expect(read('argv').replace(/\n/g, '')).toContain('[--sandbox][read-only]')
+  })
+
+  it('says through createEngines which engine can be held to the tools', () => {
+    expect(Object.fromEntries(createEngines().map((e) => [e.id, e.confinesAgent === true]))).toEqual({ claude: true, codex: false })
+  })
+})
+
 describe('tool-free flag', () => {
   it('Claude Code is tool-free only because every tool and MCP server is switched off', async () => {
     const engine = new ClaudeCodeEngine({ searchPaths: [binDir], env: env('ok') })

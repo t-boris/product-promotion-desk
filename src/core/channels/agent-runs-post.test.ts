@@ -92,6 +92,22 @@ describe('what a post mission needs, and gives the AI', () => {
     expect(w.t.bridge.opened).toEqual([])
   })
 
+  it('needs an engine that can be held to the browser tools alone (Codex cannot), says so in words, and starts nothing', async () => {
+    const { w, authority, request } = await ready()
+    w.t.engine.confinesAgent = false
+    const error = await run(w, request).catch((e: unknown) => e)
+    expect(error).toMatchObject({ code: 'engine_cannot_confine', message: expect.stringContaining('Fake engine cannot be held to the browser tools alone') })
+    expect((error as Error).message).toContain('Choose Claude Code in Settings (AI engine), or send through the connector.')
+    expect(w.t.engine.calls).toEqual([])
+    expect(w.t.bridge.opened).toEqual([])
+    expect(await state(w)).toBeNull()
+    expect(authority.leases).toBe(0)
+    // The refusal is about this mission: an engine that can be held runs it.
+    w.t.engine.confinesAgent = true
+    asTheAI(w, async () => undefined)
+    expect(await run(w, request)).toMatchObject({ ended: 'finished', committed: false })
+  })
+
   it('refuses to start while another mission works the same account, and leaves it alone', async () => {
     const { w, request } = await ready()
     let release = (): void => undefined

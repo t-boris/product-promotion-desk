@@ -45,9 +45,10 @@ export interface AiTask {
     server: string
     launch: McpLaunch
     /**
-     * The post mission (B1): the engine is held to the tools of this MCP server, and nothing it prints on a failure is put into an error
-     * message (a failure says only that the engine failed and its exit code): what an engine prints can echo the pages it worked on, and an
-     * error message reaches the log and the owner's lists. Without it the run has full access, as in DEC-018.
+     * The post mission (B1): the engine has no power but the tools of this MCP server (no shell, no files, no web of its own), and nothing it
+     * prints on a failure is put into an error message (a failure says only that the engine failed and its exit code): what an engine prints
+     * can echo the pages it worked on, and an error message reaches the log and the owner's lists. An engine that cannot be held to the
+     * tools (`confinesAgent` is not true) refuses such a run. Without it the run has full access, as in DEC-018.
      */
     confined?: boolean
   }
@@ -85,6 +86,11 @@ export interface AiEngine {
   readonly toolFree: boolean
   /** True when the engine can run an agent mission (`AiTask.agent`): it works the application's browser through the MCP server it is given. */
   readonly supportsAgent?: boolean
+  /**
+   * True when an agent run can be held to the tools of the application's MCP server and nothing else (`AiTask.agent.confined`): the engine
+   * has no shell, no file access and no web of its own. Only such an engine may publish for the owner (the post mission).
+   */
+  readonly confinesAgent?: boolean
   /** True when the engine can make a picture with its own image tool (`AiTask.makeFiles`). */
   readonly makesImages?: boolean
   check(): Promise<EngineStatus>
