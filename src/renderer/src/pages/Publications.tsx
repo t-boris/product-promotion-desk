@@ -55,6 +55,9 @@ function PublicationsScreen() {
   const cancelled = cards.filter((c) => c.opportunity.state === 'cancelled')
   // The first open draft that offers a main action has the screen's one filled button.
   const mainAction = useMainActionOwner(pending.map((card) => card.opportunity.id))
+  // With nothing to show, the empty state below offers "Write one myself" as the screen's filled button; the toolbar then does not offer a
+  // second one with the same name (BUG-057). Both are worked out from this one condition.
+  const emptyOffersWrite = Boolean(channelId) && list.data !== undefined && pending.length === 0 && !writing
 
   return (
     <Page title="Publications" subtitle="Drafts, scheduled and sent material">
@@ -80,9 +83,11 @@ function PublicationsScreen() {
           <Button variant="secondary" icon="sparkles" onClick={() => void suggest()} disabled={!channelId || suggesting.busy} data-testid="suggest-publication">
             {suggesting.busy ? 'Asking the AI…' : 'Suggest with AI'}
           </Button>
-          <Button onClick={() => setWriting(true)} disabled={!channelId || writing} data-testid="write-publication">
-            Write one myself
-          </Button>
+          {!emptyOffersWrite && (
+            <Button onClick={() => setWriting(true)} disabled={!channelId || writing} data-testid="write-publication">
+              Write one myself
+            </Button>
+          )}
           {/* Why the two buttons are off, beside them, with the way to fix it. */}
           {directory.ready && !channelId && (
             <Hint className="toolbar-hint" data-testid="publication-needs-channel">
@@ -136,7 +141,7 @@ function PublicationsScreen() {
                 title="No drafts"
                 action={
                   // The next step; filled because nothing else on the screen is: no draft has an Approve, and the form is closed.
-                  !writing && (
+                  emptyOffersWrite && (
                     <Button variant="primary" onClick={() => setWriting(true)} data-testid="write-publication-empty">
                       Write one myself
                     </Button>

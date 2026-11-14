@@ -47,10 +47,12 @@ interface Props {
   disabled: boolean
   /** Who wrote the saved draft and what it was based on, shown above the text. */
   draft: Draft | null
+  /** Put the cursor in the first field when the editor appears (a form opened on demand: the button that opened it is gone). */
+  autoFocus?: boolean
 }
 
 /** Editor for a reply or a publication. Editing never changes what was approved: saving creates a new draft. */
-export function DraftEditor({ form, onChange, withTitle, disabled, draft }: Props) {
+export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFocus = false }: Props) {
   const [path, setPath] = useState('')
   const set = (patch: Partial<DraftForm>): void => onChange({ ...form, ...patch })
   const addAttachment = (): void => {
@@ -70,11 +72,11 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft }: Prop
       )}
       {withTitle && (
         <Field label="Title">
-          <input className="input" value={form.title} disabled={disabled} onChange={(e) => set({ title: e.target.value })} data-testid="draft-title" />
+          <input className="input" value={form.title} disabled={disabled} onChange={(e) => set({ title: e.target.value })} autoFocus={autoFocus} data-testid="draft-title" />
         </Field>
       )}
       <Field label={withTitle ? 'Text' : 'Reply'}>
-        <textarea className="input draft-text" value={form.text} disabled={disabled} onChange={(e) => set({ text: e.target.value })} data-testid="draft-text" rows={4} />
+        <textarea className="input draft-text" value={form.text} disabled={disabled} onChange={(e) => set({ text: e.target.value })} autoFocus={autoFocus && !withTitle} data-testid="draft-text" rows={4} />
       </Field>
       <div className="form-row">
         <Field label="Link (optional)" hint="Links are checked against the product's own website.">

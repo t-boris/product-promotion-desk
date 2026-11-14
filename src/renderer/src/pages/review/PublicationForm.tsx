@@ -22,7 +22,7 @@ export function PublicationForm({ channelId, onCreated, onCancel }: { channelId:
   return (
     <Card title="New publication">
       <div className="review-body">
-        <DraftEditor form={form} onChange={setForm} withTitle disabled={creating.busy} draft={null} />
+        <DraftEditor form={form} onChange={setForm} withTitle disabled={creating.busy} draft={null} autoFocus />
         <ErrorNote error={creating.error} />
         <div className="form-actions">
           {empty && (

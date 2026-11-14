@@ -1,6 +1,7 @@
 import type { DraftInput } from '../../../../shared/api'
 import type { OpportunityCard } from '../../../../shared/types'
 import { Button, useMainVariant } from '../../ui'
+import { approveLabels } from './approve-labels'
 import { PREPARABLE_STATES } from './labels'
 import { mainActionOf } from './main-action'
 import { ResolveUnknown } from './ResolveUnknown'
@@ -47,7 +48,7 @@ export function ReviewButtons({ card, actions, dirty, input, primaryAction = fal
   }
   if (main === null) return null
 
-  const approveLabel = dirty ? 'Save and approve' : 'Approve'
+  const label = approveLabels(dirty)
   return (
     <div className="review-actions" data-testid="review-buttons">
       <div className="review-actions-side">
@@ -83,10 +84,10 @@ export function ReviewButtons({ card, actions, dirty, input, primaryAction = fal
         ) : (
           <>
             <Button onClick={() => void actions.approveAndSend(id, dirty ? input : undefined)} disabled={busy || !hasText} data-testid="approve-send">
-              {approveLabel} and send
+              {label.approveAndSend}
             </Button>
             <Button variant={mainVariant} onClick={() => void actions.approve(id, dirty ? input : undefined)} disabled={busy || !hasText} data-testid="approve">
-              {approveLabel}
+              {label.approve}
             </Button>
           </>
         )}

@@ -21,6 +21,7 @@ import { isMirroredSource } from '../renderer/src/pages/products/source-view'
 import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block'
 import { activateBlocker, canActivate, canPause, neverAssessed, setupStage } from '../renderer/src/pages/channels/setup-stage'
 import { afterCreateNote, nextStep } from '../renderer/src/pages/channels/next-step'
+import { approveLabels } from '../renderer/src/pages/review/approve-labels'
 import { channelLabel } from '../renderer/src/pages/review/channel-label'
 import { platformMismatch } from '../renderer/src/pages/channels/platform-hint'
 import { MOVED_PAGES, accountHref, accountsNewHref, channelsAccountOf, navigateHashOf, parseAccountsHash, parseHash, productHref, publicationsHref, publicationsProductOf } from '../renderer/src/route'
@@ -459,6 +460,13 @@ describe('QA clarity batch: what the screens say', () => {
     expect(nextProductStep(ready, { ...none, channels: 1 })).toBe('Next: write a publication')
     expect(nextProductStep(ready, { ...none, channels: 1, draftPublications: 2 })).toBe('Next: approve a draft')
     expect(nextProductStep(ready, { channels: 1, approvedPublications: 1, draftPublications: 2 })).toBeNull()
+  })
+
+  it('review buttons (BUG-057): an edited draft says "Save, approve and send", never "Save and approve and send"', () => {
+    expect(approveLabels(false)).toEqual({ approve: 'Approve', approveAndSend: 'Approve and send' })
+    expect(approveLabels(true)).toEqual({ approve: 'Save and approve', approveAndSend: 'Save, approve and send' })
+    // The send button names its steps with commas; two "and"s in a row are gone.
+    for (const dirty of [false, true]) expect(approveLabels(dirty).approveAndSend).not.toMatch(/ and .* and /)
   })
 
   it('Analysis: a step with nothing to work on says why instead of "Waiting", and is not counted', () => {
