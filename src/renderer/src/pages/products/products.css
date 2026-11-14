@@ -228,6 +228,17 @@ textarea.input.short {
   gap: 4px;
 }
 
+/* A stored goal: what to do, how it is judged, and the confirmation next to it. */
+.goal-summary-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.goal-target {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+
 /* In a narrow window the two columns left the tabs of the product no room (the sixth ran out of the page, an old fault of the
    installed build too): the list becomes a row of cards above the product, which gets the full width. */
 @media (max-width: 1040px) {
