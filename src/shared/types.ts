@@ -388,7 +388,7 @@ export interface AccountRole {
   voice: string
 }
 
-/** An idea for a role and a login name for a product. The owner creates the real login on the platform. */
+/** An idea for a role and a login name for a product. The owner decides which one is used; the AI registers the account in its own browser (DEC-018, DEC-019). */
 export interface RoleSuggestion {
   name: string
   voice: string

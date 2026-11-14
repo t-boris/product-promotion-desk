@@ -565,10 +565,26 @@ Owner direction (2026-11-14): the embedded browser is the main executor. The own
 
 ### Plan
 
-- [ ] 1. Design note (this section).
-- [ ] 2. `fix(agent)`: `browser_evaluate` host fence in every mission.
-- [ ] 3. `feat(approval)`: the disclosure check in code (approve, automatic approval, gate).
-- [ ] 4. `feat(send)`: a page step that needs a ticket, and `SendGate.renewTicket` for a running attempt (mutation-checked binding test).
-- [ ] 5. `feat(agent)`: mission-kind registry, the post toolset and `browser_submit`, pacing.
-- [ ] 6. `feat(send)`: publish through the AI browser when the owner chose it; read-back truth.
-- [ ] 7. Stale texts in touched files; review section here; final report.
+- [x] 1. Design note (this section).
+- [x] 2. `fix(agent)`: `browser_evaluate` host fence in every mission.
+- [x] 3. `feat(approval)`: the disclosure check in code (approve, automatic approval, gate).
+- [x] 4. `feat(send)`: a page step that needs a ticket, and `SendGate.renewTicket` for a running attempt (mutation-checked binding test).
+- [x] 5. `feat(agent)`: mission-kind registry, the post toolset and `browser_submit`, pacing.
+- [x] 6. `feat(send)`: publish through the AI browser when the owner chose it; read-back truth.
+- [x] 7. Stale texts in touched files; review section here; final report.
+
+### Review (B1, 2026-11-14)
+
+Commits on `feat/ai-browser-missions`: 9a77074 (design note), d14bbae `fix(agent)` evaluate fence, 0e4c971 `feat(approval)` disclosure in code, 7cfd5df `feat(send)` ticketed page step and ticket renewal, c549284 `feat(agent)` mission kinds, post toolset, `browser_submit`, pacing, 95d8a9a `feat(send)` publishing through the AI browser, and the commit of this section (stale texts in touched files).
+
+Where the build differs from the design above:
+
+- `browser_submit` takes `submit_ref` plus optional `text_ref`, `title_ref`, `link_ref` (not a single `ref`): a reply has no title, a post may have one.
+- The post toolset has no `remember_lesson`: a post mission has nothing to learn into the account's lessons and every extra tool is a surface.
+- The AI browser is used only for a click of the owner's own (`automatic === false`), so a scheduled publication and anything a rule sends still go through the connector, whatever `publishWith` says. This is the conservative reading of "an automatic rule never starts a tool-using engine"; widening it is the owner's decision.
+- An AI browser that cannot start (no engine, engine not installed, another run on the account, owner holds the browser) keeps the approval: the attempt is a `failed` row, the item stays `ready` with the reason, the owner presses Send again. Nothing was submitted.
+- Disclosure is a code check with a documented, language-limited detector (English and a small Russian set); there is no override.
+
+Stale texts denying that the AI registers accounts: fixed in `src/shared/types.ts` (two comments). Left as they are, in files B1 does not touch: `src/renderer/src/pages/channels/SuggestRoles.tsx:34`, `src/core/channels/roles.ts:2` and `:84`, `src/core/channels/ai-help.ts:403`, `docs/features/product-promotion-desk/requirements/REQ-010.md:24`.
+
+Not proven on a real platform. Proven with fakes: a fake connector, a fake page that behaves like a form, a scripted engine.
