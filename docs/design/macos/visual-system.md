@@ -642,3 +642,28 @@ Decisions taken while converting, so the next reader does not reopen them:
   again. Names, roles and test ids did not change (BUG-039).
 - `.dot.info` and `textarea.input.short` are defined in a page css file and should move to `styles.css` with the next shared change.
 
+
+## 17. AI in every field and form (0.10.0)
+
+The direction (owner, 2026-11-14): the owner says what the product is about and the AI proposes or writes the rest, so almost nothing is typed. Every typed
+field, every "Add ..." and every "Edit ..." gets AI help through the CLI engines. The AI proposes, the owner saves: nothing the AI writes is stored until the owner
+presses the form's own button (DEC-009, DEC-019). The shared kit lives in `src/renderer/src/assist/` and `src/core/assist/`.
+
+| Pattern | Markup | Rules |
+|---|---|---|
+| Field with AI | `AiField` (`.field.ai-field` > `.field-head` with the label and one secondary button, the input, the hint) | One small secondary button on the label row: "Suggest with AI" while the field is empty, "Improve with AI" while it holds text. Improve opens one line "What to change?" (optional) with "Improve" and "Cancel"; Enter runs it. The text goes into the field, never into storage. After the AI wrote, "The AI wrote this text. Check it before you save." with Undo, shown only while the field still holds exactly the AI's text (the owner's typing is never replaced silently, lesson 84). A reason it is off sits under the field with the link that fixes it. Never the filled button (V-10) |
+| Ideas, one at a time | `AiProposal` (`.idea.proposal`: title and sentence, the secondary button, what it leaves alone, an optional "lean toward" line, the idea with an Unverified badge, "Use this") | The first press is "Suggest ... with AI", every later one "Another one" and the core is told which ideas were already shown. "Use this" hands the idea to the form below (here: the new goal's form, focus on its first field, "Filled from the AI's idea. Check it, then add the goal." with Undo when something was typed). The AI never saves the idea |
+| Fill from the website | a secondary button on the label row of "Website address" on New product | Reads the site with the app's own reader, fills the empty name and description only (what is typed stays), says what it filled and kept. Nothing is created until "Create product" |
+
+Where the AI helps in 0.10.0: goal ideas (Goal tab), the goal's target action, metrics and notes, a product's description, a new product from its website, a
+channel's style, topics and search queries. The first ready engine is selected on the first launch (Settings shows it as "In use"). The numbers and switches that
+decide what goes out (interval, limits, automatic replies) stay the owner's choice. Rewriting a draft of a reply or a post comes with the disclosure check, in a later release.
+
+Rules that every AI help keeps (`core/assist/kit.ts`): untrusted text (a website, the owner's own words, the AI's answer) sits in a fenced data block that cannot close
+itself; the answer is cut to the field's rules and refused when it holds a credential (and, for a text that proposes something to do, an instruction to automate posting
+or a promise of results); the log says that a text was written, never what it says.
+
+| Id | Requirement | Method | Pass |
+|---|---|---|---|
+| V-25 | An AI control on a field or form is a secondary or quiet button, 28 px tall, on the label row; no screen shows two filled buttons because of it | tour on Products (Goal, Edit details, New product) and Channels (settings) at both sizes and themes | 0 filled AI buttons; V-06, V-09 hold |
+| V-26 | The AI's text lands in the field, never in storage; Undo restores what was there; typing over the AI's text hides Undo | packaged probe: write, undo, type | as described |
