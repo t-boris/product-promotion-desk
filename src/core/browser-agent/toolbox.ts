@@ -105,7 +105,7 @@ const TOOLS: McpTool[] = [
   ),
   tool('browser_select', 'Choose an option in a list or a drop-down (a select or a combobox): the application opens it and picks the option itself.', { ref, option: { type: 'string', description: 'The visible text of the option, like March' } }, ['ref', 'option']),
   tool('browser_press_key', 'Press Enter, Tab or Escape.', { key: { type: 'string', enum: ['Enter', 'Tab', 'Escape'] } }, ['key']),
-  tool('browser_evaluate', 'Run JavaScript in the page as the body of an async function and return its result as JSON (use return). For what the other tools cannot do.', { script: { type: 'string' } }, ['script']),
+  tool('browser_evaluate', 'Run JavaScript in the page as the body of an async function and return its result as JSON (use return). For what the other tools cannot do. Only on a page of the platform.', { script: { type: 'string' } }, ['script']),
   tool('browser_wait_for', 'Wait until the page shows a text, or for some milliseconds (at most 30000).', { text: { type: 'string' }, ms: { type: 'integer' } }),
   tool('ask_owner', 'Ask the owner for what only a person can do (solve a CAPTCHA, read a code, decide). Shows a pop-up and waits for the answer. If it says the owner has not answered yet, call it again with the same question.', { question: { type: 'string' } }, ['question']),
   tool('note_value', 'Record a value you chose for the account on the site (a display name, a birth date), so the owner can find it later. Never a password.', { label: { type: 'string' }, value: { type: 'string' } }, ['label', 'value']),
@@ -362,6 +362,9 @@ export class BrowserToolbox implements McpToolHost {
   private async evaluate(script: string): Promise<McpToolResult> {
     if (!script.trim()) return fail('script is empty.')
     return this.deps.withPage(async (page) => {
+      // The same fence as browser_navigate and every page step: a script runs only on a page of the platform, never on a page the
+      // account was sent to (a link, a redirect). An address that cannot be read is not on the platform.
+      if (!hostAllowed(await page.url(), this.deps.hosts)) return fail(`The page is not on the platform (${this.deps.hosts.join(', ')}), so no script was run. Use browser_navigate to go back.`)
       const value = await page.read<unknown>(`(async () => {\n${script}\n})()`)
       this.deps.say('Ran a script in the page')
       const json = value === undefined ? 'undefined' : JSON.stringify(value)
