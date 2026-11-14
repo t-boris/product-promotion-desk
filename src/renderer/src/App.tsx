@@ -6,7 +6,7 @@ import { useAutomation, useQuery } from './hooks'
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from './menu-state'
 import { PAGES } from './pages'
 import { MOVED_PAGES, parseHash } from './route'
-import { NO_ACCOUNTS, NO_ENGINE, accountText, accountsGroupName, automationText, engineGroupName } from './status-labels'
+import { NO_ACCOUNTS, NO_ENGINE, accountsGroupName, accountsSummary, automationText, engineGroupName } from './status-labels'
 import { Badge, Button } from './ui'
 
 /**
@@ -58,6 +58,7 @@ export function App() {
 
   const engine = engines.data?.find((e) => e.id === settings.data?.engineId)
   const attentionCount = attention.data?.length ?? 0
+  const accountsBadge = accountsSummary(accounts.data ?? [])
   const countTone = attentionCountTone(attention.data?.map((item) => item.kind) ?? [])
 
   return (
@@ -122,12 +123,10 @@ export function App() {
             </span>
             <span className="status-group" role="group" aria-label={accountsGroupName(accounts.data)}>
               <span className="topbar-label">Accounts</span>
-              {accounts.data && accounts.data.length > 0 ? (
-                accounts.data.map((a) => (
-                  <Badge key={a.id} tone={a.status === 'ready' ? 'good' : 'warn'}>
-                    {accountText(a)}
-                  </Badge>
-                ))
+              {accountsBadge ? (
+                <a className={`badge badge-${accountsBadge.tone}`} href="#/accounts" title={accountsBadge.title} data-testid="accounts-summary">
+                  {accountsBadge.text}
+                </a>
               ) : (
                 <a className="badge badge-warn" href="#/accounts/new" title="Connect an account: nothing can run without one" data-testid="connect-account-link">
                   {NO_ACCOUNTS}
@@ -140,9 +139,11 @@ export function App() {
             {state?.background && <Badge tone="info">Background</Badge>}
             {/* One text, not "Automation " and "running" as two nodes: the state reads as one statement in the accessibility tree.
                 The dot gives the state a colour (amber while paused) so it does not read as a grey caption. */}
-            <span className="status-pill" data-testid="automation-state-pill">
+            <span className="status-pill" title={automationText(state)} data-testid="automation-state-pill">
               <span className={`dot ${state ? (state.paused ? 'warn' : 'good') : ''}`} aria-hidden="true" />
-              <span data-testid="automation-state">{automationText(state)}</span>
+              <span className="status-words" data-testid="automation-state">
+                {automationText(state)}
+              </span>
             </span>
             {/* Never the filled button: the page's own main action ("New product") keeps that, and a paused app must stay resumable. */}
             <Button

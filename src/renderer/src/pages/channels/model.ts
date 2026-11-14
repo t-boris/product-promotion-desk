@@ -57,12 +57,8 @@ export function platformOfSuggestion(suggestion: ChannelSuggestion, platforms: P
 /** What a step of a channel plan is made of, in plain words. */
 export const PLAN_FORMAT_LABEL: Record<PlanFormat, string> = { text: 'Text', image: 'Photo', video: 'Video', link: 'Link', other: 'Other' }
 
-export const ACCOUNT_STATUS_LABEL: Record<AccountStatus, string> = {
-  ready: 'Signed in',
-  login_required: 'Sign-in needed',
-  captcha: 'CAPTCHA to solve',
-  suspended: 'Suspended by the platform'
-}
+// The words live with the top bar's account summary, which lists them in its tooltip; one place for both.
+export { ACCOUNT_STATUS_LABEL } from '../../status-labels'
 
 export const ACCOUNT_STATUS_TONE: Record<AccountStatus, Tone> = {
   ready: 'good',

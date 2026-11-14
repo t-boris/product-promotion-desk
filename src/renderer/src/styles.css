@@ -365,6 +365,21 @@ code {
 .topbar a {
   -webkit-app-region: no-drag;
 }
+/* The top bar stays one line (BUG-023). In a narrow bar the automation state keeps its coloured dot and the button that
+   says what it would do; its words stay in the page for a screen reader or a test tool, and are the dot's tooltip. */
+.topbar {
+  container-type: inline-size;
+}
+@container (max-width: 840px) {
+  .status-pill .status-words {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
 .topbar-label {
   font-size: var(--fs-caption);
   color: var(--muted);

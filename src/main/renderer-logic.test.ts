@@ -17,7 +17,7 @@ import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block
 import { nextStep } from '../renderer/src/pages/channels/next-step'
 import { platformMismatch } from '../renderer/src/pages/channels/platform-hint'
 import { MOVED_PAGES, accountsNewHref, parseAccountsHash, parseHash, productHref, publicationsHref, publicationsProductOf } from '../renderer/src/route'
-import { accountText, accountsGroupName, automationText, engineGroupName } from '../renderer/src/status-labels'
+import { accountText, accountsGroupName, accountsSummary, automationText, engineGroupName } from '../renderer/src/status-labels'
 
 describe('hash routes (DEC-009)', () => {
   it('reads plain pages and ignores the leading characters', () => {
@@ -196,6 +196,17 @@ describe('status row words (BUG-003)', () => {
       'Accounts: Brand · brand_user, Second'
     )
     expect(accountText({ label: 'Brand' })).toBe('Brand')
+  })
+
+  it('Top bar (BUG-023): one badge sums up the accounts, its tooltip lists every one, and none keeps "None connected"', () => {
+    const acc = (label: string, status: 'ready' | 'login_required' | 'captcha' | 'suspended', identity: string | null = null) => ({ label, identity, status })
+    expect(accountsSummary([])).toBeNull()
+    expect(accountsSummary([acc('A', 'ready'), acc('B', 'ready'), acc('C', 'ready')])).toMatchObject({ text: '3 ready', tone: 'good' })
+    expect(accountsSummary([acc('A', 'ready'), acc('B', 'login_required'), acc('C', 'ready')])).toMatchObject({ text: '3 · 1 needs sign-in', tone: 'warn' })
+    expect(accountsSummary([acc('A', 'login_required'), acc('B', 'login_required')])).toMatchObject({ text: '2 · 2 need sign-in', tone: 'warn' })
+    expect(accountsSummary([acc('A', 'captcha'), acc('B', 'ready')])).toMatchObject({ text: '2 · 1 needs you', tone: 'warn' })
+    expect(accountsSummary([acc('A', 'suspended')])).toMatchObject({ text: '1 · 1 needs you', tone: 'bad' })
+    expect(accountsSummary([acc('Brand', 'ready', 'brand_user'), acc('Second', 'login_required')])?.title).toBe('Brand · brand_user: Signed in\nSecond: Sign-in needed')
   })
 
   it('reads the automation state as one sentence, and shows an ellipsis until the state has arrived', () => {
