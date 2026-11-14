@@ -273,6 +273,26 @@ describe('drafts.refine: a post', () => {
     expect(world.engine.calls[1].prompt).toContain('connected')
   })
 
+  it('a title written while the text is empty is not asked to carry the connection: the text will say it', async () => {
+    world = makeWorld({ mode: 'draft' })
+    world.engine.on('drafts.write', answer({ title: 'Natal Mystic: how a chart is built', usedClaimIds: [], statesProductFacts: false, disclosesConnection: false }))
+    expect(await help({ field: 'title', channelId: world.channel.id, form: { title: '', text: '' } })).toEqual({ title: 'Natal Mystic: how a chart is built' })
+    expect(world.engine.calls).toHaveLength(1)
+    expect(world.engine.calls[0].prompt).toContain('do not put a phrase about the author\'s connection')
+
+    world.engine.calls.length = 0
+    expect(await help({ field: 'title', channelId: world.channel.id, form: { title: '', text: '  \n ' } })).toEqual({ title: 'Natal Mystic: how a chart is built' })
+    expect(world.engine.calls[0].prompt).toContain('do not put a phrase about the author\'s connection')
+  })
+
+  it('once there is a text, a title that names the product is read together with it and still needs the connection said', async () => {
+    world = makeWorld({ mode: 'draft' })
+    world.engine.on('drafts.write', answer({ title: 'Natal Mystic: how a chart is built', usedClaimIds: [], statesProductFacts: false, disclosesConnection: false }))
+    world.engine.on('drafts.write.repair', answer({ title: 'Natal Mystic (I work on it): how a chart is built', usedClaimIds: [], statesProductFacts: false, disclosesConnection: true }))
+    expect(await help({ field: 'title', channelId: world.channel.id, form: { title: '', text: 'A chart is built from a birth date.' } })).toEqual({ title: 'Natal Mystic (I work on it): how a chart is built' })
+    expect(world.engine.calls[0].prompt).not.toContain('do not put a phrase about the author\'s connection')
+  })
+
   it('reads the finished draft for the disclosure: the owner\'s title names the product, so the rewritten text has to say the connection', async () => {
     world = makeWorld({ mode: 'draft' })
     world.engine.on('drafts.improve', answer({ text: BORING, disclosesConnection: false }))

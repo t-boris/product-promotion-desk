@@ -682,9 +682,9 @@ The same direction for the text that goes out: the owner reads, changes and save
 the AI's text has to pass before the owner sees it. `drafts.refine` (`src/core/pipeline/draft-help.ts`) writes or improves the title or the text of a reply, of a
 post that has a card, and of a new publication, from the knowledge the AI drafts use (approved facts with their ids, prohibited statements, channel style and limits,
 the role of the login, and for a reply the discussion, the parent chain and the account's earlier replies). The answer passes the checks of an AI draft
-(`checkDraftSafety`: cited facts approved, nothing prohibited, no price, discount or "free" without a cited claim, links only to the product's own addresses), a
+(`checkDraftSafety`: cited facts approved, nothing prohibited, no price, discount or "free" without a cited claim, links only to the product's own addresses, however a link is written: a full address, a bare domain, a short link such as `bit.ly/x`, a `www.` host, the target of a markdown or reference-style link; a link that is not a web address, such as `javascript:`, is refused), a
 credential check, a length limit (a long answer is sent back, never cut) and the disclosure rule (the product's name or website named without saying the author is
-connected with it; read on the finished draft, title and text together; for now the AI's own flag, until the disclosure check of the post mission lands). A failing
+connected with it; read on the finished draft, title and text together, except that a title written while the text is still empty is not asked to carry it: the text help that follows says it; for now the AI's own flag, until the disclosure check of the post mission lands). A failing
 answer is handed back once with the reasons, then refused with them. A post written from nothing must cite an approved fact; any other text must cite one when the AI says it
 states facts about the product that the owner's draft does not state (the same trust as the category of an AI reply; empty or not decides nothing, so a one-word
 draft is no licence to add facts). The checks read the text without its invisible characters (zero-width, bidi marks, variation selectors) and with look-alike
