@@ -184,6 +184,8 @@ const TEXT_ENTRY_ROLE = /^(?:textarea|textbox|input:(?:text|search|url|email|tel
 /** The fields that hold several lines: a line break in any other field is never typed. */
 const MULTI_LINE_ROLE = /^(?:textarea|textbox)$/
 const LINE_BREAK = /[\r\n\u0085\u2028\u2029]/
+/** The name of a control that edits something the account wrote: only the author of a post or a comment is offered one. */
+const EDIT_CONTROL = /(?<![\p{L}\p{N}])(?:edit|редактировать|изменить)(?![\p{L}\p{N}])/iu
 /**
  * What can be the control that publishes: a button, or an input that submits; and its name is looked at too (`looksLikeSubmit`). Not a
  * link: a link opens something and does not submit a form, and a hostile comment can carry one named "Reply".
@@ -725,10 +727,16 @@ export class BrowserToolbox implements McpToolHost {
     const wanted = replyTarget(content.destination)
     const marked = snapshot.elements.some((e) => e.parent !== undefined)
     if (wanted && marked && box) {
-      const right = wanted.comment ? box.parent === wanted.comment : box.parent === undefined || box.parent === wanted.post
+      // The reply to a post goes into the box of the thread, which is outside every post and comment of the page. A box inside the post itself
+      // is, on a post of this account, the post's own edit box, and the snapshot does not tell an edit box from a reply box: it is refused.
+      const right = wanted.comment ? box.parent === wanted.comment : box.parent === undefined
       if (!right) {
-        const answers = box.parent ? `another thing on the page (${box.parent})` : 'the post, not the approved comment'
-        return `${box.ref} is a reply box that answers ${answers}, not the approved comment (${wanted.comment ?? wanted.post}). Open the reply form of the approved comment only (its "reply" link), leave other forms closed, look again and name that form's fields.`
+        const answers = box.parent ? (box.parent === wanted.post ? 'inside the post itself (that can be the post\'s own edit box)' : `another thing on the page (${box.parent})`) : 'the post, not the approved comment'
+        return `${box.ref} is a text box that answers ${answers}, not the approved ${wanted.comment ? 'comment' : 'thread'} (${wanted.comment ?? wanted.post}). Open the reply form of the approved comment only (its "reply" link), or use the comment box of the thread, leave other forms closed, look again and name that form's fields.`
+      }
+      // The comment shows an edit control, so it is this account's own: the box under it may be its edit box, not a reply box.
+      if (wanted.comment && snapshot.elements.some((e) => e.parent === wanted.comment && EDIT_CONTROL.test(e.name))) {
+        return `${box.ref} is under the approved comment, which has an "edit" control: the comment is this account's own, and the box may be its edit box, not a reply box. Nothing was typed. Call report_result with needs_owner and say so.`
       }
       return null
     }

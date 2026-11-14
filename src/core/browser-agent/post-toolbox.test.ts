@@ -1077,10 +1077,37 @@ describe('browser_submit: a reply goes only into the reply box of the approved c
     await look(under)
     await refused(under, submitReply(under), /answers another thing/)
 
+    // A box inside the post itself is, on a post of this account, the post's own edit box: the snapshot cannot tell it from a reply box, so it is refused.
     const post = setup(THREAD)
     layout(post, [{ form: 1, parent: 't3_abc' }])
     await look(post)
-    expect((await submitReply(post)).isError).toBeUndefined()
+    await refused(post, submitReply(post), /inside the post itself \(that can be the post's own edit box\)/)
+    // The box of the thread, outside every post and comment, is accepted, also when the post shows an edit control (the thread of an own post).
+    const own = setup(THREAD)
+    layout(own, [{ form: 1 }])
+    own.page.items.push({ ref: 'e40', role: 'link', name: 'edit', parent: 't3_abc' })
+    await look(own)
+    expect((await submitReply(own)).isError).toBeUndefined()
+  })
+
+  it('refuses the box under the approved comment when that comment shows an edit control: the comment is the account\'s own, and the box may be its edit box', async () => {
+    for (const edit of ['edit', 'Edit', 'Edit comment', 'Редактировать']) {
+      const t = setup(COMMENT)
+      layout(t, [{ form: 1, parent: 't1_def' }])
+      t.page.items.push({ ref: 'e40', role: 'link', name: edit, parent: 't1_def' })
+      await look(t)
+      await refused(t, submitReply(t), /has an "edit" control/)
+    }
+  })
+
+  it('does not take an edit control of another comment, or a word that only has the letters, for the approved comment\'s own', async () => {
+    for (const [name, parent] of [['edit', 't1_zzz'], ['edit', 't3_abc'], ['Reddit', 't1_def'], ['Credit', 't1_def'], ['Add a comment', 't1_def']] as const) {
+      const t = setup(COMMENT)
+      layout(t, [{ form: 1, parent: 't1_def' }])
+      t.page.items.push({ ref: 'e40', role: 'link', name, parent })
+      await look(t)
+      expect((await submitReply(t)).isError, `${name} under ${parent}`).toBeUndefined()
+    }
   })
 
   it('on a page that marks no comments, accepts the only text box, and refuses when there is more than one', async () => {
