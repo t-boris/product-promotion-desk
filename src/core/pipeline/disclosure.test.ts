@@ -358,6 +358,35 @@ describe('a label is not a statement', () => {
   })
 })
 
+describe('"I have a stake in it" is a statement; "I have no stake in it" is not', () => {
+  it.each([
+    'I have no stake in Natal Mystic, just recommending it.',
+    'I have no interest in Natal Mystic.',
+    'I have zero stake in Natal Mystic.',
+    'We have no connection with Natal Mystic.',
+    'I have not any stake in Natal Mystic.',
+    'I have hardly any stake in Natal Mystic, I just like it.',
+    'I have barely any interest in Natal Mystic beyond using it.',
+    'We hold no stake in Natal Mystic.',
+    'I have little stake in Natal Mystic.',
+    'I have nothing to gain, no stake in Natal Mystic.'
+  ])('does not take it for a statement of the connection: %s', (body) => {
+    expect(statesConnection(text(body), NATAL), body).toBe(false)
+    expect(disclosureProblem(text(body), NATAL), body).not.toBeNull()
+  })
+
+  it.each([
+    'I have a stake in Natal Mystic.',
+    'I have a small stake in Natal Mystic.',
+    'We hold a financial interest in Natal Mystic.',
+    'I have a personal connection with Natal Mystic.',
+    'I have a close relationship with Natal Mystic.',
+    "I'm the founder of Natal Mystic. I have no interest in astrology fads, only in good charts."
+  ])('still takes it for a statement: %s', (body) => {
+    expect(disclosureProblem(text(body), NATAL), body).toBeNull()
+  })
+})
+
 describe('a possessive that is the subject of a clause is not the product', () => {
   it.each(['My app was crashing. Natal Mystic fixed it.', 'Our product had bugs. Natal Mystic found them.', 'My startup uses Natal Mystic for charts.', 'Our company switched to Natal Mystic.'])('refuses: %s', (body) => {
     expect(disclosureProblem(text(body), NATAL)).toContain('does not say that you are connected')
@@ -509,6 +538,11 @@ describe('honest disclosures that the review feared would be refused', () => {
     'I run Natal Mystic.',
     'I own Natal Mystic.',
     'We run Natal Mystic together.',
+    'I run Natal Mystic - a free tool.',
+    'I run Natal Mystic, a free tool for charts.',
+    'I run Natal Mystic and maintain it.',
+    'I own Natal Mystic and built it with a friend.',
+    'We own Natal Mystic and host it ourselves.',
     "I'm the developer of Natal Mystic | free charts.",
     "I'm the developer of Natal Mystic • free charts.",
     'I built Natal Mystic after being just a user of other tools.',
@@ -528,6 +562,18 @@ describe('honest disclosures that the review feared would be refused', () => {
     'I run Natal Mystic every day and it is great.',
     'I own a copy of Natal Mystic.',
     'I run Natal Mystic on my laptop.',
+    'I run Natal Mystic and love it.',
+    'I own Natal Mystic with Docker.',
+    'I run Natal Mystic from my laptop.',
+    'I run Natal Mystic and recommend it to friends.',
+    'We run Natal Mystic and rely on it for our charts.',
+    'I run Natal Mystic because it is fast.',
+    'I run Natal Mystic so my charts load faster.',
+    'I own Natal Mystic since last year and swear by it.',
+    'I run Natal Mystic alone from my laptop.',
+    'I run Natal Mystic out of habit.',
+    'I run Natal Mystic and Docker on a small server.',
+    'I run Natal Mystic and Hostinger hosts it for me.',
     "I'm just a user of Natal Mystic and other tools.",
     "I'm just a user of it.",
     "I'm just a user."

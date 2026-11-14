@@ -413,6 +413,10 @@ interface Role {
   object: boolean
 }
 
+/** Up to two words between "have" and the thing had, none of which takes it away: "I have no stake", "hardly any interest", "zero ties". */
+const NEGATION_WORD = 'no|not|zero|without|hardly|barely|scarcely|never|none|nothing|little|neither|nor'
+const NOT_NEGATED = `(?:(?!(?:${NEGATION_WORD})(?![\\p{L}\\p{N}]))\\p{L}+\\s+){0,2}?`
+
 const CONNECTED_WITH = '(?:connected|affiliated|associated|involved|employed|partnered)\\s+(?:with|to|by|at|in)'
 
 const ROLES: Role[] = [
@@ -427,8 +431,8 @@ const ROLES: Role[] = [
   { pattern: words(`as\\s+(?:the|one of the)\\s+${SHAPE}(?:${ROLE_NOUN})\\s+(?:of|behind)`), object: true },
   // I'm connected with ..., I'm affiliated with ...
   { pattern: words(`${FIRST_BE}\\s+(?:(?:closely|personally|directly|professionally|financially|also|currently|officially)\\s+)?${CONNECTED_WITH}`), object: true },
-  // I have a connection with ..., we have a financial interest in ...
-  { pattern: words(`(?:i|we)\\s+(?:have|hold)\\s+(?:an?\\s+)?(?:\\p{L}+\\s+){0,2}?(?:affiliation|connection|relationship|ties|interest|stake)\\s+(?:with|to|in)`), object: true }
+  // I have a connection with ..., we have a financial interest in ... ("I have no stake in it", "hardly any interest in it" say the opposite)
+  { pattern: words(`(?:i|we)\\s+(?:have|hold)\\s+(?:an?\\s+)?${NOT_NEGATED}(?:affiliation|connection|relationship|ties|interest|stake)\\s+(?:with|to|in)`), object: true }
 ]
 
 const ROLE_RU = words(`я\\s+(?:один из\\s+)?${SHAPE_RU}(?:разработчик\\p{L}*|создател\\p{L}*|автор\\p{L}*|основател\\p{L}*|владел\\p{L}*|дизайнер\\p{L}*|программист\\p{L}*)`)
@@ -468,8 +472,17 @@ const THEN_ENDS = new RegExp(
   `^(?:$|[.!?…)"'”’\\]—–|•·~]|-(?=\\s)|['’]s${NOT_LETTER_AFTER}|(?:i|we|you|they|he|she|it|my|our|and|but|so|because|since|in|on|at|with|for|from|over|during|using|after|before|as|to|by|when|while|until|of|last|a|an|the|myself|ourselves|alone|solo|together|originally|recently|just|also|ago|years?|months?|weeks?|days?|two|three|four|five|six|seven|eight|nine|ten|\\d+|out|back|free|open|public|available|again|first|initially|mostly|entirely|completely|fully|almost|nearly|partly|largely|late|early|today|yesterday|now|then|already|about|around|through|without|within|into|under|upon|via|${GENERIC_NOUN})${NOT_LETTER_AFTER})`,
   'iu'
 )
-/** After "I run" and "I own" a name may be followed by less: what goes on with "every day", "on my laptop" is a customer's. */
-const OWNERSHIP_ENDS = new RegExp(`^(?:$|[.!?…)"'”’\\]—–|•·~]|-(?=\\s)|(?:and|but|so|because|since|with|alongside|together|alone|solo|myself|ourselves|from|out)${NOT_LETTER_AFTER})`, 'iu')
+/**
+ * After "I run" and "I own" the name must end the statement: a customer says "I run Natal Mystic and love it", "... with Docker", "... from my
+ * laptop", "... because it is fast". It ends with the sentence or a separator, with "together" or "alone" that ends it, or goes on with a
+ * verb of the one who makes or runs it ("and maintain it"), never with a word that is not a verb of that kind ("and love it", "and Docker").
+ */
+const OWNER_VERB = 'maintain|build|built|develop|design|writ|wrote|cod|ship|operat|manag|found|creat|launch|mak|made|lead|own|host|sell|fund|publish|deploy|releas|updat|moderat|handl'
+const STATEMENT_END = String.raw`(?:$|[.!?…,;:)"'”’\]—–|•·~]|-(?=\s))`
+const OWNERSHIP_ENDS = new RegExp(
+  `^(?:${STATEMENT_END}|(?:together|alone|solo|myself|ourselves)(?=\\s*${STATEMENT_END})|and\\s+(?:(?:also|then|still)\\s+)?(?:${OWNER_VERB})(?:e|es|ed|ing|s|d)?${NOT_LETTER_AFTER})`,
+  'iu'
+)
 
 /** The product used as a tool or a material ("built my site using Natal Mystic"): then "it", "this site" are what was built with it. */
 const AS_A_TOOL =
