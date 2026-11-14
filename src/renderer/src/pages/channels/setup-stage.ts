@@ -19,6 +19,14 @@ export function canActivate(channel: Channel): boolean {
   return channel.status === 'setup' || ((channel.status === 'needs_user' || channel.status === 'error') && channel.baselineDoneAt === null)
 }
 
+/**
+ * Why "Activate" is off, or null when it can be pressed: a channel that is still to be started is assessed first (activating reads
+ * the existing discussions as a baseline). The button's `disabled` and the sentence beside it both come from this one result.
+ */
+export function activateBlocker(channel: Channel): string | null {
+  return canActivate(channel) && neverAssessed(channel) ? 'Assess the channel first to see what this account can do here. Then check the settings and activate it.' : null
+}
+
 export function canPause(channel: Channel): boolean {
   return channel.status === 'active' || channel.status === 'error' || (channel.status === 'needs_user' && channel.baselineDoneAt !== null)
 }

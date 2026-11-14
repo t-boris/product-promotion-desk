@@ -17,7 +17,7 @@ import { nextProductStep, passportStatus } from '../renderer/src/pages/products/
 import { resolveSelected } from '../renderer/src/pages/products/product-selection'
 import { isMirroredSource } from '../renderer/src/pages/products/source-view'
 import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block'
-import { canActivate, canPause, neverAssessed, setupStage } from '../renderer/src/pages/channels/setup-stage'
+import { activateBlocker, canActivate, canPause, neverAssessed, setupStage } from '../renderer/src/pages/channels/setup-stage'
 import { nextStep } from '../renderer/src/pages/channels/next-step'
 import { channelLabel } from '../renderer/src/pages/review/channel-label'
 import { platformMismatch } from '../renderer/src/pages/channels/platform-hint'
@@ -576,6 +576,30 @@ describe('Channels tab: one step at a time (DEC-023)', () => {
     expect(canPause(channel({ status: 'needs_user' }))).toBe(false)
     expect(canPause(channel({ status: 'setup' }))).toBe(false)
     expect(canPause(channel({ status: 'paused' }))).toBe(false)
+  })
+
+  it('Activate waits for the assessment, and the sentence that says so is the one that disables it (BUG-055)', () => {
+    const baselineDone = '2026-11-14T00:00:00.000Z'
+    // A channel in setup that was never assessed: Activate is off and the reason is the next step.
+    expect(activateBlocker(channel({ status: 'setup' }))).toMatch(/^Assess the channel first to see what this account can do here\./)
+    // Once any ability was checked there is nothing to wait for.
+    expect(activateBlocker(channel({ status: 'setup', capabilities: assessed }))).toBeNull()
+    // A channel that is not to be started has no Activate, so nothing blocks it.
+    expect(activateBlocker(channel({ status: 'active' }))).toBeNull()
+    expect(activateBlocker(channel({ status: 'paused' }))).toBeNull()
+    // needs_user: without a baseline it can still be started, so it waits for the assessment too; with a baseline it cannot be started at all.
+    expect(activateBlocker(channel({ status: 'needs_user' }))).not.toBeNull()
+    expect(activateBlocker(channel({ status: 'needs_user', capabilities: assessed }))).toBeNull()
+    expect(activateBlocker(channel({ status: 'needs_user', baselineDoneAt: baselineDone }))).toBeNull()
+    // The button and its reason come from one rule: a blocked channel is exactly an activatable, never assessed one.
+    for (const status of ['setup', 'needs_user', 'error', 'active', 'paused'] as const) {
+      for (const baselineDoneAt of [null, baselineDone]) {
+        for (const capabilities of [channel({}).capabilities, assessed]) {
+          const c = channel({ status, baselineDoneAt, capabilities })
+          expect(activateBlocker(c) !== null).toBe(canActivate(c) && neverAssessed(c))
+        }
+      }
+    }
   })
 })
 

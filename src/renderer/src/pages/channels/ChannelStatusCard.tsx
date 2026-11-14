@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import type { Channel, Product } from '../../../../shared/types'
 import { call, useAction, useQuery } from '../../hooks'
-import { Badge, Button, Card, ErrorNote, formatTime, useMainVariant } from '../../ui'
+import { Badge, Button, Card, ErrorNote, formatTime, Hint, useMainVariant } from '../../ui'
 import { CHANNEL_STATUS_LABEL, CHANNEL_STATUS_TONE, nextCheckText } from './model'
-import { canActivate, canPause, neverAssessed } from './setup-stage'
+import { activateBlocker, canActivate, canPause } from './setup-stage'
 
 /**
  * Status, last run and next check, plus Activate / Pause and removal. "Activate" is the tab's filled button only at its stage (`filled`:
@@ -35,6 +35,8 @@ export function ChannelStatusCard({ channel, product, accountLabel, filled, onRe
   const error = activating.error ?? pausing.error ?? removing.error ?? refusal
 
   const activatable = canActivate(channel)
+  // The reason Activate is off: shown beside the button, and the same result disables it.
+  const blocker = activateBlocker(channel)
   const pausable = canPause(channel)
 
   return (
@@ -66,7 +68,6 @@ export function ChannelStatusCard({ channel, product, accountLabel, filled, onRe
         <dt>Next check</dt>
         <dd data-testid="channel-next-check">{nextCheckText(channel, formatTime)}</dd>
       </dl>
-      {neverAssessed(channel) && channel.status === 'setup' && <p className="muted small">Assess the channel first to see what this account can do here. Then check the settings and activate it.</p>}
       <ErrorNote error={error} />
       {refusal && pausable && (
         <div className="row actions-row">
@@ -77,9 +78,14 @@ export function ChannelStatusCard({ channel, product, accountLabel, filled, onRe
       )}
       <div className="row actions-row">
         {activatable && (
-          <Button variant={filled ? main : 'ghost'} onClick={() => void activate()} disabled={activating.busy} data-testid="channel-activate" title="Reads the existing discussions once as a baseline, then starts watching for new activity">
+          <Button variant={filled ? main : 'ghost'} onClick={() => void activate()} disabled={activating.busy || blocker !== null} data-testid="channel-activate" title="Reads the existing discussions once as a baseline, then starts watching for new activity">
             {activating.busy ? 'Activating…' : 'Activate'}
           </Button>
+        )}
+        {blocker && (
+          <Hint className="row-note" data-testid="channel-activate-reason">
+            {blocker}
+          </Hint>
         )}
         {pausable && (
           <Button onClick={() => void setPaused(true)} disabled={pausing.busy} data-testid="channel-pause">
