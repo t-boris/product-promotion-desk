@@ -9,7 +9,10 @@ export type LaunchStageState = 'done' | 'current' | 'todo'
 
 /** What the path is computed from. The channel and publication counts come from channels.list and opportunities.list. */
 export interface LaunchFacts {
-  /** At least one source. The core refuses a product without one (products.create and products.update), so it holds for every product. */
+  /**
+   * At least one source. products.create and products.update refuse a product without one, but removing sources one by one
+   * (sources.remove) can still empty it. The product page counts its sources; the product list, which has no sources, assumes one.
+   */
   hasSources: boolean
   passportApproved: boolean
   goals: number
@@ -60,19 +63,25 @@ export function launchProgress(stages: LaunchStage[]): string {
 export interface LaunchCounts {
   channels: number
   approvedPublications: number
+  /** Publications written but not approved yet: a draft, or waiting for the owner's approval. */
+  draftPublications: number
 }
+
+export const DRAFT_PUBLICATION_STATES: readonly OpportunityState[] = ['draft', 'awaiting_approval']
 
 /** Channels and approved publications per product, from the lists the pages already load. */
 export function launchCounts(channels: Pick<Channel, 'productId'>[], publications: { opportunity: Pick<Opportunity, 'productId' | 'state' | 'kind'> }[]): Map<Id, LaunchCounts> {
   const counts = new Map<Id, LaunchCounts>()
   const of = (id: Id): LaunchCounts => {
-    const found = counts.get(id) ?? { channels: 0, approvedPublications: 0 }
+    const found = counts.get(id) ?? { channels: 0, approvedPublications: 0, draftPublications: 0 }
     counts.set(id, found)
     return found
   }
   for (const channel of channels) of(channel.productId).channels++
   for (const { opportunity } of publications) {
-    if (opportunity.kind === 'standalone' && APPROVED_PUBLICATION_STATES.includes(opportunity.state)) of(opportunity.productId).approvedPublications++
+    if (opportunity.kind !== 'standalone') continue
+    if (APPROVED_PUBLICATION_STATES.includes(opportunity.state)) of(opportunity.productId).approvedPublications++
+    else if (DRAFT_PUBLICATION_STATES.includes(opportunity.state)) of(opportunity.productId).draftPublications++
   }
   return counts
 }

@@ -236,11 +236,18 @@ describe('QA clarity batch: what the screens say', () => {
     expect(passportStatus(none, null, [])).toEqual({ tone: 'warn', label: 'No approved passport' })
   })
 
-  it('product list: the next step goes passport, goal, channel', () => {
-    expect(nextProductStep({ activePassportVersionId: null, analysisStatus: 'idle', goals: [] })).toMatchObject({ tab: 'analysis' })
-    expect(nextProductStep({ activePassportVersionId: null, analysisStatus: 'complete', goals: [] })).toMatchObject({ tab: 'passport' })
-    expect(nextProductStep({ activePassportVersionId: 'v', analysisStatus: 'complete', goals: [] })).toMatchObject({ tab: 'goal' })
-    expect(nextProductStep({ activePassportVersionId: 'v', analysisStatus: 'complete', goals: [{ id: 'g', targetAction: 'a', successMetrics: [], notes: '' }] })).toMatchObject({ tab: 'channels' })
+  it('product list: the next step goes passport, goal, channel, publication, and is gone once the path is complete (BUG-014)', () => {
+    const none = { channels: 0, approvedPublications: 0, draftPublications: 0 }
+    const goals = [{ id: 'g', targetAction: 'a', successMetrics: [], notes: '' }]
+    expect(nextProductStep({ activePassportVersionId: null, analysisStatus: 'idle', goals: [] }, none)).toBe('Next: run the analysis')
+    expect(nextProductStep({ activePassportVersionId: null, analysisStatus: 'complete', goals: [] }, none)).toBe('Next: approve the passport')
+    expect(nextProductStep({ activePassportVersionId: 'v', analysisStatus: 'complete', goals: [] }, none)).toBe('Next: write a goal')
+    const ready = { activePassportVersionId: 'v', analysisStatus: 'complete' as const, goals }
+    expect(nextProductStep(ready, none)).toBe('Next: connect a channel')
+    // A product with a channel no longer asks for one.
+    expect(nextProductStep(ready, { ...none, channels: 1 })).toBe('Next: write a publication')
+    expect(nextProductStep(ready, { ...none, channels: 1, draftPublications: 2 })).toBe('Next: approve a draft')
+    expect(nextProductStep(ready, { channels: 1, approvedPublications: 1, draftPublications: 2 })).toBeNull()
   })
 
   it('Analysis: a step with nothing to work on says why instead of "Waiting", and is not counted', () => {
@@ -313,14 +320,14 @@ describe('QA clarity batch: what the screens say', () => {
     expect(launchStages('p1', { ...facts, passportApproved: false }).find((s) => s.state === 'current')?.id).toBe('passport')
   })
 
-  it('Launch path (BUG-012): channels and approved publications are counted per product; drafts and replies do not count', () => {
+  it('Launch path (BUG-012): channels, approved publications and drafts are counted per product; replies do not count', () => {
     const pub = (productId: string, state: string, kind = 'standalone') => ({ opportunity: { productId, state, kind } }) as Parameters<typeof launchCounts>[1][number]
     const counts = launchCounts(
       [{ productId: 'a' }, { productId: 'a' }, { productId: 'b' }],
       [pub('a', 'ready'), pub('a', 'confirmed'), pub('a', 'sending'), pub('a', 'awaiting_approval'), pub('b', 'draft'), pub('b', 'confirmed', 'reply')]
     )
-    expect(counts.get('a')).toEqual({ channels: 2, approvedPublications: 3 })
-    expect(counts.get('b')).toEqual({ channels: 1, approvedPublications: 0 })
+    expect(counts.get('a')).toEqual({ channels: 2, approvedPublications: 3, draftPublications: 1 })
+    expect(counts.get('b')).toEqual({ channels: 1, approvedPublications: 0, draftPublications: 1 })
     expect(counts.get('c')).toBeUndefined()
   })
 

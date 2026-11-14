@@ -1,15 +1,18 @@
 import type { Id } from '../../../../shared/types'
 import { useQuery } from '../../hooks'
-import { launchCounts, launchProgress, type LaunchCounts, type LaunchStage } from './launch-path'
+import { APPROVED_PUBLICATION_STATES, DRAFT_PUBLICATION_STATES, launchCounts, launchProgress, type LaunchCounts, type LaunchStage } from './launch-path'
+
+// Only the publications that count: the list is capped (300, newest first), and cancelled drafts must not push a sent one out of it.
+const COUNTED_STATES = [...APPROVED_PUBLICATION_STATES, ...DRAFT_PUBLICATION_STATES]
 
 const STATE_WORD: Record<LaunchStage['state'], string> = { done: 'done', current: 'next', todo: 'not yet' }
 
 /** The channel and approved-publication counts of every product, from the same lists Channels and Publications load. */
 export function useLaunchCounts(): (productId: Id) => LaunchCounts {
   const channels = useQuery('channels.list', undefined, ['channels', 'products'])
-  const publications = useQuery('opportunities.list', { kind: 'standalone' }, ['opportunities'])
+  const publications = useQuery('opportunities.list', { kind: 'standalone', states: COUNTED_STATES }, ['opportunities'])
   const counts = launchCounts(channels.data ?? [], publications.data ?? [])
-  return (productId) => counts.get(productId) ?? { channels: 0, approvedPublications: 0 }
+  return (productId) => counts.get(productId) ?? { channels: 0, approvedPublications: 0, draftPublications: 0 }
 }
 
 /** The launch path under the product header (BUG-012): each stage links to the place where it is worked on. */
