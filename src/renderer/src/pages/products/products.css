@@ -193,6 +193,22 @@ textarea.input.short {
   }
 }
 
+/* A section with nothing in it is one slim line; a statement keeps a calm vertical rhythm. */
+.passport-section.compact {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.passport-section.compact .card-head {
+  margin-bottom: 2px;
+}
+.claim-list {
+  gap: 10px;
+  margin-top: 8px;
+}
+.blocker {
+  font-size: var(--fs-md);
+}
+
 /* In a narrow window the two columns left the tabs of the product no room (the sixth ran out of the page, an old fault of the
    installed build too): the list becomes a row of cards above the product, which gets the full width. */
 @media (max-width: 1040px) {

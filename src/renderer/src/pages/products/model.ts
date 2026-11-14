@@ -66,3 +66,13 @@ export function describeScope(scope: SourceScope | null): string | null {
   if (scope.exclude.length > 0) parts.push(`without ${scope.exclude.join(', ')}`)
   return parts.length > 0 ? parts.join('; ') : null
 }
+
+/**
+ * The statements "Approve all proposed" approves: proposed facts and assumptions. It leaves out what needs a look first: an unknown (nothing
+ * to approve yet), a contradiction (the owner decides) and a capability found only in the project code (availability not confirmed).
+ */
+export function approvableClaims(claims: Claim[]): { approve: Claim[]; needLook: Claim[] } {
+  const proposed = claims.filter((c) => c.status === 'proposed')
+  const approve = proposed.filter((c) => (c.kind === 'fact' || c.kind === 'assumption') && !c.unconfirmedAvailability)
+  return { approve, needLook: proposed.filter((c) => !approve.includes(c)) }
+}
