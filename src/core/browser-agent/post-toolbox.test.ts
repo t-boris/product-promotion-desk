@@ -56,6 +56,8 @@ class FormPage extends FakePage {
   hidden: string[] = []
   /** A page whose fields cannot be read. */
   fieldsUnreadable = false
+  /** A page on which the script that reads the fields fails (it throws). */
+  readThrows = false
   private stepNumber = 0
 
   /** Loads a page like a browser does: a new document starts empty, except what the address or the site fills in; a change of the fragment only keeps the document and what its fields hold. */
@@ -79,6 +81,7 @@ class FormPage extends FakePage {
     this.log.push(`read ${script.slice(0, 40)}`)
     this.beforeRead?.(script)
     if (script.includes('ppd-form-text')) {
+      if (this.readThrows) throw new Error('the script failed')
       if (this.fieldsUnreadable) return 'not an answer' as T
       const blank = (text: string): boolean => text.replace(/[\s\u200b-\u200d\u2060\ufeff]/g, '') === ''
       const typed = [...this.fields].filter(([, text]) => !blank(text)).map(([ref, text]) => ({ ref, text }))
@@ -419,6 +422,46 @@ describe('a click or a choice of the AI\'s own is made only on the approved dest
     t.page.items.push({ ref: 'e9', role: 'link', name: 'Votes tab' })
     await look(t)
     expect((await t.toolbox.call('browser_click', { ref: 'e9' })).isError).toBe(true)
+  })
+})
+
+describe('what is not known about the form is not taken for empty', () => {
+  const UNREADABLE = { isError: true, text: expect.stringContaining('could not be read') }
+
+  it('refuses a click and a choice when the script that reads the fields fails, not only when it answers nonsense', async () => {
+    const t = setup()
+    await look(t)
+    t.page.readThrows = true
+    expect(await t.toolbox.call('browser_click', { ref: 'e8' })).toMatchObject(UNREADABLE)
+    expect(await t.toolbox.call('browser_select', { ref: 'e8', option: 'x' })).toMatchObject(UNREADABLE)
+    expect(t.page.clicked).toEqual([])
+    expect(t.page.posted).toEqual([])
+  })
+
+  it('refuses browser_submit before it asks for a ticket when the fields cannot be read: an unknown form is not an empty one', async () => {
+    for (const how of ['fieldsUnreadable', 'readThrows'] as const) {
+      const t = setup()
+      await look(t)
+      t.page[how] = true
+      expect(await submitReply(t)).toMatchObject(UNREADABLE)
+      expect(t.authority.leases).toBe(0)
+      expect(t.page.steps).toEqual([])
+      expect(t.page.fields.size).toBe(0)
+    }
+  })
+
+  it('does not press when the fields can no longer be read after the typing: the form may hold what nobody approved', async () => {
+    const t = setup()
+    await look(t)
+    t.page.beforeRead = (script) => {
+      // The read-back of the field has been answered; the next look at the fields fails.
+      if (script.includes('ppd-form-text') && t.page.fields.size > 0) t.page.readThrows = true
+    }
+    const result = await submitReply(t)
+    expect(result).toMatchObject({ isError: true, text: expect.stringContaining('could not be read') })
+    expect(t.page.clicked).toEqual([])
+    expect(t.page.posted).toEqual([])
+    expect(t.authority.committed).toBe(false)
   })
 })
 
@@ -1240,14 +1283,17 @@ describe('pacing: a post mission does not act in milliseconds', () => {
   })
 
   it('does not wait between the last look at the page and the press: what was checked is what is pressed', async () => {
-    for (const content of [REPLY, POST]) {
+    // Also on a clock that does not move: there every wait that is asked for is taken, so a wait added after the last look would show.
+    for (const [content, frozen] of [[REPLY, false], [POST, false], [REPLY, true], [POST, true]] as const) {
       const t = setup(content)
+      if (frozen) Object.defineProperty(t.time, 'now', { get: () => 10_000, set: () => undefined })
       await look(t)
       await t.toolbox.call('browser_click', { ref: 'e5' })
       expect((content.kind === 'post' ? await submitPost(t) : await submitReply(t)).isError).toBeUndefined()
       const press = t.page.log.lastIndexOf('pageStep click')
       const lastLook = t.page.log.slice(0, press).reduce((last, entry, i) => (entry.startsWith('read') ? i : last), -1)
       expect(lastLook).toBeGreaterThan(-1)
+      expect(t.page.log.slice(lastLook + 1, press)).toEqual([]) // nothing at all, not a wait, not another read, between the look and the press
       expect(t.page.log.slice(lastLook, press)).not.toContain('sleep')
       // The wait is still taken, just before that look: the typing of the last field is followed by one.
       expect(t.page.log.slice(0, lastLook)).toContain('sleep')
