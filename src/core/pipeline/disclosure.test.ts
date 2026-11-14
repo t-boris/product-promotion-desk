@@ -64,7 +64,6 @@ describe('what counts as stating the connection', () => {
     'We made it because charts were slow.',
     'Disclosure: I am connected with Natal Mystic.',
     'Full disclosure, this is my app.',
-    'Our product does that too.',
     'As the founder of Natal Mystic I can say it is free.',
     'Я разработчик Natal Mystic.',
     'Я сделал это приложение сам.',
@@ -90,7 +89,9 @@ describe('what counts as stating the connection', () => {
     'I work in a bank and this is not related.',
     'Thanks, I will try it!',
     'Natal Mystic, the developers say, is free.',
-    'Я пользуюсь Natal Mystic каждый день.'
+    'Я пользуюсь Natal Mystic каждый день.',
+    // A possessive that is the subject of a clause is not the product by being near it (see the table of possessives below).
+    'Our product does that too.'
   ])('rejects: %s', (sentence) => {
     expect(says(sentence)).toBe(false)
   })
@@ -312,5 +313,235 @@ describe('the documented trade-off for very short names', () => {
     expect(mentionsProductIn(text('you can go to settings'), go)).toBe(false)
     expect(disclosureProblem(text('Go to settings and turn it off'), go)).toContain('does not say that you are connected')
     expect(disclosureProblem(text('Go to settings. Disclosure: I work on Go.'), go)).toBeNull()
+  })
+})
+
+// The samples of the second review (M-3): each of these passed the check while it said what a customer says, or only used a word.
+describe('a label is not a statement', () => {
+  it.each([
+    'Disclosure: none. Natal Mystic is great.',
+    'Disclosure: N/A. Natal Mystic is great.',
+    'Disclosure: n/a Natal Mystic is great.',
+    'No disclosure needed, Natal Mystic is great.',
+    'Nothing to disclose. Natal Mystic is great.',
+    'Conflict of interest: no. Natal Mystic is great.',
+    'Affiliation: none. Natal Mystic is great.',
+    "Disclosure: I'm a regular customer of Natal Mystic.",
+    'Disclosure: I use Natal Mystic daily.',
+    'Full transparency: I love Natal Mystic.',
+    'Full disclosure: Natal Mystic changed my mornings.',
+    'Self-promotion: Natal Mystic is great.',
+    "I'm affiliated with Reddit. Natal Mystic is great.",
+    'Раскрытие информации: нет. Natal Mystic отличный.',
+    'Раскрытие информации: я пользуюсь Natal Mystic каждый день.'
+  ])('refuses: %s', (body) => {
+    expect(disclosureProblem(text(body), NATAL)).not.toBeNull()
+    expect(statesConnection(text(body), NATAL)).toBe(false)
+  })
+
+  it('says "not connected" for a label that answers "none", also in a text that does not mention the product', () => {
+    for (const body of ['Disclosure: none. Natal Mystic is great.', 'Conflict of interest: no.', 'No disclosure needed.', 'Раскрытие информации: нет.']) {
+      expect(disclosureProblem(text(body), NATAL), body).toContain('not connected')
+    }
+  })
+
+  it.each([
+    "Disclosure: I'm connected with Natal Mystic.",
+    "Disclosure: I'm affiliated with Natal Mystic, so I'm biased.",
+    'I have a financial interest in Natal Mystic.',
+    "I'm closely affiliated with Natal Mystic.",
+    "Disclosure: I'm the developer of Natal Mystic.",
+    'Я связан с Natal Mystic: я там работаю.',
+    'Я связан с Natal Mystic.'
+  ])('still accepts a label with a statement after it: %s', (body) => {
+    expect(disclosureProblem(text(body), NATAL)).toBeNull()
+  })
+})
+
+describe('a possessive that is the subject of a clause is not the product', () => {
+  it.each(['My app was crashing. Natal Mystic fixed it.', 'Our product had bugs. Natal Mystic found them.', 'My startup uses Natal Mystic for charts.', 'Our company switched to Natal Mystic.'])('refuses: %s', (body) => {
+    expect(disclosureProblem(text(body), NATAL)).toContain('does not say that you are connected')
+  })
+
+  it.each(['Natal Mystic is my app.', 'My app Natal Mystic is free.', "It's our product, Natal Mystic.", 'Natal Mystic — my startup.'])('still accepts when it says so: %s', (body) => {
+    expect(disclosureProblem(text(body), NATAL)).toBeNull()
+  })
+})
+
+describe('"this app" and "it" are the product only when the text has already named it', () => {
+  it.each([
+    'I built this app last year. Natal Mystic is great for charts.',
+    'I work on it. Natal Mystic is free this week.',
+    'I made this app in 2020.\nTry Natal Mystic.',
+    'I built this site on Natal Mystic in a weekend.',
+    'I made this on Natal Mystic.',
+    'I built this app using Natal Mystic.',
+    'I built this site with Natal Mystic.',
+    'I made this app for Natal Mystic.',
+    'I built the site around Natal Mystic.',
+    'Я сделал этот сайт на Natal Mystic.'
+  ])('refuses: %s', (body) => {
+    expect(disclosureProblem(text(body), NATAL)).toContain('does not say that you are connected')
+  })
+
+  it.each([
+    'Natal Mystic is great for charts. I built this app last year.',
+    'Natal Mystic builds a chart from your birth data. It is free for a week. I work on it.',
+    'I built this app, Natal Mystic, last year.',
+    'Natal Mystic is free. I made it because charts were slow.'
+  ])('accepts when it has been named: %s', (body) => {
+    expect(disclosureProblem(text(body), NATAL)).toBeNull()
+  })
+
+  it('accepts a "this app" that the link names, and one in a text that names the product nowhere', () => {
+    expect(disclosureProblem(text('I built this app last year.', { link: 'https://natalmystic.com' }), NATAL)).toBeNull()
+    expect(statesConnection(text('I work on it, so take this with a grain of salt.'), NATAL)).toBe(true)
+  })
+})
+
+describe('a role says nothing about the product when the clause says it is of something else', () => {
+  it.each([
+    "I'm the owner and I love Natal Mystic.",
+    "I'm the founder and CEO of Initech. Try Natal Mystic.",
+    "I'm the team lead at an agency and I use Natal Mystic.",
+    "I'm the developer and I use Natal Mystic.",
+    "I'm the CEO at a bank and Natal Mystic is great.",
+    'We are the team at an agency that uses Natal Mystic.'
+  ])('refuses: %s', (body) => {
+    expect(disclosureProblem(text(body), NATAL)).toContain('does not say that you are connected')
+  })
+
+  it.each([
+    "Natal Mystic is free this week. I'm the developer.",
+    "I'm the developer. Natal Mystic is free this week.",
+    "I'm the developer and I'm biased. Natal Mystic is free this week.",
+    "I'm one of the makers. Try Natal Mystic.",
+    "I'm a solo developer. Try Natal Mystic.",
+    'Я разработчик. Natal Mystic бесплатный.'
+  ])('accepts a role of nothing else: %s', (body) => {
+    expect(disclosureProblem(text(body), NATAL)).toBeNull()
+  })
+})
+
+describe('the name written so that the plain test misses it', () => {
+  it.each([
+    'Try **Natal** Mystic today',
+    'Try *Natal* *Mystic* today',
+    'Try __Natal__ _Mystic_ today',
+    'Try ~~Natal~~ `Mystic` today',
+    'Try [Natal](https://x.example) Mystic today',
+    'Try [Natal Mystic](https://x.example) today',
+    'Try <b>Natal</b> Mystic today',
+    'Try Natal. Mystic today',
+    'Try Natal · Mystic today',
+    'Try Natal_Mystic today',
+    'Try N\u0430tal Mystic today', // Cyrillic а
+    'Try Natal Mystіc today', // Cyrillic і
+    'Try \u039Datal Mystic today', // Greek Ν
+    'Try Натал Мистик today',
+    'Try натал мистик today'
+  ])('is still the product, and a problem without a statement: %s', (body) => {
+    expect(mentionsProductIn(text(body), NATAL)).toBe(true)
+    expect(disclosureProblem(text(body), NATAL)).toContain('does not say that you are connected')
+  })
+
+  it('finds a Cyrillic name written in Latin letters', () => {
+    const natalnaya = { name: 'Натальная Карта', websiteUrl: null }
+    expect(mentionsProductIn(text('Try Natalnaya Karta today'), natalnaya)).toBe(false) // what is not found is said in the report
+    expect(mentionsProductIn(text('Try **Натальная** Карта today'), natalnaya)).toBe(true)
+  })
+
+  it('finds a name written wholly in look-alike letters of another alphabet, which no mixed word betrays', () => {
+    const mapex = { name: 'Mapex', websiteUrl: null }
+    expect(mentionsProductIn(text('Try Mapex today'), mapex)).toBe(true)
+    expect(mentionsProductIn(text('Try \u041C\u0430\u0440\u0435\u0445 today'), mapex)).toBe(true) // Мареx in Cyrillic letters only
+    expect(mentionsProductIn(text('Try \u041C\u0430\u0440\u0435\u0445 today'), NATAL)).toBe(false)
+  })
+
+  it('does not take other words for it, and leaves a Russian text alone', () => {
+    expect(mentionsProductIn(text('Это натальная карта мира, очень мистическая'), NATAL)).toBe(false)
+    expect(mentionsProductIn(text('Натальная карта и мистика'), NATAL)).toBe(false)
+    expect(mentionsProductIn(text('Natal charts are mystic, said Natalia'), NATAL)).toBe(false)
+    expect(mentionsProductIn(text('Try Natal, Mystic and Tarot apps'), NATAL)).toBe(false)
+  })
+
+  it('still reads a statement written with markup, and with a look-alike letter', () => {
+    expect(disclosureProblem(text("I'm the **developer** of **Natal** Mystic."), NATAL)).toBeNull()
+    expect(disclosureProblem(text('I _built_ [Natal Mystic](https://natalmystic.com).'), NATAL)).toBeNull()
+    expect(disclosureProblem(text("I'm the d\u0435veloper of Natal Mystic."), NATAL)).toBeNull() // Cyrillic е
+    expect(disclosureProblem(text("I'm not affil\u0456ated with Natal Mystic."), NATAL)).toContain('not connected') // Cyrillic і
+  })
+})
+
+describe('what somebody else said, and what is wished or imagined, is not the author\'s statement', () => {
+  it.each([
+    "> I'm the developer of Natal Mystic",
+    "> I'm the developer of Natal Mystic\n\nNatal Mystic is great.",
+    'Someone said "I built Natal Mystic" and I agree.',
+    'He wrote: “I work on Natal Mystic” in the thread. Natal Mystic is great.',
+    'The page says «we are the team behind Natal Mystic». Natal Mystic is great.',
+    'I wish I had built Natal Mystic.',
+    'If I had built Natal Mystic, I would be rich.',
+    'I would love to say I built Natal Mystic.',
+    'Imagine I built Natal Mystic.',
+    "I'd like to say I'm the developer of Natal Mystic, but I'm not."
+  ])('refuses: %s', (body) => {
+    expect(disclosureProblem(text(body), NATAL)).not.toBeNull()
+  })
+
+  it.each([
+    'I built Natal Mystic last year. Someone asked me if I wish I had built it sooner.',
+    '> Is this your app?\n\nYes, I built Natal Mystic.',
+    'He asked "who made this?" and I said: I built Natal Mystic.',
+    "I'm the developer of Natal Mystic, if you wondered."
+  ])('accepts a statement that has such a thing next to it, not in front of it: %s', (body) => {
+    expect(disclosureProblem(text(body), NATAL)).toBeNull()
+  })
+})
+
+describe('honest disclosures that the review feared would be refused', () => {
+  it.each([
+    'I built Natal Mystic - a free tool.',
+    'I built Natal Mystic - a free tool for charts.',
+    'I built Natal Mystic out of frustration.',
+    'I built Natal Mystic back in 2020.',
+    'I made Natal Mystic free.',
+    'I run Natal Mystic.',
+    'I own Natal Mystic.',
+    'We run Natal Mystic together.',
+    "I'm the developer of Natal Mystic | free charts.",
+    "I'm the developer of Natal Mystic • free charts.",
+    'I built Natal Mystic after being just a user of other tools.',
+    "I used to be just a user of charts apps before I became the developer of Natal Mystic.",
+    "I'm the developer of Natal Mystic. It isn't an ad.",
+    "I'm the developer of Natal Mystic. This is not an ad.",
+    "I'm the developer of Natal Mystic. Not affiliated with Reddit.",
+    "I didn't want to build another dashboard, so I built Natal Mystic.",
+    'I did not want to build another app. Then I built Natal Mystic.',
+    'Я создал Natal Mystic. Это не реклама.'
+  ])('passes: %s', (body) => {
+    expect(disclosureProblem(text(body), NATAL)).toBeNull()
+  })
+
+  it.each([
+    'I run it every day, Natal Mystic is great.',
+    'I run Natal Mystic every day and it is great.',
+    'I own a copy of Natal Mystic.',
+    'I run Natal Mystic on my laptop.',
+    "I'm just a user of Natal Mystic and other tools.",
+    "I'm just a user of it.",
+    "I'm just a user."
+  ])('still refuses: %s', (body) => {
+    expect(disclosureProblem(text(body), NATAL)).not.toBeNull()
+  })
+
+  it('a denial that is about something else does not count against the statement, also when it is lowercase', () => {
+    expect(disclosureProblem(text("I'm just a user of other tools too, and I'm the developer of Natal Mystic."), NATAL)).toBeNull()
+    expect(disclosureProblem(text("I'm just a user of several apps. I'm the developer of Natal Mystic."), NATAL)).toBeNull()
+  })
+
+  it('a denial of advertising alone is still refused, and is said as a denial', () => {
+    expect(disclosureProblem(text('This is not an ad.'), NATAL)).toContain('not connected')
+    expect(disclosureProblem(text('Honest review of Natal Mystic. It is not an ad.'), NATAL)).toContain('not connected')
   })
 })
