@@ -220,7 +220,8 @@ export interface ApiMethods {
   'goals.suggest': [{ productId: Id; hint?: string; avoid?: string[] }, GoalIdea | null]
   /**
    * The AI writes the text of one field (`current` empty) or improves it (`current` filled, steered by the owner's `instruction`).
-   * `around` is what the owner already wrote in the other fields of the same form. Nothing is saved: the owner reads the text and
+   * A product field takes `productId`; a channel field takes `channelId` (the product is the channel's). `around` is what the owner already
+   * wrote in the other fields of the same form. Nothing is saved: the owner reads the text and
    * saves it with the form. Refused like every AI help: engine_unavailable, and not_found or invalid_input for a bad product or field.
    */
   /**
@@ -229,7 +230,7 @@ export interface ApiMethods {
    * Refused with site_unreadable when the site cannot be read, and like every AI help otherwise.
    */
   'products.draftFromSite': [{ url: string }, { name: string; description: string; websiteUrl: string } | null]
-  'assist.refine': [{ field: AssistField; productId?: Id; current: string; instruction?: string; around?: { label: string; text: string }[] }, { text: string }]
+  'assist.refine': [{ field: AssistField; productId?: Id; channelId?: Id; current: string; instruction?: string; around?: { label: string; text: string }[] }, { text: string }]
   /**
    * Reads the site at `url` through the account's browser (read-only) and has the AI prepare a draft profile for the
    * universal connector. Never saves anything and never fails because the AI could not help: the draft then carries

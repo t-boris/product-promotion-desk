@@ -17,6 +17,7 @@ export function AiField({
   hint,
   field,
   productId,
+  channelId,
   value,
   onChange,
   around,
@@ -28,6 +29,8 @@ export function AiField({
   hint?: string
   field: AssistField
   productId?: string
+  /** For a channel's text: the channel it is written for. */
+  channelId?: string
   value: string
   onChange: (text: string) => void
   /** What the owner wrote in the other fields of the same form, so the AI fits the field into it. */
@@ -45,7 +48,7 @@ export function AiField({
 
   const [run, state] = useAction(async () => {
     const before = value
-    const result = await call('assist.refine', { field, productId, current: value, instruction: action.kind === 'improve' ? wish : undefined, around })
+    const result = await call('assist.refine', { field, productId, channelId, current: value, instruction: action.kind === 'improve' ? wish : undefined, around })
     onChange(result.text)
     setApplied({ text: result.text, before })
     setWishOpen(false)

@@ -54,6 +54,32 @@ describe('assist.refine: gate and input', () => {
   })
 })
 
+describe('assist.refine: channel fields', () => {
+  it('needs the channel, writes for it, and takes the product from it', async () => {
+    const w = await world()
+    const channel = await w.call('channels.connect', { productId: w.productId, accountId: w.account.id, target: 'r/astrology' })
+    w.t.engine.on('assist.write', text('astrology questions\nbirth chart reading'))
+    expect(await w.refusal('assist.refine', { field: 'channel.topics', current: '' })).toBe('invalid_input')
+    expect(await w.refusal('assist.refine', { field: 'channel.topics', channelId: 'nope', current: '' })).toBe('not_found')
+    // The product comes from the channel: a product id sent along is not what decides.
+    const result = await w.call('assist.refine', { field: 'channel.topics', channelId: channel.id, productId: 'another', current: '' })
+    expect(result).toEqual({ text: 'astrology questions\nbirth chart reading' })
+    const prompt = w.t.engine.calls[0].prompt
+    expect(prompt).toContain('Name: Natal Mystic')
+    expect(prompt).toContain(`This text is for the channel ${channel.target} on ${channel.platform}.`)
+    expect(prompt).toContain('at most 8 lines, at most 80 characters each')
+  })
+
+  it('keeps the style as prose and cuts it to its length', async () => {
+    const w = await world()
+    const channel = await w.call('channels.connect', { productId: w.productId, accountId: w.account.id, target: 'r/astrology' })
+    w.t.engine.on('assist.write', text(`Warm and short. ${'No hype. '.repeat(100)}`))
+    const result = await w.call('assist.refine', { field: 'channel.style', channelId: channel.id, current: '' })
+    expect(result.text.length).toBeLessThanOrEqual(400)
+    expect(result.text.startsWith('Warm and short.')).toBe(true)
+  })
+})
+
 describe('assist.refine: what the AI is told', () => {
   it('writes from approved statements only, and says the field is empty', async () => {
     const w = await world()

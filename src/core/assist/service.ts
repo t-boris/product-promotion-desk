@@ -5,6 +5,7 @@ import type { Core } from '../core'
 import { AiError } from '../ports'
 import { collapseWhitespace } from '../passports/text'
 import { isAssistField, FIELDS } from './fields'
+import { found, requireText } from '../channels/errors'
 import { prepareAssist } from './gate'
 import type { ProductFacts } from './kit'
 import { refineText } from './refine'
@@ -40,19 +41,28 @@ export class AssistService {
     private readonly ai: RefineHelp = { refineText }
   ) {}
 
-  async refine(args: { field: unknown; productId?: unknown; current?: unknown; instruction?: unknown; around?: unknown }): Promise<{ text: string }> {
+  async refine(args: { field: unknown; productId?: unknown; channelId?: unknown; current?: unknown; instruction?: unknown; around?: unknown }): Promise<{ text: string }> {
     if (!isAssistField(args.field)) throw new ApiError('invalid_input', 'The AI cannot help with this field.')
     const field = args.field
     const spec = FIELDS[field]
 
+    // A channel's text is written for that channel (its platform and address); the product is the channel's. A product's text names the product.
+    let productId: unknown = args.productId
+    let channel: { platform: string; target: string } | undefined
+    if (spec.scope === 'channel') {
+      const channelId = requireText(args.channelId, 'The channel')
+      const record = found(() => this.core.repos.channel(channelId), 'The channel')
+      productId = record.productId
+      channel = { platform: record.platform, target: record.target }
+    }
     // The AI writes for one product: its name and approved statements (when there are any) are what it may rely on.
-    const { product, engine, claims } = await prepareAssist(this.core, args.productId, { passport: 'optional' })
+    const { product, engine, claims } = await prepareAssist(this.core, productId, { passport: 'optional' })
     const facts: ProductFacts = { name: product.name, websiteUrl: product.websiteUrl, description: product.description }
 
     const current = typeof args.current === 'string' ? args.current.slice(0, MAX_CURRENT) : ''
     const instruction = typeof args.instruction === 'string' ? collapseWhitespace(args.instruction).slice(0, MAX_INSTRUCTION) : ''
     try {
-      const text = await this.ai.refineText(engine, { field, product: facts, claims, around: readAround(args.around), current, instruction })
+      const text = await this.ai.refineText(engine, { field, product: facts, claims, channel, around: readAround(args.around), current, instruction })
       // The log says that a text was written, not what it says.
       this.core.log.info('passports', `The AI ${current.trim() ? 'improved' : 'wrote'} the ${spec.label}. Nothing is saved.`)
       return { text }
