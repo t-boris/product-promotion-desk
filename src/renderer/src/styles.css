@@ -126,6 +126,45 @@
   }
 }
 
+/* Motion is only for a change of state, and it is off when the system asks for less of it: one place sets the
+   durations to 0ms, so every transition and animation that uses the tokens stops. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+  }
+}
+
+/* Things that open (menus, panels, dialogs, folded blocks) fade in over --dur-base. */
+@keyframes ppd-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ppd-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.modal-backdrop {
+  animation: ppd-fade var(--dur-base) var(--ease-out);
+}
+.modal,
+.ai-pill-panel,
+.menu-pop,
+.disclosure[open] > .disclosure-body,
+.more[open] > :not(summary) {
+  animation: ppd-fade-in var(--dur-base) var(--ease-out);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -805,7 +844,7 @@ input[type='radio'] {
   height: 22px;
   border-radius: 999px;
   background: var(--border-strong);
-  transition: background 0.15s ease;
+  transition: background var(--dur-fast) var(--ease-out);
 }
 .switch-track::after {
   content: '';
@@ -816,7 +855,7 @@ input[type='radio'] {
   height: 16px;
   border-radius: 50%;
   background: var(--panel);
-  transition: transform 0.15s ease;
+  transition: transform var(--dur-fast) var(--ease-out);
 }
 .switch input:checked + .switch-track {
   background: var(--accent);
@@ -902,7 +941,7 @@ input[type='radio'] {
   border-right: 2px solid var(--muted);
   border-bottom: 2px solid var(--muted);
   transform: rotate(-45deg);
-  transition: transform 0.15s ease;
+  transition: transform var(--dur-base) var(--ease-out);
 }
 .disclosure[open] > summary::before {
   transform: rotate(45deg);

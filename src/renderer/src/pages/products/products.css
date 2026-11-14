@@ -178,7 +178,7 @@ textarea.input.short {
 .progress-bar {
   height: 100%;
   background: var(--accent);
-  transition: width 0.2s ease;
+  transition: width var(--dur-base) var(--ease-out);
 }
 
 @media (max-width: 900px) {
