@@ -530,3 +530,23 @@ Review:
 - Not verified: BUG-041 against a real keychain prompt (never provoked on the owner's Mac): the spy-encryptor tests prove zero safeStorage calls on open, `canStart` and background sign-in; whether main stays responsive during a real prompt and whether "Always Allow" persists with `PPD_SIGN_IDENTITY` are UNVERIFIED. The Electron typings promise that data from the sync `encryptString` decrypts with `decryptStringAsync`; a vault written by this build is not promised readable by an older build.
 - Known gaps, not fixed: BUG-044 a port already in use (EADDRINUSE) still leaves the switch On; the About panel reads "0.9.0 (0.9.0)" (BUG-048, not in the report); "Stop the AI" has no confirm (decision); AccountEmail "Remove address" and the draft attachment "Remove" stay immediate; the Products list can show zero counts for one frame while the lists load.
 - The tour's 980 runs hide the menu, so its V-18 figure (308) is not the real state (lesson 132): measure with the menu shown.
+
+
+## AI-first interface (plan approved by the owner 2026-11-14; plan file `~/.claude/plans/spicy-questing-stonebraker.md` while it lives)
+
+Rule: AI support on every typed field, every "Add ..." and every "Edit ...", through the CLI engines; the embedded browser (MCP) is the main executor for account, scan and post actions. The AI proposes or fills, the owner saves; every outward action still needs the owner's Approve in the app (DEC-008, send ticket, limits).
+
+Stream A (branch `feat/ai-assist-foundation`, this checkout), release 0.10.0:
+- [x] Core of `goals.suggest` (f5a2973, 19 tests).
+- [ ] Shared assist kit `src/core/assist/` (helpers moved out of `ai-help.ts`, gate with optional passport), behaviour unchanged.
+- [ ] Engine auto-select on first launch (no engine selected and one is ready).
+- [ ] `assist.refine` (free text field: write, or improve with an instruction) with a field table; tests.
+- [ ] Renderer kit: `AiField`, `AiProposal`, `useAssist`, `assist-block.ts` (pure, tested).
+- [ ] Goals UI (propose one at a time, "Use this" fills the form) and Edit with AI.
+- [ ] Create a product from its website (name, description, sources proposed).
+- [ ] Channel settings proposed by the AI.
+- [ ] Rewrite and fix of drafts (reply, post), disclosure and safety wording.
+- [ ] Spec (`docs/design/macos/visual-system.md`), layout shown to the owner before the PR, packaged probe, PR, release 0.10.0.
+- Later releases: 0.11.0 remaining forms; 0.12.0 "Let the AI do this" per stage and cadence-based post proposals.
+
+Stream B (worktree `../ppd-browser`, branch `feat/ai-browser-missions`, from main): B1 ticket-aware post mission and the honesty fixes; B2 account creation end to end; B3 connect, assess and scan missions.
