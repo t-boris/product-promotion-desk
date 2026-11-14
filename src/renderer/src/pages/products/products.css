@@ -139,3 +139,22 @@ textarea.input.short {
     position: static;
   }
 }
+
+/* In a narrow window the two columns left the tabs of the product no room (the sixth ran out of the page, an old fault of the
+   installed build too): the list becomes a row of cards above the product, which gets the full width. */
+@media (max-width: 1040px) {
+  .products-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .products-list {
+    position: static;
+  }
+  .products-list .stack {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .products-list .stack > * {
+    flex: 1 1 220px;
+    min-width: 0;
+  }
+}

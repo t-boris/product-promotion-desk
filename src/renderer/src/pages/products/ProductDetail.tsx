@@ -1,7 +1,7 @@
 import type { Id } from '../../../../shared/types'
 import { useEvents, useQuery } from '../../hooks'
 import type { ProductTab } from '../../route'
-import { EmptyState, ErrorNote, Loading } from '../../ui'
+import { ErrorNote, Loading } from '../../ui'
 import { ChannelsPanel } from '../channels/ChannelsPanel'
 import { ResultsPanel } from '../results/ResultsPanel'
 import { AnalysisTab } from './AnalysisTab'
@@ -34,7 +34,7 @@ export function ProductDetail({ productId, tab, onTabChange, onDeleted }: { prod
 
   return (
     <div className="stack" data-testid="product-detail">
-      <ProductHeader product={view.product} onDeleted={onDeleted} />
+      <ProductHeader view={view} onDeleted={onDeleted} onOpenTab={onTabChange} />
       <div className="tabs" role="tablist" aria-label="Product sections">
         {TABS.map((t) => (
           <button key={t.id} role="tab" aria-selected={tab === t.id} className={`tab ${tab === t.id ? 'active' : ''}`} onClick={() => onTabChange(t.id)} data-testid={`product-tab-${t.id}`}>
@@ -50,13 +50,5 @@ export function ProductDetail({ productId, tab, onTabChange, onDeleted }: { prod
       {tab === 'channels' && <ChannelsPanel productId={productId} />}
       {tab === 'results' && <ResultsPanel productId={productId} />}
     </div>
-  )
-}
-
-export function NothingSelected() {
-  return (
-    <EmptyState title="Select a product">
-      Pick a product to see its sources, passport, analysis, goal, channels and results, or add a new one.
-    </EmptyState>
   )
 }

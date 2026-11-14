@@ -1,8 +1,10 @@
 import { useState } from 'react'
-import type { Product } from '../../../../shared/types'
+import type { PassportView, Product } from '../../../../shared/types'
+import type { ProductTab } from '../../route'
 import { call, useAction } from '../../hooks'
 import { Badge, Button, Card, ErrorNote, Field } from '../../ui'
 import { ANALYSIS_LABELS, ANALYSIS_TONES } from './labels'
+import { NOT_ANALYZED_HINT, passportStatus } from './product-status'
 
 function EditDetails({ product, onDone }: { product: Product; onDone: () => void }) {
   const [name, setName] = useState(product.name)
@@ -43,7 +45,9 @@ function EditDetails({ product, onDone }: { product: Product; onDone: () => void
   )
 }
 
-export function ProductHeader({ product, onDeleted }: { product: Product; onDeleted: () => void }) {
+export function ProductHeader({ view, onDeleted, onOpenTab }: { view: PassportView; onDeleted: () => void; onOpenTab: (tab: ProductTab) => void }) {
+  const { product } = view
+  const passport = passportStatus(product, view.version, view.claims)
   const [editing, setEditing] = useState(false)
   const [remove, removing] = useAction(async () => {
     const message = `Delete "${product.name}" with its sources, passport and version history? This cannot be undone.`
@@ -72,13 +76,33 @@ export function ProductHeader({ product, onDeleted }: { product: Product; onDele
       ) : (
         <dl className="kv" data-testid="product-details">
           <dt>Website</dt>
-          <dd>{product.websiteUrl ?? <span className="muted">Not set</span>}</dd>
+          <dd>
+            {product.websiteUrl ?? (
+              <span className="muted">
+                No website yet{' '}
+                <button type="button" className="link-btn" onClick={() => setEditing(true)} data-testid="add-website">
+                  Add website
+                </button>
+              </span>
+            )}
+          </dd>
           <dt>Description</dt>
-          <dd>{product.description ?? <span className="muted">Not set</span>}</dd>
+          <dd>{product.description ?? <span className="muted">No description yet</span>}</dd>
           <dt>Status</dt>
           <dd className="row">
-            <Badge tone={product.activePassportVersionId ? 'good' : 'warn'}>{product.activePassportVersionId ? 'Passport approved' : 'No approved passport'}</Badge>
-            <Badge tone={ANALYSIS_TONES[product.analysisStatus]}>{ANALYSIS_LABELS[product.analysisStatus]}</Badge>
+            <Badge tone={passport.tone}>{passport.label}</Badge>
+            {passport.detail && <span className="hint">{passport.detail}</span>}
+            {product.analysisStatus === 'idle' ? (
+              // Amber and clickable: it is a step still to do, not a quiet caption (QA findings 42, 48).
+              <>
+                <Badge tone="warn">{ANALYSIS_LABELS.idle}</Badge>
+                <button type="button" className="link-btn" onClick={() => onOpenTab('analysis')} title={NOT_ANALYZED_HINT} data-testid="open-analysis">
+                  Open Analysis
+                </button>
+              </>
+            ) : (
+              <Badge tone={ANALYSIS_TONES[product.analysisStatus]}>{ANALYSIS_LABELS[product.analysisStatus]}</Badge>
+            )}
           </dd>
         </dl>
       )}
