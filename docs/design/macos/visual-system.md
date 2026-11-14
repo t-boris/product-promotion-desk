@@ -365,7 +365,7 @@ Texts are the current ones and do not change.
 |---|---|---|---|
 | No products | Page header + empty state | "Add your first product" ("New product" is bezel) | "No products yet" → "Add your first product" |
 | New product form (`CreateProduct`) | Group box form at the top of the page | "Create product" | — |
-| List + detail | List + detail; product rows: name + launch dots, website or "No website yet", "Next: …" | per tab | — |
+| List + detail | List + detail; product rows: name + launch dots, the website's host (full address and full name in the tooltip) or "No website yet", "Next: …" | per tab | — |
 | Product header (`ProductHeader`), Edit details form | Object header; edit form as a group box | "Save" while editing | — |
 | Launch path + tabs | Stepper + segmented control (Sources, Passport, Analysis, Goal, Channels, Results) | — | — |
 | Sources (`SourcesTab`, `AddSource`, `SourcePreviewPanel`) | "Add a source" group box (kind as segmented control), "Sources" group box with rows (Edit/Remove on the right), preview as a well | "Add source"; "Save" while an inline edit is open | "No sources yet" → the add form |
@@ -576,7 +576,7 @@ matrix of §10 is the target; this section records what the code does, so the sw
 |---|---|---|
 | Products, no product | empty state, art `product` | "Add your first product" (header "New product" is a bezel) |
 | New product | group box form above the list; the product below keeps its tab but its main action is a bezel | "Create product" |
-| List + detail | list panel (name + five launch dots, website or "No website yet", analysis tag only for running/paused/failed, "Next: …"), detail pane | per tab |
+| List + detail | list panel (name + five launch dots, the website's host or "No website yet", analysis tag only for running/paused/failed, "Next: …"), detail pane | per tab |
 | Product header | object header + label/value rows, no card; Edit details opens a group box "Edit details" | "Save" while editing |
 | Launch path | stage 24 px, joint 18 px (10 px in a pane under 560 px), mark 14 px, "Next" capsule 20 px | — |
 | Sources | "Sources" group box with hairline rows (kind tag, name, text clamped to 3 lines, Edit / Remove quiet), "Add a source" group box (segmented kind) | "Add source"; "Save" while a source is edited ("Add source" steps back) |

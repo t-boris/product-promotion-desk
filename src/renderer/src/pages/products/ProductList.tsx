@@ -3,7 +3,7 @@ import { Badge, EmptyState } from '../../ui'
 import { ANALYSIS_LABELS, ANALYSIS_TONES } from './labels'
 import { launchStages, type LaunchCounts } from './launch-path'
 import { LaunchDots } from './LaunchPath'
-import { nextProductStep } from './product-status'
+import { nextProductStep, websiteHost } from './product-status'
 
 export function ProductList({ products, selectedId, countsOf, onSelect }: { products: Product[]; selectedId: string | null; countsOf: (productId: Id) => LaunchCounts; onSelect: (id: string) => void }) {
   if (products.length === 0) return <EmptyState art="product" title="No products yet">Add the first one with the button above.</EmptyState>
@@ -31,10 +31,12 @@ export function ProductList({ products, selectedId, countsOf, onSelect }: { prod
             data-testid={`product-${product.id}`}
           >
             <div className="panel-row-top">
-              <span className="panel-row-title">{product.name}</span>
+              <span className="panel-row-title" title={product.name}>{product.name}</span>
               <LaunchDots stages={stages} testId={`launch-dots-${product.id}`} />
             </div>
-            <div className="panel-row-line">{product.websiteUrl ?? 'No website yet'}</div>
+            <div className="panel-row-line" title={product.websiteUrl ?? undefined}>
+              {product.websiteUrl ? websiteHost(product.websiteUrl) : 'No website yet'}
+            </div>
             {/* The passport and the analysis are in the header and in the next step; only a state worth a glance gets a tag here. */}
             {(product.analysisStatus === 'running' || product.analysisStatus === 'paused' || product.analysisStatus === 'failed') && (
               <div className="row">

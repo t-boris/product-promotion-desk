@@ -13,7 +13,7 @@ import { engineChoiceVariant, recommendedEngineId, splitEngineDetail } from '../
 import { describeSources, planStages, progressOf } from '../renderer/src/pages/products/analysis-plan'
 import { launchCounts, launchProgress, launchStages } from '../renderer/src/pages/products/launch-path'
 import { approvableClaims } from '../renderer/src/pages/products/model'
-import { nextProductStep, passportStatus } from '../renderer/src/pages/products/product-status'
+import { nextProductStep, passportStatus, websiteHost } from '../renderer/src/pages/products/product-status'
 import { resolveSelected } from '../renderer/src/pages/products/product-selection'
 import { isMirroredSource } from '../renderer/src/pages/products/source-view'
 import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block'
@@ -696,5 +696,23 @@ describe('the product that is open on the Products page (BUG-042)', () => {
     // Once the list holds it, the normal rule applies and the created id no longer matters.
     expect(resolveSelected(['p1', 'p2', 'p3'], 'p3', 'p3')).toBe('p3')
     expect(resolveSelected(ids, 'p3', null)).toBeNull()
+  })
+})
+
+describe('the website a product row shows (BUG-062)', () => {
+  it('shows the host: no scheme, no "www.", no trailing slash, no path', () => {
+    expect(websiteHost('https://northwind.example.com/')).toBe('northwind.example.com')
+    expect(websiteHost('http://www.northwind.example.com')).toBe('northwind.example.com')
+    expect(websiteHost('https://northwind-notes-team-workspace.example.com/products/meeting-notes?ref=1#top')).toBe('northwind-notes-team-workspace.example.com')
+  })
+
+  it('keeps a port, which tells two sites on one host apart', () => {
+    expect(websiteHost('http://localhost:3000/')).toBe('localhost:3000')
+  })
+
+  it('keeps the raw text when it is not an address', () => {
+    expect(websiteHost('northwind.example.com')).toBe('northwind.example.com')
+    expect(websiteHost('not a url')).toBe('not a url')
+    expect(websiteHost('')).toBe('')
   })
 })

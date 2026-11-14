@@ -34,5 +34,18 @@ export function nextProductStep(product: Pick<Product, 'activePassportVersionId'
   return counts.draftPublications > 0 ? 'Next: approve a draft' : 'Next: write a publication'
 }
 
+/**
+ * The website of a product as a row of the list shows it: the host (and a port), without the scheme, "www." or a path, so it fits
+ * the narrow list; the full address goes in the row's tooltip (BUG-062). Text that is not an address is kept as it is.
+ */
+export function websiteHost(url: string): string {
+  try {
+    const host = new URL(url).host.replace(/^www\./i, '')
+    return host || url
+  } catch {
+    return url
+  }
+}
+
 /** Why a product shows "Not analyzed", in words that say what is missing and where to fix it. */
 export const NOT_ANALYZED_HINT = 'The AI has not read this product’s sources yet. Open the Analysis tab to run it, or build the passport by hand.'
