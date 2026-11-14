@@ -2,6 +2,7 @@
 // and consume other modules only through these interfaces, so they can be built and tested independently.
 
 import type { AgentAsk, CapabilityKey, Claim, Id, MetricSnapshot, SendAction } from '../shared/types'
+import type { PostMissionService } from './browser-agent/post-submit'
 
 /** Implemented by the passports module (I-1); consumed by drafting and sending (I-5, I-6). */
 export interface KnowledgeProvider {
@@ -78,6 +79,8 @@ export interface AgentQuestions {
 
 export interface CoreServices {
   agent?: AgentQuestions
+  /** Implemented by the channels module; the send flow runs an approved publication through it when the owner chose the AI browser (B1). */
+  postMissions?: PostMissionService
   channels?: ChannelsService
   knowledge?: KnowledgeProvider
   pipeline?: PipelineHooks

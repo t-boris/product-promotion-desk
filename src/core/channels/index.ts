@@ -51,6 +51,7 @@ export function register(core: Core): void {
   accounts.onSignedOut = (account) => void signIn.maybeAutomatic(account)
 
   core.services.agent = agent
+  core.services.postMissions = agent
   core.services.channels = {
     markCapabilityVerified: (channelId, key, detail) => channels.markCapabilityVerified(channelId, key, detail)
   }

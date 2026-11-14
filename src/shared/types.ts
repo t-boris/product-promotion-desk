@@ -269,6 +269,11 @@ export interface SignInResult {
 /** What the browser agent can be asked to do on an account's own browser (DEC-017). More kinds follow: read, answer, set up a profile. */
 /** `signup`: create the account on the platform. `profile`: fill in the profile of an account that exists (about-text, place, website, picture). */
 export type AgentTaskKind = 'signup' | 'profile'
+/**
+ * What a run of the browser agent is. The first two are started by the owner (`agent.start`); `post` is started only by the send flow,
+ * for one approved publication, and cannot be started through the API.
+ */
+export type MissionKind = AgentTaskKind | 'post'
 export type AgentRunStatus = 'running' | 'done' | 'needs_owner' | 'failed' | 'stopped'
 
 /** Whether the browser agent can start on an account now, and if not, the one thing to do first, in plain words. */
@@ -292,7 +297,7 @@ export interface AgentAsk extends AgentQuestion {
 /** One run of the browser agent on one account: what it is doing or why it stopped, and what it did. Kept in memory; no secret is ever in it. */
 export interface AgentRun {
   accountId: Id
-  kind: AgentTaskKind
+  kind: MissionKind
   status: AgentRunStatus
   /** One sentence for the owner: what it is doing now, or why it stopped and what to do. */
   summary: string
@@ -387,7 +392,7 @@ export interface AccountRole {
 export interface RoleSuggestion {
   name: string
   voice: string
-  /** A few ideas for the login name on the platform; the application never registers accounts. */
+  /** A few ideas for the login name on the platform; the owner decides, and the AI registers the account in its own browser with the name the owner approved (DEC-018, DEC-019). */
   usernameIdeas: string[]
   /** Why this role fits the product's audience. */
   reason: string
