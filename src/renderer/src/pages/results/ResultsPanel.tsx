@@ -31,6 +31,7 @@ export function ResultsPanel({ productId }: { productId: string }) {
       {results.data && <GoalsCard goals={results.data.goals} />}
       {results.data && channels.length === 0 && (
         <EmptyState
+          art="channel"
           title="No channels for this product yet"
           action={
             <a className="btn btn-primary" href={productHref(productId, 'channels')} data-testid="results-channels-link">

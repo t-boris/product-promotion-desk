@@ -12,7 +12,7 @@ export function RunsTab() {
     <div className="stack" data-testid="runs-tab">
       <ErrorNote error={runs.error} />
       {runs.loading && !runs.data && <Loading what="Loading runs" />}
-      {runs.data?.length === 0 && <EmptyState title="No runs yet">Checks of channels, metric refreshes and sends are listed here once they happen.</EmptyState>}
+      {runs.data?.length === 0 && <EmptyState art="list" title="No runs yet">Checks of channels, metric refreshes and sends are listed here once they happen.</EmptyState>}
       {runs.data && runs.data.length > 0 && (
         <table className="table" data-testid="runs-table">
           <thead>

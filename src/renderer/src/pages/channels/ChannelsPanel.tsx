@@ -70,7 +70,7 @@ export function ChannelsPanel({ productId }: { productId: string }) {
       )}
       {channelList.length === 0 ? (
         // Without an account the strip above already says what to do; an empty "No channels yet" would only repeat it.
-        hasAccount && <EmptyState title="No channels yet">Connect your first channel above.</EmptyState>
+        hasAccount && <EmptyState art="channel" title="No channels yet">Connect your first channel above.</EmptyState>
       ) : (
         <div className="channels-layout">
           <aside className="channels-list">

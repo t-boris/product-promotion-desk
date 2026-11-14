@@ -60,6 +60,7 @@ function NothingNeedsYou({ products, accounts, paused, onResume }: { products: P
       <div className="stack" data-testid="attention-empty">
         <EmptyState
           fill
+          art="inbox"
           title="Nothing needs you right now"
           action={
             <a className="btn" href="#/opportunities" data-testid="attention-next-opportunities">

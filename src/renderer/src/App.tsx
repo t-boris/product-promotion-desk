@@ -66,7 +66,12 @@ export function App() {
       {menuOpen && (
         <aside className="sidebar" data-testid="sidebar">
           <div className="brand">
-            <span className="brand-mark" aria-hidden="true" />
+            {/* The launch glyph: three rising bars in the accent tile, drawn in CSS (BUG-036). */}
+            <span className="brand-mark" aria-hidden="true" data-testid="brand-mark">
+              <span />
+              <span />
+              <span />
+            </span>
             <span>Promotion Desk</span>
           </div>
           <nav aria-label="Work areas">

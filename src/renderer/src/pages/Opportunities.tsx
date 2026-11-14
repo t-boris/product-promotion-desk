@@ -88,6 +88,7 @@ export function OpportunitiesPage() {
       {(waitingForProducts || (list.loading && !list.data)) && <Loading what="Loading" />}
       {!waitingForProducts && cards?.length === 0 && (
         <EmptyState
+          art="channel"
           title="Nothing here"
           action={
             noChannel && (

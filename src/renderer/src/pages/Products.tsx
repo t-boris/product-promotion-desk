@@ -71,6 +71,7 @@ export function ProductsPage() {
       {products.data && list.length === 0 && !creating && (
         <EmptyState
           fill
+          art="product"
           title="No products yet"
           action={
             <Button variant="primary" onClick={() => setCreating(true)}>

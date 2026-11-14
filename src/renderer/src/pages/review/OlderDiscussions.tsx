@@ -42,7 +42,7 @@ export function OlderDiscussions({ channel }: { channel: Channel }) {
           </Field>
           <ErrorNote error={list.error ?? selecting.error} />
           {list.loading && !list.data && <Loading what="Loading discussions" />}
-          {list.data?.length === 0 && <EmptyState title="No discussions recorded yet" />}
+          {list.data?.length === 0 && <EmptyState art="inbox" title="No discussions recorded yet" />}
           {matching.slice(0, MAX_SHOWN).map((d) => (
             <label key={d.id} className="list-row" data-testid={`older-${d.id}`}>
               <span className="row" style={{ flex: 1 }}>

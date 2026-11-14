@@ -292,6 +292,26 @@ code {
   height: 22px;
   border-radius: 7px;
   background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #ff7ab8));
+  /* The launch glyph (BUG-036): three rising bars standing on the tile's lower edge. */
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  padding-bottom: 5px;
+}
+.brand-mark > span {
+  width: 3px;
+  border-radius: 1px;
+  background: var(--on-accent);
+}
+.brand-mark > span:nth-child(1) {
+  height: 5px;
+}
+.brand-mark > span:nth-child(2) {
+  height: 8px;
+}
+.brand-mark > span:nth-child(3) {
+  height: 12px;
 }
 .nav-item {
   display: flex;
@@ -622,6 +642,14 @@ textarea.input {
   padding: var(--space-5) var(--space-4);
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius);
+}
+/* One line drawing per empty state, in the accent (BUG-036). It is still: nothing moves, with or without reduced motion. */
+.empty-art {
+  display: block;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto var(--space-3);
+  color: var(--accent-on-tint);
 }
 .plain-list {
   margin: var(--space-2) 0 0;

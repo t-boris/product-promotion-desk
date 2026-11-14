@@ -164,7 +164,7 @@ export function SourcesTab({ view }: { view: PassportView }) {
           <Hint>Project code is read, never run. Secrets, environment files and dependencies are never sent to the AI engine.</Hint>
         </More>
         {view.sources.length === 0 ? (
-          <EmptyState title="No sources yet">Add a website, notes, a document or a project folder {formFirst ? 'above' : 'below'}.</EmptyState>
+          <EmptyState art="draft" title="No sources yet">Add a website, notes, a document or a project folder {formFirst ? 'above' : 'below'}.</EmptyState>
         ) : (
           <div className="stack source-list">
             {view.sources.map((source) => (

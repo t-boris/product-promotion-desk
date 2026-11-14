@@ -24,7 +24,7 @@ export function EventsTab() {
       </div>
       <ErrorNote error={events.error} />
       {events.loading && !events.data && <Loading what="Loading events" />}
-      {events.data?.length === 0 && <EmptyState title="No events">{level ? 'No events at this level.' : 'Nothing has been logged yet.'}</EmptyState>}
+      {events.data?.length === 0 && <EmptyState art="list" title="No events">{level ? 'No events at this level.' : 'Nothing has been logged yet.'}</EmptyState>}
       {events.data && events.data.length > 0 && (
         <table className="table" data-testid="events-table">
           <thead>

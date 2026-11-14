@@ -6,7 +6,7 @@ import { LaunchDots } from './LaunchPath'
 import { nextProductStep } from './product-status'
 
 export function ProductList({ products, selectedId, countsOf, onSelect }: { products: Product[]; selectedId: string | null; countsOf: (productId: Id) => LaunchCounts; onSelect: (id: string) => void }) {
-  if (products.length === 0) return <EmptyState title="No products yet">Add the first one with the button above.</EmptyState>
+  if (products.length === 0) return <EmptyState art="product" title="No products yet">Add the first one with the button above.</EmptyState>
   return (
     <div className="stack" data-testid="product-list">
       {products.map((product) => {

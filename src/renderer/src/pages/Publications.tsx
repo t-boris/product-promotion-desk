@@ -92,6 +92,7 @@ export function PublicationsPage() {
 
       {directory.ready && inScope.length === 0 && (
         <EmptyState
+          art="channel"
           title="No channels yet"
           action={
             <a className="btn btn-primary" href={connectChannelHref(productId)} data-testid="publications-connect-channel">
@@ -112,7 +113,7 @@ export function PublicationsPage() {
         <>
           <section className="stack" data-testid="pending-publications">
             <h2>Drafts, approved and scheduled</h2>
-            {pending.length === 0 && <EmptyState title="No drafts">Ask the AI for a suggestion or write one yourself.</EmptyState>}
+            {pending.length === 0 && <EmptyState art="draft" title="No drafts">Ask the AI for a suggestion or write one yourself.</EmptyState>}
             {pending.map((card) => (
               <ReviewCard key={card.opportunity.id} card={card} collapsible defaultOpen={pending.length === 1} productName={productName} />
             ))}

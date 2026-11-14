@@ -69,7 +69,7 @@ export function HistoryTab() {
     <div className="stack" data-testid="history-tab">
       <ErrorNote error={history.error} />
       {history.loading && !history.data && <Loading what="Loading action history" />}
-      {history.data?.length === 0 && <EmptyState title="Nothing has been sent yet">Every message the application sends is recorded here, with the approval or rule that allowed it.</EmptyState>}
+      {history.data?.length === 0 && <EmptyState art="list" title="Nothing has been sent yet">Every message the application sends is recorded here, with the approval or rule that allowed it.</EmptyState>}
       {history.data && history.data.length > 0 && (
         <table className="table" data-testid="history-table">
           <thead>
