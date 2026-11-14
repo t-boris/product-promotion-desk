@@ -409,6 +409,13 @@ Texts are the current ones and do not change.
 |---|---|---|---|
 | Tabs Runs / Action history / Events | Segmented control; each tab a table in a group box | none | "No runs yet", "Nothing has been sent yet", "No events" + their sentences (records appear by themselves: no action needed) |
 
+In the three tables a cell is `log-fit` or `log-text` (`logs.css`, BUG-045). `log-fit` is a value that is never broken: the time
+(Events Time, Runs Started, History When), a source, a kind; it stays on one line and the table gives it its width. `log-text` is
+free text, a name or an address (Message, Result, What was sent, Where, Channel, On what basis): it wraps at word boundaries,
+a long address breaks at any character, and a short word (up to 14 characters) is never split by a squeezed column. Measured
+at 1320×880 and 980×640 in both themes with long messages and a long channel address: no time wrapped, no source or kind word
+split, no sideways scroll.
+
 ### 10.7 Settings (`#/settings`)
 
 | Screen / state | Target pattern | Filled | Empty state → next step |

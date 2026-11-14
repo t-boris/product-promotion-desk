@@ -26,6 +26,17 @@
 .card.log-card {
   padding: var(--space-1) var(--space-1) var(--space-2);
 }
-.log-table td {
+/* A cell is one of two kinds. `log-fit` holds a value that is never broken: a time, a source, a kind (its muted second line may
+   wrap). `log-text` holds free text, an address or a name: it wraps inside its cell, and a long address breaks at any character.
+   `anywhere` makes such a cell count as one character wide when the table squeezes its columns, so `min-width` keeps a short word
+   whole (14 characters). */
+.log-table td.log-fit {
+  white-space: nowrap;
+}
+.log-table td.log-fit .small {
+  white-space: normal;
+}
+.log-table td.log-text {
   overflow-wrap: anywhere;
+  min-width: 14ch;
 }

@@ -19,17 +19,17 @@ function HistoryRow({ entry, versionLabel }: { entry: HistoryEntry; versionLabel
   const when = action.completedAt ?? action.attemptedAt
   return (
     <tr data-testid={`history-${action.id}`}>
-      <td>
+      <td className="log-fit">
         {formatTime(when)}
         {action.completedAt && <div className="muted small">Attempted {formatTime(action.attemptedAt)}</div>}
       </td>
-      <td>
+      <td className="log-text">
         {draft.title && <strong>{draft.title}</strong>}
         <div>{excerpt(draft.text)}</div>
         {draft.link && <div className="muted small">Link: {draft.link}</div>}
         <div className="muted small">{opportunity.kind === 'standalone' ? 'Standalone publication' : 'Reply'}</div>
       </td>
-      <td>
+      <td className="log-text">
         <div>
           {entry.channelTarget} as {entry.accountLabel}
         </div>
@@ -41,11 +41,11 @@ function HistoryRow({ entry, versionLabel }: { entry: HistoryEntry; versionLabel
           <div className="muted small">{action.destination}</div>
         )}
       </td>
-      <td>
+      <td className="log-text">
         <div data-testid={`basis-${action.id}`}>{action.authorizationBasis}</div>
         <div className="muted small">Knowledge {versionLabel ?? action.knowledgeVersionId?.slice(0, 8) ?? 'not recorded'}</div>
       </td>
-      <td>
+      <td className="log-text">
         <Badge tone={SEND_STATE_TONE[action.state] ?? 'neutral'}>{SEND_STATE_LABEL[action.state] ?? action.state}</Badge>
         {isWebLink(action.resultUrl) && (
           <div>

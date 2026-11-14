@@ -40,12 +40,12 @@ export function EventsTab() {
               <tbody>
                 {events.data.map((event) => (
                   <tr key={event.id} data-testid={`event-${event.id}`}>
-                    <td>{formatTime(event.ts)}</td>
+                    <td className="log-fit">{formatTime(event.ts)}</td>
                     <td>
                       <Badge tone={LEVEL_TONE[event.level]}>{event.level}</Badge>
                     </td>
-                    <td>{event.source}</td>
-                    <td>{event.message}</td>
+                    <td className="log-fit">{event.source}</td>
+                    <td className="log-text">{event.message}</td>
                   </tr>
                 ))}
               </tbody>

@@ -29,16 +29,16 @@ export function RunsTab() {
               <tbody>
                 {runs.data.map((run) => (
                   <tr key={run.id} data-testid={`run-${run.id}`}>
-                    <td>
+                    <td className="log-fit">
                       {formatTime(run.startedAt)}
                       <div className="muted small">{durationText(run.startedAt, run.finishedAt)}</div>
                     </td>
-                    <td>{RUN_KIND_LABEL[run.kind] ?? run.kind}</td>
-                    <td>{run.channelId ? (targets.get(run.channelId) ?? '—') : '—'}</td>
+                    <td className="log-fit">{RUN_KIND_LABEL[run.kind] ?? run.kind}</td>
+                    <td className="log-text">{run.channelId ? (targets.get(run.channelId) ?? '—') : '—'}</td>
                     <td>
                       <Badge tone={RUN_STATUS_TONE[run.status] ?? 'neutral'}>{RUN_STATUS_LABEL[run.status] ?? run.status}</Badge>
                     </td>
-                    <td>{run.summary || <span className="muted">—</span>}</td>
+                    <td className="log-text">{run.summary || <span className="muted">—</span>}</td>
                   </tr>
                 ))}
               </tbody>
