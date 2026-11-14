@@ -403,3 +403,35 @@ Both reports fail the same QA step, "the shell and an empty Attention look whole
 Checked: new build on its own `PPD_DATA_DIR`: the tree shows `AXARIACurrent=page` on Attention, the two groups and "Automation running" as one text; the position and size of every item in the shell are identical to the 0.7.2 baseline. `npm run verify` (typecheck, lint, 79 files / 1539 tests, build) passes; 3 tests added for the status words.
 
 Not changed (owner's design decisions, listed in the reports as suggestions): empty-state buttons and centring, the logo pill, contrast and size of the status labels, "Attention" renaming, a clickable "None connected".
+
+### QA interface batch (BUG-009, BUG-010 and the 49 lightbulb findings of QA run 20261114-021307-7b29) — branch `fix/qa-ui-clarity`
+
+Owner goal (2026-11-14): fix the two bugs the QA run created, fix every lightbulb finding of the same run (explicitly: "Not analyzed" against the Analysis tab, the reason the AI buttons are blocked is not visible), and make the interface so much better that the owner hardly recognises it. The findings are the specification: each one carries its own proposal (`.dde/qa/runs/20261114-021307-7b29/run.json`, `findings`).
+
+Decisions made while planning (no new library, no change of architecture, no API change):
+- The product description stays mirrored as a source (core design: the analysis reads only sources). The UI stops showing it twice instead (finding 20).
+- The interface stays English; Russian only appears in the owner's own product data. Findings 16 and 42 ("mixed languages") are answered with consistent English wording and states that read as states, not with a second language.
+- The version badge stays in the top bar (the owner's QA scenario reads it there); it is only made quieter and separated (finding 3).
+- "Resume automation" stays usable (a paused app must always be resumable) but becomes the secondary button; "New product" keeps the only filled button of the Products page (findings 5, 17).
+
+Work packages (a box is ticked only after it was seen in a screenshot of my own instance and measured):
+- [x] WP1 Foundation: readable muted text and borders, disabled buttons that read, real tap targets for checkboxes/radios (switch for Settings), segmented control, `Hint`, `Disclosure`, `EmptyState` with an action, `quiet` button, row menu (findings 7, 11, 12, 21, 26, 30, 33, 38, 40, 46)
+- [x] WP2 Shell: top bar status with a dot and warning tones, "None connected" is a link, version quiet, Attention empty state with next steps, traffic-light spacing (1-7, 17)
+- [x] WP3 Products list and header: first/last product opens by itself, selected card state with chevron, next step per product, header statuses that agree with the Passport and Analysis tabs, "Not analyzed" explained (13-16, 18, 27, 42, 48)
+- [x] WP4 BUG-010 commit: source text in the UI font, wraps at words, three lines with "Show full text" (19, 23)
+- [x] WP5 Sources tab: description not duplicated, "Project folder" everywhere, segmented kind switch, compact add form, quiet Remove with an inline confirmation (20-22, 24-26)
+- [x] WP6 Passport tab: one status line, reason next to the blocked button, "Approve all proposed", primary Approve and a "More" menu for Reject / Prohibit / Delete with a line on the difference, compact "+ Add statement" (27-31)
+- [x] WP7 Analysis tab: steps that do not apply say why, one status, no empty bar before a run, three short points, what will be read (32-35)
+- [x] WP8 Goal tab: short intro, saved goals as compact cards with Edit, the new-goal form only after "Add a goal" (36-38)
+- [x] WP9 BUG-009 commit: Channels tab order (accounts line, connect form, channels, AI ideas folded), blocked reason beside the AI buttons with a fix link, one action in the empty state (39-41, 47, 49)
+- [x] WP10 Results tab: conversions note folded to one line, empty states with a real button, "Refresh all" explained, product name not repeated (43-46)
+- [x] WP11 Settings: saved rules separated from the form with the rule length stated, selected engine shows "In use", version and path on their own line, notes about automatic replies in a warning note, switches (8-12)
+- [x] Sweep: measure every control on every route at 1320x880 and 980x640 (heights, wrapped labels, horizontal scroll, tiny text), compare with the "before" run
+- [ ] `npm run verify`, own-instance acceptance (screenshots before/after), commits (one for BUG-010, one for BUG-009, grouped commits for the findings), PR, CI, merge, release 0.7.4, deploy:local, relaunch, `markview_issue_context` for BUG-009 and BUG-010
+- [ ] Report: `branch:` lines in BUG-009/BUG-010 only after their commits; "QA test data left in the owner's database" told to the owner (product «QA-тест: натальные карты», nothing deleted without asking)
+
+Review (own instance, installed 0.7.3 as the "before", the branch build as the "after"; screenshots and measurements in the session scratchpad `probe/out`):
+- `npm run verify`: typecheck, lint, 79 test files / 1548 tests, build all pass. 12 new tests in `src/main/renderer-logic.test.ts` cover the new pure logic (start steps, product statuses, analysis plan, mirrored sources, bulk approve, engine detail, the reason the AI buttons are off).
+- A DevTools script (`probe/flows.mjs`) drove a seeded own instance through the screens and checked 34 claims the findings ask for (bulk approve, the More menu and Escape, show full text and the font of a source, Remove asks first, applicable analysis steps, goal card and Goal 2, ideas folded with their reason or engine, results empty state, switches, the first product opening by itself, light theme): 34 of 34 pass. The first run found one real fault (bulk approve stopped at a price statement the core refuses); fixed, lesson 99.
+- Overflow: at 980x640 the installed build scrolled sideways inside the page (sixth tab out of the page); fixed with a stacked product list below 1040px. No route overflows at 1320x880 or 980x640 now. No text under 12px on any route.
+- Not changed on purpose: the version badge stays in the top bar (the owner's QA scenario reads it there); Resume automation stays pressable with no account (a paused app must be resumable) and is only the secondary button; the interface stays English (the Russian in the screens is the owner's own product data); the shared `Product` type was not extended, so the product list says "Passport approved" (true) and the header and the Passport tab add the draft.
