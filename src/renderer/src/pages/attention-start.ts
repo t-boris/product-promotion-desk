@@ -39,7 +39,11 @@ export function startSteps(facts: StartFacts): StartStep[] {
     {
       id: 'resume',
       title: 'Resume automation',
-      hint: 'While it is paused, nothing is checked or sent. It is paused on purpose until the first account is ready.',
+      // The hint follows the state: a running automation is not "paused on purpose" (BUG-029). The title stays.
+      hint:
+        facts.paused === false
+          ? 'Running: your channels are checked on schedule. You can pause it at any time from the top bar.'
+          : 'While it is paused, nothing is checked or sent. It is paused on purpose until the first account is ready.',
       action: 'Resume automation',
       href: '#/attention',
       done: facts.paused === false

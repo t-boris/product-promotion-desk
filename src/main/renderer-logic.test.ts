@@ -225,6 +225,14 @@ describe('QA clarity batch: what the screens say', () => {
     expect(startSteps({ products: 1, accounts: 1, paused: undefined }).find((x) => x.id === 'resume')?.done).toBe(false)
   })
 
+  it('Attention (BUG-029): the "Resume automation" hint follows the state, the title stays', () => {
+    const resume = (paused: boolean | undefined) => startSteps({ products: 1, accounts: 1, paused }).find((x) => x.id === 'resume')
+    expect(resume(false)).toMatchObject({ title: 'Resume automation', done: true })
+    expect(resume(false)?.hint).toMatch(/^Running: your channels are checked on schedule\./)
+    expect(resume(true)?.hint).toMatch(/^While it is paused, nothing is checked or sent\./)
+    expect(resume(undefined)?.hint).not.toMatch(/^Running/)
+  })
+
   it('product header: approved, approved with a draft waiting, and not approved agree with the Passport tab', () => {
     const none = { activePassportVersionId: null }
     const active = { activePassportVersionId: 'v1' }
