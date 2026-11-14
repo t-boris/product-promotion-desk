@@ -17,11 +17,11 @@ export function ModeSelector({ channel }: { channel: Channel }) {
               <input type="radio" name={`mode-${channel.id}`} checked={selected} disabled={state.busy || (blocked !== null && !selected)} onChange={() => void setMode(option.id)} />
               <span>
                 <strong>{option.label}</strong>
-                <span className="muted small" style={{ display: 'block' }}>
+                <span className="muted small mode-summary">
                   {option.summary}
                 </span>
                 {blocked && !selected && (
-                  <span className="small" style={{ display: 'block', color: 'var(--warn)' }}>
+                  <span className="small mode-blocked">
                     Not available: {blocked}
                   </span>
                 )}

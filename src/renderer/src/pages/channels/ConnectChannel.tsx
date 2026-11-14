@@ -14,6 +14,8 @@ export interface Prefill {
 
 interface Props {
   product: Product | undefined
+  /** There is no account in the app yet: the card is dimmed and says so once (BUG-030). Decided by the Channels tab. */
+  needsAccount: boolean
   /** Every account of the library (DEC-015): any of them can serve this product. */
   accounts: Account[]
   /** This product's channels, to explain what happens when a second login joins the same community. */
@@ -27,7 +29,7 @@ interface Props {
 }
 
 /** Connects this product to a channel address through an account of the library. Nothing is posted and nothing is read yet. */
-export function ConnectChannel({ product, accounts, channels, allChannels, platforms, productName, prefill, onConnected }: Props) {
+export function ConnectChannel({ product, needsAccount, accounts, channels, allChannels, platforms, productName, prefill, onConnected }: Props) {
   const [accountId, setAccountId] = useState('')
   const [target, setTarget] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
@@ -77,13 +79,16 @@ export function ConnectChannel({ product, accounts, channels, allChannels, platf
   }
 
   return (
-    <Card title="Connect a channel">
+    <Card title="Connect a channel" className={needsAccount ? 'dimmed' : ''}>
       {!product && <p className="muted">This product was not found.</p>}
-      {product && (
-        <Hint>
-          {accounts.length === 0 ? 'Add an account above first. ' : ''}Connecting saves the address for <strong>{product.name}</strong>: nothing is posted and nothing is read yet.
-        </Hint>
-      )}
+      {product &&
+        (needsAccount ? (
+          <Hint data-testid="connect-needs-account">Needs an account</Hint>
+        ) : (
+          <Hint>
+            Connecting saves the address for <strong>{product.name}</strong>: nothing is posted and nothing is read yet.
+          </Hint>
+        ))}
       <form onSubmit={(e) => void submit(e)} data-testid="connect-form">
         <div className="settings-grid">
           <Field label="Account">
@@ -118,6 +123,7 @@ export function ConnectChannel({ product, accounts, channels, allChannels, platf
                 setJustJoined(false)
               }}
               placeholder={addressExample(info)}
+              disabled={needsAccount}
               data-testid="connect-target"
             />
           </Field>
@@ -145,9 +151,7 @@ export function ConnectChannel({ product, accounts, channels, allChannels, platf
             {state.busy ? 'Connecting…' : 'Connect channel'}
           </Button>
           {/* Why the button is off, beside it. */}
-          {!ready && product && (
-            <Hint data-testid="connect-reason">{account === undefined ? 'Add an account first.' : 'Type the channel address.'}</Hint>
-          )}
+          {!ready && product && !needsAccount && <Hint data-testid="connect-reason">Type the channel address.</Hint>}
         </div>
       </form>
       {account && info && !info.prepared && isWebAddress(address) && <PrepareSiteProfile key={`${account.id}|${address}`} productId={productId} accountId={account.id} url={address} />}

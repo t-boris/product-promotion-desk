@@ -31,6 +31,13 @@ function hostLabel(url: string): string {
   }
 }
 
+/** The name a source gets when the owner gives none: the host of an address, the file or folder name, "Description" for a text. */
+export function defaultSourceLabel(kind: SourceKind, ref: string): string {
+  if (kind === 'url') return hostLabel(ref)
+  if (kind === 'text') return 'Description'
+  return basename(ref)
+}
+
 /** Validates user input for a new source and returns its normalized form. Throws ApiError('invalid_input'). */
 export function validateSource(input: { kind: unknown; ref: unknown; label?: unknown; scope?: SourceScope | null }): ValidSource {
   if (!isSourceKind(input.kind)) throw new ApiError('invalid_input', `Unknown source type: ${String(input.kind)}`)
@@ -40,25 +47,25 @@ export function validateSource(input: { kind: unknown; ref: unknown; label?: unk
   switch (input.kind) {
     case 'url': {
       const ref = normalizeHttpUrl(raw)
-      return { kind: 'url', ref, label: customLabel || hostLabel(ref), scope: null }
+      return { kind: 'url', ref, label: customLabel || defaultSourceLabel('url', ref), scope: null }
     }
     case 'text': {
       if (raw.length > MAX_TEXT_SOURCE_CHARS) throw new ApiError('invalid_input', `The text is too long (limit ${MAX_TEXT_SOURCE_CHARS} characters).`)
-      return { kind: 'text', ref: raw, label: customLabel || 'Description', scope: null }
+      return { kind: 'text', ref: raw, label: customLabel || defaultSourceLabel('text', raw), scope: null }
     }
     case 'document': {
       assertReadableFile(raw)
-      return { kind: 'document', ref: raw, label: customLabel || basename(raw), scope: null }
+      return { kind: 'document', ref: raw, label: customLabel || defaultSourceLabel('document', raw), scope: null }
     }
     case 'image': {
       assertReadableFile(raw)
       if (!isImagePath(raw)) throw new ApiError('invalid_input', 'This file is not a recognized image type. Add it as a document instead.')
-      return { kind: 'image', ref: raw, label: customLabel || basename(raw), scope: null }
+      return { kind: 'image', ref: raw, label: customLabel || defaultSourceLabel('image', raw), scope: null }
     }
     case 'code_folder': {
       // An unreadable, missing or overly broad folder is refused here.
       resolveCodeFolder(raw)
-      return { kind: 'code_folder', ref: raw, label: customLabel || basename(raw), scope: normalizeScope(input.scope) }
+      return { kind: 'code_folder', ref: raw, label: customLabel || defaultSourceLabel('code_folder', raw), scope: normalizeScope(input.scope) }
     }
   }
 }

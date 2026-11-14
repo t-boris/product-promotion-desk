@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import type { PassportView, Product } from '../../../../shared/types'
-import type { ProductTab } from '../../route'
+import { productHref, type ProductTab } from '../../route'
 import { call, useAction } from '../../hooks'
 import { Badge, Button, Card, ErrorNote, Field } from '../../ui'
+import { ClampedText } from './ClampedText'
 import { ANALYSIS_LABELS, ANALYSIS_TONES } from './labels'
 import { NOT_ANALYZED_HINT, passportStatus } from './product-status'
 
@@ -87,11 +88,23 @@ export function ProductHeader({ view, onDeleted, onOpenTab }: { view: PassportVi
             )}
           </dd>
           <dt>Description</dt>
-          <dd>{product.description ?? <span className="muted">No description yet</span>}</dd>
+          {/* Two lines and "Show full text": the full text is also a source on the Sources tab, and the tabs stay near the top (BUG-037). */}
+          <dd>
+            {product.description ? (
+              <ClampedText text={product.description} lines={2} testId="product-description" toggleTestId="product-description-toggle" />
+            ) : (
+              <span className="muted">No description yet</span>
+            )}
+          </dd>
           <dt>Status</dt>
           <dd className="row">
             <Badge tone={passport.tone}>{passport.label}</Badge>
-            {passport.detail && <span className="hint">{passport.detail}</span>}
+            {/* Statements waiting for the owner: a link to the Passport tab, where they are reviewed (BUG-037). */}
+            {passport.detail && (
+              <a className="badge badge-warn" href={productHref(product.id, 'passport')} title="Review them on the Passport tab" data-testid="passport-review-link">
+                {passport.detail}
+              </a>
+            )}
             {product.analysisStatus === 'idle' ? (
               // Amber and clickable: it is a step still to do, not a quiet caption (QA findings 42, 48).
               <>

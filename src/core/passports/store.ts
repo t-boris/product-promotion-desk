@@ -156,8 +156,13 @@ export class ProductStore {
     return this.source(id)
   }
 
-  updateSource(id: Id, patch: { ref: string; label: string }): void {
-    this.db.prepare('UPDATE product_sources SET ref = ?, label = ? WHERE id = ?').run(patch.ref, patch.label, id)
+  /** Changes what a source points at; the id and the date it was added stay. The scope changes only when one is given. */
+  updateSource(id: Id, patch: { ref: string; label: string; scope?: SourceScope | null }): void {
+    if (patch.scope === undefined) {
+      this.db.prepare('UPDATE product_sources SET ref = ?, label = ? WHERE id = ?').run(patch.ref, patch.label, id)
+    } else {
+      this.db.prepare('UPDATE product_sources SET ref = ?, label = ?, scope_json = ? WHERE id = ?').run(patch.ref, patch.label, patch.scope ? toJson(patch.scope) : null, id)
+    }
   }
 
   removeSource(id: Id): void {

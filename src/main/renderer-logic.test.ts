@@ -4,18 +4,20 @@
 import { describe, expect, it } from 'vitest'
 import type { Account, AnalysisStage, AttentionItem, Channel, Claim, Product } from '../shared/types'
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from '../renderer/src/menu-state'
-import { fixLinkFor } from '../renderer/src/pages/attention-links'
+import { connectChannelHref, fixLinkFor } from '../renderer/src/pages/attention-links'
+import { KIND_TONE, attentionCountTone } from '../renderer/src/pages/attention-tone'
 import { startSteps } from '../renderer/src/pages/attention-start'
-import { splitEngineDetail } from '../renderer/src/pages/engine-detail'
+import { engineChoiceVariant, recommendedEngineId, splitEngineDetail } from '../renderer/src/pages/engine-detail'
 import { describeSources, planStages, progressOf } from '../renderer/src/pages/products/analysis-plan'
+import { launchCounts, launchProgress, launchStages } from '../renderer/src/pages/products/launch-path'
 import { approvableClaims } from '../renderer/src/pages/products/model'
 import { nextProductStep, passportStatus } from '../renderer/src/pages/products/product-status'
 import { isMirroredSource } from '../renderer/src/pages/products/source-view'
 import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block'
 import { nextStep } from '../renderer/src/pages/channels/next-step'
 import { platformMismatch } from '../renderer/src/pages/channels/platform-hint'
-import { MOVED_PAGES, accountsNewHref, parseAccountsHash, parseHash, productHref } from '../renderer/src/route'
-import { accountText, accountsGroupName, automationText, engineGroupName } from '../renderer/src/status-labels'
+import { MOVED_PAGES, accountsNewHref, parseAccountsHash, parseHash, productHref, publicationsHref, publicationsProductOf } from '../renderer/src/route'
+import { accountText, accountsGroupName, accountsSummary, automationText, engineGroupName } from '../renderer/src/status-labels'
 
 describe('hash routes (DEC-009)', () => {
   it('reads plain pages and ignores the leading characters', () => {
@@ -196,6 +198,17 @@ describe('status row words (BUG-003)', () => {
     expect(accountText({ label: 'Brand' })).toBe('Brand')
   })
 
+  it('Top bar (BUG-023): one badge sums up the accounts, its tooltip lists every one, and none keeps "None connected"', () => {
+    const acc = (label: string, status: 'ready' | 'login_required' | 'captcha' | 'suspended', identity: string | null = null) => ({ label, identity, status })
+    expect(accountsSummary([])).toBeNull()
+    expect(accountsSummary([acc('A', 'ready'), acc('B', 'ready'), acc('C', 'ready')])).toMatchObject({ text: '3 ready', tone: 'good' })
+    expect(accountsSummary([acc('A', 'ready'), acc('B', 'login_required'), acc('C', 'ready')])).toMatchObject({ text: '3 · 1 needs sign-in', tone: 'warn' })
+    expect(accountsSummary([acc('A', 'login_required'), acc('B', 'login_required')])).toMatchObject({ text: '2 · 2 need sign-in', tone: 'warn' })
+    expect(accountsSummary([acc('A', 'captcha'), acc('B', 'ready')])).toMatchObject({ text: '2 · 1 needs you', tone: 'warn' })
+    expect(accountsSummary([acc('A', 'suspended')])).toMatchObject({ text: '1 · 1 needs you', tone: 'bad' })
+    expect(accountsSummary([acc('Brand', 'ready', 'brand_user'), acc('Second', 'login_required')])?.title).toBe('Brand · brand_user: Signed in\nSecond: Sign-in needed')
+  })
+
   it('reads the automation state as one sentence, and shows an ellipsis until the state has arrived', () => {
     expect(automationText({ paused: false })).toBe('Automation running')
     expect(automationText({ paused: true })).toBe('Automation paused')
@@ -223,6 +236,14 @@ describe('QA clarity batch: what the screens say', () => {
     expect(startSteps({ products: 1, accounts: 1, paused: undefined }).find((x) => x.id === 'resume')?.done).toBe(false)
   })
 
+  it('Attention (BUG-029): the "Resume automation" hint follows the state, the title stays', () => {
+    const resume = (paused: boolean | undefined) => startSteps({ products: 1, accounts: 1, paused }).find((x) => x.id === 'resume')
+    expect(resume(false)).toMatchObject({ title: 'Resume automation', done: true })
+    expect(resume(false)?.hint).toMatch(/^Running: your channels are checked on schedule\./)
+    expect(resume(true)?.hint).toMatch(/^While it is paused, nothing is checked or sent\./)
+    expect(resume(undefined)?.hint).not.toMatch(/^Running/)
+  })
+
   it('product header: approved, approved with a draft waiting, and not approved agree with the Passport tab', () => {
     const none = { activePassportVersionId: null }
     const active = { activePassportVersionId: 'v1' }
@@ -234,11 +255,18 @@ describe('QA clarity batch: what the screens say', () => {
     expect(passportStatus(none, null, [])).toEqual({ tone: 'warn', label: 'No approved passport' })
   })
 
-  it('product list: the next step goes passport, goal, channel', () => {
-    expect(nextProductStep({ activePassportVersionId: null, analysisStatus: 'idle', goals: [] })).toMatchObject({ tab: 'analysis' })
-    expect(nextProductStep({ activePassportVersionId: null, analysisStatus: 'complete', goals: [] })).toMatchObject({ tab: 'passport' })
-    expect(nextProductStep({ activePassportVersionId: 'v', analysisStatus: 'complete', goals: [] })).toMatchObject({ tab: 'goal' })
-    expect(nextProductStep({ activePassportVersionId: 'v', analysisStatus: 'complete', goals: [{ id: 'g', targetAction: 'a', successMetrics: [], notes: '' }] })).toMatchObject({ tab: 'channels' })
+  it('product list: the next step goes passport, goal, channel, publication, and is gone once the path is complete (BUG-014)', () => {
+    const none = { channels: 0, approvedPublications: 0, draftPublications: 0 }
+    const goals = [{ id: 'g', targetAction: 'a', successMetrics: [], notes: '' }]
+    expect(nextProductStep({ activePassportVersionId: null, analysisStatus: 'idle', goals: [] }, none)).toBe('Next: run the analysis')
+    expect(nextProductStep({ activePassportVersionId: null, analysisStatus: 'complete', goals: [] }, none)).toBe('Next: approve the passport')
+    expect(nextProductStep({ activePassportVersionId: 'v', analysisStatus: 'complete', goals: [] }, none)).toBe('Next: write a goal')
+    const ready = { activePassportVersionId: 'v', analysisStatus: 'complete' as const, goals }
+    expect(nextProductStep(ready, none)).toBe('Next: connect a channel')
+    // A product with a channel no longer asks for one.
+    expect(nextProductStep(ready, { ...none, channels: 1 })).toBe('Next: write a publication')
+    expect(nextProductStep(ready, { ...none, channels: 1, draftPublications: 2 })).toBe('Next: approve a draft')
+    expect(nextProductStep(ready, { channels: 1, approvedPublications: 1, draftPublications: 2 })).toBeNull()
   })
 
   it('Analysis: a step with nothing to work on says why instead of "Waiting", and is not counted', () => {
@@ -296,6 +324,69 @@ describe('QA clarity batch: what the screens say', () => {
     const claude = splitEngineDetail('Claude Code 2.1.325 is installed and answers. Writing: tool-free, it can only return text. Account missions: it works the account’s browser with full access.')
     expect(claude.limits).toBe(false)
     expect(splitEngineDetail('Codex was not found.')).toEqual({ summary: 'Codex was not found.', writing: null, missions: null, limits: false })
+  })
+
+  it('Launch path (BUG-012): five stages, the first one not done is the next step, each links to where it is worked on', () => {
+    const facts = { hasSources: true, passportApproved: true, goals: 0, channels: 0, approvedPublications: 0 }
+    const stages = launchStages('p1', facts)
+    expect(stages.map((s) => s.id)).toEqual(['product', 'passport', 'goal', 'channel', 'publication'])
+    expect(stages.map((s) => s.state)).toEqual(['done', 'done', 'current', 'todo', 'todo'])
+    expect(stages.map((s) => s.href)).toEqual(['#/products/p1/sources', '#/products/p1/passport', '#/products/p1/goal', '#/products/p1/channels', '#/publications/p1'])
+    expect(launchProgress(stages)).toBe('2 of 5 done')
+    // A stage is done by its own fact: a channel connected before the goal was written is done, the goal is still next.
+    expect(launchStages('p1', { ...facts, channels: 1 }).map((s) => s.state)).toEqual(['done', 'done', 'current', 'done', 'todo'])
+    expect(launchStages('p1', { hasSources: true, passportApproved: true, goals: 1, channels: 2, approvedPublications: 1 }).every((s) => s.state === 'done')).toBe(true)
+    expect(launchStages('p1', { ...facts, passportApproved: false }).find((s) => s.state === 'current')?.id).toBe('passport')
+  })
+
+  it('Launch path (BUG-012): channels, approved publications and drafts are counted per product; replies do not count', () => {
+    const pub = (productId: string, state: string, kind = 'standalone') => ({ opportunity: { productId, state, kind } }) as Parameters<typeof launchCounts>[1][number]
+    const counts = launchCounts(
+      [{ productId: 'a' }, { productId: 'a' }, { productId: 'b' }],
+      [pub('a', 'ready'), pub('a', 'confirmed'), pub('a', 'sending'), pub('a', 'awaiting_approval'), pub('b', 'draft'), pub('b', 'confirmed', 'reply')]
+    )
+    expect(counts.get('a')).toEqual({ channels: 2, approvedPublications: 3, draftPublications: 1 })
+    expect(counts.get('b')).toEqual({ channels: 1, approvedPublications: 0, draftPublications: 1 })
+    expect(counts.get('c')).toBeUndefined()
+  })
+
+  it('Launch path (BUG-012): the Publication stage opens Publications filtered by the product', () => {
+    expect(publicationsHref('p 1')).toBe('#/publications/p%201')
+    expect(publicationsHref(null)).toBe('#/publications')
+    expect(publicationsProductOf('#/publications/p%201')).toBe('p 1')
+    expect(publicationsProductOf('#/publications')).toBeNull()
+    expect(publicationsProductOf('#/products/p1')).toBeNull()
+    // The shell still routes the link to the Publications page.
+    expect(parseHash('#/publications/p1').page).toBe('publications')
+  })
+
+  it('Publications and Opportunities (BUG-017, BUG-018): "Connect a channel" opens the chosen product\'s Channels tab, or Products', () => {
+    expect(connectChannelHref('p 1')).toBe('#/products/p%201/channels')
+    expect(connectChannelHref('')).toBe('#/products')
+    expect(connectChannelHref(null)).toBe('#/products')
+  })
+
+  it('Menu (BUG-016): the Attention count is amber, and red only while one of the items is a failure', () => {
+    expect(attentionCountTone([])).toBeNull()
+    expect(attentionCountTone(['draft', 'approval', 'question', 'login', 'captcha', 'connection'])).toBe('attention')
+    expect(attentionCountTone(['draft', 'error'])).toBe('error')
+    expect(attentionCountTone(['unknown_result'])).toBe('error')
+    // Only failures are red on the page too; a sign-in or a CAPTCHA waits for the owner, it is not an error.
+    expect(Object.entries(KIND_TONE).filter(([, tone]) => tone === 'bad').map(([kind]) => kind)).toEqual(['error', 'unknown_result'])
+  })
+
+  it('Settings (BUG-015): only the recommended engine is filled, and only while no engine is in use', () => {
+    const codex = { id: 'codex', installed: true, detail: 'Codex 0.169.0 is installed and answers. Writing: not tool-free (it can read files on this computer), so it is not used for automatic replies.' }
+    const claude = { id: 'claude', installed: true, detail: 'Claude Code 2.1.325 is installed and answers. Writing: tool-free, it can only return text.' }
+    // Codex is listed first, but it is not tool-free, so the tool-free Claude Code is the recommended one.
+    expect(recommendedEngineId([codex, claude])).toBe('claude')
+    expect(recommendedEngineId([codex, { ...claude, installed: false }])).toBeNull()
+    expect(recommendedEngineId([])).toBeNull()
+    expect(engineChoiceVariant('claude', 'claude', false)).toBe('primary')
+    expect(engineChoiceVariant('codex', 'claude', false)).toBe('ghost')
+    // Once an engine is in use, nothing on the card is filled any more.
+    expect(engineChoiceVariant('claude', 'claude', true)).toBe('secondary')
+    expect(engineChoiceVariant('codex', null, false)).toBe('ghost')
   })
 
   it('Channels (BUG-009): the reason the AI buttons are off names the place that fixes it', () => {

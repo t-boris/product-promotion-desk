@@ -20,3 +20,23 @@ export function splitEngineDetail(detail: string): EngineDetail {
   const missions = missionsAt >= 0 ? detail.slice(missionsAt).trim() : null
   return { summary: detail.slice(0, summaryEnd).trim(), writing, missions, limits: writing !== null && /not used for automatic replies/.test(writing) }
 }
+
+/** The fields of an engine this module reads (EngineStatus has more). */
+export interface EngineChoice {
+  id: string
+  installed: boolean
+  detail: string
+}
+
+/** The engine the app recommends: the first one that is installed and writes tool-free, so its drafts can be used for
+ *  automatic replies. Today that is Claude Code. Null when none qualifies. */
+export function recommendedEngineId(engines: EngineChoice[]): string | null {
+  return engines.find((engine) => engine.installed && !splitEngineDetail(engine.detail).limits)?.id ?? null
+}
+
+/** One main action per screen: "Use this engine" is filled only on the recommended engine while no engine is in use.
+ *  Once one is in use, the recommended one is an accent outline and every other engine a plain button. */
+export function engineChoiceVariant(engineId: string, recommendedId: string | null, anySelected: boolean): 'primary' | 'secondary' | 'ghost' {
+  if (engineId !== recommendedId) return 'ghost'
+  return anySelected ? 'secondary' : 'primary'
+}

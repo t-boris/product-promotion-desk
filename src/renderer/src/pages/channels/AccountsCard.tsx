@@ -8,10 +8,23 @@ import { ACCOUNT_STATUS_LABEL, ACCOUNT_STATUS_TONE, platformLabel } from './mode
  * library with its own section, where they are added, signed in, given an address and a password; here they are only listed.
  * With none, the card is one line with the one button that fixes it (QA findings 41, 49), not a large empty box with three paths.
  */
-export function AccountsCard({ accounts, channels, platforms }: { accounts: Account[]; /** The channels of this product. */ channels: Channel[]; platforms: PlatformInfo[] }) {
+export function AccountsCard({
+  accounts,
+  libraryHasAccounts,
+  channels,
+  platforms
+}: {
+  /** The accounts of this product. */
+  accounts: Account[]
+  /** Whether the app has any account at all: any of them can serve this product (DEC-015). */
+  libraryHasAccounts: boolean
+  /** The channels of this product. */
+  channels: Channel[]
+  platforms: PlatformInfo[]
+}) {
   const add = (
-    <Button variant={accounts.length === 0 ? 'primary' : 'ghost'} onClick={() => (window.location.hash = accountsNewHref())} data-testid="product-add-account">
-      {accounts.length === 0 ? 'Add an account' : 'Add a new account'}
+    <Button variant={libraryHasAccounts ? 'ghost' : 'primary'} onClick={() => (window.location.hash = accountsNewHref())} data-testid="product-add-account">
+      {libraryHasAccounts ? 'Add a new account' : 'Add an account'}
     </Button>
   )
   if (accounts.length === 0) {
@@ -20,7 +33,11 @@ export function AccountsCard({ accounts, channels, platforms }: { accounts: Acco
         <div className="strip" data-testid="product-accounts-empty">
           <div>
             <h2>Accounts of this product</h2>
-            <Hint data-testid="product-accounts-note">No accounts yet. A channel is reached through an account, so add one first.</Hint>
+            <Hint data-testid="product-accounts-note">
+              {libraryHasAccounts
+                ? 'No account serves this product yet. Choose one of your accounts when you connect a channel below.'
+                : 'No accounts yet. A channel is reached through an account, so add one first.'}
+            </Hint>
           </div>
           {add}
         </div>

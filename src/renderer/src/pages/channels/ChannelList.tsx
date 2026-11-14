@@ -3,7 +3,7 @@ import { Badge, EmptyState } from '../../ui'
 import { CHANNEL_STATUS_LABEL, CHANNEL_STATUS_TONE } from './model'
 
 export function ChannelList({ channels, products, selectedId, onSelect }: { channels: Channel[]; products: Product[]; selectedId: string | null; onSelect: (id: string) => void }) {
-  if (channels.length === 0) return <EmptyState title="No channels yet">Connect your first channel above.</EmptyState>
+  if (channels.length === 0) return <EmptyState art="channel" title="No channels yet">Connect your first channel above.</EmptyState>
   return (
     <>
       {channels.map((channel) => (

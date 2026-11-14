@@ -53,7 +53,7 @@ export const DECISION_LABEL: Record<OpportunityDecision, string> = {
 }
 
 export const SEND_STATE_LABEL: Record<SendState, string> = { sending: 'Sending', confirmed: 'Confirmed', failed: 'Failed', unknown: 'Result unknown' }
-export const SEND_STATE_TONE: Record<SendState, Tone> = { sending: 'info', confirmed: 'good', failed: 'bad', unknown: 'warn' }
+export const SEND_STATE_TONE: Record<SendState, Tone> = { sending: 'info', confirmed: 'good', failed: 'bad', unknown: 'bad' }
 
 /** States in which the content is out, in flight or waiting for a send result: it can no longer be edited. */
 export const LOCKED_STATES: OpportunityState[] = ['sending', 'confirmed', 'unknown_result']

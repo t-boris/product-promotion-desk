@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { EmptyArtwork, type EmptyArt } from './empty-art'
 import type { Tone } from './tone'
 
 export function Page({ title, subtitle, actions, children }: { title: string; subtitle?: string; actions?: ReactNode; children: ReactNode }) {
@@ -30,7 +31,9 @@ export function Card({ title, actions, children, className = '' }: { title?: str
   )
 }
 
-type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'ghost' | 'danger' | 'quiet' }
+/** primary is the one main action of a screen (filled); secondary an accent outline for helpers (the AI ideas, approving
+ *  one statement); ghost a plain button; quiet a text-only one; danger for removing things. */
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'quiet' }
 
 /**
  * A button never submits a form unless it says so (`type="submit"`). A browser button inside a form submits it by default, which
@@ -50,9 +53,11 @@ export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: R
  * An empty state says what is missing and offers the one action that fills it (QA findings 1, 41, 45): a lone sentence left the owner
  * to find the way. `fill` stretches it over the free height of its column so the page does not end after a thin strip.
  */
-export function EmptyState({ title, children, action, fill = false }: { title: string; children?: ReactNode; action?: ReactNode; fill?: boolean }) {
+/** An empty page or list: a line drawing of what will be here (BUG-036), what it is, and what to do about it. */
+export function EmptyState({ title, children, action, fill = false, art = 'launch' }: { title: string; children?: ReactNode; action?: ReactNode; fill?: boolean; art?: EmptyArt }) {
   return (
     <div className={`empty${fill ? ' fill' : ''}`}>
+      <EmptyArtwork art={art} />
       <strong>{title}</strong>
       {children && <p className="muted">{children}</p>}
       {action && <div className="empty-action">{action}</div>}

@@ -76,6 +76,72 @@ describe('products and sources (REQ-001)', () => {
     expect((await h.call('passport.get', { productId })).sources.map((s) => s.kind)).not.toContain('image')
   })
 
+  it('corrects a source in place: same id and date, the same checks as adding, and the statements keep citing it (BUG-034)', async () => {
+    const h = makeHarness()
+    // A product with its own website and description, so the sources added below are not mirrors of them.
+    const productId = (await h.call('products.create', { name: 'Natal Mystic', websiteUrl: 'https://natal.example/', description: 'Natal chart calculator' })).id
+    const notes = await h.call('sources.add', { productId, kind: 'text', ref: 'Frist reading is free', label: 'Notes' })
+    const site = await h.call('sources.add', { productId, kind: 'url', ref: 'https://docs.example/' })
+    const claim = await h.call('passport.claim.save', { productId, claim: { section: 'terms', text: 'The first reading is free', kind: 'fact', sources: [{ sourceId: notes.id, ref: notes.ref, verifiedAt: notes.addedAt }] } })
+
+    const fixed = await h.call('sources.update', { id: notes.id, ref: '  First reading is free  ', label: 'Notes' })
+    expect(fixed).toMatchObject({ id: notes.id, kind: 'text', ref: 'First reading is free', label: 'Notes', addedAt: notes.addedAt })
+    const moved = await h.call('sources.update', { id: site.id, ref: 'docs.example/help' })
+    expect(moved).toMatchObject({ id: site.id, ref: 'https://docs.example/help', addedAt: site.addedAt })
+    const view = await h.call('passport.get', { productId })
+    expect(view.sources.map((x) => x.id).slice(-2)).toEqual([notes.id, site.id])
+    expect(view.claims.find((c) => c.id === claim.id)?.sources[0]?.sourceId).toBe(notes.id)
+
+    // The same checks as adding: an empty or unsafe source, a copy of another one, a source that is gone.
+    await expect(h.call('sources.update', { id: notes.id, ref: '   ' })).rejects.toMatchObject({ code: 'invalid_input' })
+    await expect(h.call('sources.update', { id: site.id, ref: 'javascript:alert(1)' })).rejects.toMatchObject({ code: 'invalid_input' })
+    await expect(h.call('sources.update', { id: notes.id, ref: 'Natal chart calculator' })).rejects.toMatchObject({ code: 'conflict' })
+    await expect(h.call('sources.update', { id: 'missing', ref: 'x' })).rejects.toMatchObject({ code: 'not_found' })
+    // The website and the description are mirrored from the product details and change only there.
+    for (const [ref, next] of [['Natal chart calculator', 'Another text'], ['https://natal.example/', 'https://other.example/']]) {
+      const mirror = view.sources.find((x) => x.ref === ref)!
+      await expect(h.call('sources.update', { id: mirror.id, ref: next }), ref).rejects.toMatchObject({ code: 'invalid_state' })
+      expect((await h.call('passport.get', { productId })).sources.find((x) => x.id === mirror.id)?.ref).toBe(ref)
+    }
+  })
+
+  it('corrects a named text that became the description and keeps the description in step with it (BUG-034)', async () => {
+    const h = makeHarness()
+    // A product with a website only: the first text added becomes its description too, under the name the owner gave it.
+    const product = await h.call('products.create', { name: 'Natal Mystic', websiteUrl: 'https://natal.example/' })
+    const notes = await h.call('sources.add', { productId: product.id, kind: 'text', ref: 'Frist reading is free', label: 'Notes' })
+    expect((await h.call('products.list', undefined))[0].description).toBe('Frist reading is free')
+
+    const fixed = await h.call('sources.update', { id: notes.id, ref: 'First reading is free', label: 'Notes' })
+    expect(fixed).toMatchObject({ id: notes.id, ref: 'First reading is free', label: 'Notes', addedAt: notes.addedAt })
+    expect((await h.call('products.list', undefined))[0].description).toBe('First reading is free')
+  })
+
+  it('makes a new automatic name for a new address, and keeps a name the owner chose (BUG-034)', async () => {
+    const h = makeHarness()
+    const productId = (await h.call('products.create', { name: 'Natal Mystic', websiteUrl: 'https://natal.example/', description: 'Natal chart calculator' })).id
+    const docs = await h.call('sources.add', { productId, kind: 'url', ref: 'https://docs.example/' })
+    expect(docs.label).toBe('docs.example')
+    // "Edit" sends back the name it showed; the app's own name follows the address.
+    const moved = await h.call('sources.update', { id: docs.id, ref: 'https://help.other.org/start', label: 'docs.example' })
+    expect(moved).toMatchObject({ ref: 'https://help.other.org/start', label: 'help.other.org' })
+    const named = await h.call('sources.update', { id: docs.id, ref: 'https://help.other.org/start', label: 'Help centre' })
+    const movedAgain = await h.call('sources.update', { id: docs.id, ref: 'https://docs.example/', label: 'Help centre' })
+    expect([named.label, movedAgain.label]).toEqual(['Help centre', 'Help centre'])
+  })
+
+  it('keeps or replaces the scope of a code folder when it is corrected (BUG-034)', async () => {
+    const h = makeHarness()
+    const productId = await newProduct(h)
+    const dir = makeFolder({ 'project/src/a.ts': 'export const a = 1', 'project/docs/b.md': '# b', 'other/c.ts': 'x' })
+    const code = await h.call('sources.add', { productId, kind: 'code_folder', ref: join(dir, 'project'), scope: { include: ['src'], exclude: [] } })
+    const kept = await h.call('sources.update', { id: code.id, ref: join(dir, 'project'), label: 'App' })
+    expect(kept).toMatchObject({ label: 'App', scope: { include: ['src'], exclude: [] } })
+    const cleared = await h.call('sources.update', { id: code.id, ref: join(dir, 'other'), label: 'App', scope: null })
+    // No scope means the whole folder, stored as empty lists, the same as when a folder is added without one.
+    expect(cleared).toMatchObject({ ref: join(dir, 'other'), scope: { include: [], exclude: [] }, addedAt: code.addedAt })
+  })
+
   it('previews what the AI would see for each kind of source, before anything is analyzed', async () => {
     const h = makeHarness()
     const dir = makeFolder({ 'brief.md': '# Brief', 'logo.png': Buffer.from([1]), 'app/src/a.ts': 'a', 'app/node_modules/x/i.js': 'x', 'app/.env': 'K=1' })

@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import type { Comment, OpportunityCard } from '../../../../shared/types'
 import { Badge, formatTime } from '../../ui'
 import { isHttpUrl } from './labels'
@@ -20,8 +21,8 @@ function ExternalLink({ url, children }: { url: string | null | undefined; child
 function CommentBox({ comment, highlight, depth }: { comment: Comment; highlight?: boolean; depth: number }) {
   return (
     <div
-      className="list-row"
-      style={{ marginLeft: Math.min(depth, 4) * 16, display: 'block', borderColor: highlight ? 'var(--accent)' : undefined }}
+      className={`list-row thread-comment ${highlight ? 'highlight' : ''}`}
+      style={{ '--depth': Math.min(depth, 4) } as CSSProperties}
       data-testid={highlight ? 'original-comment' : 'thread-comment'}
     >
       <div className="row small muted">
@@ -30,7 +31,7 @@ function CommentBox({ comment, highlight, depth }: { comment: Comment; highlight
         {comment.postedAt && <span>{formatTime(comment.postedAt)}</span>}
         {highlight && <ExternalLink url={comment.url}>Open comment in browser</ExternalLink>}
       </div>
-      <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginTop: 4 }}>{preview(comment.body)}</div>
+      <div className="thread-comment-body">{preview(comment.body)}</div>
     </div>
   )
 }

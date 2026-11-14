@@ -1,33 +1,97 @@
 :root {
-  --bg: #f6f7f9;
-  --panel: #ffffff;
-  --panel-2: #f0f2f5;
-  --border: #dfe3e8;
-  --border-strong: #c3cad4;
-  --text: #1c2026;
-  --muted: #566074;
+  /* Design tokens (the "brand launch studio" concept, BUG-011). The names in this first group are the vocabulary of the
+     interface; light values here, dark values in the media block below. New and changed CSS uses these names. */
+  /* Surfaces: the window, cards, inputs on cards and hover, and anything that floats above a card (menus, dialogs). */
+  --surface-0: #f6f7f9;
+  --surface-1: #ffffff;
+  --surface-2: #f0f2f5;
+  --surface-3: #ffffff;
+  /* Lines and text. --text-3 is for disabled labels and stays legible (about 4.6:1 on a card). */
+  --line: #dfe3e8;
+  --line-strong: #c3cad4;
+  --text-1: #1c2026;
+  --text-2: #566074;
+  --text-3: #6b7587;
+  /* The violet accent means action and selection; --accent-tint is the selection fill, --focus the focus ring. */
   --accent: #4f46e5;
-  --accent-text: #ffffff;
-  --good: #1a7f4b;
-  --good-bg: #e3f5eb;
-  --warn: #9a6700;
-  --warn-bg: #fdf1d6;
-  --bad: #b42318;
-  --bad-bg: #fde8e6;
+  --on-accent: #ffffff;
+  --accent-tint: rgb(79 70 229 / 12%);
+  /* Accent text on the tint (a chosen menu item or segment): at least 4.5:1 in both themes. */
+  --accent-on-tint: #4f46e5;
+  --focus: #4f46e5;
+  /* Colour with meaning: green is done or healthy, amber needs your attention or decision, red is an error or a
+     failure only, blue is neutral information. */
+  --success: #1a7f4b;
+  --success-bg: #e3f5eb;
+  --attention: #9a6700;
+  --attention-bg: #fdf1d6;
+  --on-attention: #ffffff;
+  --error: #b42318;
+  --error-bg: #fde8e6;
+  --on-error: #ffffff;
   --info: #2457c5;
   --info-bg: #e5edfd;
+  /* Elevation and focus. */
+  --shadow-pop: 0 12px 32px rgb(16 24 40 / 18%);
+  --focus-ring: 0 0 0 2px var(--surface-0), 0 0 0 4px var(--focus);
+  /* The hover of anything on a card or in the sidebar: a lift that can be seen in the dark theme too. */
+  --hover-fill: color-mix(in srgb, var(--text-1) 8%, var(--surface-1));
+  /* A 4px spacing grid: every padding, gap and margin comes from here. --titlebar-h clears the window buttons. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --titlebar-h: 44px;
+  /* A hairline step for pills and tight lists, and the room the window buttons take at the left of the top bar. */
+  --space-half: 2px;
+  --window-buttons-w: 100px;
+  /* Radius. */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+  /* Motion: short, only for a change of state (hover, press, open, close, switch). The reduced-motion block sets the
+     durations to 0ms. */
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* The type scale. Prose is 1.5 high, titles 1.3. Monospace is for paths, addresses, ids and secrets only. */
+  --fs-caption: 13px;
+  --fs-body: 14px;
+  --fs-title: 16px;
+  --fs-section: 19px;
+  --fs-page: 24px;
+  --fs-display: 32px;
+  --lh-prose: 1.5;
+  --lh-title: 1.3;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+
+  /* The earlier names, kept as aliases of the vocabulary above. */
+  --bg: var(--surface-0);
+  --panel: var(--surface-1);
+  --panel-2: var(--surface-2);
+  --border: var(--line);
+  --border-strong: var(--line-strong);
+  --text: var(--text-1);
+  --muted: var(--text-2);
+  --accent-text: var(--on-accent);
+  --good: var(--success);
+  --good-bg: var(--success-bg);
+  --warn: var(--attention);
+  --warn-bg: var(--attention-bg);
+  --bad: var(--error);
+  --bad-bg: var(--error-bg);
   --radius: 10px;
   /* One size for every control: buttons, inputs and selects share the height, radius and the font (UI standard). */
   --control-h: 36px;
   --control-radius: 8px;
   --control-pad-x: 14px;
   --control-min-w: 88px;
-  /* Type scale: use these instead of ad-hoc pixel sizes. */
-  --fs-xs: 12px;
-  --fs-sm: 13px;
-  --fs-md: 14px;
-  --fs-lg: 15px;
-  --fs-xl: 22px;
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, monospace;
   color-scheme: light dark;
@@ -35,24 +99,72 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #14161a;
-    --panel: #1c1f25;
-    --panel-2: #23272e;
-    --border: #363c47;
-    --border-strong: #4a5160;
-    --text: #e7e9ee;
-    --muted: #b0b8c6;
+    /* Surfaces come in three steps above the window: cards, inputs and hover, and floating surfaces. */
+    --surface-0: #121418;
+    --surface-1: #1b1e24;
+    --surface-2: #23272e;
+    --surface-3: #2c313a;
+    --line: #363c47;
+    --line-strong: #4a5160;
+    --text-1: #e7e9ee;
+    --text-2: #b0b8c6;
+    --text-3: #7d8594;
     --accent: #7c83ff;
-    --accent-text: #0f1020;
-    --good: #5fd39a;
-    --good-bg: #173326;
-    --warn: #f2c14e;
-    --warn-bg: #3a2f12;
-    --bad: #ff8a80;
-    --bad-bg: #3d1b19;
+    --on-accent: #0f1020;
+    --accent-tint: rgb(124 131 255 / 16%);
+    --accent-on-tint: #a5abff;
+    --focus: #a5abff;
+    --success: #5fd39a;
+    --success-bg: #173326;
+    --attention: #f2c14e;
+    --attention-bg: #3a2f12;
+    --on-attention: #241a00;
+    --error: #ff8a80;
+    --error-bg: #3d1b19;
+    --on-error: #2b0d0b;
     --info: #8ab0ff;
     --info-bg: #172544;
+    --shadow-pop: 0 12px 32px rgb(0 0 0 / 45%);
   }
+}
+
+/* Motion is only for a change of state, and it is off when the system asks for less of it: one place sets the
+   durations to 0ms, so every transition and animation that uses the tokens stops. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+  }
+}
+
+/* Things that open (menus, panels, dialogs, folded blocks) fade in over --dur-base. */
+@keyframes ppd-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ppd-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.modal-backdrop {
+  animation: ppd-fade var(--dur-base) var(--ease-out);
+}
+.modal,
+.ai-pill-panel,
+.menu-pop,
+.disclosure[open] > .disclosure-body,
+.more[open] > :not(summary) {
+  animation: ppd-fade-in var(--dur-base) var(--ease-out);
 }
 
 * {
@@ -70,27 +182,45 @@ body,
 body {
   background: var(--bg);
   color: var(--text);
-  font: var(--fs-md)/1.5 var(--font);
+  font: var(--fs-body) / var(--lh-prose) var(--font);
   -webkit-font-smoothing: antialiased;
 }
 
-h1 {
-  font-size: var(--fs-xl);
+/* Four heading levels that read as different steps: the page title, a section of a page, the title of a card or a
+   dialog, and a sub-title inside a card. Body text is 14px, captions and hints 13px. */
+h1,
+h2,
+h3 {
   margin: 0;
+  line-height: var(--lh-title);
+  font-weight: var(--fw-semibold);
+}
+h1 {
+  font-size: var(--fs-page);
   letter-spacing: -0.01em;
 }
 h2 {
-  font-size: var(--fs-lg);
-  margin: 0;
+  font-size: var(--fs-section);
+}
+.card h2,
+.modal h2 {
+  font-size: var(--fs-title);
+}
+h3 {
+  font-size: var(--fs-body);
+}
+strong,
+b {
+  font-weight: var(--fw-semibold);
 }
 p {
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-2);
 }
 code {
   font-family: var(--mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
   background: var(--panel-2);
-  padding: 1px 6px;
+  padding: var(--space-half) var(--space-1);
   border-radius: 6px;
   word-break: break-all;
 }
@@ -99,12 +229,12 @@ code {
   color: var(--muted);
 }
 .small {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
 }
 .row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 /* A named group for a screen reader that takes no part in the layout: its children stay flex items of the row. */
@@ -114,10 +244,10 @@ code {
 .stack {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .sep {
-  margin-left: 12px;
+  margin-left: var(--space-3);
 }
 
 .shell {
@@ -133,10 +263,10 @@ code {
 .sidebar {
   background: var(--panel);
   border-right: 1px solid var(--border);
-  padding: 44px 12px 16px;
+  padding: var(--titlebar-h) var(--space-3) var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
   min-height: 0;
   overflow-y: auto;
   -webkit-app-region: drag;
@@ -144,16 +274,16 @@ code {
 .sidebar nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-half);
   -webkit-app-region: no-drag;
 }
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-weight: 700;
-  font-size: var(--fs-lg);
-  padding: 0 10px;
+  gap: var(--space-2);
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-title);
+  padding: 0 var(--space-3);
   letter-spacing: -0.01em;
 }
 .brand-mark {
@@ -162,32 +292,59 @@ code {
   height: 22px;
   border-radius: 7px;
   background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #ff7ab8));
+  /* The launch glyph (BUG-036): three rising bars standing on the tile's lower edge. */
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  padding-bottom: 5px;
+}
+.brand-mark > span {
+  width: 3px;
+  border-radius: 1px;
+  background: var(--on-accent);
+}
+.brand-mark > span:nth-child(1) {
+  height: 5px;
+}
+.brand-mark > span:nth-child(2) {
+  height: 8px;
+}
+.brand-mark > span:nth-child(3) {
+  height: 12px;
 }
 .nav-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 7px 10px;
+  padding: var(--space-2) var(--space-3);
   border-radius: 8px;
   color: var(--text);
   text-decoration: none;
 }
 .nav-item:hover {
-  background: var(--panel-2);
+  background: var(--hover-fill);
 }
 .nav-item.active {
-  background: var(--accent);
-  color: var(--accent-text);
+  /* Selection is a tint with accent text; the solid accent fill is kept for the one main action of a screen. */
+  background: var(--accent-tint);
+  color: var(--accent-on-tint);
   font-weight: 600;
 }
 .count {
-  background: var(--bad);
-  color: #fff;
-  border-radius: 999px;
-  font-size: var(--fs-xs);
-  padding: 0 7px;
+  /* "Needs you": amber with its own on-colour (7:1 and more); red only while one of the items is a failure. */
+  background: var(--attention);
+  color: var(--on-attention);
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  padding: 0 var(--space-2);
   min-width: 20px;
   text-align: center;
+}
+.count.error {
+  background: var(--error);
+  color: var(--on-error);
 }
 
 /* The menu can be hidden (the Hide menu / Menu buttons): then the page takes the whole width. */
@@ -196,7 +353,7 @@ code {
 }
 /* The window's own buttons sit at the top left of the window; without the menu the top bar starts after them. */
 .shell.menu-closed .topbar {
-  padding-left: 100px;
+  padding-left: var(--window-buttons-w);
 }
 .sidebar-foot {
   margin-top: auto;
@@ -217,8 +374,8 @@ code {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  padding: 10px 24px;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-5);
   background: var(--panel);
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
@@ -228,18 +385,33 @@ code {
 .topbar a {
   -webkit-app-region: no-drag;
 }
+/* The top bar stays one line (BUG-023). In a narrow bar the automation state keeps its coloured dot and the button that
+   says what it would do; its words stay in the page for a screen reader or a test tool, and are the dot's tooltip. */
+.topbar {
+  container-type: inline-size;
+}
+@container (max-width: 840px) {
+  .status-pill .status-words {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
 .topbar-label {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
   color: var(--muted);
-  margin-left: 6px;
-  padding-left: 14px;
+  margin-left: var(--space-2);
+  padding-left: var(--space-3);
   border-left: 1px solid var(--border);
 }
 .status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: var(--fs-sm);
+  gap: var(--space-2);
+  font-size: var(--fs-caption);
   font-weight: 500;
   color: var(--text);
 }
@@ -257,33 +429,33 @@ a.btn {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 24px;
+  padding: var(--space-5);
 }
 /* The page fills the window: a fixed width left empty bands on both sides when the window was widened. */
 .page {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 .page-head {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .card {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 16px;
+  padding: var(--space-4);
 }
 .card-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: var(--space-3);
 }
 
 .btn {
@@ -306,14 +478,17 @@ a.btn {
   border-radius: var(--control-radius);
   cursor: pointer;
 }
+/* The face changes on hover, the label keeps its own colour: a variant (primary, danger, secondary) sets it and must not lose it here. */
 .btn:hover:not(:disabled) {
-  background: var(--panel-2);
+  background: var(--hover-fill);
 }
 .btn:disabled {
-  /* Flat and grey, but the words stay readable: a faded button hid why it was off (QA findings 10, 30). */
-  background: var(--panel-2);
-  border-color: var(--border);
-  color: var(--muted);
+  /* Off at a glance and still legible: no face, a dashed border and the --text-3 label (about 4.5:1 on a card), and
+     no hover. Fading the whole button hid why it was off (QA findings 10, 30); the reason sits beside it as a Hint. */
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--line-strong);
+  color: var(--text-3);
   cursor: not-allowed;
 }
 .btn-primary {
@@ -325,6 +500,20 @@ a.btn {
   background: var(--accent);
   filter: brightness(1.08);
 }
+.btn-secondary {
+  /* A helper next to the main action (an AI idea, approving one statement): an accent outline, never a fill. */
+  background: transparent;
+  border-color: var(--accent);
+  color: var(--accent-on-tint);
+}
+.btn-secondary:hover:not(:disabled) {
+  background: var(--accent-tint);
+  color: var(--accent-on-tint);
+}
+.btn-primary:disabled {
+  /* The screen's main action, not ready yet: the dashed outline keeps the accent, so it still reads as the main one. */
+  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
+}
 .btn-danger {
   color: var(--bad);
   border-color: var(--bad);
@@ -332,9 +521,9 @@ a.btn {
 
 .badge {
   display: inline-block;
-  font-size: var(--fs-sm);
-  line-height: 1.5;
-  padding: 1px 10px;
+  font-size: var(--fs-caption);
+  line-height: var(--lh-prose);
+  padding: var(--space-half) var(--space-3);
   border-radius: 999px;
   background: var(--panel-2);
   color: var(--muted);
@@ -361,8 +550,8 @@ a.btn {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3);
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel);
@@ -376,7 +565,7 @@ a.btn {
 .list-row.stacked {
   flex-direction: column;
   align-items: stretch;
-  gap: 6px;
+  gap: var(--space-2);
 }
 .list-row.stacked > :first-child {
   flex: none;
@@ -392,19 +581,34 @@ a.btn {
 .field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin: 8px 0;
+  gap: var(--space-1);
+  margin: var(--space-2) 0;
+}
+/* A filter and action bar: labelled fields and buttons share one bottom line, so a button sits level with a select. */
+.toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3) var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-2);
+}
+.toolbar > .field {
+  margin: 0;
+}
+/* A reason beside the buttons of a toolbar: its line sits on the buttons' middle. */
+.toolbar > .toolbar-hint {
+  padding-bottom: calc((var(--control-h) - 1lh) / 2);
 }
 .form-row {
   /* Fields side by side: the columns share the width and the labels line up at the top, whatever hint sits below an input. */
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0 12px;
+  gap: 0 var(--space-3);
   align-items: start;
 }
 .field-label {
   font-weight: 600;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
 }
 .input,
 select.input,
@@ -414,7 +618,7 @@ textarea.input {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--control-radius);
-  padding: 0 10px;
+  padding: 0 var(--space-3);
   width: 100%;
 }
 input.input,
@@ -422,43 +626,42 @@ select.input {
   height: var(--control-h);
 }
 textarea.input {
-  font: inherit;
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 7px 10px;
-  width: 100%;
-}
-textarea.input {
-  padding: 8px 10px;
+  padding: var(--space-2) var(--space-3);
   min-height: 90px;
   resize: vertical;
 }
 .check {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 6px 0;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
 }
 
 .empty {
   text-align: center;
-  padding: 28px 16px;
+  padding: var(--space-5) var(--space-4);
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius);
 }
+/* One line drawing per empty state, in the accent (BUG-036). It is still: nothing moves, with or without reduced motion. */
+.empty-art {
+  display: block;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto var(--space-3);
+  color: var(--accent-on-tint);
+}
 .plain-list {
-  margin: 6px 0 0;
-  padding-left: 18px;
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
 }
 
 /* One goal of a product on the Goal tab, and its line on the Results tab. */
 .goal-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
+  gap: var(--space-3);
+  padding: var(--space-3);
   border: 1px solid var(--border);
   border-radius: var(--control-radius);
 }
@@ -466,8 +669,8 @@ textarea.input {
   min-height: 64px;
 }
 .goal-line + .goal-line {
-  margin-top: 8px;
-  padding-top: 8px;
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
   border-top: 1px solid var(--border);
 }
 
@@ -479,25 +682,24 @@ textarea.input {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
-  background: rgb(0 0 0 / 40%);
+  padding: var(--space-4);
+  background: rgb(0 0 0 / 55%);
 }
 .modal {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
   width: min(520px, 100%);
   max-height: 100%;
   overflow: auto;
-  padding: 18px 20px;
-  background: var(--panel);
+  padding: var(--space-5) var(--space-5);
+  background: var(--surface-3);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 12px 40px rgb(0 0 0 / 30%);
+  box-shadow: var(--shadow-pop);
 }
 .modal h2 {
   margin: 0;
-  font-size: var(--fs-lg);
 }
 .modal-text {
   margin: 0;
@@ -511,39 +713,54 @@ textarea.input {
   flex-wrap: nowrap;
 }
 
-/* A message inside a page: information (default), warning, or a confirmation that something was done. */
+/* A message inside a page: information (default), warning, or a confirmation that something was done. The text is
+   body text on --surface-2; the meaning is a 3px bar and a small icon in its colour, so a note never reads like a link. */
 .note {
-  background: var(--info-bg);
-  color: var(--info);
-  border-radius: var(--control-radius);
-  padding: 10px 12px;
-  margin: 8px 0;
+  --note-tone: var(--info);
+  --note-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill-rule='evenodd' d='M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zM7.25 4h1.5v1.5h-1.5zm0 3h1.5v5h-1.5z'/></svg>");
+  position: relative;
+  background: var(--surface-2);
+  color: var(--text-1);
+  border-left: 3px solid var(--note-tone);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-3) + 16px + var(--space-2));
+  margin: var(--space-2) 0;
+}
+.note::before {
+  content: '';
+  position: absolute;
+  left: var(--space-3);
+  top: calc(var(--space-3) + 3px);
+  width: 16px;
+  height: 16px;
+  background: var(--note-tone);
+  mask: var(--note-icon) center / contain no-repeat;
 }
 .note.warn {
-  background: var(--warn-bg);
-  color: var(--warn);
+  --note-tone: var(--attention);
+  --note-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill-rule='evenodd' d='M8 1.5 15.25 14.5H.75zM7.25 6h1.5v4h-1.5zm0 5h1.5v1.5h-1.5z'/></svg>");
 }
 .note.good {
+  --note-tone: var(--success);
+  --note-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill-rule='evenodd' d='M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zM11.3 4.6l1.05 1.05L7 11 3.65 7.65 4.7 6.6 7 8.9z'/></svg>");
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
   flex-wrap: wrap;
-  background: var(--good-bg);
-  color: var(--good);
 }
 .error-note {
   background: var(--bad-bg);
   color: var(--bad);
   border-radius: 8px;
-  padding: 8px 12px;
-  margin: 8px 0;
+  padding: var(--space-2) var(--space-3);
+  margin: var(--space-2) 0;
 }
 
 .kv {
   display: grid;
   grid-template-columns: 120px 1fr;
-  gap: 6px 12px;
+  gap: var(--space-2) var(--space-3);
   margin: 0;
 }
 .kv dt {
@@ -562,23 +779,23 @@ table.table {
 .table th,
 .table td {
   text-align: left;
-  padding: 8px 10px;
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--border);
   vertical-align: top;
 }
 .table th {
-  font-size: var(--fs-xs);
+  font-size: var(--fs-caption);
   color: var(--muted);
   font-weight: 600;
 }
 
 .tabs {
   display: flex;
-  gap: 4px;
+  gap: var(--space-1);
   border-bottom: 1px solid var(--border);
 }
 .tab {
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   border: 0;
   background: none;
   color: var(--muted);
@@ -602,7 +819,7 @@ table.table {
     grid-template-rows: minmax(0, 1fr);
   }
   .sidebar {
-    padding: 12px;
+    padding: var(--space-3);
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }
@@ -611,7 +828,7 @@ table.table {
     overflow-x: auto;
   }
   .content {
-    padding: 16px;
+    padding: var(--space-4);
   }
 }
 
@@ -621,30 +838,30 @@ table.table {
 }
 .ai-pill-panel {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + var(--space-2));
   right: 0;
   z-index: 20;
   width: min(460px, 90vw);
   max-height: 70vh;
   overflow: auto;
-  padding: 8px;
+  padding: var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--panel);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  background: var(--surface-3);
+  box-shadow: var(--shadow-pop);
   -webkit-app-region: no-drag;
 }
 .ai-task-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
+/* What the AI says while it works is prose: the interface font, never smaller than 13px. */
 .ai-lines {
-  margin: 6px 0 0;
-  padding-left: 18px;
-  font-family: var(--mono);
-  font-size: var(--fs-xs);
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+  font-size: var(--fs-caption);
   color: var(--muted);
   overflow-wrap: anywhere;
 }
@@ -654,8 +871,8 @@ table.table {
 /* Explanations are read, so they are 13px and light enough; the long ones sit in a Disclosure. */
 .hint {
   margin: 0;
-  font-size: var(--fs-sm);
-  line-height: 1.5;
+  font-size: var(--fs-caption);
+  line-height: var(--lh-prose);
   color: var(--muted);
 }
 .hint.strong {
@@ -671,7 +888,7 @@ table.table {
 }
 .mono {
   font-family: var(--mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
 }
 
 /* A quiet button: no frame until it is pointed at. For the second and third actions of a row. */
@@ -682,8 +899,8 @@ table.table {
   min-width: 0;
 }
 .btn-quiet:hover:not(:disabled) {
-  background: var(--panel-2);
-  color: var(--text);
+  background: var(--hover-fill);
+  color: var(--text-1);
 }
 .btn-quiet.accent {
   color: var(--accent);
@@ -694,10 +911,11 @@ table.table {
 .btn-quiet:disabled {
   background: transparent;
   border-color: transparent;
+  color: var(--text-3);
 }
 .btn-danger:disabled {
-  color: var(--muted);
-  border-color: var(--border);
+  color: var(--text-3);
+  border-color: var(--line-strong);
 }
 
 /* Checkboxes and radio buttons: a real tap target, the whole row clicks. */
@@ -718,7 +936,7 @@ input[type='radio'] {
 .switch {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   min-height: 36px;
   cursor: pointer;
 }
@@ -734,7 +952,7 @@ input[type='radio'] {
   height: 22px;
   border-radius: 999px;
   background: var(--border-strong);
-  transition: background 0.15s ease;
+  transition: background var(--dur-fast) var(--ease-out);
 }
 .switch-track::after {
   content: '';
@@ -745,7 +963,7 @@ input[type='radio'] {
   height: 16px;
   border-radius: 50%;
   background: var(--panel);
-  transition: transform 0.15s ease;
+  transition: transform var(--dur-fast) var(--ease-out);
 }
 .switch input:checked + .switch-track {
   background: var(--accent);
@@ -754,7 +972,7 @@ input[type='radio'] {
   transform: translateX(18px);
 }
 .switch input:focus-visible + .switch-track {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 .switch input:disabled + .switch-track {
@@ -769,8 +987,8 @@ input[type='radio'] {
 .segmented {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 4px;
-  padding: 4px;
+  gap: var(--space-1);
+  padding: var(--space-1);
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: calc(var(--control-radius) + 4px);
@@ -780,7 +998,7 @@ input[type='radio'] {
   align-items: center;
   justify-content: center;
   height: 32px;
-  padding: 0 14px;
+  padding: 0 var(--control-pad-x);
   border-radius: var(--control-radius);
   color: var(--muted);
   font-weight: 500;
@@ -796,12 +1014,13 @@ input[type='radio'] {
   color: var(--text);
 }
 .segmented-option.on {
-  background: var(--accent);
-  color: var(--accent-text);
+  background: var(--accent-tint);
+  color: var(--accent-on-tint);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
 }
-.segmented-option:focus-within {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+.segmented-option:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 
 /* A folded block: the summary is always readable, the long text opens on demand. */
@@ -813,8 +1032,8 @@ input[type='radio'] {
 .disclosure > summary {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
   min-height: 44px;
   cursor: pointer;
   list-style: none;
@@ -831,7 +1050,7 @@ input[type='radio'] {
   border-right: 2px solid var(--muted);
   border-bottom: 2px solid var(--muted);
   transform: rotate(-45deg);
-  transition: transform 0.15s ease;
+  transition: transform var(--dur-base) var(--ease-out);
 }
 .disclosure[open] > summary::before {
   transform: rotate(45deg);
@@ -840,35 +1059,60 @@ input[type='radio'] {
   margin-left: auto;
   font-weight: 400;
   color: var(--muted);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
 }
 .disclosure-body {
-  padding: 4px 14px 14px;
+  padding: var(--space-1) var(--space-4) var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 /* The same, as an inline "More about this" under a short line. */
 .more > summary {
+  /* A real target: at least 28px tall, with the same chevron as a folded block (Disclosure). */
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 28px;
+  padding: var(--space-1) var(--space-2) var(--space-1) 0;
   cursor: pointer;
+  list-style: none;
   color: var(--accent);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
   width: fit-content;
+  border-radius: var(--radius-sm);
+}
+.more > summary::-webkit-details-marker {
+  display: none;
+}
+.more > summary::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-left: var(--space-1);
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.more[open] > summary::before {
+  transform: rotate(45deg);
 }
 .more[open] > summary {
-  margin-bottom: 6px;
+  margin-bottom: var(--space-1);
 }
 
 /* An empty state that offers its one next action. */
 .empty .empty-action {
-  margin-top: 14px;
+  margin-top: var(--space-4);
   display: flex;
   justify-content: center;
-  gap: 8px;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 .empty p {
-  margin: 4px auto 0;
+  margin: var(--space-1) auto 0;
   max-width: 60ch;
 }
 .empty.fill {
@@ -886,25 +1130,25 @@ input[type='radio'] {
 .menu-pop {
   position: absolute;
   right: 0;
-  top: calc(100% + 4px);
+  top: calc(100% + var(--space-1));
   z-index: 15;
   min-width: 260px;
-  padding: 6px;
+  padding: var(--space-1);
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  background: var(--panel);
+  gap: var(--space-half);
+  background: var(--surface-3);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 30%);
+  box-shadow: var(--shadow-pop);
 }
 .menu-item {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 1px;
+  gap: var(--space-half);
   width: 100%;
-  padding: 8px 10px;
+  padding: var(--space-2) var(--space-3);
   border: 0;
   border-radius: 8px;
   background: none;
@@ -914,14 +1158,15 @@ input[type='radio'] {
   cursor: pointer;
 }
 .menu-item:hover:not(:disabled) {
-  background: var(--panel-2);
+  /* A menu floats on --surface-3, so its hover lifts from that colour instead of dropping to --surface-2. */
+  background: color-mix(in srgb, var(--text-1) 8%, var(--surface-3));
 }
 .menu-item:disabled {
   color: var(--muted);
   cursor: not-allowed;
 }
 .menu-item .menu-note {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
   color: var(--muted);
   font-weight: 400;
 }
@@ -947,21 +1192,30 @@ input[type='radio'] {
 .dot.bad {
   background: var(--bad);
 }
+/* A sentence with a coloured dot, where a badge would be too long (a badge is for one to three words). */
+.dot-line {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.dot-line > .dot {
+  align-self: center;
+}
 
 /* "Getting started" on an empty Attention page. */
 .start-steps {
   list-style: none;
-  margin: 8px 0 0;
+  margin: var(--space-2) 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 .start-steps li {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 10px 0;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
   border-top: 1px solid var(--border);
 }
 .start-steps li:first-child {
@@ -976,8 +1230,8 @@ input[type='radio'] {
   height: 24px;
   border: 2px solid var(--border-strong);
   border-radius: 50%;
-  font-size: var(--fs-sm);
-  font-weight: 700;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
 }
 .start-steps li.done .start-mark {
   background: var(--good);
@@ -994,15 +1248,46 @@ input[type='radio'] {
   flex-direction: column;
 }
 
+/* Getting started leads an empty Attention page while a step is open (BUG-024): a display headline, the launch path, one
+   filled button for the next step and the list of steps. */
+.start-hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6);
+}
+.start-eyebrow {
+  margin: 0 0 calc(var(--space-3) * -1);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--text-2);
+}
+.card .start-headline {
+  font-size: var(--fs-display);
+  line-height: var(--lh-title);
+}
+.start-steps li.next .start-mark {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-tint);
+}
+/* "Nothing needs you right now" is one line while Getting started leads. */
+.nothing-line {
+  margin: 0;
+  color: var(--text-2);
+}
+.nothing-line strong {
+  color: var(--text-1);
+}
+
 /* A product card in the list: it says it can be opened, and which one is open. */
 .product-card {
   position: relative;
-  padding-right: 36px;
+  padding-right: var(--space-6);
 }
 .product-card::after {
   content: '';
   position: absolute;
-  right: 16px;
+  right: var(--space-4);
   top: 50%;
   width: 8px;
   height: 8px;
@@ -1023,8 +1308,117 @@ input[type='radio'] {
   border-color: var(--accent);
 }
 .product-card:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
+}
+
+/* ───────────── Launch path (BUG-012) ─────────────
+   Product → Passport → Goal → Channel → Publication. Done is a green check, the current stage (the next step) an accent
+   ring that fills in --dur-base with a "Next" label, a stage not reached yet a grey circle. */
+.launch-path ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.launch-stage {
+  display: flex;
+  align-items: center;
+}
+.launch-stage + .launch-stage::before {
+  /* The line that joins two stages: green only between two stages that are both done. */
+  content: '';
+  width: var(--space-5);
+  height: 2px;
+  margin: 0 var(--space-1);
+  border-radius: 1px;
+  background: var(--line-strong);
+}
+.launch-stage.done + .launch-stage.done::before {
+  background: var(--success);
+}
+.launch-stage a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 28px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  color: var(--text-2);
+  text-decoration: none;
+}
+.launch-stage a:hover {
+  background: var(--hover-fill);
+  color: var(--text-1);
+}
+.launch-mark {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+}
+.launch-stage.done a {
+  color: var(--text-1);
+}
+.launch-stage.done .launch-mark {
+  border: 0;
+  background: var(--success);
+  mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill-rule='evenodd' d='M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zM11.3 4.6l1.05 1.05L7 11 3.65 7.65 4.7 6.6 7 8.9z'/></svg>") center / contain no-repeat;
+}
+.launch-stage.current a {
+  color: var(--text-1);
+  font-weight: var(--fw-semibold);
+}
+.launch-stage.current .launch-mark {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  box-shadow: 0 0 0 3px var(--accent-tint);
+  animation: ppd-ring var(--dur-base) var(--ease-out);
+}
+.launch-next {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--accent-on-tint);
+  background: var(--accent-tint);
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-2);
+}
+@keyframes ppd-ring {
+  from {
+    border-color: var(--line-strong);
+    box-shadow: 0 0 0 0 var(--accent-tint);
+  }
+}
+/* The same path as five dots on a product card. */
+.product-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.launch-dots {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+}
+.launch-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+}
+.launch-dot.done {
+  background: var(--success);
+  border-color: var(--success);
+}
+.launch-dot.current {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-tint);
 }
 
 /* A button that reads as a link: for the next step beside a status. */
@@ -1034,7 +1428,7 @@ input[type='radio'] {
   background: none;
   color: var(--accent);
   font: inherit;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
   cursor: pointer;
 }
 .link-btn:hover {
@@ -1051,7 +1445,7 @@ input[type='radio'] {
 .engine-main {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 .engine-path {
   color: var(--muted);
@@ -1060,7 +1454,7 @@ input[type='radio'] {
 .in-use {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1);
   height: var(--control-h);
   padding: 0 var(--control-pad-x);
   color: var(--good);
@@ -1069,13 +1463,12 @@ input[type='radio'] {
 }
 /* A list under its own heading, apart from the form above it. */
 .list-title {
-  margin: 20px 0 0;
-  padding-top: 16px;
+  margin: var(--space-5) 0 0;
+  padding-top: var(--space-4);
   border-top: 1px solid var(--border);
-  font-size: var(--fs-lg);
 }
 .rule-row {
-  padding: 12px;
+  padding: var(--space-3);
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel);
@@ -1084,13 +1477,78 @@ input[type='radio'] {
 /* Spacing after a folded "More" line inside a card, so the next block does not touch it. */
 .card > .more + *,
 .card > .hint + * {
-  margin-top: 12px;
+  margin-top: var(--space-3);
 }
 .card > .hint + .more {
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 
 /* A badge may wrap in a narrow column instead of running out of its card. */
 .kv .badge {
   white-space: normal;
+}
+
+/* A comment in a thread: replies step in by one space unit per level (up to four). */
+.list-row.thread-comment {
+  display: block;
+  margin-left: calc(var(--space-4) * var(--depth, 0));
+}
+.list-row.thread-comment.highlight {
+  border-color: var(--accent);
+}
+.thread-comment-body {
+  margin-top: var(--space-1);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ───────────── Focus and hover (BUG-021) ───────────── */
+
+/* One focus ring for every interactive element, for keyboard focus: a 2px gap and 2px of --focus. The hidden inputs of
+   switches and segmented controls ring their visible part instead (above). */
+:where(a[href], button, summary, select, textarea, input, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Everything clickable reacts to the pointer. */
+.tab:not(.active):hover {
+  color: var(--text-1);
+  background: var(--hover-fill);
+}
+.tab {
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+.disclosure > summary {
+  border-radius: calc(var(--radius) - 1px);
+}
+.disclosure > summary:hover {
+  background: var(--hover-fill);
+}
+.more > summary:hover,
+a:not(.btn):not(.badge):not(.nav-item):hover,
+.link-btn:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 2px;
+}
+.input:hover:not(:disabled):not(:focus) {
+  border-color: var(--line-strong);
+}
+
+/* Changes of state are short, and stop under Reduce motion (the tokens are 0ms there). */
+.btn,
+.nav-item,
+.tab,
+.disclosure > summary,
+.menu-item,
+.list-row.selectable,
+.product-card,
+.input,
+.segmented-option {
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    filter var(--dur-fast) var(--ease-out);
 }

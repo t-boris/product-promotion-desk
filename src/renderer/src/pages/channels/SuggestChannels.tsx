@@ -34,7 +34,7 @@ export function SuggestChannels({
         title="Where to promote"
         summary="Places where the audience may talk, from the approved passport."
         button={
-          <Button variant="primary" onClick={() => void ask()} disabled={blocked !== null || state.busy} data-testid="suggest-channels">
+          <Button variant="secondary" onClick={() => void ask()} disabled={blocked !== null || state.busy} data-testid="suggest-channels">
             {state.busy ? 'Thinking…' : 'Suggest channels with AI'}
           </Button>
         }

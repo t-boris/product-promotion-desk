@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Id } from '../../../shared/types'
 import { call, useAction, useQuery } from '../hooks'
-import { Badge, Button, Card, EmptyState, ErrorNote, Field, Loading, Page } from '../ui'
+import { publicationsProductOf } from '../route'
+import { Badge, Button, Card, EmptyState, ErrorNote, Field, Hint, Loading, Page } from '../ui'
+import { connectChannelHref } from './attention-links'
 import { PublicationForm } from './review/PublicationForm'
 import { ProductFilter, useProductDirectory, useProductFilter } from './review/products'
 import { ReviewCard } from './review/ReviewCard'
@@ -11,6 +13,16 @@ const CLOSED = ['confirmed', 'cancelled']
 export function PublicationsPage() {
   const directory = useProductDirectory()
   const [chosenProduct, setProduct] = useProductFilter('publications')
+  // The last stage of a product's launch path links here as #/publications/<productId>: show that product.
+  useEffect(() => {
+    const follow = (): void => {
+      const linked = publicationsProductOf(window.location.hash)
+      if (linked) setProduct(linked)
+    }
+    follow()
+    window.addEventListener('hashchange', follow)
+    return () => window.removeEventListener('hashchange', follow)
+  }, [])
   const productId = directory.effective(chosenProduct)
   const inScope = directory.channelsOf(productId)
   const [chosen, setChosen] = useState<Id | ''>('')
@@ -34,10 +46,16 @@ export function PublicationsPage() {
   return (
     <Page title="Publications" subtitle="Drafts, scheduled and sent material">
       <Card>
-        <div className="row">
+        <div className="toolbar">
           <ProductFilter products={directory.products} value={productId} onChange={setProduct} />
           <Field label="Channel">
-            <select className="input" value={channelId} onChange={(e) => setChosen(e.target.value)} data-testid="publication-channel">
+            <select className="input" value={channelId} onChange={(e) => setChosen(e.target.value)} disabled={inScope.length === 0} data-testid="publication-channel">
+              {/* Without a channel the select is not blank: it says why there is nothing to choose. */}
+              {inScope.length === 0 && (
+                <option value="" disabled>
+                  No channels yet
+                </option>
+              )}
               {inScope.map((c) => (
                 <option key={c.id} value={c.id}>
                   {directory.channelLabel(c)}
@@ -51,6 +69,12 @@ export function PublicationsPage() {
           <Button onClick={() => setWriting(true)} disabled={!channelId || writing} data-testid="write-publication">
             Write one myself
           </Button>
+          {/* Why the two buttons are off, beside them, with the way to fix it. */}
+          {directory.ready && !channelId && (
+            <Hint className="toolbar-hint" data-testid="publication-needs-channel">
+              Connect a channel first. <a href={connectChannelHref(productId)}>Connect a channel</a>
+            </Hint>
+          )}
         </div>
         <ErrorNote error={directory.error ?? suggesting.error} />
         {cannotPost && (
@@ -67,7 +91,15 @@ export function PublicationsPage() {
       </Card>
 
       {directory.ready && inScope.length === 0 && (
-        <EmptyState title="No channels yet">
+        <EmptyState
+          art="channel"
+          title="No channels yet"
+          action={
+            <a className="btn btn-primary" href={connectChannelHref(productId)} data-testid="publications-connect-channel">
+              Connect a channel
+            </a>
+          }
+        >
           {productId ? 'This product has no channels yet. Add one on the product page; publications are written for a specific channel.' : 'Connect a channel first; publications are written for a specific channel.'}
         </EmptyState>
       )}
@@ -81,7 +113,7 @@ export function PublicationsPage() {
         <>
           <section className="stack" data-testid="pending-publications">
             <h2>Drafts, approved and scheduled</h2>
-            {pending.length === 0 && <EmptyState title="No drafts">Ask the AI for a suggestion or write one yourself.</EmptyState>}
+            {pending.length === 0 && <EmptyState art="draft" title="No drafts">Ask the AI for a suggestion or write one yourself.</EmptyState>}
             {pending.map((card) => (
               <ReviewCard key={card.opportunity.id} card={card} collapsible defaultOpen={pending.length === 1} productName={productName} />
             ))}

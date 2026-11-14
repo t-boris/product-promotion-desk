@@ -2,8 +2,8 @@
 // so the three places cannot contradict each other (QA findings 15, 27, 42, 48). Pure, so the words are tested without the interface.
 
 import type { PassportVersion, Product } from '../../../../shared/types'
-import type { ProductTab } from '../../route'
 import type { Tone } from '../../tone'
+import type { LaunchCounts } from './launch-path'
 import { summarize } from './model'
 
 export interface StatusLine {
@@ -24,13 +24,14 @@ export function passportStatus(product: Pick<Product, 'activePassportVersionId'>
   return { tone: 'warn', label: 'No approved passport' }
 }
 
-/** What the owner does next with a product, in the order the work goes; the tab to open for it. */
-export function nextProductStep(product: Pick<Product, 'activePassportVersionId' | 'analysisStatus' | 'goals'>): { text: string; tab: ProductTab } {
-  if (product.activePassportVersionId === null) {
-    return product.analysisStatus === 'idle' ? { text: 'Next: run the analysis', tab: 'analysis' } : { text: 'Next: approve the passport', tab: 'passport' }
-  }
-  if (product.goals.length === 0) return { text: 'Next: write a goal', tab: 'goal' }
-  return { text: 'Next: connect a channel', tab: 'channels' }
+/** What the owner does next with a product, in the order of its launch path (BUG-012), from the same counts; null once
+ *  the path is complete (an approved publication), when the five dots of the card already say so. */
+export function nextProductStep(product: Pick<Product, 'activePassportVersionId' | 'analysisStatus' | 'goals'>, counts: LaunchCounts): string | null {
+  if (product.activePassportVersionId === null) return product.analysisStatus === 'idle' ? 'Next: run the analysis' : 'Next: approve the passport'
+  if (product.goals.length === 0) return 'Next: write a goal'
+  if (counts.channels === 0) return 'Next: connect a channel'
+  if (counts.approvedPublications > 0) return null
+  return counts.draftPublications > 0 ? 'Next: approve a draft' : 'Next: write a publication'
 }
 
 /** Why a product shows "Not analyzed", in words that say what is missing and where to fix it. */

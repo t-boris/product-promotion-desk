@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Id, OpportunityState } from '../../../shared/types'
 import { call, useAction, useQuery } from '../hooks'
 import { Button, Card, EmptyState, ErrorNote, Field, Loading, Page } from '../ui'
+import { connectChannelHref } from './attention-links'
 import { OlderDiscussions } from './review/OlderDiscussions'
 import { ProductFilter, useProductDirectory, useProductFilter } from './review/products'
 import { ReviewCard } from './review/ReviewCard'
@@ -34,11 +35,13 @@ export function OpportunitiesPage() {
   const inScopeIds = new Set(inScope.map((c) => c.id))
   const cards = list.data?.filter((card) => !productId || inScopeIds.has(card.opportunity.channelId))
   const waitingForProducts = Boolean(productId) && !directory.ready
+  // The app, or the chosen product, has no channel at all.
+  const noChannel = directory.ready && inScope.length === 0
 
   return (
     <Page title="Opportunities" subtitle="Comments found in your channels, what happened to each, and older discussions you choose to work on">
       <Card>
-        <div className="row">
+        <div className="toolbar">
           <ProductFilter products={directory.products} value={productId} onChange={setProduct} />
           <Field label="Channel">
             <select className="input" value={channelId} onChange={(e) => setChannelId(e.target.value)} data-testid="channel-filter">
@@ -84,8 +87,20 @@ export function OpportunitiesPage() {
       <ErrorNote error={list.error} />
       {(waitingForProducts || (list.loading && !list.data)) && <Loading what="Loading" />}
       {!waitingForProducts && cards?.length === 0 && (
-        <EmptyState title="Nothing here">
+        <EmptyState
+          art="channel"
+          title="Nothing here"
+          action={
+            noChannel && (
+              <a className="btn btn-primary" href={connectChannelHref(productId)} data-testid="opportunities-connect-channel">
+                Connect a channel
+              </a>
+            )
+          }
+        >
           {filter === 'open' ? 'New comments in your active channels show up here. A new channel starts with a first look that only records what already exists.' : 'No items match this filter.'}
+          {/* Without a channel nothing can show up here: say so, and offer the one way forward. */}
+          {noChannel && ' You have no channel yet.'}
         </EmptyState>
       )}
       <div className="stack" data-testid="opportunity-list">

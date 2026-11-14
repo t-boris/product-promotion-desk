@@ -40,7 +40,7 @@ export function ClaimRow({ claim, all, productId }: { claim: Claim; all: Claim[]
           )}
         </div>
       </div>
-      <p className={`claim-text${claim.status === 'rejected' ? ' struck' : ''}`}>{claim.text}</p>
+      <p className={`claim-text${claim.status === 'rejected' || claim.status === 'prohibited' ? ' struck' : ''}`}>{claim.text}</p>
 
       {isContradiction && others.length > 0 && (
         <div className="conflict-box" data-testid={`conflict-${claim.id}`}>
@@ -78,7 +78,7 @@ export function ClaimRow({ claim, all, productId }: { claim: Claim; all: Claim[]
       <ErrorNote error={statusState.error ?? removeState.error} />
       <div className="row claim-actions">
         {canApprove && (
-          <Button variant="primary" onClick={() => void setStatus('approved')} disabled={busy} data-testid={`claim-approve-${claim.id}`}>
+          <Button variant="secondary" onClick={() => void setStatus('approved')} disabled={busy} data-testid={`claim-approve-${claim.id}`}>
             Approve
           </Button>
         )}

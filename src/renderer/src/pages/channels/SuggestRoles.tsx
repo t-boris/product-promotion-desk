@@ -21,7 +21,7 @@ export function SuggestRoles({ productId, blocked, engineLabel, onUse }: { produ
         title="Roles for logins"
         summary="A role gives an account its own voice, for example an astrologer or a developer."
         button={
-          <Button variant="primary" onClick={() => void ask()} disabled={blocked !== null || state.busy} data-testid="suggest-roles">
+          <Button variant="secondary" onClick={() => void ask()} disabled={blocked !== null || state.busy} data-testid="suggest-roles">
             {state.busy ? 'Thinking…' : 'Suggest roles with AI'}
           </Button>
         }

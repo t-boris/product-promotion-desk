@@ -55,6 +55,20 @@ export function productHref(productId: string | null | undefined, tab?: ProductT
   return tab ? `${base}/${tab}` : base
 }
 
+/** Link to Publications, filtered by one product when one is given (the last stage of a product's launch path). */
+export function publicationsHref(productId?: string | null): string {
+  return productId ? `#/publications/${encodeURIComponent(productId)}` : '#/publications'
+}
+
+/** The product a `#/publications/<productId>` link asks Publications to show, or null. */
+export function publicationsProductOf(hash: string): string | null {
+  const [page, productId] = hash
+    .replace(/^#\/?/, '')
+    .split('/')
+    .filter((segment) => segment !== '')
+  return page === 'publications' && productId ? safeDecode(productId) : null
+}
+
 /** What the Accounts section was asked to show: the new-account form, possibly with a role already filled in. */
 export interface AccountsRoute {
   adding: boolean

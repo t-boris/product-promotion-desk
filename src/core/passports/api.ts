@@ -6,7 +6,8 @@ import { tx } from '../db/database'
 import type { Core } from '../core'
 import type { PassportModule } from './module'
 import { isClaimStatus } from './claim-input'
-import { previewSource, validateSource } from './sources'
+import { isMirroredSource } from '../../shared/sources'
+import { defaultSourceLabel, previewSource, validateSource } from './sources'
 import { normalizeHttpUrl } from './url-reader'
 
 const MAX_NAME = 120
@@ -166,6 +167,30 @@ export function registerHandlers(core: Core, mod: PassportModule): void {
       core.log.info('passports', `Source added to "${product.name}": ${valid.kind} ${valid.kind === 'text' ? '' : valid.ref}`.trim())
       mod.touch()
       return source
+    },
+
+    'sources.update': (args) => {
+      const current = store.source(requireId(args?.id, 'The source'))
+      const product = store.product(current.productId)
+      // The mirrors of the website and the description change with Edit details (products.update). The rule is the one the
+      // Sources tab uses to mark them "From product details", so the tab never offers "Edit" on a source refused here.
+      if (isMirroredSource(current, product)) throw new ApiError('invalid_state', 'This source comes from the product details: change it with Edit details.')
+      // "Edit" sends back the name it showed. A name the app made from the old address (its host, a file or folder name) is made
+      // again from the new one; a name the owner chose stays.
+      const keptAutoName = typeof args?.label === 'string' && args.label.trim() === current.label && current.label === defaultSourceLabel(current.kind, current.ref)
+      const valid = validateSource({ kind: current.kind, ref: args?.ref, label: keptAutoName ? undefined : args?.label, scope: args?.scope === undefined ? current.scope : args.scope })
+      if (store.sources(product.id).some((s) => s.id !== current.id && s.kind === valid.kind && s.ref === valid.ref)) {
+        throw new ApiError('conflict', 'This source is already added to the product.')
+      }
+      tx(core.db, () => {
+        store.updateSource(current.id, { ref: valid.ref, label: valid.label, scope: valid.scope })
+        // A text the owner added and named becomes the description of a product that had none (sources.add). It stays in step
+        // with that description, as removing it clears the description (sources.remove).
+        if (current.kind === 'text' && product.description === current.ref) store.update(product.id, { description: valid.ref })
+      })
+      core.log.info('passports', `Source of "${product.name}" changed: ${valid.kind} ${valid.kind === 'text' ? '' : valid.ref}`.trim())
+      mod.touch()
+      return store.source(current.id)
     },
 
     'sources.remove': (args) => {

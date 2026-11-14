@@ -27,7 +27,8 @@ export function LessonsCard() {
         <Hint>“Compress the picture”, “edit only the editable fields”.</Hint>
       </More>
       <div className="form-row">
-        <Field label="A rule of your own" hint="One short sentence, at least 8 characters.">
+        {/* The length rule is said once, beside the button it holds back (BUG-037). */}
+        <Field label="A rule of your own" hint="One short sentence.">
           <input className="input" value={rule} maxLength={RULE_LIMIT} onChange={(e) => setRule(e.target.value)} data-testid="lesson-new-rule" />
         </Field>
         <Field label="For" hint="One platform, or all of them.">
@@ -42,7 +43,7 @@ export function LessonsCard() {
         </Field>
       </div>
       <div className="row">
-        <Button variant="primary" onClick={() => void add()} disabled={adding.busy || rule.trim().length < 8} data-testid="lesson-add">
+        <Button variant="secondary" onClick={() => void add()} disabled={adding.busy || rule.trim().length < 8} data-testid="lesson-add">
           {adding.busy ? 'Adding…' : 'Add the rule'}
         </Button>
         {/* Why the button is off, beside it (QA finding 9). */}
