@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import type { Id } from '../../../shared/types'
 import { call, useAction, useQuery } from '../hooks'
 import { publicationsProductOf } from '../route'
-import { Badge, Button, Card, EmptyState, ErrorNote, Field, Loading, Page } from '../ui'
+import { Badge, Button, Card, EmptyState, ErrorNote, Field, Hint, Loading, Page } from '../ui'
+import { connectChannelHref } from './attention-links'
 import { PublicationForm } from './review/PublicationForm'
 import { ProductFilter, useProductDirectory, useProductFilter } from './review/products'
 import { ReviewCard } from './review/ReviewCard'
@@ -48,7 +49,13 @@ export function PublicationsPage() {
         <div className="toolbar">
           <ProductFilter products={directory.products} value={productId} onChange={setProduct} />
           <Field label="Channel">
-            <select className="input" value={channelId} onChange={(e) => setChosen(e.target.value)} data-testid="publication-channel">
+            <select className="input" value={channelId} onChange={(e) => setChosen(e.target.value)} disabled={inScope.length === 0} data-testid="publication-channel">
+              {/* Without a channel the select is not blank: it says why there is nothing to choose. */}
+              {inScope.length === 0 && (
+                <option value="" disabled>
+                  No channels yet
+                </option>
+              )}
               {inScope.map((c) => (
                 <option key={c.id} value={c.id}>
                   {directory.channelLabel(c)}
@@ -62,6 +69,12 @@ export function PublicationsPage() {
           <Button onClick={() => setWriting(true)} disabled={!channelId || writing} data-testid="write-publication">
             Write one myself
           </Button>
+          {/* Why the two buttons are off, beside them, with the way to fix it. */}
+          {directory.ready && !channelId && (
+            <Hint className="toolbar-hint" data-testid="publication-needs-channel">
+              Connect a channel first. <a href={connectChannelHref(productId)}>Connect a channel</a>
+            </Hint>
+          )}
         </div>
         <ErrorNote error={directory.error ?? suggesting.error} />
         {cannotPost && (
@@ -78,7 +91,14 @@ export function PublicationsPage() {
       </Card>
 
       {directory.ready && inScope.length === 0 && (
-        <EmptyState title="No channels yet">
+        <EmptyState
+          title="No channels yet"
+          action={
+            <a className="btn btn-primary" href={connectChannelHref(productId)} data-testid="publications-connect-channel">
+              Connect a channel
+            </a>
+          }
+        >
           {productId ? 'This product has no channels yet. Add one on the product page; publications are written for a specific channel.' : 'Connect a channel first; publications are written for a specific channel.'}
         </EmptyState>
       )}

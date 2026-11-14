@@ -38,3 +38,9 @@ export function fixLinkFor(item: AttentionItem, { channels, products }: LinkSour
   if (!productId) return { href: productHref(null), label: 'Open Products', productName: null }
   return { href: productHref(productId, 'channels'), label: productName ? `Open ${productName} channels` : 'Open channels', productName }
 }
+
+/** Where the owner connects a channel: the Channels tab of the chosen product, or the product list when no product is
+ *  chosen ("All products"), since a channel always belongs to a product (DEC-009). */
+export function connectChannelHref(productId: string | null | undefined): string {
+  return productId ? productHref(productId, 'channels') : productHref(null)
+}

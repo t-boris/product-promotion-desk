@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Account, AnalysisStage, AttentionItem, Channel, Claim, Product } from '../shared/types'
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from '../renderer/src/menu-state'
-import { fixLinkFor } from '../renderer/src/pages/attention-links'
+import { connectChannelHref, fixLinkFor } from '../renderer/src/pages/attention-links'
 import { KIND_TONE, attentionCountTone } from '../renderer/src/pages/attention-tone'
 import { startSteps } from '../renderer/src/pages/attention-start'
 import { engineChoiceVariant, recommendedEngineId, splitEngineDetail } from '../renderer/src/pages/engine-detail'
@@ -358,6 +358,12 @@ describe('QA clarity batch: what the screens say', () => {
     expect(publicationsProductOf('#/products/p1')).toBeNull()
     // The shell still routes the link to the Publications page.
     expect(parseHash('#/publications/p1').page).toBe('publications')
+  })
+
+  it('Publications and Opportunities (BUG-017, BUG-018): "Connect a channel" opens the chosen product\'s Channels tab, or Products', () => {
+    expect(connectChannelHref('p 1')).toBe('#/products/p%201/channels')
+    expect(connectChannelHref('')).toBe('#/products')
+    expect(connectChannelHref(null)).toBe('#/products')
   })
 
   it('Menu (BUG-016): the Attention count is amber, and red only while one of the items is a failure', () => {

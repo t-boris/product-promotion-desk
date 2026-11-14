@@ -575,6 +575,10 @@ a.btn {
 .toolbar > .field {
   margin: 0;
 }
+/* A reason beside the buttons of a toolbar: its line sits on the buttons' middle. */
+.toolbar > .toolbar-hint {
+  padding-bottom: calc((var(--control-h) - 1lh) / 2);
+}
 .form-row {
   /* Fields side by side: the columns share the width and the labels line up at the top, whatever hint sits below an input. */
   display: grid;
