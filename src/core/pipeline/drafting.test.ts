@@ -556,7 +556,8 @@ describe('automatic replies do not lean on the AI\'s own label (REQ-003 criterio
   type Case = { name: string; comment: string; answer: string; state: 'awaiting_approval' | 'needs_user'; reason: RegExp }
   const thanks = (text: string, extra: Partial<Parameters<typeof reply>[0]> = {}) => reply({ category: 'thanks', reply: text, rationale: 'thanks', usedClaimIds: [], ...extra })
   const cases: Case[] = [
-    { name: 'a shortened link in a thank-you', comment: 'Thanks, great app!', answer: thanks('Glad you like it! More at bit.ly/x'), state: 'awaiting_approval', reason: /link, an address or a mention/ },
+    { name: 'a shortened link in a thank-you', comment: 'Thanks, great app!', answer: thanks('Glad you like it! More at bit.ly/x'), state: 'needs_user', reason: /bit\.ly/ },
+    { name: 'a markdown link to another site in a thank-you', comment: 'Thanks, great app!', answer: thanks('Glad you like it! [More](shady.pl/x)'), state: 'needs_user', reason: /shady\.pl/ },
     { name: 'a bare domain in a factual answer', comment: 'Does it work on Android?', answer: reply({ reply: 'Visit example.co for Android and iPhone', usedClaimIds: ['c2'] }), state: 'needs_user', reason: /example\.co/ },
     { name: 'an amount in a thank-you', comment: 'Thanks a lot!', answer: thanks('Glad you like it, only $5 a month!'), state: 'needs_user', reason: /price/ },
     { name: 'a digit in a thank-you', comment: 'Thanks a lot!', answer: thanks('Glad you like it, enjoy version 2'), state: 'awaiting_approval', reason: /number or an amount/ },
