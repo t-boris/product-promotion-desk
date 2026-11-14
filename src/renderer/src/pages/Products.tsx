@@ -34,7 +34,7 @@ export function ProductsPage() {
   const [creating, setCreating] = useState(false)
   // The product just created: open before `products.list` has reloaded and holds it.
   const [created, setCreated] = useState<string | null>(null)
-  const countsOf = useLaunchCounts()
+  const { countsOf } = useLaunchCounts()
 
   const list = products.data ?? []
   // A product that was deleted (here or elsewhere), or a link to one that does not exist, selects nothing.

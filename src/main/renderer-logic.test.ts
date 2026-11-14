@@ -9,7 +9,7 @@ import { closeForm, mainForm, openForm, type OpenFormIds } from '../renderer/src
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from '../renderer/src/menu-state'
 import { connectChannelHref, fixLinkFor } from '../renderer/src/pages/attention-links'
 import { KIND_TONE, attentionCountTone } from '../renderer/src/pages/attention-tone'
-import { startSteps } from '../renderer/src/pages/attention-start'
+import { startHeadline, startSteps } from '../renderer/src/pages/attention-start'
 import { engineChoiceVariant, recommendedEngineId, splitEngineDetail } from '../renderer/src/pages/engine-detail'
 import { describeSources, planStages, progressOf } from '../renderer/src/pages/products/analysis-plan'
 import { TAB_STAGE, launchCounts, launchProgress, launchStages, nextStage, tabAccent, type LaunchFacts } from '../renderer/src/pages/products/launch-path'
@@ -417,7 +417,7 @@ describe('QA clarity batch: what the screens say', () => {
   const stage = (name: AnalysisStage['name'], status: AnalysisStage['status'] = 'pending'): AnalysisStage => ({ productId: 'p', name, status, detail: '', updatedAt: '' })
   const ALL_STAGES = [stage('read_site'), stage('analyze_documents'), stage('scan_code'), stage('synthesize'), stage('find_contradictions')]
 
-  it('Attention: the getting-started steps follow the state of the app, and the first open one is the next step', () => {
+  it('Attention: the getting-started steps follow the state of the app, and the first open one is the next step (with no launch stage in the way)', () => {
     const fresh = startSteps({ products: 0, accounts: 0, paused: true })
     expect(fresh.map((x) => x.done)).toEqual([false, false, false])
     expect(fresh.find((x) => !x.done)?.id).toBe('product')
@@ -427,6 +427,36 @@ describe('QA clarity batch: what the screens say', () => {
     expect(startSteps({ products: 2, accounts: 1, paused: false }).every((x) => x.done)).toBe(true)
     // Until the state of the automation arrived nothing claims it is running.
     expect(startSteps({ products: 1, accounts: 1, paused: undefined }).find((x) => x.id === 'resume')?.done).toBe(false)
+  })
+
+  it('Attention (BUG-058): the newest product\'s next stage leads the checklist, ahead of the account and the automation, and is the step the path and the button name', () => {
+    const stageOf = (over: Partial<LaunchFacts>) => nextStage(launchStages('p1', { hasSources: true, passportApproved: false, goals: 0, channels: 0, approvedPublications: 0, ...over }))
+    // Products but no account, automation paused (the report): the passport is the first open step, the account comes after it.
+    const passport = startSteps({ products: 3, accounts: 0, paused: true, stage: stageOf({}) })
+    expect(passport.map((x) => x.id)).toEqual(['product', 'launch', 'account', 'resume'])
+    expect(passport.map((x) => x.done)).toEqual([true, false, false, false])
+    expect(passport.find((x) => !x.done)).toMatchObject({ id: 'launch', title: 'Build the passport', action: 'Build the passport', hint: 'Build and approve the passport.', href: '#/products/p1/passport' })
+    expect(startSteps({ products: 3, accounts: 0, paused: true, stage: stageOf({ passportApproved: true }) }).find((x) => !x.done)).toMatchObject({ id: 'launch', action: 'Write a goal', href: '#/products/p1/goal' })
+    expect(startSteps({ products: 3, accounts: 0, paused: true, stage: stageOf({ passportApproved: true, goals: 1 }) }).find((x) => !x.done)).toMatchObject({ id: 'launch', action: 'Connect a channel', href: '#/products/p1/channels' })
+    // An account and a running automation do not move the path's stage out of the first place.
+    expect(startSteps({ products: 1, accounts: 1, paused: false, stage: stageOf({}) }).find((x) => !x.done)?.id).toBe('launch')
+    // With every setup stage done (the Publication stage is the work, not the setup) or no stage, the three steps stay as they were.
+    for (const stage of [stageOf({ passportApproved: true, goals: 1, channels: 1 }), stageOf({ passportApproved: true, goals: 1, channels: 1, approvedPublications: 1 }), null, undefined]) {
+      expect(startSteps({ products: 2, accounts: 0, paused: true, stage }).map((x) => x.id)).toEqual(['product', 'account', 'resume'])
+    }
+    // The first open step, the filled button under the card and the path's "Next" tag are one step: the same action as nextStage.
+    for (const over of [{}, { passportApproved: true }, { passportApproved: true, goals: 1 }]) {
+      const stages = launchStages('p1', { hasSources: true, passportApproved: false, goals: 0, channels: 0, approvedPublications: 0, ...over })
+      const first = startSteps({ products: 1, accounts: 0, paused: true, stage: nextStage(stages) }).find((x) => !x.done)
+      expect({ action: first?.action, href: first?.href }).toEqual({ action: nextStage(stages)?.action, href: nextStage(stages)?.href })
+    }
+  })
+
+  it('Attention (BUG-058): the headline names the product the path is about, and asks for the first product when there is none', () => {
+    expect(startHeadline(null)).toBe('Launch your first product')
+    expect(startHeadline('Northwind Notes')).toBe('Launch Northwind Notes')
+    // A label that tells products of one name apart (BUG-054) is named as it is.
+    expect(startHeadline('Lumen Reader · 14 Nov 13:46')).toBe('Launch Lumen Reader · 14 Nov 13:46')
   })
 
   it('Attention (BUG-029): the "Resume automation" hint follows the state, the title stays', () => {

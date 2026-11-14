@@ -5,9 +5,10 @@ import { Icon } from '../icons'
 import { Badge, Button, Card, EmptyState, ErrorNote, Loading, Page } from '../ui'
 import { fixLinkFor } from './attention-links'
 import { KIND_TONE } from './attention-tone'
-import { startSteps } from './attention-start'
-import { launchStages } from './products/launch-path'
+import { startHeadline, startSteps } from './attention-start'
+import { launchStages, nextStage } from './products/launch-path'
 import { LaunchPath, useLaunchCounts } from './products/LaunchPath'
+import { productLabels } from './products/product-labels'
 import { useMainActionOwner } from './review/main-action'
 import { useProductDirectory, type ProductDirectory } from './review/products'
 import { ReviewCard } from './review/ReviewCard'
@@ -70,14 +71,26 @@ function DecisionCard({
 
 /**
  * Nothing needs the owner: say so, and say what to do next (QA findings 1, 5, 6). While a start step is open, Getting started
- * leads the page (BUG-024): a headline, the launch path of the newest product and one filled button for the next step, so
- * "Add a product" appears once; "Nothing needs you right now" is one line below it. Once every step is done, the empty
- * state is the page, with the way to Opportunities.
+ * leads the page (BUG-024): a headline naming the newest product, its launch path and one filled button for the next step, so
+ * "Add a product" appears once; "Nothing needs you right now" is one line below it. The newest product's next stage of the
+ * path is the first open step, so the path's "Next" tag, the filled button and the checklist agree (BUG-058). Once every step is
+ * done, the empty state is the page, with the way to Opportunities.
  */
 function NothingNeedsYou({ products, accounts, paused, onResume }: { products: Product[]; accounts: number; paused: boolean | undefined; onResume: () => void }) {
-  const steps = startSteps({ products: products.length, accounts, paused })
+  const { countsOf, loaded } = useLaunchCounts()
+  // Until the channels and publications have answered every product looks like one with none, so the path would send a launched product to "Connect a channel".
+  if (!loaded) return <Loading what="Loading" />
+  // The newest product; with none yet, the path starts at "Product" and its links lead to the product page.
+  const latest = products.reduce<Product | undefined>((newest, p) => (!newest || p.createdAt > newest.createdAt ? p : newest), undefined)
+  const stages = launchStages(latest?.id ?? '', {
+    hasSources: latest !== undefined,
+    passportApproved: latest?.activePassportVersionId != null,
+    goals: latest?.goals.length ?? 0,
+    ...(latest ? countsOf(latest.id) : { channels: 0, approvedPublications: 0 })
+  })
+  // The path's next stage leads the checklist, so the path, the filled button and the checklist name one step (BUG-058).
+  const steps = startSteps({ products: products.length, accounts, paused, stage: latest ? nextStage(stages) : null })
   const next = steps.find((step) => !step.done)
-  const countsOf = useLaunchCounts()
   if (!next) {
     return (
       <div className="gs" data-testid="attention-empty">
@@ -96,19 +109,12 @@ function NothingNeedsYou({ products, accounts, paused, onResume }: { products: P
       </div>
     )
   }
-  // The newest product; with none yet, the path starts at "Product" and its links lead to the product page.
-  const latest = products.reduce<Product | undefined>((newest, p) => (!newest || p.createdAt > newest.createdAt ? p : newest), undefined)
-  const stages = launchStages(latest?.id ?? '', {
-    hasSources: latest !== undefined,
-    passportApproved: latest?.activePassportVersionId != null,
-    goals: latest?.goals.length ?? 0,
-    ...(latest ? countsOf(latest.id) : { channels: 0, approvedPublications: 0 })
-  })
+  const label = latest ? (productLabels(products).get(latest.id) ?? latest.name) : null
   return (
     <div className="gs" data-testid="attention-empty">
       <section className="card gs-hero" aria-label="Getting started" data-testid="attention-start">
         <p className="gs-eyebrow">Getting started</p>
-        <h2 className="gs-headline">Launch your first product</h2>
+        <h2 className="gs-headline">{startHeadline(label)}</h2>
         <LaunchPath stages={stages} testId="attention-launch-path" />
         <div className="row">
           {next.id === 'resume' ? (

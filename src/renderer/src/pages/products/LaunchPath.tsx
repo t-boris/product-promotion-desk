@@ -10,12 +10,20 @@ const COUNTED_STATES = [...APPROVED_PUBLICATION_STATES, ...DRAFT_PUBLICATION_STA
 
 const STATE_WORD: Record<LaunchStage['state'], string> = { done: 'done', current: 'next', todo: 'not yet' }
 
-/** The channel and approved-publication counts of every product, from the same lists Channels and Publications load. */
-export function useLaunchCounts(): (productId: Id) => LaunchCounts {
+/**
+ * The channel and approved-publication counts of every product, from the same lists Channels and Publications load. Until both lists have
+ * answered (or failed) every count is zero and `loaded` is false: a screen that names the next stage waits for it, or a launched product
+ * would be told to connect a channel for a moment.
+ */
+export function useLaunchCounts(): { countsOf: (productId: Id) => LaunchCounts; loaded: boolean } {
   const channels = useQuery('channels.list', undefined, ['channels', 'products'])
   const publications = useQuery('opportunities.list', { kind: 'standalone', states: COUNTED_STATES }, ['opportunities'])
   const counts = launchCounts(channels.data ?? [], publications.data ?? [])
-  return (productId) => counts.get(productId) ?? { channels: 0, approvedPublications: 0, draftPublications: 0 }
+  const answered = (query: { data: unknown; error: string | null }): boolean => query.data !== undefined || query.error !== null
+  return {
+    countsOf: (productId) => counts.get(productId) ?? { channels: 0, approvedPublications: 0, draftPublications: 0 },
+    loaded: answered(channels) && answered(publications)
+  }
 }
 
 /** The launch path under the product header (BUG-012): each stage links to the place where it is worked on. */

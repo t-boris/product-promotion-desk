@@ -27,6 +27,8 @@
   font-size: var(--fs-display);
   line-height: var(--lh-title);
   letter-spacing: -0.01em;
+  /* It now carries a product name: a long one wraps inside the card (BUG-058). */
+  overflow-wrap: anywhere;
 }
 
 /* The steps: hairline rows, a mark, the words, and the plain button of a later step on the right. */

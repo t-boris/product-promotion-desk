@@ -342,7 +342,7 @@ Motion: background, border and colour transitions in `--dur-fast`; disclosure ch
 | **Review list** | Attention, Opportunities, Publications | One group box per item: head row (tags, channel, time), body (thread / draft fields), actions right-aligned at the bottom; the main action is filled only on the first item, the same action is `secondary` on the others |
 | **Table** | Log tabs, Results metrics, channel capability | Full width inside a group box; zebra; wrap long text; no sideways scroll |
 | **Empty state** | every list and page | §7; in the free height of its column (`fill`) |
-| **Getting started** | Attention, first run | Group box with eyebrow, 26 px headline, the launch path, one filled button for the next step, the step list |
+| **Getting started** | Attention, first run | Group box with eyebrow, 26 px headline that names the newest product ("Launch Northwind Notes", "Launch your first product" while there is none; a long name wraps inside the card), the launch path, one filled button for the next step, the step list |
 
 ---
 
@@ -355,7 +355,7 @@ Texts are the current ones and do not change.
 
 | Screen / state | Target pattern | Filled | Empty state → next step |
 |---|---|---|---|
-| Getting started (a launch step open) | Getting-started group box | the next step: "Add a product" / "Connect an account" / "Resume automation" | — |
+| Getting started (a launch step open) | Getting-started group box | the next step: "Add a product", then the newest product's next stage of the launch path ("Build the passport" / "Write a goal" / "Connect a channel", `startSteps`), then "Connect an account" / "Resume automation" | — |
 | All done | Empty state | none (only "Open Opportunities" bezel) | "Nothing needs you right now" → "Open Opportunities" |
 | Connections and accounts | Group box, one row per problem: tag, title, product line, fix button on the right | none (fix buttons bezel) | — |
 | Needs your decision | Review list | "Approve" of the first card | — |
@@ -462,6 +462,12 @@ on-demand form is open. On Channels with a connected channel "Assess channel"
 (and its reason, BUG-055) and "Activate" stay available as bezels. Once every stage is done no tab is filled. A saved goal keeps its
 "Goal saved. It now appears on the Results tab." note with "Show on Results" as a bezel; the filled "Connect a channel" is the link above it.
 
+**Getting started takes the same step (BUG-058).** `startSteps` puts the newest product's next stage, while it is Product, Passport, Goal
+or Channel, right after "Add a product" and ahead of "Connect an account" and "Resume automation", with the stage's action as its title and
+button and its `todo` as the hint. The first open step is then the stage that carries the path's "Next" tag and the stage the filled button
+names. Publication is not a setup step: a path that has reached it leaves the checklist to the account and the automation. The headline
+names the product ("Launch Northwind Notes"; with two products of one name, the label of BUG-054).
+
 ---
 
 ## 12. Verifiable requirements
@@ -491,7 +497,7 @@ Measured on the packaged build of the branch with `scripts/design/tour.mjs` (72 
 | V-18 | Products at 980×640 with the menu shown: list and detail side by side, the tab row ends at y ≤ 310 px (measured 308 with a product that has a website, a description and a status row; the first guess of 300 was not reachable without dropping the status row), the launch path is one row, no word broken inside a URL | DOM measure on the Passport tab | all true |
 | V-19 | Launch path visible under the product header, as dots on every product row, and on the first-run Attention; counts unchanged | DOM read; existing launch-path unit tests | true |
 | V-20 | Every empty state of §10 has a title, one sentence and the named next-step action (or says none is needed) | tour on a fresh data folder and on the seeded one | 100 % |
-| V-21 | QA-bound texts, accessible names, roles and `data-testid` of §13 unchanged. Decided exceptions after the QA walk: the send button of an edited draft reads "Save, approve and send" (was "Save and approve and send", BUG-057); the toolbar's "Write one myself" is not drawn while the empty list offers its own (BUG-057); the row of a product with no approved passport reads "Next: build the passport" (was "Next: run the analysis" / "Next: approve the passport", BUG-064) | `grep` of each string in the renderer + both QA scenarios run | all found; scenarios pass |
+| V-21 | QA-bound texts, accessible names, roles and `data-testid` of §13 unchanged. Decided exceptions after the QA walk: the send button of an edited draft reads "Save, approve and send" (was "Save and approve and send", BUG-057); the toolbar's "Write one myself" is not drawn while the empty list offers its own (BUG-057); the row of a product with no approved passport reads "Next: build the passport" (was "Next: run the analysis" / "Next: approve the passport", BUG-064); the Getting started headline names the newest product ("Launch Northwind Notes", was "Launch your first product") and its checklist puts that product's next launch-path stage between "Add a product" and "Connect an account" (BUG-058) | `grep` of each string in the renderer + both QA scenarios run | all found; scenarios pass |
 | V-22 | No new runtime or dev dependency; icons are local SVG | `git diff main -- package.json package-lock.json` | no dependency change |
 | V-23 | Web mode (`PPD_WEB_MODE=1`) renders the same layout with an opaque sidebar | open the web address in the MarkView browser tab | sidebar opaque, no transparency holes |
 | V-24 | `npm run verify` green, CI green | as DoD | green |
@@ -615,7 +621,7 @@ matrix of §10 is the target; this section records what the code does, so the sw
 | Accounts → Profiles | `.split` with a "New profile" bezel above the list; platform and account choices are toggle groups (`aria-pressed`, tint, never filled); no person yet = the form, a person proposed = the proposal | one per stage: "Make the profile", "Propose a profile", "Approve", "Make an account" |
 | Accounts → Mailboxes | hairline rows of mailboxes and the add form; reason "Type the address of your mailbox." | "Add mailbox" |
 | Product → Channels | a single column of group boxes in the order accounts strip, connect, channel list (a `.panel`), status, capability, plan, mode, settings, "Ideas from the AI"; the stage decides the one filled button while Channel is the path's next stage (no account → "Add an account", no channel → "Connect channel"); with a channel connected "Assess channel" and "Activate" are bezels and the link to the next stage is filled; "Save settings" is filled only while the form is dirty and the stage button steps back | by stage |
-| Attention | "Getting started" group box (eyebrow, 26 px headline, launch path, hairline steps) while a step is open; "Connections and accounts" one box of hairline rows; decisions as review cards | the next Getting-started step, else the first open decision card's main action |
+| Attention | "Getting started" group box (eyebrow, 26 px headline, launch path, hairline steps) while a step is open; "Connections and accounts" one box of hairline rows; decisions as review cards | the next Getting-started step (the newest product's next launch-path stage leads it), else the first open decision card's main action |
 | Opportunities | a bar (product and channel pop-ups, a segmented state filter, "Check now" when one channel is picked), a hint with the result of the check, cards collapsed | the first open card's main action; "Connect a channel" in the empty state only when there is no channel |
 | Publications | toolbar (Product, Channel, "Suggest with AI" secondary, "Write one myself" bezel, left out while the empty list offers it), the posting warning as a warning note, sections Drafts, Sent, Rejected | the open form's "Save as draft", else the first open draft's main action |
 | Review card (Attention, Opportunities, Publications) | head row (state, kind, product, channel, account, date), the quoted comment on a well, the draft form (96 px resizable text area), the schedule row, the actions row: Defer and Reject quiet on the left, "Save draft", "Draft with AI" (secondary), "Approve and send" ("Save, approve and send" once the text is edited, `approveLabels`), then the main action on the right; the reason "Write the text first." beside a disabled Approve | the first card that offers a main action (`useMainActionOwner`); on every other card the same action is secondary |

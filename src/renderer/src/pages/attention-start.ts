@@ -1,7 +1,10 @@
 // The "Getting started" steps of an empty Attention page. Pure, so the order and the words are tested without the interface.
 
+import type { LaunchStage, LaunchStageId } from './products/launch-path'
+
 export interface StartStep {
-  id: 'product' | 'account' | 'resume'
+  /** `launch` is the newest product's next stage of the launch path (BUG-058). */
+  id: 'product' | 'launch' | 'account' | 'resume'
   title: string
   hint: string
   /** The words of the button that does the step. */
@@ -15,10 +18,24 @@ export interface StartFacts {
   accounts: number
   /** Undefined until the state of the automation arrived. */
   paused: boolean | undefined
+  /** The next stage of the newest product's launch path (`nextStage`), null when it has none or there is no product. */
+  stage?: LaunchStage | null
 }
 
-/** The three things that bring the app to work, in the order the owner does them; `done` says which are already behind. */
+/**
+ * The stages that are a step of Getting started. Publications are the work the app does once it is set up, so a path that has reached them
+ * leaves the checklist to the account and the automation.
+ */
+const LAUNCH_STEP_STAGES: readonly LaunchStageId[] = ['product', 'passport', 'goal', 'channel']
+
+/**
+ * The things that bring the app to work, in the order the owner does them; `done` says which are already behind. The newest product's
+ * next stage of the launch path comes right after "Add a product", ahead of the account and the automation, so the checklist, the filled
+ * button under the path and the path's own "Next" tag all name the same step (BUG-058).
+ */
 export function startSteps(facts: StartFacts): StartStep[] {
+  const stage = facts.stage && LAUNCH_STEP_STAGES.includes(facts.stage.id) ? facts.stage : null
+  const launch: StartStep[] = stage ? [{ id: 'launch', title: stage.action, hint: stage.todo, action: stage.action, href: stage.href, done: false }] : []
   return [
     {
       id: 'product',
@@ -28,6 +45,7 @@ export function startSteps(facts: StartFacts): StartStep[] {
       href: '#/products',
       done: facts.products > 0
     },
+    ...launch,
     {
       id: 'account',
       title: 'Connect an account',
@@ -49,4 +67,9 @@ export function startSteps(facts: StartFacts): StartStep[] {
       done: facts.paused === false
     }
   ]
+}
+
+/** The headline of the Getting started card: it names the product its launch path is about (BUG-058); with none yet it is the first one. */
+export function startHeadline(productLabel: string | null): string {
+  return productLabel === null ? 'Launch your first product' : `Launch ${productLabel}`
 }
