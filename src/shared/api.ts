@@ -270,6 +270,8 @@ export interface ApiMethods {
    * link) or it was not. Without this an unreachable platform check would lock the item forever.
    */
   'opportunities.resolveUnknown': [{ id: Id; outcome: 'published' | 'not_published'; url?: string }, OpportunityCard]
+  // The rules an AI draft passes, read against the owner's own text before it is approved. Local: no engine, nothing stored.
+  'drafts.check': [{ opportunityId: Id; form?: { title: string; text: string; link: string } }, DraftCheckResult]
   /**
    * The AI writes (the field is empty, or `post`) or improves (the field is filled, steered by the owner's `instruction`) the title or the
    * text of a reply or of a post. A card is named by `opportunityId`; a new publication that has no card yet, by `channelId`. `form` is
@@ -280,8 +282,6 @@ export interface ApiMethods {
    * a malformed call or a draft too long to be read whole (never cut). If the product knowledge changes while the AI writes, the text is refused
    * (suggest_failed). Like the AI drafts, it works with any ready engine.
    */
-  // The rules an AI draft passes, read against the owner's own text before it is approved. Local: no engine, nothing stored.
-  'drafts.check': [{ opportunityId: Id; form?: { title: string; text: string; link: string } }, DraftCheckResult]
   'drafts.refine': [{ field: DraftHelpField; opportunityId?: Id; channelId?: Id; form: { title: string; text: string }; instruction?: string; about?: string }, DraftHelpResult]
   'publications.suggest': [{ channelId: Id }, OpportunityCard]
   'publications.create': [{ channelId: Id; draft: DraftInput }, OpportunityCard]

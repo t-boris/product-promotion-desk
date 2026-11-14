@@ -40,7 +40,10 @@ export function ReviewButtons({ card, actions, dirty, input, primaryAction = fal
   const panel = heldFor(held, input)
   const here = useRef<HTMLDivElement>(null)
   const now = fingerprint(input)
+  // The text on the screen as of the latest render: a check that comes back after the card changed under it is about another text.
+  const latest = useRef(now)
   useEffect(() => {
+    latest.current = now
     setHeld((current) => (current !== null && current.fingerprint !== now ? null : current))
   }, [now])
 
@@ -70,7 +73,10 @@ export function ReviewButtons({ card, actions, dirty, input, primaryAction = fal
   }
   const approveWith = async (which: Approving): Promise<void> => {
     if (!needsCheck(card.draft, dirty)) return goOn(which)
+    const asked = now
     const outcome = await actions.check(id, dirty ? input : undefined)
+    // The card changed while the text was read (a new draft arrived): neither approve the old text nor show findings about it. The owner presses again.
+    if (latest.current !== asked) return
     if (outcome.error === null && outcome.findings.length === 0) {
       setHeld(null)
       return goOn(which)
@@ -78,7 +84,7 @@ export function ReviewButtons({ card, actions, dirty, input, primaryAction = fal
     setHeld({ which, findings: outcome.findings, error: outcome.error, fingerprint: fingerprint(input) })
   }
   const editText = (): void => {
-    const container = here.current?.closest('[data-testid^="review-card-"]')
+    const container = here.current?.closest('.review-card')
     setHeld(null)
     container?.querySelector<HTMLElement>('textarea.draft-text')?.focus()
   }

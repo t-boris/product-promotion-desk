@@ -60,6 +60,15 @@ describe('drafts.check: what is found', () => {
     })
   }
 
+  it('quotes the words in a long sentence, and the whole of a price and of an address', async () => {
+    world = makeWorld({ mode: 'draft' })
+    const opp = await world.newOpportunity()
+    const long = 'Thanks for asking about the plans and what is included in each of them, and by the way the first month is free for everyone who signs up today.'
+    const found = (await check(opp.id, { text: long })).findings.find((f) => f.rule === 'free')
+    expect(found?.quote).toContain('free')
+    expect((await check(opp.id, { text: 'It costs $9.99 a month' })).findings.find((f) => f.rule === 'price')?.quote).toBe('It costs $9.99 a month')
+  })
+
   it('names a prohibited statement and quotes it', async () => {
     world = makeWorld({ mode: 'draft' })
     world.knowledge.prohibited = [makeClaim('p1', 'The readings are guaranteed accurate')]
@@ -88,6 +97,7 @@ describe('drafts.check: what is found', () => {
     expect(await rulesOf(PLAIN, { link: 'evil\u200B.com' })).toEqual(['link'])
     expect(await rulesOf(PLAIN, { title: 'fr\u200Bee chart' })).toEqual(['free'])
     expect(await rulesOf(PLAIN, { title: 'password: hunter22x' })).toEqual(['credential'])
+    expect(await rulesOf('My pass\u200Bword: hunter22x')).toEqual(['credential'])
   })
 
   it('lets through what the own address and the approved facts allow', async () => {
@@ -179,9 +189,22 @@ describe('drafts.check: the gate', () => {
     expect(await refusal({ opportunityId: opp.id, form: 'text' })).toBe('invalid_input')
     expect(await refusal({ opportunityId: opp.id, form: { title: '', text: 5, link: '' } })).toBe('invalid_input')
     expect(await refusal({ opportunityId: opp.id, form: { title: '', text: 'hi' } })).toBe('invalid_input')
-    expect(await refusal({ opportunityId: opp.id, form: { title: '', text: 'x'.repeat(20_001), link: '' } })).toBe('invalid_input')
+    expect(await refusal({ opportunityId: opp.id, form: { title: '', text: 'x'.repeat(40_001), link: '' } })).toBe('invalid_input')
     expect(await refusal({ opportunityId: opp.id, form: { title: 'x'.repeat(2_000), text: 'hi', link: '' } })).toBe('invalid_input')
-    expect(await refusal({ opportunityId: opp.id, form: { title: '', text: 'hi', link: 'x'.repeat(2_001) } })).toBe('invalid_input')
+    expect(await refusal({ opportunityId: opp.id, form: { title: '', text: 'hi', link: 'x'.repeat(40_001) } })).toBe('invalid_input')
+    // Everything the save accepts can be read: the limits are the save's, and a refusal names the field that is too long.
+    expect(await refusal({ opportunityId: opp.id, form: { title: 'x'.repeat(300), text: 'x'.repeat(40_000), link: 'https://a.test/' + 'x'.repeat(2_500) } })).toBe('accepted')
+    const named = async (form: { title: string; text: string; link: string }): Promise<string> => {
+      try {
+        await world.core.router.call('drafts.check', { opportunityId: opp.id, form } as never)
+      } catch (error) {
+        return (error as Error).message
+      }
+      return ''
+    }
+    expect(await named({ title: '', text: 'x'.repeat(40_001), link: '' })).toMatch(/^The text is longer/)
+    expect(await named({ title: 'x'.repeat(301), text: 'hi', link: '' })).toMatch(/^The title is longer/)
+    expect(await named({ title: '', text: 'hi', link: 'x'.repeat(40_001) })).toMatch(/^The link is longer/)
     expect(await refusal({ opportunityId: opp.id, form: { title: '', text: 'hi', link: '' } })).toBe('accepted')
     expect(world.engine.calls).toEqual([])
   })

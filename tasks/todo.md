@@ -646,4 +646,5 @@ Plan:
 - [x] `disclosure.ts`: a verdict with a kind (`denies` | `unsaid`), `disclosureProblem` keeps its text.
 - [x] `draft-check.ts` + `drafts.check` API: by opportunity id and an optional form; prohibited statements, links outside the product's addresses (0.11.1 rules), price/discount/free, a credential, the connection (blocking). Local, no engine, no log of the text.
 - [x] Renderer: pure logic (`approve-check.ts`: who is checked, fingerprint, may approve anyway, labels), panel in `ReviewButtons`, styles, focus; the panel goes away when the text changes.
-- [ ] Tests (core, renderer logic), mutants, packaged probe on an own instance (every state of the panel in light and dark), spec V-31, independent review, PR, release 0.12.0.
+- [x] Tests (core, renderer logic), mutants (62, all killed but 4 equivalent), packaged probe on an own instance (45 checks, every state of the panel in light and dark), spec 19 + V-31, independent review (5 real defects fixed: the quote cut away from the words, cut at a dot inside a number or an address, split an emoji; the credential rule did not fold invisible characters; the check's caps were stricter than the save's; a card changed during the check; plus the JSDoc and the method list).
+- [ ] PR, CI, release 0.12.0.

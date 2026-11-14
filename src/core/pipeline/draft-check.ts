@@ -17,14 +17,16 @@ import { requireText } from '../channels/errors'
 import type { Core } from '../core'
 import { loadKnowledge } from './context'
 import { disclosureVerdict } from './disclosure'
-import { MAX_TITLE_CHARS } from './draft-prompt'
+import { MAX_TEXT_LENGTH, MAX_TITLE_LENGTH } from './draft-input'
 import { forChecks } from './draft-help'
 import { allowedHostsFor, checkDraftSafety, type FindingRule } from './safety'
 import type { FlowStore } from './store'
 
-// The same limit as the text the AI is shown: a text longer than this is refused, never cut and never half read.
-const MAX_TEXT = 20_000
-const MAX_LINK = 2_000
+// The limits of the save (draft-input.ts), so everything that can be saved can be read: a field longer than its limit is refused, never cut and never half read.
+// The save has no limit for a link; it is read as text, so it gets the text's.
+const MAX_TEXT = MAX_TEXT_LENGTH
+const MAX_TITLE = MAX_TITLE_LENGTH
+const MAX_LINK = MAX_TEXT_LENGTH
 
 export interface DraftCheckArgs {
   opportunityId: Id
@@ -78,7 +80,7 @@ export class DraftCheck {
       findings.push({ rule: finding.rule as DraftFinding['rule'], title: finding.title, quote: finding.quote, why: finding.why, blocks: false })
     }
 
-    if (holdsCredential([content.title, content.text].join('\n'))) {
+    if (holdsCredential(forChecks([content.title, content.text].join('\n')))) {
       findings.push({
         rule: 'credential',
         title: 'Something that looks like a password or a key',
@@ -97,9 +99,9 @@ export class DraftCheck {
       if (!isRecord(raw) || typeof raw.title !== 'string' || typeof raw.text !== 'string' || typeof raw.link !== 'string') {
         throw new ApiError('invalid_input', 'The draft is missing its title, text or link.')
       }
-      if (raw.text.length > MAX_TEXT || raw.title.length > MAX_TITLE_CHARS || raw.link.length > MAX_LINK) {
-        throw new ApiError('invalid_input', `The draft is too long to be checked whole (the text up to ${MAX_TEXT} characters, the title up to ${MAX_TITLE_CHARS}).`)
-      }
+      if (raw.text.length > MAX_TEXT) throw new ApiError('invalid_input', `The text is longer than ${MAX_TEXT} characters and cannot be checked whole.`)
+      if (raw.title.length > MAX_TITLE) throw new ApiError('invalid_input', `The title is longer than ${MAX_TITLE} characters and cannot be checked whole.`)
+      if (raw.link.length > MAX_LINK) throw new ApiError('invalid_input', `The link is longer than ${MAX_LINK} characters and cannot be checked whole.`)
       return { title: raw.title, text: raw.text, link: raw.link }
     }
     const draft = this.core.repos.latestDraft(opportunityId)

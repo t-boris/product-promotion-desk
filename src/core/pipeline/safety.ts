@@ -145,13 +145,34 @@ const hostAllowed = (host: string, allowed: string[]): boolean => allowed.some((
 
 const QUOTE_MAX = 90
 
-/** The sentence or line the match at `index` sits in, whole but for its length: the owner sees the words, not an offset. */
-function clauseAround(text: string, index: number): string {
-  const start = Math.max(text.lastIndexOf('.', index - 1), text.lastIndexOf('!', index - 1), text.lastIndexOf('?', index - 1), text.lastIndexOf('\n', index - 1)) + 1
-  const ends = [text.indexOf('.', index), text.indexOf('!', index), text.indexOf('?', index), text.indexOf('\n', index)].filter((i) => i >= 0)
-  const end = ends.length > 0 ? Math.min(...ends) : text.length
-  const clause = text.slice(start, end).replace(/\s+/g, ' ').trim()
-  return clause.length > QUOTE_MAX ? `${clause.slice(0, QUOTE_MAX - 1)}…` : clause
+/** A full stop, "!" or "?" ends a sentence only before a space or at the end; inside "$9.99", "evil.com" or "a.b/c?d" it does not. A line break always does. */
+const endsSentence = (text: string, i: number): boolean => {
+  const c = text[i]
+  if (c === '\n') return true
+  return (c === '.' || c === '!' || c === '?') && (i + 1 >= text.length || /\s/.test(text[i + 1]))
+}
+
+/**
+ * The sentence or line a match sits in, for the owner to see the words instead of an offset. A long sentence is cut around the match, never away from it,
+ * and by characters, so no emoji is split. `…` marks each cut.
+ */
+function clauseAround(text: string, match: { index: number; length: number }): string {
+  let start = match.index
+  while (start > 0 && !endsSentence(text, start - 1)) start--
+  let end = match.index + match.length
+  while (end < text.length && !endsSentence(text, end)) end++
+  const squash = (part: string): string => part.replace(/\s+/g, ' ')
+  const before = Array.from(squash(text.slice(start, match.index)).trimStart())
+  const middle = Array.from(squash(text.slice(match.index, match.index + match.length)))
+  const after = Array.from(squash(text.slice(match.index + match.length, end)).trimEnd())
+  // What a rule matches is a word or an amount, far shorter than the room: the room is what is left around it.
+  const room = Math.max(QUOTE_MAX - middle.length, 0)
+  const takeAfter = Math.min(after.length, Math.ceil(room / 2))
+  const takeBefore = Math.min(before.length, room - takeAfter)
+  const takeAfterMore = Math.min(after.length, room - takeBefore)
+  const head = takeBefore < before.length ? '…' : ''
+  const tail = takeAfterMore < after.length ? '…' : ''
+  return `${head}${before.slice(before.length - takeBefore).join('')}${middle.join('')}${after.slice(0, takeAfterMore).join('')}${tail}`.trim()
 }
 
 export function checkDraftSafety(input: SafetyInput): SafetyReport {
@@ -215,7 +236,7 @@ export function checkDraftSafety(input: SafetyInput): SafetyReport {
       flag(`it states a price (${unsupported[0][0].trim()}) that no cited approved claim supports`, {
         rule: 'price',
         title: 'A price no approved fact supports',
-        quote: clauseAround(body, unsupported[0].index ?? 0),
+        quote: clauseAround(body, { index: unsupported[0].index ?? 0, length: unsupported[0][0].length }),
         why: `No ${backing} names ${unsupported[0][0].trim()}.`
       })
     }
@@ -225,7 +246,7 @@ export function checkDraftSafety(input: SafetyInput): SafetyReport {
     flag('it mentions a discount or promotion that no cited approved claim supports', {
       rule: 'discount',
       title: 'A discount or promotion no approved fact supports',
-      quote: clauseAround(body, discount.index),
+      quote: clauseAround(body, { index: discount.index, length: discount[0].length }),
       why: `No ${backing} mentions a discount or a promotion.`
     })
   }
@@ -234,7 +255,7 @@ export function checkDraftSafety(input: SafetyInput): SafetyReport {
     flag('it says something is free that no cited approved claim supports', {
       rule: 'free',
       title: 'A free offer no approved fact states',
-      quote: clauseAround(body, free.index),
+      quote: clauseAround(body, { index: free.index, length: free[0].length }),
       why: `No ${backing} says that anything is free, or for how long.`
     })
   }
