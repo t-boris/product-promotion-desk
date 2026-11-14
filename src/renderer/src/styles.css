@@ -85,12 +85,6 @@
   --control-radius: 8px;
   --control-pad-x: 14px;
   --control-min-w: 88px;
-  /* Type scale: use these instead of ad-hoc pixel sizes. */
-  --fs-xs: 12px;
-  --fs-sm: 13px;
-  --fs-md: 14px;
-  --fs-lg: 15px;
-  --fs-xl: 22px;
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, monospace;
   color-scheme: light dark;
@@ -180,25 +174,43 @@ body,
 body {
   background: var(--bg);
   color: var(--text);
-  font: var(--fs-md)/1.5 var(--font);
+  font: var(--fs-body) / var(--lh-prose) var(--font);
   -webkit-font-smoothing: antialiased;
 }
 
-h1 {
-  font-size: var(--fs-xl);
+/* Four heading levels that read as different steps: the page title, a section of a page, the title of a card or a
+   dialog, and a sub-title inside a card. Body text is 14px, captions and hints 13px. */
+h1,
+h2,
+h3 {
   margin: 0;
+  line-height: var(--lh-title);
+  font-weight: var(--fw-semibold);
+}
+h1 {
+  font-size: var(--fs-page);
   letter-spacing: -0.01em;
 }
 h2 {
-  font-size: var(--fs-lg);
-  margin: 0;
+  font-size: var(--fs-section);
+}
+.card h2,
+.modal h2 {
+  font-size: var(--fs-title);
+}
+h3 {
+  font-size: var(--fs-body);
+}
+strong,
+b {
+  font-weight: var(--fw-semibold);
 }
 p {
   margin: 0 0 8px;
 }
 code {
   font-family: var(--mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
   background: var(--panel-2);
   padding: 1px 6px;
   border-radius: 6px;
@@ -209,7 +221,7 @@ code {
   color: var(--muted);
 }
 .small {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
 }
 .row {
   display: flex;
@@ -261,8 +273,8 @@ code {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-weight: 700;
-  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-title);
   padding: 0 10px;
   letter-spacing: -0.01em;
 }
@@ -339,7 +351,7 @@ code {
   -webkit-app-region: no-drag;
 }
 .topbar-label {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
   color: var(--muted);
   margin-left: 6px;
   padding-left: 14px;
@@ -349,7 +361,7 @@ code {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
   font-weight: 500;
   color: var(--text);
 }
@@ -442,8 +454,8 @@ a.btn {
 
 .badge {
   display: inline-block;
-  font-size: var(--fs-sm);
-  line-height: 1.5;
+  font-size: var(--fs-caption);
+  line-height: var(--lh-prose);
   padding: 1px 10px;
   border-radius: 999px;
   background: var(--panel-2);
@@ -514,7 +526,7 @@ a.btn {
 }
 .field-label {
   font-weight: 600;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
 }
 .input,
 select.input,
@@ -607,7 +619,6 @@ textarea.input {
 }
 .modal h2 {
   margin: 0;
-  font-size: var(--fs-lg);
 }
 .modal-text {
   margin: 0;
@@ -764,8 +775,8 @@ table.table {
 /* Explanations are read, so they are 13px and light enough; the long ones sit in a Disclosure. */
 .hint {
   margin: 0;
-  font-size: var(--fs-sm);
-  line-height: 1.5;
+  font-size: var(--fs-caption);
+  line-height: var(--lh-prose);
   color: var(--muted);
 }
 .hint.strong {
@@ -781,7 +792,7 @@ table.table {
 }
 .mono {
   font-family: var(--mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
 }
 
 /* A quiet button: no frame until it is pointed at. For the second and third actions of a row. */
@@ -950,7 +961,7 @@ input[type='radio'] {
   margin-left: auto;
   font-weight: 400;
   color: var(--muted);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
 }
 .disclosure-body {
   padding: 4px 14px 14px;
@@ -962,7 +973,7 @@ input[type='radio'] {
 .more > summary {
   cursor: pointer;
   color: var(--accent);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
   width: fit-content;
 }
 .more[open] > summary {
@@ -1031,7 +1042,7 @@ input[type='radio'] {
   cursor: not-allowed;
 }
 .menu-item .menu-note {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
   color: var(--muted);
   font-weight: 400;
 }
@@ -1086,8 +1097,8 @@ input[type='radio'] {
   height: 24px;
   border: 2px solid var(--border-strong);
   border-radius: 50%;
-  font-size: var(--fs-sm);
-  font-weight: 700;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
 }
 .start-steps li.done .start-mark {
   background: var(--good);
@@ -1144,7 +1155,7 @@ input[type='radio'] {
   background: none;
   color: var(--accent);
   font: inherit;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
   cursor: pointer;
 }
 .link-btn:hover {
@@ -1182,7 +1193,6 @@ input[type='radio'] {
   margin: 20px 0 0;
   padding-top: 16px;
   border-top: 1px solid var(--border);
-  font-size: var(--fs-lg);
 }
 .rule-row {
   padding: 12px;

@@ -50,7 +50,7 @@ textarea.input.short {
 .source-text {
   margin: 0;
   font: inherit;
-  line-height: 1.5;
+  line-height: var(--lh-prose);
   white-space: pre-wrap;
   word-break: normal;
   overflow-wrap: break-word;
@@ -211,7 +211,7 @@ textarea.input.short {
   margin-top: 8px;
 }
 .blocker {
-  font-size: var(--fs-md);
+  font-size: var(--fs-body);
 }
 
 /* An analysis step that has nothing to work on: quieter than a step that will run. */
@@ -226,8 +226,8 @@ textarea.input.short {
 .analysis-points {
   margin: 0;
   color: var(--muted);
-  font-size: var(--fs-sm);
-  line-height: 1.55;
+  font-size: var(--fs-caption);
+  line-height: var(--lh-prose);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -240,7 +240,7 @@ textarea.input.short {
   gap: 10px;
 }
 .goal-target {
-  font-size: var(--fs-lg);
+  font-size: var(--fs-title);
   font-weight: 600;
 }
 

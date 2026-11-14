@@ -27,7 +27,7 @@
 
 .cap-table td.cap-detail {
   color: var(--muted);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
   max-width: 340px;
 }
 .legend {
@@ -67,7 +67,7 @@ textarea.input.short {
 }
 
 .run-line {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
 }
 @media (max-width: 760px) {
   .channels-layout,
@@ -109,7 +109,7 @@ textarea.input.short {
 
 .secret-value {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: var(--fs-md);
+  font-size: var(--fs-body);
   padding: 8px 10px;
   border-radius: 6px;
   background: var(--panel-2);
@@ -180,7 +180,7 @@ textarea.input.short {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
   font-weight: 600;
 }
 .acct-block-title {
@@ -190,7 +190,7 @@ textarea.input.short {
   gap: 2px;
 }
 .acct-summary {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
   overflow-wrap: anywhere;
 }
 .acct-actions {
@@ -308,10 +308,6 @@ textarea.input.short {
 .idea-title {
   flex: 1 1 280px;
   min-width: 0;
-}
-.idea-title h3 {
-  margin: 0;
-  font-size: var(--fs-lg);
 }
 .idea-action {
   display: flex;
