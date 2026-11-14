@@ -1,4 +1,5 @@
 import type { Core } from '../core'
+import { DraftHelp } from './draft-help'
 import { DraftingFlow } from './drafting'
 import { registerFlowApi } from './flow-api'
 import { SendGate } from './gate'
@@ -13,7 +14,8 @@ import { FlowStore } from './store'
 /**
  * Registers the discussion → draft → approval → sending flow (I-4, I-5, I-6): the monitor, drafting, review,
  * gate and sending services (attached to `core.services`) and the opportunities.*, publications.*,
- * channels.discussions, channels.selectOlder, channels.activate, channels.checkNow and channels.setPaused handlers.
+ * channels.discussions, channels.selectOlder, channels.activate, channels.checkNow and channels.setPaused handlers,
+ * and drafts.refine (the AI writes or improves the text of a draft; nothing is saved).
  */
 export function registerFlow(core: Core): void {
   const store = new FlowStore(core)
@@ -32,4 +34,6 @@ export function registerFlow(core: Core): void {
   core.services.sending = sending
 
   registerFlowApi({ core, store, review, monitor, drafting, sending, publications })
+  const draftHelp = new DraftHelp(core, store)
+  core.router.register({ 'drafts.refine': (args) => draftHelp.refine(args) })
 }
