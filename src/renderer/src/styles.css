@@ -12,7 +12,8 @@
   --field: #ffffff;
   --field-border: #a8a8ae;
   --bezel: #ffffff;
-  /* Lines and text. --text-3 is for disabled labels and placeholders and stays legible (4.5:1 on the surfaces). */
+  /* Lines and text. --text-2 is secondary text and --text-3 disabled labels and placeholders; both stay at 4.5:1 or more on the
+     surface they sit on, stacked fills included (the info tag on a striped table row, the disabled field, the placeholder). */
   --line: #e3e3e8;
   --line-strong: #c7c7cc;
   --text-1: #1d1d1f;
@@ -141,8 +142,8 @@
     --line: #38383c;
     --line-strong: #4b4b50;
     --text-1: #f2f2f7;
-    --text-2: #a5a5ab;
-    --text-3: #929298;
+    --text-2: #b4b4ba;
+    --text-3: #9e9ea4;
     --accent: #5e5ce6;
     --on-accent: #ffffff;
     --accent-tint: rgb(94 92 230 / 26%);
@@ -167,7 +168,7 @@
     --shadow-thumb: 0 1px 2px rgb(0 0 0 / 40%);
     --shadow-pop: 0 0 0 0.5px rgb(255 255 255 / 10%), 0 12px 32px rgb(0 0 0 / 50%);
     --scrim: rgb(0 0 0 / 40%);
-    --glyph-updown: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23a5a5ab' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M5.5 6.25 8 3.75l2.5 2.5M5.5 9.75 8 12.25l2.5-2.5'/></svg>");
+    --glyph-updown: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23b4b4ba' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M5.5 6.25 8 3.75l2.5 2.5M5.5 9.75 8 12.25l2.5-2.5'/></svg>");
   }
 }
 
@@ -885,6 +886,9 @@ select.input {
   background-color: var(--surface-2);
   border-color: var(--line);
   color: var(--text-3);
+  /* Chromium fades a disabled pop-up button to 70 % by itself, which takes its value under 3:1; a disabled field is flat and
+     keeps the full --text-3 (V-16). */
+  opacity: 1;
 }
 .check {
   display: flex;

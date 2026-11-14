@@ -177,7 +177,9 @@ The content column (`.main`) always paints `--surface-0`.
 ## 5. Tokens
 
 All values live in `:root` (light) and `@media (prefers-color-scheme: dark)` of `styles.css`. Names in **bold** are new; the
-others keep their DEC-022 names with new values. Contrast ratios are computed (WCAG formula) for the pairs that carry text.
+others keep their DEC-022 names with new values. Contrast ratios are computed (WCAG formula) for the pairs that carry text, over the
+background the text really sits on: a translucent fill (`--hover-fill` stripe, `--segment-track` tag, `--accent-tint`) is stacked on
+its card first, so a figure for a token pair alone is not enough (BUG-049, lesson 114).
 
 ### 5.1 Colour
 
@@ -195,8 +197,8 @@ others keep their DEC-022 names with new values. Contrast ratios are computed (W
 | `--line` | `#e3e3e8` | `#38383c` | Separators, group borders |
 | `--line-strong` | `#c7c7cc` | `#4b4b50` | Bezel edges, switch track off |
 | `--text-1` | `#1d1d1f` | `#f2f2f7` | Primary text (15.5:1 / 14.9:1 on surface-0) |
-| `--text-2` | `#5f5f64` | `#a5a5ab` | Secondary text (≥ 5.2:1 on every surface, both themes) |
-| `--text-3` | `#6c6c71` | `#929298` | Disabled labels, placeholders (≥ 4.5:1 on surface-0/1/2, both themes) |
+| `--text-2` | `#5f5f64` | `#b4b4ba` | Secondary text. On a plain surface (surface-0/1/2/3, field) ≥ 5.2:1 light and ≥ 6.1:1 dark; on the stacks of fills that occur (tag, table stripe, selected row, tab track) ≥ 5.1:1 light and ≥ 4.78:1 dark, the lowest being the neutral tag over a striped table row (dark `#434346`: card + stripe + tag) |
+| `--text-3` | `#6c6c71` | `#9e9ea4` | Disabled labels and values, placeholders (≥ 4.59:1 light and ≥ 4.79:1 dark on surface-0/1/2/3 and field; the lowest are the disabled value on surface-2 and the placeholder on field). Not for text on a tag, a hovered row or a selected row |
 | `--accent` | `#5856d6` | `#5e5ce6` | Filled main action, switch on, brand tile |
 | `--on-accent` | `#ffffff` | `#ffffff` | Label on the accent (5.65:1 / 5.06:1) |
 | `--accent-tint` | `rgb(88 86 214 / 12%)` | `rgb(94 92 230 / 26%)` | Selected list row, pressed toggle, "Next" capsule |
@@ -452,11 +454,11 @@ Measured on the packaged build of the branch with `scripts/design/tour.mjs` (72 
 | V-09 | Every button, field and pop-up button 28 px tall (text areas excluded); segmented control 28 px; labels 13 px | measure all controls on every screen | 100 % |
 | V-10 | At most one filled (`.btn-primary`) button visible per screen, none in the toolbar or sidebar, and it is never an optional AI helper ("Suggest with AI", "Draft with AI", "Let the AI …"); the step's own next action stays filled even when the AI carries it out ("Propose a profile", "Assess channel", "Start analysis") | tour `filledButtons` | ≤ 1 everywhere; = 1 where §10 names one |
 | V-11 | Tokens: no hex or `rgb()` colour and no px font size outside the token block in `styles.css`, `products.css`, `channels.css` and the renderer `.tsx` files; no inline `style` setting colour or font size | grep | 0 hits |
-| V-12 | Contrast in both themes: text-1/text-2 ≥ 4.5:1 on surface-0/1/2 and field; text-3 ≥ 4.5:1 on surface-0/1; on-accent on accent ≥ 4.5:1; every tag colour on its background ≥ 4.5:1; focus ring ≥ 3:1 against its surroundings | computed colours of the rendered page (not the source) | all pass (§5.1 values) |
+| V-12 | Contrast in both themes, over each text's real stacked background (every translucent fill composited: card, table stripe, tag, tab track, selected row): text-1/text-2 ≥ 4.5:1 on surface-0/1/2/3 and field and on a tag over a striped row (dark `#b4b4ba` on `#434346` = 4.78:1); text-3 ≥ 4.5:1 on surface-0/1/2/3 and field (dark: placeholder 4.79:1, disabled value 4.86:1; light 4.59:1 on surface-2); on-accent on accent ≥ 4.5:1; every tag colour on its background ≥ 4.5:1; focus ring ≥ 3:1 against its surroundings | every text node, input value and placeholder of the rendered page (not the source) against its composited ancestors, both themes, 1320×880 and 980×640, every route of the tour | none under 4.5:1 (6 910 text nodes in the BUG-049 pass) |
 | V-13 | Themes: every screen renders fully in light and in dark with no mix (native selects and scrollbars follow `color-scheme`) | tour in both themes; native capture after switching macOS appearance | no element keeps the other theme's colours |
 | V-14 | Hover changes the background of every button variant, sidebar item, segment, list row, menu item and disclosure, without changing the label colour of primary and danger (lesson 112) | CDP hover on each variant, computed colours before/after, both themes | all change; labels kept |
 | V-15 | Focus: Tab reaches every control; each shows the 2 px `--focus` ring | Tab through Products, Accounts, Settings; computed outline | 100 % |
-| V-16 | Disabled differs from enabled at a glance (no shadow, `--text-3` label, `--line` edge) and stays ≥ 4.5:1; its reason is visible beside it: a sentence next to the button, or, for a button that sits beside its own empty field ("Add" an image, "Schedule"), that field | computed styles of disabled vs enabled of each variant | distinct; reason present |
+| V-16 | Disabled differs from enabled at a glance (no shadow, not faded, `--text-3` label, `--line` edge) and stays ≥ 4.5:1 on its own fill: a button label on surface-0/1, a field or pop-up value on `--surface-2` (the browser's own 70 % fade of a disabled pop-up button is switched off: it gave 2.7:1); its reason is visible beside it: a sentence next to the button, or, for a button that sits beside its own empty field ("Add" an image, "Schedule"), that field | computed styles of disabled vs enabled of each variant | distinct; reason present |
 | V-17 | Reduce motion: every `transition-duration` and `animation-duration` is 0 s; Reduce transparency: the sidebar is opaque `--sidebar` | `Emulation.setEmulatedMedia` for both features | true |
 | V-18 | Products at 980×640 with the menu shown: list and detail side by side, the tab row ends at y ≤ 310 px (measured 308 with a product that has a website, a description and a status row; the first guess of 300 was not reachable without dropping the status row), the launch path is one row, no word broken inside a URL | DOM measure on the Passport tab | all true |
 | V-19 | Launch path visible under the product header, as dots on every product row, and on the first-run Attention; counts unchanged | DOM read; existing launch-path unit tests | true |
