@@ -549,6 +549,17 @@ a.btn {
   gap: var(--space-1);
   margin: var(--space-2) 0;
 }
+/* A filter and action bar: labelled fields and buttons share one bottom line, so a button sits level with a select. */
+.toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3) var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-2);
+}
+.toolbar > .field {
+  margin: 0;
+}
 .form-row {
   /* Fields side by side: the columns share the width and the labels line up at the top, whatever hint sits below an input. */
   display: grid;

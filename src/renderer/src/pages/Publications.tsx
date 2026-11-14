@@ -34,7 +34,7 @@ export function PublicationsPage() {
   return (
     <Page title="Publications" subtitle="Drafts, scheduled and sent material">
       <Card>
-        <div className="row">
+        <div className="toolbar">
           <ProductFilter products={directory.products} value={productId} onChange={setProduct} />
           <Field label="Channel">
             <select className="input" value={channelId} onChange={(e) => setChosen(e.target.value)} data-testid="publication-channel">

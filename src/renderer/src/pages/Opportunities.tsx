@@ -38,7 +38,7 @@ export function OpportunitiesPage() {
   return (
     <Page title="Opportunities" subtitle="Comments found in your channels, what happened to each, and older discussions you choose to work on">
       <Card>
-        <div className="row">
+        <div className="toolbar">
           <ProductFilter products={directory.products} value={productId} onChange={setProduct} />
           <Field label="Channel">
             <select className="input" value={channelId} onChange={(e) => setChannelId(e.target.value)} data-testid="channel-filter">
