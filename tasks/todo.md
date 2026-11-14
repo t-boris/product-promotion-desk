@@ -501,3 +501,13 @@ Built on a development build (`npx electron-vite build`, own instance, own `PPD_
 - Decisions recorded in the spec (§16.3 and V-10, V-16, V-18): optional AI helpers are never filled; the step's own action is; a disabled button has its reason beside it or its own empty field next to it.
 - Not verified here: the packaged build (vibrancy, real window buttons, the accessibility tree of the final code) and the two QA scenarios; they belong to the sweep and the QA step.
 
+### Review: verification and local build (step 5 of the macOS design plan)
+
+- Baseline `npm run verify` on `f4c57b7` (typecheck, lint, 79 files / 1560 tests, build) green. After the review below: 79 files / 1563 tests, green again on `5d4965a` and on the release commit.
+- Independent review of `git diff 6d6e471..HEAD -- src` (separate read-only reviewer, then every finding traced in the code by me): `OpenFormsScope`, `useOpenForm`, `useMainVariant`, `useMainActionOwner`, the window options in `src/main/index.ts`, `data-chrome`, tokens, focus ring and Reduce motion are clean; no new dependency (`package.json` changed only by the version).
+- Fixed: the sheet scrim `.modal-backdrop` is `no-drag` (lesson 125); probe on the packaged build with real clicks: 2 of 2 clicks reach the sheet controls in the toolbar and sidebar strips, without the rule 0 of 4. Added tests for `setupStage`, `neverAssessed`, `canActivate`, `canPause` (`src/main/renderer-logic.test.ts`).
+- Filed, not fixed (design decisions, for the fix step): BUG-039 (Reject, and "Stop the AI", are first in the Tab order; 0.8.0 had Reject last; no confirmation), BUG-040 (several open on-demand forms each show a filled button).
+- Reported only: `AccountDetail.tsx:22` shows no filled button for one render while the vault loads; the review lists small additions beyond a pure restyle (the `approve-blocker` text for an approved passport, `write-publication-empty`, `approve-reason`, fewer badges in the product list); not reverted.
+- Known gap: `mainActionOf` (`review/main-action.ts`) has no unit test. A test under `tsconfig.node.json` cannot import it: `labels.ts` has `import type { Tone } from '../../ui'` (a `.tsx` file) and the node config has no `jsx` setting (TS6142). Follow-up: move `Tone` into a plain `.ts` module and re-export it from `ui.tsx`. Until then the QA scenarios check "one filled button per screen" on the final build.
+- Version 0.9.0 (minor: a new visual system and window chrome, not a patch) in its own commit `chore: release 0.9.0`; `npm run deploy:local` installed 0.9.0 and checked it against `package.json`.
+
