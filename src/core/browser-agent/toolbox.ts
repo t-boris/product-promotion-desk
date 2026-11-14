@@ -418,7 +418,10 @@ export class BrowserToolbox implements McpToolHost {
     // The same fence as browser_submit has: the platform's host fences every step, and only the page of the approved destination is worked on.
     const wrong = this.pageProblem(now)
     if (wrong) return fail(wrong)
-    const named = [now.elements.find((e) => e.ref === reference), this.shown?.elements.find((e) => e.ref === reference)].filter((e) => e !== undefined)
+    // A ref that is not on the page now cannot be judged, so it is not clicked: the check below is of what the control is now.
+    const fresh = now.elements.find((e) => e.ref === reference)
+    if (!fresh) return fail(`${reference} is not on the page now: the page changed since it was shown. Look at the page again (browser_snapshot) and use a ref from it.`)
+    const named = [fresh, this.shown?.elements.find((e) => e.ref === reference)].filter((e) => e !== undefined)
     if (named.some((e) => isPublishingControl(e))) return fail(PUBLISHING_CONTROL)
     if (named.some((e) => neverClicked(e.name))) return fail(NOT_PUBLISHED_HERE)
     return null

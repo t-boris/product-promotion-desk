@@ -339,6 +339,27 @@ describe('a control that publishes is never clicked or chosen by the AI itself, 
     expect(t.page.steps).toEqual([])
   })
 
+  it('judges the element by the fresh look too: a page that renumbered its elements can turn the harmless control of the AI\'s snapshot into the one that publishes', async () => {
+    const t = setup()
+    await look(t) // e8 is "Continue" here
+    t.page.items = t.page.items.map((i) => (i.ref === 'e8' ? { ref: 'e8', role: 'button', name: 'Post' } : i))
+    expect(await t.toolbox.call('browser_click', { ref: 'e8' })).toMatchObject(PUBLISHING)
+    expect(await t.toolbox.call('browser_select', { ref: 'e8', option: 'x' })).toMatchObject(PUBLISHING)
+    expect(t.page.steps).toEqual([])
+  })
+
+  it('refuses a ref that is not on the page now, shown or not: what cannot be judged is not clicked', async () => {
+    const GONE = { isError: true, text: expect.stringContaining('is not on the page now') }
+    const t = setup()
+    await look(t)
+    expect(await t.toolbox.call('browser_click', { ref: 'e77' })).toMatchObject(GONE) // never on the page
+    expect(await t.toolbox.call('browser_select', { ref: 'e77', option: 'x' })).toMatchObject(GONE)
+    t.page.items = t.page.items.filter((i) => i.ref !== 'e5') // shown to the AI, gone from the page now
+    expect(await t.toolbox.call('browser_click', { ref: 'e5' })).toMatchObject(GONE)
+    expect(t.page.steps).toEqual([])
+    expect(t.page.clicked).toEqual([])
+  })
+
   it('does not refuse what is not a publishing control: a link, a text box, a button of another purpose', async () => {
     const t = setup()
     t.page.items.push({ ref: 'e9', role: 'button', name: 'Expand comment' }, { ref: 'e10', role: 'link', name: 'Reply' }, { ref: 'e11', role: 'button', name: 'Add flair' })
