@@ -1,5 +1,5 @@
 import { call, useAction, useQuery } from '../../hooks'
-import { Button, EmptyState, ErrorNote, Loading } from '../../ui'
+import { Button, EmptyState, ErrorNote, Hint, Loading } from '../../ui'
 import { productHref } from '../../route'
 import { ConversionsNote } from './ConversionsNote'
 import { GoalsCard } from './GoalsCard'
@@ -24,20 +24,28 @@ export function ResultsPanel({ productId }: { productId: string }) {
         <Button onClick={() => void refreshAll()} disabled={all.busy || channels.length === 0} data-testid="refresh-all">
           {all.busy ? 'Refreshing…' : 'Refresh all'}
         </Button>
-        <span className="muted small">Reads the latest metrics from each channel's platform.</span>
+        <Hint>{channels.length === 0 ? 'No channels to refresh yet.' : 'Reads the latest metrics from each channel’s platform.'}</Hint>
       </div>
-      <ConversionsNote />
       <ErrorNote error={results.error ?? all.error} />
       {results.loading && !results.data && <Loading what="Loading results" />}
       {results.data && <GoalsCard goals={results.data.goals} />}
       {results.data && channels.length === 0 && (
-        <EmptyState title="No channels for this product yet">
-          Connect a channel on the <a href={productHref(productId, 'channels')} data-testid="results-channels-link">Channels tab</a> to see the metrics its platform provides.
+        <EmptyState
+          title="No channels for this product yet"
+          action={
+            <a className="btn btn-primary" href={productHref(productId, 'channels')} data-testid="results-channels-link">
+              Connect a channel
+            </a>
+          }
+        >
+          Metrics appear here once a channel is connected: the platform provides them.
         </EmptyState>
       )}
       {channels.map((entry) => (
         <MetricsCard key={entry.channel.id} entry={entry} />
       ))}
+      {/* A standing caveat, folded to one line: it used to take more room than the goal above it. */}
+      <ConversionsNote />
     </div>
   )
 }
