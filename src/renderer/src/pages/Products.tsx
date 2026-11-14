@@ -5,6 +5,7 @@ import { CreateProduct } from './products/CreateProduct'
 import { ProductDetail } from './products/ProductDetail'
 import { useLaunchCounts } from './products/LaunchPath'
 import { ProductList } from './products/ProductList'
+import { resolveSelected } from './products/product-selection'
 import { useProductRoute } from './products/useProductRoute'
 import './products/products.css'
 
@@ -31,11 +32,13 @@ export function ProductsPage() {
   const products = useQuery('products.list', undefined, ['products', 'passport'])
   const { productId, tab, selectProduct, selectTab } = useProductRoute()
   const [creating, setCreating] = useState(false)
+  // The product just created: open before `products.list` has reloaded and holds it.
+  const [created, setCreated] = useState<string | null>(null)
   const countsOf = useLaunchCounts()
 
   const list = products.data ?? []
   // A product that was deleted (here or elsewhere), or a link to one that does not exist, selects nothing.
-  const selected = list.find((p) => p.id === productId)?.id ?? null
+  const selected = resolveSelected(list.map((p) => p.id), productId, created)
 
   // A product is always open: the one seen last, else the first. A bare `#/products` showed an empty panel and cost a click (QA finding 13).
   useEffect(() => {
@@ -46,6 +49,10 @@ export function ProductsPage() {
   useEffect(() => {
     if (selected) saveLastProduct(selected)
   }, [selected])
+  // Once the list holds the new product it is an ordinary row, so a later deletion elsewhere selects nothing again.
+  useEffect(() => {
+    if (created && list.some((p) => p.id === created)) setCreated(null)
+  }, [products.data, created])
 
   return (
     // One scope for the page: the "New product" form and the forms of the open product (edit details, a statement, a source) each own
@@ -66,6 +73,7 @@ export function ProductsPage() {
           <CreateProduct
             onCreated={(product) => {
               setCreating(false)
+              setCreated(product.id)
               selectProduct(product.id, 'sources')
             }}
             onCancel={() => setCreating(false)}

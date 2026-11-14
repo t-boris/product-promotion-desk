@@ -12,6 +12,7 @@ import { describeSources, planStages, progressOf } from '../renderer/src/pages/p
 import { launchCounts, launchProgress, launchStages } from '../renderer/src/pages/products/launch-path'
 import { approvableClaims } from '../renderer/src/pages/products/model'
 import { nextProductStep, passportStatus } from '../renderer/src/pages/products/product-status'
+import { resolveSelected } from '../renderer/src/pages/products/product-selection'
 import { isMirroredSource } from '../renderer/src/pages/products/source-view'
 import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block'
 import { canActivate, canPause, neverAssessed, setupStage } from '../renderer/src/pages/channels/setup-stage'
@@ -444,5 +445,36 @@ describe('Channels tab: one step at a time (DEC-023)', () => {
     expect(canPause(channel({ status: 'needs_user' }))).toBe(false)
     expect(canPause(channel({ status: 'setup' }))).toBe(false)
     expect(canPause(channel({ status: 'paused' }))).toBe(false)
+  })
+})
+
+describe('the product that is open on the Products page (BUG-042)', () => {
+  const ids = ['p1', 'p2']
+
+  it('a product in the list is the selected one', () => {
+    expect(resolveSelected(ids, 'p2', null)).toBe('p2')
+    expect(resolveSelected(ids, 'p1', 'p3')).toBe('p1')
+  })
+
+  it('a product that was just created stays selected before the list has loaded it', () => {
+    // After "Create product" the route names the new product while `products.list` still holds the old rows.
+    expect(resolveSelected(ids, 'p3', 'p3')).toBe('p3')
+    expect(resolveSelected([], 'p3', 'p3')).toBe('p3')
+  })
+
+  it('an id that is neither in the list nor the one just created selects nothing', () => {
+    expect(resolveSelected(ids, 'gone', null)).toBeNull()
+    expect(resolveSelected(ids, 'gone', 'p3')).toBeNull()
+    expect(resolveSelected(ids, null, 'p3')).toBeNull()
+    expect(resolveSelected(ids, null, null)).toBeNull()
+  })
+
+  it('the "always open" effect does not fire for a created product: it acts only on a null selection', () => {
+    // Products.tsx re-selects the last or first product only when this is null. A created product must not be null, or
+    // the effect replaces the route with an old product (the defect behind BUG-042, BUG-068 and BUG-069).
+    expect(resolveSelected(ids, 'p3', 'p3')).not.toBeNull()
+    // Once the list holds it, the normal rule applies and the created id no longer matters.
+    expect(resolveSelected(['p1', 'p2', 'p3'], 'p3', 'p3')).toBe('p3')
+    expect(resolveSelected(ids, 'p3', null)).toBeNull()
   })
 })
