@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Id } from '../../../shared/types'
 import { call, useAction, useQuery } from '../hooks'
+import { publicationsProductOf } from '../route'
 import { Badge, Button, Card, EmptyState, ErrorNote, Field, Loading, Page } from '../ui'
 import { PublicationForm } from './review/PublicationForm'
 import { ProductFilter, useProductDirectory, useProductFilter } from './review/products'
@@ -11,6 +12,16 @@ const CLOSED = ['confirmed', 'cancelled']
 export function PublicationsPage() {
   const directory = useProductDirectory()
   const [chosenProduct, setProduct] = useProductFilter('publications')
+  // The last stage of a product's launch path links here as #/publications/<productId>: show that product.
+  useEffect(() => {
+    const follow = (): void => {
+      const linked = publicationsProductOf(window.location.hash)
+      if (linked) setProduct(linked)
+    }
+    follow()
+    window.addEventListener('hashchange', follow)
+    return () => window.removeEventListener('hashchange', follow)
+  }, [])
   const productId = directory.effective(chosenProduct)
   const inScope = directory.channelsOf(productId)
   const [chosen, setChosen] = useState<Id | ''>('')

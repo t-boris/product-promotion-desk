@@ -1234,6 +1234,115 @@ input[type='radio'] {
   outline-offset: 2px;
 }
 
+/* ───────────── Launch path (BUG-012) ─────────────
+   Product → Passport → Goal → Channel → Publication. Done is a green check, the current stage (the next step) an accent
+   ring that fills in --dur-base with a "Next" label, a stage not reached yet a grey circle. */
+.launch-path ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.launch-stage {
+  display: flex;
+  align-items: center;
+}
+.launch-stage + .launch-stage::before {
+  /* The line that joins two stages: green only between two stages that are both done. */
+  content: '';
+  width: var(--space-5);
+  height: 2px;
+  margin: 0 var(--space-1);
+  border-radius: 1px;
+  background: var(--line-strong);
+}
+.launch-stage.done + .launch-stage.done::before {
+  background: var(--success);
+}
+.launch-stage a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 28px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  color: var(--text-2);
+  text-decoration: none;
+}
+.launch-stage a:hover {
+  background: var(--hover-fill);
+  color: var(--text-1);
+}
+.launch-mark {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+}
+.launch-stage.done a {
+  color: var(--text-1);
+}
+.launch-stage.done .launch-mark {
+  border: 0;
+  background: var(--success);
+  mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill-rule='evenodd' d='M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zM11.3 4.6l1.05 1.05L7 11 3.65 7.65 4.7 6.6 7 8.9z'/></svg>") center / contain no-repeat;
+}
+.launch-stage.current a {
+  color: var(--text-1);
+  font-weight: var(--fw-semibold);
+}
+.launch-stage.current .launch-mark {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  box-shadow: 0 0 0 3px var(--accent-tint);
+  animation: ppd-ring var(--dur-base) var(--ease-out);
+}
+.launch-next {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--accent-on-tint);
+  background: var(--accent-tint);
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-2);
+}
+@keyframes ppd-ring {
+  from {
+    border-color: var(--line-strong);
+    box-shadow: 0 0 0 0 var(--accent-tint);
+  }
+}
+/* The same path as five dots on a product card. */
+.product-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.launch-dots {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+}
+.launch-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+}
+.launch-dot.done {
+  background: var(--success);
+  border-color: var(--success);
+}
+.launch-dot.current {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-tint);
+}
+
 /* A button that reads as a link: for the next step beside a status. */
 .link-btn {
   border: 0;

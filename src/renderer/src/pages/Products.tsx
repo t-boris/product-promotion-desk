@@ -3,6 +3,7 @@ import { useQuery } from '../hooks'
 import { Button, EmptyState, ErrorNote, Loading, Page } from '../ui'
 import { CreateProduct } from './products/CreateProduct'
 import { ProductDetail } from './products/ProductDetail'
+import { useLaunchCounts } from './products/LaunchPath'
 import { ProductList } from './products/ProductList'
 import { useProductRoute } from './products/useProductRoute'
 import './products/products.css'
@@ -30,6 +31,7 @@ export function ProductsPage() {
   const products = useQuery('products.list', undefined, ['products', 'passport'])
   const { productId, tab, selectProduct, selectTab } = useProductRoute()
   const [creating, setCreating] = useState(false)
+  const countsOf = useLaunchCounts()
 
   const list = products.data ?? []
   // A product that was deleted (here or elsewhere), or a link to one that does not exist, selects nothing.
@@ -82,10 +84,10 @@ export function ProductsPage() {
       {products.data && list.length > 0 && (
         <div className="products-layout">
           <aside className="products-list">
-            <ProductList products={list} selectedId={selected} onSelect={(id) => selectProduct(id)} />
+            <ProductList products={list} selectedId={selected} countsOf={countsOf} onSelect={(id) => selectProduct(id)} />
           </aside>
           <div className="products-detail">
-            {selected ? <ProductDetail key={selected} productId={selected} tab={tab} onTabChange={selectTab} onDeleted={() => selectProduct(null)} /> : <Loading what="Opening the product" />}
+            {selected ? <ProductDetail key={selected} productId={selected} tab={tab} counts={countsOf(selected)} onTabChange={selectTab} onDeleted={() => selectProduct(null)} /> : <Loading what="Opening the product" />}
           </div>
         </div>
       )}

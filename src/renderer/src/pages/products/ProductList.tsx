@@ -1,9 +1,11 @@
-import type { Product } from '../../../../shared/types'
+import type { Id, Product } from '../../../../shared/types'
 import { Badge, EmptyState } from '../../ui'
 import { ANALYSIS_LABELS, ANALYSIS_TONES } from './labels'
+import { launchStages, type LaunchCounts } from './launch-path'
+import { LaunchDots } from './LaunchPath'
 import { nextProductStep } from './product-status'
 
-export function ProductList({ products, selectedId, onSelect }: { products: Product[]; selectedId: string | null; onSelect: (id: string) => void }) {
+export function ProductList({ products, selectedId, countsOf, onSelect }: { products: Product[]; selectedId: string | null; countsOf: (productId: Id) => LaunchCounts; onSelect: (id: string) => void }) {
   if (products.length === 0) return <EmptyState title="No products yet">Add the first one with the button above.</EmptyState>
   return (
     <div className="stack" data-testid="product-list">
@@ -24,7 +26,11 @@ export function ProductList({ products, selectedId, onSelect }: { products: Prod
           data-testid={`product-${product.id}`}
         >
           <div>
-            <strong>{product.name}</strong>
+            <div className="product-card-head">
+              <strong>{product.name}</strong>
+              {/* Every product has a source: the core refuses one without (see LaunchFacts.hasSources). */}
+              <LaunchDots stages={launchStages(product.id, { hasSources: true, passportApproved: product.activePassportVersionId !== null, goals: product.goals.length, ...countsOf(product.id) })} testId={`launch-dots-${product.id}`} />
+            </div>
             <div className="hint">{product.websiteUrl ?? 'No website yet'}</div>
           </div>
           <div className="row">

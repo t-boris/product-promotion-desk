@@ -9,13 +9,14 @@ import { KIND_TONE, attentionCountTone } from '../renderer/src/pages/attention-t
 import { startSteps } from '../renderer/src/pages/attention-start'
 import { engineChoiceVariant, recommendedEngineId, splitEngineDetail } from '../renderer/src/pages/engine-detail'
 import { describeSources, planStages, progressOf } from '../renderer/src/pages/products/analysis-plan'
+import { launchCounts, launchProgress, launchStages } from '../renderer/src/pages/products/launch-path'
 import { approvableClaims } from '../renderer/src/pages/products/model'
 import { nextProductStep, passportStatus } from '../renderer/src/pages/products/product-status'
 import { isMirroredSource } from '../renderer/src/pages/products/source-view'
 import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block'
 import { nextStep } from '../renderer/src/pages/channels/next-step'
 import { platformMismatch } from '../renderer/src/pages/channels/platform-hint'
-import { MOVED_PAGES, accountsNewHref, parseAccountsHash, parseHash, productHref } from '../renderer/src/route'
+import { MOVED_PAGES, accountsNewHref, parseAccountsHash, parseHash, productHref, publicationsHref, publicationsProductOf } from '../renderer/src/route'
 import { accountText, accountsGroupName, automationText, engineGroupName } from '../renderer/src/status-labels'
 
 describe('hash routes (DEC-009)', () => {
@@ -297,6 +298,40 @@ describe('QA clarity batch: what the screens say', () => {
     const claude = splitEngineDetail('Claude Code 2.1.325 is installed and answers. Writing: tool-free, it can only return text. Account missions: it works the account’s browser with full access.')
     expect(claude.limits).toBe(false)
     expect(splitEngineDetail('Codex was not found.')).toEqual({ summary: 'Codex was not found.', writing: null, missions: null, limits: false })
+  })
+
+  it('Launch path (BUG-012): five stages, the first one not done is the next step, each links to where it is worked on', () => {
+    const facts = { hasSources: true, passportApproved: true, goals: 0, channels: 0, approvedPublications: 0 }
+    const stages = launchStages('p1', facts)
+    expect(stages.map((s) => s.id)).toEqual(['product', 'passport', 'goal', 'channel', 'publication'])
+    expect(stages.map((s) => s.state)).toEqual(['done', 'done', 'current', 'todo', 'todo'])
+    expect(stages.map((s) => s.href)).toEqual(['#/products/p1/sources', '#/products/p1/passport', '#/products/p1/goal', '#/products/p1/channels', '#/publications/p1'])
+    expect(launchProgress(stages)).toBe('2 of 5 done')
+    // A stage is done by its own fact: a channel connected before the goal was written is done, the goal is still next.
+    expect(launchStages('p1', { ...facts, channels: 1 }).map((s) => s.state)).toEqual(['done', 'done', 'current', 'done', 'todo'])
+    expect(launchStages('p1', { hasSources: true, passportApproved: true, goals: 1, channels: 2, approvedPublications: 1 }).every((s) => s.state === 'done')).toBe(true)
+    expect(launchStages('p1', { ...facts, passportApproved: false }).find((s) => s.state === 'current')?.id).toBe('passport')
+  })
+
+  it('Launch path (BUG-012): channels and approved publications are counted per product; drafts and replies do not count', () => {
+    const pub = (productId: string, state: string, kind = 'standalone') => ({ opportunity: { productId, state, kind } }) as Parameters<typeof launchCounts>[1][number]
+    const counts = launchCounts(
+      [{ productId: 'a' }, { productId: 'a' }, { productId: 'b' }],
+      [pub('a', 'ready'), pub('a', 'confirmed'), pub('a', 'sending'), pub('a', 'awaiting_approval'), pub('b', 'draft'), pub('b', 'confirmed', 'reply')]
+    )
+    expect(counts.get('a')).toEqual({ channels: 2, approvedPublications: 3 })
+    expect(counts.get('b')).toEqual({ channels: 1, approvedPublications: 0 })
+    expect(counts.get('c')).toBeUndefined()
+  })
+
+  it('Launch path (BUG-012): the Publication stage opens Publications filtered by the product', () => {
+    expect(publicationsHref('p 1')).toBe('#/publications/p%201')
+    expect(publicationsHref(null)).toBe('#/publications')
+    expect(publicationsProductOf('#/publications/p%201')).toBe('p 1')
+    expect(publicationsProductOf('#/publications')).toBeNull()
+    expect(publicationsProductOf('#/products/p1')).toBeNull()
+    // The shell still routes the link to the Publications page.
+    expect(parseHash('#/publications/p1').page).toBe('publications')
   })
 
   it('Menu (BUG-016): the Attention count is amber, and red only while one of the items is a failure', () => {
