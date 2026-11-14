@@ -312,13 +312,19 @@ code {
   font-weight: 600;
 }
 .count {
-  background: var(--bad);
-  color: #fff;
-  border-radius: 999px;
+  /* "Needs you": amber with its own on-colour (7:1 and more); red only while one of the items is a failure. */
+  background: var(--attention);
+  color: var(--on-attention);
+  border-radius: var(--radius-pill);
   font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
   padding: 0 var(--space-2);
   min-width: 20px;
   text-align: center;
+}
+.count.error {
+  background: var(--error);
+  color: var(--on-error);
 }
 
 /* The menu can be hidden (the Hide menu / Menu buttons): then the page takes the whole width. */

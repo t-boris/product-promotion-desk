@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AgentQuestionDialog } from './AgentQuestionDialog'
 import { AiPill } from './AiProgress'
+import { attentionCountTone } from './pages/attention-tone'
 import { useAutomation, useQuery } from './hooks'
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from './menu-state'
 import { PAGES } from './pages'
@@ -57,6 +58,7 @@ export function App() {
 
   const engine = engines.data?.find((e) => e.id === settings.data?.engineId)
   const attentionCount = attention.data?.length ?? 0
+  const countTone = attentionCountTone(attention.data?.map((item) => item.kind) ?? [])
 
   return (
     <div className={`shell ${menuOpen ? '' : 'menu-closed'}`} data-testid="shell">
@@ -80,7 +82,11 @@ export function App() {
                 data-testid={`nav-${page.id}`}
               >
                 <span>{page.label}</span>
-                {page.id === 'attention' && attentionCount > 0 && <span className="count">{attentionCount}</span>}
+                {page.id === 'attention' && countTone && (
+                  <span className={`count ${countTone}`} data-testid="attention-count">
+                    {attentionCount}
+                  </span>
+                )}
               </a>
             ))}
           </nav>

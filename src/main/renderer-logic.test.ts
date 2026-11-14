@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import type { Account, AnalysisStage, AttentionItem, Channel, Claim, Product } from '../shared/types'
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from '../renderer/src/menu-state'
 import { fixLinkFor } from '../renderer/src/pages/attention-links'
+import { KIND_TONE, attentionCountTone } from '../renderer/src/pages/attention-tone'
 import { startSteps } from '../renderer/src/pages/attention-start'
 import { engineChoiceVariant, recommendedEngineId, splitEngineDetail } from '../renderer/src/pages/engine-detail'
 import { describeSources, planStages, progressOf } from '../renderer/src/pages/products/analysis-plan'
@@ -296,6 +297,15 @@ describe('QA clarity batch: what the screens say', () => {
     const claude = splitEngineDetail('Claude Code 2.1.325 is installed and answers. Writing: tool-free, it can only return text. Account missions: it works the account’s browser with full access.')
     expect(claude.limits).toBe(false)
     expect(splitEngineDetail('Codex was not found.')).toEqual({ summary: 'Codex was not found.', writing: null, missions: null, limits: false })
+  })
+
+  it('Menu (BUG-016): the Attention count is amber, and red only while one of the items is a failure', () => {
+    expect(attentionCountTone([])).toBeNull()
+    expect(attentionCountTone(['draft', 'approval', 'question', 'login', 'captcha', 'connection'])).toBe('attention')
+    expect(attentionCountTone(['draft', 'error'])).toBe('error')
+    expect(attentionCountTone(['unknown_result'])).toBe('error')
+    // Only failures are red on the page too; a sign-in or a CAPTCHA waits for the owner, it is not an error.
+    expect(Object.entries(KIND_TONE).filter(([, tone]) => tone === 'bad').map(([kind]) => kind)).toEqual(['error', 'unknown_result'])
   })
 
   it('Settings (BUG-015): only the recommended engine is filled, and only while no engine is in use', () => {

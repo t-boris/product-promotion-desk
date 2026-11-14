@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { AttentionKind, Id } from '../../../shared/types'
 import { useAutomation, useQuery } from '../hooks'
-import { Badge, Button, EmptyState, ErrorNote, Loading, Page, type Tone } from '../ui'
+import { Badge, Button, EmptyState, ErrorNote, Loading, Page } from '../ui'
 import { fixLinkFor } from './attention-links'
+import { KIND_TONE } from './attention-tone'
 import { startSteps } from './attention-start'
 import { useProductDirectory, type ProductDirectory } from './review/products'
 import { ReviewCard } from './review/ReviewCard'
@@ -16,17 +17,6 @@ const KIND_LABEL: Record<AttentionKind, string> = {
   connection: 'Connection',
   error: 'Problem',
   unknown_result: 'Unknown result'
-}
-
-const KIND_TONE: Record<AttentionKind, Tone> = {
-  approval: 'warn',
-  draft: 'info',
-  question: 'warn',
-  login: 'bad',
-  captcha: 'bad',
-  connection: 'warn',
-  error: 'bad',
-  unknown_result: 'bad'
 }
 
 /**
