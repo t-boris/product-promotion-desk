@@ -41,10 +41,21 @@ export type Executor = 'connector' | 'ai_browser'
  */
 export type MissionResult =
   | { status: 'confirmed'; url: string; externalId: string }
-  /** `auth`: the application itself saw a signed-out account or a human check, which makes the flow check the session and suspend the account. */
-  | { status: 'failed'; error: string; auth?: 'login' | 'captcha' }
-  | { status: 'unknown'; error: string }
+  /**
+   * `error` is the application's own wording. `note` is what the AI or the site said (a reason, a warning, a description of a human
+   * check), bounded: it is for the owner to read next to the error and is never written to the log, because it is free text.
+   * `auth`: the application itself saw a signed-out account or a human check, which makes the flow check the session and suspend the account.
+   */
+  | { status: 'failed'; error: string; note?: string; auth?: 'login' | 'captcha' }
+  | { status: 'unknown'; error: string; note?: string }
   | { status: 'not_started'; error: string }
+
+/** The longest piece of free text (the AI's reason, a site's warning) that goes next to an error. */
+const NOTE_MAX = 300
+const bounded = (text: string, max = NOTE_MAX): string => {
+  const line = text.replace(/\s+/g, ' ').trim()
+  return line.length > max ? `${line.slice(0, max - 1)}…` : line
+}
 
 /** The hosts a mission may work on: the platform of the destination and of the channel, without the decoration of one of its sub-domains. */
 export function missionHosts(...urls: string[]): string[] {
@@ -206,19 +217,20 @@ export class MissionPublisher {
   }
 
   /**
-   * Nothing was submitted (the authority never saw a press), whatever the AI says. The wording is the application's. Only what the
-   * application itself saw on the page (a human check) makes the flow check the session; the AI's own words are shown and never classified.
+   * Nothing was submitted (the authority never saw a press), whatever the AI says. The wording is the application's; what the AI or the
+   * site said travels apart, as a bounded `note`, for the owner to read and never for the log. Only what the application itself saw on
+   * the page (a human check) makes the flow check the session; the AI's own words are shown and never classified.
    */
   private notSubmitted(outcome: PostMissionOutcome | null, crash: string | null): MissionResult {
     const none = 'Nothing was submitted.'
-    if (outcome?.humanCheck) return { status: 'failed', auth: 'captcha', error: `CAPTCHA required: the site showed a human check (${outcome.humanCheck}). ${none}` }
-    if (outcome?.warning) return { status: 'failed', error: `The site shows a warning ("${outcome.warning}"), so nothing was published. ${none}` }
+    if (outcome?.humanCheck) return { status: 'failed', auth: 'captcha', error: `CAPTCHA required: the site showed a human check. ${none}`, note: `The page shows: ${bounded(outcome.humanCheck, 160)}` }
+    if (outcome?.warning) return { status: 'failed', error: `The site shows a warning, so nothing was published. ${none}`, note: `The site says: "${bounded(outcome.warning)}"` }
     if (!outcome) return { status: 'failed', error: `The AI browser stopped with an error. ${none} ${crash ?? ''}`.trim() }
     if (outcome.ended === 'stopped') return { status: 'failed', error: `You stopped the AI before it published. ${none}` }
     if (outcome.ended === 'timeout') return { status: 'failed', error: `The AI did not finish in time. ${none}` }
     if (outcome.ended === 'error') return { status: 'failed', error: `The AI stopped because of an error (${outcome.error ?? 'unknown error'}). ${none}` }
     const reason = outcome.reported?.reason
-    return { status: 'failed', error: reason ? `The AI could not publish: ${reason} ${none}` : `The AI ended without publishing. ${none}` }
+    return reason ? { status: 'failed', error: `The AI could not publish. ${none}`, note: `The AI says: ${bounded(reason)}` } : { status: 'failed', error: `The AI ended without publishing. ${none}` }
   }
 
   /**
@@ -242,8 +254,11 @@ export class MissionPublisher {
       return { status: 'unknown', error: `${pressed} The application could not check that the text is on the site (${errorMessage(error)}), so it is not known whether it was published.` }
     }
     if (ref) return { status: 'confirmed', url: ref.url, externalId: ref.externalId }
-    const said = outcome?.reported ? ` The AI says: ${outcome.reported.reason}` : ''
-    return { status: 'unknown', error: `${pressed} The application did not find the text on the site afterwards, so it is not known whether it was published.${said}` }
+    return {
+      status: 'unknown',
+      error: `${pressed} The application did not find the text on the site afterwards, so it is not known whether it was published.`,
+      note: outcome?.reported ? `The AI says: ${bounded(outcome.reported.reason)}` : undefined
+    }
   }
 }
 

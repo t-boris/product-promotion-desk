@@ -420,6 +420,57 @@ describe('a mission never starts, and never presses, without the gate\'s authori
   })
 })
 
+describe('free text of the AI and of the site stays out of the log and the run list', () => {
+  const FREE = 'ZZZ-free-text-of-the-ai'
+  const everythingLogged = (): string => [...world.core.log.list(500).map((l) => l.message), ...world.core.runs.list({ limit: 50 }).map((r) => r.summary ?? '')].join('\n')
+
+  it.each([
+    ['the AI gave a reason for not publishing', async () => ({ reported: { status: 'failed' as const, reason: `${FREE} I could not find the button` } })],
+    ['the site showed a warning', async () => ({ warning: `${FREE} you are doing that too much` })],
+    ['the page showed a human check', async () => ({ humanCheck: `${FREE} a check frame` })]
+  ])('keeps it for the owner and out of the log when %s before any press', async (_name, script) => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    useMissions(script)
+
+    const action = await sending().send(opp.id)
+
+    expect(action.state).toBe('failed')
+    expect(actionRow(action.id).error).toContain(FREE) // the owner reads it
+    expect(actionRow(action.id).error).toContain('Nothing was submitted') // and the application's own wording
+    expect(everythingLogged()).not.toContain(FREE)
+    expect(everythingLogged()).toContain('not sent') // the send itself is still logged
+  })
+
+  it('keeps what the AI said after a press the application could not find out of the log, and the owner still reads it', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    useMissions(async (request) => {
+      await press(request, { show: false })
+      return { reported: { status: 'done', reason: `${FREE} Posted. I can see it.` } }
+    })
+
+    const action = await sending().send(opp.id)
+
+    expect(action.state).toBe('unknown')
+    expect(actionRow(action.id).error).toContain(FREE)
+    expect(world.opportunity(opp.id).reason).toContain(FREE)
+    expect(everythingLogged()).not.toContain(FREE)
+    expect(everythingLogged()).toContain('result unknown')
+  })
+
+  it('bounds what it keeps for the owner', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    useMissions(async () => ({ reported: { status: 'failed' as const, reason: `${FREE} ${'a very long reason '.repeat(500)}` } }))
+
+    const action = await sending().send(opp.id)
+
+    expect(actionRow(action.id).error).toContain(FREE)
+    expect((actionRow(action.id).error ?? '').length).toBeLessThan(700)
+  })
+})
+
 describe('what a mission that did not press leaves behind', () => {
   it('is a failure with nothing submitted when the AI ends without pressing, however it words it, and the item goes back to review', async () => {
     world = makeWorld()

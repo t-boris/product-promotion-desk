@@ -279,7 +279,8 @@ export class AgentRunService implements PostMissionService {
       else if (ended === 'error') this.finish(live, 'failed', `The AI stopped because of an error: ${error}`)
       else this.finish(live, reported?.status === 'failed' ? 'failed' : 'needs_owner', reported?.reason || 'The AI did not publish anything.')
     }
-    this.core.log.info('accounts', `The AI ${committed ? 'pressed the button that publishes' : 'did not publish'} for ${account.label}${reported ? `: ${reported.reason}` : ''}`)
+    // The AI's own words are shown to the owner in the run; the log keeps a fixed phrase and the status it reported.
+    this.core.log.info('accounts', `The AI ${committed ? 'pressed the button that publishes' : 'did not publish'} for ${account.label}${reported ? ` (it reported "${reported.status}")` : ''}.`)
     return { ended, committed, reported, humanCheck: observed.humanCheck, warning: observed.warning, error }
   }
 

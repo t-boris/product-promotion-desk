@@ -43,8 +43,8 @@ export interface SendOptions {
 type AttemptOutcome =
   | { kind: 'confirmed'; url: string; externalId: string }
   /** `hold`: nothing was submitted and the AI browser could not be used; the approval stays and the owner may press Send again. */
-  | { kind: 'failed'; error: string; loginLike?: boolean; hold?: boolean }
-  | { kind: 'unknown'; error: string; loginLike?: boolean }
+  | { kind: 'failed'; error: string; note?: string; loginLike?: boolean; hold?: boolean }
+  | { kind: 'unknown'; error: string; note?: string; loginLike?: boolean }
 
 type LoginProblem = 'login' | 'captcha'
 
@@ -185,9 +185,9 @@ export class SendingFlow implements SendingService {
       case 'confirmed':
         return this.normalize({ status: 'confirmed', url: result.url, externalId: result.externalId })
       case 'failed':
-        return { kind: 'failed', error: result.error, loginLike: result.auth !== undefined }
+        return { kind: 'failed', error: result.error, note: result.note, loginLike: result.auth !== undefined }
       case 'unknown':
-        return { kind: 'unknown', error: result.error }
+        return { kind: 'unknown', error: result.error, note: result.note }
       case 'not_started':
         return { kind: 'failed', error: result.error, hold: true }
     }
@@ -237,6 +237,8 @@ export class SendingFlow implements SendingService {
   private settle(grant: GateGrant, outcome: AttemptOutcome, problem: LoginProblem | null): SendAction {
     const oppId = grant.opportunity.id
     const now = this.store.now()
+    // What the owner reads: the application's wording, then what the AI or the site said (bounded, see MissionResult). The log gets the wording only.
+    const shown = outcome.kind === 'confirmed' ? '' : outcome.note ? `${outcome.error} ${outcome.note}` : outcome.error
     this.core.db.transaction(() => {
       if (outcome.kind === 'confirmed') {
         this.core.db
@@ -244,20 +246,20 @@ export class SendingFlow implements SendingService {
           .run(now, outcome.url || null, outcome.externalId || null, grant.actionId)
         this.store.updateOpportunity(oppId, { state: 'confirmed', reason: '' })
       } else if (outcome.kind === 'failed') {
-        this.core.db.prepare("UPDATE send_actions SET state = 'failed', completed_at = ?, error = ? WHERE id = ?").run(now, outcome.error, grant.actionId)
+        this.core.db.prepare("UPDATE send_actions SET state = 'failed', completed_at = ?, error = ? WHERE id = ?").run(now, shown, grant.actionId)
         if (problem) {
           // Nothing was submitted and the content is unchanged, so the approval stays; the account is what needs the owner.
           const what = problem === 'captcha' ? 'is waiting for a CAPTCHA' : 'is signed out'
           this.store.updateOpportunity(oppId, { state: 'ready', reason: `Sending is paused: account "${grant.account.label}" ${what}. Fix it, then press Send.` })
         } else if (outcome.hold) {
           // Nothing was submitted and the content is unchanged: the approval stays, the owner may press Send again.
-          this.store.updateOpportunity(oppId, { state: 'ready', reason: `Not sent: ${outcome.error} The approval is kept; press Send to try again.` })
+          this.store.updateOpportunity(oppId, { state: 'ready', reason: `Not sent: ${shown} The approval is kept; press Send to try again.` })
         } else {
-          this.review.returnToReview(oppId, `Sending failed: ${outcome.error} Review it before trying again.`, { settlingAttempt: true })
+          this.review.returnToReview(oppId, `Sending failed: ${shown} Review it before trying again.`, { settlingAttempt: true })
         }
       } else {
-        this.core.db.prepare("UPDATE send_actions SET state = 'unknown', completed_at = NULL, error = ? WHERE id = ?").run(outcome.error, grant.actionId)
-        this.store.updateOpportunity(oppId, { state: 'unknown_result', reason: `${outcome.error} No new attempt is possible until this is reconciled with the platform.` })
+        this.core.db.prepare("UPDATE send_actions SET state = 'unknown', completed_at = NULL, error = ? WHERE id = ?").run(shown, grant.actionId)
+        this.store.updateOpportunity(oppId, { state: 'unknown_result', reason: `${shown} No new attempt is possible until this is reconciled with the platform.` })
       }
     })()
     if (outcome.kind === 'confirmed') this.markVerified(grant.channel.id, grant.opportunity.kind === 'standalone', outcome.url || outcome.externalId)
@@ -267,6 +269,7 @@ export class SendingFlow implements SendingService {
     return this.core.repos.action(grant.actionId)
   }
 
+  /** The line for the log and the run list: the application's wording only, never the free text of `note`. */
   private describe(grant: GateGrant, outcome: AttemptOutcome): string {
     const what = grant.opportunity.kind === 'standalone' ? 'Post' : 'Reply'
     if (outcome.kind === 'confirmed') return `${what} sent to ${grant.request.destination}${outcome.url ? ` (${outcome.url})` : ''}`

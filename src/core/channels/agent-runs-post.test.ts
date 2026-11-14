@@ -171,6 +171,24 @@ describe('how a post mission ends: the authority says whether the control was pr
     expect(w.t.bridge.closed).toBe(1)
   })
 
+  it('keeps what the AI reported out of the log (the run shows it to the owner, the log keeps the status)', async () => {
+    const { w, request } = await ready()
+    const FREE = 'ZZZ-free-text-of-the-ai'
+    asTheAI(w, async (call) => {
+      await call('browser_snapshot')
+      await call('report_result', { status: 'needs_owner', reason: `${FREE} the form asks for a code` })
+      return 'Stopped.'
+    })
+
+    await run(w, request)
+
+    const final = (await state(w)) as AgentRun
+    expect(final.summary).toContain(FREE)
+    const logged = w.core.log.list(500).map((l) => l.message)
+    expect(logged.some((m) => m.includes(FREE))).toBe(false)
+    expect(logged.some((m) => m.includes('did not publish') && m.includes('needs_owner'))).toBe(true)
+  })
+
   it('is not committed when the AI says "done" without ever calling browser_submit: its word is a note, not a verdict', async () => {
     const { w, authority, request } = await ready()
     asTheAI(w, async (call) => {
