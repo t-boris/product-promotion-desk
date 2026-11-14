@@ -219,6 +219,28 @@ export function destinationMatches(pageUrl: string, destination: string, kind: '
   }
 }
 
+const SUBMIT_VERBS = ['post', 'reply', 'comment', 'submit', 'publish', 'save', 'send', 'add', 'answer', 'write', 'leave', 'отправить', 'опубликовать', 'ответить', 'комментировать', 'сохранить', 'добавить', 'оставить', 'написать']
+const SUBMIT_NOUNS = ['comment', 'reply', 'post', 'answer', 'response', 'message', 'thread', 'topic', 'комментарий', 'ответ', 'пост', 'сообщение', 'тему']
+const SUBMIT_FILLER = ['a', 'an', 'your', 'the', 'new']
+
+/**
+ * Whether the name of a control is that of one that publishes what was typed into a form: a verb of publishing, alone or with what it
+ * publishes ("Post", "Reply", "Comment", "Add a comment", "Submit post", "Save", "Опубликовать"). It is the whole name that counts, so a
+ * control that only mentions one ("Report comment", "Delete reply", "Comment as u/someone") is not one. The approved content is typed
+ * into a form and a control is pressed on the AI's word: this keeps that control from being any element of the page.
+ */
+export function looksLikeSubmit(name: string): boolean {
+  const words = name
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter((w) => w !== '')
+  const [verb, ...rest] = words
+  if (!verb || words.length > 4 || !SUBMIT_VERBS.includes(verb)) return false
+  const nouns = rest.filter((w) => !SUBMIT_FILLER.includes(w))
+  return nouns.length <= 1 && nouns.every((w) => SUBMIT_NOUNS.includes(w))
+}
+
 const PLATFORM_WARNING =
   /\b(?:too many (?:requests|posts|comments|replies|attempts)|you(?:'|’)re doing that too (?:much|often|fast)|rate[- ]?limit(?:ed)?|slow down|try again (?:later|in)|temporarily (?:blocked|restricted|limited|unavailable)|(?:account|you) (?:has|have|is|are|was|were)\s+(?:been\s+)?(?:suspended|banned|restricted|limited|locked)|unusual activity|suspicious activity|verify (?:your )?(?:identity|account))\b/i
 

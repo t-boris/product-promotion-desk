@@ -482,6 +482,114 @@ describe('browser_submit refuses before it asks for a ticket', () => {
   })
 })
 
+describe('browser_submit types only into a text box, presses only a control that can publish, and only what the AI was shown', () => {
+  const refusedBeforeTheTicket = async (t: Setup, result: Promise<{ isError?: boolean; text: string }>, why: string | RegExp) => {
+    expect(await result).toMatchObject({ isError: true, text: expect.stringMatching(why) })
+    expect(t.authority.leases).toBe(0)
+    expect(t.page.steps).toEqual([])
+    expect(t.page.posted).toEqual([])
+  }
+
+  it.each(['div', 'summary', 'tab', 'menuitem', 'combobox', 'select', 'checkbox', 'input:password', 'input:hidden', 'img'])('does not type into an element that is a %s, whichever label the AI gives it', async (role) => {
+    const t = setup()
+    t.page.items.push({ ref: 'e7', role, name: 'Add a comment' })
+    await look(t)
+    await refusedBeforeTheTicket(t, submitReply(t, { text_ref: 'e7' }), /not a field/)
+  })
+
+  it.each(['textarea', 'textbox', 'input:text', 'input:search', 'input:url', 'input:email'])('types into a %s', async (role) => {
+    const t = setup()
+    t.page.items.push({ ref: 'e7', role, name: 'Add a comment' })
+    await look(t)
+    expect((await submitReply(t, { text_ref: 'e7' })).isError).toBeUndefined()
+    expect(t.page.posted).toEqual([{ e7: REPLY.text }])
+  })
+
+  it.each([
+    ['button', 'Delete comment'],
+    ['button', 'Report'],
+    ['button', 'Comment as u/someone'],
+    ['button', 'Report comment'],
+    ['button', ''],
+    ['link', 'Cancel'],
+    ['link', 'Log out'],
+    ['div', 'Post'],
+    ['input:checkbox', 'Post'],
+    ['textarea', 'Reply']
+  ])('does not press a %s named "%s": it is not a control that publishes', async (role, name) => {
+    const t = setup()
+    t.page.items.push({ ref: 'e7', role, name })
+    await look(t)
+    await refusedBeforeTheTicket(t, submitReply(t, { submit_ref: 'e7' }), /not a control that publishes/)
+  })
+
+  it.each([
+    ['button', 'Comment'],
+    ['button', 'Reply'],
+    ['button', 'Post'],
+    ['button', 'Add a comment'],
+    ['button', 'Post comment'],
+    ['link', 'save'],
+    ['input:submit', 'Submit'],
+    ['button', 'Publish'],
+    ['button', 'Опубликовать']
+  ])('presses a %s named "%s"', async (role, name) => {
+    const t = setup()
+    t.page.items.push({ ref: 'e7', role, name })
+    await look(t)
+    expect((await submitReply(t, { submit_ref: 'e7' })).isError).toBeUndefined()
+    expect(t.page.clicked).toEqual(['e7'])
+  })
+
+  it('refuses a label that is not what the AI was shown when the page was numbered again (a reload by another flow on the same browser)', async () => {
+    const renamed = setup()
+    await look(renamed)
+    renamed.page.items = renamed.page.items.map((i) => (i.ref === 'e4' ? { ...i, name: 'Delete comment' } : i))
+    await refusedBeforeTheTicket(renamed, submitReply(renamed), /not what it was when you looked/)
+
+    const otherKind = setup()
+    await look(otherKind)
+    otherKind.page.items = otherKind.page.items.map((i) => (i.ref === 'e1' ? { ...i, role: 'button', name: 'Reply' } : i))
+    await refusedBeforeTheTicket(otherKind, submitReply(otherKind), /not what it was when you looked/)
+  })
+
+  it('judges the labels by what the AI saw, not by what the application saw last: a step after its look may have numbered the page again', async () => {
+    const t = setup()
+    await look(t)
+    // The click of the AI is answered with a page that has been numbered again: the application looks at it (`afterStep`), the AI does not.
+    t.page.beforeStep = (step) => {
+      if (step.do === 'click' && step.ref === 'e5') t.page.items = t.page.items.map((i) => (i.ref === 'e4' ? { ...i, name: 'Delete comment' } : i))
+    }
+    expect((await t.toolbox.call('browser_click', { ref: 'e5' })).isError).toBeUndefined()
+    t.page.beforeStep = null
+    expect(await submitReply(t)).toMatchObject({ isError: true, text: expect.stringMatching(/not what it was when you looked/) })
+    expect(t.page.steps.map((s) => s.step)).toEqual([{ do: 'click', ref: 'e5' }]) // only the AI's own click: nothing was typed or pressed
+    expect(t.authority.leases).toBe(0)
+    expect(t.page.posted).toEqual([])
+  })
+
+  it('does not press when the control became another one while the application was typing', async () => {
+    const t = setup()
+    await look(t)
+    t.page.beforeStep = (step) => {
+      if (step.do === 'type') t.page.items = t.page.items.map((i) => (i.ref === 'e4' ? { ...i, name: 'Delete comment' } : i))
+    }
+    expect(await submitReply(t)).toMatchObject({ isError: true, text: expect.stringContaining('not what it was when you looked') })
+    expect(t.page.clicked).toEqual([])
+    expect(t.authority.committed).toBe(false)
+  })
+
+  it('does not press when the control was disabled while the application was typing', async () => {
+    const t = setup()
+    await look(t)
+    t.page.beforeStep = (step) => {
+      if (step.do === 'type') t.page.items = t.page.items.map((i) => (i.ref === 'e4' ? { ...i, disabled: true } : i))
+    }
+    expect(await submitReply(t)).toMatchObject({ isError: true, text: expect.stringContaining('is disabled') })
+    expect(t.page.clicked).toEqual([])
+  })
+})
+
 describe('browser_submit stops without pressing when the form is not as approved', () => {
   it('does not press when a field does not hold the approved text, and then allows no click of the AI\'s own on that page', async () => {
     const t = setup()

@@ -17,6 +17,7 @@ interface NodeSpec {
   placeholder?: string
   label?: string
   src?: string
+  editable?: boolean
 }
 class FakeNode {
   readonly attributes = new Map<string, string>()
@@ -36,6 +37,7 @@ class FakeNode {
   get disabled(): boolean { return this.spec.disabled ?? false }
   get required(): boolean { return this.spec.required ?? false }
   get placeholder(): string { return this.spec.placeholder ?? '' }
+  get isContentEditable(): boolean { return this.spec.editable ?? false }
   get title(): string { return '' }
   get name(): string { return '' }
   get labels(): { innerText: string }[] | null { return this.spec.label ? [{ innerText: this.spec.label }] : null }
@@ -91,6 +93,27 @@ describe('snapshotScript: the page as a list of labelled elements', () => {
   it('names a field once when the site repeats its label for screen readers', () => {
     const s = runSnapshot({ interactive: [{ tag: 'input', attrs: { type: 'password' }, label: 'Password Password' }, { tag: 'input', attrs: { type: 'text' }, label: 'Mobile number or email Mobile number or email' }, { tag: 'button', text: 'Go Go Stop' }] })
     expect(s.elements.map((e) => e.name)).toEqual(['Password', 'Mobile number or email', 'Go Go Stop'])
+  })
+
+  it('calls an editable element a text box whatever its tag, which is how the application tells a field from any other element', () => {
+    const s = runSnapshot({
+      interactive: [
+        { tag: 'div', attrs: { contenteditable: 'true' }, text: 'typed', editable: true },
+        { tag: 'div', attrs: { contenteditable: 'true', role: 'textbox', 'aria-label': 'Comment' }, editable: true },
+        { tag: 'div', attrs: { contenteditable: 'true', role: 'combobox', 'aria-label': 'Country' }, editable: true },
+        { tag: 'p', text: 'not editable', attrs: { onclick: 'x()' } },
+        { tag: 'textarea', placeholder: 'A textarea' },
+        { tag: 'button', text: 'Post' }
+      ]
+    })
+    expect(s.elements.map((e) => [e.role, e.name])).toEqual([
+      ['textbox', 'typed'],
+      ['textbox', 'Comment'],
+      ['combobox', 'Country'],
+      ['p', 'not editable'],
+      ['textarea', 'A textarea'],
+      ['button', 'Post']
+    ])
   })
 
   it('keeps the field role of an input that the site calls a combobox, and shows what a drop-down holds', () => {

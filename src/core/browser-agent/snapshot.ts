@@ -17,7 +17,7 @@ const MAX_ALERTS = 8
 export interface SnapshotElement {
   /** "e12": the label the page carries in data-ppd-ref. */
   ref: string
-  /** "input:text", "input:password", "select", "button", "link", "checkbox", "combobox", "option", "textarea", ... */
+  /** "input:text", "input:password", "select", "button", "link", "checkbox", "combobox", "option", "textarea", "textbox" (an editable element), ... */
   role: string
   name: string
   /** What a non-password field holds. Never set for a password field. */
@@ -80,8 +80,10 @@ export function snapshotScript(): string {
     let ref = el.getAttribute('data-ppd-ref');
     if (!ref) { ref = 'e' + (++counter); el.setAttribute('data-ppd-ref', ref); }
     const roleAttr = el.getAttribute('role');
-    // A form field keeps its field role even when the site gives it another (an input with role=combobox is still typed into).
-    const role = tag === 'input' ? 'input:' + (type || 'text') : tag === 'textarea' || tag === 'select' ? tag : roleAttr || (tag === 'a' ? 'link' : tag);
+    // A form field keeps its field role even when the site gives it another (an input with role=combobox is still typed into). An editable
+    // element (an editor built on a div) is a text box, whatever its tag: the application tells a field from any other element by this.
+    const editable = tag !== 'input' && tag !== 'textarea' && el.isContentEditable === true;
+    const role = tag === 'input' ? 'input:' + (type || 'text') : tag === 'textarea' || tag === 'select' ? tag : editable && (!roleAttr || roleAttr === 'textbox') ? 'textbox' : roleAttr || (tag === 'a' ? 'link' : tag);
     const labelledBy = (el.getAttribute('aria-labelledby') || '').split(' ').map((id) => { const t = id && document.getElementById(id); return t ? t.innerText : ''; }).join(' ');
     const label = el.labels && el.labels[0] ? el.labels[0].innerText : '';
     const name = once(clean(el.getAttribute('aria-label') || labelledBy || label || el.innerText || el.placeholder || el.title || el.name || (type === 'submit' || type === 'button' ? el.value : ''), ${MAX_NAME}));

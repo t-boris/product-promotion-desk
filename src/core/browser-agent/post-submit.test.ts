@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { destinationMatches, fieldValueScript, formTextScript, normalizeText, parseHeldText, platformWarning, sameContent } from './post-submit'
+import { destinationMatches, fieldValueScript, formTextScript, looksLikeSubmit, normalizeText, parseHeldText, platformWarning, sameContent } from './post-submit'
 
 const HOSTS = ['reddit.com']
 const COMMENT = 'https://www.reddit.com/r/astrology/comments/abc123/my_chart/def456/'
@@ -176,5 +176,15 @@ describe('reading what the form holds', () => {
     expect(parseHeldText([{ ref: 'e1' }])).toBeNull()
     expect(parseHeldText([null])).toBeNull()
     expect(parseHeldText([{ ref: 'e1; drop', text: 'a' }])).toEqual([{ ref: null, text: 'a' }])
+  })
+})
+
+describe('which control is named like one that publishes', () => {
+  it.each(['Post', 'Reply', 'Comment', 'Submit', 'Publish', 'Save', 'Send', 'post', 'COMMENT', 'Add comment', 'Add a comment', 'Post comment', 'Post reply', 'Submit post', 'Publish post', 'Save comment', 'Comment ›', 'Опубликовать', 'Отправить', 'Ответить', 'Добавить комментарий', 'Оставить комментарий'])('is: %s', (name) => {
+    expect(looksLikeSubmit(name)).toBe(true)
+  })
+
+  it.each(['', '  ', 'Delete', 'Delete comment', 'Report', 'Report comment', 'Cancel', 'Edit', 'Share', 'Award', 'Comment as u/someone', 'Reply to everyone and notify all of them now', 'Log in', 'Sign up to post', 'Posts', 'Удалить', 'Пожаловаться', 'Отмена', 'Post (disabled)', 'Save to bookmarks and share it'])('is not: "%s"', (name) => {
+    expect(looksLikeSubmit(name)).toBe(false)
   })
 })
