@@ -10,7 +10,7 @@
 
 import { TakeoverError, type BrowserPage, type PageStep } from '../ports'
 import type { McpTool, McpToolHost, McpToolResult } from '../mcp/protocol'
-import { destinationMatches, fieldValueScript, formTextScript, isPublishingControl, looksLikeSubmit, neverClicked, onComposePage, composePageOf, parseHeldText, replyTarget, platformWarning, sameContent, type HeldText, type PostSetup, type SubmitLease } from './post-submit'
+import { changesPostSettings, communitiesShown, communityOf, destinationMatches, fieldValueScript, formTextScript, isPublishingControl, looksLikeSubmit, neverClicked, onComposePage, composePageOf, parseHeldText, replyTarget, platformWarning, sameContent, type HeldText, type PostSetup, type SubmitLease } from './post-submit'
 import { parseSnapshot, renderElements, snapshotScript, type PageSnapshot, type SnapshotElement } from './snapshot'
 
 export interface TaskValue {
@@ -177,6 +177,8 @@ const FORM_HOLDS_TEXT =
 const FIELDS_UNREADABLE = 'The fields of the page could not be read, so nothing is clicked or chosen: it is not known that the form is empty. Look again with browser_snapshot, or call report_result with needs_owner.'
 const NOT_PUBLISHED_HERE =
   'This control joins, follows, votes, blocks, deletes, reports, signs out or grants access, and nothing of the kind is done in this mission: only the approved content is published, and only by browser_submit. If the page insists on it, call report_result with needs_owner and say what it asks.'
+const POST_SETTING_CONTROL =
+  'This control sets the community, the flair, the tags, NSFW, spoiler, a schedule, a crosspost or the profile of a post, and in this mission nothing of the kind is chosen: the form is published as the owner approved it. If the page insists on it (a community that requires a flair), call report_result with needs_owner and say what it asks.'
 const PUBLISHING_CONTROL =
   'This control publishes what is typed in a form, and in this mission only browser_submit presses such a control: it types the approved content under the owner\'s approval and presses it itself. A click or a choice of your own on it is refused, whatever the page holds. Open the form (a link, or the same address on another layout of the site), look at the page, and call browser_submit with the labels of the fields and of this control.'
 /** What the approved content can be typed into: a text box (the snapshot calls an editable element a text box). Nothing else is a field. */
@@ -421,10 +423,15 @@ export class BrowserToolbox implements McpToolHost {
    * What stands between the AI's own click or choice in a post mission and the page, before the held-text check below (a second layer):
    * it is made only on the page of the approved destination (the fence browser_submit has), never on a control that publishes (a native
    * submit control, or one named like one: the held-text check is not atomic with the mouse event, a page can fill a form in between),
-   * and never on one that joins, follows, votes, blocks, deletes, reports or grants access. Judged on a fresh look and on what the AI was
-   * shown, so a page that was renumbered cannot turn a control into something else. Null when the click may go on.
+   * and never on one that joins, follows, votes, blocks, deletes, reports or grants access, nor on one that sets the community, flair, tags,
+   * NSFW, spoiler, a schedule, a crosspost or the profile a post goes out as (`changesPostSettings`): the address is fenced, the rest of the
+   * form is left as the site gave it, and a site that needs one of them ends the mission as needs_owner. Judged on a fresh look and on what
+   * the AI was shown, so a page that was renumbered cannot turn a control into something else; a choice in a list is judged by its option too.
+   * LIVE ACCEPTANCE: these words, and the community field read back in `pageProblem`, are those of Reddit's layouts as far as they are known
+   * from the connector; they must be checked on a real compose page, which shows what a picker and a community field are really called and
+   * whether the form shows the community at all. Null when the click may go on.
    */
-  private async postClickProblem(page: BrowserPage, reference: string): Promise<McpToolResult | null> {
+  private async postClickProblem(page: BrowserPage, reference: string, option?: string): Promise<McpToolResult | null> {
     if (!this.deps.post) return null
     const now = await this.observe(page)
     if (!now) return fail('The page shows nothing usable yet. Wait a moment and look again.')
@@ -435,8 +442,12 @@ export class BrowserToolbox implements McpToolHost {
     const fresh = now.elements.find((e) => e.ref === reference)
     if (!fresh) return fail(`${reference} is not on the page now: the page changed since it was shown. Look at the page again (browser_snapshot) and use a ref from it.`)
     const named = [fresh, this.shown?.elements.find((e) => e.ref === reference)].filter((e) => e !== undefined)
-    if (named.some((e) => isPublishingControl(e))) return fail(PUBLISHING_CONTROL)
-    if (named.some((e) => neverClicked(e.name))) return fail(NOT_PUBLISHED_HERE)
+    // The control, and for a choice in a list the option the AI names: the application opens a list that is not a plain one and clicks the
+    // option with that text, so the option is a click too and is judged by what it says, as a button is (an item of a menu is one).
+    const clicked = option === undefined ? named : [...named, { role: 'button', name: option, submits: false }]
+    if (clicked.some((e) => isPublishingControl(e))) return fail(PUBLISHING_CONTROL)
+    if (clicked.some((e) => neverClicked(e.name))) return fail(NOT_PUBLISHED_HERE)
+    if (clicked.some((e) => changesPostSettings(e))) return fail(POST_SETTING_CONTROL)
     return null
   }
 
@@ -466,6 +477,10 @@ export class BrowserToolbox implements McpToolHost {
       const compose = composePageOf(content.destination)
       return `A new post is published from the community's submit page (${compose ? `/${compose.join('/')}` : 'its submit page'}), and this is not it. Open it with browser_navigate (or the "Create post" link), leave the form empty and call browser_submit there.`
     }
+    // The form's own community, when a field of the page says it clearly, is the approved one: the address is not the whole form.
+    const community = publishing && content.kind === 'post' ? communityOf(content.destination) : null
+    const other = community ? communitiesShown(snapshot.elements).find((shown) => shown !== community) : undefined
+    if (community && other) return `The form's community field shows r/${other}, and the approved post goes to r/${community}. Nothing was typed. Do not change the field: call report_result with needs_owner and say so.`
     if (snapshot.humanCheck) return `A human check is on the page (${snapshot.humanCheck}). Only a person can do it: call ask_owner, then look at the page again.`
     const warning = platformWarning(snapshot.alerts)
     if (warning) return `The site shows a warning: "${oneLine(warning, 160)}". Publishing now is unwise: do not try again, call report_result with needs_owner and say what the site shows.`
@@ -548,7 +563,7 @@ export class BrowserToolbox implements McpToolHost {
     if (!option || HAS_PLACEHOLDER.test(option)) return fail('option must be the visible text of an option.')
     // A choice in a list may be a click on anything that is not a list (the application opens it and picks): it is a click, and guarded as one.
     return this.acting(async (page) => {
-      const publisher = await this.postClickProblem(page, reference)
+      const publisher = await this.postClickProblem(page, reference, option)
       if (publisher) return publisher
       const hands = await this.handsOff(page)
       if (hands) return hands

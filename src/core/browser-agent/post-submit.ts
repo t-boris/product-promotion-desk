@@ -338,6 +338,60 @@ export function neverClicked(name: string): boolean {
   return NEVER_CLICKED.test(name)
 }
 
+/**
+ * Controls that set something about the post itself that the owner did not approve: the community it goes to (a picker, "Post to",
+ * "Choose a community"), its flair and tags, NSFW, spoiler, "mark as", a schedule, a crosspost, posting as the profile. The approved
+ * destination is the address of the form, and nothing else of the form is changed by the AI: a post that needs one of these (a community
+ * that requires a flair) ends the mission as needs_owner, which is the safe failure. A post-type tab (Text, Link, Images), a consent or a
+ * dialog-dismiss button is none of them. English and Russian, whole words. LIVE ACCEPTANCE: the words are those of Reddit's two layouts as
+ * far as they are known; they must be checked on a real compose page, which shows what a picker is really called.
+ */
+const POST_SETTING = new RegExp(
+  '(?<![\\p{L}\\p{N}])(?:' +
+    [
+      'flairs?', 'tags?', 'nsfw', 'not\\s+safe\\s+for\\s+work', '18\\s*\\+', 'spoilers?', 'mark(?:ed)?\\s+as', 'schedul(?:e|es|ed|ing)', 'cross-?post(?:s|ed|ing)?',
+      '(?:post|posting)\\s+(?:to|as)', '(?:post|posting)\\s+(?:in|on)(?=\\s+[ru]/)',
+      '(?:choose|select|pick|change|switch)\\s+(?:an?\\s+|the\\s+|your\\s+|another\\s+|different\\s+)?(?:community|communities|subreddit|profile)',
+      'фл[еэ]й?р\\p{L}*', 'тег\\p{L}*', 'метк\\p{L}*', 'отмет\\p{L}*', 'помет\\p{L}*', 'спойлер\\p{L}*', 'для\\s+взрослых', 'запланир\\p{L}*', 'отложен\\p{L}*', 'расписани\\p{L}*', 'кросс-?пост\\p{L}*',
+      '(?:выбер\\p{L}*|выбрать|смен\\p{L}*|изменить)\\s+(?:\\p{L}+\\s+)?(?:сообществ\\p{L}*|профил\\p{L}*)', 'опубликовать\\s+(?:в|от|как)'
+    ].join('|') +
+    ')(?![\\p{L}\\p{N}])',
+  'iu'
+)
+
+/** Whether a control sets the community, flair, tags, NSFW, spoiler, schedule, crosspost or posting-as of a post (see POST_SETTING): a post mission clicks and chooses none of them. */
+export function changesPostSettings(control: { role: string; name: string }): boolean {
+  if (POST_SETTING.test(control.name)) return true
+  // A picker that shows the community or the profile ("r/test", "u/someone" on a button, a list, a box); a link of that name only goes there.
+  return control.role !== 'link' && /^\s*\/?[ru]\/[\w-]+/i.test(control.name)
+}
+
+/** The community a destination of Reddit's shape names ("test" for /r/test), or null. */
+export function communityOf(destination: string): string | null {
+  return composePageOf(destination)?.[1] ?? null
+}
+
+const COMMUNITY_FIELD_NAME = /(?<![\p{L}\p{N}])(?:community|communities|subreddit|сообществ\p{L}*|sr)(?![\p{L}\p{N}])/iu
+const COMMUNITY_FIELD_ROLE = /^(?:input:(?:text|search)|textbox|combobox|select)$/
+
+/**
+ * The community the form shows, when a field of the page says it clearly: a text box, a search box or a list named like a community whose
+ * value is "r/name" (or a plain name of one word). A value of several words ("Choose a community") is a placeholder and says nothing.
+ * Returns the names the fields show, in the lower case, without "r/"; empty when no field says one.
+ */
+export function communitiesShown(elements: { role: string; name: string; value?: string }[]): string[] {
+  const shown: string[] = []
+  for (const e of elements) {
+    if (!COMMUNITY_FIELD_ROLE.test(e.role) || !COMMUNITY_FIELD_NAME.test(e.name) || !e.value) continue
+    const value = e.value.trim().replace(/^\//, '')
+    const prefixed = /^r\/([\w-]+)(?![\w-])/i.exec(value)
+    const plain = /^[\w-]{2,21}$/.exec(value)
+    const name = prefixed?.[1] ?? plain?.[0]
+    if (name) shown.push(name.toLowerCase())
+  }
+  return shown
+}
+
 const PLATFORM_WARNING =
   /\b(?:too many (?:requests|posts|comments|replies|attempts)|you(?:'|’)re doing that too (?:much|often|fast)|rate[- ]?limit(?:ed)?|slow down|try again (?:later|in)|temporarily (?:blocked|restricted|limited|unavailable)|(?:account|you) (?:has|have|is|are|was|were)\s+(?:been\s+)?(?:suspended|banned|restricted|limited|locked)|unusual activity|suspicious activity|verify (?:your )?(?:identity|account))\b/i
 

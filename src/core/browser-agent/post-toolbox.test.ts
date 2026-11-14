@@ -18,6 +18,7 @@ interface Item {
   submits?: boolean
   form?: number
   parent?: string
+  value?: string
 }
 
 /** A compose form that behaves like a site: typed text lands in fields, a press of the submit control posts what the fields hold. */
@@ -362,7 +363,7 @@ describe('a control that publishes is never clicked or chosen by the AI itself, 
 
   it('does not refuse what is not a publishing control: a link, a text box, a button of another purpose', async () => {
     const t = setup()
-    t.page.items.push({ ref: 'e9', role: 'button', name: 'Expand comment' }, { ref: 'e10', role: 'link', name: 'Reply' }, { ref: 'e11', role: 'button', name: 'Add flair' })
+    t.page.items.push({ ref: 'e9', role: 'button', name: 'Expand comment' }, { ref: 'e10', role: 'link', name: 'Reply' }, { ref: 'e11', role: 'button', name: 'Add a link' })
     await look(t)
     for (const ref of ['e5', 'e9', 'e10', 'e11', 'e1']) expect((await t.toolbox.call('browser_click', { ref })).isError).toBeUndefined()
     expect(t.page.clicked).toEqual(['e5', 'e9', 'e10', 'e11', 'e1'])
@@ -431,7 +432,7 @@ describe('a click or a choice of the AI\'s own is made only on the approved dest
     }
   })
 
-  it.each(['Expand comment', 'Show more', 'Cancel', 'Add flair', 'Followers', 'Reportage', 'Blockquote', 'Allowance', 'Comments', 'Sort by: Best', 'Отмена', 'Показать ещё', 'Пожалуйста, подождите'])('does not take "%s" for one of them', async (name) => {
+  it.each(['Expand comment', 'Show more', 'Cancel', 'Followers', 'Reportage', 'Blockquote', 'Allowance', 'Comments', 'Sort by: Best', 'Отмена', 'Показать ещё', 'Пожалуйста, подождите'])('does not take "%s" for one of them', async (name) => {
     const t = setup()
     t.page.items.push({ ref: 'e9', role: 'link', name })
     await look(t)
@@ -443,6 +444,152 @@ describe('a click or a choice of the AI\'s own is made only on the approved dest
     t.page.items.push({ ref: 'e9', role: 'link', name: 'Votes tab' })
     await look(t)
     expect((await t.toolbox.call('browser_click', { ref: 'e9' })).isError).toBe(true)
+  })
+})
+
+describe('a click or a choice never sets the community, flair, tags, NSFW, spoiler, schedule, crosspost or posting-as of a post', () => {
+  const SETTING = { isError: true, text: expect.stringContaining('sets the community, the flair') }
+  const REFUSED = [
+    'Choose a community', 'Select a community', 'Select community', 'Pick a subreddit', 'Change community', 'Switch profile', 'Post to', 'Post to r/test', 'Post as your profile', 'Posting to', 'Post in r/other',
+    'Add flair', 'Flair', 'Edit flair', 'Add tags', 'Tags', 'NSFW', 'Mark as NSFW', 'Not safe for work', '18+', 'Spoiler', 'Mark as spoiler', 'Mark as OC', 'Marked as original content',
+    'Schedule', 'Schedule post', 'Scheduled', 'Crosspost', 'Cross-post', 'Crossposting',
+    'Выберите сообщество', 'Выбрать сообщество', 'Сменить профиль', 'Добавить флер', 'Флэйр', 'Добавить теги', 'Метки', 'Отметить как спойлер', 'Отметить как оригинальный контент', 'Пометить пост', 'Спойлер', 'Для взрослых', 'Запланировать', 'Отложенная публикация', 'Кросспост', 'Опубликовать в сообществе'
+  ]
+
+  it.each(REFUSED)('refuses a click and a choice on a button named "%s", and sends nothing to the page', async (name) => {
+    const t = setup(POST)
+    t.page.items.push({ ref: 'e9', role: 'button', name })
+    await look(t)
+    expect(await t.toolbox.call('browser_click', { ref: 'e9' })).toMatchObject(SETTING)
+    expect(await t.toolbox.call('browser_select', { ref: 'e9', option: 'x' })).toMatchObject(SETTING)
+    expect(t.page.steps).toEqual([])
+  })
+
+  it.each(['link', 'combobox', 'select', 'menuitem', 'tab', 'checkbox', 'option'])('refuses it whatever the role: a %s named "Add flair"', async (role) => {
+    const t = setup(POST)
+    t.page.items.push({ ref: 'e9', role, name: 'Add flair' })
+    await look(t)
+    expect(await t.toolbox.call('browser_click', { ref: 'e9' })).toMatchObject(SETTING)
+    expect(t.page.steps).toEqual([])
+  })
+
+  it.each([
+    ['button', 'r/test'],
+    ['combobox', 'r/other'],
+    ['select', '/r/test'],
+    ['button', 'u/someone'],
+    ['menuitem', 'r/AstroCharts']
+  ])('refuses a picker that shows a community or a profile: a %s named "%s"; a link of that name only goes there', async (role, name) => {
+    const t = setup(POST)
+    t.page.items.push({ ref: 'e9', role, name }, { ref: 'e10', role: 'link', name })
+    await look(t)
+    expect(await t.toolbox.call('browser_click', { ref: 'e9' })).toMatchObject(SETTING)
+    expect((await t.toolbox.call('browser_click', { ref: 'e10' })).isError).toBeUndefined()
+  })
+
+  it.each(['Text', 'Link', 'Images & Video', 'Poll', 'Accept all', 'Reject non-essential', 'Close', 'Got it', 'Dismiss', 'Not now', 'Continue', 'Add a link', 'Tagline', 'Heritage', 'Scheduler', 'Hashtag', 'Spoilerfree', 'Flairs and rules of this place', 'Show more', 'Cancel', 'Post type', 'Назад', 'Закрыть', 'Принять все'])('leaves "%s" clickable: a post type, a consent or a dismiss is not a setting of the post', async (name) => {
+    const t = setup(POST)
+    t.page.items.push({ ref: 'e9', role: 'tab', name })
+    await look(t)
+    // "Flairs and rules of this place" has the whole word "Flairs" in it and is refused on purpose; "Scheduler" and the rest are other words.
+    const refused = ['Flairs and rules of this place'].includes(name)
+    expect((await t.toolbox.call('browser_click', { ref: 'e9' })).isError === true, name).toBe(refused)
+  })
+
+  it('also judges the option the AI names for a list, because the application opens a list that is not a plain one and clicks that option', async () => {
+    for (const option of ['NSFW', 'Add flair', 'Choose a community', 'Delete', 'Report', 'Post', 'Reply', 'Опубликовать', 'Спойлер']) {
+      const t = setup(POST)
+      t.page.items.push({ ref: 'e9', role: 'combobox', name: 'Options' })
+      await look(t)
+      expect(await t.toolbox.call('browser_select', { ref: 'e9', option }), option).toMatchObject({ isError: true })
+      expect(t.page.steps).toEqual([])
+    }
+    const fine = setup(POST)
+    fine.page.items.push({ ref: 'e9', role: 'combobox', name: 'Sort by' })
+    await look(fine)
+    expect((await fine.toolbox.call('browser_select', { ref: 'e9', option: 'Best' })).isError).toBeUndefined()
+  })
+
+  it('does not apply to the other missions: a sign-up may choose a flair or a list', async () => {
+    const t = setup(POST, { post: undefined })
+    t.page.items.push({ ref: 'e9', role: 'button', name: 'Add flair' })
+    await look(t)
+    expect((await t.toolbox.call('browser_click', { ref: 'e9' })).isError).toBeUndefined()
+  })
+})
+
+describe('browser_submit: the community the form shows is the approved one, when a field says it clearly', () => {
+  const field = (t: Setup, name: string, value: string, role = 'input:text') => t.page.items.push({ ref: 'e9', role, name, value, form: undefined })
+  const NOT_THE_COMMUNITY = { isError: true, text: expect.stringContaining('community field shows') }
+
+  it.each([
+    ['Choose a community', 'other'],
+    ['Choose a community', 'r/other'],
+    ['community', '/r/Other'],
+    ['sr', 'other'],
+    ['Subreddit', 'r/testing'],
+    ['Сообщество', 'r/other'],
+    ['Community', 'r/test2 • 1.2M members']
+  ])('does not type or press when the field "%s" shows %j and the approved post goes to r/test', async (name, value) => {
+    for (const role of ['input:text', 'combobox', 'select', 'textbox', 'input:search']) {
+      const t = setup(POST)
+      field(t, name, value, role)
+      await look(t)
+      expect(await submitPost(t), `${role}`).toMatchObject(NOT_THE_COMMUNITY)
+      expect(t.authority.leases).toBe(0)
+      expect(t.page.steps).toEqual([])
+      expect(t.page.posted).toEqual([])
+    }
+  })
+
+  it.each([['Choose a community', 'test'], ['Choose a community', 'r/test'], ['community', '/r/Test'], ['sr', 'TEST'], ['Community', 'r/test • 1.2M members']])('publishes when the field "%s" shows %j: it is the approved community', async (name, value) => {
+    const t = setup(POST)
+    field(t, name, value)
+    await look(t)
+    expect((await submitPost(t)).isError).toBeUndefined()
+  })
+
+  it('says nothing about a field that does not clearly name one: a placeholder, an empty value, a field of another name, another kind of element', async () => {
+    for (const [name, value, role] of [
+      ['Choose a community', 'Choose a community', 'input:text'],
+      ['Choose a community', '', 'input:text'],
+      ['Title', 'other', 'input:text'],
+      ['Community guidelines', 'other', 'button'],
+      ['Community', 'other', 'link'],
+      ['Community', 'r/other', 'checkbox']
+    ] as const) {
+      const t = setup(POST)
+      field(t, name, value, role)
+      await look(t)
+      expect((await submitPost(t)).isError, `${name} ${value} ${role}`).toBeUndefined()
+    }
+  })
+
+  it('is read again at the last look before the press: a form that changed its community while the application typed is not pressed', async () => {
+    const t = setup(POST)
+    field(t, 'Choose a community', 'test')
+    await look(t)
+    t.page.beforeStep = (step) => {
+      if (step.do === 'type' && t.page.fields.size === 1) t.page.items = t.page.items.map((i) => (i.ref === 'e9' ? { ...i, value: 'r/other' } : i))
+    }
+    expect(await submitPost(t)).toMatchObject(NOT_THE_COMMUNITY)
+    expect(t.page.posted).toEqual([])
+    expect(t.authority.committed).toBe(false)
+  })
+
+  it('is a check of the press only: the AI may still look around, and click what is not a setting, on a page whose form shows another community', async () => {
+    const t = setup(POST)
+    field(t, 'Choose a community', 'r/other')
+    await look(t)
+    expect((await t.toolbox.call('browser_click', { ref: 'e5' })).isError).toBeUndefined()
+    expect((await look(t)).isError).toBeUndefined()
+  })
+
+  it('does not apply to a reply: its form has no community', async () => {
+    const t = setup(REPLY)
+    field(t, 'Community', 'r/other')
+    await look(t)
+    expect((await submitReply(t)).isError).toBeUndefined()
   })
 })
 
