@@ -48,6 +48,9 @@ export interface GateGrant {
 
 export type GateDecision = GateGrant | GateBlock
 
+/** What a renewal answers: a fresh ticket for the attempt that is already running, or the reason it is not given. */
+export type TicketRenewal = { allowed: true; ticket: SendTicket } | GateBlock
+
 export class SendBlockedError extends Error {
   constructor(readonly block: GateBlock) {
     super(block.reasons.join(' '))
@@ -129,6 +132,44 @@ export class SendGate {
       contentHash: hash,
       authorizationBasis: approval.approvedBy === 'user' ? `user approval ${approval.id}` : `auto rule ${approval.ruleId}`
     }
+  }
+
+  /**
+   * A fresh single-use ticket for the attempt that is ALREADY running (B1: the AI browser mission). The 3-minute ticket of `authorize`
+   * does not last a mission that opens a browser, composes and waits for the owner's CAPTCHA, and a longer-lived one would outlive the
+   * owner's withdrawal of the approval. So the mission asks again at the moment it is about to submit, and this re-checks what can change
+   * without leaving the page: the attempt is still this one and still open, the approval is still the very one the attempt was reserved
+   * with and still matches the content, account and destination, the disclosure, the single-login rule, the account and channel, the
+   * owner's hold on the browser and the account's limits (without counting this attempt against itself). The live thread is not read
+   * again: that navigates away from the form the mission has filled. Fails closed on anything it cannot confirm.
+   */
+  renewTicket(grant: GateGrant, automatic: boolean): TicketRenewal {
+    const oppId = grant.opportunity.id
+    const open = this.store.openAction(oppId)
+    if (!open || open.id !== grant.actionId || open.state !== 'sending') {
+      return block('hold', 'attempt_gone', 'This send is no longer the attempt in progress, so no further authorization is given.')
+    }
+    let pair: { connector: Connector; ctx: ConnectorContext }
+    try {
+      pair = this.core.connectorContext(grant.channel.id)
+    } catch (error) {
+      return block('hold', 'connector_missing', errorMessage(error))
+    }
+    const req = { opportunityId: oppId, automatic }
+    const now = this.load(oppId)
+    const problem = this.checkApproval(now, req) ?? this.checkSingleLogin(now) ?? this.checkAvailability(now, req, pair.ctx) ?? this.checkLimits(now, grant.actionId)
+    if (problem) return problem
+
+    const { opp, channel, account } = now
+    const draft = now.draft as Draft
+    const approval = this.core.repos.activeApproval(draft.id)
+    const destination = this.store.resolveDestination(opp, channel)
+    const hash = contentHash(draft, account, destination)
+    // The approval, the draft and every bound value must be exactly the ones this attempt was authorized with.
+    if (!approval || approval.id !== grant.approval.id || draft.id !== grant.draft.id || hash !== grant.contentHash || account.id !== grant.account.id || destination !== grant.request.destination) {
+      return block('review', 'approval_stale', 'The approval, the content, the account or the destination is no longer the one this send was authorized for.')
+    }
+    return { allowed: true, ticket: this.core.tickets.issue({ actionId: grant.actionId, contentHash: hash, accountId: account.id, destination }) }
   }
 
   private load(opportunityId: Id): Snapshot {
@@ -277,7 +318,7 @@ export class SendGate {
    * that share an account therefore share one budget, and each channel's own limit is the ceiling it is
    * measured against. That keeps one real login within the platform's tolerance.
    */
-  private checkLimits(s: Snapshot): GateBlock | null {
+  private checkLimits(s: Snapshot, exceptActionId?: Id): GateBlock | null {
     const { channel, account } = s
     const now = this.core.clock.now().getTime()
     const { perHour, perDay } = channel.settings.limits
@@ -286,7 +327,7 @@ export class SendGate {
       { label: 'daily', code: 'limit_day', ms: DAY_MS, max: perDay }
     ]
     for (const w of windows) {
-      const { count, oldest } = this.store.countActions(account.id, new Date(now - w.ms).toISOString())
+      const { count, oldest } = this.store.countActions(account.id, new Date(now - w.ms).toISOString(), exceptActionId)
       if (count >= w.max) {
         // All of the account's channels share one allowance: count what was sent anywhere with this account.
         const next = oldest ? new Date(new Date(oldest).getTime() + w.ms).toISOString() : null

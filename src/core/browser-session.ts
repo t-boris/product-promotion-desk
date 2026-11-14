@@ -105,7 +105,8 @@ export class ControlledSession implements BrowserSession {
       click: async (selector, ticket) => (authorized(ticket), alive(), raw.click(selector)),
       uploadFile: async (selector, path, ticket) => (authorized(ticket), alive(), raw.uploadFile(selector, path)),
       signIn: async (form) => (alive(), raw.signIn(form)),
-      pageStep: async (step, hosts) => (alive(), raw.pageStep(step, hosts))
+      pageStep: async (step, hosts) => (alive(), raw.pageStep(step, hosts)),
+      publishStep: async (step, hosts, ticket) => (authorized(ticket), alive(), raw.pageStep(step, hosts))
     }
   }
 }

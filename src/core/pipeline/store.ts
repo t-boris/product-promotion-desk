@@ -430,14 +430,17 @@ export class FlowStore {
     return row ? mapAction(row) : null
   }
 
-  /** Attempts of the account (all its channels together) that count against its limits since `sinceIso`. */
-  countActions(accountId: Id, sinceIso: string): { count: number; oldest: string | null } {
+  /**
+   * Attempts of the account (all its channels together) that count against its limits since `sinceIso`. `exceptActionId` leaves out the
+   * attempt that is asking: a send in progress must not be counted against itself when its ticket is renewed.
+   */
+  countActions(accountId: Id, sinceIso: string, exceptActionId?: Id): { count: number; oldest: string | null } {
     const row = this.db
       .prepare(
         `SELECT COUNT(*) AS c, MIN(attempted_at) AS oldest FROM send_actions
-         WHERE account_id = ? AND state IN (${OPEN_ACTION_STATES.map(() => '?').join(', ')}) AND attempted_at > ?`
+         WHERE account_id = ? AND state IN (${OPEN_ACTION_STATES.map(() => '?').join(', ')}) AND attempted_at > ? AND id != ?`
       )
-      .get(accountId, ...OPEN_ACTION_STATES, sinceIso) as { c: number; oldest: string | null }
+      .get(accountId, ...OPEN_ACTION_STATES, sinceIso, exceptActionId ?? '') as { c: number; oldest: string | null }
     return { count: row.c, oldest: row.oldest }
   }
 

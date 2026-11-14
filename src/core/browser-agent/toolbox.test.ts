@@ -25,7 +25,11 @@ const browserPage = (raw: ScriptedPage): BrowserPage => ({
   click: async () => undefined,
   uploadFile: async () => undefined,
   signIn: (form) => raw.signIn(form),
-  pageStep: (step, hosts) => raw.pageStep(step, hosts)
+  pageStep: (step, hosts) => raw.pageStep(step, hosts),
+  // A mission without a send ticket never publishes: reaching this is a defect.
+  publishStep: async () => {
+    throw new Error('publishStep needs a send ticket')
+  }
 })
 
 const form = (over: Partial<{ url: string; elements: SnapshotElement[]; alerts: string[]; humanCheck: string; text: string }> = {}) => ({

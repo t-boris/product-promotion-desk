@@ -198,11 +198,17 @@ export interface BrowserPage {
   signIn(form: SignInForm): Promise<{ status: SignInStatus }>
   /**
    * The second write-class operation that needs no SendTicket (DEC-017): one step of the browser agent. It is for work that
-   * publishes nothing (signing up, signing in, looking around, setting up a profile): a task that can publish goes through a
-   * connector with a ticket. It refuses a page outside `hosts` and works only on an element the page snapshot labelled. Typing and
-   * clicking use the browser's own input, as a person's hands would.
+   * publishes nothing (signing up, signing in, looking around, setting up a profile): whatever can publish goes through a
+   * connector with a ticket, or through `publishStep`. It refuses a page outside `hosts` and works only on an element the page snapshot
+   * labelled. Typing and clicking use the browser's own input, as a person's hands would.
    */
   pageStep(step: PageStep, hosts: string[]): Promise<PageStepResult>
+  /**
+   * The same step as `pageStep`, but it needs a valid SendTicket of this account (REQ-004): the way the AI browser puts the approved
+   * content into a form and presses the control that publishes it. The guard refuses it without a genuine, unexpired, unused ticket;
+   * the caller (the post mission, see mission-publisher.ts) holds the ticket and has checked that it is bound to exactly this content.
+   */
+  publishStep(step: PageStep, hosts: string[], ticket: SendTicket): Promise<PageStepResult>
   goto(url: string, options?: { timeoutMs?: number }): Promise<void>
   url(): Promise<string>
   /** Evaluates a read-only script in the page and returns its JSON-serializable result. */
