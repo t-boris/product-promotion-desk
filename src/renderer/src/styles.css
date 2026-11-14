@@ -32,6 +32,8 @@
   /* Elevation and focus. */
   --shadow-pop: 0 12px 32px rgb(16 24 40 / 18%);
   --focus-ring: 0 0 0 2px var(--surface-0), 0 0 0 4px var(--focus);
+  /* The hover of anything on a card or in the sidebar: a lift that can be seen in the dark theme too. */
+  --hover-fill: color-mix(in srgb, var(--text-1) 8%, var(--surface-1));
   /* A 4px spacing grid: every padding, gap and margin comes from here. --titlebar-h clears the window buttons. */
   --space-1: 4px;
   --space-2: 8px;
@@ -298,7 +300,7 @@ code {
   text-decoration: none;
 }
 .nav-item:hover {
-  background: var(--panel-2);
+  background: var(--hover-fill);
 }
 .nav-item.active {
   background: var(--accent);
@@ -431,8 +433,9 @@ a.btn {
   border-radius: var(--control-radius);
   cursor: pointer;
 }
+/* The face changes on hover, the label keeps its own colour: a variant (primary, danger, secondary) sets it and must not lose it here. */
 .btn:hover:not(:disabled) {
-  background: var(--panel-2);
+  background: var(--hover-fill);
 }
 .btn:disabled {
   /* Off at a glance and still legible: no face, a dashed border and the --text-3 label (about 4.5:1 on a card), and
@@ -803,8 +806,8 @@ table.table {
   min-width: 0;
 }
 .btn-quiet:hover:not(:disabled) {
-  background: var(--panel-2);
-  color: var(--text);
+  background: var(--hover-fill);
+  color: var(--text-1);
 }
 .btn-quiet.accent {
   color: var(--accent);
@@ -876,7 +879,7 @@ input[type='radio'] {
   transform: translateX(18px);
 }
 .switch input:focus-visible + .switch-track {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 .switch input:disabled + .switch-track {
@@ -921,9 +924,9 @@ input[type='radio'] {
   background: var(--accent);
   color: var(--accent-text);
 }
-.segmented-option:focus-within {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+.segmented-option:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 
 /* A folded block: the summary is always readable, the long text opens on demand. */
@@ -1146,7 +1149,7 @@ input[type='radio'] {
   border-color: var(--accent);
 }
 .product-card:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -1229,4 +1232,55 @@ input[type='radio'] {
   margin-top: var(--space-1);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* ───────────── Focus and hover (BUG-021) ───────────── */
+
+/* One focus ring for every interactive element, for keyboard focus: a 2px gap and 2px of --focus. The hidden inputs of
+   switches and segmented controls ring their visible part instead (above). */
+:where(a[href], button, summary, select, textarea, input, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Everything clickable reacts to the pointer. */
+.tab:not(.active):hover {
+  color: var(--text-1);
+  background: var(--hover-fill);
+}
+.tab {
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+.disclosure > summary {
+  border-radius: calc(var(--radius) - 1px);
+}
+.disclosure > summary:hover {
+  background: var(--hover-fill);
+}
+.more > summary:hover,
+a:not(.btn):not(.badge):not(.nav-item):hover,
+.link-btn:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 2px;
+}
+.input:hover:not(:disabled):not(:focus) {
+  border-color: var(--line-strong);
+}
+
+/* Changes of state are short, and stop under Reduce motion (the tokens are 0ms there). */
+.btn,
+.nav-item,
+.tab,
+.disclosure > summary,
+.menu-item,
+.list-row.selectable,
+.product-card,
+.input,
+.segmented-option {
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    filter var(--dur-fast) var(--ease-out);
 }

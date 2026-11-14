@@ -50,6 +50,15 @@
 .mode-option.selected {
   border-color: var(--accent);
 }
+.mode-option:not(.selected):not(.blocked):hover {
+  border-color: var(--line-strong);
+  background: var(--hover-fill);
+}
+.mode-option {
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
 .mode-option.blocked {
   opacity: 0.6;
 }
@@ -209,6 +218,9 @@ textarea.input.short {
 .acct-more > summary {
   cursor: pointer;
   color: var(--muted);
+}
+.acct-more > summary:hover {
+  color: var(--text-1);
 }
 .acct-more-body {
   display: flex;
