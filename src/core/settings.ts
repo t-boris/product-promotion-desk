@@ -1,10 +1,11 @@
 import type { AppSettings } from '../shared/types'
+import { DEFAULT_WEB_PORT } from '../shared/web-port'
 import { parseJson, toJson, type Db } from './db/database'
 
 export const DEFAULT_SETTINGS: AppSettings = {
   engineId: null,
   notifications: true,
-  webMode: { enabled: false, port: 47615 }
+  webMode: { enabled: false, port: DEFAULT_WEB_PORT }
 }
 
 /** Key/value settings persisted in SQLite. Also used for small pieces of runtime state (e.g. pause flag). */

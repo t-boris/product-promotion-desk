@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import type { Core } from '../core/core'
+import { usablePort } from '../shared/web-port'
 import { startWebServer, type RunningWebServer } from './web-server'
 
 /**
@@ -24,7 +25,8 @@ export class WebModeController {
   private desired(): { enabled: boolean; port: number } {
     const stored = this.core.settings.app().webMode
     const forced = process.env.PPD_WEB_MODE === '1'
-    const port = Number(process.env.PPD_WEB_PORT) || stored.port
+    // An older build stored any number: a port the server cannot listen on means the default, not a failed start (BUG-044).
+    const port = Number(process.env.PPD_WEB_PORT) || usablePort(stored.port)
     return { enabled: forced || stored.enabled, port }
   }
 

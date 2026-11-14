@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { EngineId } from '../../../shared/types'
+import { parseWebPort, usablePort } from '../../../shared/web-port'
 import { call, useAction, useQuery } from '../hooks'
 import { Icon } from '../icons'
 import { Badge, Button, Card, EmptyState, ErrorNote, Hint, Loading, More, Page, Switch } from '../ui'
@@ -11,18 +12,50 @@ export function SettingsPage() {
   const engines = useQuery('engines.list', undefined, ['settings'])
   const settings = useQuery('app.settings.get', undefined, ['settings'])
   const info = useQuery('app.info', undefined, ['settings'])
-  const [port, setPort] = useState<string>('')
+  // The port field: what the owner typed and has not applied yet (null shows the port in use), and why it was refused.
+  const [draft, setDraft] = useState<string | null>(null)
+  const [portError, setPortError] = useState<string | null>(null)
 
   const [selectEngine, selecting] = useAction((id: EngineId) => call('engines.select', { id }))
   const [recheck, rechecking] = useAction(async () => {
     engines.reload()
   })
   const [update, updating] = useAction((patch: Parameters<typeof call<'app.settings.update'>>[1]) => call('app.settings.update', patch))
+  // A port edit has its own action, so applying it when the field loses focus does not disable the switch under the next click.
+  const [updatePort, updatingPort] = useAction((patch: Parameters<typeof call<'app.settings.update'>>[1]) => call('app.settings.update', patch))
 
   const current = settings.data
   const recommendedId = recommendedEngineId(engines.data ?? [])
   const anySelected = engines.data?.some((engine) => engine.id === current?.engineId) ?? false
-  const portValue = port || String(current?.webMode.port ?? 47615)
+  const webEnabled = current?.webMode.enabled ?? false
+  const portInUse = usablePort(current?.webMode.port)
+  // The field shows the port in use as soon as it changes, applied here or elsewhere, so it never shows another one.
+  useEffect(() => {
+    setDraft(null)
+    setPortError(null)
+  }, [portInUse])
+
+  /** The port to use now: the typed one when it is valid, else null with the reason beside the field. */
+  const checkedPort = (): number | null => {
+    if (draft === null) return portInUse
+    const parsed = parseWebPort(draft)
+    setPortError(parsed.ok ? null : parsed.message)
+    return parsed.ok ? parsed.port : null
+  }
+  /** A valid port applies when the field loses focus or on Enter; an invalid one stays in the field with its reason and nothing is sent. */
+  const applyPort = async (): Promise<void> => {
+    const port = checkedPort()
+    if (port === null) return
+    const saved = port === portInUse ? undefined : await updatePort({ webMode: { enabled: webEnabled, port } })
+    // Nothing to change, or the change was refused (the reason is above): the field shows the port in use again.
+    if (!saved) setDraft(null)
+  }
+  /** The switch never turns access on with a port that cannot work, and turns it off whatever the field says. */
+  const toggleWeb = (next: boolean): void => {
+    const port = checkedPort()
+    if (next && port === null) return
+    void update({ webMode: { enabled: next, port: port ?? portInUse } })
+  }
 
   return (
     <Page title="Settings" subtitle="AI engine, notifications, local web access and version">
@@ -108,20 +141,38 @@ export function SettingsPage() {
         <More label="How it is protected">
           <Hint>It needs the secret link below, is reachable only from this computer, and cannot send anything without the same approvals the app always requires. Off by default.</Hint>
         </More>
-        <ErrorNote error={updating.error} />
+        <ErrorNote error={updating.error ?? updatingPort.error} />
         <div className="rows">
           <div className="group-row">
-            <Switch
-              checked={current?.webMode.enabled ?? false}
-              disabled={!current || updating.busy}
-              onChange={(next) => void update({ webMode: { enabled: next, port: Number(portValue) || 47615 } })}
-              label="Enable local web access"
-              testId="web-switch"
-            />
+            <Switch checked={webEnabled} disabled={!current || updating.busy} onChange={toggleWeb} label="Enable local web access" testId="web-switch" />
           </div>
           <label className="group-row">
-            <span className="field-label">Port</span>
-            <input className="input port-input" value={portValue} onChange={(e) => setPort(e.target.value)} inputMode="numeric" />
+            <span className="port-label">
+              <span className="field-label">Port</span>
+              {portError && (
+                <span className="hint bad" id="web-port-error" role="alert" data-testid="web-port-error">
+                  {portError}
+                </span>
+              )}
+            </span>
+            <input
+              className="input port-input"
+              value={draft ?? String(portInUse)}
+              onChange={(e) => {
+                setDraft(e.target.value)
+                setPortError(null)
+              }}
+              onBlur={() => void applyPort()}
+              onKeyDown={(e) => {
+                // Enter applies and stays in the field, so a refused port is fixed where it is and the cursor is not thrown to the page; a held key sends one update.
+                if (e.key === 'Enter' && !updatingPort.busy) void applyPort()
+              }}
+              inputMode="numeric"
+              disabled={!current}
+              aria-invalid={portError !== null}
+              aria-describedby={portError ? 'web-port-error' : undefined}
+              data-testid="web-port"
+            />
           </label>
           {info.data?.webMode.enabled && info.data.webMode.url && (
             <p className="web-link">

@@ -412,7 +412,7 @@ Texts are the current ones and do not change.
 | Screen / state | Target pattern | Filled | Empty state → next step |
 |---|---|---|---|
 | AI engine | Group box; one row per engine (name, version, tags, two `--text-2` lines, Details disclosure; "In use" check or "Use this engine") | "Use this engine" only when recommended and none is selected | "No AI engines found" |
-| Notifications, local web access | Group boxes with label-left rows and switches; Port field | none | — |
+| Notifications, local web access | Group boxes with label-left rows and switches; Port field (1024–65535, applied on blur or Enter; a refused port shows its reason under the label in `--error` and the switch stays off, BUG-044) | none | — |
 | What the AI learned (`LessonsCard`) | Group box: add row (field + pop-up + "Add the rule" secondary), saved rules as rows | none | "Nothing learned yet." |
 | About | Group box of label/value rows | none | — |
 
