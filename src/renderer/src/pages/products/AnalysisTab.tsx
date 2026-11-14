@@ -1,7 +1,7 @@
 import type { AnalysisStageName, PassportView } from '../../../../shared/types'
 import { call, useAction, useQuery } from '../../hooks'
 import { productHref } from '../../route'
-import { Badge, Button, Card, ErrorNote, formatTime, Hint } from '../../ui'
+import { Badge, Button, Card, ErrorNote, formatTime, Hint, useMainVariant } from '../../ui'
 import { describeSources, planStages, progressOf, type PlannedStage } from './analysis-plan'
 import { ANALYSIS_LABELS, ANALYSIS_TONES, STAGE_LABELS, STAGE_STATUS_LABELS, STAGE_TONES } from './labels'
 
@@ -41,6 +41,8 @@ export function AnalysisTab({ view }: { view: PassportView }) {
   const noSources = view.sources.length === 0
   // The one reason the button is off, at reading size beside it. The engine has its own note below.
   const blocked = noSources ? 'Add a source first: there is nothing to analyze.' : null
+  // Starting the analysis is the main action of this tab, unless the product's edit form is open and owns the filled button.
+  const mainVariant = useMainVariant()
 
   return (
     <div className="stack" data-testid="analysis-tab">
@@ -52,7 +54,7 @@ export function AnalysisTab({ view }: { view: PassportView }) {
               {stopping.busy ? 'Stopping…' : 'Stop'}
             </Button>
           ) : (
-            <Button variant="primary" onClick={() => void start()} disabled={starting.busy || (engineKnown && !engineReady) || noSources} title={blocked ?? undefined} data-testid="analysis-start">
+            <Button variant={mainVariant} onClick={() => void start()} disabled={starting.busy || (engineKnown && !engineReady) || noSources} title={blocked ?? undefined} data-testid="analysis-start">
               {starting.busy ? 'Starting…' : startLabel}
             </Button>
           )
@@ -89,20 +91,20 @@ export function AnalysisTab({ view }: { view: PassportView }) {
             <li>Running it again after it is complete starts over and adds new proposals to a draft. The approved passport is not changed.</li>
           </ul>
           {engineKnown && !engineReady && (
-            <div className="warn-note" data-testid="analysis-no-engine">
+            <div className="note warn" data-testid="analysis-no-engine">
               {engine ? `${engine.label} is not ready${engine.detail ? ` (${engine.detail})` : ''}.` : 'No AI engine is selected.'} Analysis needs one. You can still fill in the passport by hand on the Passport tab, or{' '}
               <a href="#/settings">choose an engine in Settings</a>.
             </div>
           )}
           <ErrorNote error={starting.error ?? stopping.error} />
         </div>
+        <div className="rows analysis-steps" data-testid="analysis-stages">
+          {planned.map((p) => (
+            <StageRow key={p.stage.name} planned={p} />
+          ))}
+        </div>
       </Card>
 
-      <div className="stack" data-testid="analysis-stages">
-        {planned.map((p) => (
-          <StageRow key={p.stage.name} planned={p} />
-        ))}
-      </div>
     </div>
   )
 }

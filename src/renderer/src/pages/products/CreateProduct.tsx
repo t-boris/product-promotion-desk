@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import type { Product } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Button, Card, ErrorNote, Field } from '../../ui'
+import { Button, Card, ErrorNote, Field, useOpenForm } from '../../ui'
 
 /** A product starts from a name plus a website address and/or a description; everything else is added later. */
 export function CreateProduct({ onCreated, onCancel }: { onCreated: (product: Product) => void; onCancel: () => void }) {
+  useOpenForm()
   const [name, setName] = useState('')
   const [websiteUrl, setWebsiteUrl] = useState('')
   const [description, setDescription] = useState('')

@@ -76,12 +76,14 @@ export const MEASURE = `(() => {
   const vis = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 }
   const controls = [...document.querySelectorAll('button, input:not([type=hidden]), select, textarea, a.btn, [role=tab]')].filter(vis).map((e) => {
     const r = e.getBoundingClientRect(); const cs = getComputedStyle(e)
-    return { tag: e.tagName.toLowerCase() + (e.type ? ':' + e.type : ''), text: (e.textContent || e.placeholder || e.getAttribute('aria-label') || '').trim().slice(0, 28), w: Math.round(r.width), h: Math.round(r.height), fs: cs.fontSize }
+    return { tag: e.tagName.toLowerCase() + (e.type ? ':' + e.type : ''), role: e.getAttribute('role'), text: (e.textContent || e.placeholder || e.getAttribute('aria-label') || '').trim().slice(0, 28), w: Math.round(r.width), h: Math.round(r.height), fs: cs.fontSize }
   })
-  const small = controls.filter((c) => c.h < 28 && !/checkbox|radio/.test(c.tag)).length
+  // A tab is a segment inside a 28px track (the track is the control, §7), and a text area is taller by nature.
+  const smallList = controls.filter((c) => c.h < 28 && !/checkbox|radio/.test(c.tag) && c.role !== 'tab')
+  const small = smallList.length
   const tiny = [...document.querySelectorAll('*')].filter((e) => e.children.length === 0 && e.textContent.trim() && vis(e) && parseFloat(getComputedStyle(e).fontSize) < 12).length
-  const wrapped = controls.filter((c) => /button|a/.test(c.tag.split(':')[0]) && c.h > 44).map((c) => c.text)
-  return { scrollW: document.documentElement.scrollWidth, innerW: window.innerWidth, hOverflow: document.documentElement.scrollWidth > window.innerWidth + 1 || (document.querySelector('.content') ? document.querySelector('.content').scrollWidth > document.querySelector('.content').clientWidth + 1 : false), controls: controls.length, smallControls: small, tinyTextNodes: tiny, tallButtons: wrapped, route: location.hash }
+  const wrapped = controls.filter((c) => /button|a/.test(c.tag.split(':')[0]) && c.h > 44 && !c.tag.startsWith('textarea')).map((c) => c.text)
+  return { scrollW: document.documentElement.scrollWidth, innerW: window.innerWidth, hOverflow: document.documentElement.scrollWidth > window.innerWidth + 1 || (document.querySelector('.content') ? document.querySelector('.content').scrollWidth > document.querySelector('.content').clientWidth + 1 : false), controls: controls.length, smallControls: small, smallList: smallList.map((c) => c.tag + ' ' + c.h + 'px ' + c.text), tinyTextNodes: tiny, tallButtons: wrapped, route: location.hash }
 })()`
 
 // Extra facts a visual spec needs, on top of the sweep of lesson 12/25.

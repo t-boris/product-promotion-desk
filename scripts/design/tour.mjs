@@ -10,7 +10,8 @@ const OUT = `${outDir}/shots`
 fs.mkdirSync(OUT, { recursive: true })
 const log = (...a) => console.log(...a)
 
-const p = await start({ app: appPath, dataDir: `${outDir}/data`, port: Number(port) })
+// TOUR_ARGS (JSON array) and TOUR_CWD run a development build: the Electron binary with the app folder as its argument.
+const p = await start({ app: appPath, args: process.env.TOUR_ARGS ? JSON.parse(process.env.TOUR_ARGS) : [], cwd: process.env.TOUR_CWD, dataDir: `${outDir}/data`, port: Number(port) })
 const metrics = {}
 const theme = (value) => p.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value }] })
 const snap = async (name, { full = false } = {}) => {

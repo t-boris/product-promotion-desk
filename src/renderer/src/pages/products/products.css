@@ -5,7 +5,21 @@
 .pane {
   display: flex;
   flex-direction: column;
+  gap: var(--space-2);
+}
+/* The group boxes of a tab sit a step further apart than the header, the path and the tabs above them. */
+.pane > .stack {
   gap: var(--space-3);
+}
+/* The object's name, its facts and its actions are one block. */
+.obj {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.obj .kv {
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
 }
 
 textarea.input.short {
@@ -143,18 +157,6 @@ textarea.input.short {
 .warn-text {
   color: var(--warn);
 }
-.warn-note {
-  background: var(--warn-bg);
-  color: var(--text-1);
-  border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3);
-  margin: var(--space-2) 0;
-}
-.warn-note a {
-  color: inherit;
-  font-weight: var(--fw-semibold);
-}
-
 .progress {
   height: 6px;
   border-radius: var(--radius-pill);
@@ -242,6 +244,10 @@ textarea.input.short {
 .list-row.not-needed strong {
   color: var(--text-2);
   font-weight: var(--fw-medium);
+}
+.analysis-steps {
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--line);
 }
 .analysis-points {
   margin: 0;

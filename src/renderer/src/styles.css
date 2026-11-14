@@ -1766,7 +1766,7 @@ input[type='radio'] {
   display: inline-flex;
   align-items: center;
   gap: var(--icon-gap);
-  height: var(--control-h);
+  height: 24px;
   padding: 0 var(--icon-gap);
   border-radius: var(--radius-pill);
   color: var(--text-2);

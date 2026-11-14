@@ -106,7 +106,7 @@ export function PassportTab({ view, onOpenAnalysis }: { view: PassportView; /** 
               <strong>No passport yet.</strong> Run the analysis to draft it from your sources, or add the first statement yourself.
             </p>
             <div className="row">
-              <Button variant="primary" onClick={onOpenAnalysis} data-testid="passport-open-analysis">
+              <Button variant={mainVariant} onClick={onOpenAnalysis} data-testid="passport-open-analysis">
                 Open Analysis
               </Button>
               {approveButton}
@@ -166,8 +166,8 @@ export function PassportTab({ view, onOpenAnalysis }: { view: PassportView; /** 
             </span>
           </div>
           {/* The reason the button is off stands next to it, at reading size, not as a small grey line below the banners. */}
-          {blocker && version?.status === 'draft' && (
-            <Hint tone="strong" className="blocker" data-testid="approve-blocker">
+          {blocker && (
+            <Hint tone={version?.status === 'draft' ? 'strong' : undefined} className="blocker" data-testid="approve-blocker">
               {blocker}
             </Hint>
           )}
@@ -181,7 +181,7 @@ export function PassportTab({ view, onOpenAnalysis }: { view: PassportView; /** 
             </div>
           )}
           {summary.unconfirmed > 0 && (
-            <div className="warn-note" data-testid="unconfirmed-banner">
+            <div className="note warn" data-testid="unconfirmed-banner">
               {summary.unconfirmed} statement{summary.unconfirmed === 1 ? '' : 's'} found only in the project code. Confirm that users can really use {summary.unconfirmed === 1 ? 'it' : 'them'} before approving.
             </div>
           )}

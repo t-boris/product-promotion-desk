@@ -60,7 +60,7 @@ export function ProductHeader({ view, onDeleted, onOpenTab }: { view: PassportVi
   })
 
   return (
-    <>
+    <div className="obj">
       <ObjectHeader
         title={product.name}
         actions={
@@ -124,6 +124,6 @@ export function ProductHeader({ view, onDeleted, onOpenTab }: { view: PassportVi
         </dl>
       )}
       <ErrorNote error={removing.error} />
-    </>
+    </div>
   )
 }
