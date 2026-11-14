@@ -39,7 +39,27 @@ function Section({ section, view }: { section: PassportSection; view: PassportVi
   )
 }
 
-export function PassportTab({ view }: { view: PassportView }) {
+/** One line of the empty passport's checklist (BUG-019): the section, what belongs there, and "+ Add statement". */
+function SectionRow({ section, view }: { section: PassportSection; view: PassportView }) {
+  const [adding, setAdding] = useState(false)
+  return (
+    <li data-testid={`section-${section}`}>
+      <div className="checklist-head">
+        <span className="checklist-mark" aria-hidden="true" />
+        <span className="checklist-text">
+          <strong>{SECTION_LABELS[section]}</strong>
+          <span className="hint">{SECTION_HINTS[section]}</span>
+        </span>
+        <Button variant="quiet" className="accent" onClick={() => setAdding(true)} disabled={adding} aria-label={`Add statement to ${SECTION_LABELS[section]}`} data-testid={`add-claim-${section}`}>
+          + Add statement
+        </Button>
+      </div>
+      {adding && <ClaimForm productId={view.product.id} section={section} onDone={() => setAdding(false)} />}
+    </li>
+  )
+}
+
+export function PassportTab({ view, onOpenAnalysis }: { view: PassportView; /** Opens the Analysis tab, the usual way to fill an empty passport. */ onOpenAnalysis: () => void }) {
   const summary = summarize(view.claims)
   const blocker = approvalBlocker(view)
   const { approve: bulk, needLook } = approvableClaims(view.claims)
@@ -60,6 +80,59 @@ export function PassportTab({ view }: { view: PassportView }) {
     }
   })
   const version = view.version
+  // No statement and no approved passport: the next step is the analysis, not the approval (BUG-019). A draft emptied by
+  // deleting every statement of an approved passport keeps the usual layout, with its version and the approved badge.
+  const empty = view.claims.length === 0 && view.product.activePassportVersionId === null
+  const approveButton = (
+    <Button
+      variant={empty ? 'ghost' : 'primary'}
+      onClick={() => void approve()}
+      disabled={blocker !== null || approving.busy || approvingAll.busy}
+      title={blocker ?? 'Make this the passport that drafting and review rely on'}
+      data-testid="approve-passport"
+    >
+      {approving.busy ? 'Approving…' : 'Approve passport'}
+    </Button>
+  )
+
+  if (empty) {
+    return (
+      <div className="stack" data-testid="passport-tab">
+        <Card title="Product passport">
+          <div className="stack">
+            <p className="passport-lead" data-testid="passport-empty-lead">
+              <strong>No passport yet.</strong> Run the analysis to draft it from your sources, or add the first statement yourself.
+            </p>
+            <div className="row">
+              <Button variant="primary" onClick={onOpenAnalysis} data-testid="passport-open-analysis">
+                Open Analysis
+              </Button>
+              {approveButton}
+              <Hint data-testid="approve-blocker">Nothing to approve yet.</Hint>
+            </div>
+            <div className="row" data-testid="passport-status">
+              <span className="hint">
+                {summary.approved} approved · {summary.proposed} to review
+              </span>
+            </div>
+            <More label="How the passport works">
+              <Hint>Only approved statements are used for drafting and checks.</Hint>
+              <Hint>Your edits go into a new draft; the approved version stays as it was until you approve the draft.</Hint>
+            </More>
+            <ErrorNote error={approving.error} />
+          </div>
+        </Card>
+        <Card title="Sections">
+          <ol className="passport-checklist">
+            {PASSPORT_SECTIONS.map((section) => (
+              <SectionRow key={section} section={section} view={view} />
+            ))}
+          </ol>
+        </Card>
+        <VersionsCard productId={view.product.id} />
+      </div>
+    )
+  }
 
   return (
     <div className="stack" data-testid="passport-tab">
@@ -72,9 +145,7 @@ export function PassportTab({ view }: { view: PassportView }) {
                 {approvingAll.busy ? 'Approving…' : `Approve all ${bulk.length} proposed`}
               </Button>
             )}
-            <Button variant="primary" onClick={() => void approve()} disabled={blocker !== null || approving.busy || approvingAll.busy} title={blocker ?? 'Make this the passport that drafting and review rely on'} data-testid="approve-passport">
-              {approving.busy ? 'Approving…' : 'Approve passport'}
-            </Button>
+            {approveButton}
           </>
         }
       >

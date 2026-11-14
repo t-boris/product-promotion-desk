@@ -200,6 +200,45 @@ textarea.input.short {
   }
 }
 
+/* An empty passport (BUG-019): one leading line with the next step, and the eight sections as a compact checklist. */
+.passport-lead {
+  margin: 0;
+  font-size: var(--fs-title);
+  line-height: var(--lh-prose);
+}
+.passport-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.passport-checklist > li {
+  padding: var(--space-1) 0;
+  border-top: 1px solid var(--line);
+}
+.passport-checklist > li:first-child {
+  border-top: 0;
+}
+.checklist-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.checklist-mark {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--line-strong);
+  border-radius: 50%;
+}
+.checklist-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-2);
+}
+
 /* A section with nothing in it is one slim line; a statement keeps a calm vertical rhythm. */
 .passport-section.compact {
   padding-top: var(--space-2);

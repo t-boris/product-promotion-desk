@@ -67,7 +67,7 @@ export function ProductDetail({
       </div>
       <ErrorNote error={passport.error} />
       {tab === 'sources' && <SourcesTab view={view} />}
-      {tab === 'passport' && <PassportTab view={view} />}
+      {tab === 'passport' && <PassportTab view={view} onOpenAnalysis={() => onTabChange('analysis')} />}
       {tab === 'analysis' && <AnalysisTab view={view} />}
       {tab === 'goal' && <GoalTab product={view.product} onOpenResults={() => onTabChange('results')} />}
       {tab === 'channels' && <ChannelsPanel productId={productId} />}
