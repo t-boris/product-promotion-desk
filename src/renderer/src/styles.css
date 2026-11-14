@@ -971,6 +971,9 @@ select.input {
 .modal-actions {
   justify-content: flex-end;
 }
+.modal-actions .modal-stop {
+  order: -1;
+}
 .row.nowrap {
   flex-wrap: nowrap;
 }

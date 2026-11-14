@@ -257,7 +257,8 @@
   flex-wrap: wrap;
   gap: var(--space-2) var(--space-3);
 }
-/* The rare ones (defer, reject) on the left, quiet; what moves the item on on the right. */
+/* The rare ones (defer, reject) on the left, quiet; what moves the item on on the right. The side group comes last in the markup, so
+   Tab ends on Reject, and `order` puts it first on screen (BUG-039). */
 .review-actions-side,
 .review-actions-main {
   display: flex;
@@ -268,6 +269,9 @@
 .review-actions-main {
   margin-left: auto;
   justify-content: flex-end;
+}
+.review-actions-side {
+  order: -1;
 }
 .review-actions-note {
   flex: 1 1 240px;

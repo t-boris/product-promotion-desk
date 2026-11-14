@@ -610,6 +610,9 @@ Decisions taken while converting, so the next reader does not reopen them:
 - "Older discussions" keeps its button and the texts "Show (N)" / "Hide": the QA scenarios use them (spec §13). The state filter of Opportunities stays a group of
   buttons with `aria-pressed` (a `SegmentedControl` would turn them into radio inputs and change their roles).
 - A segment of a segmented track is 24 px inside the 28 px track (§7); the tour does not count it as a small control.
-- The DOM order of the review actions changed (Defer, Reject first; "Approve and send" before "Approve"); names, roles and test ids did not.
+- The DOM order of the review actions is the main actions first ("Save draft", "Draft with AI", "Approve and send", "Approve"), then Defer and Reject, so Tab ends on Reject
+  (as in 0.8.0); `.review-actions-side { order: -1 }` keeps them at the left on screen. Reject asks inline (`ConfirmAction`, focus on Cancel). The AI question sheet is the
+  same: "Show the browser", "I’m done", then "Stop the AI" in the markup, `.modal-stop { order: -1 }` keeps it at the left; it asks nothing, a mission can be started
+  again. Names, roles and test ids did not change (BUG-039).
 - `.dot.info` and `textarea.input.short` are defined in a page css file and should move to `styles.css` with the next shared change.
 

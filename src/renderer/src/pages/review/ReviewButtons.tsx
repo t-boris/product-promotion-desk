@@ -1,6 +1,6 @@
 import type { DraftInput } from '../../../../shared/api'
 import type { OpportunityCard } from '../../../../shared/types'
-import { Button, useMainVariant } from '../../ui'
+import { Button, ConfirmAction, useMainVariant } from '../../ui'
 import { approveLabels } from './approve-labels'
 import { PREPARABLE_STATES } from './labels'
 import { mainActionOf } from './main-action'
@@ -19,7 +19,9 @@ interface Props {
 
 /**
  * The buttons of a review card, chosen by the state of the item so the owner only sees what makes sense. The main action is
- * the rightmost; the rare ones (defer, reject) are quiet and sit at the left, away from the approving buttons.
+ * the rightmost; the rare ones (defer, reject) are quiet and sit at the left, away from the approving buttons. In the markup the
+ * main actions come first and the rare ones last, so Tab reaches Reject after everything else and never first (BUG-039); the
+ * stylesheet puts them at the left. Reject cannot be undone, so it asks first, in its own place.
  */
 export function ReviewButtons({ card, actions, dirty, input, primaryAction = false }: Props) {
   const { opportunity: opp } = card
@@ -51,16 +53,6 @@ export function ReviewButtons({ card, actions, dirty, input, primaryAction = fal
   const label = approveLabels(dirty)
   return (
     <div className="review-actions" data-testid="review-buttons">
-      <div className="review-actions-side">
-        {opp.state !== 'deferred' && (
-          <Button variant="quiet" onClick={() => void actions.defer(id)} disabled={busy} data-testid="defer">
-            Defer
-          </Button>
-        )}
-        <Button variant="quiet" className="danger" onClick={() => void actions.reject(id)} disabled={busy} data-testid="reject">
-          Reject
-        </Button>
-      </div>
       <div className="review-actions-main">
         {main === 'approve' && !hasText && (
           <span className="muted small" data-testid="approve-reason">
@@ -91,6 +83,24 @@ export function ReviewButtons({ card, actions, dirty, input, primaryAction = fal
             </Button>
           </>
         )}
+      </div>
+      <div className="review-actions-side">
+        {opp.state !== 'deferred' && (
+          <Button variant="quiet" onClick={() => void actions.defer(id)} disabled={busy} data-testid="defer">
+            Defer
+          </Button>
+        )}
+        <ConfirmAction
+          label="Reject"
+          variant="quiet"
+          className="danger"
+          question="Rejects this for good. A rejected item cannot be reopened."
+          confirmLabel="Reject"
+          onConfirm={() => actions.reject(id)}
+          disabled={busy}
+          testId="reject"
+          confirmTestId="reject-confirm"
+        />
       </div>
     </div>
   )

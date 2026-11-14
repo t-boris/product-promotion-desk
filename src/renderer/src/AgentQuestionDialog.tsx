@@ -57,16 +57,17 @@ export function AgentQuestionDialog() {
             </Button>
           </div>
         </form>
-        {/* A sheet's actions sit at the right and the filled one is last, as in a macOS sheet. */}
+        {/* A sheet's actions sit at the right and the filled one is last, as in a macOS sheet. "Stop the AI" is the last in the markup, so Tab
+            reaches it after the helpful ones, and is first on screen (`.modal-stop`, BUG-039). It asks nothing: the mission can be started again. */}
         <div className="row modal-actions">
-          <Button variant="danger" onClick={() => void stop()} disabled={busy} data-testid="agent-question-stop">
-            Stop the AI
-          </Button>
           <Button onClick={() => void show()} disabled={showing.busy} data-testid="agent-question-show">
             Show the browser
           </Button>
           <Button variant="primary" onClick={() => void send('done')} disabled={busy} data-testid="agent-question-done">
             I’m done
+          </Button>
+          <Button variant="danger" className="modal-stop" onClick={() => void stop()} disabled={busy} data-testid="agent-question-stop">
+            Stop the AI
           </Button>
         </div>
         <ErrorNote error={sending.error ?? showing.error ?? stopping.error ?? questions.error} />
