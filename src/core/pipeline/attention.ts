@@ -78,7 +78,8 @@ function accountItems(core: Core): AttentionItem[] {
     const base = { refType: 'account' as const, refId: account.id, createdAt: account.createdAt }
     const who = account.identity ? `${account.label} (${account.identity})` : account.label
     if (account.status === 'login_required') {
-      items.push({ id: `login:${account.id}`, kind: 'login', title: `Sign in again to ${who}`, detail: 'The login expired. Work on this account is suspended until you sign in.', ...base })
+      // Also the state of an account that was never signed in, so the wording says neither "again" nor "expired" (BUG-052).
+      items.push({ id: `login:${account.id}`, kind: 'login', title: `Sign in to ${who}`, detail: 'This account is not signed in. Work on this account is suspended until you sign in.', ...base })
     } else if (account.status === 'captcha') {
       items.push({ id: `captcha:${account.id}`, kind: 'captcha', title: `Solve the CAPTCHA for ${who}`, detail: 'The platform asks for a human check. Work on this account is suspended until you complete it.', ...base })
     } else if (account.status === 'suspended') {
