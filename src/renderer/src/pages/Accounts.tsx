@@ -26,8 +26,9 @@ function useAccountsRoute(): AccountsRoute {
  * e-mail address and a password, and signed in. It is only about the account: channels and products are not shown here; an
  * account is chosen where a channel is connected.
  *
- * One filled button per screen state (visual-system.md §10.3): the header's "Add account" is a bezel; the new-account form owns the
- * filled button while it is open (the scope below makes the account behind it step back), otherwise the next step of the account.
+ * One filled button per screen state (visual-system.md §10.3): the header's "Add account" is a bezel, off while the new-account form
+ * is on screen (like "New product"); the form owns the filled button while it is open (the scope below makes the account behind it
+ * step back), otherwise the next step of the account.
  */
 function AccountsScreen() {
   const accounts = useQuery('accounts.list', undefined, ['accounts'])
@@ -73,7 +74,7 @@ function AccountsScreen() {
       title="Accounts"
       subtitle="Your logins on the platforms, and the profiles (people) behind them: a profile has one login per platform."
       actions={
-        <Button icon="plus" onClick={goNew} data-testid="account-add">
+        <Button icon="plus" onClick={goNew} disabled={adding} data-testid="account-add">
           Add account
         </Button>
       }
