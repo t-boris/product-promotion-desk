@@ -1201,6 +1201,37 @@ input[type='radio'] {
   flex-direction: column;
 }
 
+/* Getting started leads an empty Attention page while a step is open (BUG-024): a display headline, the launch path, one
+   filled button for the next step and the list of steps. */
+.start-hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6);
+}
+.start-eyebrow {
+  margin: 0 0 calc(var(--space-3) * -1);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--text-2);
+}
+.card .start-headline {
+  font-size: var(--fs-display);
+  line-height: var(--lh-title);
+}
+.start-steps li.next .start-mark {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-tint);
+}
+/* "Nothing needs you right now" is one line while Getting started leads. */
+.nothing-line {
+  margin: 0;
+  color: var(--text-2);
+}
+.nothing-line strong {
+  color: var(--text-1);
+}
+
 /* A product card in the list: it says it can be opened, and which one is open. */
 .product-card {
   position: relative;
