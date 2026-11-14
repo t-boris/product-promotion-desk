@@ -596,7 +596,7 @@ textarea.input {
   align-items: center;
   justify-content: center;
   padding: var(--space-4);
-  background: rgb(0 0 0 / 40%);
+  background: rgb(0 0 0 / 55%);
 }
 .modal {
   display: flex;
@@ -606,10 +606,10 @@ textarea.input {
   max-height: 100%;
   overflow: auto;
   padding: var(--space-5) var(--space-5);
-  background: var(--panel);
+  background: var(--surface-3);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 12px 40px rgb(0 0 0 / 30%);
+  box-shadow: var(--shadow-pop);
 }
 .modal h2 {
   margin: 0;
@@ -745,8 +745,8 @@ table.table {
   padding: var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--panel);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  background: var(--surface-3);
+  box-shadow: var(--shadow-pop);
   -webkit-app-region: no-drag;
 }
 .ai-task-head {
@@ -1008,10 +1008,10 @@ input[type='radio'] {
   display: flex;
   flex-direction: column;
   gap: var(--space-half);
-  background: var(--panel);
+  background: var(--surface-3);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 30%);
+  box-shadow: var(--shadow-pop);
 }
 .menu-item {
   display: flex;
@@ -1029,7 +1029,8 @@ input[type='radio'] {
   cursor: pointer;
 }
 .menu-item:hover:not(:disabled) {
-  background: var(--panel-2);
+  /* A menu floats on --surface-3, so its hover lifts from that colour instead of dropping to --surface-2. */
+  background: color-mix(in srgb, var(--text-1) 8%, var(--surface-3));
 }
 .menu-item:disabled {
   color: var(--muted);
