@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Id, Product, PromotionGoal } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Badge, Button, Card, ErrorNote, Field, Hint, More } from '../../ui'
+import { Badge, Button, Card, ErrorNote, Field, Hint, More, useMainVariant, useOpenForm } from '../../ui'
 import { lines } from './model'
 
 interface GoalFields {
@@ -115,6 +115,11 @@ function GoalCard({
   const [confirmRemove, setConfirmRemove] = useState(false)
   // A stored goal is a compact card (what to do, how it is judged) until the owner presses Edit; a new goal is a form from the start.
   const [editing, setEditing] = useState(goal === null)
+  // The form is on demand when the owner opened it: an edit of a stored goal, or a new card that can be cancelled. The lone first-goal
+  // form is the screen's resting main action, so it steps back while an on-demand form of the screen is open.
+  const onDemand = goal !== null ? editing : onCancel !== undefined
+  const saveVariant = useOpenForm(onDemand)
+  const restingVariant = useMainVariant()
   const [save, saving] = useAction(async () => {
     const next = normalized(fields)
     const result = await call('products.saveGoal', { id: productId, goal: { ...(goal ? { id: goal.id } : {}), targetAction: next.targetAction, successMetrics: lines(next.metrics), notes: next.notes } })
@@ -213,7 +218,7 @@ function GoalCard({
       </Field>
       <ErrorNote error={saving.error ?? removing.error} />
       <div className="row">
-        <Button variant="primary" onClick={() => void save()} disabled={!canSave} data-testid={`goal-save-${id}`}>
+        <Button variant={onDemand ? saveVariant : restingVariant} onClick={() => void save()} disabled={!canSave} data-testid={`goal-save-${id}`}>
           {saving.busy ? 'Saving…' : goal ? 'Save goal' : 'Add goal'}
         </Button>
         {needsTarget && dirty && (

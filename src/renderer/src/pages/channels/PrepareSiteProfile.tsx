@@ -27,8 +27,8 @@ export function PrepareSiteProfile({ productId, accountId, url }: { productId: s
   }
 
   const reviewable = draft !== null && draft.valid && draft.instructions.length === 0
-  // A draft waiting to be saved owns the filled button; the channel's own next step steps back until it is saved or discarded.
-  useOpenForm(reviewable && saved === null)
+  // A draft waiting to be saved owns the filled button while it is the form opened last; the channel's own next step steps back until it is saved or discarded.
+  const saveVariant = useOpenForm(reviewable && saved === null)
 
   return (
     <div className="site-profile" data-testid="site-profile">
@@ -61,7 +61,7 @@ export function PrepareSiteProfile({ productId, accountId, url }: { productId: s
             </div>
           ) : (
             <div className="row">
-              <Button variant="primary" onClick={() => void keep(draft)} disabled={saving.busy} data-testid="profile-save">
+              <Button variant={saveVariant} onClick={() => void keep(draft)} disabled={saving.busy} data-testid="profile-save">
                 {saving.busy ? 'Saving…' : 'Save this profile'}
               </Button>
               <Button onClick={() => setDraft(null)} disabled={saving.busy} data-testid="profile-discard">

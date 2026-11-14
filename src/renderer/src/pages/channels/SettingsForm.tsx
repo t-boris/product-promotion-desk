@@ -14,7 +14,7 @@ export function SettingsForm({ channel }: { channel: Channel }) {
   const [formError, setFormError] = useState<string | null>(null)
   const [save, state] = useAction((settings: Channel['settings']) => call('channels.updateSettings', { channelId: channel.id, settings }))
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial)
-  useOpenForm(dirty)
+  const saveVariant = useOpenForm(dirty)
   const set = <K extends keyof SettingsDraft>(key: K, value: SettingsDraft[K]): void => setDraft((d) => ({ ...d, [key]: value }))
 
   async function submit(): Promise<void> {
@@ -81,7 +81,7 @@ export function SettingsForm({ channel }: { channel: Channel }) {
       </div>
       <ErrorNote error={formError ?? state.error} />
       <div className="row">
-        <Button variant={dirty ? 'primary' : 'ghost'} onClick={() => void submit()} disabled={!dirty || state.busy} data-testid="settings-save">
+        <Button variant={saveVariant} onClick={() => void submit()} disabled={!dirty || state.busy} data-testid="settings-save">
           {state.busy ? 'Saving…' : 'Save settings'}
         </Button>
         {dirty && (

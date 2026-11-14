@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ApiEvent } from '../shared/api'
 import type { Account, AnalysisStage, AttentionItem, Channel, Claim, Product } from '../shared/types'
 import { createFanOut } from '../renderer/src/fan-out'
+import { closeForm, mainForm, openForm, type OpenFormIds } from '../renderer/src/open-forms'
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from '../renderer/src/menu-state'
 import { connectChannelHref, fixLinkFor } from '../renderer/src/pages/attention-links'
 import { KIND_TONE, attentionCountTone } from '../renderer/src/pages/attention-tone'
@@ -773,5 +774,51 @@ describe('the labels that tell products of one name apart (BUG-054)', () => {
     ]
     const labels = [...productLabels(list).values()]
     expect(new Set(labels).size).toBe(list.length)
+  })
+})
+
+describe('the on-demand form that owns the filled button (BUG-040)', () => {
+  const open = (...ids: string[]): OpenFormIds => ids.reduce<OpenFormIds>((forms, id) => openForm(forms, id), [])
+
+  it('nobody owns it while no form is open', () => {
+    expect(mainForm([])).toBeNull()
+  })
+
+  it('the form opened last owns it, and a form opened before it does not', () => {
+    expect(mainForm(open('a'))).toBe('a')
+    expect(mainForm(open('a', 'b'))).toBe('b')
+    expect(mainForm(open('a', 'b', 'c'))).toBe('c')
+  })
+
+  it('closing the form that owns it hands it to the one opened before', () => {
+    expect(mainForm(closeForm(open('a', 'b', 'c'), 'c'))).toBe('b')
+    expect(mainForm(closeForm(closeForm(open('a', 'b', 'c'), 'c'), 'b'))).toBe('a')
+    expect(mainForm(closeForm(open('a'), 'a'))).toBeNull()
+  })
+
+  it('closing a form that does not own it leaves the owner as it is', () => {
+    expect(mainForm(closeForm(open('a', 'b', 'c'), 'a'))).toBe('c')
+    expect(mainForm(closeForm(open('a', 'b', 'c'), 'b'))).toBe('c')
+  })
+
+  it('registering a form again does not duplicate it and does not take the button from a newer form', () => {
+    const forms = open('a', 'b')
+    expect(openForm(forms, 'a')).toEqual(['a', 'b'])
+    expect(mainForm(openForm(forms, 'a'))).toBe('b')
+    expect(openForm(forms, 'b')).toBe(forms)
+  })
+
+  it('an id is in the list once, however often it is registered', () => {
+    expect(open('a', 'a', 'b', 'a', 'b')).toEqual(['a', 'b'])
+  })
+
+  it('closing a form that is not open changes nothing', () => {
+    const forms = open('a', 'b')
+    expect(closeForm(forms, 'x')).toBe(forms)
+  })
+
+  it('a form that was closed and opens again is the newest', () => {
+    expect(mainForm(openForm(closeForm(open('a', 'b'), 'a'), 'a'))).toBe('a')
+    expect(open('a', 'b').length).toBe(2)
   })
 })

@@ -12,8 +12,8 @@ import type { NextStep } from './next-step'
  */
 export function AccountEmail({ account, mailboxes, next }: { account: Account; mailboxes: Mailbox[]; /** The step the account needs next: "Set an address" is the filled button only when it is this one. */ next: NextStep['block'] }) {
   const [editing, setEditing] = useState(false)
-  // The open form owns the filled button; the resting "Set an address" is filled only while it is the account's next step.
-  useOpenForm(editing)
+  // The open form owns the filled button while it is the form opened last; the resting "Set an address" is filled only while it is the account's next step.
+  const saveVariant = useOpenForm(editing)
   const main = useMainVariant()
   const [address, setAddress] = useState(account.email ?? '')
   const [chosenMailbox, setChosenMailbox] = useState<string>(account.mailboxId ?? '')
@@ -108,7 +108,7 @@ export function AccountEmail({ account, mailboxes, next }: { account: Account; m
             <p className="muted small">To get proposed addresses, add your own mailbox on the “Mailboxes” tab.</p>
           )}
           <div className="row">
-            <Button variant="primary" type="submit" disabled={saving.busy || address.trim() === ''} data-testid={`email-save-${account.id}`}>
+            <Button variant={saveVariant} type="submit" disabled={saving.busy || address.trim() === ''} data-testid={`email-save-${account.id}`}>
               {saving.busy ? 'Saving…' : 'Save address'}
             </Button>
             {account.email && (

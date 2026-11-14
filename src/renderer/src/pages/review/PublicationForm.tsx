@@ -8,8 +8,8 @@ const EMPTY: DraftForm = { title: '', text: '', link: '', attachments: [] }
 
 /** Write a standalone publication by hand. It is saved as a draft: nothing is published until it is approved. */
 export function PublicationForm({ channelId, onCreated, onCancel }: { channelId: Id; onCreated: () => void; onCancel: () => void }) {
-  // The form is open on demand, so "Save as draft" is the screen's filled button while it is open.
-  useOpenForm()
+  // The form is open on demand, so "Save as draft" is the screen's filled button while it is the form opened last.
+  const saveVariant = useOpenForm()
   const [form, setForm] = useState<DraftForm>(EMPTY)
   const [create, creating] = useAction(async () => {
     await call('publications.create', { channelId, draft: toInput(form, true) })
@@ -33,7 +33,7 @@ export function PublicationForm({ channelId, onCreated, onCancel }: { channelId:
           <Button onClick={onCancel} disabled={creating.busy}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={() => void create()} disabled={creating.busy || empty} data-testid="create-publication">
+          <Button variant={saveVariant} onClick={() => void create()} disabled={creating.busy || empty} data-testid="create-publication">
             Save as draft
           </Button>
         </div>

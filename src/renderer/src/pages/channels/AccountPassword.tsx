@@ -12,8 +12,8 @@ import type { NextStep } from './next-step'
  */
 export function AccountPassword({ account, vaultAvailable, hasPassword, next }: { account: Account; vaultAvailable: boolean; hasPassword: boolean; /** The step the account needs next: "Save a password" is the filled button only when it is this one. */ next: NextStep['block'] }) {
   const [editing, setEditing] = useState(false)
-  // The open form owns the filled button; the resting "Save a password" is filled only while it is the account's next step.
-  useOpenForm(editing)
+  // The open form owns the filled button while it is the form opened last; the resting "Save a password" is filled only while it is the account's next step.
+  const saveVariant = useOpenForm(editing)
   const main = useMainVariant()
   const [loginName, setLoginName] = useState(account.loginName ?? account.email ?? '')
   const [password, setPassword] = useState('')
@@ -138,7 +138,7 @@ export function AccountPassword({ account, vaultAvailable, hasPassword, next }: 
             <span className="muted small row-note">It is shown here until you save it. Use the same one when you create the account on the site.</span>
           </div>
           <div className="row">
-            <Button variant="primary" type="submit" disabled={saving.busy || loginName.trim() === '' || password === ''} data-testid={`password-save-${account.id}`}>
+            <Button variant={saveVariant} type="submit" disabled={saving.busy || loginName.trim() === '' || password === ''} data-testid={`password-save-${account.id}`}>
               {saving.busy ? 'Saving…' : 'Save password'}
             </Button>
             {hasPassword &&

@@ -34,8 +34,8 @@ export function CreateAccount({
   /** Absent while there is no account yet and no product to go back to: the form is then the only thing to do. */
   onCancel?: () => void
 }) {
-  // The form is the next step of the screen and owns its one filled button; the account behind it keeps bezels meanwhile.
-  useOpenForm()
+  // The form is the next step of the screen and owns its one filled button unless a form opened after it does; the account behind it keeps bezels meanwhile.
+  const submitVariant = useOpenForm()
   const [chosen, setChosen] = useState('')
   const [profileId, setProfileId] = useState('')
   const [label, setLabel] = useState(role ? `${role.name} account` : '')
@@ -146,7 +146,7 @@ export function CreateAccount({
       )}
       {roleIncomplete && <p className="muted small">Give the role a name, or clear the voice.</p>}
       <div className="row">
-        <Button variant="primary" type="submit" disabled={!label.trim() || !platform || roleIncomplete || state.busy} data-testid="account-create">
+        <Button variant={submitVariant} type="submit" disabled={!label.trim() || !platform || roleIncomplete || state.busy} data-testid="account-create">
           {state.busy ? 'Adding…' : 'Add account'}
         </Button>
         {onCancel && <Button onClick={onCancel}>Cancel</Button>}

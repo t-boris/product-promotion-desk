@@ -8,7 +8,7 @@ import { ANALYSIS_LABELS, ANALYSIS_TONES } from './labels'
 import { NOT_ANALYZED_HINT, passportStatus } from './product-status'
 
 function EditDetails({ product, onDone }: { product: Product; onDone: () => void }) {
-  useOpenForm()
+  const saveVariant = useOpenForm()
   const [name, setName] = useState(product.name)
   const [websiteUrl, setWebsiteUrl] = useState(product.websiteUrl ?? '')
   const [description, setDescription] = useState(product.description ?? '')
@@ -36,7 +36,7 @@ function EditDetails({ product, onDone }: { product: Product; onDone: () => void
       </Field>
       <ErrorNote error={state.error} />
       <div className="row">
-        <Button variant="primary" type="submit" disabled={!valid || state.busy} data-testid="edit-product-save">
+        <Button variant={saveVariant} type="submit" disabled={!valid || state.busy} data-testid="edit-product-save">
           {state.busy ? 'Saving…' : 'Save'}
         </Button>
         <Button type="button" onClick={onDone}>

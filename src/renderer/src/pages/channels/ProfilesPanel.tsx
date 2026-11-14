@@ -116,8 +116,8 @@ export function ProfilesPanel({
 
 /** Names a profile and says what it is for; the AI proposes the person afterwards. */
 function NewProfile({ platforms, products, freeAccounts, onCreated, onCancel }: { platforms: PlatformInfo[]; products: Product[]; freeAccounts: Account[]; onCreated: (profile: Profile) => void; onCancel?: () => void }) {
-  // The form is the next step of the Profiles tab: "Make the profile" is its one filled button.
-  useOpenForm()
+  // The form is the next step of the Profiles tab: "Make the profile" is its one filled button unless a form opened after it owns it.
+  const submitVariant = useOpenForm()
   const [label, setLabel] = useState('')
   const [purpose, setPurpose] = useState('')
   const [chosen, setChosen] = useState<string[]>([])
@@ -179,7 +179,7 @@ function NewProfile({ platforms, products, freeAccounts, onCreated, onCancel }: 
         </div>
       </Field>
       <div className="row">
-        <Button variant="primary" type="submit" disabled={!label.trim() || state.busy} data-testid="profile-create">
+        <Button variant={submitVariant} type="submit" disabled={!label.trim() || state.busy} data-testid="profile-create">
           {state.busy ? 'Making…' : 'Make the profile'}
         </Button>
         {onCancel && <Button onClick={onCancel}>Cancel</Button>}

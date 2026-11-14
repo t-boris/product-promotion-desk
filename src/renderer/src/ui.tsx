@@ -1,6 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { EmptyArtwork, type EmptyArt } from './empty-art'
 import { Icon, type IconName } from './icons'
+import { closeForm, mainForm, openForm, type OpenFormIds } from './open-forms'
 import type { Tone } from './tone'
 
 export function Page({ title, subtitle, actions, children }: { title: string; subtitle?: string; actions?: ReactNode; children: ReactNode }) {
@@ -34,31 +35,40 @@ export function ObjectHeader({ title, meta, actions, testId }: { title: ReactNod
 /**
  * One filled button per screen (visual-system.md §10): the screen's next step. While a form that was opened on demand (an edit,
  * "Add statement") is open, the form's own button is the filled one and the resting main action steps back to a bezel. A screen
- * wraps its content in `OpenFormsScope`; an on-demand form calls `useOpenForm()`; a resting main action reads `useMainVariant()`.
+ * wraps its content in `OpenFormsScope`; an on-demand form calls `useOpenForm()` and gives its submit button the variant it returns; a
+ * resting main action reads `useMainVariant()`. When several forms are open, only the one opened last keeps its submit filled
+ * (open-forms.ts), so there is never more than one filled button on a screen (BUG-040).
  */
-const OpenForms = createContext<{ count: number; add: () => () => void } | null>(null)
+const OpenForms = createContext<{ forms: OpenFormIds; open: (id: string) => () => void } | null>(null)
 
 export function OpenFormsScope({ children }: { children: ReactNode }) {
-  const [count, setCount] = useState(0)
-  const add = useCallback(() => {
-    setCount((c) => c + 1)
-    return () => setCount((c) => c - 1)
+  const [forms, setForms] = useState<OpenFormIds>([])
+  const open = useCallback((id: string) => {
+    setForms((list) => openForm(list, id))
+    return () => setForms((list) => closeForm(list, id))
   }, [])
-  const value = useMemo(() => ({ count, add }), [count, add])
+  const value = useMemo(() => ({ forms, open }), [forms, open])
   return <OpenForms.Provider value={value}>{children}</OpenForms.Provider>
 }
 
-/** Called by an on-demand form while it is open (`active`); a form that is only sometimes an on-demand one passes the condition. */
-export function useOpenForm(active = true): void {
+/**
+ * Called by an on-demand form while it is open (`active`); a form that is only sometimes an on-demand one passes the condition. It
+ * returns the variant of the form's submit button: filled only while this is the form opened last, a bezel otherwise. The form
+ * registers in a layout effect, so the screen never paints a frame with two filled buttons.
+ */
+export function useOpenForm(active = true): 'primary' | 'ghost' {
   const scope = useContext(OpenForms)
-  const add = scope?.add
-  useEffect(() => (active ? add?.() : undefined), [add, active])
+  const open = scope?.open
+  const id = useId()
+  useLayoutEffect(() => (active ? open?.(id) : undefined), [open, id, active])
+  if (!scope) return active ? 'primary' : 'ghost'
+  return active && mainForm(scope.forms) === id ? 'primary' : 'ghost'
 }
 
 /** The variant of a resting main action: filled, unless an on-demand form of the same screen is open. */
 export function useMainVariant(): 'primary' | 'ghost' {
   const scope = useContext(OpenForms)
-  return scope && scope.count > 0 ? 'ghost' : 'primary'
+  return scope && scope.forms.length > 0 ? 'ghost' : 'primary'
 }
 
 export function Card({ title, actions, children, className = '' }: { title?: string; actions?: ReactNode; children: ReactNode; className?: string }) {

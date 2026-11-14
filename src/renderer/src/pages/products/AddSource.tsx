@@ -37,8 +37,8 @@ interface SourceFormProps {
  */
 export function SourceForm({ productId, source, onSaved, onCancel }: SourceFormProps) {
   const editing = source !== undefined
-  // An edit in place is an on-demand form and owns the filled button; the resting "Add source" steps back while one is open.
-  useOpenForm(editing)
+  // An edit in place is an on-demand form: its Save is filled while it is the form opened last; the resting "Add source" steps back while one is open.
+  const saveVariant = useOpenForm(editing)
   const addVariant = useMainVariant()
   // The add form and an open edit form are on the page together: their test ids differ, so a query finds the one it means.
   const tid = (name: string): string => (editing ? `source-edit-${name}` : `source-${name}`)
@@ -122,7 +122,7 @@ export function SourceForm({ productId, source, onSaved, onCancel }: SourceFormP
         </Button>
         {editing ? (
           <>
-            <Button variant="primary" onClick={() => void save()} disabled={!ready || saving.busy} data-testid="source-save">
+            <Button variant={saveVariant} onClick={() => void save()} disabled={!ready || saving.busy} data-testid="source-save">
               {saving.busy ? 'Saving…' : 'Save'}
             </Button>
             <Button variant="quiet" onClick={onCancel} disabled={saving.busy} data-testid="source-edit-cancel">

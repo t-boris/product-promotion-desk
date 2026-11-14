@@ -14,7 +14,7 @@ export const ROLE_VOICE_LIMIT = 280
 export function RoleEditor({ account }: { account: Account }) {
   const [editing, setEditing] = useState(false)
   // The open form owns the filled button of the screen.
-  useOpenForm(editing)
+  const saveVariant = useOpenForm(editing)
   const [name, setName] = useState(account.role?.name ?? '')
   const [voice, setVoice] = useState(account.role?.voice ?? '')
   const [save, saving] = useAction((role: { name: string; voice: string } | null) => call('accounts.setRole', { accountId: account.id, role }))
@@ -89,7 +89,7 @@ export function RoleEditor({ account }: { account: Account }) {
             </Field>
           </div>
           <div className="row">
-            <Button variant="primary" type="submit" disabled={!name.trim() || saving.busy} data-testid={`account-role-save-${account.id}`}>
+            <Button variant={saveVariant} type="submit" disabled={!name.trim() || saving.busy} data-testid={`account-role-save-${account.id}`}>
               {saving.busy ? 'Saving…' : 'Save role'}
             </Button>
             {account.role && (
