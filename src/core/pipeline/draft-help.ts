@@ -94,7 +94,7 @@ Rules
 - Voice: when context.role is present, write as that role: use the way of writing described in context.role.voice and stay within what that voice allows you to talk about. The role never overrides any rule above.
 - Disclosure: when the finished draft mentions the product (context.product.name) or its website, it includes one short phrase saying that the author is connected with it (for example "I work on it"), worded in the voice of context.role when there is one. Never present the author as an independent user, customer or bystander. A draft that does not mention the product needs no such phrase.
 - Never include passwords, keys or other credentials.
-- "statesProductFacts" is true when the text says anything about what the product is, does, offers or supports, and false otherwise (a thank-you or a question back states nothing about it). When it is true and you write the text from nothing, cite the approved claims it rests on.
+- "statesProductFacts" is true when the text says anything about what the product is, does, offers or supports that the owner's draft does not already say, and false otherwise (a thank-you, a question back or a rewording of what the owner wrote states nothing new). When it is true, cite the approved claims it rests on.
 - Improving keeps the meaning and what is true in the draft; change only what the owner's wish or clarity asks for.`
 
 function wanted(field: DraftHelpField): string {
@@ -168,9 +168,22 @@ function namesProduct(text: string, product: ProductView): boolean {
   return host !== null && text.toLowerCase().includes(host)
 }
 
-/** What the AI was given, as one comparable string: if it differs when the answer arrives, the checks ran against facts that are gone. */
-const knowledgeKey = (k: ReturnType<typeof loadKnowledge>): string =>
-  JSON.stringify([k.versionId, k.approved.map((c) => [c.id, c.text, c.unconfirmedAvailability]), k.prohibited])
+/**
+ * What the AI was given and what the checks read, as one comparable string: if it differs when the answer arrives, the checks ran against
+ * facts that are gone (a fact withdrawn, a statement prohibited, the product renamed or moved to another website).
+ */
+const knowledgeKey = (k: ReturnType<typeof loadKnowledge>, product: { name: string; websiteUrl: string | null }): string =>
+  JSON.stringify([k.versionId, k.approved.map((c) => [c.id, c.text, c.unconfirmedAvailability]), k.prohibited, product.name, product.websiteUrl])
+
+/**
+ * The text as the checks read it: invisible characters (zero-width, soft hyphen, bidi marks, variation selectors, tags) taken out and
+ * look-alike forms folded (NFKC), so "fr\u200Bee", "$\u200B9" or "evil\u200B.com" are what they say. The draft itself is not changed:
+ * a text that only passes with its invisible characters in is blocked, not cleaned.
+ */
+function forChecks(text: string): string {
+  // Format characters (zero-width, soft hyphen, bidi marks, tags), variation selectors, the combining grapheme joiner and the line separators.
+  return text.normalize('NFKC').replace(/\p{Cf}|\p{Variation_Selector}|\u034f|[\u2028\u2029]/gu, '')
+}
 
 /** A draft text: markdown and links stay; carriage returns and control characters go. */
 function cleanDraft(raw: string): string {
@@ -202,16 +215,17 @@ export function readDraftAnswer(raw: unknown, input: DraftHelpInput): Parsed<Dra
     if (text.length > max) return { ok: false, error: `"text" is longer than ${max} characters; shorten it` }
     result.text = text
   }
-  const written = [result.title ?? '', result.text ?? ''].join('\n')
-  if (holdsCredential(written)) return { ok: false, error: 'the text holds a credential; write it without one' }
+  // The checks read the text without its invisible characters; the draft handed over is the text as the AI wrote it.
+  const read = { title: result.title === undefined ? null : forChecks(result.title), text: forChecks(result.text ?? '') }
+  if (holdsCredential([read.title ?? '', read.text].join('\n'))) return { ok: false, error: 'the text holds a credential; write it without one' }
 
-  const writing = isWriting(input)
-  // Written from nothing, the AI says whether the text states facts about the product (the same trust as the category of an AI reply); the answer must say.
-  if (writing && typeof raw.statesProductFacts !== 'boolean') return { ok: false, error: '"statesProductFacts" must be true or false' }
+  // The AI says whether the text states facts about the product that the owner's draft does not state (the same trust as the category of an AI
+  // reply). Whether the field was empty or not decides nothing: a one-word draft is not a licence to add facts.
+  if (typeof raw.statesProductFacts !== 'boolean') return { ok: false, error: '"statesProductFacts" must be true or false' }
   const usedClaimIds = Array.isArray(raw.usedClaimIds) ? raw.usedClaimIds.filter((id): id is string => typeof id === 'string') : []
   const report = checkDraftSafety({
-    text: result.text ?? '',
-    title: result.title ?? null,
+    text: read.text,
+    title: read.title,
     link: null,
     usedClaimIds,
     approved: subject.approved,
@@ -219,13 +233,14 @@ export function readDraftAnswer(raw: unknown, input: DraftHelpInput): Parsed<Dra
     allowedHosts: allowedHostsFor(subject.product.website, subject.approved)
   })
   const problems = [...report.violations]
-  // A post written from nothing stands on approved facts, as the AI's own posts do; any other text written from nothing that states facts must cite them.
-  const postFromNothing = subject.kind === 'post' && writing && field !== 'title'
+  // A post written from nothing stands on approved facts, as the AI's own posts do; any other text that states facts the owner's draft does not
+  // state must cite them.
+  const postFromNothing = subject.kind === 'post' && isWriting(input) && field !== 'title'
   if (report.usedClaims.length === 0) {
     if (postFromNothing) problems.push('a post written from nothing must cite at least one approved fact')
-    else if (writing && raw.statesProductFacts === true) problems.push('the text states facts about the product but cites no approved fact')
+    else if (raw.statesProductFacts === true) problems.push("the text states facts about the product that the owner's draft does not state, but cites no approved fact")
   }
-  const finished = [result.title ?? input.form.title, result.text ?? input.form.text].join('\n')
+  const finished = forChecks([result.title ?? input.form.title, result.text ?? input.form.text].join('\n'))
   if (namesProduct(finished, subject.product) && raw.disclosesConnection !== true) {
     problems.push('the draft names the product without saying that the author is connected with it')
   }
@@ -243,7 +258,14 @@ export interface DraftHelper {
   refineDraft: typeof refineDraft
 }
 
-const bounded = (value: unknown, max: number): string => (typeof value === 'string' ? value.slice(0, max) : '')
+/** A line the owner typed (a wish, what a post is about): one line, never cut (a cut wish can lose its restriction); too long is refused. */
+function ownerLine(value: unknown, max: number, what: string): string {
+  if (value === undefined || value === null) return ''
+  if (typeof value !== 'string') throw new ApiError('invalid_input', `${what} must be text.`)
+  const line = collapseWhitespace(value)
+  if (line.length > max) throw new ApiError('invalid_input', `${what} is longer than ${max} characters. Shorten it.`)
+  return line
+}
 
 export class DraftHelp {
   constructor(
@@ -261,8 +283,8 @@ export class DraftHelp {
       throw new ApiError('invalid_input', `The draft is too long for the AI to read whole (the text up to ${MAX_CURRENT} characters, the title up to ${MAX_TITLE_CHARS}).`)
     }
     const input: DraftFormInput = { title: form.title, text: form.text }
-    const instruction = collapseWhitespace(bounded(args.instruction, MAX_INSTRUCTION))
-    const about = collapseWhitespace(bounded(args.about, MAX_ABOUT))
+    const instruction = ownerLine(args.instruction, MAX_INSTRUCTION, 'What to change')
+    const about = ownerLine(args.about, MAX_ABOUT, 'What the post is about')
 
     const { opp, channel } = this.target(args)
     const kind: Kind = opp && opp.kind === 'reply' ? 'reply' : 'post'
@@ -305,7 +327,8 @@ export class DraftHelp {
     }
     // The checks ran against the knowledge the AI was given. If it changed while the AI was writing (a fact withdrawn, a statement prohibited),
     // the text is not handed over as checked.
-    if (knowledgeKey(loadKnowledge(this.core, channel.productId)) !== knowledgeKey(knowledge)) {
+    const nowProduct = this.core.repos.product(channel.productId)
+    if (knowledgeKey(loadKnowledge(this.core, channel.productId), nowProduct) !== knowledgeKey(knowledge, product)) {
       throw new ApiError('suggest_failed', 'The product knowledge changed while the AI was writing. Ask again.')
     }
     // The log says that a text was written, never what it says.

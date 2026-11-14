@@ -17,6 +17,16 @@ export function canApplyPost(asked: PostText, now: PostText): boolean {
   return asked.title === now.title && asked.text === now.text
 }
 
+/**
+ * What happens to the AI's post when it arrives: it was written for one channel from an empty form. If the owner wrote something meanwhile,
+ * typing wins; if the form was pointed at another channel, the post (checked against the first channel's product) is not for it.
+ */
+export function postAnswerFate(asked: PostText & { channelId: string }, now: PostText & { channelId: string }): 'apply' | 'typed' | 'channel' {
+  if (!canApplyPost(asked, now)) return 'typed'
+  if (asked.channelId !== now.channelId) return 'channel'
+  return 'apply'
+}
+
 /** Undo is offered only while both fields still hold exactly what the AI wrote; once the owner types, the text is theirs again. */
 export function postUndoable(now: PostText, applied: PostText | null): boolean {
   return applied !== null && canApplyPost(applied, now)

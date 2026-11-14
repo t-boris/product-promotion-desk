@@ -258,7 +258,7 @@ describe('drafts.refine: a post', () => {
 
   it('improves only the title and returns only the title', async () => {
     world = makeWorld({ mode: 'draft' })
-    world.engine.on('drafts.improve', answer({ title: 'How a natal chart is built', usedClaimIds: [] }))
+    world.engine.on('drafts.improve', answer({ title: 'How a natal chart is built', usedClaimIds: [], statesProductFacts: false }))
     // The owner's own text states a discount; it is not the AI's doing and is not checked.
     const result = await help({ field: 'title', channelId: world.channel.id, form: { title: 'chart', text: 'Use SAVE for 90% off' } })
     expect(result).toEqual({ title: 'How a natal chart is built' })
@@ -267,8 +267,8 @@ describe('drafts.refine: a post', () => {
 
   it('reads the finished draft for the disclosure: a title that names the product needs the connection said somewhere', async () => {
     world = makeWorld({ mode: 'draft' })
-    world.engine.on('drafts.improve', answer({ title: 'Natal Mystic explained', usedClaimIds: [], disclosesConnection: false }))
-    world.engine.on('drafts.improve.repair', answer({ title: 'Natal Mystic explained (I work on it)', usedClaimIds: [], disclosesConnection: true }))
+    world.engine.on('drafts.improve', answer({ title: 'Natal Mystic explained', usedClaimIds: [], statesProductFacts: false, disclosesConnection: false }))
+    world.engine.on('drafts.improve.repair', answer({ title: 'Natal Mystic explained (I work on it)', usedClaimIds: [], statesProductFacts: false, disclosesConnection: true }))
     expect(await help({ field: 'title', channelId: world.channel.id, form: { title: 'chart', text: 'I work on Natal Mystic.' } })).toEqual({ title: 'Natal Mystic explained (I work on it)' })
     expect(world.engine.calls[1].prompt).toContain('connected')
   })
@@ -298,7 +298,7 @@ describe('drafts.refine: what a text written from nothing must stand on', () => 
     world.engine.on('drafts.write', answer({ text: 'Yes, it works fully offline.', usedClaimIds: [], statesProductFacts: true }))
     world.engine.on('drafts.write.repair', answer({ text: BORING }))
     expect(await help({ field: 'text', opportunityId: opp.id, form: { title: '', text: '' } })).toEqual({ text: BORING })
-    expect(world.engine.calls[1].prompt).toContain('states facts about the product but cites no approved fact')
+    expect(world.engine.calls[1].prompt).toContain('cites no approved fact')
 
     world.engine.calls.length = 0
     world.engine.on('drafts.write', answer({ text: 'Thanks for asking, good luck with the follow-ups!', usedClaimIds: [], statesProductFacts: false }))
@@ -315,12 +315,42 @@ describe('drafts.refine: what a text written from nothing must stand on', () => 
     expect(world.engine.calls[1].prompt).toContain('statesProductFacts')
   })
 
-  it('an improvement is not forced to cite: the facts it keeps are the owner\'s own', async () => {
+  it('an improvement that states nothing new is not forced to cite: the facts it keeps are the owner\'s own', async () => {
     world = makeWorld({ mode: 'draft' })
     const opp = await replyCard()
-    world.engine.on('drafts.improve', answer({ text: 'It exports lists as text.', usedClaimIds: [], statesProductFacts: true }))
+    world.engine.on('drafts.improve', answer({ text: 'It exports lists as text.', usedClaimIds: [], statesProductFacts: false }))
     expect(await help({ field: 'text', opportunityId: opp.id, form: { title: '', text: 'it exports lists as plain text, yes' } })).toEqual({ text: 'It exports lists as text.' })
     expect(world.engine.calls).toHaveLength(1)
+  })
+
+  it('a one-word draft is no licence to add facts: an improvement that states new facts must cite them, a reply and a post alike', async () => {
+    world = makeWorld({ mode: 'draft' })
+    const opp = await replyCard()
+    world.engine.on('drafts.improve', answer({ text: 'It works offline and is HIPAA compliant.', usedClaimIds: [], statesProductFacts: true }))
+    world.engine.on('drafts.improve.repair', answer({ text: BORING }))
+    expect(await help({ field: 'text', opportunityId: opp.id, form: { title: '', text: '.' } })).toEqual({ text: BORING })
+    expect(world.engine.calls[1].prompt).toContain('cites no approved fact')
+
+    world.engine.calls.length = 0
+    world.engine.on('drafts.improve', answer({ text: 'It works offline.', usedClaimIds: [], statesProductFacts: true }))
+    world.engine.on('drafts.improve.repair', answer({ text: BORING }))
+    expect(await help({ field: 'text', channelId: world.channel.id, form: { title: 'Hello', text: 'x' } })).toEqual({ text: BORING })
+    expect(world.engine.calls[1].prompt).toContain('cites no approved fact')
+  })
+
+  it('an improvement must say whether it states new facts, as a written text must', async () => {
+    world = makeWorld({ mode: 'draft' })
+    const opp = await replyCard()
+    world.engine.on('drafts.improve', JSON.stringify({ text: BORING, usedClaimIds: ['c1'], disclosesConnection: false }))
+    world.engine.on('drafts.improve.repair', answer({ text: BORING }))
+    expect(await help({ field: 'text', opportunityId: opp.id, form: { title: '', text: 'chart' } })).toEqual({ text: BORING })
+    expect(world.engine.calls[1].prompt).toContain('statesProductFacts')
+  })
+
+  it('improving a post\'s text is not "a post written from nothing": it needs no citation when it adds no fact', async () => {
+    world = makeWorld({ mode: 'draft', claims: [] })
+    world.engine.on('drafts.improve', answer({ text: 'A first post, a little clearer.', usedClaimIds: [], statesProductFacts: false }))
+    expect(await help({ field: 'text', channelId: world.channel.id, form: { title: 'Hello', text: 'A first post' } })).toEqual({ text: 'A first post, a little clearer.' })
   })
 
   it('a title is a heading of the body: it asks for no approved fact, and a title with no fact approved is still written', async () => {
@@ -372,6 +402,95 @@ describe('drafts.refine: the title is checked like the text', () => {
       expect(world.engine.calls[1].prompt).toMatch(reason)
     })
   }
+})
+
+describe('drafts.refine: invisible characters do not hide what the checks look for', () => {
+  const hidden: [string, string, RegExp][] = [
+    ['a free offer', 'It is fr\u200Bee for everyone.', /free/i],
+    ['a price', 'It costs $\u200B9 a month.', /price|amount|\$/i],
+    ['a discount', 'Take 90\u200B% off today.', /discount|%/i],
+    ['a link to somebody else', 'See evil\u200B.com/post for more.', /evil\.com/],
+    ['a prohibited statement', 'Natal\u2060 Mystic predicts your future with certainty', /prohibited/],
+    ['a bidi mark inside a word', 'It is fre\u202Ee for everyone.', /free/i],
+    ['a free offer in fullwidth letters', 'It is \uFF46\uFF52\uFF45\uFF45 for everyone.', /free/i],
+    ['a price in a fullwidth currency sign and digit', 'It costs \uFF04\uFF19 a month.', /price|amount|\$/i]
+  ]
+  for (const [name, text, reason] of hidden) {
+    it(`blocks ${name} written with an invisible character in it`, async () => {
+      world = makeWorld({ mode: 'draft' })
+      world.knowledge.prohibited = [makeClaim('p1', 'Natal Mystic predicts your future with certainty')]
+      const opp = await replyCard()
+      world.engine.on('drafts.improve', answer({ text, usedClaimIds: [], statesProductFacts: false, disclosesConnection: true }))
+      world.engine.on('drafts.improve.repair', answer({ text: BORING }))
+      expect(await help({ field: 'text', opportunityId: opp.id, form: { title: '', text: 'hi' } })).toEqual({ text: BORING })
+      expect(world.engine.calls[1].prompt).toMatch(reason)
+    })
+  }
+
+  it('the product named with an invisible character inside a word still needs the connection said', async () => {
+    world = makeWorld({ mode: 'draft' })
+    const opp = await replyCard()
+    world.engine.on('drafts.improve', answer({ text: 'Try Na\u200Btal Mystic, it is good.', usedClaimIds: [], statesProductFacts: false, disclosesConnection: false }))
+    world.engine.on('drafts.improve.repair', answer({ text: 'I work on it; try it.', usedClaimIds: [], statesProductFacts: false, disclosesConnection: true }))
+    expect(await help({ field: 'text', opportunityId: opp.id, form: { title: '', text: 'hi' } })).toEqual({ text: 'I work on it; try it.' })
+    expect(world.engine.calls[1].prompt).toContain('connected')
+  })
+
+  it('the text handed over is the AI\'s own: emoji joiners and other invisible characters in an allowed text are kept', async () => {
+    world = makeWorld({ mode: 'draft' })
+    const opp = await replyCard()
+    const family = 'Thanks \u{1F468}\u200D\u{1F469}\u200D\u{1F467}!'
+    world.engine.on('drafts.improve', answer({ text: family, usedClaimIds: [], statesProductFacts: false }))
+    expect(await help({ field: 'text', opportunityId: opp.id, form: { title: '', text: 'thanks' } })).toEqual({ text: family })
+  })
+})
+
+describe('drafts.refine: the checks stand on what the AI was given', () => {
+  const changeDuring = async (change: () => void): Promise<unknown> => {
+    world = makeWorld({ mode: 'draft' })
+    const opp = await replyCard()
+    world.engine.on('drafts.write', () => {
+      change()
+      return answer({ text: BORING })
+    })
+    return help({ field: 'text', opportunityId: opp.id, form: { title: '', text: '' } }).catch((e: unknown) => e)
+  }
+  const refused = (e: unknown): void => expect(e).toMatchObject({ code: 'suggest_failed', message: expect.stringMatching(/knowledge changed/) })
+
+  it('refuses when a statement becomes prohibited while the AI writes', async () => {
+    refused(await changeDuring(() => (world.knowledge.prohibited = [makeClaim('p9', 'Natal Mystic is the fastest')])))
+  })
+  it('refuses when an approved fact is reworded while the AI writes', async () => {
+    refused(await changeDuring(() => (world.knowledge.approved = world.knowledge.approved.map((c) => ({ ...c, text: `${c.text} Now with more.` })))))
+  })
+  it('refuses when a fact turns out to be of unconfirmed availability while the AI writes', async () => {
+    refused(await changeDuring(() => (world.knowledge.approved = world.knowledge.approved.map((c) => ({ ...c, unconfirmedAvailability: true })))))
+  })
+  it('refuses when the product moves to another website while the AI writes (the links allowed are its own)', async () => {
+    refused(await changeDuring(() => world.core.db.prepare('UPDATE products SET website_url = ? WHERE id = ?').run('https://elsewhere.example', world.product.id)))
+  })
+  it('refuses when the product is renamed while the AI writes (the disclosure is read for its name)', async () => {
+    refused(await changeDuring(() => world.core.db.prepare('UPDATE products SET name = ? WHERE id = ?').run('Starlight', world.product.id)))
+  })
+  it('hands the text over when nothing changed', async () => {
+    world = makeWorld({ mode: 'draft' })
+    const opp = await replyCard()
+    world.engine.on('drafts.write', answer({ text: BORING }))
+    expect(await help({ field: 'text', opportunityId: opp.id, form: { title: '', text: '' } })).toEqual({ text: BORING })
+  })
+})
+
+describe('drafts.refine: the owner\'s own lines are never cut', () => {
+  it('refuses a wish or a subject that is too long instead of losing its end', async () => {
+    world = makeWorld({ mode: 'draft' })
+    const opp = await replyCard()
+    const form = { title: '', text: 'hi' }
+    const long = `${'shorter '.repeat(40)}but never mention the price`
+    expect(await refusal({ field: 'text', opportunityId: opp.id, form, instruction: long })).toBe('invalid_input')
+    expect(await refusal({ field: 'post', channelId: world.channel.id, form: { title: '', text: '' }, about: 'x'.repeat(301) })).toBe('invalid_input')
+    expect(await refusal({ field: 'text', opportunityId: opp.id, form, instruction: 42 as unknown as string })).toBe('invalid_input')
+    expect(world.engine.calls).toEqual([])
+  })
 })
 
 describe('drafts.refine: the connection is said when the product is named or its website is', () => {

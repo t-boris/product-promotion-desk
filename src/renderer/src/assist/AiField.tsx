@@ -3,7 +3,7 @@ import type { AssistField } from '../../../shared/types'
 import { call, useAction } from '../hooks'
 import { Button, ErrorNote, Hint } from '../ui'
 import type { Blocked } from './block'
-import { canApply, canUndo, fieldAction, type AppliedText } from './field-logic'
+import { answerFate, canUndo, fieldAction, skippedNote, type AnswerFate, type AppliedText } from './field-logic'
 import './assist.css'
 
 /** What the AI is asked for one text: the text as it is, and the owner's wish when the field is filled. */
@@ -27,6 +27,7 @@ export function AiTextField({
   ask,
   blocked,
   disabled = false,
+  around = null,
   testId,
   children
 }: {
@@ -38,6 +39,11 @@ export function AiTextField({
   blocked: Blocked | null
   /** The form is busy with something else (saving): the AI waits; the control stays where it is. */
   disabled?: boolean
+  /**
+   * What the answer depends on besides this field (the other field of the draft, the channel it is written for), as one string. The answer
+   * was checked against it; if it differs when the answer arrives, the answer is dropped.
+   */
+  around?: string | null
   testId: string
   /** The input itself; it takes the id that ties it to the label. */
   children: (id: string) => ReactNode
@@ -46,11 +52,11 @@ export function AiTextField({
   const [wishOpen, setWishOpen] = useState(false)
   const [wish, setWish] = useState('')
   const [applied, setApplied] = useState<AppliedText | null>(null)
-  const [skipped, setSkipped] = useState(false)
+  const [skipped, setSkipped] = useState<AnswerFate | null>(null)
   const action = fieldAction(value)
   // The field as it is when the answer arrives: the owner may keep typing while the AI works, and the form may be closed meanwhile.
-  const latest = useRef(value)
-  latest.current = value
+  const latest = useRef({ value, around, locked: disabled })
+  latest.current = { value, around, locked: disabled }
   const mounted = useRef(true)
   useEffect(() => {
     mounted.current = true
@@ -64,14 +70,16 @@ export function AiTextField({
 
   const [run, state] = useAction(async () => {
     const before = value
+    const checkedAgainst = around
     hadFocus.current = root.current?.contains(document.activeElement) ?? false
-    setSkipped(false)
+    setSkipped(null)
     const text = await ask({ current: value, instruction: action.kind === 'improve' ? wish : undefined })
     if (!mounted.current) return // the form was closed: nothing is left to fill
     setWishOpen(false)
     setWish('')
-    if (!canApply(before, latest.current)) {
-      setSkipped(true) // typing meanwhile wins; the AI's text is dropped, not merged
+    const fate = answerFate({ value: before, around: checkedAgainst }, latest.current)
+    if (fate !== 'apply') {
+      setSkipped(fate) // typing meanwhile wins, and an answer checked against a draft that moved on is dropped, not merged
       return
     }
     onChange(text)
@@ -121,6 +129,7 @@ export function AiTextField({
                 void run()
               }
             }}
+            maxLength={300}
             placeholder="What to change? For example: shorter, friendlier (optional)"
             aria-label={`What to change in ${label}`}
             data-testid={`${testId}-wish-input`}
@@ -141,7 +150,7 @@ export function AiTextField({
       <ErrorNote error={state.error} />
       {skipped && (
         <p className="hint" role="status" data-testid={`${testId}-skipped`}>
-          You changed the text while the AI was working, so its text was not used. Ask again to get it.
+          {skippedNote(skipped)}
         </p>
       )}
       {applied && canUndo(value, applied) && (

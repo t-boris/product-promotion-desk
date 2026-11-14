@@ -4,7 +4,7 @@ import { useAssistBlock } from '../../assist/useAssistBlock'
 import { call, useAction } from '../../hooks'
 import { Button, ErrorNote, Hint } from '../../ui'
 import type { DraftForm } from './DraftEditor'
-import { canApplyPost, postUndoable, showPostHelper, type PostText } from './post-draft'
+import { postAnswerFate, postUndoable, showPostHelper, type PostText } from './post-draft'
 import '../../assist/assist.css'
 
 const post = (form: DraftForm): PostText => ({ title: form.title, text: form.text })
@@ -19,11 +19,11 @@ export function PostDrafter({ productId, channelId, form, onChange }: { productI
   const id = useId()
   const [about, setAbout] = useState('')
   const [applied, setApplied] = useState<PostText | null>(null)
-  const [skipped, setSkipped] = useState(false)
+  const [skipped, setSkipped] = useState<'typed' | 'channel' | null>(null)
   const { blocked } = useAssistBlock({ productId, needsPassport: true })
   // The form as it is when the answer arrives: the owner may type while the AI works, and the form may be closed meanwhile.
-  const latest = useRef(form)
-  latest.current = form
+  const latest = useRef({ form, channelId })
+  latest.current = { form, channelId }
   const mounted = useRef(true)
   useEffect(() => {
     mounted.current = true
@@ -38,11 +38,13 @@ export function PostDrafter({ productId, channelId, form, onChange }: { productI
   const [run, state] = useAction(async () => {
     const asked = post(form)
     hadFocus.current = root.current?.contains(document.activeElement) ?? false
-    setSkipped(false)
+    setSkipped(null)
     const result = await call('drafts.refine', { field: 'post', channelId, form: asked, about: about.trim() || undefined })
     if (!mounted.current) return
-    if (!canApplyPost(asked, post(latest.current)) || result.title === undefined || result.text === undefined) {
-      setSkipped(true) // typing meanwhile wins; the AI's post is dropped, not merged
+    // Typing meanwhile wins, and a post written for one channel is not put into a form that now points at another (its checks were that product's).
+    const fate = postAnswerFate({ ...asked, channelId }, { ...post(latest.current.form), channelId: latest.current.channelId })
+    if (fate !== 'apply' || result.title === undefined || result.text === undefined) {
+      setSkipped(fate === 'channel' ? 'channel' : 'typed')
       return
     }
     onChange((current) => ({ ...current, title: result.title as string, text: result.text as string }))
@@ -60,7 +62,7 @@ export function PostDrafter({ productId, channelId, form, onChange }: { productI
     // The owner has written something of their own: the helper steps aside (its button would write over it), but it still says why its post was not used.
     return skipped ? (
       <p className="hint" role="status" data-testid="post-drafter-skipped">
-        You typed while the AI was working, so its post was not used. Clear the title and the text to ask again.
+        {skipped === 'channel' ? 'You changed the channel while the AI was working, so its post was not used. Ask again to get it.' : 'You typed while the AI was working, so its post was not used. Clear the title and the text to ask again.'}
       </p>
     ) : null
   }
@@ -94,6 +96,7 @@ export function PostDrafter({ productId, channelId, form, onChange }: { productI
           }
         }}
         disabled={state.busy}
+        maxLength={300}
         placeholder="Optional: for example, how the chart is built"
         data-testid="post-drafter-about"
       />
@@ -106,7 +109,7 @@ export function PostDrafter({ productId, channelId, form, onChange }: { productI
       <ErrorNote error={state.error} />
       {skipped && (
         <p className="hint" role="status" data-testid="post-drafter-skipped">
-          The AI's post was not used. Ask again to get it.
+          {skipped === 'channel' ? 'You changed the channel while the AI was working, so its post was not used. Ask again to get it.' : "The AI's post was not used. Ask again to get it."}
         </p>
       )}
       {undoable && (

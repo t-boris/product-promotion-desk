@@ -22,6 +22,37 @@ export function canApply(asked: string, now: string): boolean {
   return asked === now
 }
 
+/** What happens to an answer that arrives after the owner may have moved on. */
+export type AnswerFate = 'apply' | 'typed' | 'draft_changed' | 'locked'
+
+/**
+ * Whether the AI's text goes into the field when it arrives. The answer was written and checked against the draft as it was when the question
+ * was asked: if the field itself changed, the owner's typing wins; if the rest of the draft it was checked against changed (the other field, the
+ * channel it is for), the answer no longer holds and is dropped; if the form is busy saving, the draft row is about to be replaced.
+ * `around` is a snapshot of everything but the field that the answer depends on; null when it depends on nothing else.
+ */
+export function answerFate(asked: { value: string; around: string | null }, now: { value: string; around: string | null; locked: boolean }): AnswerFate {
+  if (!canApply(asked.value, now.value)) return 'typed'
+  if (asked.around !== now.around) return 'draft_changed'
+  if (now.locked) return 'locked'
+  return 'apply'
+}
+
+/** What the owner is told when an answer was dropped; null when it was applied. */
+export function skippedNote(fate: AnswerFate, what: 'text' | 'post' = 'text'): string | null {
+  const it = what === 'post' ? 'its post' : 'its text'
+  switch (fate) {
+    case 'apply':
+      return null
+    case 'typed':
+      return `You changed the ${what === 'post' ? 'title or the text' : 'text'} while the AI was working, so ${it} was not used. Ask again to get it.`
+    case 'draft_changed':
+      return `The draft changed while the AI was working (the other field or the channel), so ${it} was not used. Ask again to get it.`
+    case 'locked':
+      return `The draft was being saved while the AI was working, so ${it} was not used. Ask again to get it.`
+  }
+}
+
 const MAX_AVOID = 20
 
 /** The ideas already shown, newest last, without repeats and bounded; the core asks the AI not to repeat them. */

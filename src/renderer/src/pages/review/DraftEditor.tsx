@@ -72,6 +72,10 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
     if (text === undefined) throw new Error('The AI did not return a text. Try again.')
     return text
   }
+  // An answer is checked against the other field and the target it was asked for; if either moved on meanwhile, it is dropped (AiTextField).
+  const target = ai?.opportunityId ?? ai?.channelId ?? ''
+  const aroundTitle = JSON.stringify([target, form.text])
+  const aroundText = JSON.stringify([target, form.title])
   const set = (patch: Partial<DraftForm>): void => onChange((current) => ({ ...current, ...patch }))
   const addAttachment = (): void => {
     const trimmed = path.trim()
@@ -90,7 +94,7 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
       )}
       {withTitle &&
         (ai ? (
-          <AiTextField key={`title-${draft?.id ?? 'new'}`} label="Title" value={form.title} onChange={(title) => set({ title })} ask={askFor('title')} blocked={blocked} disabled={disabled} testId="draft-title-help">
+          <AiTextField key={`title-${draft?.id ?? 'new'}`} label="Title" value={form.title} onChange={(title) => set({ title })} ask={askFor('title')} blocked={blocked} disabled={disabled} around={aroundTitle} testId="draft-title-help">
             {(id) => <input id={id} className="input" value={form.title} disabled={disabled} onChange={(e) => set({ title: e.target.value })} autoFocus={autoFocus} data-testid="draft-title" />}
           </AiTextField>
         ) : (
@@ -99,7 +103,7 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
           </Field>
         ))}
       {ai ? (
-        <AiTextField key={`text-${draft?.id ?? 'new'}`} label={withTitle ? 'Text' : 'Reply'} value={form.text} onChange={(text) => set({ text })} ask={askFor('text')} blocked={blocked} disabled={disabled} testId="draft-text-help">
+        <AiTextField key={`text-${draft?.id ?? 'new'}`} label={withTitle ? 'Text' : 'Reply'} value={form.text} onChange={(text) => set({ text })} ask={askFor('text')} blocked={blocked} disabled={disabled} around={aroundText} testId="draft-text-help">
           {(id) => <textarea id={id} className="input draft-text" value={form.text} disabled={disabled} onChange={(e) => set({ text: e.target.value })} autoFocus={autoFocus && !withTitle} data-testid="draft-text" rows={4} />}
         </AiTextField>
       ) : (
