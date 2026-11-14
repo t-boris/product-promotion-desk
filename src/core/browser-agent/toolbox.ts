@@ -676,6 +676,8 @@ export class BrowserToolbox implements McpToolHost {
       if (typed.status !== 'done') return { refused: `the ${part.name} could not be typed (${typed.detail}). The form may hold part of it; do not click anything: look again, or open the page again with browser_navigate.` }
       this.deps.say(`Typed the approved ${part.name} into "${this.labelOf(part.ref)}"`)
     }
+    // The last wait, before the last look: from the look below to the press nothing is waited for, so what was seen is what is pressed.
+    await this.pace()
     for (const part of parts) {
       const held = await page.read<unknown>(fieldValueScript(part.ref))
       if (!sameContent(held, part.value)) {
@@ -692,7 +694,6 @@ export class BrowserToolbox implements McpToolHost {
     const problem = this.targetProblem(now, parts, submitRef)
     if (problem) return { refused: problem }
 
-    await this.pace()
     // No wait between this look and the point of no return: whatever ended the mission before it is seen here, and `commit` itself refuses after a seal.
     const over = this.overNow()
     if (over) return { refused: over }

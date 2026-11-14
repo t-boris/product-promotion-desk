@@ -143,6 +143,7 @@ function setup(content: ApprovedContent = REPLY, over: Partial<ToolboxDeps> = {}
     values: {},
     sleep: async (ms) => {
       sleeps.push(ms)
+      page.log.push('sleep')
       time.now += ms
     },
     say: (line) => said.push(line),
@@ -877,6 +878,21 @@ describe('pacing: a post mission does not act in milliseconds', () => {
     // Before the submission, between the three typings, and before the press: 1 + 2 + 1 gaps; the 1000 is the page settling after it.
     expect(waits.filter((ms) => ms === 2000)).toHaveLength(4)
     expect(t.authority.committed).toBe(true)
+  })
+
+  it('does not wait between the last look at the page and the press: what was checked is what is pressed', async () => {
+    for (const content of [REPLY, POST]) {
+      const t = setup(content)
+      await look(t)
+      await t.toolbox.call('browser_click', { ref: 'e5' })
+      expect((content.kind === 'post' ? await submitPost(t) : await submitReply(t)).isError).toBeUndefined()
+      const press = t.page.log.lastIndexOf('pageStep click')
+      const lastLook = t.page.log.slice(0, press).reduce((last, entry, i) => (entry.startsWith('read') ? i : last), -1)
+      expect(lastLook).toBeGreaterThan(-1)
+      expect(t.page.log.slice(lastLook, press)).not.toContain('sleep')
+      // The wait is still taken, just before that look: the typing of the last field is followed by one.
+      expect(t.page.log.slice(0, lastLook)).toContain('sleep')
+    }
   })
 
   it('does not pace the sign-up and profile missions', async () => {
