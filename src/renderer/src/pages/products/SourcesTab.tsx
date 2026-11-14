@@ -3,7 +3,7 @@ import type { PassportView, Product, ProductSource } from '../../../../shared/ty
 import type { SourcePreview } from '../../../../shared/api'
 import { call, useAction } from '../../hooks'
 import { Badge, Button, Card, EmptyState, ErrorNote, formatTime, Hint, More } from '../../ui'
-import { AddSource } from './AddSource'
+import { AddSource, SOURCE_SAVED_TEXT, SourceForm } from './AddSource'
 import { SOURCE_LABELS } from './labels'
 import { describeScope } from './model'
 import { isMirroredSource, isProse } from './source-view'
@@ -42,15 +42,47 @@ function SourceText({ text, lines }: { text: string; lines: number }) {
   )
 }
 
-function SourceRow({ source, product }: { source: ProductSource; product: Product }) {
+function SourceRow({
+  source,
+  product,
+  editing,
+  onEdit
+}: {
+  source: ProductSource
+  product: Product
+  /** This row is the one open in "Edit": one at a time, so the edit form's test ids stay unique. */
+  editing: boolean
+  /** Opens this row in "Edit" (true) or closes it (false). */
+  onEdit: (open: boolean) => void
+}) {
   const [preview, setPreview] = useState<SourcePreview | null>(null)
   const [confirming, setConfirming] = useState(false)
+  // "Edit" opens the source in place, in the same form as "Add a source"; after a save the row says what it means (BUG-034).
+  const [saved, setSaved] = useState(false)
   const [remove, removing] = useAction(() => call('sources.remove', { id: source.id }))
   const [look, looking] = useAction(async () => {
     setPreview(await call('sources.preview', { kind: source.kind, ref: source.ref, scope: source.scope }))
   })
   const scope = describeScope(source.scope)
   const mirrored = isMirroredSource(source, product)
+
+  if (editing) {
+    return (
+      <div className="source-row editing" data-testid={`source-${source.id}`}>
+        <div className="source-main">
+          <SourceForm
+            productId={product.id}
+            source={source}
+            onSaved={() => {
+              onEdit(false)
+              setSaved(true)
+            }}
+            onCancel={() => onEdit(false)}
+          />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="stack" data-testid={`source-${source.id}`}>
@@ -74,6 +106,18 @@ function SourceRow({ source, product }: { source: ProductSource; product: Produc
               What the AI sees
             </Button>
           )}
+          {!mirrored && !confirming && (
+            <Button
+              variant="quiet"
+              onClick={() => {
+                setSaved(false)
+                onEdit(true)
+              }}
+              data-testid={`source-edit-${source.id}`}
+            >
+              Edit
+            </Button>
+          )}
           {!mirrored &&
             (confirming ? (
               <>
@@ -92,6 +136,11 @@ function SourceRow({ source, product }: { source: ProductSource; product: Produc
             ))}
         </div>
       </div>
+      {saved && (
+        <div className="note good" role="status" data-testid={`source-saved-${source.id}`}>
+          {SOURCE_SAVED_TEXT}
+        </div>
+      )}
       <ErrorNote error={looking.error ?? removing.error} />
       {preview && <SourcePreviewPanel preview={preview} />}
     </div>
@@ -102,6 +151,7 @@ function SourceRow({ source, product }: { source: ProductSource; product: Produc
 const FORM_FIRST_BELOW = 3
 
 export function SourcesTab({ view }: { view: PassportView }) {
+  const [editingId, setEditingId] = useState<string | null>(null)
   const formFirst = view.sources.length < FORM_FIRST_BELOW
   // One keyed element in two places: React moves it when the order flips, so a half-typed source is not lost.
   const form = <AddSource key="add-source" productId={view.product.id} />
@@ -118,7 +168,13 @@ export function SourcesTab({ view }: { view: PassportView }) {
         ) : (
           <div className="stack source-list">
             {view.sources.map((source) => (
-              <SourceRow key={source.id} source={source} product={view.product} />
+              <SourceRow
+                key={source.id}
+                source={source}
+                product={view.product}
+                editing={editingId === source.id}
+                onEdit={(open) => setEditingId(open ? source.id : null)}
+              />
             ))}
           </div>
         )}

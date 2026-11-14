@@ -106,6 +106,12 @@ export interface ApiMethods {
   'products.saveGoal': [{ id: Id; goal: PromotionGoalInput }, Product]
   'products.removeGoal': [{ id: Id; goalId: Id }, Product]
   'sources.add': [{ productId: Id; kind: SourceKind; ref: string; label?: string; scope?: SourceScope | null }, ProductSource]
+  /**
+   * Corrects a source in place (BUG-034): the same checks as sources.add, the kind stays, and the id and the date it was
+   * added are kept, so the statements that cite it keep their source. Refuses a source that mirrors the product's website
+   * or description (`invalid_state`: those change with products.update) and a copy of another source (`conflict`).
+   */
+  'sources.update': [{ id: Id; ref: string; label?: string; scope?: SourceScope | null }, ProductSource]
   'sources.remove': [{ id: Id }, void]
   'sources.preview': [{ kind: SourceKind; ref: string; scope?: SourceScope | null }, SourcePreview]
   'analysis.start': [{ productId: Id }, PassportView]
