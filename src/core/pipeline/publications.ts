@@ -36,6 +36,8 @@ export class PublicationsFlow {
       this.store.insertDraft(created.id, content, { knowledgeVersionId: null, usedClaimLineageIds: [], rationale: '', author: 'user' })
       return created
     })()
+    // The entry says that a draft was written, not what it says, and later edits of it stay out of the log (BUG-066).
+    this.core.log.info('pipeline', `Draft written for ${channel.target}`, channel.id)
     this.store.notify()
     return opp
   }
