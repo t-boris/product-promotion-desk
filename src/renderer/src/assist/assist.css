@@ -1,0 +1,51 @@
+/* The AI beside a field and the panel that proposes one idea at a time (assist/). Spacing and sizes come from the tokens; the buttons are
+   the standard ones, so a field with the AI is not taller than its neighbours (UI standard for controls). */
+
+.field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: var(--control-h);
+}
+.ai-wish {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.ai-wish .input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.ai-undo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.proposal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.proposal-steer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.proposal-steer .input {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.proposal-idea {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow-wrap: anywhere;
+}

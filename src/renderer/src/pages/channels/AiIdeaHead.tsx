@@ -12,7 +12,8 @@ export function AiIdeaHead({
   button,
   blocked,
   engineLabel,
-  blockedTestId
+  blockedTestId,
+  note = 'Nothing is created or connected.'
 }: {
   title: string
   summary: string
@@ -20,6 +21,8 @@ export function AiIdeaHead({
   blocked: Blocked | null
   engineLabel: string | undefined
   blockedTestId: string
+  /** What the help leaves alone, said under the button: it differs by help ("Nothing is saved." for a goal). */
+  note?: string
 }) {
   return (
     <div className="idea-head">
@@ -34,7 +37,7 @@ export function AiIdeaHead({
             {blocked.text} <a href={blocked.fix.href}>{blocked.fix.label}</a>
           </Hint>
         ) : (
-          <Hint>Uses {engineLabel ?? 'the AI engine'}. Nothing is created or connected.</Hint>
+          <Hint>Uses {engineLabel ?? 'the AI engine'}. {note}</Hint>
         )}
       </div>
     </div>
