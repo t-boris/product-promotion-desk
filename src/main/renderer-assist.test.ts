@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest'
 import { assistBlock, type BlockFacts } from '../renderer/src/assist/block'
 import { canUndo, fieldAction, ideaButtonLabel, rememberShown } from '../renderer/src/assist/field-logic'
 import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block'
+import { around, fieldsFromIdea, hasText } from '../renderer/src/pages/products/goal-ideas'
+import { applySiteProposal, siteProposalNote } from '../renderer/src/pages/products/site-proposal'
 
 const READY = { id: 'claude', ready: true, detail: 'ok', label: 'Claude Code' }
 const base: BlockFacts = { productId: 'p1', needsPassport: false, approved: false, engineId: 'claude', engines: [READY], ready: true }
@@ -65,5 +67,50 @@ describe('ideaButtonLabel', () => {
     expect(ideaButtonLabel({ asking: false, shownBefore: 0, ...words })).toBe('Suggest a goal with AI')
     expect(ideaButtonLabel({ asking: false, shownBefore: 2, ...words })).toBe('Another one')
     expect(ideaButtonLabel({ asking: true, shownBefore: 2, ...words })).toBe('Thinking…')
+  })
+})
+
+describe('goal ideas and the goal form', () => {
+  const idea = { targetAction: 'Create the first natal chart', successMetrics: ['charts created', 'replies'], reason: 'It takes a minute.' }
+
+  it('an idea fills the target action and the metrics, one per line, and leaves the notes to the owner', () => {
+    expect(fieldsFromIdea(idea)).toEqual({ targetAction: 'Create the first natal chart', metrics: 'charts created\nreplies', notes: '' })
+    expect(fieldsFromIdea({ ...idea, successMetrics: [] }).metrics).toBe('')
+  })
+
+  it('knows whether the owner has written anything', () => {
+    expect(hasText({ targetAction: '', metrics: '  ', notes: '\n' })).toBe(false)
+    expect(hasText({ targetAction: '', metrics: '', notes: 'a note' })).toBe(true)
+  })
+
+  it('shows the AI the other filled fields of the form, not the one it works on', () => {
+    const fields = { targetAction: 'Join the waitlist', metrics: '', notes: 'By May' }
+    expect(around(fields, 'targetAction')).toEqual([{ label: 'Notes', text: 'By May' }])
+    expect(around(fields, 'metrics')).toEqual([
+      { label: 'Target action', text: 'Join the waitlist' },
+      { label: 'Notes', text: 'By May' }
+    ])
+  })
+})
+
+describe('fill from the website', () => {
+  const proposal = { name: 'Natal Mystic', description: 'Makes birth chart reports.', websiteUrl: 'https://natal.example.com/' }
+
+  it('fills the empty fields and normalizes the address', () => {
+    const applied = applySiteProposal({ name: '', websiteUrl: 'natal.example.com', description: ' ' }, proposal)
+    expect(applied.form).toEqual({ name: 'Natal Mystic', websiteUrl: 'https://natal.example.com/', description: 'Makes birth chart reports.' })
+    expect(applied.filled).toEqual(['name', 'description'])
+    expect(siteProposalNote(applied)).toBe('Filled the name and the description from the site. Check them before you create the product.')
+  })
+
+  it('never replaces what the owner typed', () => {
+    const applied = applySiteProposal({ name: 'My product', websiteUrl: 'natal.example.com', description: '' }, proposal)
+    expect(applied.form.name).toBe('My product')
+    expect(applied.form.description).toBe('Makes birth chart reports.')
+    expect(applied.kept).toEqual(['name'])
+    expect(siteProposalNote(applied)).toBe('Filled the description from the site, and kept your name. Check it before you create the product.')
+    const none = applySiteProposal({ name: 'A', websiteUrl: 'x.test', description: 'B' }, proposal)
+    expect(none.form).toMatchObject({ name: 'A', description: 'B' })
+    expect(siteProposalNote(none)).toBe('Kept what you wrote. Clear a field to let the site fill it.')
   })
 })
