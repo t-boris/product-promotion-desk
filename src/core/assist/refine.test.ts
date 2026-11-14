@@ -178,6 +178,11 @@ describe('readRefined (the answer is untrusted text)', () => {
     expect(long.ok && long.value.length).toBeLessThanOrEqual(prose.max)
   })
 
+  it('lets a product description say "guarantee" or "automatic", and still refuses a credential in it', () => {
+    expect(readRefined({ text: 'Schedules your posts automatically. Comes with a money-back guarantee.' }, prose)).toMatchObject({ ok: true })
+    expect(readRefined({ text: 'Our admin password: hunter2' }, prose)).toMatchObject({ ok: false })
+  })
+
   it('refuses a wrong shape, an empty text, credentials, automation and promises', () => {
     expect(readRefined('nope', line)).toMatchObject({ ok: false })
     expect(readRefined({ text: 5 }, line)).toMatchObject({ ok: false })

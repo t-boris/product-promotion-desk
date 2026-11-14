@@ -7,7 +7,7 @@ import type { AssistField } from '../../shared/types'
 import { AiError, type AiEngine, type AiRunOptions, type AiTask } from '../ports'
 import { collapseWhitespace, normalizeForCompare } from '../passports/text'
 import { FIELDS, type FieldSpec } from './fields'
-import { askWithRepair, fence, isRecord, oneLine, plainText, productBlock, unsafe, type Claim, type Parsed, type ProductFacts } from './kit'
+import { askWithRepair, fence, holdsCredential, isRecord, oneLine, plainText, productBlock, unsafe, type Claim, type Parsed, type ProductFacts } from './kit'
 
 export interface RefineInput {
   field: AssistField
@@ -126,7 +126,9 @@ export function readRefined(raw: unknown, spec: FieldSpec): Parsed<string> {
   }
 
   if (!text) return { ok: false, error: '"text" is empty' }
-  if (unsafe(text)) return { ok: false, error: 'the text holds a credential, talks of automating posting or replying, or promises results; write it without them' }
+  if (spec.guard === 'credentials' ? holdsCredential(text) : unsafe(text)) {
+    return { ok: false, error: spec.guard === 'credentials' ? 'the text holds a credential; write it without one' : 'the text holds a credential, talks of automating posting or replying, or promises results; write it without them' }
+  }
   return { ok: true, value: text }
 }
 

@@ -45,9 +45,14 @@ const AUTOMATION =
   /\b(?:auto[- ]?(?:post|reply|respond|comment|publish)\w*|(?:automatically|automate|schedule)\s+(?:the\s+)?(?:post|reply|replies|comment|publish|send)\w*|(?:use|run|build)\s+(?:a\s+)?bots?\b|spam\w*|mass[- ](?:post|dm|message)\w*)/i
 const PROMISE = /\b(?:guarantee[ds]?|promise[ds]?|100\s?%\s+(?:success|results|conversion)|will\s+(?:definitely|certainly|surely)\s+(?:bring|get|drive|win))\b/i
 
+/** True for text that holds a credential (a password, a key, a token). */
+export function holdsCredential(text: string): boolean {
+  return redactSecrets(text).count > 0 || SECRET_WORDS.test(text)
+}
+
 /** True for text that holds a credential, talks of automating posting or replying, or promises results. */
 export function unsafe(text: string): boolean {
-  return redactSecrets(text).count > 0 || SECRET_WORDS.test(text) || AUTOMATION.test(text) || PROMISE.test(text)
+  return holdsCredential(text) || AUTOMATION.test(text) || PROMISE.test(text)
 }
 
 /** What a reader returns: the value, or the problem that is handed back to the engine for one repair attempt. */

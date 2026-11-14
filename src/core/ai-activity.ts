@@ -22,6 +22,7 @@ const TITLES: Record<string, string> = {
   'goals.suggest': 'Suggesting a goal',
   'assist.write': 'Writing a text',
   'assist.improve': 'Improving a text',
+  'products.from_site': 'Reading the site to propose the product',
   'channels.roles': 'Suggesting roles',
   'channels.plan': 'Planning the channel',
   'channels.site_profile': 'Reading the site to prepare its profile',
