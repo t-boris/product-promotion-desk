@@ -7,6 +7,7 @@ import { answerFate, canApply, canUndo, fieldAction, ideaButtonLabel, rememberSh
 import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block'
 import { around, fieldsFromIdea, hasText } from '../renderer/src/pages/products/goal-ideas'
 import { applySiteProposal, proposalFits, siteProposalNote } from '../renderer/src/pages/products/site-proposal'
+import { approveAnywayLabel, checkForm, countLabel, fingerprint, heldFor, introLine, mayApproveAnyway, needsCheck, type Held } from '../renderer/src/pages/review/approve-check'
 import { canApplyPost, postAnswerFate, postFormEmpty, postUndoable, showPostHelper } from '../renderer/src/pages/review/post-draft'
 
 const READY = { id: 'claude', ready: true, detail: 'ok', label: 'Claude Code' }
@@ -218,5 +219,62 @@ describe('"Draft with AI" for a new publication', () => {
     expect(showPostHelper(wrote, wrote)).toBe(true)
     expect(showPostHelper(wrote, null)).toBe(false)
     expect(showPostHelper({ ...wrote, text: 'edited' }, wrote)).toBe(false)
+  })
+})
+
+describe('the check before an approval', () => {
+  const finding = (blocks: boolean) => ({ rule: blocks ? ('connection_unsaid' as const) : ('free' as const), title: 'A rule', quote: null, why: 'Why', blocks })
+  const held = (over: Partial<Held> = {}): Held => ({ which: 'approve', findings: [finding(false)], error: null, fingerprint: fingerprint({ text: 'Hello' }), ...over })
+
+  it('reads a text the owner wrote or changed, and leaves an AI draft they left alone', () => {
+    expect(needsCheck(null, false)).toBe(false)
+    expect(needsCheck(null, true)).toBe(true)
+    expect(needsCheck({ author: 'ai' }, false)).toBe(false)
+    expect(needsCheck({ author: 'ai' }, true)).toBe(true)
+    expect(needsCheck({ author: 'user' }, false)).toBe(true)
+    expect(needsCheck({ author: 'user' }, true)).toBe(true)
+  })
+
+  it('sends the editor to the core with every field set', () => {
+    expect(checkForm({ text: 'Hi' })).toEqual({ title: '', text: 'Hi', link: '' })
+    expect(checkForm({ title: 'T', text: 'Hi', link: 'https://x.test' })).toEqual({ title: 'T', text: 'Hi', link: 'https://x.test' })
+    expect(checkForm({ title: null, text: 'Hi', link: null })).toEqual({ title: '', text: 'Hi', link: '' })
+  })
+
+  it('knows a text by its title, text and link, and by nothing else', () => {
+    const base = { title: 'T', text: 'Hello', link: 'https://x.test' }
+    expect(fingerprint(base)).toBe(fingerprint({ ...base }))
+    expect(fingerprint({ text: 'Hello' })).toBe(fingerprint({ title: null, text: 'Hello', link: null }))
+    expect(fingerprint({ ...base, title: 'U' })).not.toBe(fingerprint(base))
+    expect(fingerprint({ ...base, text: 'Hello!' })).not.toBe(fingerprint(base))
+    expect(fingerprint({ ...base, link: 'https://y.test' })).not.toBe(fingerprint(base))
+    expect(fingerprint({ ...base, attachments: [{ name: 'a.png', path: '/a.png', mime: 'image/png', sha256: 'x' }] })).toBe(fingerprint(base))
+  })
+
+  it('shows the panel only while the text it was made for is on the screen', () => {
+    const h = held()
+    expect(heldFor(h, { text: 'Hello' })).toBe(h)
+    expect(heldFor(h, { text: 'Hello', attachments: [{ name: 'a.png', path: '/a.png', mime: 'image/png', sha256: 'x' }] })).toBe(h)
+    expect(heldFor(h, { text: 'Hello there' })).toBeNull()
+    expect(heldFor(h, { title: 'New', text: 'Hello' })).toBeNull()
+    expect(heldFor(h, { text: 'Hello', link: 'https://x.test' })).toBeNull()
+    expect(heldFor(null, { text: 'Hello' })).toBeNull()
+  })
+
+  it('offers "Approve anyway" unless a finding blocks, and says what was pressed', () => {
+    expect(mayApproveAnyway({ findings: [] })).toBe(true)
+    expect(mayApproveAnyway({ findings: [finding(false), finding(false)] })).toBe(true)
+    expect(mayApproveAnyway({ findings: [finding(false), finding(true)] })).toBe(false)
+    expect(approveAnywayLabel('approve')).toBe('Approve anyway')
+    expect(approveAnywayLabel('approve_send')).toBe('Approve and send anyway')
+  })
+
+  it('counts the findings and introduces the panel in the words of its case', () => {
+    expect(countLabel([finding(false)])).toBe('1 thing')
+    expect(countLabel([finding(false), finding(false), finding(true)])).toBe('3 things')
+    expect(introLine({ findings: [finding(false)], error: null })).toBe("Your text breaks rules the AI's own drafts must follow. Nothing is approved yet.")
+    expect(introLine({ findings: [finding(true)], error: null })).toBe('Something here has to be fixed before the text can be approved. Nothing is approved yet.')
+    expect(introLine({ findings: [], error: 'The engine is gone' })).toBe('The text could not be checked (The engine is gone). Nothing is approved yet; you can still approve it.')
+    expect(introLine({ findings: [finding(true)], error: 'x' })).toContain('could not be checked')
   })
 })

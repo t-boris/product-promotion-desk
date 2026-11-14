@@ -690,8 +690,7 @@ states facts about the product that the owner's draft does not state (the same t
 draft is no licence to add facts). The checks read the text without its invisible characters (zero-width, bidi marks, variation selectors) and with look-alike
 forms folded, so "fr\u200Bee" or "evil\u200B.com" are caught; the text handed over is the AI's own. If the product knowledge (facts, prohibited statements, the product's
 name or website) changes while the AI writes, the text is refused, not handed over as checked. The owner's text is never cut: a draft too long for the AI to read whole (20,000 characters) is refused. The
-owner's own text next to the AI's is not checked; what the owner saves is the owner's, as before (a check of the owner's own text on save and approve is a separate
-decision). Like the AI drafts, it works with any ready engine; the website-fed helps of §17 refuse engines that are not tool-free.
+owner's own text next to the AI's is not checked; what the owner saves is the owner's, as before (the check of the owner's own text when it is approved is §19). Like the AI drafts, it works with any ready engine; the website-fed helps of §17 refuse engines that are not tool-free.
 
 | Pattern | Markup | Rules |
 |---|---|---|
@@ -705,3 +704,31 @@ decision). Like the AI drafts, it works with any ready engine; the website-fed h
 | V-29 | The AI's draft text lands in the editor, never in storage; Undo restores what was there; typing over it hides Undo; "Redo with AI" with unsaved changes asks first | packaged probe with the real engine on an own instance | as described |
 | V-30 | A text the safety checks refuse is never shown to the owner; the refusal names the reasons | `draft-help.test.ts` (each rule, mutation-checked) and the packaged probe | as described |
 
+## 19. A check before the owner's own text is approved (0.12.0)
+
+The owner's own text used to reach Approve without anyone reading it against the rules an AI draft must pass. Now pressing "Approve" or "Approve and send" on a text
+the owner wrote, or changed and did not save, reads it first (`drafts.check`, `src/core/pipeline/draft-check.ts`): locally, with no engine, nothing stored and the
+text never logged. An AI draft the owner left as it is passed these rules when it was written and is not read again (`needsCheck` in `approve-check.ts`: the form is
+dirty, or the draft's author is the owner).
+
+What it reads is the safety module of the AI drafts in its owner mode (`checkDraftSafety` with `mode: 'owner'`): a statement the product knowledge prohibits; a link
+that is not the product's own address, however it is written (the §18 rules); a price, a discount or "free" that no approved fact states (the owner's text cites no
+fact, so any approved claim backs it, and the rules about citing facts do not apply); something that looks like a password or a key; and the connection to the
+product (`disclosureVerdict`, the rule the approval itself enforces: the product named without saying the author is connected with it, or a denial of the connection).
+Only the connection can stop an approval, because only it is decided in code at the approval and at the send. Nothing else is blocked by this panel.
+
+No findings: the text is approved at once, as before. Findings: nothing is approved, nothing is saved, and the panel stands where the buttons were.
+
+| Pattern | Markup | Rules |
+|---|---|---|
+| Check before you approve | `ApproveCheck` (`.check-panel`: the `--attention-bg` well with a `--line` border and `--radius-md`; head with the title and a warn `Badge` "N things"; one line of explanation; `.check-list`, one row per finding separated by hairlines: the rule in `--fw-medium`, the owner's words quoted in `--mono`, the reason muted; then the same action row as the card) | It replaces the buttons of the card, it is not a modal. "Edit the text" is the filled button (or secondary when another card owns the screen's one filled button) and has the focus when the panel opens; "Approve anyway" is secondary and approves what was pressed ("Approve anyway" after Approve, "Approve and send anyway" after Approve and send) with the editor as it stands. Defer and Reject stay at the left. |
+| Blocking line | the same row with a `bad` `Badge` "Must be fixed" and the heading line "Something here has to be fixed before the text can be approved." | While a finding blocks, "Approve anyway" is not offered, only "Edit the text". |
+| Check failed | the panel with no count, "The text could not be checked (reason). Nothing is approved yet; you can still approve it.", "Approve anyway" and "Edit the text" | A failed check never blocks an approval by itself (it is advice; the hard rules stay in the core). |
+
+The panel is made for one text: its fingerprint is the title, text and link as the editor trims them (the attachments are not read by the rules). When any of them
+changes the panel goes and the buttons return; a space at the end of the text changes nothing that would be approved and does not remove it. "Edit the text" closes it
+and puts the focus in the text of the card. The buttons are disabled while the check runs, so the editor cannot change under it.
+
+| Id | Requirement | Method | Pass |
+|---|---|---|---|
+| V-31 | The owner's text is read before it is approved; with findings nothing is approved or saved and the panel names each rule, the words and why; a blocking finding offers no "Approve anyway"; the panel goes when the text changes | `draft-check.test.ts`, `safety.test.ts`, `renderer-assist.test.ts` (each mutation-checked), and the packaged probe on an own instance (43 checks: clean text, AI draft left alone, three advice findings, the blocking connection line, both buttons, typing, Edit the text, light/dark at 1320x880 and 980x640) | as described; V-06, V-09 hold (one filled button per screen, no cut buttons) |

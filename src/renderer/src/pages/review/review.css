@@ -354,3 +354,57 @@
   align-items: center;
   gap: var(--space-2);
 }
+
+/* ───────────── The check before an approval: one tinted box in place of the buttons, one row for each rule the text breaks ───────────── */
+
+.check-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--attention-bg);
+}
+.check-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.check-intro {
+  margin: 0;
+}
+.check-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.check-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-half);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--line);
+}
+.check-list li:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+.check-rule {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-weight: var(--fw-medium);
+}
+/* The owner's own words, quoted: monospace is for addresses and pasted text, and this is both. */
+.check-list q {
+  font-family: var(--mono);
+  font-size: var(--fs-caption);
+  color: var(--text-1);
+  overflow-wrap: anywhere;
+}

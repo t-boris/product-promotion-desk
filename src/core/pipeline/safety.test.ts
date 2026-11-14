@@ -109,3 +109,86 @@ describe('hosts the product allows', () => {
     expect(check('See natalmystic.com', { allowedHosts: allowedHostsFor(null, []) })).toHaveLength(1)
   })
 })
+
+describe('findings: the same problems, shaped for a screen', () => {
+  const run = (text: string, extra: Partial<Parameters<typeof checkDraftSafety>[0]> = {}) =>
+    checkDraftSafety({ text, title: null, link: null, usedClaimIds: [], approved: [], prohibited: [], allowedHosts: OWN, ...extra })
+
+  it('are one for each violation, in the same order, for an AI draft', () => {
+    const report = run('It is free. A price: $9. Use the coupon. See bit.ly/x. A guaranteed result.', {
+      prohibited: ['A guaranteed result'],
+      usedClaimIds: ['nope'],
+      approved: [claim('c9', 'Something else')]
+    })
+    expect(report.findings.map((f) => f.rule)).toEqual(['unknown_claim', 'prohibited', 'price', 'discount', 'free', 'link'])
+    expect(report.findings).toHaveLength(report.violations.length)
+  })
+
+  it('quote the sentence a price, a discount or a free offer sits in, and cut a long one', () => {
+    expect(run('Hello there. It is $9 a month. Bye.').findings[0].quote).toBe('It is $9 a month')
+    expect(run('First line\nUse the coupon today!\nThird').findings[0].quote).toBe('Use the coupon today')
+    expect(run('First line\nUse the coupon today\nSecond line, no full stop').findings[0].quote).toBe('Use the coupon today')
+    // A long sentence is cut around the words, never away from them.
+    const long = run(`${'word '.repeat(40)}is free now`).findings[0].quote ?? ''
+    expect(long.length).toBeLessThanOrEqual(92)
+    expect(long.startsWith('…')).toBe(true)
+    expect(long).toContain('free')
+    const early = run(`It is free ${'word '.repeat(40)}and so on`).findings[0].quote ?? ''
+    expect(early.startsWith('It is free')).toBe(true)
+    expect(early.endsWith('…')).toBe(true)
+    // What the front does not use, the back gets: the quote is as long as the room allows (90 characters and the mark).
+    expect(early).toHaveLength(91)
+    const middle = run(`${'before '.repeat(20)}the first month is free for everyone ${'after '.repeat(20)}`).findings[0].quote ?? ''
+    expect(middle.startsWith('…') && middle.endsWith('…')).toBe(true)
+    expect(middle).toContain('is free for')
+    expect(middle.length).toBeLessThanOrEqual(92)
+  })
+
+  it('cut a long sentence evenly around the words, for each rule', () => {
+    const around = (words: string): string => `${'before '.repeat(20)}${words} ${'after '.repeat(20)}`
+    expect(run(around('the first month is free for everyone')).findings[0].quote).toBe('…re before before before the first month is free for everyone after after after after after…')
+    expect(run(around('it costs $9 a month for everyone')).findings[0].quote).toBe('…before before before before before it costs $9 a month for everyone after after after afte…')
+    expect(run(around('use the coupon NATAL for everyone')).findings[0].quote).toBe('…efore before before before before use the coupon NATAL for everyone after after after afte…')
+  })
+
+  it('show a sentence with its spaces squeezed to one', () => {
+    expect(run('Yes   it is  free   for  a month').findings[0].quote).toBe('Yes it is free for a month')
+  })
+
+  it('keep a number, an address or a question mark inside the sentence it is in', () => {
+    expect(run('It costs $9.99 a month, which is cheap.').findings[0].quote).toBe('It costs $9.99 a month, which is cheap')
+    expect(run('Try evil.com it is free for everyone.').findings.map((f) => f.quote)).toEqual(['Try evil.com it is free for everyone', 'evil.com'])
+    expect(run('See evil.com/a?b=1 and use the coupon.', { allowedHosts: [] }).findings.map((f) => f.quote)).toEqual(['See evil.com/a?b=1 and use the coupon', 'evil.com'])
+    // A full stop, "!" or "?" before a space still ends the sentence, and so does the end of the text.
+    expect(run('Is it ok? Use the coupon! Fine.').findings[0].quote).toBe('Use the coupon')
+    expect(run('Hello. Use the coupon.').findings[0].quote).toBe('Use the coupon')
+  })
+
+  it('cut a long sentence by characters, not through an emoji', () => {
+    const quote = run(`${'😀'.repeat(120)} free`).findings[0].quote ?? ''
+    expect(quote).toContain('free')
+    expect(quote).not.toMatch(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/)
+    const after = run(`It is free ${'😀'.repeat(120)}`).findings[0].quote ?? ''
+    expect(after.startsWith('It is free')).toBe(true)
+    expect(after).not.toMatch(/[\ud800-\udbff](?![\udc00-\udfff])/)
+  })
+
+  it('say which addresses may be linked, or that there are none', () => {
+    expect(run('See evil.com').findings[0].why).toBe('Only natalmystic.com may be linked.')
+    expect(run('See evil.com', { allowedHosts: [] }).findings[0].why).toBe('The product has no website, and no approved fact names an address.')
+    expect(run('See evil.com', { allowedHosts: ['a.com', 'b.com', 'c.com', 'd.com'] }).findings[0].why).toBe('Only a.com, b.com, c.com may be linked.')
+  })
+
+  it("for the owner's own text skip the rules about citing, and count any approved fact as the backing", () => {
+    const approved = [claim('c1', 'It costs $9 a month.'), { ...claim('c2', 'A Windows build.'), unconfirmedAvailability: true }]
+    // It cites an unconfirmed fact and an unknown id, as an AI draft would: for the owner's text that is nothing to report.
+    const owner = run('It is $9 a month, on Windows.', { mode: 'owner', approved, usedClaimIds: ['c1', 'c2', 'nope'] })
+    expect(owner.violations).toEqual([])
+    expect(owner.findings).toEqual([])
+    expect(owner.usedClaims).toEqual([])
+    // The same text as an AI draft that cites nothing is refused: nothing backs the price.
+    expect(run('It is $9 a month, on Windows.', { approved }).findings.map((f) => f.rule)).toEqual(['price'])
+    // A price no approved fact names is found in the owner's text too.
+    expect(run('It is $12 a month.', { mode: 'owner', approved }).findings.map((f) => f.rule)).toEqual(['price'])
+  })
+})

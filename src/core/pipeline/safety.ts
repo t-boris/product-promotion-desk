@@ -17,11 +17,30 @@ export interface SafetyInput {
   prohibited: string[]
   /** Hosts a link may point to (the product website and hosts named in approved claims). */
   allowedHosts: string[]
+  /**
+   * 'ai' (the default): an AI draft, which cites the approved facts it rests on; a price, a discount or "free" must be backed by a cited one.
+   * 'owner': a text the owner wrote, which cites nothing: the rules about citing do not apply, and an amount, a discount or "free" is backed
+   * when any approved fact says it.
+   */
+  mode?: 'ai' | 'owner'
+}
+
+/** Which rule a finding is about. */
+export type FindingRule = 'unknown_claim' | 'unconfirmed' | 'prohibited' | 'price' | 'discount' | 'free' | 'link' | 'unsafe_link'
+
+/** One thing a draft breaks, in words for the owner: the rule, the words it is about (or null), and why it is a problem. */
+export interface SafetyFinding {
+  rule: FindingRule
+  title: string
+  quote: string | null
+  why: string
 }
 
 export interface SafetyReport {
   violations: string[]
   usedClaims: ClaimView[]
+  /** The same problems as `violations`, one each, shaped for a screen. */
+  findings: SafetyFinding[]
 }
 
 const AMOUNT = /(?:[$€£¥₽₹]\s?\d[\d.,]*|\d[\d.,]*\s?(?:[$€£¥₽₹]|(?:usd|eur|gbp|rub|dollars?|euros?|pounds?|bucks)\b))/gi
@@ -124,37 +143,122 @@ export function allowedHostsFor(website: string | null, approved: ClaimView[]): 
 
 const hostAllowed = (host: string, allowed: string[]): boolean => allowed.some((a) => host === a || host.endsWith(`.${a}`))
 
+const QUOTE_MAX = 90
+
+/** A full stop, "!" or "?" ends a sentence only before a space or at the end; inside "$9.99", "evil.com" or "a.b/c?d" it does not. A line break always does. */
+const endsSentence = (text: string, i: number): boolean => {
+  const c = text[i]
+  if (c === '\n') return true
+  return (c === '.' || c === '!' || c === '?') && (i + 1 >= text.length || /\s/.test(text[i + 1]))
+}
+
+/**
+ * The sentence or line a match sits in, for the owner to see the words instead of an offset. A long sentence is cut around the match, never away from it,
+ * and by characters, so no emoji is split. `…` marks each cut.
+ */
+function clauseAround(text: string, match: { index: number; length: number }): string {
+  let start = match.index
+  while (start > 0 && !endsSentence(text, start - 1)) start--
+  let end = match.index + match.length
+  while (end < text.length && !endsSentence(text, end)) end++
+  const squash = (part: string): string => part.replace(/\s+/g, ' ')
+  const before = Array.from(squash(text.slice(start, match.index)).trimStart())
+  const middle = Array.from(squash(text.slice(match.index, match.index + match.length)))
+  const after = Array.from(squash(text.slice(match.index + match.length, end)).trimEnd())
+  // What a rule matches is a word or an amount, far shorter than the room: the room is what is left around it.
+  const room = Math.max(QUOTE_MAX - middle.length, 0)
+  const takeAfter = Math.min(after.length, Math.ceil(room / 2))
+  const takeBefore = Math.min(before.length, room - takeAfter)
+  const takeAfterMore = Math.min(after.length, room - takeBefore)
+  const head = takeBefore < before.length ? '…' : ''
+  const tail = takeAfterMore < after.length ? '…' : ''
+  return `${head}${before.slice(before.length - takeBefore).join('')}${middle.join('')}${after.slice(0, takeAfterMore).join('')}${tail}`.trim()
+}
+
 export function checkDraftSafety(input: SafetyInput): SafetyReport {
   const violations: string[] = []
+  const findings: SafetyFinding[] = []
+  const flag = (violation: string, finding: SafetyFinding): void => {
+    violations.push(violation)
+    findings.push(finding)
+  }
+  const owner = input.mode === 'owner'
   const body = [input.title ?? '', input.text, input.link ?? ''].join('\n')
 
-  // 1. Only approved facts may be cited.
+  // 1. Only approved facts may be cited (an AI draft cites; the owner's own text does not).
   const approvedById = new Map(input.approved.map((c) => [c.id, c]))
-  const unknown = input.usedClaimIds.filter((id) => !approvedById.has(id))
-  if (unknown.length > 0) violations.push(`it relies on facts that are not approved (${unknown.length} unknown claim id(s))`)
-  const usedClaims = input.usedClaimIds.flatMap((id) => {
-    const claim = approvedById.get(id)
-    return claim ? [claim] : []
-  })
+  const unknown = owner ? [] : input.usedClaimIds.filter((id) => !approvedById.has(id))
+  if (unknown.length > 0) {
+    flag(`it relies on facts that are not approved (${unknown.length} unknown claim id(s))`, {
+      rule: 'unknown_claim',
+      title: 'A fact that is not approved',
+      quote: null,
+      why: 'The text rests on a fact that is not in the approved product knowledge.'
+    })
+  }
+  const usedClaims = owner
+    ? []
+    : input.usedClaimIds.flatMap((id) => {
+        const claim = approvedById.get(id)
+        return claim ? [claim] : []
+      })
   for (const claim of usedClaims) {
-    if (claim.unconfirmedAvailability) violations.push(`it relies on a capability whose availability is unconfirmed: "${claim.text.slice(0, 80)}"`)
+    if (claim.unconfirmedAvailability) {
+      flag(`it relies on a capability whose availability is unconfirmed: "${claim.text.slice(0, 80)}"`, {
+        rule: 'unconfirmed',
+        title: 'A capability that is not confirmed',
+        quote: claim.text.slice(0, QUOTE_MAX),
+        why: 'The approved fact it rests on says the availability is not confirmed yet.'
+      })
+    }
   }
 
   // 2. Prohibited statements must never appear.
   for (const prohibited of input.prohibited) {
-    if (repeatsProhibitedClaim(body, prohibited)) violations.push(`it repeats a prohibited statement: "${prohibited.slice(0, 80)}"`)
+    if (repeatsProhibitedClaim(body, prohibited)) {
+      flag(`it repeats a prohibited statement: "${prohibited.slice(0, 80)}"`, {
+        rule: 'prohibited',
+        title: 'A statement your product knowledge prohibits',
+        quote: prohibited.replace(/\s+/g, ' ').trim().slice(0, QUOTE_MAX),
+        why: 'The text repeats, or nearly repeats, a statement the product knowledge says must never be made.'
+      })
+    }
   }
 
-  // 3. Money talk needs an approved supporting claim.
-  const claimText = usedClaims.map((c) => c.text).join('\n')
+  // 3. Money talk needs an approved supporting claim: the cited ones for an AI draft, any approved one for the owner's own text.
+  const claimText = (owner ? input.approved : usedClaims).map((c) => c.text).join('\n')
+  const backing = owner ? 'approved fact' : 'cited approved claim'
   const amounts = [...body.matchAll(AMOUNT)]
   if (amounts.length > 0) {
     const supported = numbersIn(claimText)
     const unsupported = amounts.filter((m) => ![...numbersIn(m[0])].every((n) => supported.has(n)))
-    if (unsupported.length > 0) violations.push(`it states a price (${unsupported[0][0].trim()}) that no cited approved claim supports`)
+    if (unsupported.length > 0) {
+      flag(`it states a price (${unsupported[0][0].trim()}) that no cited approved claim supports`, {
+        rule: 'price',
+        title: 'A price no approved fact supports',
+        quote: clauseAround(body, { index: unsupported[0].index ?? 0, length: unsupported[0][0].length }),
+        why: `No ${backing} names ${unsupported[0][0].trim()}.`
+      })
+    }
   }
-  if (DISCOUNT.test(body) && !DISCOUNT.test(claimText)) violations.push('it mentions a discount or promotion that no cited approved claim supports')
-  if (FREE.test(body) && !FREE.test(claimText)) violations.push('it says something is free that no cited approved claim supports')
+  const discount = DISCOUNT.exec(body)
+  if (discount && !DISCOUNT.test(claimText)) {
+    flag('it mentions a discount or promotion that no cited approved claim supports', {
+      rule: 'discount',
+      title: 'A discount or promotion no approved fact supports',
+      quote: clauseAround(body, { index: discount.index, length: discount[0].length }),
+      why: `No ${backing} mentions a discount or a promotion.`
+    })
+  }
+  const free = FREE.exec(body)
+  if (free && !FREE.test(claimText)) {
+    flag('it says something is free that no cited approved claim supports', {
+      rule: 'free',
+      title: 'A free offer no approved fact states',
+      quote: clauseAround(body, { index: free.index, length: free[0].length }),
+      why: `No ${backing} says that anything is free, or for how long.`
+    })
+  }
 
   // 4. Links only to the product's own addresses: every full address, bare domain, short link and link target.
   const { hosts: found, unsafe } = linksIn(body)
@@ -164,9 +268,23 @@ export function checkDraftSafety(input: SafetyInput): SafetyReport {
     if (host) hosts.add(host)
   }
   for (const host of hosts) {
-    if (!hostAllowed(host, input.allowedHosts)) violations.push(`it links to ${host}, which is not the product's own address`)
+    if (!hostAllowed(host, input.allowedHosts)) {
+      flag(`it links to ${host}, which is not the product's own address`, {
+        rule: 'link',
+        title: "A link that is not the product's own",
+        quote: host,
+        why: input.allowedHosts.length > 0 ? `Only ${input.allowedHosts.slice(0, 3).join(', ')} may be linked.` : 'The product has no website, and no approved fact names an address.'
+      })
+    }
   }
-  if (unsafe.length > 0) violations.push(`it holds a link that is not a web address (${unsafe[0]})`)
+  if (unsafe.length > 0) {
+    flag(`it holds a link that is not a web address (${unsafe[0]})`, {
+      rule: 'unsafe_link',
+      title: 'A link that is not a web address',
+      quote: unsafe[0],
+      why: 'Only web addresses may be linked.'
+    })
+  }
 
-  return { violations, usedClaims }
+  return { violations, usedClaims, findings }
 }
