@@ -71,7 +71,7 @@ function PublicationsScreen() {
               )}
               {inScope.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {directory.channelLabel(c)}
+                  {directory.channelLabel(c, productId !== '')}
                 </option>
               ))}
             </select>

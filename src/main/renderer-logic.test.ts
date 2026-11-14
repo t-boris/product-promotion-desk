@@ -19,6 +19,7 @@ import { isMirroredSource } from '../renderer/src/pages/products/source-view'
 import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block'
 import { canActivate, canPause, neverAssessed, setupStage } from '../renderer/src/pages/channels/setup-stage'
 import { nextStep } from '../renderer/src/pages/channels/next-step'
+import { channelLabel } from '../renderer/src/pages/review/channel-label'
 import { platformMismatch } from '../renderer/src/pages/channels/platform-hint'
 import { MOVED_PAGES, accountsNewHref, navigateHashOf, parseAccountsHash, parseHash, productHref, publicationsHref, publicationsProductOf } from '../renderer/src/route'
 import { accountText, accountsGroupName, accountsSummary, automationText, engineGroupName } from '../renderer/src/status-labels'
@@ -488,6 +489,14 @@ describe('QA clarity batch: what the screens say', () => {
     expect(connectChannelHref('p 1')).toBe('#/products/p%201/channels')
     expect(connectChannelHref('')).toBe('#/products')
     expect(connectChannelHref(null)).toBe('#/products')
+  })
+
+  it('Publications and Opportunities (BUG-067): the Channel pop-up names the product only while no product is chosen', () => {
+    expect(channelLabel('Northwind Notes', 'r/test_sandbox', false)).toBe('Northwind Notes · r/test_sandbox')
+    expect(channelLabel('Northwind Notes', 'r/test_sandbox', true)).toBe('r/test_sandbox')
+    // A channel whose product is not known yet is named by its target in both cases.
+    expect(channelLabel(undefined, 'r/test_sandbox', false)).toBe('r/test_sandbox')
+    expect(channelLabel('', 'r/test_sandbox', false)).toBe('r/test_sandbox')
   })
 
   it('Menu (BUG-016): the Attention count is amber, and red only while one of the items is a failure', () => {

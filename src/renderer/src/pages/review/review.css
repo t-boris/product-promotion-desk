@@ -30,6 +30,8 @@
 .toolbar select.input {
   min-width: 160px;
   max-width: 320px;
+  /* A value that does not fit ends with an ellipsis, never mid-word (the select is drawn without the system arrow). */
+  text-overflow: ellipsis;
 }
 /* The filter has no label above it: it sits on the bottom line of the bar, level with the pop-ups (the shared segmented control
    aligns itself to the top of a flex row). */

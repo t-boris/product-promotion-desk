@@ -52,7 +52,7 @@ export function OpportunitiesPage() {
               <option value="">All channels</option>
               {inScope.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {directory.channelLabel(c)}
+                  {directory.channelLabel(c, productId !== '')}
                 </option>
               ))}
             </select>

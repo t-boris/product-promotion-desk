@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Channel, Id, Product } from '../../../../shared/types'
 import { useQuery } from '../../hooks'
 import { Field } from '../../ui'
+import { channelLabel } from './channel-label'
 
 /** The choice that means "do not filter by product". */
 export const ALL_PRODUCTS = ''
@@ -33,8 +34,8 @@ export interface ProductDirectory {
   /** The channels of the product (all channels when no product is chosen). */
   channelsOf(productId: Id | ''): Channel[]
   productNameOfChannel(channelId: Id): string | undefined
-  /** "Product · channel", the way a channel is named wherever products are mixed. */
-  channelLabel(channel: Channel): string
+  /** "Product · channel" wherever products are mixed; the channel alone once a product is chosen. */
+  channelLabel(channel: Channel, productChosen: boolean): string
 }
 
 /**
@@ -61,10 +62,7 @@ export function useProductDirectory(): ProductDirectory {
       const productId = productOfChannel.get(channelId)
       return productId ? nameOf.get(productId) : undefined
     },
-    channelLabel: (channel) => {
-      const name = productName(channel)
-      return name ? `${name} · ${channel.target}` : channel.target
-    }
+    channelLabel: (channel, productChosen) => channelLabel(productName(channel), channel.target, productChosen)
   }
 }
 
