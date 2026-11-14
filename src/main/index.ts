@@ -102,6 +102,8 @@ async function start(): Promise<void> {
       minHeight: 640,
       title: 'Product Promotion Desk',
       titleBarStyle: 'hiddenInset',
+      // The window buttons get air from the edge and line up with the sidebar's brand (QA finding 2).
+      trafficLightPosition: { x: 20, y: 18 },
       backgroundColor: '#14161a',
       webPreferences: {
         preload: join(import.meta.dirname, '../preload/index.cjs'),
