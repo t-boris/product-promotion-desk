@@ -102,10 +102,14 @@ async function start(): Promise<void> {
       minHeight: 640,
       title: 'Product Promotion Desk',
       titleBarStyle: 'hiddenInset',
-      // The window buttons get air from the edge and line up with the sidebar's brand (QA finding 2).
-      trafficLightPosition: { x: 20, y: 18 },
-      // The dark window colour, the same as --surface-0 in the renderer, so nothing flashes before the stylesheet loads.
-      backgroundColor: '#121418',
+      // The window buttons sit on the centre line of the 52px toolbar band (--toolbar-h), 20px from the edge: the red button's
+      // centre is 26px from the top (visual-system.md §4.1, V-02).
+      trafficLightPosition: { x: 20, y: 19 },
+      // The sidebar is the window's own material; the page paints everything else itself (.main is always --surface-0), so
+      // the window colour stays transparent and nothing flashes: the page background is the first thing the web view paints.
+      vibrancy: 'sidebar',
+      visualEffectState: 'followWindow',
+      backgroundColor: '#00000000',
       webPreferences: {
         preload: join(import.meta.dirname, '../preload/index.cjs'),
         sandbox: true,

@@ -158,8 +158,10 @@ The content column (`.main`) always paints `--surface-0`.
   and accessible text (as today, BUG-023); below 720 px the labels "AI engine" and "Accounts" do the same. Measured in the
   mock: no overlap at 980×640.
 - **Menu hidden:** the toolbar starts after the window buttons (`--window-buttons-w` 84 px); its first item is the same
-  sidebar toggle with accessible name **"Menu"** or **"Menu · N"** (N = attention count, shown as a small count badge on the
-  icon), `data-testid="menu-show"`.
+  sidebar toggle with accessible name **"Menu"** or **"Menu · N"** (N = attention count, shown as the sidebar's count capsule
+  beside the glyph, not as a dot on it: the digits stay 13 px), `data-testid="menu-show"`. Both toggles are `IconButton`s: the
+  glyph is decorative and the name is a visually hidden text inside the button, so the accessibility tree keeps a button titled
+  "Hide menu" / "Menu · N" exactly as with the old text buttons (read with an AXUIElement dump of the packaged build).
 
 ### 4.5 Content column and page header
 
@@ -185,7 +187,8 @@ others keep their DEC-022 names with new values. Contrast ratios are computed (W
 | `--surface-1` | `#ffffff` | `#28282b` | Group boxes, list panels |
 | `--surface-2` | `#f0f0f2` | `#313135` | Wells (read-only text, previews, code) |
 | `--surface-3` | `#ffffff` | `#2c2c2f` | Menus, popovers, sheets (with `--shadow-pop`) |
-| **`--sidebar`** | `#e8e8ed` | `#252528` | Opaque sidebar (web mode, Reduce transparency); `transparent` in native mode |
+| **`--sidebar-solid`** | `#e8e8ed` | `#252528` | The opaque sidebar colour |
+| **`--sidebar`** | `var(--sidebar-solid)` | `var(--sidebar-solid)` | What `.sidebar` paints: opaque (web mode, Reduce transparency); `transparent` under `html[data-chrome='native']` |
 | **`--field`** | `#ffffff` | `#323236` | Text fields, text areas, pop-up buttons |
 | **`--field-border`** | `#a8a8ae` | `#636369` | Field edge (2.4:1 / 2.1:1 against its surroundings; a native-looking edge, the focus ring carries 3:1+) |
 | **`--bezel`** | `#ffffff` | `#3a3a3e` | Push-button face |
@@ -197,13 +200,17 @@ others keep their DEC-022 names with new values. Contrast ratios are computed (W
 | `--accent` | `#5856d6` | `#5e5ce6` | Filled main action, switch on, brand tile |
 | `--on-accent` | `#ffffff` | `#ffffff` | Label on the accent (5.65:1 / 5.06:1) |
 | `--accent-tint` | `rgb(88 86 214 / 12%)` | `rgb(94 92 230 / 26%)` | Selected list row, pressed toggle, "Next" capsule |
-| `--accent-on-tint` | `#5856d6` | `#a5a3ff` | Accent text: links, sidebar icons, quiet buttons, text on the tint (≥ 4.79:1) |
+| `--accent-on-tint` | `#4e4cc8` | `#a5a3ff` | Accent text: links, sidebar icons, quiet buttons, text on the tint (≥ 5.1:1 on the tint over `--surface-0`; `#5856d6` gave 4.41:1 there, measured on the packaged build) |
 | `--focus` | `#5856d6` | `#a5a3ff` | Focus ring (≥ 5.2:1 against surface-0 and surface-1) |
 | **`--selection`** | `rgb(0 0 0 / 7%)` | `rgb(255 255 255 / 10%)` | Neutral selection (sidebar item) |
 | `--hover-fill` | `rgb(0 0 0 / 4.5%)` | `rgb(255 255 255 / 6%)` | Hover on rows, sidebar items, toolbar and quiet buttons |
 | **`--press-fill`** | `rgb(0 0 0 / 9%)` | `rgb(255 255 255 / 12%)` | Pressed (`:active`) |
 | **`--segment-track`** | `rgb(0 0 0 / 5.5%)` | `rgb(255 255 255 / 7%)` | Segmented track, neutral tag, version tag |
 | **`--segment-thumb`** | `#ffffff` | `#545458` | Selected segment |
+| **`--bezel-hover`**, **`--bezel-press`** | bezel mixed with 5 % / 10 % `--text-1` | same rule | Face of a bezel button on hover and press (made from the tokens, so a theme changes them with the rest) |
+| **`--accent-hover`**, **`--accent-press`** | accent mixed with 8 % `--on-accent` / 8 % black | same rule | Face of the filled button on hover and press |
+| **`--scrim`** | `rgb(0 0 0 / 20%)` | `rgb(0 0 0 / 40%)` | Veil behind a sheet |
+| **`--glyph-updown`** | up/down chevron, stroke `--text-2` | stroke `--text-2` | Background glyph of a pop-up button (a CSS background cannot take `currentColor`, so each theme has its own) |
 | `--success` / `--success-bg` | `#17733f` / `#e3f5eb` | `#5fd39a` / `#173326` | Done, healthy (5.20:1 / 7.33:1) |
 | `--attention` / `--attention-bg` | `#8a5c00` / `#fdf1d6` | `#f2c14e` / `#3a2f12` | Needs a decision (5.19:1 / 7.84:1) |
 | `--on-attention` | `#ffffff` | `#241a00` | Count capsule label (5.81:1 / 10.2:1) |
@@ -234,6 +241,8 @@ backgrounds). The dark window colour changes from `#121418` to `#1e1e20`.
 | **`--row-h`** | 28 px | Sidebar items, table rows, menu items without a note |
 | `--window-buttons-w` | 84 px (was 100) | Toolbar start when the menu is hidden |
 | `--dur-fast` / `--dur-base`, `--ease-out` | 120 / 180 ms, `cubic-bezier(0.2, 0.8, 0.2, 1)`; 0 ms under Reduce motion | Unchanged |
+| **`--dur-spin`** | 900 ms; 0 ms under Reduce motion | The turn of the busy ring in the AI capsule (the only looping motion) |
+| **`--icon-gap`** | 6 px | The one half step off the 4 px grid: between a glyph and its label |
 
 ---
 
@@ -292,6 +301,12 @@ wraps (lessons 11–13). Cursor: arrow on controls, rows and tabs; pointer only 
 | **Launch path** (`LaunchPath`) | stages 28 px pills, 14 px marks, joints 18 px (10 px in a detail pane under 560 px), "Next" capsule 20 px | stage `--text-2` | `--hover-fill` | done: green check + `--text-1`; current: accent ring + `--accent-tint` halo, 600 | — |
 | **Launch dots** (product rows) | five 7 px circles, gap 3 | `--line-strong` ring | — | done green; current accent ring | — |
 | **Focus ring** | `outline: 2px solid var(--focus); outline-offset: 1px`, follows the radius | on every `a[href]`, button, summary, field, tab, segment (via `:has(:focus-visible)`), switch, list row | | | |
+
+Implementation notes (step "shell and shared components"): the segmented track is 28 px and its segments 24 px, so the sweep measures the
+track, not the segment; a switch has its label on the left and the switch on the right (the DOM order stays input, track, text); a menu
+entry under the pointer or the keyboard is the accent with `--on-accent` text, danger entries included; sheet actions are Stop the AI
+(danger), Show the browser, I’m done (filled, last); the AI capsule is a toolbar bezel with an accent label and a ring that turns at
+`--dur-spin`; toolbar items that carry a tooltip (version, automation state) are no-drag so the pointer reaches them.
 
 Motion: background, border and colour transitions in `--dur-fast`; disclosure chevrons, menus, popovers and the sheet fade/slide
 4 px in `--dur-base`; all 0 ms under Reduce motion. No other animation.
@@ -427,7 +442,7 @@ Measured on the packaged build of the branch with `scripts/design/tour.mjs` (72 
 | Id | Requirement | Method | Pass |
 |---|---|---|---|
 | V-01 | Window: hidden-inset title, vibrancy sidebar, transparent window colour, min size 980×640 | read `createWindow`; native capture | as §4.1 |
-| V-02 | Window buttons centred on the 52 px band and nothing interactive under them | native capture: centre y of the red button ±1 px of 26 px; tour `underWindowButtons` | empty on every screen |
+| V-02 | Window buttons centred on the 52 px band and nothing interactive under them | native capture: centre y of the red button ±1 px of 26 px (measured 25.6); tour `underLights` (x < 84; the buttons end near x = 79) | empty on every screen |
 | V-03 | Window drag works on the sidebar band and the toolbar; the toggle, links and buttons inside them are no-drag | computed `-webkit-app-region`; drag the window by the toolbar in the native window | drag moves the window; every control clicks |
 | V-04 | Sidebar: 7 items in today's order, each with one 16×16 icon at the same x; Log and Settings at the bottom; neutral selection with `aria-current`; "Promotion Desk" visible; hide/show works and keeps the route | DOM read + click | all true, both themes |
 | V-05 | Toolbar 52 px, one line, no overlap of its items at 1320 and 980 wide, with the menu shown and hidden; version, AI engine and Accounts groups and the automation toggle present | bounding boxes of `.topbar` children | no overlap; heights 52 |

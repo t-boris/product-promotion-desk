@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { EmptyArtwork, type EmptyArt } from './empty-art'
+import { Icon, type IconName } from './icons'
 import type { Tone } from './tone'
 
 export function Page({ title, subtitle, actions, children }: { title: string; subtitle?: string; actions?: ReactNode; children: ReactNode }) {
@@ -31,16 +32,51 @@ export function Card({ title, actions, children, className = '' }: { title?: str
   )
 }
 
-/** primary is the one main action of a screen (filled); secondary an accent outline for helpers (the AI ideas, approving
- *  one statement); ghost a plain button; quiet a text-only one; danger for removing things. */
-type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'quiet' }
+/** primary is the one main action of a screen (filled); secondary a bezel with an accent label for helpers (the AI ideas,
+ *  approving one statement); ghost the plain bezel; quiet a text-only one; danger for removing things. All have one size; `icon`
+ *  adds a 16px glyph before the words (the accessible name stays the words). */
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'quiet'; icon?: IconName }
 
 /**
  * A button never submits a form unless it says so (`type="submit"`). A browser button inside a form submits it by default, which
  * made "Propose" and "Cancel" create an account in the middle of filling in its form.
  */
-export function Button({ variant = 'ghost', className = '', type = 'button', ...rest }: ButtonProps) {
-  return <button {...rest} type={type} className={`btn btn-${variant} ${className}`} />
+export function Button({ variant = 'ghost', className = '', type = 'button', icon, children, ...rest }: ButtonProps) {
+  return (
+    <button {...rest} type={type} className={`btn btn-${variant} ${className}`}>
+      {icon && <Icon name={icon} />}
+      {children}
+    </button>
+  )
+}
+
+/**
+ * A square button with only a glyph (the sidebar toggle, a row's "more"). The words are in the page for a screen reader and for a
+ * test tool that reads the accessibility tree (they are the button's name), and are the tooltip; `count` is the count capsule of the
+ * sidebar, shown beside the glyph (never smaller than 13px, so it is not a dot on the glyph).
+ */
+export function IconButton({
+  icon,
+  label,
+  count,
+  countTone,
+  title,
+  className = '',
+  type = 'button',
+  ...rest
+}: ButtonHTMLAttributes<HTMLButtonElement> & { icon: IconName; label: string; count?: number; countTone?: 'attention' | 'error' | null; title?: string }) {
+  const counted = count !== undefined && count > 0
+  return (
+    <button {...rest} type={type} title={title ?? label} className={`icon-btn${counted ? ' has-count' : ''} ${className}`}>
+      <Icon name={icon} />
+      {counted && (
+        <span className={`count ${countTone ?? ''}`} aria-hidden="true">
+          {count}
+        </span>
+      )}
+      <span className="sr-only">{label}</span>
+    </button>
+  )
 }
 
 export type { Tone } from './tone'
@@ -162,6 +198,7 @@ export function RowMenu({ label, children, testId }: { label: string; children: 
     <div className="menu" ref={box}>
       <Button variant="ghost" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)} data-testid={testId}>
         {label}
+        <Icon name="chevronDown" small />
       </Button>
       {open && (
         <div className="menu-pop" role="menu">

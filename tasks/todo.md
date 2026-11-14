@@ -468,10 +468,22 @@ Spec: `docs/design/macos/visual-system.md` (tokens, type, components, every scre
 
 - [x] Prerequisites checked (git, access, toolchain, CI, install path, QA scenarios, owner's baseline: automation paused, 3 products, 0 accounts, 0 channels)
 - [x] Visual system defined: baseline captured on an own instance of 0.8.0, mock captured in a real window with vibrancy, spec written
-- [ ] Tokens, window options (`vibrancy`, transparent background, window buttons on the 52px band), `data-chrome`
-- [ ] Shell: sidebar with icons, band toggle, toolbar band, hidden-menu state
-- [ ] Shared components (`ui.tsx`, `styles.css`): buttons and states, fields, pop-up button, segmented control for all tabs, switch, tag, group box, list rows, table, disclosure, note, empty state, menu, sheet
+- [x] Tokens, window options (`vibrancy`, transparent background, window buttons on the 52px band), `data-chrome`
+- [x] Shell: sidebar with icons, band toggle, toolbar band, hidden-menu state
+- [x] Shared components (`ui.tsx`, `styles.css`): buttons and states, fields, pop-up button, segmented control for all tabs, switch, tag, group box, list rows, table, disclosure, note, empty state, menu, sheet (page-level rules of `products.css`, `channels.css` and the page markup are the next package)
 - [ ] Pages: Products (all tabs and forms), Accounts (accounts, profiles, mailboxes), Attention, Opportunities, Publications, Log, Settings; one filled button per screen (§10); `products.css`, `channels.css` and inline styles onto tokens
 - [ ] Sweep V-01 … V-24 on the packaged build, both themes, both sizes; an independent review of the diff
 - [ ] QA scenarios: edits only under the supervisor's rules, both run on the final code; the owner's baseline checked after each run
 - [ ] Delivery: commit the earlier untracked files, `npm run verify`, PR, CI, merge, `chore: release X.Y.Z`, tag, GitHub release, `npm run deploy:local`, MarkView statuses, DEC-023 accepted
+
+### Review: shell and shared components (step 3 of the macOS design plan)
+
+Built and measured on the packaged build (`npm run dist`, `dist/mac-arm64`, working tree of `feat/macos-design` before the commit), own instance with its own `PPD_DATA_DIR`; the owner's app and data were not touched (the 64 untracked files of `.markview/` and `docs/bugs/` match the step-1 sha256 manifest).
+
+- Window: `hiddenInset`, traffic lights at `{x: 20, y: 19}`, `vibrancy: 'sidebar'`, transparent window colour. Native capture of the red button: centre y 25.6 (plan 26 ± 1), x 26.5; the three buttons end at x = 79 < `--window-buttons-w` 84.
+- Shell: 224 px sidebar with the window material (opaque `--sidebar-solid` in web mode and under Reduce transparency), icons from `icons.tsx` (no new dependency), Log and Settings pinned at the bottom, 52 px toolbar band, hidden-menu state with a count toggle. Real OS clicks (cliclick on my own pid): hide and show the sidebar keep the route; nav items and the accounts link navigate; a window drag works from the toolbar, the sidebar band and the empty sidebar and does not start on the toggle.
+- Accessibility tree (AXUIElement walk of the packaged build): "Hide menu", "Menu · 2", group "Work areas" with a link per section (`aria-current` = page), "AI engine: Claude Code", "Accounts: …", "Resume automation" are all present, with the menu open and hidden.
+- Components: buttons (filled, bezel, quiet, danger, toolbar), icon buttons, fields and pop-up buttons, switches, segmented tabs, badges, notes, empty states, menus, sheets, tables, disclosures share the tokens; hover, press, focus and disabled are distinct in both themes; Reduce motion makes every duration 0; primary and danger labels do not change colour on hover (lesson 112).
+- Tour (72 screens, both themes, 1320×880 and 980×640, packaged build): no horizontal scroll, no cut buttons, nothing under the window buttons, toolbar 52 px, text sizes only 13/15/17/22. Contrast of all visible text on the Products screen: ≥ 4.5:1 in both themes after `--accent-on-tint` (light) went from `#5856d6` to `#4e4cc8` (the "Next" tag was 4.41:1).
+- `npm run verify` green: 79 test files, 1560 tests, typecheck, lint, build.
+- Not done here, by plan: page-level layouts of Products (list stacking at 980, card-in-card), Accounts, Attention, Opportunities, Publications, Log, Settings; one filled button per screen (§10); `products.css`, `channels.css` and inline styles onto tokens; the independent review; both QA scenarios. Light-theme native captures used `nativeTheme.themeSource` of my own process, not the system appearance switch.

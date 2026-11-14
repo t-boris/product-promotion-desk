@@ -99,9 +99,9 @@ export const LOOK = `(() => {
   const cut = [...document.querySelectorAll('button, a.btn, [role=tab]')].filter(vis).filter((b) => {
     const r = b.getBoundingClientRect(); return r.right > window.innerWidth + 1 || b.scrollWidth > b.clientWidth + 1
   }).map((b) => b.textContent.trim().slice(0, 30))
-  // What sits under the window buttons (x < 92, y < 40): only drag area may be there.
+  // What sits under the window buttons (x < 84, y < 40; the buttons end near x = 72 and --window-buttons-w is 84): only drag area may be there.
   const underLights = [...document.querySelectorAll('button, a, input, select, [role=tab], h1, h2, strong, span')].filter(vis).filter((e) => {
-    const r = e.getBoundingClientRect(); return r.left < 92 && r.top < 40 && r.bottom > 6
+    const r = e.getBoundingClientRect(); return r.left < 84 && r.top < 40 && r.bottom > 6
   }).map((e) => (e.textContent || e.tagName).trim().slice(0, 20))
   return {
     font: getComputedStyle(document.body).fontFamily.slice(0, 60),

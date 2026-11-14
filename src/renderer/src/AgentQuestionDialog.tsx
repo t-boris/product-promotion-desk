@@ -57,15 +57,16 @@ export function AgentQuestionDialog() {
             </Button>
           </div>
         </form>
+        {/* A sheet's actions sit at the right and the filled one is last, as in a macOS sheet. */}
         <div className="row modal-actions">
+          <Button variant="danger" onClick={() => void stop()} disabled={busy} data-testid="agent-question-stop">
+            Stop the AI
+          </Button>
           <Button onClick={() => void show()} disabled={showing.busy} data-testid="agent-question-show">
             Show the browser
           </Button>
           <Button variant="primary" onClick={() => void send('done')} disabled={busy} data-testid="agent-question-done">
             I’m done
-          </Button>
-          <Button variant="danger" onClick={() => void stop()} disabled={busy} data-testid="agent-question-stop">
-            Stop the AI
           </Button>
         </div>
         <ErrorNote error={sending.error ?? showing.error ?? stopping.error ?? questions.error} />
