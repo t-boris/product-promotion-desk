@@ -76,10 +76,10 @@ export const MEASURE = `(() => {
   const vis = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 }
   const controls = [...document.querySelectorAll('button, input:not([type=hidden]), select, textarea, a.btn, [role=tab]')].filter(vis).map((e) => {
     const r = e.getBoundingClientRect(); const cs = getComputedStyle(e)
-    return { tag: e.tagName.toLowerCase() + (e.type ? ':' + e.type : ''), role: e.getAttribute('role'), text: (e.textContent || e.placeholder || e.getAttribute('aria-label') || '').trim().slice(0, 28), w: Math.round(r.width), h: Math.round(r.height), fs: cs.fontSize }
+    return { tag: e.tagName.toLowerCase() + (e.type ? ':' + e.type : ''), role: e.getAttribute('role'), link: e.classList.contains('link-btn'), track: !!e.closest('.segmented, .tabs'), text: (e.textContent || e.placeholder || e.getAttribute('aria-label') || '').trim().slice(0, 28), w: Math.round(r.width), h: Math.round(r.height), fs: cs.fontSize }
   })
-  // A tab is a segment inside a 28px track (the track is the control, §7), and a text area is taller by nature.
-  const smallList = controls.filter((c) => c.h < 28 && !/checkbox|radio/.test(c.tag) && c.role !== 'tab')
+  // A tab is a segment inside a 28px track (the track is the control, §7); a segment of a segmented track is 24px inside the 28px track (§7); a link-styled button is inline text like a link.
+  const smallList = controls.filter((c) => c.h < 28 && !/checkbox|radio/.test(c.tag) && c.role !== 'tab' && !c.link && !c.track)
   const small = smallList.length
   const tiny = [...document.querySelectorAll('*')].filter((e) => e.children.length === 0 && e.textContent.trim() && vis(e) && parseFloat(getComputedStyle(e).fontSize) < 12).length
   const wrapped = controls.filter((c) => /button|a/.test(c.tag.split(':')[0]) && c.h > 44 && !c.tag.startsWith('textarea')).map((c) => c.text)
@@ -114,6 +114,9 @@ export const LOOK = `(() => {
     contentScrollW: content ? content.scrollWidth - content.clientWidth : null,
     contentScrollH: content ? content.scrollHeight - content.clientHeight : null,
     primaries,
+    // V-18: where the product tab row ends and how many rows the launch path takes.
+    tabsBottom: document.querySelector('.split-detail .tabs') ? Math.round(document.querySelector('.split-detail .tabs').getBoundingClientRect().bottom) : null,
+    pathRows: document.querySelector('.split-detail .launch-path') ? new Set([...document.querySelectorAll('.split-detail .launch-stage')].map((e) => Math.round(e.getBoundingClientRect().top))).size : null,
     fontSizes: Object.fromEntries([...sizes.entries()].sort()),
     cutButtons: cut,
     underLights

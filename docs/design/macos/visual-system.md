@@ -450,15 +450,15 @@ Measured on the packaged build of the branch with `scripts/design/tour.mjs` (72 
 | V-07 | Text sizes only 13, 15, 17, 22, 26 px; nothing under 13 px; body 13 px | tour `fontSizes` | set ⊆ {13,15,17,22,26} on every screen |
 | V-08 | Font is the system font | computed `font-family` of `body` starts with `-apple-system` | true |
 | V-09 | Every button, field and pop-up button 28 px tall (text areas excluded); segmented control 28 px; labels 13 px | measure all controls on every screen | 100 % |
-| V-10 | At most one filled (`.btn-primary`) button visible per screen, none in the toolbar or sidebar, and it is never an AI helper | tour `filledButtons` | ≤ 1 everywhere; = 1 where §10 names one |
+| V-10 | At most one filled (`.btn-primary`) button visible per screen, none in the toolbar or sidebar, and it is never an optional AI helper ("Suggest with AI", "Draft with AI", "Let the AI …"); the step's own next action stays filled even when the AI carries it out ("Propose a profile", "Assess channel", "Start analysis") | tour `filledButtons` | ≤ 1 everywhere; = 1 where §10 names one |
 | V-11 | Tokens: no hex or `rgb()` colour and no px font size outside the token block in `styles.css`, `products.css`, `channels.css` and the renderer `.tsx` files; no inline `style` setting colour or font size | grep | 0 hits |
 | V-12 | Contrast in both themes: text-1/text-2 ≥ 4.5:1 on surface-0/1/2 and field; text-3 ≥ 4.5:1 on surface-0/1; on-accent on accent ≥ 4.5:1; every tag colour on its background ≥ 4.5:1; focus ring ≥ 3:1 against its surroundings | computed colours of the rendered page (not the source) | all pass (§5.1 values) |
 | V-13 | Themes: every screen renders fully in light and in dark with no mix (native selects and scrollbars follow `color-scheme`) | tour in both themes; native capture after switching macOS appearance | no element keeps the other theme's colours |
 | V-14 | Hover changes the background of every button variant, sidebar item, segment, list row, menu item and disclosure, without changing the label colour of primary and danger (lesson 112) | CDP hover on each variant, computed colours before/after, both themes | all change; labels kept |
 | V-15 | Focus: Tab reaches every control; each shows the 2 px `--focus` ring | Tab through Products, Accounts, Settings; computed outline | 100 % |
-| V-16 | Disabled differs from enabled at a glance (no shadow, `--text-3` label, `--line` edge) and stays ≥ 4.5:1; its reason is visible beside it | computed styles of disabled vs enabled of each variant | distinct; reason present |
+| V-16 | Disabled differs from enabled at a glance (no shadow, `--text-3` label, `--line` edge) and stays ≥ 4.5:1; its reason is visible beside it: a sentence next to the button, or, for a button that sits beside its own empty field ("Add" an image, "Schedule"), that field | computed styles of disabled vs enabled of each variant | distinct; reason present |
 | V-17 | Reduce motion: every `transition-duration` and `animation-duration` is 0 s; Reduce transparency: the sidebar is opaque `--sidebar` | `Emulation.setEmulatedMedia` for both features | true |
-| V-18 | Products at 980×640 with the menu shown: list and detail side by side, the tab row ends at y ≤ 300 px, the launch path is one row, no word broken inside a URL | DOM measure on the Passport tab | all true |
+| V-18 | Products at 980×640 with the menu shown: list and detail side by side, the tab row ends at y ≤ 310 px (measured 308 with a product that has a website, a description and a status row; the first guess of 300 was not reachable without dropping the status row), the launch path is one row, no word broken inside a URL | DOM measure on the Passport tab | all true |
 | V-19 | Launch path visible under the product header, as dots on every product row, and on the first-run Attention; counts unchanged | DOM read; existing launch-path unit tests | true |
 | V-20 | Every empty state of §10 has a title, one sentence and the named next-step action (or says none is needed) | tour on a fresh data folder and on the seeded one | 100 % |
 | V-21 | QA-bound texts, accessible names, roles and `data-testid` of §13 unchanged | `grep` of each string in the renderer + both QA scenarios run | all found; scenarios pass |
@@ -542,3 +542,63 @@ node scripts/design/mock-capture.mjs <scratch dir> products:dark:1320:880 produc
 
 The scripts start their own process, use their own data folder and capture only their own window (by pid). They never start,
 read or stop the owner's application.
+
+---
+
+## 16. Page patterns as implemented (step "Update all screens")
+
+Status: written while the page packages were implemented on `feat/macos-design` (commits `8c79db8`, `b14d89a` and the packages after them). The
+matrix of §10 is the target; this section records what the code does, so the sweep and the next steps read one source.
+
+### 16.1 Shared page patterns (`styles.css`, `ui.tsx`)
+
+| Pattern | Markup | Rules |
+|---|---|---|
+| List + detail | `.split` > `.split-list` + `.split-detail` | Columns `clamp(208px, 27%, 300px)` + `minmax(0, 1fr)`, gap 16, **side by side at 980×640** (the 1040 px stacking rule is gone); the list is sticky; the detail is a CSS container (`@container (max-width: 560px)` folds its columns, tightens the launch path joints) |
+| List panel | `.panel` > `.panel-row` (`.active`) | One surface `--surface-1` radius 12 pad 6; rows radius 8, pad 8/10, title 13/600 one line with ellipsis, up to two `--text-2` lines (`.panel-row-line`, `.wrap`); selected = `--accent-tint`; no card per row, no chevron |
+| Object header | `ObjectHeader` (`.obj-head`) | Name 17/600, optional meta line, actions on the right; no box. Product: name + Edit details / Delete, then the label/value rows (Website, Description, Status; the labels are QA text) in `.obj` |
+| Group rows | `.rows`, `.group-row`, `.status-line` | Children of a group box separated by inset hairlines; `.list-row` inside `.card` is flattened by CSS (no border, no fill) |
+| One filled button | `OpenFormsScope`, `useOpenForm(active)`, `useMainVariant()` | One scope per screen (Products page). An on-demand form (New product, Edit details, Add statement, Edit statement, Edit source) registers while open and owns the filled button; a resting main action (Approve passport, Open Analysis, Start analysis, Add source) uses `useMainVariant()` and becomes a bezel while a form is open |
+| Page action | `Button icon="plus"` in `Page.actions` | Bezel; the first-run empty state carries the filled "Add your first product" |
+
+### 16.2 Products (done in the first page package)
+
+| Screen / state | What it is now | Filled |
+|---|---|---|
+| Products, no product | empty state, art `product` | "Add your first product" (header "New product" is a bezel) |
+| New product | group box form above the list; the product below keeps its tab but its main action is a bezel | "Create product" |
+| List + detail | list panel (name + five launch dots, website or "No website yet", analysis tag only for running/paused/failed, "Next: …"), detail pane | per tab |
+| Product header | object header + label/value rows, no card; Edit details opens a group box "Edit details" | "Save" while editing |
+| Launch path | stage 24 px, joint 18 px (10 px in a pane under 560 px), mark 14 px, "Next" capsule 20 px | — |
+| Sources | "Sources" group box with hairline rows (kind tag, name, text clamped to 3 lines, Edit / Remove quiet), "Add a source" group box (segmented kind) | "Add source"; "Save" while a source is edited ("Add source" steps back) |
+| Passport | group box with version, status, approval reason (also for an approved passport: "There are no changes to approve."), one group box per section with hairline statement rows (tags, text, sources; Approve secondary, Edit / Back to review / More quiet); the empty passport is the lead line + checklist | "Approve passport" (empty: "Open Analysis"); an open statement form owns it |
+| Analysis | one group box: status, what will be read, three points, the steps as hairline rows | "Start analysis" / "Resume analysis" / "Run again" |
+| Goal | one group box; saved goals are hairline rows (Edit, quiet Remove goal), the new-goal form opens by itself when there is no goal | "Add goal" / "Save goal" of the open form |
+
+### 16.3 Accounts, channels, review, Log and Settings (done in the second page package)
+
+| Screen / state | What it is now | Filled |
+|---|---|---|
+| Accounts → Accounts | `.split`: a `.panel` of accounts (name, platform, a tag only for sign-in needed, captcha, suspended; a dot and a word otherwise) beside the account. The account is an object header, a "Next:" note and five numbered step boxes (role, profile, e-mail, password, sign-in); the rare controls are one "More" disclosure | the account's next step: "Save" role, "Set an address", "Save a password", then "Show the window" / "Sign in with saved password" / "Open browser to sign in"; "Add account" in the header is a bezel with a plus |
+| Accounts → New account | a group box above the list; the account below keeps bezels; the reason "Choose a platform." / "Name the account." sits beside the button | "Add account" |
+| Accounts → Profiles | `.split` with a "New profile" bezel above the list; platform and account choices are toggle groups (`aria-pressed`, tint, never filled); no person yet = the form, a person proposed = the proposal | one per stage: "Make the profile", "Propose a profile", "Approve", "Make an account" |
+| Accounts → Mailboxes | hairline rows of mailboxes and the add form; reason "Type the address of your mailbox." | "Add mailbox" |
+| Product → Channels | a single column of group boxes in the order accounts strip, connect, channel list (a `.panel`), status, capability, plan, mode, settings, "Ideas from the AI"; the stage decides the one filled button (no account → "Add an account", no channel → "Connect channel", never assessed → "Assess channel", assessed → "Activate"; running or paused → none); "Save settings" is filled only while the form is dirty and the stage button steps back | by stage |
+| Attention | "Getting started" group box (eyebrow, 26 px headline, launch path, hairline steps) while a step is open; "Connections and accounts" one box of hairline rows; decisions as review cards | the next Getting-started step, else the first open decision card's main action |
+| Opportunities | a bar (product and channel pop-ups, a segmented state filter, "Check now" when one channel is picked), a hint with the result of the check, cards collapsed | the first open card's main action; "Connect a channel" in the empty state only when there is no channel |
+| Publications | toolbar (Product, Channel, "Suggest with AI" secondary, "Write one myself" bezel), the posting warning as a warning note, sections Drafts, Sent, Rejected | the open form's "Save as draft", else the first open draft's main action |
+| Review card (Attention, Opportunities, Publications) | head row (state, kind, product, channel, account, date), the quoted comment on a well, the draft form (96 px resizable text area), the schedule row, the actions row: Defer and Reject quiet on the left, "Save draft", "Draft with AI" (secondary), "Approve and send", then the main action on the right; the reason "Write the text first." beside a disabled Approve | the first card that offers a main action (`useMainActionOwner`); on every other card the same action is secondary |
+| Log | segmented tabs (Runs, Action history, Events), each a table in a group box, wrapping cells, no sideways scroll | none |
+| Settings | group boxes: AI engine (hairline engine rows, "In use" with a check), What the AI learned (add-rule row, hairline saved rules), Notifications, Local web access, About | none; "Use this engine" on the recommended engine while none is chosen |
+| Results (product tab) | group boxes for goals and for each channel's metrics (a wrapping table), "Refresh all" bezel | "Connect a channel" in the empty state only |
+
+Decisions taken while converting, so the next reader does not reopen them:
+
+- Page CSS lives next to its page (`attention.css`, `settings.css`, `logs.css`, `results.css`, `review.css`, `channels.css`, `products.css`). `main.tsx` loads
+  `styles.css` after the pages, so a page rule that must win over a shared one uses a longer selector (`.card .x`) or a new class name.
+- "Older discussions" keeps its button and the texts "Show (N)" / "Hide": the QA scenarios use them (spec §13). The state filter of Opportunities stays a group of
+  buttons with `aria-pressed` (a `SegmentedControl` would turn them into radio inputs and change their roles).
+- A segment of a segmented track is 24 px inside the 28 px track (§7); the tour does not count it as a small control.
+- The DOM order of the review actions changed (Defer, Reject first; "Approve and send" before "Approve"); names, roles and test ids did not.
+- `.dot.info` and `textarea.input.short` are defined in a page css file and should move to `styles.css` with the next shared change.
+

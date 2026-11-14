@@ -814,21 +814,6 @@ a.btn {
   min-width: 0;
   overflow-wrap: break-word;
 }
-/* A row in a narrow column (the product list): text on top, tags and actions below, nothing squeezed. */
-.list-row.stacked {
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--space-2);
-}
-.list-row.stacked > :first-child {
-  flex: none;
-}
-.list-row.selectable:hover {
-  background: var(--surface-2);
-}
-.list-row.active {
-  background: var(--accent-tint);
-}
 
 .field {
   display: flex;
@@ -1489,83 +1474,6 @@ input[type='radio'] {
   align-self: center;
 }
 
-/* "Getting started" on an empty Attention page. */
-.start-steps {
-  list-style: none;
-  margin: var(--space-2) 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-.start-steps li {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-3) 0;
-  border-top: 1px solid var(--border);
-}
-.start-steps li:first-child {
-  border-top: 0;
-}
-.start-mark {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: 2px solid var(--border-strong);
-  border-radius: 50%;
-  font-size: var(--fs-caption);
-  font-weight: var(--fw-semibold);
-}
-.start-steps li.done .start-mark {
-  background: var(--good);
-  border-color: var(--good);
-  color: var(--panel);
-}
-.start-steps li.done .start-text {
-  opacity: 0.7;
-}
-.start-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Getting started leads an empty Attention page while a step is open (BUG-024): a display headline, the launch path, one
-   filled button for the next step and the list of steps. */
-.start-hero {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  padding: var(--space-6);
-}
-.start-eyebrow {
-  margin: 0 0 calc(var(--space-3) * -1);
-  font-size: var(--fs-caption);
-  font-weight: var(--fw-semibold);
-  color: var(--text-2);
-}
-.card .start-headline {
-  font-size: var(--fs-display);
-  line-height: var(--lh-title);
-}
-.start-steps li.next .start-mark {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-tint);
-}
-/* "Nothing needs you right now" is one line while Getting started leads. */
-.nothing-line {
-  margin: 0;
-  color: var(--text-2);
-}
-.nothing-line strong {
-  color: var(--text-1);
-}
-
 /* ───────────── Page patterns (visual-system.md §9) ───────────── */
 
 /* List + detail: a panel of rows beside the object a row opens, side by side down to the minimum window. The detail is a
@@ -1866,42 +1774,6 @@ input[type='radio'] {
   align-self: flex-start;
 }
 
-/* Settings: an engine row reads as lines (name, version, path, then what it can do), and the selected one says "In use". */
-.engine-row {
-  align-items: flex-start;
-}
-.engine-main {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-.engine-path {
-  color: var(--muted);
-  overflow-wrap: anywhere;
-}
-.in-use {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  height: var(--control-h);
-  padding: 0 var(--control-pad-x);
-  color: var(--good);
-  font-weight: 600;
-  white-space: nowrap;
-}
-/* A list under its own heading, apart from the form above it. */
-.list-title {
-  margin: var(--space-5) 0 0;
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--border);
-}
-.rule-row {
-  padding: var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel);
-}
-
 /* Spacing after a folded "More" line inside a card, so the next block does not touch it. */
 .card > .more + *,
 .card > .hint + * {
@@ -1914,20 +1786,6 @@ input[type='radio'] {
 /* A badge may wrap in a narrow column instead of running out of its card. */
 .kv .badge {
   white-space: normal;
-}
-
-/* A comment in a thread: replies step in by one space unit per level (up to four). */
-.list-row.thread-comment {
-  display: block;
-  margin-left: calc(var(--space-4) * var(--depth, 0));
-}
-.list-row.thread-comment.highlight {
-  border-color: var(--accent);
-}
-.thread-comment-body {
-  margin-top: var(--space-1);
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 /* ───────────── Focus and hover (BUG-021) ───────────── */
@@ -1966,7 +1824,6 @@ a:not(.btn):not(.badge):not(.nav-item):not(.tb-value):hover,
 .disclosure > summary,
 .more > summary,
 .menu-item,
-.list-row.selectable,
 .panel-row,
 .input,
 .segmented-option {

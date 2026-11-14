@@ -1,0 +1,31 @@
+/* Log (visual-system.md §10.6): a segmented control of three tabs (the shared `.tabs`), each tab a table in a group box. Colours,
+   sizes and radii come from the shared tokens in styles.css.
+   The page stylesheets are bundled before styles.css (main.tsx imports it last), so a rule here that sets what a shared rule of
+   styles.css also sets is written one step more specific. */
+
+.log-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* The level filter of Events: its word and its pop-up button on one line. */
+.log-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.log-filter select.input.log-level {
+  width: auto;
+  min-width: 120px;
+}
+
+/* The table is the group box's content: the box's own padding is small, so the cells' 12px put the text 16px from the edge (where
+   a title would start) and the zebra runs nearly edge to edge. What is long wraps (never sideways). */
+.card.log-card {
+  padding: var(--space-1) var(--space-1) var(--space-2);
+}
+.log-table td {
+  overflow-wrap: anywhere;
+}

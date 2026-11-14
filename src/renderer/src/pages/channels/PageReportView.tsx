@@ -14,7 +14,7 @@ export function PageReportView({ report, testId }: { report: PageReport | null; 
   }
   const refused = (status: number | null, error: string | null): boolean => error !== null || (status !== null && status >= 400)
   return (
-    <div className="stack page-report" data-testid={testId}>
+    <div className="stack well page-report" data-testid={testId}>
       <div>
         <strong>{report.title || '(no title)'}</strong> <span className="muted small">{report.address}</span>
       </div>

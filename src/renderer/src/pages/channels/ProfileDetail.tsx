@@ -3,7 +3,7 @@ import type { Account, PlatformInfo, Product, Profile, ProfileFields, ProfileGen
 import { fieldsOf, profileLine, sameFields } from '../../../../shared/profile'
 import { AiProgressPanel } from '../../AiProgress'
 import { call, useAction } from '../../hooks'
-import { Badge, Button, Card, ErrorNote, Field } from '../../ui'
+import { Badge, Button, Card, ErrorNote, Field, ObjectHeader } from '../../ui'
 import { ProfileAccounts } from './ProfileAccounts'
 import { ROLE_NAME_LIMIT, ROLE_VOICE_LIMIT } from './RoleEditor'
 import { platformLabel } from './model'
@@ -124,6 +124,10 @@ export function ProfileDetail({
   const approved = profile.status === 'approved'
   const hasPerson = profile.displayName !== '' || profile.strategy !== ''
   const open = !hasPerson || !approved || editing
+  // The one filled button, by stage: "Propose a profile" for a profile with no person, "Approve" for a proposal (or a change) waiting for the
+  // owner, and, once the person is approved, "Make an account" in the accounts below. The form's buttons are only drawn while it is open.
+  const showApprove = open && hasPerson && (!approved || dirty)
+  const formFilled = (open && !hasPerson) || showApprove
 
   const setField = <K extends keyof ProfileFields>(key: K, value: ProfileFields[K]): void => setDraft((d) => ({ ...d, fields: { ...d.fields, [key]: value } }))
   const togglePlatform = (key: string): void => setDraft((d) => ({ ...d, platforms: d.platforms.includes(key) ? d.platforms.filter((p) => p !== key) : [...d.platforms, key] }))
@@ -140,32 +144,47 @@ export function ProfileDetail({
   )
 
   return (
-    <div className="stack" data-testid={`profile-${profile.id}`}>
-      <Card
+    <div className="pane" data-testid={`profile-${profile.id}`}>
+      <ObjectHeader
         title={profile.label}
-        actions={
+        meta={
           <>
-            <Badge tone={!hasPerson ? 'neutral' : approved ? 'good' : 'warn'}>{!hasPerson ? 'No person yet' : approved ? 'Approved' : 'Proposed'}</Badge>
-            {hasPerson && approved && !editing && (
-              <Button onClick={() => setEditing(true)} data-testid={`profile-edit-${profile.id}`}>
-                Change
-              </Button>
+            {!hasPerson ? (
+              <span className="dot-line">
+                <span className="dot" aria-hidden="true" />
+                No person yet
+              </span>
+            ) : approved ? (
+              <span className="dot-line">
+                <span className="dot good" aria-hidden="true" />
+                Approved
+              </span>
+            ) : (
+              <Badge tone="warn">Proposed</Badge>
             )}
+            <p data-testid={`profile-state-${profile.id}`}>
+              {hasPerson ? (
+                <>
+                  <strong>{profileLine(profile, new Date())}</strong>
+                  {!approved && <span className="muted"> · waits for your decision</span>}
+                </>
+              ) : (
+                <span className="muted">The AI proposes the whole person (name, age, place, about-text, picture) from what the profile is for, and you decide.</span>
+              )}
+            </p>
           </>
         }
-      >
-        <p data-testid={`profile-state-${profile.id}`}>
-          {hasPerson ? (
-            <>
-              <strong>{profileLine(profile, new Date())}</strong>
-              {!approved && <span className="muted"> · waits for your decision</span>}
-            </>
-          ) : (
-            <span className="muted">The AI proposes the whole person (name, age, place, about-text, picture) from what the profile is for, and you decide.</span>
-          )}
-        </p>
+        actions={
+          hasPerson && approved && !editing ? (
+            <Button onClick={() => setEditing(true)} data-testid={`profile-edit-${profile.id}`}>
+              Change
+            </Button>
+          ) : undefined
+        }
+      />
 
-        {open && (
+      {open && (
+        <Card>
           <div className="stack" data-testid={`profile-form-${profile.id}`}>
             <div className="form-row">
               <Field label="Name of the profile" hint="Only for you.">
@@ -186,9 +205,9 @@ export function ProfileDetail({
               <textarea className="input short" value={draft.purpose} maxLength={PURPOSE_LIMIT} onChange={(e) => setDraft({ ...draft, purpose: e.target.value })} data-testid={`profile-purpose-${profile.id}`} />
             </Field>
             <Field label="Platforms (optional)" hint="Where this person will have accounts. The AI plans the person for all of them; an account is made for each below.">
-              <div className="row" data-testid={`profile-platforms-${profile.id}`}>
+              <div className="toggle-group" data-testid={`profile-platforms-${profile.id}`}>
                 {platforms.map((p) => (
-                  <Button key={p.platform} variant={draft.platforms.includes(p.platform) ? 'primary' : undefined} onClick={() => togglePlatform(p.platform)} aria-pressed={draft.platforms.includes(p.platform)} data-testid={`profile-platform-${p.platform}-${profile.id}`}>
+                  <Button key={p.platform} onClick={() => togglePlatform(p.platform)} aria-pressed={draft.platforms.includes(p.platform)} data-testid={`profile-platform-${p.platform}-${profile.id}`}>
                     {p.label}
                   </Button>
                 ))}
@@ -212,7 +231,7 @@ export function ProfileDetail({
               <div className="profile-grid">
                 <div className="profile-picture" data-testid={`profile-picture-${profile.id}`}>
                   <div className="profile-thumb">{picture ? <img src={picture} alt="Profile" /> : <span className="muted small">No picture yet</span>}</div>
-                  <Button onClick={() => void makePicture()} disabled={busy || !draft.fields.pictureIdea.trim()} data-testid={`profile-picture-make-${profile.id}`}>
+                  <Button variant="secondary" onClick={() => void makePicture()} disabled={busy || !draft.fields.pictureIdea.trim()} data-testid={`profile-picture-make-${profile.id}`}>
                     {making.busy ? 'Making it…' : hasPicture ? 'Create new' : 'Create picture'}
                   </Button>
                   <Button onClick={() => setPicking(!picking)} disabled={busy} data-testid={`profile-picture-own-${profile.id}`}>
@@ -254,7 +273,7 @@ export function ProfileDetail({
               </div>
             )}
             <div className="row">
-              <Button variant={hasPerson ? undefined : 'primary'} onClick={() => void propose()} disabled={busy || roleIncomplete} data-testid={`profile-propose-${profile.id}`}>
+              <Button variant={hasPerson ? 'secondary' : 'primary'} onClick={() => void propose()} disabled={busy || roleIncomplete} data-testid={`profile-propose-${profile.id}`}>
                 {proposing.busy ? 'The AI is thinking…' : hasPerson ? 'Propose again' : 'Propose a profile'}
               </Button>
               <Button onClick={() => void save()} disabled={busy || !dirty || roleIncomplete} data-testid={`profile-save-${profile.id}`}>
@@ -265,7 +284,7 @@ export function ProfileDetail({
                   Cancel
                 </Button>
               )}
-              {hasPerson && (!approved || dirty) && (
+              {showApprove && (
                 <Button variant="primary" onClick={() => void approve()} disabled={busy || roleIncomplete} data-testid={`profile-approve-${profile.id}`}>
                   {approving.busy ? 'Approving…' : 'Approve'}
                 </Button>
@@ -273,12 +292,12 @@ export function ProfileDetail({
             </div>
             <p className="muted small">“Propose again” replaces the person above with a new one. A mission types only an approved profile.</p>
           </div>
-        )}
-        <AiProgressPanel subject={profile.id} />
-        <ErrorNote error={error} />
-      </Card>
+        </Card>
+      )}
+      <AiProgressPanel subject={profile.id} />
+      <ErrorNote error={error} />
 
-      <ProfileAccounts profile={profile} accounts={accounts} platforms={platforms} onOpenAccount={onOpenAccount} />
+      <ProfileAccounts profile={profile} accounts={accounts} platforms={platforms} onOpenAccount={onOpenAccount} main={!formFilled} />
 
       <div className="row">
         <Button onClick={() => void remove()} disabled={removing.busy || accounts.length > 0} data-testid={`profile-remove-${profile.id}`}>
@@ -289,4 +308,3 @@ export function ProfileDetail({
     </div>
   )
 }
-

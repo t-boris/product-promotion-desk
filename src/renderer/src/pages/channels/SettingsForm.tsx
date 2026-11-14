@@ -1,16 +1,20 @@
 import { useState } from 'react'
 import type { Channel } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Button, Card, ErrorNote, Field } from '../../ui'
+import { Button, Card, ErrorNote, Field, useOpenForm } from '../../ui'
 import { fromDraft, toDraft, type SettingsDraft } from './form'
 
-/** Language, style, topics, queries, interval, limits, automatic categories, daily summary and notifications. */
+/**
+ * Language, style, topics, queries, interval, limits, automatic categories, daily summary and notifications. "Save settings" is the filled
+ * button only while the form has unsaved changes (then the setup stage's own button steps back to a bezel, see `useOpenForm`).
+ */
 export function SettingsForm({ channel }: { channel: Channel }) {
   const initial = toDraft(channel.settings)
   const [draft, setDraft] = useState<SettingsDraft>(initial)
   const [formError, setFormError] = useState<string | null>(null)
   const [save, state] = useAction((settings: Channel['settings']) => call('channels.updateSettings', { channelId: channel.id, settings }))
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial)
+  useOpenForm(dirty)
   const set = <K extends keyof SettingsDraft>(key: K, value: SettingsDraft[K]): void => setDraft((d) => ({ ...d, [key]: value }))
 
   async function submit(): Promise<void> {
@@ -25,7 +29,7 @@ export function SettingsForm({ channel }: { channel: Channel }) {
 
   return (
     <Card title="Channel settings">
-      <div className="settings-grid">
+      <div className="form-row">
         <Field label="Languages" hint="Language codes, separated by commas, e.g. en, es.">
           <input className="input" value={draft.languages} onChange={(e) => set('languages', e.target.value)} data-testid="settings-languages" />
         </Field>
@@ -77,7 +81,7 @@ export function SettingsForm({ channel }: { channel: Channel }) {
       </div>
       <ErrorNote error={formError ?? state.error} />
       <div className="row">
-        <Button variant="primary" onClick={() => void submit()} disabled={!dirty || state.busy} data-testid="settings-save">
+        <Button variant={dirty ? 'primary' : 'ghost'} onClick={() => void submit()} disabled={!dirty || state.busy} data-testid="settings-save">
           {state.busy ? 'Saving…' : 'Save settings'}
         </Button>
         {dirty && (

@@ -1,19 +1,24 @@
 import { useState } from 'react'
 import type { Account, PageReport, PlatformInfo, SignInResult } from '../../../../shared/types'
 import { call, useAction, useQuery } from '../../hooks'
-import { Badge, Button, ErrorNote } from '../../ui'
+import { Button, ErrorNote, useMainVariant } from '../../ui'
 import { AccountBlock } from './AccountBlock'
+import { AccountStatusLine } from './AccountStatus'
 import { AgentRunPanel } from './AgentRunPanel'
 import { CopyButton } from './CopyButton'
-import { ACCOUNT_STATUS_LABEL, ACCOUNT_STATUS_TONE } from './model'
+import type { NextStep } from './next-step'
 import { PageReportView } from './PageReportView'
 
 /**
  * Signing in (REQ-012, DEC-014, DEC-015, REQ-016): create the account on the platform if it does not exist yet (the AI does it in the
  * account's own browser, or the owner does), sign in in the account's own browser or with the saved password, and check the result.
  * Every check on a site (a CAPTCHA, a code, a phone number) is the owner's: the AI stops and says so.
+ *
+ * Only one button of this step is ever filled, and only while sign-in is the account's next step (`next`): the saved password when there is
+ * one, else the account's browser (also to solve a CAPTCHA). "Let the AI create the account" is a helper and is never filled.
  */
-export function AccountSignIn({ account, info, vaultAvailable, hasPassword }: { account: Account; info: PlatformInfo | undefined; vaultAvailable: boolean; hasPassword: boolean }) {
+export function AccountSignIn({ account, info, vaultAvailable, hasPassword, next }: { account: Account; info: PlatformInfo | undefined; vaultAvailable: boolean; hasPassword: boolean; next: NextStep['block'] }) {
+  const main = useMainVariant()
   const [signedIn, setSignedIn] = useState<SignInResult | null>(null)
   const [pageReport, setPageReport] = useState<{ report: PageReport | null } | null>(null)
   const [open, opening] = useAction(() => call('accounts.openBrowser', { accountId: account.id }))
@@ -46,9 +51,16 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword }: { 
   const agentReady = canStart.data?.ready === true
   const agentWhy = !agentWorking && canStart.data && !canStart.data.ready ? canStart.data.reason : null
 
+  // The saved password signs in by itself; a CAPTCHA, or no saved password, needs the account's own browser.
+  const signInNext = next === 'signin'
+  const passwordNext = signInNext && hasPassword && account.status !== 'captcha'
+  const browserNext = signInNext && !passwordNext
+  // While the owner holds the browser the one thing to do is in that window; it is the main action unless an earlier step is still open.
+  const holding = next === 'signin' || next === null
+
   const summary = (
     <>
-      <Badge tone={ACCOUNT_STATUS_TONE[account.status]}>{ACCOUNT_STATUS_LABEL[account.status]}</Badge>{' '}
+      <AccountStatusLine status={account.status} />{' '}
       <span data-testid={`account-identity-${account.id}`} className="muted">
         {account.identity ? `Signed in as ${account.identity}` : ready ? 'The site does not show the account name, so the app cannot read it.' : 'The account name on the platform is not confirmed yet.'}
       </span>
@@ -66,7 +78,7 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword }: { 
           </div>
           <div className="row">
             {windowOpen && (
-              <Button variant="primary" onClick={() => void show()} disabled={showing.busy} data-testid={`browser-show-${account.id}`}>
+              <Button variant={holding ? main : 'ghost'} onClick={() => void show()} disabled={showing.busy} data-testid={`browser-show-${account.id}`}>
                 Show the window
               </Button>
             )}
@@ -84,18 +96,18 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword }: { 
       ) : (
         <div className="row">
           {hasPassword && (
-            <Button variant={ready ? 'ghost' : 'primary'} onClick={() => void signIn()} disabled={signingIn.busy || agentWorking} data-testid={`password-signin-${account.id}`}>
+            <Button variant={passwordNext ? main : 'ghost'} onClick={() => void signIn()} disabled={signingIn.busy || agentWorking} data-testid={`password-signin-${account.id}`}>
               {signingIn.busy ? 'Signing in…' : 'Sign in with saved password'}
             </Button>
           )}
-          <Button variant={ready || hasPassword ? 'ghost' : 'primary'} onClick={() => void open()} disabled={opening.busy || agentWorking} data-testid={`account-open-${account.id}`}>
+          <Button variant={browserNext ? main : 'ghost'} onClick={() => void open()} disabled={opening.busy || agentWorking} data-testid={`account-open-${account.id}`}>
             Open browser to sign in
           </Button>
           <Button onClick={() => void check()} disabled={checking.busy || agentWorking} data-testid={`account-check-${account.id}`}>
             {checking.busy ? 'Checking…' : 'Check sign-in'}
           </Button>
           {info?.signupUrl && !ready && (
-            <Button variant={agentReady ? 'primary' : undefined} onClick={() => void startAgent()} disabled={!agentReady || startingAgent.busy || agentWorking} data-testid={`agent-start-${account.id}`}>
+            <Button variant="secondary" onClick={() => void startAgent()} disabled={!agentReady || startingAgent.busy || agentWorking} data-testid={`agent-start-${account.id}`}>
               {startingAgent.busy ? 'Starting…' : 'Let the AI create the account'}
             </Button>
           )}
@@ -115,7 +127,7 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword }: { 
       {agentRun?.kind === 'signup' && <AgentRunPanel run={agentRun} onStop={() => void stopAgent()} stopping={stoppingAgent.busy} testId={`agent-run-${account.id}`} />}
       <p className="muted small">A CAPTCHA, a code or any other check on the site is always yours: the app stops and tells you.</p>
       {!ready && info && (info.signupUrl || info.signupNote) && (
-        <div className="stack" data-testid={`signup-help-${account.id}`}>
+        <div className="stack well" data-testid={`signup-help-${account.id}`}>
           <strong className="small">No account on {info.label} yet?</strong>
           {info.signupUrl ? (
             <ol className="plain-lines" data-testid={`signup-steps-${account.id}`}>

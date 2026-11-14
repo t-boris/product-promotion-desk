@@ -21,15 +21,15 @@ export function ScheduleControl({ opportunity, busy, onSchedule }: { opportunity
   const approved = opportunity.state === 'ready'
 
   return (
-    <div data-testid="schedule-control">
+    <div className="schedule" data-testid="schedule-control">
       <Field label="Send at" hint={approved ? 'Approved: it will be sent at this time if the checks still pass.' : 'It is sent at this time only after you approve it.'}>
-        <div className="row">
-          <input className="input" style={{ maxWidth: 240 }} type="datetime-local" value={value} onChange={(e) => setValue(e.target.value)} data-testid="schedule-input" />
+        <div className="schedule-row">
+          <input className="input schedule-input" type="datetime-local" value={value} onChange={(e) => setValue(e.target.value)} data-testid="schedule-input" />
           <Button onClick={() => onSchedule(new Date(value).toISOString())} disabled={busy || !value || !changed || Number.isNaN(new Date(value).getTime())} data-testid="schedule-save">
             Schedule
           </Button>
           {opportunity.scheduledAt && (
-            <Button onClick={() => onSchedule(null)} disabled={busy} data-testid="schedule-clear">
+            <Button variant="quiet" onClick={() => onSchedule(null)} disabled={busy} data-testid="schedule-clear">
               Clear
             </Button>
           )}

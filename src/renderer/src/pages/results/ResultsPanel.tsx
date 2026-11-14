@@ -4,6 +4,7 @@ import { productHref } from '../../route'
 import { ConversionsNote } from './ConversionsNote'
 import { GoalsCard } from './GoalsCard'
 import { MetricsCard } from './MetricsCard'
+import './results.css'
 
 /**
  * Results of one product (DEC-009): its promotion goal and the metrics each of its channels' platforms provide.
@@ -19,8 +20,8 @@ export function ResultsPanel({ productId }: { productId: string }) {
   const channels = results.data?.channels ?? []
 
   return (
-    <div className="stack" data-testid="results-panel">
-      <div className="row">
+    <div className="results" data-testid="results-panel">
+      <div className="results-bar">
         <Button onClick={() => void refreshAll()} disabled={all.busy || channels.length === 0} data-testid="refresh-all">
           {all.busy ? 'Refreshing…' : 'Refresh all'}
         </Button>

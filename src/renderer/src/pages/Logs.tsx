@@ -3,6 +3,7 @@ import { Page } from '../ui'
 import { EventsTab } from './logs/EventsTab'
 import { HistoryTab } from './logs/HistoryTab'
 import { RunsTab } from './logs/RunsTab'
+import './logs/logs.css'
 
 type TabId = 'runs' | 'history' | 'events'
 

@@ -1,11 +1,16 @@
 import { useState } from 'react'
 import type { Channel, Product } from '../../../../shared/types'
 import { call, useAction, useQuery } from '../../hooks'
-import { Badge, Button, Card, ErrorNote, formatTime } from '../../ui'
-import { CHANNEL_STATUS_LABEL, CHANNEL_STATUS_TONE, neverAssessed, nextCheckText } from './model'
+import { Badge, Button, Card, ErrorNote, formatTime, useMainVariant } from '../../ui'
+import { CHANNEL_STATUS_LABEL, CHANNEL_STATUS_TONE, nextCheckText } from './model'
+import { canActivate, canPause, neverAssessed } from './setup-stage'
 
-/** Status, last run and next check, plus Activate / Pause and removal. */
-export function ChannelStatusCard({ channel, product, accountLabel, onRemoved }: { channel: Channel; product: Product | undefined; accountLabel: string; onRemoved: () => void }) {
+/**
+ * Status, last run and next check, plus Activate / Pause and removal. "Activate" is the tab's filled button only at its stage (`filled`:
+ * the channel was assessed and is still to be started); "Pause", "Resume" and "Pause this channel instead" are never filled.
+ */
+export function ChannelStatusCard({ channel, product, accountLabel, filled, onRemoved }: { channel: Channel; product: Product | undefined; accountLabel: string; filled: boolean; onRemoved: () => void }) {
+  const main = useMainVariant()
   const [confirmRemove, setConfirmRemove] = useState(false)
   const runs = useQuery('runs.list', { channelId: channel.id, limit: 1 }, ['logs', 'channels'])
   const lastRun = runs.data?.[0]
@@ -29,11 +34,11 @@ export function ChannelStatusCard({ channel, product, accountLabel, onRemoved }:
   })
   const error = activating.error ?? pausing.error ?? removing.error ?? refusal
 
-  const canActivate = channel.status === 'setup' || ((channel.status === 'needs_user' || channel.status === 'error') && channel.baselineDoneAt === null)
-  const canPause = channel.status === 'active' || channel.status === 'error' || (channel.status === 'needs_user' && channel.baselineDoneAt !== null)
+  const activatable = canActivate(channel)
+  const pausable = canPause(channel)
 
   return (
-    <Card title={channel.target}>
+    <Card title={channel.target} className="wraps-title">
       <dl className="kv">
         <dt>Product</dt>
         <dd>{product?.name ?? 'Unknown product'}</dd>
@@ -63,33 +68,33 @@ export function ChannelStatusCard({ channel, product, accountLabel, onRemoved }:
       </dl>
       {neverAssessed(channel) && channel.status === 'setup' && <p className="muted small">Assess the channel first to see what this account can do here. Then check the settings and activate it.</p>}
       <ErrorNote error={error} />
-      {refusal && canPause && (
+      {refusal && pausable && (
         <div className="row actions-row">
-          <Button variant="primary" onClick={() => void setPaused(true)} disabled={pausing.busy} data-testid="channel-pause-instead">
+          <Button onClick={() => void setPaused(true)} disabled={pausing.busy} data-testid="channel-pause-instead">
             Pause this channel instead
           </Button>
         </div>
       )}
       <div className="row actions-row">
-        {canActivate && (
-          <Button variant="primary" onClick={() => void activate()} disabled={activating.busy} data-testid="channel-activate" title="Reads the existing discussions once as a baseline, then starts watching for new activity">
+        {activatable && (
+          <Button variant={filled ? main : 'ghost'} onClick={() => void activate()} disabled={activating.busy} data-testid="channel-activate" title="Reads the existing discussions once as a baseline, then starts watching for new activity">
             {activating.busy ? 'Activating…' : 'Activate'}
           </Button>
         )}
-        {canPause && (
+        {pausable && (
           <Button onClick={() => void setPaused(true)} disabled={pausing.busy} data-testid="channel-pause">
             Pause
           </Button>
         )}
         {channel.status === 'paused' && (
-          <Button variant="primary" onClick={() => void setPaused(false)} disabled={pausing.busy} data-testid="channel-resume">
+          <Button onClick={() => void setPaused(false)} disabled={pausing.busy} data-testid="channel-resume">
             Resume
           </Button>
         )}
         <span className="sep" />
         {confirmRemove ? (
           <>
-            <span className="muted small">Deletes this channel with its discussions and drafts. The account stays. A channel that has already sent something cannot be removed, only paused.</span>
+            <span className="muted small row-note">Deletes this channel with its discussions and drafts. The account stays. A channel that has already sent something cannot be removed, only paused.</span>
             <Button variant="danger" onClick={() => void remove()} disabled={removing.busy} data-testid="channel-remove-confirm">
               Remove channel
             </Button>

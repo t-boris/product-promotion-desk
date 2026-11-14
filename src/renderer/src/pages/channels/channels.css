@@ -1,132 +1,40 @@
-/* Styles for the Channels page. Colors come from the shared tokens in styles.css. */
+/* Styles for the Accounts section and the Channels tab of a product. Colours, sizes and radii come from the shared tokens in
+   styles.css; the list + detail layout, the list panel, the object header, the hairline rows and the group box are shared patterns
+   there (visual-system.md §9). Container queries follow the width of the detail pane (`.split-detail`), not the window's: at the
+   minimum window the product's Channels tab is about 490px wide and stays one column. */
 
-/* The tab sits inside the product page, which already has its own list column. A second column left the channel detail too
-   narrow (long addresses and the abilities table ran out of their cards), so the channels form a row above the detail
-   and the detail gets the full width. */
-.channels-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-4);
-}
-.channels-detail {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-.channels-list {
-  display: flex;
-  flex-flow: row wrap;
-  gap: var(--space-2);
-}
-.channels-list > * {
-  flex: 1 1 260px;
-  min-width: 0;
-}
-
-
-.cap-table td.cap-detail {
-  color: var(--muted);
-  font-size: var(--fs-caption);
-  max-width: 340px;
-}
-.legend {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: var(--space-1) var(--space-2);
-  margin: var(--space-2) 0 0;
-  align-items: center;
-}
-
-.mode-option {
-  display: flex;
-  gap: var(--space-2);
-  align-items: flex-start;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel);
-}
-.mode-option.selected {
-  border-color: var(--accent);
-}
-.mode-option:not(.selected):not(.blocked):hover {
-  border-color: var(--line-strong);
-  background: var(--hover-fill);
-}
-.mode-option {
-  transition:
-    background-color var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
-}
-.mode-option.blocked {
-  opacity: 0.6;
-}
-
-.settings-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0 var(--space-4);
-}
-.settings-grid .wide {
-  grid-column: 1 / -1;
+/* A note or an error directly in a detail pane is spaced by the pane's own gap (a note carries a margin for use inside a group box). */
+.pane > .note,
+.pane > .error-note {
+  margin: 0;
 }
 textarea.input.short {
   min-height: 56px;
 }
 
-.run-line {
-  font-size: var(--fs-caption);
+/* A well: read-only text, a draft, a report; a tint on the group box, not a box in a box. */
+.well {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
 }
-@media (max-width: 760px) {
-  .channels-layout,
-  .settings-grid {
-    grid-template-columns: 1fr;
-  }
-  .channels-list {
-    position: static;
-  }
+.dot.info {
+  background: var(--info);
 }
-
-.list-row.suggestion {
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: var(--space-3);
+/* A sentence beside the buttons of a row takes the free width and wraps; the buttons keep their size. */
+.row-note {
+  flex: 1 1 240px;
+  min-width: 0;
 }
-.consent {
-  display: flex;
-  gap: var(--space-2);
-  align-items: flex-start;
-  margin: var(--space-2) 0 0;
-}
-.site-profile {
-  margin-top: var(--space-3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-.plain-lines {
-  margin: var(--space-1) 0;
-  padding-left: var(--space-5);
-}
-.note p {
-  margin: var(--space-1) 0;
-}
-
-
-
-
-.secret-value {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: var(--fs-body);
-  padding: var(--space-2) var(--space-3);
-  border-radius: 6px;
-  background: var(--panel-2);
-  user-select: all;
+/* An address or a name in a detail wraps where it must, never sideways. */
+.row-main,
+.account-line {
+  min-width: 0;
   overflow-wrap: anywhere;
 }
-
-
+.obj-meta p {
+  margin: 0;
+}
 /* A choice and the button that acts on it, side by side; they wrap on a narrow window. */
 .pick-row {
   display: flex;
@@ -139,104 +47,111 @@ textarea.input.short {
   width: auto;
   min-width: 0;
 }
-
-/* The Accounts section (DEC-015): the list on the left, the chosen account on the right. */
-.accounts-layout {
-  display: grid;
-  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
-  gap: var(--space-4);
-  align-items: start;
+/* A form that is one field and its button (the base mailbox). */
+.add-form {
+  margin-top: var(--space-2);
 }
-.acct-detail-wrap {
-  min-width: 0;
-}
-.acct-list-name {
-  min-width: 0;
+/* Paths and addresses are monospace; a secret is selectable in one click and wraps. */
+.secret-value {
+  font-family: var(--mono);
+  font-size: var(--fs-body);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  user-select: all;
   overflow-wrap: anywhere;
 }
-.acct-detail-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-1) var(--space-3);
+.plain-lines {
+  margin: var(--space-1) 0;
+  padding-left: var(--space-5);
 }
-.acct-detail-head h2 {
-  margin: 0;
+.note p {
+  margin: var(--space-1) 0;
 }
 
-/* One numbered block of the account card: a number, what it is with its value in one line, the buttons, and a form below. */
-.acct-block {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--panel);
-}
-.acct-block-head {
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto;
-  gap: var(--space-3);
-  align-items: start;
-}
-.acct-step {
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--fs-caption);
-  font-weight: 600;
-}
-.acct-block-title {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-half);
-}
-.acct-summary {
-  font-size: var(--fs-caption);
-  overflow-wrap: anywhere;
-}
-.acct-actions {
+/* A choice among a few that can be on at the same time (platforms, accounts of a profile): bezels in a row; a pressed one is the accent
+   tint with an accent label, never the filled button (that is for the one next step). The segmented look is for radios. */
+.toggle-group {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  justify-content: flex-end;
+}
+.toggle-group .btn[aria-pressed='true'] {
+  background: var(--accent-tint);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: none;
+  color: var(--accent-on-tint);
+}
+.toggle-group .btn[aria-pressed='true']:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-tint), var(--text-1) 6%);
+}
+.toggle-group .btn[aria-pressed='true']:active:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-tint), var(--text-1) 12%);
 }
 
-/* The rare controls of an account sit behind "More". */
-.acct-more {
-  border: 1px dashed var(--border);
-  border-radius: var(--radius);
-  padding: var(--space-2) var(--space-4);
-}
-.acct-more > summary {
-  cursor: pointer;
-  color: var(--muted);
-}
-.acct-more > summary:hover {
-  color: var(--text-1);
-}
-.acct-more-body {
+/* ───────────── Accounts: the numbered steps of an account ───────────── */
+
+/* One step is a group box: a small neutral number, the title, one line of what is set, the control on the right, and a form below. */
+.step {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  margin-top: var(--space-3);
 }
-
-@media (max-width: 900px) {
-  .accounts-layout {
-    grid-template-columns: minmax(0, 1fr);
+.step > .note,
+.step > .error-note,
+.step > p {
+  margin: 0;
+}
+.step-head {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: start;
+}
+.step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-top: var(--space-half);
+  border-radius: 50%;
+  background: var(--segment-track);
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.step-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.step-title {
+  display: block;
+  /* The title line is as tall as a button, so the title and the control on the right share one centre line. */
+  font-size: var(--fs-title);
+  line-height: var(--control-h);
+}
+.step-summary {
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.step-summary strong {
+  color: var(--text-1);
+}
+.step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+/* In a narrow pane the controls of a step go under its text, in line with the title. */
+@container (max-width: 560px) {
+  .step-head {
+    grid-template-columns: 24px minmax(0, 1fr);
   }
-  .acct-block-head {
-    grid-template-columns: 28px minmax(0, 1fr);
-  }
-  .acct-actions {
+  .step-actions {
     grid-column: 2;
     justify-content: flex-start;
   }
@@ -248,11 +163,17 @@ textarea.input.short {
 }
 .page-shot {
   max-width: 100%;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+/* What the AI chose on a site: a well of lines. */
+.well > .plain-lines {
+  margin-bottom: 0;
 }
 
-/* The profile block of an account (DEC-019): the picture on the left, the values on the right. */
+/* ───────────── Profiles ───────────── */
+
+/* The person of a profile (DEC-019): the picture on the left, the values on the right; one column in a narrow pane. */
 .profile-grid {
   display: grid;
   grid-template-columns: 180px minmax(0, 1fr);
@@ -273,17 +194,16 @@ textarea.input.short {
   padding: var(--space-2);
   text-align: center;
   overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--panel-2);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
 }
 .profile-thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: calc(var(--radius) - 2px);
+  border-radius: var(--radius-sm);
 }
-@media (max-width: 900px) {
+@container (max-width: 640px) {
   .profile-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -292,48 +212,150 @@ textarea.input.short {
 .profile-grid textarea.input {
   min-height: 96px;
 }
+/* The logins of a profile: one hairline row per platform, its login and its actions on the right. */
+.platform-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.platform-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+}
+.platform-row-main {
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.platform-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.platform-row-actions select.input {
+  width: auto;
+  max-width: 240px;
+}
 
+/* ───────────── The Channels tab of a product ───────────── */
+
+/* The title of a channel is its address: it wraps in the group box instead of running out of it. */
+.card.wraps-title .card-head h2 {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 /* The accounts line of a product with no account: the sentence and the one button that fixes it, side by side. */
 .strip {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-4);
+  gap: var(--space-3) var(--space-4);
   flex-wrap: wrap;
 }
-/* An "ask the AI" block: what it is, the button, and its reason or its engine right under the button. */
-.idea {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-.idea-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-}
-.idea-title {
-  flex: 1 1 280px;
+.strip > :first-child {
+  flex: 1 1 240px;
   min-width: 0;
 }
-.idea-action {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--space-2);
-  flex: 0 1 340px;
-  margin-left: auto;
-  text-align: right;
+/* The Connect card before there is any account (BUG-030): one line says what it needs, and its controls are off (disabled, not faded:
+   a faded label would lose its contrast). They stay in the page, so "Choose an account" and "Connect channel" still read. */
+.card.dimmed .field-label {
+  color: var(--text-2);
 }
 
-/* A row of buttons under the channel's status. */
-.actions-row {
-  margin-top: var(--space-2);
+/* What the abilities of a channel are: a table that wraps in the pane, and turns into stacked rows when the pane is narrow. */
+.cap-table td {
+  overflow-wrap: anywhere;
+}
+.cap-table td.cap-detail,
+.cap-table td.cap-checked {
+  color: var(--text-2);
+}
+.cap-table td.cap-checked {
+  font-variant-numeric: tabular-nums;
+}
+@container (max-width: 640px) {
+  .cap-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .cap-table,
+  .cap-table tbody {
+    display: block;
+  }
+  .cap-table tr,
+  .table.cap-table tbody tr:nth-child(even) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-half) var(--space-3);
+    padding: var(--space-2) 0;
+    background: none;
+    border-top: 1px solid var(--line);
+  }
+  .cap-table tr:first-child {
+    border-top: 0;
+  }
+  .table.cap-table td {
+    display: block;
+    padding: 0;
+  }
+  .cap-table td:first-child {
+    font-weight: var(--fw-medium);
+  }
+  .cap-table td:nth-child(3),
+  .cap-table td:nth-child(4) {
+    grid-column: 1 / -1;
+  }
+}
+/* The legend of the states: the state and what it means, two columns. */
+.legend {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-3) 0 0;
+  align-items: baseline;
+}
+.legend-item {
+  display: contents;
+}
+
+/* The four modes: flat rows of one group. The chosen one is the accent tint with a hairline accent ring; a blocked one says why. */
+.mode-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+}
+.mode-option {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  cursor: default;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+.mode-option input[type='radio'] {
+  margin-top: var(--space-half);
+}
+.mode-option:not(.selected):not(.blocked):hover {
+  background: var(--hover-fill);
+}
+.mode-option.selected {
+  background: var(--accent-tint);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.mode-option.blocked strong {
+  color: var(--text-2);
 }
 /* A sending mode's one-line summary, and why it cannot be chosen. */
 .mode-summary,
@@ -344,8 +366,96 @@ textarea.input.short {
   color: var(--attention);
 }
 
-/* The Connect card before there is any account (BUG-030): one line says what it needs, and the form below it is dimmed and
-   off. Its controls stay in the page, disabled, so "Choose an account" and "Connect channel" still read. */
-.card.dimmed form {
-  opacity: 0.55;
+/* The settings form: fields in the shared `.form-row` grid; a wide one takes the whole row. */
+.form-row > .wide {
+  grid-column: 1 / -1;
 }
+
+/* A step of the AI's plan for a channel, a row of the group box. */
+.plan-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  overflow-wrap: anywhere;
+}
+
+.run-line {
+  font-size: var(--fs-caption);
+}
+/* A row of buttons under the channel's status. */
+.actions-row {
+  margin-top: var(--space-2);
+}
+
+/* A site profile prepared with the AI (inside the Connect card): the button, then the draft as a well. */
+.site-profile {
+  margin-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Ideas from the AI (inside its disclosure): an "ask the AI" block is its title and sentence, the button, and its reason or its engine
+   right under the button; two blocks are split by a hairline, and an idea is a row of the block. */
+.idea {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.idea + .idea {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+}
+.idea-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+  flex-wrap: wrap;
+}
+.idea-title {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+.idea-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  flex: 1 1 240px;
+  min-width: 0;
+}
+@container (min-width: 640px) {
+  .idea-action {
+    align-items: flex-end;
+    flex: 0 1 340px;
+    margin-left: auto;
+    text-align: right;
+  }
+}
+.suggestion-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.suggestion-row > :first-child {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* An account row: the name has the whole first line (it ellipsizes there), the platform and the state tag share the second. */
+.account-row-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+}
+.account-row-platform {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+

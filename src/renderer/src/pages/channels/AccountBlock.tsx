@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react'
 
-/** One numbered block of the account card: what it is, its value in one line, the buttons for it, and room for a form below. */
+/**
+ * One numbered step of the account card, as a group box: the number in a small neutral circle, the title, one line of what is set
+ * (`--text-2`), the control on the right, and room below for a form. The number is also in the "Next:" note above, so it stays.
+ */
 export function AccountBlock({
   step,
   title,
@@ -17,16 +20,16 @@ export function AccountBlock({
   children?: ReactNode
 }) {
   return (
-    <section className="acct-block" data-testid={testId}>
-      <div className="acct-block-head">
-        <span className="acct-step" aria-hidden="true">
+    <section className="card step" data-testid={testId}>
+      <div className="step-head">
+        <span className="step-num" aria-hidden="true">
           {step}
         </span>
-        <div className="acct-block-title">
-          <strong>{title}</strong>
-          <div className="acct-summary">{summary}</div>
+        <div className="step-main">
+          <strong className="step-title">{title}</strong>
+          <div className="step-summary">{summary}</div>
         </div>
-        {actions && <div className="acct-actions">{actions}</div>}
+        {actions && <div className="step-actions">{actions}</div>}
       </div>
       {children}
     </section>

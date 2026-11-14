@@ -3,12 +3,13 @@ import { call, useAction } from '../../hooks'
 import { Card, ErrorNote } from '../../ui'
 import { MODE_OPTIONS, modeBlockedReason } from './model'
 
+/** How far the app goes in this channel: one of four modes, as selectable rows of one group (the chosen one is tinted). */
 export function ModeSelector({ channel }: { channel: Channel }) {
   const [setMode, state] = useAction((mode: ChannelMode) => call('channels.setMode', { channelId: channel.id, mode }))
 
   return (
     <Card title="What the app does here">
-      <div className="stack" role="radiogroup" aria-label="Channel mode">
+      <div className="mode-options" role="radiogroup" aria-label="Channel mode">
         {MODE_OPTIONS.map((option) => {
           const blocked = modeBlockedReason(channel, option.id)
           const selected = channel.mode === option.id
@@ -17,14 +18,8 @@ export function ModeSelector({ channel }: { channel: Channel }) {
               <input type="radio" name={`mode-${channel.id}`} checked={selected} disabled={state.busy || (blocked !== null && !selected)} onChange={() => void setMode(option.id)} />
               <span>
                 <strong>{option.label}</strong>
-                <span className="muted small mode-summary">
-                  {option.summary}
-                </span>
-                {blocked && !selected && (
-                  <span className="small mode-blocked">
-                    Not available: {blocked}
-                  </span>
-                )}
+                <span className="muted small mode-summary">{option.summary}</span>
+                {blocked && !selected && <span className="small mode-blocked">Not available: {blocked}</span>}
               </span>
             </label>
           )

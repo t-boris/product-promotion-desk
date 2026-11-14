@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import type { EngineId } from '../../../shared/types'
 import { call, useAction, useQuery } from '../hooks'
-import { Badge, Button, Card, EmptyState, ErrorNote, Field, Hint, Loading, More, Page, Switch } from '../ui'
+import { Icon } from '../icons'
+import { Badge, Button, Card, EmptyState, ErrorNote, Hint, Loading, More, Page, Switch } from '../ui'
 import { engineChoiceVariant, recommendedEngineId, splitEngineDetail } from './engine-detail'
 import { LessonsCard } from './LessonsCard'
+import './settings.css'
 
 export function SettingsPage() {
   const engines = useQuery('engines.list', undefined, ['settings'])
@@ -39,23 +41,23 @@ export function SettingsPage() {
         <ErrorNote error={engines.error ?? selecting.error} />
         {engines.loading && !engines.data && <Loading what="Checking installed engines" />}
         {engines.data && engines.data.length === 0 && <EmptyState title="No AI engines found">Install Codex or Claude Code to enable analysis and drafting.</EmptyState>}
-        <div className="stack">
+        <div className="rows engines">
           {engines.data?.map((engine) => {
             const selected = current?.engineId === engine.id
             const detail = splitEngineDetail(engine.detail)
             const recommended = engine.id === recommendedId
             return (
-              <div key={engine.id} className="list-row engine-row" data-testid={`engine-${engine.id}`}>
-                <div className="engine-main">
+              <div key={engine.id} className="engine" data-testid={`engine-${engine.id}`}>
+                <div className="engine-body">
                   {/* One line says what is installed: "Claude Code 2.1.325 · Ready". The path is a detail (BUG-037). */}
-                  <div className="row">
+                  <div className="engine-name">
                     <strong>{engine.label}</strong>
                     {engine.version && (
                       <span className="hint" data-testid={`engine-version-${engine.id}`}>
                         {engine.version}
                       </span>
                     )}
-                    {selected && <Badge tone="info">Selected</Badge>}
+                    {selected && <Badge>Selected</Badge>}
                     {recommended && !selected && <Badge tone="info">Recommended</Badge>}
                     {engine.installed ? <Badge tone={engine.ready ? 'good' : 'warn'}>{engine.ready ? 'Ready' : 'Installed'}</Badge> : <Badge>Not installed</Badge>}
                   </div>
@@ -66,15 +68,15 @@ export function SettingsPage() {
                   {detail.missions && <div className="hint">{detail.missions}</div>}
                   {engine.path && (
                     <More label="Details">
-                      <div className="mono engine-path" data-testid={`engine-path-${engine.id}`}>
+                      <div className="mono engine-location" data-testid={`engine-path-${engine.id}`}>
                         {engine.path}
                       </div>
                     </More>
                   )}
                 </div>
                 {selected ? (
-                  <span className="in-use" data-testid={`engine-in-use-${engine.id}`}>
-                    <span aria-hidden="true">✓</span> In use
+                  <span className="engine-in-use" data-testid={`engine-in-use-${engine.id}`}>
+                    <Icon name="check" /> In use
                   </span>
                 ) : (
                   <Button variant={engineChoiceVariant(engine.id, recommendedId, anySelected)} disabled={!engine.installed || selecting.busy} onClick={() => void selectEngine(engine.id)}>
@@ -90,13 +92,15 @@ export function SettingsPage() {
       <LessonsCard />
 
       <Card title="Notifications">
-        <Switch
-          checked={current?.notifications ?? true}
-          disabled={!current || updating.busy}
-          onChange={(next) => void update({ notifications: next })}
-          label="Show macOS notifications for items that need you"
-          testId="notifications-switch"
-        />
+        <div className="group-row">
+          <Switch
+            checked={current?.notifications ?? true}
+            disabled={!current || updating.busy}
+            onChange={(next) => void update({ notifications: next })}
+            label="Show macOS notifications for items that need you"
+            testId="notifications-switch"
+          />
+        </div>
       </Card>
 
       <Card title="Local web access">
@@ -105,33 +109,44 @@ export function SettingsPage() {
           <Hint>It needs the secret link below, is reachable only from this computer, and cannot send anything without the same approvals the app always requires. Off by default.</Hint>
         </More>
         <ErrorNote error={updating.error} />
-        <Switch
-          checked={current?.webMode.enabled ?? false}
-          disabled={!current || updating.busy}
-          onChange={(next) => void update({ webMode: { enabled: next, port: Number(portValue) || 47615 } })}
-          label="Enable local web access"
-          testId="web-switch"
-        />
-        <Field label="Port">
-          <input className="input" value={portValue} onChange={(e) => setPort(e.target.value)} inputMode="numeric" />
-        </Field>
-        {info.data?.webMode.enabled && info.data.webMode.url && (
-          <p>
-            Open this link on this Mac: <code data-testid="web-url">{info.data.webMode.url}</code>
-          </p>
-        )}
+        <div className="rows">
+          <div className="group-row">
+            <Switch
+              checked={current?.webMode.enabled ?? false}
+              disabled={!current || updating.busy}
+              onChange={(next) => void update({ webMode: { enabled: next, port: Number(portValue) || 47615 } })}
+              label="Enable local web access"
+              testId="web-switch"
+            />
+          </div>
+          <label className="group-row">
+            <span className="field-label">Port</span>
+            <input className="input port-input" value={portValue} onChange={(e) => setPort(e.target.value)} inputMode="numeric" />
+          </label>
+          {info.data?.webMode.enabled && info.data.webMode.url && (
+            <p className="web-link">
+              Open this link on this Mac: <code data-testid="web-url">{info.data.webMode.url}</code>
+            </p>
+          )}
+        </div>
       </Card>
 
       <Card title="About">
-        <dl className="kv" id="about">
-          <dt>Version</dt>
-          <dd data-testid="app-version">{info.data?.version ?? '…'}</dd>
-          <dt>Platform</dt>
-          <dd>{info.data?.platform ?? '…'}</dd>
-          <dt>Data folder</dt>
-          <dd>
-            <code>{info.data?.dataDir ?? '…'}</code>
-          </dd>
+        <dl className="rows about" id="about">
+          <div className="group-row">
+            <dt>Version</dt>
+            <dd data-testid="app-version">{info.data?.version ?? '…'}</dd>
+          </div>
+          <div className="group-row">
+            <dt>Platform</dt>
+            <dd>{info.data?.platform ?? '…'}</dd>
+          </div>
+          <div className="group-row">
+            <dt>Data folder</dt>
+            <dd>
+              <code>{info.data?.dataDir ?? '…'}</code>
+            </dd>
+          </div>
         </dl>
       </Card>
     </Page>

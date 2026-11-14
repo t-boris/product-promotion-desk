@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import type { Account, AccountRole, Mailbox, PlatformInfo, Profile } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Button, ErrorNote, Field } from '../../ui'
+import { Button, ErrorNote, Field, Hint, useOpenForm } from '../../ui'
 import { ROLE_NAME_LIMIT, ROLE_VOICE_LIMIT } from './RoleEditor'
 
 /**
@@ -29,6 +29,8 @@ export function CreateAccount({
   /** Absent while there is no account yet: the form is then the only thing to do. */
   onCancel?: () => void
 }) {
+  // The form is the next step of the screen and owns its one filled button; the account behind it keeps bezels meanwhile.
+  useOpenForm()
   const [chosen, setChosen] = useState('')
   const [profileId, setProfileId] = useState('')
   const [label, setLabel] = useState(role ? `${role.name} account` : '')
@@ -50,6 +52,8 @@ export function CreateAccount({
   const freeProfiles = profiles.filter((p) => !accounts.some((a) => a.profileId === p.id && a.platform === platform))
   const profile = freeProfiles.find((p) => p.id === profileId)
   const roleIncomplete = !profile && roleName.trim() === '' && roleVoice.trim() !== ''
+  // Why "Add account" cannot be pressed yet, beside the button (the field that is missing first).
+  const createBlocker = !platform ? 'Choose a platform.' : !label.trim() ? 'Name the account.' : roleIncomplete ? 'Give the role a name, or clear the voice.' : null
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault()
@@ -105,7 +109,7 @@ export function CreateAccount({
                   </option>
                 ))}
               </select>
-              <Button onClick={() => void propose(platform)} disabled={proposing.busy || platform === ''} data-testid="account-propose-email">
+              <Button variant="secondary" onClick={() => void propose(platform)} disabled={proposing.busy || platform === ''} data-testid="account-propose-email">
                 Propose
               </Button>
             </div>
@@ -125,14 +129,14 @@ export function CreateAccount({
         </Field>
       )}
       {!profile && (
-      <div className="form-row">
-        <Field label="Role (optional)" hint="For example astrologer or developer.">
-          <input className="input" value={roleName} maxLength={ROLE_NAME_LIMIT} onChange={(e) => setRoleName(e.target.value)} data-testid="account-role-name" />
-        </Field>
-        <Field label="Voice (optional)" hint={`How this account writes and what it may talk about. Up to ${ROLE_VOICE_LIMIT} characters.`}>
-          <textarea className="input short" value={roleVoice} maxLength={ROLE_VOICE_LIMIT} onChange={(e) => setRoleVoice(e.target.value)} data-testid="account-role-voice" />
-        </Field>
-      </div>
+        <div className="form-row">
+          <Field label="Role (optional)" hint="For example astrologer or developer.">
+            <input className="input" value={roleName} maxLength={ROLE_NAME_LIMIT} onChange={(e) => setRoleName(e.target.value)} data-testid="account-role-name" />
+          </Field>
+          <Field label="Voice (optional)" hint={`How this account writes and what it may talk about. Up to ${ROLE_VOICE_LIMIT} characters.`}>
+            <textarea className="input short" value={roleVoice} maxLength={ROLE_VOICE_LIMIT} onChange={(e) => setRoleVoice(e.target.value)} data-testid="account-role-voice" />
+          </Field>
+        </div>
       )}
       {roleIncomplete && <p className="muted small">Give the role a name, or clear the voice.</p>}
       <div className="row">
@@ -140,6 +144,7 @@ export function CreateAccount({
           {state.busy ? 'Adding…' : 'Add account'}
         </Button>
         {onCancel && <Button onClick={onCancel}>Cancel</Button>}
+        {createBlocker && <Hint data-testid="account-create-reason">{createBlocker}</Hint>}
       </div>
       <p className="muted small" data-testid="account-create-note">
         After adding it you are told what to do next: set the address and the password, then create the account on the platform or sign in.

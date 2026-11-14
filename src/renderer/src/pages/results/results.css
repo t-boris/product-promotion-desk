@@ -1,0 +1,52 @@
+/* The Results tab of a product (visual-system.md §10.2): group boxes for the goals and for each channel's metrics, a table that
+   wraps, and the standing note on conversions folded to one line. The tab is a column of the product pane (about 490px at the
+   minimum window), so nothing here sets a width. Colours, sizes and radii come from the shared tokens in styles.css.
+   The page stylesheets are bundled before styles.css (main.tsx imports it last), so a rule here that sets what a shared rule of
+   styles.css also sets is written one step more specific. */
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.results > .error-note,
+.results > .note {
+  margin: 0;
+}
+
+/* "Refresh all" and the words beside it, which say why it is off or what it does. */
+.results-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+
+/* The goals: one hairline row per product, its goals under each other. */
+.results-goal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The metrics of one channel: the table's text lines up with the box's title, its zebra runs nearly edge to edge, long words wrap. */
+.card.metrics-card > * + * {
+  margin-top: var(--space-2);
+}
+.card.metrics-card > .card-head + * {
+  margin-top: 0;
+}
+.card.metrics-card > .table {
+  width: calc(100% + var(--space-3) * 2);
+  margin-left: calc(var(--space-3) * -1);
+  margin-right: calc(var(--space-3) * -1);
+}
+.metrics-card .table td {
+  overflow-wrap: anywhere;
+}
+.card.metrics-card > .metrics-empty {
+  margin-bottom: 0;
+}

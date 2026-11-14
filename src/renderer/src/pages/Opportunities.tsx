@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import type { Id, OpportunityState } from '../../../shared/types'
 import { call, useAction, useQuery } from '../hooks'
-import { Button, Card, EmptyState, ErrorNote, Field, Loading, Page } from '../ui'
+import { Button, EmptyState, ErrorNote, Field, Hint, Loading, Page } from '../ui'
 import { connectChannelHref } from './attention-links'
+import { useMainActionOwner } from './review/main-action'
 import { OlderDiscussions } from './review/OlderDiscussions'
 import { ProductFilter, useProductDirectory, useProductFilter } from './review/products'
 import { ReviewCard } from './review/ReviewCard'
+import './review/review.css'
 
 type Filter = 'open' | 'sent' | 'closed' | 'all'
 
@@ -37,10 +39,12 @@ export function OpportunitiesPage() {
   const waitingForProducts = Boolean(productId) && !directory.ready
   // The app, or the chosen product, has no channel at all.
   const noChannel = directory.ready && inScope.length === 0
+  // The first open card that offers a main action has the screen's one filled button.
+  const mainAction = useMainActionOwner(cards?.map((card) => card.opportunity.id) ?? [])
 
   return (
     <Page title="Opportunities" subtitle="Comments found in your channels, what happened to each, and older discussions you choose to work on">
-      <Card>
+      <div className="list-head">
         <div className="toolbar">
           <ProductFilter products={directory.products} value={productId} onChange={setProduct} />
           <Field label="Channel">
@@ -53,11 +57,11 @@ export function OpportunitiesPage() {
               ))}
             </select>
           </Field>
-          <div className="row" role="group" aria-label="State filter">
+          <div className="segmented" role="group" aria-label="State filter">
             {FILTERS.map((f) => (
-              <Button key={f.id} variant={filter === f.id ? 'primary' : 'ghost'} onClick={() => setFilter(f.id)} data-testid={`filter-${f.id}`}>
+              <button key={f.id} type="button" className={`segmented-option${filter === f.id ? ' on' : ''}`} aria-pressed={filter === f.id} onClick={() => setFilter(f.id)} data-testid={`filter-${f.id}`}>
                 {f.label}
-              </Button>
+              </button>
             ))}
           </div>
           {selected && (
@@ -76,11 +80,11 @@ export function OpportunitiesPage() {
         </div>
         <ErrorNote error={directory.error ?? checking.error} />
         {lastRun && (
-          <div className="muted small" data-testid="check-result">
+          <Hint data-testid="check-result">
             Last check: {lastRun}
-          </div>
+          </Hint>
         )}
-      </Card>
+      </div>
 
       {selected && <OlderDiscussions channel={selected} />}
 
@@ -88,6 +92,7 @@ export function OpportunitiesPage() {
       {(waitingForProducts || (list.loading && !list.data)) && <Loading what="Loading" />}
       {!waitingForProducts && cards?.length === 0 && (
         <EmptyState
+          fill
           art="channel"
           title="Nothing here"
           action={
@@ -103,10 +108,18 @@ export function OpportunitiesPage() {
           {noChannel && ' You have no channel yet.'}
         </EmptyState>
       )}
-      <div className="stack" data-testid="opportunity-list">
+      <div className="review-list" data-testid="opportunity-list">
         {!waitingForProducts &&
           cards?.map((card) => (
-            <ReviewCard key={card.opportunity.id} card={card} collapsible defaultOpen={false} productName={directory.productNameOfChannel(card.opportunity.channelId)} />
+            <ReviewCard
+              key={card.opportunity.id}
+              card={card}
+              collapsible
+              defaultOpen={false}
+              productName={directory.productNameOfChannel(card.opportunity.channelId)}
+              primaryAction={mainAction.isOwner(card.opportunity.id)}
+              onMainAction={mainAction.offer}
+            />
           ))}
       </div>
     </Page>

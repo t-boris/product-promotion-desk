@@ -93,6 +93,8 @@ try {
     for (const tab of tabs) { await p.go(`#/products/${fullId}/${tab}`, 1000); await snap(`${S}-03-product-${tab}`) }
     await p.go('#/accounts', 900); await snap(`${S}-04-accounts`)
     await p.go('#/accounts/new', 900); await snap(`${S}-04-accounts-new`)
+    await p.go('#/accounts', 700)
+    for (const tab of ['Profiles', 'Mailboxes']) { await p.clickText(tab, 700); await snap(`${S}-04-accounts-${tab.toLowerCase()}`) }
     await p.go('#/opportunities', 900); await snap(`${S}-05-opportunities`)
     await p.go('#/publications', 900); await snap(`${S}-06-publications`)
     await p.go('#/logs', 900); await snap(`${S}-07-log-runs`)

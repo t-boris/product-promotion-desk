@@ -471,7 +471,7 @@ Spec: `docs/design/macos/visual-system.md` (tokens, type, components, every scre
 - [x] Tokens, window options (`vibrancy`, transparent background, window buttons on the 52px band), `data-chrome`
 - [x] Shell: sidebar with icons, band toggle, toolbar band, hidden-menu state
 - [x] Shared components (`ui.tsx`, `styles.css`): buttons and states, fields, pop-up button, segmented control for all tabs, switch, tag, group box, list rows, table, disclosure, note, empty state, menu, sheet (page-level rules of `products.css`, `channels.css` and the page markup are the next package)
-- [ ] Pages: Products (all tabs and forms), Accounts (accounts, profiles, mailboxes), Attention, Opportunities, Publications, Log, Settings; one filled button per screen (§10); `products.css`, `channels.css` and inline styles onto tokens
+- [x] Pages: Products (all tabs and forms), Accounts (accounts, profiles, mailboxes), Attention, Opportunities, Publications, Log, Settings; one filled button per screen (§10); `products.css`, `channels.css` and inline styles onto tokens
 - [ ] Sweep V-01 … V-24 on the packaged build, both themes, both sizes; an independent review of the diff
 - [ ] QA scenarios: edits only under the supervisor's rules, both run on the final code; the owner's baseline checked after each run
 - [ ] Delivery: commit the earlier untracked files, `npm run verify`, PR, CI, merge, `chore: release X.Y.Z`, tag, GitHub release, `npm run deploy:local`, MarkView statuses, DEC-023 accepted
@@ -487,3 +487,17 @@ Built and measured on the packaged build (`npm run dist`, `dist/mac-arm64`, work
 - Tour (72 screens, both themes, 1320×880 and 980×640, packaged build): no horizontal scroll, no cut buttons, nothing under the window buttons, toolbar 52 px, text sizes only 13/15/17/22. Contrast of all visible text on the Products screen: ≥ 4.5:1 in both themes after `--accent-on-tint` (light) went from `#5856d6` to `#4e4cc8` (the "Next" tag was 4.41:1).
 - `npm run verify` green: 79 test files, 1560 tests, typecheck, lint, build.
 - Not done here, by plan: page-level layouts of Products (list stacking at 980, card-in-card), Accounts, Attention, Opportunities, Publications, Log, Settings; one filled button per screen (§10); `products.css`, `channels.css` and inline styles onto tokens; the independent review; both QA scenarios. Light-theme native captures used `nativeTheme.themeSource` of my own process, not the system appearance switch.
+
+### Review: all screens (step 4 of the macOS design plan)
+
+Built on a development build (`npx electron-vite build`, own instance, own `PPD_DATA_DIR`, demo data with example.com names, automation paused); the owner's app and data were not touched. Commits on `feat/macos-design`: `8c79db8`, `b14d89a` (Products) and the package after them (Accounts, channels, Attention, Opportunities, Publications, review cards, Log, Settings, Results).
+
+- Tour (`scripts/design/tour.mjs`, 76 screens: dark and light × 1320×880 and 980×640, every section, the product tabs, empty and new-product states, accounts, profiles, mailboxes, menu hidden): no horizontal scroll, no cut button, no tall button, no control under 28 px (segments of a 28 px track and link-styled buttons are not counted, §7), no screen with two filled buttons, nothing under the window buttons, text sizes 13/15/17/22 only.
+- Stress probe (long product name and address, 55-character account name, long profile name, error on adding a source, three drafts, the AI-question sheet markup; dark and light × both sizes): no overflow, no cut, no tall button, no small control; the sheet shows "Stop the AI" (danger), "Show the browser", "I’m done" (filled, last).
+- V-18: list and detail side by side at 980×640, launch path one row, tab row ends at 308 px (target amended from 300 to 310, measured; the first guess was not reachable without dropping the status row).
+- QA text safety: every string quoted in the two scenarios that exists at the start of the step still exists (168 of 168), no test id lost (445 now, 444 before; `account-more-*` is passed through `Disclosure testId`), no `aria-*` or `role` lost. Added test ids: `channel-list`, `write-publication-empty`, and the reasons `account-create-reason`, `mailbox-add-reason`, `profile-create-reason`, `approve-reason`, `create-publication-reason`.
+- Tokens: no hex, rgb, px font size, radius literal or font stack in the page CSS (`products.css`, `channels.css`, `attention.css`, `settings.css`, `logs.css`, `results.css`, `review.css`); three inline styles remain and are dynamic (progress width, clamp lines, thread depth).
+- Dead CSS removed from `styles.css` (143 lines): Getting started, nothing-line, engine rows, rule rows, thread comments, the old selectable list row.
+- Decisions recorded in the spec (§16.3 and V-10, V-16, V-18): optional AI helpers are never filled; the step's own action is; a disabled button has its reason beside it or its own empty field next to it.
+- Not verified here: the packaged build (vibrancy, real window buttons, the accessibility tree of the final code) and the two QA scenarios; they belong to the sweep and the QA step.
+

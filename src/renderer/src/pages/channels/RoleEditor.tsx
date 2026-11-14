@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Account } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Badge, Button, ErrorNote, Field } from '../../ui'
+import { Button, ErrorNote, Field, useOpenForm } from '../../ui'
 import { AccountBlock } from './AccountBlock'
 
 export const ROLE_NAME_LIMIT = 40
@@ -13,6 +13,8 @@ export const ROLE_VOICE_LIMIT = 280
  */
 export function RoleEditor({ account }: { account: Account }) {
   const [editing, setEditing] = useState(false)
+  // The open form owns the filled button of the screen.
+  useOpenForm(editing)
   const [name, setName] = useState(account.role?.name ?? '')
   const [voice, setVoice] = useState(account.role?.voice ?? '')
   const [save, saving] = useAction((role: { name: string; voice: string } | null) => call('accounts.setRole', { accountId: account.id, role }))
@@ -37,7 +39,7 @@ export function RoleEditor({ account }: { account: Account }) {
         summary={
           account.role ? (
             <>
-              <Badge tone="info">{account.role.name}</Badge> <span>{account.role.voice || 'No voice written yet.'}</span> <span className="muted">· from the profile (step 2)</span>
+              <strong>{account.role.name}</strong> <span>{account.role.voice || 'No voice written yet.'}</span> <span className="muted">· from the profile (step 2)</span>
             </>
           ) : (
             <span className="muted">No role. It is set in the profile (step 2), and then it is the same on every platform of the profile.</span>
@@ -49,7 +51,7 @@ export function RoleEditor({ account }: { account: Account }) {
 
   const summary = account.role ? (
     <>
-      <Badge tone="info">{account.role.name}</Badge> <span>{account.role.voice || 'No voice written yet.'}</span>
+      <strong>{account.role.name}</strong> <span>{account.role.voice || 'No voice written yet.'}</span>
     </>
   ) : (
     <span className="muted">No role. The account then writes in the reply style of the channel it is used in.</span>

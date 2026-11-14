@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '../hooks'
 import { accountsNewHref, parseAccountsHash, type AccountsRoute } from '../route'
-import { Button, Card, EmptyState, ErrorNote, Loading, Page } from '../ui'
+import { Button, Card, EmptyState, ErrorNote, Loading, OpenFormsScope, Page } from '../ui'
 import { AccountDetail } from './channels/AccountDetail'
 import { AccountList } from './channels/AccountList'
 import { CreateAccount } from './channels/CreateAccount'
@@ -25,8 +25,11 @@ function useAccountsRoute(): AccountsRoute {
  * The account library (DEC-015, REQ-014): every account the owner promotes from. An account is added here, given a role, an
  * e-mail address and a password, and signed in. It is only about the account: channels and products are not shown here; an
  * account is chosen where a channel is connected.
+ *
+ * One filled button per screen state (visual-system.md §10.3): the header's "Add account" is a bezel; the new-account form owns the
+ * filled button while it is open (the scope below makes the account behind it step back), otherwise the next step of the account.
  */
-export function AccountsPage() {
+function AccountsScreen() {
   const accounts = useQuery('accounts.list', undefined, ['accounts'])
   const platforms = useQuery('platforms.list', undefined, [])
   const mailboxes = useQuery('mailboxes.list', undefined, ['accounts'])
@@ -70,7 +73,7 @@ export function AccountsPage() {
       title="Accounts"
       subtitle="Your logins on the platforms, and the profiles (people) behind them: a profile has one login per platform."
       actions={
-        <Button variant="primary" onClick={goNew} data-testid="account-add">
+        <Button icon="plus" onClick={goNew} data-testid="account-add">
           Add account
         </Button>
       }
@@ -122,11 +125,11 @@ export function AccountsPage() {
             </Card>
           )}
           {list.length > 0 && (
-            <div className="accounts-layout">
-              <aside>
+            <div className="split">
+              <aside className="split-list">
                 <AccountList accounts={list} platforms={platforms.data ?? []} selectedId={selected?.id ?? null} onSelect={setSelectedId} />
               </aside>
-              <div className="acct-detail-wrap">
+              <div className="split-detail">
                 {selected ? (
                   <AccountDetail key={selected.id} account={selected} platforms={platforms.data ?? []} mailboxes={mailboxes.data ?? []} vault={vault.data} onOpenProfile={openProfile} />
                 ) : (
@@ -138,5 +141,13 @@ export function AccountsPage() {
         </>
       )}
     </Page>
+  )
+}
+
+export function AccountsPage() {
+  return (
+    <OpenFormsScope>
+      <AccountsScreen />
+    </OpenFormsScope>
   )
 }
