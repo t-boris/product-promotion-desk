@@ -1,6 +1,9 @@
+import { useEffect, useRef, useState } from 'react'
 import type { DraftInput } from '../../../../shared/api'
 import type { OpportunityCard } from '../../../../shared/types'
 import { Button, ConfirmAction, useMainVariant } from '../../ui'
+import { ApproveCheck } from './ApproveCheck'
+import { fingerprint, heldFor, needsCheck, type Approving, type Held } from './approve-check'
 import { approveLabels } from './approve-labels'
 import { PREPARABLE_STATES } from './labels'
 import { mainActionOf } from './main-action'
@@ -32,6 +35,14 @@ export function ReviewButtons({ card, actions, dirty, input, primaryAction = fal
   const resting = useMainVariant()
   const mainVariant = primaryAction && resting === 'primary' ? 'primary' : 'secondary'
   const { busy } = actions
+  // A text the owner wrote is read against the rules of an AI draft before it is approved; with findings the panel stands in for the buttons.
+  const [held, setHeld] = useState<Held | null>(null)
+  const panel = heldFor(held, input)
+  const here = useRef<HTMLDivElement>(null)
+  const now = fingerprint(input)
+  useEffect(() => {
+    setHeld((current) => (current !== null && current.fingerprint !== now ? null : current))
+  }, [now])
 
   if (main === 'reconcile') {
     return (
@@ -51,8 +62,55 @@ export function ReviewButtons({ card, actions, dirty, input, primaryAction = fal
   if (main === null) return null
 
   const label = approveLabels(dirty)
+  const goOn = (which: Approving): void => {
+    // What the panel said was about this press; it must not come back if the item returns to review with the same text.
+    setHeld(null)
+    const draft = dirty ? input : undefined
+    void (which === 'approve' ? actions.approve(id, draft) : actions.approveAndSend(id, draft))
+  }
+  const approveWith = async (which: Approving): Promise<void> => {
+    if (!needsCheck(card.draft, dirty)) return goOn(which)
+    const outcome = await actions.check(id, dirty ? input : undefined)
+    if (outcome.error === null && outcome.findings.length === 0) {
+      setHeld(null)
+      return goOn(which)
+    }
+    setHeld({ which, findings: outcome.findings, error: outcome.error, fingerprint: fingerprint(input) })
+  }
+  const editText = (): void => {
+    const container = here.current?.closest('[data-testid^="review-card-"]')
+    setHeld(null)
+    container?.querySelector<HTMLElement>('textarea.draft-text')?.focus()
+  }
+  const side = (
+    <>
+      {opp.state !== 'deferred' && (
+        <Button variant="quiet" onClick={() => void actions.defer(id)} disabled={busy} data-testid="defer">
+          Defer
+        </Button>
+      )}
+      <ConfirmAction
+        label="Reject"
+        variant="quiet"
+        className="danger"
+        question="Rejects this for good. A rejected item cannot be reopened."
+        confirmLabel="Reject"
+        onConfirm={() => actions.reject(id)}
+        disabled={busy}
+        testId="reject"
+        confirmTestId="reject-confirm"
+      />
+    </>
+  )
+  if (panel !== null && main === 'approve') {
+    return (
+      <div ref={here}>
+        <ApproveCheck held={panel} onEdit={editText} onApprove={() => goOn(panel.which)} busy={busy} editVariant={mainVariant} side={side} />
+      </div>
+    )
+  }
   return (
-    <div className="review-actions" data-testid="review-buttons">
+    <div className="review-actions" data-testid="review-buttons" ref={here}>
       <div className="review-actions-main">
         {main === 'approve' && !hasText && (
           <span className="muted small" data-testid="approve-reason">
@@ -89,33 +147,16 @@ export function ReviewButtons({ card, actions, dirty, input, primaryAction = fal
           </Button>
         ) : (
           <>
-            <Button onClick={() => void actions.approveAndSend(id, dirty ? input : undefined)} disabled={busy || !hasText} data-testid="approve-send">
+            <Button onClick={() => void approveWith('approve_send')} disabled={busy || !hasText} data-testid="approve-send">
               {label.approveAndSend}
             </Button>
-            <Button variant={mainVariant} onClick={() => void actions.approve(id, dirty ? input : undefined)} disabled={busy || !hasText} data-testid="approve">
+            <Button variant={mainVariant} onClick={() => void approveWith('approve')} disabled={busy || !hasText} data-testid="approve">
               {label.approve}
             </Button>
           </>
         )}
       </div>
-      <div className="review-actions-side">
-        {opp.state !== 'deferred' && (
-          <Button variant="quiet" onClick={() => void actions.defer(id)} disabled={busy} data-testid="defer">
-            Defer
-          </Button>
-        )}
-        <ConfirmAction
-          label="Reject"
-          variant="quiet"
-          className="danger"
-          question="Rejects this for good. A rejected item cannot be reopened."
-          confirmLabel="Reject"
-          onConfirm={() => actions.reject(id)}
-          disabled={busy}
-          testId="reject"
-          confirmTestId="reject-confirm"
-        />
-      </div>
+      <div className="review-actions-side">{side}</div>
     </div>
   )
 }
