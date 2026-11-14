@@ -1,9 +1,10 @@
 import type { AnalysisStageName, PassportView } from '../../../../shared/types'
 import { call, useAction, useQuery } from '../../hooks'
 import { productHref } from '../../route'
-import { Badge, Button, Card, ErrorNote, formatTime, Hint, useMainVariant } from '../../ui'
+import { Badge, Button, Card, ErrorNote, formatTime, Hint } from '../../ui'
 import { describeSources, planStages, progressOf, type PlannedStage } from './analysis-plan'
 import { ANALYSIS_LABELS, ANALYSIS_TONES, STAGE_LABELS, STAGE_STATUS_LABELS, STAGE_TONES } from './labels'
+import { useTabMainVariant } from './LaunchPath'
 
 function StageRow({ planned }: { planned: PlannedStage }) {
   const { stage, needed, reason } = planned
@@ -41,8 +42,9 @@ export function AnalysisTab({ view }: { view: PassportView }) {
   const noSources = view.sources.length === 0
   // The one reason the button is off, at reading size beside it. The engine has its own note below.
   const blocked = noSources ? 'Add a source first: there is nothing to analyze.' : null
-  // Starting the analysis is the main action of this tab, unless the product's edit form is open and owns the filled button.
-  const mainVariant = useMainVariant()
+  // Starting the analysis is the main action of this tab while the passport is the path's next stage, unless the product's edit form is open and
+  // owns the filled button. Once the passport is approved the next stage owns it, and "Run again" is a bezel (BUG-065).
+  const mainVariant = useTabMainVariant('analysis')
 
   return (
     <div className="stack" data-testid="analysis-tab">

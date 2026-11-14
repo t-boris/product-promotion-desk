@@ -20,8 +20,8 @@ export function ChannelDetail({
   accounts: Account[]
   platforms: PlatformInfo[]
   planBlockedReason: string | null
-  /** The setup stage of the tab: "Assess channel" and "Activate" are filled only at their own stage. */
-  stage: SetupStage
+  /** The setup stage whose button is the tab's filled one: "Assess channel" and "Activate" are filled only at their own stage, and not at all (null) while the path's next stage is elsewhere. */
+  stage: SetupStage | null
   onRemoved: () => void
 }) {
   const account = accounts.find((a) => a.id === channel.accountId)

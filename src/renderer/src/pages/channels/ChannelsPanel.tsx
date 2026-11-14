@@ -3,13 +3,14 @@ import type { ChannelSuggestion, RoleSuggestion } from '../../../../shared/types
 import { useQuery } from '../../hooks'
 import { accountsNewHref, channelsAccountOf } from '../../route'
 import { Disclosure, EmptyState, ErrorNote, Loading } from '../../ui'
+import { useTabAccent } from '../products/LaunchPath'
 import { AccountsCard } from './AccountsCard'
 import { ChannelDetail } from './ChannelDetail'
 import { ChannelList } from './ChannelList'
 import { ConnectChannel, type Prefill } from './ConnectChannel'
 import { SuggestRoles } from './SuggestRoles'
 import { SuggestChannels } from './SuggestChannels'
-import { setupStage } from './setup-stage'
+import { setupStage, type SetupStage } from './setup-stage'
 import { suggestionBlock } from './suggestion-block'
 import './channels.css'
 
@@ -45,6 +46,9 @@ export function ChannelsPanel({ productId }: { productId: string }) {
   const productName = (id: string | null): string => allProducts.find((p) => p.id === id)?.name ?? 'another product'
   const selected = channelList.find((c) => c.id === selectedId) ?? (channelList.length === 1 ? channelList[0] : undefined)
   const stage = setupStage({ hasAccount, channelCount: channelList.length, selected })
+  // The stage of this tab names its own next step, but the path decides whether that step is the screen's filled button: only while the Channel
+  // stage is the path's next one. A connected channel ends it, so "Assess channel" and "Activate" are bezels and the next stage is filled (BUG-065).
+  const filledStage: SetupStage | null = useTabAccent('channels').own ? stage : null
 
   const blocked = suggestionBlock({
     productId,
@@ -62,11 +66,11 @@ export function ChannelsPanel({ productId }: { productId: string }) {
       {(accounts.loading && !accounts.data) || (channels.loading && !channels.data) ? <Loading what="Loading channels" /> : null}
       {accountsKnown && (
         <>
-          <AccountsCard productId={productId} accounts={productAccounts} libraryHasAccounts={hasAccount} channels={channelList} platforms={platformList} filled={stage === 'account'} />
+          <AccountsCard productId={productId} accounts={productAccounts} libraryHasAccounts={hasAccount} channels={channelList} platforms={platformList} filled={filledStage === 'account'} />
           <ConnectChannel
             product={product}
             needsAccount={!hasAccount}
-            filled={stage === 'connect'}
+            filled={filledStage === 'connect'}
             accounts={accountList}
             firstAccountId={firstAccountId}
             channels={channelList}
@@ -85,7 +89,7 @@ export function ChannelsPanel({ productId }: { productId: string }) {
         <>
           <ChannelList channels={channelList} products={allProducts.filter((p) => p.id === productId)} selectedId={selected?.id ?? null} onSelect={setSelectedId} />
           {selected ? (
-            <ChannelDetail key={selected.id} channel={selected} products={allProducts} accounts={accountList} platforms={platformList} planBlockedReason={blockedReason} stage={stage} onRemoved={() => setSelectedId(null)} />
+            <ChannelDetail key={selected.id} channel={selected} products={allProducts} accounts={accountList} platforms={platformList} planBlockedReason={blockedReason} stage={filledStage} onRemoved={() => setSelectedId(null)} />
           ) : (
             <EmptyState title="Select a channel">Pick a channel to see its status and abilities, assess it, and set how the app behaves there.</EmptyState>
           )}

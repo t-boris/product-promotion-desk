@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { Id, Product, PromotionGoal } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Badge, Button, Card, ConfirmAction, ErrorNote, Field, Hint, More, useMainVariant, useOpenForm } from '../../ui'
+import { Badge, Button, Card, ConfirmAction, ErrorNote, Field, Hint, More, useOpenForm } from '../../ui'
+import { useTabMainVariant } from './LaunchPath'
 import { lines } from './model'
 
 interface GoalFields {
@@ -115,10 +116,11 @@ function GoalCard({
   // A stored goal is a compact card (what to do, how it is judged) until the owner presses Edit; a new goal is a form from the start.
   const [editing, setEditing] = useState(goal === null)
   // The form is on demand when the owner opened it: an edit of a stored goal, or a new card that can be cancelled. The lone first-goal
-  // form is the screen's resting main action, so it steps back while an on-demand form of the screen is open.
+  // form is the screen's resting main action, so it steps back while an on-demand form of the screen is open, and while the goal is not the path's
+  // next stage (the path's own next stage owns the filled button then, BUG-065).
   const onDemand = goal !== null ? editing : onCancel !== undefined
   const saveVariant = useOpenForm(onDemand)
-  const restingVariant = useMainVariant()
+  const restingVariant = useTabMainVariant('goal')
   const [save, saving] = useAction(async () => {
     const next = normalized(fields)
     const result = await call('products.saveGoal', { id: productId, goal: { ...(goal ? { id: goal.id } : {}), targetAction: next.targetAction, successMetrics: lines(next.metrics), notes: next.notes } })

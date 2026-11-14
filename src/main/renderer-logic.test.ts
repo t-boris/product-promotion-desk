@@ -12,7 +12,7 @@ import { KIND_TONE, attentionCountTone } from '../renderer/src/pages/attention-t
 import { startSteps } from '../renderer/src/pages/attention-start'
 import { engineChoiceVariant, recommendedEngineId, splitEngineDetail } from '../renderer/src/pages/engine-detail'
 import { describeSources, planStages, progressOf } from '../renderer/src/pages/products/analysis-plan'
-import { launchCounts, launchProgress, launchStages, nextStage, type LaunchFacts } from '../renderer/src/pages/products/launch-path'
+import { TAB_STAGE, launchCounts, launchProgress, launchStages, nextStage, tabAccent, type LaunchFacts } from '../renderer/src/pages/products/launch-path'
 import { approvableClaims } from '../renderer/src/pages/products/model'
 import { productLabels } from '../renderer/src/pages/products/product-labels'
 import { deleteBlocker, nextProductStep, passportStatus, websiteHost } from '../renderer/src/pages/products/product-status'
@@ -24,7 +24,7 @@ import { afterCreateNote, nextStep } from '../renderer/src/pages/channels/next-s
 import { approveLabels } from '../renderer/src/pages/review/approve-labels'
 import { channelLabel } from '../renderer/src/pages/review/channel-label'
 import { platformMismatch } from '../renderer/src/pages/channels/platform-hint'
-import { MOVED_PAGES, accountHref, accountsNewHref, channelsAccountOf, navigateHashOf, parseAccountsHash, parseHash, productHref, publicationsHref, publicationsProductOf } from '../renderer/src/route'
+import { MOVED_PAGES, PRODUCT_TABS, accountHref, accountsNewHref, channelsAccountOf, navigateHashOf, parseAccountsHash, parseHash, productHref, publicationsHref, publicationsProductOf } from '../renderer/src/route'
 import { accountText, accountsGroupName, accountsSummary, automationText, engineGroupName } from '../renderer/src/status-labels'
 
 describe('hash routes (DEC-009)', () => {
@@ -568,6 +568,47 @@ describe('QA clarity batch: what the screens say', () => {
     expect(middle).toMatchObject({ id: 'goal', state: 'current', href: '#/products/p1/goal', action: 'Write a goal' })
     expect(nextStage(launchStages('p1', { ...facts, hasSources: true, goals: 1, channels: 1 }))?.id).toBe('passport')
     expect(nextStage([])).toBeNull()
+  })
+
+  it('Product tabs (BUG-065): a tab keeps its filled action only while its own stage is the next one; every other tab points at the next stage', () => {
+    const facts = { hasSources: true, passportApproved: false, goals: 0, channels: 0, approvedPublications: 0 }
+    const accents = (over: Partial<LaunchFacts>) => {
+      const stages = launchStages('p1', { ...facts, ...over })
+      return Object.fromEntries(PRODUCT_TABS.map((tab) => [tab, (({ own, next }) => (own ? 'own' : (next?.id ?? 'none')))(tabAccent(stages, tab))]))
+    }
+    // A product with a source and no passport: Passport (and the Analysis that builds it) hold the accent; the finished Sources tab does not.
+    expect(accents({})).toEqual({ sources: 'passport', passport: 'own', analysis: 'own', goal: 'passport', channels: 'passport', results: 'passport' })
+    // Approved passport: the Goal tab is next, and the Passport and Analysis tabs hand the accent on.
+    expect(accents({ passportApproved: true })).toEqual({ sources: 'goal', passport: 'goal', analysis: 'goal', goal: 'own', channels: 'goal', results: 'goal' })
+    // Saved goal: Channels (and the Results tab, whose one action is "Connect a channel") hold it.
+    expect(accents({ passportApproved: true, goals: 1 })).toEqual({ sources: 'channel', passport: 'channel', analysis: 'channel', goal: 'channel', channels: 'own', results: 'own' })
+    // A connected channel: the Channels tab hands it on (its "Assess channel" and "Activate" are bezels); only Publication is left, and no tab is its own.
+    expect(accents({ passportApproved: true, goals: 1, channels: 1 })).toEqual({ sources: 'publication', passport: 'publication', analysis: 'publication', goal: 'publication', channels: 'publication', results: 'publication' })
+    // A product without a source: Sources holds it.
+    expect(accents({ hasSources: false }).sources).toBe('own')
+    // A done stage in the middle: a channel connected before the goal was written leaves the Goal tab as the owner.
+    expect(accents({ passportApproved: true, channels: 1 })).toMatchObject({ goal: 'own', channels: 'goal' })
+    // The path is complete: nothing is next, so no tab holds a filled button.
+    expect(accents({ passportApproved: true, goals: 1, channels: 1, approvedPublications: 1 })).toEqual({ sources: 'none', passport: 'none', analysis: 'none', goal: 'none', channels: 'none', results: 'none' })
+    expect(tabAccent(launchStages('p1', facts), 'goal').next).toMatchObject({ id: 'passport', href: '#/products/p1/passport', action: 'Build the passport' })
+  })
+
+  it('Product tabs (BUG-065): whatever the facts, each tab either holds the filled action or points at the path\'s next stage, never both and never neither while a stage is left', () => {
+    for (let n = 0; n < 32; n++) {
+      const facts: LaunchFacts = { hasSources: (n & 1) === 1, passportApproved: (n & 2) === 2, goals: (n & 4) === 4 ? 1 : 0, channels: (n & 8) === 8 ? 1 : 0, approvedPublications: (n & 16) === 16 ? 1 : 0 }
+      const stages = launchStages('p1', facts)
+      const next = nextStage(stages)
+      for (const tab of PRODUCT_TABS) {
+        const accent = tabAccent(stages, tab)
+        expect(accent.own && accent.next !== null).toBe(false)
+        if (!accent.own) expect(accent.next).toEqual(next)
+        if (!accent.own && next !== null) expect(accent.next?.state).toBe('current')
+      }
+      // At most one stage is next, so the owners are all tabs of that one stage: never two stages' accents on a screen.
+      const owners = PRODUCT_TABS.filter((tab) => tabAccent(stages, tab).own)
+      expect(owners.length).toBeLessThanOrEqual(2)
+      for (const tab of owners) expect(TAB_STAGE[tab]).toBe(next?.id)
+    }
   })
 
   it('Launch path (BUG-012): channels, approved publications and drafts are counted per product; replies do not count', () => {

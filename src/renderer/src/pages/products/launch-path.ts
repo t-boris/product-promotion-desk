@@ -2,7 +2,7 @@
 // (the first one not done, the next step) or not yet. Pure, so the rules are tested from src/main/renderer-logic.test.ts.
 
 import type { Channel, Id, Opportunity, OpportunityState } from '../../../../shared/types'
-import { productHref, publicationsHref } from '../../route'
+import { productHref, publicationsHref, type ProductTab } from '../../route'
 
 export type LaunchStageId = 'product' | 'passport' | 'goal' | 'channel' | 'publication'
 export type LaunchStageState = 'done' | 'current' | 'todo'
@@ -69,6 +69,30 @@ export function launchStages(productId: Id, facts: LaunchFacts): LaunchStage[] {
  */
 export function nextStage(stages: LaunchStage[]): LaunchStage | null {
   return stages.find((stage) => stage.state === 'current') ?? null
+}
+
+/**
+ * The stage each tab of the product page works on. The Analysis tab is the AI's way to the passport and Results is where a channel's
+ * numbers appear, so both follow the stage they serve; their one action ("Connect a channel" on an empty Results) is that stage's own.
+ */
+export const TAB_STAGE: Record<ProductTab, LaunchStageId> = { sources: 'product', passport: 'passport', analysis: 'passport', goal: 'goal', channels: 'channel', results: 'channel' }
+
+export interface TabAccent {
+  /** The tab holds the path's current stage, so its own main action is the screen's filled button. */
+  own: boolean
+  /** Where the filled button points when the tab does not hold the current stage: the next stage, or null once the path is complete. */
+  next: LaunchStage | null
+}
+
+/**
+ * Who owns the one filled button of a product tab (BUG-065). The path's next stage is the owner's next move, so a tab keeps its own
+ * filled action only while its own stage is that stage. Every other tab, whether its stage is already done (a finished Sources or
+ * Passport tab) or not reached yet, shows its actions as bezels and points the filled button at the next stage. When every stage is
+ * done there is no next move and no tab holds a filled button.
+ */
+export function tabAccent(stages: LaunchStage[], tab: ProductTab): TabAccent {
+  const own = stages.find((stage) => stage.id === TAB_STAGE[tab])?.state === 'current'
+  return own ? { own: true, next: null } : { own: false, next: nextStage(stages) }
 }
 
 /** "2 of 5 done", for the name of the path read by a screen reader. */

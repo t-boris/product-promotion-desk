@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { PASSPORT_SECTIONS, type PassportSection, type PassportView } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Badge, Button, Card, ErrorNote, Hint, More, useMainVariant } from '../../ui'
+import { Badge, Button, Card, ErrorNote, Hint, More } from '../../ui'
 import { ClaimForm } from './ClaimForm'
 import { ClaimRow } from './ClaimRow'
 import { SECTION_HINTS, SECTION_LABELS } from './labels'
+import { useTabMainVariant } from './LaunchPath'
 import { approvableClaims, approvalBlocker, groupBySection, summarize } from './model'
 import { VersionsCard } from './VersionsCard'
 
@@ -83,8 +84,9 @@ export function PassportTab({ view, onOpenAnalysis }: { view: PassportView; /** 
   // No statement and no approved passport: the next step is the analysis, not the approval (BUG-019). A draft emptied by
   // deleting every statement of an approved passport keeps the usual layout, with its version and the approved badge.
   const empty = view.claims.length === 0 && view.product.activePassportVersionId === null
-  // "Approve passport" is the main action of a passport with statements, unless a statement form is open (it owns the filled button).
-  const mainVariant = useMainVariant()
+  // "Approve passport" is the main action of a passport with statements while the passport is the path's next stage, unless a statement form is
+  // open (it owns the filled button). Once the passport is approved the next stage owns it and this is a bezel (BUG-065).
+  const mainVariant = useTabMainVariant('passport')
   const approveButton = (
     <Button
       variant={empty ? 'ghost' : mainVariant}

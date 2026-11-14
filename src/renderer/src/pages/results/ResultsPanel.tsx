@@ -1,6 +1,7 @@
 import { call, useAction, useQuery } from '../../hooks'
 import { Button, EmptyState, ErrorNote, Hint, Loading } from '../../ui'
 import { productHref } from '../../route'
+import { useTabMainVariant } from '../products/LaunchPath'
 import { ConversionsNote } from './ConversionsNote'
 import { GoalsCard } from './GoalsCard'
 import { MetricsCard } from './MetricsCard'
@@ -18,6 +19,8 @@ export function ResultsPanel({ productId }: { productId: string }) {
   })
 
   const channels = results.data?.channels ?? []
+  // "Connect a channel" is the channel stage's own action: filled only while that stage is the path's next one (BUG-065).
+  const connectVariant = useTabMainVariant('results')
 
   return (
     <div className="results" data-testid="results-panel">
@@ -35,7 +38,7 @@ export function ResultsPanel({ productId }: { productId: string }) {
           art="channel"
           title="No channels for this product yet"
           action={
-            <a className="btn btn-primary" href={productHref(productId, 'channels')} data-testid="results-channels-link">
+            <a className={`btn btn-${connectVariant}`} href={productHref(productId, 'channels')} data-testid="results-channels-link">
               Connect a channel
             </a>
           }

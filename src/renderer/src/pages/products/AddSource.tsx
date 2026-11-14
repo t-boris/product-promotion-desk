@@ -2,8 +2,9 @@ import { useState } from 'react'
 import type { SourcePreview } from '../../../../shared/api'
 import type { Id, ProductSource, SourceKind } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Badge, Button, Card, ErrorNote, Field, Hint, SegmentedControl, useMainVariant, useOpenForm } from '../../ui'
+import { Badge, Button, Card, ErrorNote, Field, Hint, SegmentedControl, useOpenForm } from '../../ui'
 import { SOURCE_LABELS, SOURCE_PLACEHOLDERS } from './labels'
+import { useTabMainVariant } from './LaunchPath'
 import { scopeFromText } from './model'
 import { SourcePreviewPanel } from './SourcePreviewPanel'
 
@@ -37,9 +38,10 @@ interface SourceFormProps {
  */
 export function SourceForm({ productId, source, onSaved, onCancel }: SourceFormProps) {
   const editing = source !== undefined
-  // An edit in place is an on-demand form: its Save is filled while it is the form opened last; the resting "Add source" steps back while one is open.
+  // An edit in place is an on-demand form: its Save is filled while it is the form opened last; the resting "Add source" steps back while one is open,
+  // and once the product has a source it is a bezel for good: the path's next stage owns the filled button then (BUG-065).
   const saveVariant = useOpenForm(editing)
-  const addVariant = useMainVariant()
+  const addVariant = useTabMainVariant('sources')
   // The add form and an open edit form are on the page together: their test ids differ, so a query finds the one it means.
   const tid = (name: string): string => (editing ? `source-edit-${name}` : `source-${name}`)
   const [kind, setKind] = useState<SourceKind>(source?.kind ?? 'url')
