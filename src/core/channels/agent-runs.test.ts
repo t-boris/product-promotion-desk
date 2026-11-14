@@ -94,6 +94,29 @@ async function until(condition: () => Promise<boolean> | boolean): Promise<void>
   throw new Error('the condition never held')
 }
 
+describe('one mission on an account at a time, also while both are still being prepared', () => {
+  it('lets only one of two starts that both waited for the engine go on', async () => {
+    const w = await ready()
+    let open = (): void => undefined
+    const gate = new Promise<void>((resolve) => (open = resolve))
+    const check = w.t.engine.check.bind(w.t.engine)
+    w.t.engine.check = async () => {
+      await gate
+      return check()
+    }
+    w.t.engine.on('agent.signup', () => new Promise<string>(() => undefined))
+
+    const first = start(w)
+    const second = start(w)
+    const refusal = expect(second).rejects.toMatchObject({ code: 'agent_running' })
+    open()
+    await refusal
+    expect(await first).toMatchObject({ status: 'running' })
+    await tick(5)
+    expect(w.t.engine.calls.filter((c) => c.label === 'agent.signup')).toHaveLength(1)
+  })
+})
+
 describe('what a mission needs before it starts', () => {
   it('needs the e-mail of the account', async () => {
     const w = await makeReadyWorld()

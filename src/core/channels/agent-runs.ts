@@ -164,9 +164,17 @@ export class AgentRunService implements PostMissionService {
     return { engine, mission: async () => mission }
   }
 
+  /**
+   * One run at a time on an account. Synchronous on purpose: the caller claims the account (`runs.set`) in the same turn, with nothing
+   * awaited in between, so two starts that were both waiting for the engine cannot both go on.
+   */
+  private assertIdle(account: Account): void {
+    if (this.runs.get(account.id)?.run.status === 'running') throw new ApiError('agent_running', `The AI is already working on ${account.label}.`)
+  }
+
   /** No run going on the account, and an engine that can work the browser and is ready: what every kind of mission needs first. */
   private async readyEngine(account: Account): Promise<AiEngine> {
-    if (this.runs.get(account.id)?.run.status === 'running') throw new ApiError('agent_running', `The AI is already working on ${account.label}.`)
+    this.assertIdle(account)
 
     const engine = this.core.engines.selected()
     if (!engine) throw new ApiError('no_engine', 'No AI engine is selected. Choose Claude Code or Codex in Settings.')
@@ -202,6 +210,8 @@ export class AgentRunService implements PostMissionService {
         finishedAt: null
       }
     }
+    // The checks above and the password lookup awaited: another start may have taken the account meanwhile.
+    this.assertIdle(account)
     this.runs.set(account.id, live)
     this.lessons.markUsed(this.lessons.forPlatform(account.platform))
     this.core.log.info('accounts', `The AI started to ${MISSIONS[kind].doing} ${account.label} on ${mission.hosts[0] ?? 'the platform'} (${engine.label}).`)
@@ -229,32 +239,35 @@ export class AgentRunService implements PostMissionService {
       exchange: null,
       run: { accountId: account.id, kind: 'post', status: 'running', summary: spec.opening, lines: [], typed: [], question: null, learned: [], startedAt: this.core.clock.now().toISOString(), finishedAt: null }
     }
+    // The engine check above awaited: another start may have taken the account meanwhile.
+    this.assertIdle(account)
     this.runs.set(account.id, live)
-    this.core.log.info('accounts', `The AI started to ${spec.doing} ${account.label} on ${request.hosts[0] ?? 'the platform'} (${engine.label}).`)
-    this.core.events.changed('accounts')
-    this.core.browser.showAgentBrowser?.(account)
-
-    const session = this.core.browser.session(account)
-    const toolbox = new BrowserToolbox({
-      withPage: (work) => session.withAgentControl('agent-post', work),
-      hosts: request.hosts,
-      values: {},
-      sleep: this.core.sleep,
-      say: (line) => this.say(live, line),
-      ask: (question) => this.ask(live, question),
-      note: () => undefined,
-      report: (result) => void (live.reported = result),
-      signal: live.abort.signal,
-      maxCalls: spec.maxCalls,
-      post: { authority: request.authority, minGapMs: POST_MIN_GAP_MS, now: () => this.core.clock.now().getTime() }
-    })
 
     // The moment the owner presses Stop the mission loses the right to press, and so it does when the engine ends, however it ends: a
     // call of the AI that is still running (a submit in the middle of its typing) cannot press after this run has read `committed`.
     live.abort.signal.addEventListener('abort', () => request.authority.seal(), { once: true })
     let ended: PostMissionOutcome['ended'] = 'finished'
     let error: string | null = null
+    let toolbox: BrowserToolbox | null = null
     try {
+      // Everything after the claim is inside the try: whatever throws here ends the run as failed, and never leaves it "running".
+      this.core.log.info('accounts', `The AI started to ${spec.doing} ${account.label} on ${request.hosts[0] ?? 'the platform'} (${engine.label}).`)
+      this.core.events.changed('accounts')
+      this.core.browser.showAgentBrowser?.(account)
+      const session = this.core.browser.session(account)
+      toolbox = new BrowserToolbox({
+        withPage: (work) => session.withAgentControl('agent-post', work),
+        hosts: request.hosts,
+        values: {},
+        sleep: this.core.sleep,
+        say: (line) => this.say(live, line),
+        ask: (question) => this.ask(live, question),
+        note: () => undefined,
+        report: (result) => void (live.reported = result),
+        signal: live.abort.signal,
+        maxCalls: spec.maxCalls,
+        post: { authority: request.authority, minGapMs: POST_MIN_GAP_MS, now: () => this.core.clock.now().getTime() }
+      })
       const said = await this.runEngine(live, engine, toolbox, 'agent.post', account.profileId ?? account.id, postMissionPrompt(request, this.core.clock.now().toISOString().slice(0, 10)), spec.timeoutMs)
       if (said.trim()) this.say(live, `The AI: ${said.trim().replace(/\s+/g, ' ').slice(0, 240)}`)
     } catch (caught) {
@@ -272,7 +285,7 @@ export class AgentRunService implements PostMissionService {
 
     const committed = request.authority.committed
     const reported = live.reported ? { status: live.reported.status, reason: live.reported.reason } : null
-    const observed = toolbox.observed
+    const observed = toolbox?.observed ?? { humanCheck: null, warning: null }
     if (live.run.status === 'running') {
       if (committed) this.finish(live, 'done', 'The AI pressed the button that publishes. The application is checking that the text is on the site.')
       else if (ended === 'timeout') this.finish(live, 'needs_owner', 'The AI did not finish in a quarter of an hour and was stopped. Nothing was published.')

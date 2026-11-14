@@ -149,6 +149,51 @@ describe('what a post mission needs, and gives the AI', () => {
   })
 })
 
+describe('a post mission cannot leave the account stuck, or share it', () => {
+  it('two missions that both waited for the engine do not both go on: the second is refused, and the first is left alone', async () => {
+    const { w, request } = await ready()
+    // Both pass the "no mission going" check at the top, then wait for the engine's answer; the account is claimed only afterwards.
+    let open = (): void => undefined
+    const gate = new Promise<void>((resolve) => (open = resolve))
+    const check = w.t.engine.check.bind(w.t.engine)
+    w.t.engine.check = async () => {
+      await gate
+      return check()
+    }
+    let release = (): void => undefined
+    asTheAI(w, async () => void (await new Promise<void>((resolve) => (release = resolve))))
+
+    const first = run(w, request)
+    const second = run(w, request)
+    const refusal = expect(second).rejects.toMatchObject({ code: 'agent_running' })
+    open()
+    await refusal
+    await tick(5)
+    expect(w.t.engine.calls.filter((c) => c.label === 'agent.post')).toHaveLength(1)
+    expect(await state(w)).toMatchObject({ kind: 'post', status: 'running' })
+    release()
+    expect(await first).toMatchObject({ ended: 'finished', committed: false })
+  })
+
+  it('ends the run as failed when something after the claim throws, instead of leaving it running and every later send refused', async () => {
+    const { w, authority, request } = await ready()
+    w.t.browser.showAgentBrowser = () => {
+      throw new Error('the browser window is gone')
+    }
+
+    const outcome = await run(w, request)
+
+    expect(outcome).toMatchObject({ ended: 'error', committed: false, error: 'the browser window is gone', humanCheck: null, warning: null })
+    expect(await state(w)).toMatchObject({ status: 'failed', summary: expect.stringContaining('the browser window is gone') })
+    expect(authority.sealed).toBe(true)
+    expect(w.t.engine.calls).toEqual([])
+    // The account is free again: the next mission starts.
+    w.t.browser.showAgentBrowser = () => undefined
+    asTheAI(w, async () => 'Done.')
+    expect(await run(w, request)).toMatchObject({ ended: 'finished' })
+  })
+})
+
 describe('how a post mission ends: the authority says whether the control was pressed, the AI only adds a note', () => {
   it('after browser_submit: committed, and the AI\'s report is passed on as a note, with the run shown as done', async () => {
     const { w, authority, request } = await ready()
