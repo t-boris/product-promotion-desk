@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react'
 import { AgentQuestionDialog } from './AgentQuestionDialog'
 import { AiPill } from './AiProgress'
 import { attentionCountTone } from './pages/attention-tone'
-import { useAutomation, useQuery } from './hooks'
+import { useAutomation, useEvents, useQuery } from './hooks'
 import { Icon, type IconName } from './icons'
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from './menu-state'
 import { PAGES } from './pages'
-import { MOVED_PAGES, parseHash } from './route'
+import { MOVED_PAGES, navigateHashOf, parseHash } from './route'
 import { NO_ACCOUNTS, NO_ENGINE, accountsGroupName, accountsSummary, automationText, engineGroupName } from './status-labels'
 import { Badge, Button, IconButton } from './ui'
 import type { Tone } from './tone'
@@ -69,6 +69,11 @@ export function App() {
     saveMenuOpen(browserStorage(), open)
   }
   const { state, setPaused } = useAutomation()
+  // The native menu's "Settings…" (BUG-048): the main process sends a navigate event to this window, and the hash route does the rest.
+  useEvents((event) => {
+    const hash = navigateHashOf(event)
+    if (hash) window.location.hash = hash
+  })
   const attention = useQuery('attention.list', undefined, ['attention', 'opportunities', 'channels', 'accounts'])
   const accounts = useQuery('accounts.list', undefined, ['accounts'])
   const info = useQuery('app.info', undefined, [])

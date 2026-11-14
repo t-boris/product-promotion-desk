@@ -1,6 +1,8 @@
 // Hash routes shared by the shell, the product page and the attention list. Kept apart from the components so the
 // rules (which hashes exist, where old links go) live in one place.
 
+import type { ApiEvent } from '../../shared/api'
+
 /** Tabs of the product page in display order (DEC-009: Channels and Results live here, not in the main menu). */
 export const PRODUCT_TABS = ['sources', 'passport', 'analysis', 'goal', 'channels', 'results'] as const
 export type ProductTab = (typeof PRODUCT_TABS)[number]
@@ -90,4 +92,9 @@ export function parseAccountsHash(hash: string): AccountsRoute {
   const params = new URLSearchParams(at < 0 ? '' : body.slice(at + 1))
   const name = params.get('name')?.trim() ?? ''
   return { adding, role: adding && name ? { name, voice: params.get('voice')?.trim() ?? '' } : null }
+}
+
+/** The hash a `navigate` event from the main process asks the window to show (the "Settings…" menu item), or null for any other event or a malformed hash. */
+export function navigateHashOf(event: ApiEvent): string | null {
+  return event.type === 'navigate' && /^#\/\S*$/.test(event.hash) ? event.hash : null
 }

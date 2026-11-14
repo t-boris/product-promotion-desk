@@ -2,6 +2,7 @@
 // tested from here. The modules under test import only src/shared, which keeps these plain unit tests.
 
 import { describe, expect, it } from 'vitest'
+import type { ApiEvent } from '../shared/api'
 import type { Account, AnalysisStage, AttentionItem, Channel, Claim, Product } from '../shared/types'
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from '../renderer/src/menu-state'
 import { connectChannelHref, fixLinkFor } from '../renderer/src/pages/attention-links'
@@ -18,7 +19,7 @@ import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block
 import { canActivate, canPause, neverAssessed, setupStage } from '../renderer/src/pages/channels/setup-stage'
 import { nextStep } from '../renderer/src/pages/channels/next-step'
 import { platformMismatch } from '../renderer/src/pages/channels/platform-hint'
-import { MOVED_PAGES, accountsNewHref, parseAccountsHash, parseHash, productHref, publicationsHref, publicationsProductOf } from '../renderer/src/route'
+import { MOVED_PAGES, accountsNewHref, navigateHashOf, parseAccountsHash, parseHash, productHref, publicationsHref, publicationsProductOf } from '../renderer/src/route'
 import { accountText, accountsGroupName, accountsSummary, automationText, engineGroupName } from '../renderer/src/status-labels'
 
 describe('hash routes (DEC-009)', () => {
@@ -54,6 +55,24 @@ describe('hash routes (DEC-009)', () => {
 
   it('sends the old Channels and Results routes to the product list', () => {
     expect(MOVED_PAGES).toEqual({ channels: 'products', results: 'products' })
+  })
+})
+
+describe('the navigate event of the native menu (BUG-048)', () => {
+  it('asks for a page only through a navigate event with a hash route', () => {
+    expect(navigateHashOf({ type: 'navigate', hash: '#/settings' })).toBe('#/settings')
+    expect(navigateHashOf({ type: 'navigate', hash: '#/products/p1/channels' })).toBe('#/products/p1/channels')
+  })
+
+  it('ignores every other event and a hash that is not a route', () => {
+    expect(navigateHashOf({ type: 'changed', scope: 'settings' })).toBeNull()
+    for (const hash of ['', '#', 'settings', 'https://example.com/#/settings', '#/set tings']) {
+      expect(navigateHashOf({ type: 'navigate', hash } satisfies ApiEvent)).toBeNull()
+    }
+  })
+
+  it('names a page that the shell knows', () => {
+    expect(parseHash(navigateHashOf({ type: 'navigate', hash: '#/settings' }) ?? '').page).toBe('settings')
   })
 })
 

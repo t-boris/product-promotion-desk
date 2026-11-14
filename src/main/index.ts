@@ -1,13 +1,14 @@
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { BrowserWindow, app, clipboard, ipcMain, powerMonitor, safeStorage, shell } from 'electron'
-import { ApiError, IPC_EVENT, IPC_INVOKE, type ApiMethod } from '../shared/api'
+import { BrowserWindow, Menu, app, clipboard, ipcMain, powerMonitor, safeStorage, shell } from 'electron'
+import { ApiError, IPC_EVENT, IPC_INVOKE, type ApiEvent, type ApiMethod } from '../shared/api'
 import { APP_NAME } from '../shared/app-name'
 import { createEngines } from '../ai'
 import { ElectronBrowserService } from '../browser/electron-browser-service'
 import { createConnectors } from '../connectors'
 import { createCore } from '../core/core'
 import { getAutomation, startAutomation } from '../core/pipeline'
+import { appMenuTemplate } from './app-menu'
 import { installLifecycle } from './lifecycle'
 import { McpGateway } from './mcp-gateway'
 import { ElectronImageShrinker } from './image-shrinker'
@@ -17,6 +18,9 @@ import { FileVault, TimedClipboard } from './vault'
 import { WebModeController } from './web-mode'
 
 app.setName(APP_NAME)
+
+/** The hash route of the Settings page (src/renderer/src/pages), opened by the menu's "Settings…". */
+const SETTINGS_HASH = '#/settings'
 
 // PPD_DATA_DIR makes a clean, separate instance (a QA baseline, a test run). It must move the whole instance, not only the database: the
 // single-instance lock and the browser profile (the sessions of the accounts) live in Electron's userData. Without this a second launch with
@@ -82,20 +86,29 @@ async function start(): Promise<void> {
   const webMode = new WebModeController(core, join(app.getAppPath(), 'out', 'renderer'))
   await webMode.reconcile()
 
-  const showWindow = (): void => {
+  // Opens (or focuses) the main window. `hash` is the page to show: a window created now loads it, one that exists is sent a navigate event (to
+  // its own web contents only, never through the core's events, so the web mode is not driven by the desktop menu).
+  const openWindow = (hash?: string): void => {
     const existing = BrowserWindow.getAllWindows()[0]
     if (existing) {
       if (existing.isMinimized()) existing.restore()
       existing.show()
       existing.focus()
+      if (hash) {
+        // A window that is still loading (just opened, or reloading) has no listener for the event yet: it loads the page at that hash instead.
+        if (existing.webContents.isLoading()) loadPage(existing, hash)
+        else existing.webContents.send(IPC_EVENT, { type: 'navigate', hash } satisfies ApiEvent)
+      }
     } else {
-      createWindow()
+      createWindow(hash)
     }
     core.background = false
     core.events.changed('settings')
   }
+  // The callbacks of the tray, the notifications and the lifecycle are called with arguments of their own (a menu item, an event), so they get a function that takes none.
+  const showWindow = (): void => openWindow()
 
-  function createWindow(): void {
+  function createWindow(hash?: string): void {
     const win = new BrowserWindow({
       width: 1320,
       height: 880,
@@ -125,9 +138,18 @@ async function start(): Promise<void> {
     win.webContents.on('will-navigate', (event, url) => {
       if (!url.startsWith(process.env.ELECTRON_RENDERER_URL ?? 'file://')) event.preventDefault()
     })
-    if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL)
-    else void win.loadFile(join(import.meta.dirname, '../renderer/index.html'))
+    loadPage(win, hash)
   }
+
+  /** Loads the page into a window; the renderer reads `hash` (the page to show) when it starts. */
+  function loadPage(win: BrowserWindow, hash?: string): void {
+    if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL + (hash ?? ''))
+    else void win.loadFile(join(import.meta.dirname, '../renderer/index.html'), hash ? { hash } : undefined)
+  }
+
+  // The application menu written for this app (BUG-048). It is installed here, not right after whenReady(), because "Settings…" opens a window and
+  // that needs the core and the window code above; the window itself only appears at the end of this function, so the default menu is never in use.
+  Menu.setApplicationMenu(Menu.buildFromTemplate(appMenuTemplate({ appName: APP_NAME, isPackaged: app.isPackaged, openSettings: () => openWindow(SETTINGS_HASH) })))
 
   // Background operation (DEC-003): menu-bar status/pause/Quit, sleep and wake, notifications. Automation itself
   // starts only after the window is up, because its startup recovery may take a while.
