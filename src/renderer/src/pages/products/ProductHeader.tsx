@@ -130,6 +130,10 @@ export function ProductHeader({ view, channels, onDeleted, onOpenTab }: { view: 
                 <button type="button" className="link-btn" onClick={() => onOpenTab('analysis')} title={NOT_ANALYZED_HINT} data-testid="open-analysis">
                   Open Analysis
                 </button>
+                {/* The way that needs no AI is said in the open, not only in the tooltip above (BUG-064). */}
+                <button type="button" className="link-btn" onClick={() => onOpenTab('passport')} data-testid="open-passport-by-hand">
+                  or add statements yourself
+                </button>
               </>
             ) : (
               <Badge tone={ANALYSIS_TONES[product.analysisStatus]}>{ANALYSIS_LABELS[product.analysisStatus]}</Badge>

@@ -12,7 +12,7 @@ import { KIND_TONE, attentionCountTone } from '../renderer/src/pages/attention-t
 import { startSteps } from '../renderer/src/pages/attention-start'
 import { engineChoiceVariant, recommendedEngineId, splitEngineDetail } from '../renderer/src/pages/engine-detail'
 import { describeSources, planStages, progressOf } from '../renderer/src/pages/products/analysis-plan'
-import { launchCounts, launchProgress, launchStages } from '../renderer/src/pages/products/launch-path'
+import { launchCounts, launchProgress, launchStages, nextStage, type LaunchFacts } from '../renderer/src/pages/products/launch-path'
 import { approvableClaims } from '../renderer/src/pages/products/model'
 import { productLabels } from '../renderer/src/pages/products/product-labels'
 import { deleteBlocker, nextProductStep, passportStatus, websiteHost } from '../renderer/src/pages/products/product-status'
@@ -448,18 +448,23 @@ describe('QA clarity batch: what the screens say', () => {
     expect(passportStatus(none, null, [])).toEqual({ tone: 'warn', label: 'No approved passport' })
   })
 
-  it('product list: the next step goes passport, goal, channel, publication, and is gone once the path is complete (BUG-014)', () => {
-    const none = { channels: 0, approvedPublications: 0, draftPublications: 0 }
-    const goals = [{ id: 'g', targetAction: 'a', successMetrics: [], notes: '' }]
-    expect(nextProductStep({ activePassportVersionId: null, analysisStatus: 'idle', goals: [] }, none)).toBe('Next: run the analysis')
-    expect(nextProductStep({ activePassportVersionId: null, analysisStatus: 'complete', goals: [] }, none)).toBe('Next: approve the passport')
-    expect(nextProductStep({ activePassportVersionId: 'v', analysisStatus: 'complete', goals: [] }, none)).toBe('Next: write a goal')
-    const ready = { activePassportVersionId: 'v', analysisStatus: 'complete' as const, goals }
-    expect(nextProductStep(ready, none)).toBe('Next: connect a channel')
+  it('product list: the next step is the next stage of the launch path, in the words of its action, and is gone once the path is complete (BUG-014, BUG-064)', () => {
+    const rowOf = (facts: Partial<LaunchFacts>) => nextProductStep(launchStages('p1', { hasSources: true, passportApproved: false, goals: 0, channels: 0, approvedPublications: 0, ...facts }))
+    // No approved passport: the row names the stage, never the analysis, whatever the analysis or a hand-built draft did (the row has no say in it).
+    expect(rowOf({})).toBe('Next: build the passport')
+    expect(rowOf({ passportApproved: true })).toBe('Next: write a goal')
+    expect(rowOf({ passportApproved: true, goals: 1 })).toBe('Next: connect a channel')
     // A product with a channel no longer asks for one.
-    expect(nextProductStep(ready, { ...none, channels: 1 })).toBe('Next: write a publication')
-    expect(nextProductStep(ready, { ...none, channels: 1, draftPublications: 2 })).toBe('Next: approve a draft')
-    expect(nextProductStep(ready, { channels: 1, approvedPublications: 1, draftPublications: 2 })).toBeNull()
+    expect(rowOf({ passportApproved: true, goals: 1, channels: 1 })).toBe('Next: write a publication')
+    expect(rowOf({ passportApproved: true, goals: 1, channels: 1, draftPublications: 2 })).toBe('Next: approve a draft')
+    expect(rowOf({ passportApproved: true, goals: 1, channels: 1, approvedPublications: 1, draftPublications: 2 })).toBeNull()
+    // The stage that is not done decides, whatever stands behind it: a channel connected before the goal was written leaves the goal next.
+    expect(rowOf({ passportApproved: true, channels: 1 })).toBe('Next: write a goal')
+    // The row and the header path read the same stages, so they name the same step.
+    for (const facts of [{}, { passportApproved: true }, { passportApproved: true, goals: 1 }, { passportApproved: true, goals: 1, channels: 1 }]) {
+      const stages = launchStages('p1', { hasSources: true, passportApproved: false, goals: 0, channels: 0, approvedPublications: 0, ...facts })
+      expect(nextProductStep(stages)?.toLowerCase()).toBe(`next: ${nextStage(stages)?.action.toLowerCase()}`)
+    }
   })
 
   it('review buttons (BUG-057): an edited draft says "Save, approve and send", never "Save and approve and send"', () => {
@@ -537,6 +542,32 @@ describe('QA clarity batch: what the screens say', () => {
     expect(launchStages('p1', { ...facts, channels: 1 }).map((s) => s.state)).toEqual(['done', 'done', 'current', 'done', 'todo'])
     expect(launchStages('p1', { hasSources: true, passportApproved: true, goals: 1, channels: 2, approvedPublications: 1 }).every((s) => s.state === 'done')).toBe(true)
     expect(launchStages('p1', { ...facts, passportApproved: false }).find((s) => s.state === 'current')?.id).toBe('passport')
+  })
+
+  it('Launch path (BUG-064): the passport stage asks to build and approve it, and every stage has the words of its button', () => {
+    const stages = launchStages('p1', { hasSources: true, passportApproved: false, goals: 0, channels: 0, approvedPublications: 0 })
+    expect(stages.find((s) => s.id === 'passport')?.todo).toBe('Build and approve the passport.')
+    expect(stages.map((s) => s.action)).toEqual(['Add a source', 'Build the passport', 'Write a goal', 'Connect a channel', 'Write a publication'])
+    // The Publication stage reads the drafts: with one waiting, the step is to approve it.
+    expect(launchStages('p1', { hasSources: true, passportApproved: true, goals: 1, channels: 1, approvedPublications: 0, draftPublications: 1 }).at(-1)?.action).toBe('Approve a draft')
+    expect(launchStages('p1', { hasSources: true, passportApproved: true, goals: 1, channels: 1, approvedPublications: 0, draftPublications: 0 }).at(-1)?.action).toBe('Write a publication')
+  })
+
+  it('Launch path (BUG-064, BUG-065): the next stage is the first stage that is not done, and none once every stage is done', () => {
+    const facts = { hasSources: false, passportApproved: false, goals: 0, channels: 0, approvedPublications: 0 }
+    // Every stage in turn is the next one while the stages before it are done.
+    expect(nextStage(launchStages('p1', facts))?.id).toBe('product')
+    expect(nextStage(launchStages('p1', { ...facts, hasSources: true }))?.id).toBe('passport')
+    expect(nextStage(launchStages('p1', { ...facts, hasSources: true, passportApproved: true }))?.id).toBe('goal')
+    expect(nextStage(launchStages('p1', { ...facts, hasSources: true, passportApproved: true, goals: 1 }))?.id).toBe('channel')
+    const publication = nextStage(launchStages('p1', { ...facts, hasSources: true, passportApproved: true, goals: 1, channels: 1 }))
+    expect(publication).toMatchObject({ id: 'publication', href: '#/publications/p1', action: 'Write a publication' })
+    expect(nextStage(launchStages('p1', { hasSources: true, passportApproved: true, goals: 1, channels: 1, approvedPublications: 1 }))).toBeNull()
+    // A done stage in the middle does not move the next step: the first stage that is not done keeps it.
+    const middle = nextStage(launchStages('p1', { ...facts, hasSources: true, passportApproved: true, channels: 1 }))
+    expect(middle).toMatchObject({ id: 'goal', state: 'current', href: '#/products/p1/goal', action: 'Write a goal' })
+    expect(nextStage(launchStages('p1', { ...facts, hasSources: true, goals: 1, channels: 1 }))?.id).toBe('passport')
+    expect(nextStage([])).toBeNull()
   })
 
   it('Launch path (BUG-012): channels, approved publications and drafts are counted per product; replies do not count', () => {

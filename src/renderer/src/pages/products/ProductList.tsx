@@ -14,9 +14,9 @@ export function ProductList({ products, selectedId, countsOf, onSelect }: { prod
       {products.map((product) => {
         const label = labels.get(product.id) ?? product.name
         const counts = countsOf(product.id)
-        const next = nextProductStep(product, counts)
         // The list has no sources to count; a product is created with one (see LaunchFacts.hasSources).
         const stages = launchStages(product.id, { hasSources: true, passportApproved: product.activePassportVersionId !== null, goals: product.goals.length, ...counts })
+        const next = nextProductStep(stages)
         return (
           <div
             key={product.id}

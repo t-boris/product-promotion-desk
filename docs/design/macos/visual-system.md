@@ -366,8 +366,8 @@ Texts are the current ones and do not change.
 |---|---|---|---|
 | No products | Page header + empty state | "Add your first product" ("New product" is bezel) | "No products yet" → "Add your first product" |
 | New product form (`CreateProduct`) | Group box form at the top of the page | "Create product" | — |
-| List + detail | List + detail; product rows: name + launch dots, the website's host (full address and full name in the tooltip) or "No website yet", "Next: …" | per tab | — |
-| Product header (`ProductHeader`), Edit details form | Object header; edit form as a group box | "Save" while editing | — |
+| List + detail | List + detail; product rows: name + launch dots, the website's host (full address and full name in the tooltip) or "No website yet", "Next: …" (the next stage of the launch path in the words of its action: "Next: build the passport", "write a goal", "connect a channel", "write a publication" / "approve a draft"; §11) | per tab | — |
+| Product header (`ProductHeader`), Edit details form | Object header; edit form as a group box. A product that was not analyzed says "Not analyzed", "Open Analysis" and, beside it, "or add statements yourself" (opens the Passport tab: the way that needs no AI is said in the open, not only in the tooltip) | "Save" while editing | — |
 | Launch path + tabs | Stepper + segmented control (Sources, Passport, Analysis, Goal, Channels, Results) | — | — |
 | Sources (`SourcesTab`, `AddSource`, `SourcePreviewPanel`) | "Add a source" group box (kind as segmented control), "Sources" group box with rows (Edit/Remove on the right), preview as a well | "Add source"; "Save" while an inline edit is open | "No sources yet" → the add form |
 | Passport, empty | Group box with the lead line, the Sections checklist, Versions | "Open Analysis" ("Approve passport" bezel, disabled with its reason) | "No passport yet." → "Open Analysis" |
@@ -442,6 +442,14 @@ Kept exactly as DEC-022 decides (stages, counts, links, "approved publication" m
 §7 under the object header, the five dots on each product row, and the getting-started block on Attention. At 980×640 with the
 menu shown the stepper stays on one row (mock: `pathRows: 1`).
 
+**One next step (BUG-064).** The launch path is the single source of "what next". `launchStages` gives every stage its state and the
+words of its button (`action`: "Add a source", "Build the passport", "Write a goal", "Connect a channel", "Write a publication" or
+"Approve a draft"), and `nextStage` is the first stage that is not done. The "Next: …" row of a product in the list is that stage's
+action in lower case ("Next: build the passport"; `nextProductStep`), with no rule of its own, so the row, the path above the tabs
+and the "Next" tag cannot name different steps. The passport stage reads "Build and approve the passport." because the passport is
+built by the AI from the sources or by hand and then approved; the row does not know a hand-built draft (that would need a field
+in `products.list`), so it keeps saying "build the passport" until the passport is approved.
+
 ---
 
 ## 12. Verifiable requirements
@@ -471,7 +479,7 @@ Measured on the packaged build of the branch with `scripts/design/tour.mjs` (72 
 | V-18 | Products at 980×640 with the menu shown: list and detail side by side, the tab row ends at y ≤ 310 px (measured 308 with a product that has a website, a description and a status row; the first guess of 300 was not reachable without dropping the status row), the launch path is one row, no word broken inside a URL | DOM measure on the Passport tab | all true |
 | V-19 | Launch path visible under the product header, as dots on every product row, and on the first-run Attention; counts unchanged | DOM read; existing launch-path unit tests | true |
 | V-20 | Every empty state of §10 has a title, one sentence and the named next-step action (or says none is needed) | tour on a fresh data folder and on the seeded one | 100 % |
-| V-21 | QA-bound texts, accessible names, roles and `data-testid` of §13 unchanged. Decided exceptions after the QA walk: the send button of an edited draft reads "Save, approve and send" (was "Save and approve and send", BUG-057); the toolbar's "Write one myself" is not drawn while the empty list offers its own (BUG-057) | `grep` of each string in the renderer + both QA scenarios run | all found; scenarios pass |
+| V-21 | QA-bound texts, accessible names, roles and `data-testid` of §13 unchanged. Decided exceptions after the QA walk: the send button of an edited draft reads "Save, approve and send" (was "Save and approve and send", BUG-057); the toolbar's "Write one myself" is not drawn while the empty list offers its own (BUG-057); the row of a product with no approved passport reads "Next: build the passport" (was "Next: run the analysis" / "Next: approve the passport", BUG-064) | `grep` of each string in the renderer + both QA scenarios run | all found; scenarios pass |
 | V-22 | No new runtime or dev dependency; icons are local SVG | `git diff main -- package.json package-lock.json` | no dependency change |
 | V-23 | Web mode (`PPD_WEB_MODE=1`) renders the same layout with an opaque sidebar | open the web address in the MarkView browser tab | sidebar opaque, no transparency holes |
 | V-24 | `npm run verify` green, CI green | as DoD | green |
@@ -578,8 +586,8 @@ matrix of §10 is the target; this section records what the code does, so the sw
 |---|---|---|
 | Products, no product | empty state, art `product` | "Add your first product" (header "New product" is a bezel) |
 | New product | group box form above the list; the product below keeps its tab but its main action is a bezel | "Create product" |
-| List + detail | list panel (name + five launch dots, the website's host or "No website yet", analysis tag only for running/paused/failed, "Next: …"), detail pane | per tab |
-| Product header | object header + label/value rows, no card; Edit details opens a group box "Edit details" | "Save" while editing |
+| List + detail | list panel (name + five launch dots, the website's host or "No website yet", analysis tag only for running/paused/failed, "Next: …" from `nextStage`), detail pane | per tab |
+| Product header | object header + label/value rows, no card; Edit details opens a group box "Edit details"; an unanalyzed product's Status row reads "Not analyzed", "Open Analysis", "or add statements yourself" (Passport tab) | "Save" while editing |
 | Launch path | stage 24 px, joint 18 px (10 px in a pane under 560 px), mark 14 px, "Next" capsule 20 px | — |
 | Sources | "Sources" group box with hairline rows (kind tag, name, text clamped to 3 lines, Edit / Remove quiet), "Add a source" group box (segmented kind) | "Add source"; "Save" while a source is edited ("Add source" steps back) |
 | Passport | group box with version, status, approval reason (also for an approved passport: "There are no changes to approve."), one group box per section with hairline statement rows (tags, text, sources; Approve secondary, Edit / Back to review / More quiet); the empty passport is the lead line + checklist | "Approve passport" (empty: "Open Analysis"); an open statement form owns it |
