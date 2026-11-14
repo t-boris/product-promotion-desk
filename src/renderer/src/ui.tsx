@@ -30,7 +30,9 @@ export function Card({ title, actions, children, className = '' }: { title?: str
   )
 }
 
-type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'ghost' | 'danger' | 'quiet' }
+/** primary is the one main action of a screen (filled); secondary an accent outline for helpers (the AI ideas, approving
+ *  one statement); ghost a plain button; quiet a text-only one; danger for removing things. */
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'quiet' }
 
 /**
  * A button never submits a form unless it says so (`type="submit"`). A browser button inside a form submits it by default, which

@@ -42,7 +42,7 @@ export function LessonsCard() {
         </Field>
       </div>
       <div className="row">
-        <Button variant="primary" onClick={() => void add()} disabled={adding.busy || rule.trim().length < 8} data-testid="lesson-add">
+        <Button variant="secondary" onClick={() => void add()} disabled={adding.busy || rule.trim().length < 8} data-testid="lesson-add">
           {adding.busy ? 'Adding…' : 'Add the rule'}
         </Button>
         {/* Why the button is off, beside it (QA finding 9). */}

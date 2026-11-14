@@ -6,7 +6,7 @@ import type { Account, AnalysisStage, AttentionItem, Channel, Claim, Product } f
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from '../renderer/src/menu-state'
 import { fixLinkFor } from '../renderer/src/pages/attention-links'
 import { startSteps } from '../renderer/src/pages/attention-start'
-import { splitEngineDetail } from '../renderer/src/pages/engine-detail'
+import { engineChoiceVariant, recommendedEngineId, splitEngineDetail } from '../renderer/src/pages/engine-detail'
 import { describeSources, planStages, progressOf } from '../renderer/src/pages/products/analysis-plan'
 import { approvableClaims } from '../renderer/src/pages/products/model'
 import { nextProductStep, passportStatus } from '../renderer/src/pages/products/product-status'
@@ -296,6 +296,20 @@ describe('QA clarity batch: what the screens say', () => {
     const claude = splitEngineDetail('Claude Code 2.1.325 is installed and answers. Writing: tool-free, it can only return text. Account missions: it works the account’s browser with full access.')
     expect(claude.limits).toBe(false)
     expect(splitEngineDetail('Codex was not found.')).toEqual({ summary: 'Codex was not found.', writing: null, missions: null, limits: false })
+  })
+
+  it('Settings (BUG-015): only the recommended engine is filled, and only while no engine is in use', () => {
+    const codex = { id: 'codex', installed: true, detail: 'Codex 0.169.0 is installed and answers. Writing: not tool-free (it can read files on this computer), so it is not used for automatic replies.' }
+    const claude = { id: 'claude', installed: true, detail: 'Claude Code 2.1.325 is installed and answers. Writing: tool-free, it can only return text.' }
+    // Codex is listed first, but it is not tool-free, so the tool-free Claude Code is the recommended one.
+    expect(recommendedEngineId([codex, claude])).toBe('claude')
+    expect(recommendedEngineId([codex, { ...claude, installed: false }])).toBeNull()
+    expect(recommendedEngineId([])).toBeNull()
+    expect(engineChoiceVariant('claude', 'claude', false)).toBe('primary')
+    expect(engineChoiceVariant('codex', 'claude', false)).toBe('ghost')
+    // Once an engine is in use, nothing on the card is filled any more.
+    expect(engineChoiceVariant('claude', 'claude', true)).toBe('secondary')
+    expect(engineChoiceVariant('codex', null, false)).toBe('ghost')
   })
 
   it('Channels (BUG-009): the reason the AI buttons are off names the place that fixes it', () => {
