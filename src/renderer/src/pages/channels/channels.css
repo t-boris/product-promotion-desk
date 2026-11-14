@@ -343,3 +343,9 @@ textarea.input.short {
 .mode-blocked {
   color: var(--attention);
 }
+
+/* The Connect card before there is any account (BUG-030): one line says what it needs, and the form below it is dimmed and
+   off. Its controls stay in the page, disabled, so "Choose an account" and "Connect channel" still read. */
+.card.dimmed form {
+  opacity: 0.55;
+}

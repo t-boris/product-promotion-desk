@@ -26,6 +26,10 @@ export function ChannelsPanel({ productId }: { productId: string }) {
 
   const channelList = channels.data ?? []
   const accountList = accounts.data ?? []
+  // One answer to "is there an account?" for the whole tab: any account of the library can serve this product (DEC-015).
+  // Until the list has loaded there is no answer, and the tab does not say "no account" (BUG-030).
+  const accountsKnown = accounts.data !== undefined
+  const hasAccount = accountList.length > 0
   // The accounts this product works with: those its channels use and those made for it.
   const productAccounts = accountList.filter((a) => a.productId === productId || channelList.some((c) => c.accountId === a.id))
   const platformList = platforms.data ?? []
@@ -48,19 +52,25 @@ export function ChannelsPanel({ productId }: { productId: string }) {
     <div className="stack" data-testid="channels-panel">
       <ErrorNote error={accounts.error ?? channels.error ?? products.error ?? platforms.error} />
       {(accounts.loading && !accounts.data) || (channels.loading && !channels.data) ? <Loading what="Loading channels" /> : null}
-      <AccountsCard accounts={productAccounts} channels={channelList} platforms={platformList} />
-      <ConnectChannel
-        product={product}
-        accounts={accountList}
-        channels={channelList}
-        allChannels={everyChannel.data ?? []}
-        platforms={platformList}
-        productName={productName}
-        prefill={prefill}
-        onConnected={(channel) => setSelectedId(channel.id)}
-      />
+      {accountsKnown && (
+        <>
+          <AccountsCard accounts={productAccounts} libraryHasAccounts={hasAccount} channels={channelList} platforms={platformList} />
+          <ConnectChannel
+            product={product}
+            needsAccount={!hasAccount}
+            accounts={accountList}
+            channels={channelList}
+            allChannels={everyChannel.data ?? []}
+            platforms={platformList}
+            productName={productName}
+            prefill={prefill}
+            onConnected={(channel) => setSelectedId(channel.id)}
+          />
+        </>
+      )}
       {channelList.length === 0 ? (
-        <EmptyState title="No channels yet">{accountList.length === 0 ? 'Add an account, then connect your first channel above.' : 'Connect your first channel above.'}</EmptyState>
+        // Without an account the strip above already says what to do; an empty "No channels yet" would only repeat it.
+        hasAccount && <EmptyState title="No channels yet">Connect your first channel above.</EmptyState>
       ) : (
         <div className="channels-layout">
           <aside className="channels-list">
