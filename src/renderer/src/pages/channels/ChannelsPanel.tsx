@@ -79,7 +79,16 @@ export function ChannelsPanel({ productId }: { productId: string }) {
       <Disclosure
         title="Ideas from the AI"
         testId="ai-ideas"
-        aside={blocked ? <Badge tone="warn">{blocked.text}</Badge> : <Badge tone="good">Ready · {engineLabel ?? 'AI engine'}</Badge>}
+        aside={
+          blocked ? (
+            <span className="dot-line" data-testid="ai-ideas-blocked">
+              <span className="dot warn" aria-hidden="true" />
+              {blocked.text}
+            </span>
+          ) : (
+            <Badge tone="good">Ready · {engineLabel ?? 'AI engine'}</Badge>
+          )
+        }
       >
         <SuggestRoles productId={productId} blocked={blocked} engineLabel={engineLabel} onUse={(suggestion: RoleSuggestion) => (window.location.hash = accountsNewHref({ name: suggestion.name, voice: suggestion.voice }))} />
         <SuggestChannels productId={productId} platforms={platformList} blocked={blocked} engineLabel={engineLabel} onUse={(suggestion: ChannelSuggestion) => setPrefill({ suggestion })} />

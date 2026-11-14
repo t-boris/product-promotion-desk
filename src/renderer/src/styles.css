@@ -655,26 +655,41 @@ textarea.input {
   flex-wrap: nowrap;
 }
 
-/* A message inside a page: information (default), warning, or a confirmation that something was done. */
+/* A message inside a page: information (default), warning, or a confirmation that something was done. The text is
+   body text on --surface-2; the meaning is a 3px bar and a small icon in its colour, so a note never reads like a link. */
 .note {
-  background: var(--info-bg);
-  color: var(--info);
-  border-radius: var(--control-radius);
-  padding: var(--space-3) var(--space-3);
+  --note-tone: var(--info);
+  --note-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill-rule='evenodd' d='M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zM7.25 4h1.5v1.5h-1.5zm0 3h1.5v5h-1.5z'/></svg>");
+  position: relative;
+  background: var(--surface-2);
+  color: var(--text-1);
+  border-left: 3px solid var(--note-tone);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-3) + 16px + var(--space-2));
   margin: var(--space-2) 0;
 }
+.note::before {
+  content: '';
+  position: absolute;
+  left: var(--space-3);
+  top: calc(var(--space-3) + 3px);
+  width: 16px;
+  height: 16px;
+  background: var(--note-tone);
+  mask: var(--note-icon) center / contain no-repeat;
+}
 .note.warn {
-  background: var(--warn-bg);
-  color: var(--warn);
+  --note-tone: var(--attention);
+  --note-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill-rule='evenodd' d='M8 1.5 15.25 14.5H.75zM7.25 6h1.5v4h-1.5zm0 5h1.5v1.5h-1.5z'/></svg>");
 }
 .note.good {
+  --note-tone: var(--success);
+  --note-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill-rule='evenodd' d='M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zM11.3 4.6l1.05 1.05L7 11 3.65 7.65 4.7 6.6 7 8.9z'/></svg>");
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
   flex-wrap: wrap;
-  background: var(--good-bg);
-  color: var(--good);
 }
 .error-note {
   background: var(--bad-bg);
@@ -1093,6 +1108,15 @@ input[type='radio'] {
 }
 .dot.bad {
   background: var(--bad);
+}
+/* A sentence with a coloured dot, where a badge would be too long (a badge is for one to three words). */
+.dot-line {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.dot-line > .dot {
+  align-self: center;
 }
 
 /* "Getting started" on an empty Attention page. */
