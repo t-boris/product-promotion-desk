@@ -262,3 +262,13 @@
 87. A note "tests are stale, port them later" is a red `main`, not a plan. When the owner says to skip tests for a release, say in one line that CI will be red until they are ported, and port them in the very next commit, before any new feature.
 88. Before every push to `main`, run the whole `npm run verify` (typecheck, lint, the WHOLE test suite, build), the same four steps as `.github/workflows/ci.yml`, not only the test files I touched. Running a few files hides the stale ones. If a push is red, fixing it comes before the next feature.
 89. A type-clean test file is not a passing one: when an entity's rules change (the role moved from the account to the profile), the tests that compile can still fail at run time. After porting types, run the suite and read each failure as a changed rule: port the test to the new rule, never loosen it.
+
+## 2026-11-13 (the owner, during the QA bug batch): "Explain everything in Russian" and "Do not forget the bug statuses in MarkView"
+
+**What happened.** (1) I explained the whole investigation in English and the owner had to ask for Russian. (2) The goal prompt ended with a MarkView status step (request `open` for a bug that is not fixed, `resolved` for a fixed one, add the branch to the report). I planned the code and the commits and left the statuses for the very end, and the owner had to remind me. (3) To look at the accessibility tree I pointed System Events at the process BY NAME, which hit the owner's own running app (I read it and flipped one in-memory attribute and back). A few minutes later the owner's app was closed; the owner thinks they closed it by mistake, but from my side I could not prove it was not me.
+
+**Rules for myself.**
+
+90. Everything said to the owner is in Russian when they ask for it or write in Russian (files, code comments and commit messages stay in English). Switch at once and keep it for the whole session, including the text of questions.
+91. A goal with a lifecycle in a tool (MarkView statuses) is planned with that lifecycle: the checklist at the start lists the status requests, the report sections and the check of the outcome next to the commits, and the last answer says what each status is and why. In this project the bug statuses are only new, active, resolved and closed (no `open`), and `resolved` is refused until the work is merged, checked and released: say that plainly instead of trying to force it.
+92. A GUI app the owner may be using is never the test subject. Run my own instance (own `--user-data-dir` and `PPD_DATA_DIR`), aim every tool at its pid, never at the process name, and note before and after whether the owner's instance is alive. Signal only the pids I started.
