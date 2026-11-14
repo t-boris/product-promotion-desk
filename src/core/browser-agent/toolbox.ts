@@ -339,6 +339,17 @@ export class BrowserToolbox implements McpToolHost {
 
   private async navigate(url: string): Promise<McpToolResult> {
     if (!/^https?:\/\//i.test(url) || !hostAllowed(url, this.deps.hosts)) return fail(`Only addresses on ${this.deps.hosts.join(', ')} can be opened in this task.`)
+    // A post mission starts on the approved destination and needs no other page: the host alone would let it open /logout, /settings or
+    // an API address of the platform. The fence is that of a click. A site that sends the account to its sign-in page, or asks for a human
+    // check, ends the mission as needs_owner (the AI reports it): it does not go around.
+    if (this.deps.post) {
+      const { destination, kind } = this.deps.post.authority.content
+      if (!destinationMatches(url, destination, kind, this.deps.hosts)) {
+        return fail(
+          `A post mission opens only the approved page (${displayAddress(destination)})${kind === 'post' ? ' and the pages of its community' : ' and its thread'}, and ${displayAddress(url)} is not one of them. If the site asks the account to sign in, or shows a human check, call report_result with needs_owner and say so.`
+        )
+      }
+    }
     return this.acting(async (page) => {
       await page.goto(url)
       this.deps.say(`Opened ${displayAddress(url)}`)

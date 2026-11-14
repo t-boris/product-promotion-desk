@@ -29,7 +29,7 @@ export function postMissionPrompt(request: PostMissionRequest, today: string): s
     '',
     'HOW TO WORK:',
     '- You work in the account\'s own browser, which the owner watches in a window, through the tools of the "ppd" MCP server (browser_snapshot, browser_navigate, browser_click, browser_select, browser_wait_for, browser_submit, ask_owner, report_result). Use only those tools for web pages: no other browser, no fetching pages yourself, nothing on this computer.',
-    `- Start by opening this address with browser_navigate: ${content.destination}\n  Then call browser_snapshot.`,
+    `- Start by opening this address with browser_navigate: ${content.destination}\n  Then call browser_snapshot. browser_navigate opens only this page and ${content.kind === 'reply' ? 'its thread' : 'the pages of its community'}: if the site asks the account to sign in, call report_result with needs_owner.`,
     content.kind === 'reply'
       ? '- Find the comment this reply answers on the page and open the reply form under it (a "reply" link, or the comment box of the thread). A button that publishes ("Reply", "Comment", "Post", "Save") is never clicked by you, whatever the page shows: it is refused. Open only that one reply form, leave the form empty, and name the fields and the button of that form.'
       : '- Open the form for a new post in this place (the "Create post" or "Submit" page of the community: a new post is published only from there). Leave the form empty.',

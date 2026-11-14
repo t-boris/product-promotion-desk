@@ -133,6 +133,7 @@ describe('what a post mission needs, and gives the AI', () => {
     expect(prompt).toContain('GOAL: Publish the reply the owner approved on Fake')
     expect(prompt).toContain(REPLY.destination)
     expect(prompt).toContain('You do NOT type the text')
+    expect(prompt).toContain('browser_navigate opens only this page and its thread')
     expect(prompt).toContain('browser_submit')
     expect(prompt).toContain('<comment>\nHow does the natal chart work?\n</comment>')
     expect(prompt).not.toContain('browser_type')

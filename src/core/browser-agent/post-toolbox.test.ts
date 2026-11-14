@@ -486,6 +486,89 @@ describe('what is not known about the form is not taken for empty', () => {
   })
 })
 
+describe('browser_navigate in a post mission opens only the approved page', () => {
+  const OUTSIDE = { isError: true, text: expect.stringContaining('opens only') }
+  const opened = (t: ReturnType<typeof setup>): string[] => t.page.log.filter((line) => line.startsWith('goto '))
+
+  it.each([
+    'https://fake.test/logout',
+    'https://fake.test/',
+    'https://fake.test/api/v1/me',
+    'https://fake.test/settings/account',
+    'https://fake.test/user/someone',
+    'https://fake.test/prefs/delete',
+    'https://fake.test/r/other/comments/abc/slug/',
+    'https://fake.test/r/test',
+    'https://fake.test/r/test/comments/zzz/slug/',
+    'https://fake.test/r/tes'
+  ])('refuses %s for a reply, and opens nothing', async (url) => {
+    const t = setup(REPLY)
+    await look(t)
+    expect(await t.toolbox.call('browser_navigate', { url })).toMatchObject(OUTSIDE)
+    expect(opened(t)).toEqual([])
+  })
+
+  it.each([
+    'https://fake.test/logout',
+    'https://fake.test/',
+    'https://fake.test/submit',
+    'https://fake.test/api/v1/me',
+    'https://fake.test/settings/account',
+    'https://fake.test/r/other',
+    'https://fake.test/r/other/submit',
+    'https://fake.test/r/tes/submit'
+  ])('refuses %s for a new post, and opens nothing', async (url) => {
+    const t = setup(POST)
+    await look(t)
+    expect(await t.toolbox.call('browser_navigate', { url })).toMatchObject(OUTSIDE)
+    expect(opened(t)).toEqual([])
+  })
+
+  it.each([
+    'https://fake.test/r/test/comments/abc/slug/def',
+    'https://fake.test/r/test/comments/abc/slug/def/',
+    'https://fake.test/r/test/comments/abc/slug/',
+    'https://fake.test/r/test/comments/abc/slug/#',
+    'https://FAKE.test/r/Test/comments/abc/slug/def?context=3',
+    'https://www.fake.test/r/test/comments/abc/slug/'
+  ])('opens %s for a reply: the approved page, a reload of it, and its own thread', async (url) => {
+    const t = setup(REPLY)
+    expect((await t.toolbox.call('browser_navigate', { url })).isError).toBeUndefined()
+    expect(opened(t)).toEqual([`goto ${url}`])
+  })
+
+  it.each([
+    'https://fake.test/r/test',
+    'https://fake.test/r/test/',
+    'https://fake.test/r/test/submit',
+    'https://fake.test/r/test/submit?selftext=true',
+    'https://fake.test/r/test/submit/?type=IMAGE'
+  ])('opens %s for a new post: the community, and the submit page the brief sends it to', async (url) => {
+    const t = setup(POST)
+    expect((await t.toolbox.call('browser_navigate', { url })).isError).toBeUndefined()
+    expect(opened(t)).toEqual([`goto ${url}`])
+  })
+
+  it('still refuses a page that is not on the platform in its own words, and one that is not http', async () => {
+    const t = setup(POST)
+    expect(await t.toolbox.call('browser_navigate', { url: 'https://evil.example/r/test' })).toMatchObject({ isError: true, text: expect.stringContaining('Only addresses on fake.test') })
+    expect(await t.toolbox.call('browser_navigate', { url: 'file:///etc/passwd' })).toMatchObject({ isError: true })
+    expect(opened(t)).toEqual([])
+  })
+
+  it('tells the AI what to do when a sign-in or a human check is in the way: report it, do not go around', async () => {
+    const t = setup(POST)
+    const refused = await t.toolbox.call('browser_navigate', { url: 'https://fake.test/login' })
+    expect(refused.text).toContain('needs_owner')
+  })
+
+  it('leaves the other missions alone: a sign-up may open any page of the platform', async () => {
+    const t = setup(REPLY, { post: undefined })
+    expect((await t.toolbox.call('browser_navigate', { url: 'https://fake.test/logout' })).isError).toBeUndefined()
+    expect(opened(t)).toEqual(['goto https://fake.test/logout'])
+  })
+})
+
 describe('calls that arrive together are taken in turn, and each one is decided when its turn comes', () => {
   it('a click sent together with browser_submit is refused after the press, and presses nothing a second time', async () => {
     const t = setup()
@@ -523,7 +606,7 @@ describe('calls that arrive together are taken in turn, and each one is decided 
   it('a navigation sent together with browser_submit waits for it and is then refused: the page it would replace has been published', async () => {
     const t = setup()
     await look(t)
-    const [submitted, opened] = await Promise.all([submitReply(t), t.toolbox.call('browser_navigate', { url: 'https://fake.test/r/test' })])
+    const [submitted, opened] = await Promise.all([submitReply(t), t.toolbox.call('browser_navigate', { url: 'https://fake.test/r/test/comments/abc/slug/' })])
     expect(submitted.isError).toBeUndefined()
     expect(opened).toMatchObject({ isError: true, text: expect.stringContaining('submitted') })
     expect(t.page.log.filter((l) => l.startsWith('goto'))).toEqual([])
