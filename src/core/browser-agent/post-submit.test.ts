@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { composePageOf, destinationMatches, fieldValueScript, formTextScript, looksLikeSubmit, normalizeText, onComposePage, parseHeldText, platformWarning, replyTarget, sameContent } from './post-submit'
+import { composePageOf, destinationMatches, fieldValueScript, formTextScript, isPublishingControl, looksLikeSubmit, neverClicked, normalizeText, onComposePage, parseHeldText, platformWarning, replyTarget, sameContent } from './post-submit'
 
 const HOSTS = ['reddit.com']
 const COMMENT = 'https://www.reddit.com/r/astrology/comments/abc123/my_chart/def456/'
@@ -233,12 +233,43 @@ describe('reading what the form holds', () => {
 })
 
 describe('which control is named like one that publishes', () => {
-  it.each(['Post', 'Reply', 'Comment', 'Submit', 'Publish', 'Save', 'Send', 'post', 'COMMENT', 'Add comment', 'Add a comment', 'Post comment', 'Post reply', 'Submit post', 'Publish post', 'Save comment', 'Comment ›', 'Опубликовать', 'Отправить', 'Ответить', 'Добавить комментарий', 'Оставить комментарий'])('is: %s', (name) => {
+  it.each(['Post', 'Reply', 'Comment', 'Submit', 'Publish', 'Save', 'Send', 'post', 'COMMENT', 'Add comment', 'Add a comment', 'Post comment', 'Post reply', 'Submit post', 'Publish post', 'Save comment', 'Comment ›', 'Post the new comment', 'Опубликовать', 'Отправить', 'Ответить', 'Добавить комментарий', 'Оставить комментарий'])('is: %s', (name) => {
     expect(looksLikeSubmit(name)).toBe(true)
   })
 
-  it.each(['', '  ', 'Delete', 'Delete comment', 'Report', 'Report comment', 'Cancel', 'Edit', 'Share', 'Award', 'Comment as u/someone', 'Reply to everyone and notify all of them now', 'Log in', 'Sign up to post', 'Posts', 'Удалить', 'Пожаловаться', 'Отмена', 'Post (disabled)', 'Save to bookmarks and share it'])('is not: "%s"', (name) => {
+  it.each(['', '  ', 'Delete', 'Delete comment', 'Report', 'Report comment', 'Cancel', 'Edit', 'Share', 'Award', 'Comment as u/someone', 'Reply to everyone and notify all of them now', 'Log in', 'Sign up to post', 'Posts', 'Удалить', 'Пожаловаться', 'Отмена', 'Post (disabled)', 'Save to bookmarks and share it', 'Post the your new comment'])('is not: "%s"', (name) => {
     expect(looksLikeSubmit(name)).toBe(false)
+  })
+})
+
+describe('which control is one that a post mission never clicks to publish', () => {
+  it.each([
+    [{ role: 'input:image', name: 'Go' }, true],
+    [{ role: 'input:image', name: '' }, true],
+    [{ role: 'input:submit', name: 'Go' }, true],
+    [{ role: 'button', name: 'Continue', submits: true }, true],
+    [{ role: 'link', name: 'Continue', submits: true }, true],
+    [{ role: 'button', name: 'Post' }, true],
+    [{ role: 'input:button', name: 'Reply' }, true],
+    [{ role: 'link', name: 'Reply' }, false],
+    [{ role: 'link', name: 'Post' }, false],
+    [{ role: 'textarea', name: 'Post' }, false],
+    [{ role: 'button', name: 'Continue' }, false],
+    [{ role: 'button', name: 'Continue', submits: false }, false],
+    [{ role: 'input:image', name: 'Go', submits: false }, true]
+  ] as const)('%j: %s', (control, expected) => {
+    expect(isPublishingControl(control)).toBe(expected)
+  })
+})
+
+describe('which name is that of a control that does something else to the account', () => {
+  it.each(['Join', 'Joined', 'Follow', 'Following', 'Following the rules', 'Unfollow', 'Vote', 'Upvote', 'Votes tab', 'Block user', 'Delete', 'Report', 'Log out', 'Sign out', 'Allow', 'Authorize app', 'Подписаться', 'Удалить'])('is: %s', (name) => {
+    expect(neverClicked(name)).toBe(true)
+  })
+
+  // The word is looked for as a whole word: letters before it or after it make another word.
+  it.each(['Devoted fans', 'Adjoining rooms', 'Rejoice', 'Banner', 'Bandwidth', 'Blockquote', 'Blockchain', 'Allowance', 'Reportage', 'Followers', 'Granted', 'Grants program', 'Unvoted', 'Removal', 'Flagship', 'Subscribers', 'Authorization code', 'Mutex', 'Expand comment'])('is not: "%s"', (name) => {
+    expect(neverClicked(name)).toBe(false)
   })
 })
 

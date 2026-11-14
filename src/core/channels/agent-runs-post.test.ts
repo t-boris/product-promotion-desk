@@ -328,6 +328,22 @@ describe('how a post mission ends: the authority says whether the control was pr
     expect(w.t.browser.page(w.account.id).steps).toEqual([])
   })
 
+  it('ends the right to press the moment the owner presses Stop, not when the engine ends: the authority is sealed while the engine still runs', async () => {
+    const { w, authority, request } = await ready()
+    let release = (): void => undefined
+    asTheAI(w, async () => {
+      await new Promise<void>((resolve) => (release = resolve))
+      throw new AiError('cancelled', 'cancelled')
+    })
+    const running = run(w, request)
+    await tick(5)
+    expect(authority.sealed).toBe(false)
+    await w.call('agent.stop', { accountId: w.account.id })
+    expect(authority.sealed).toBe(true) // the engine has not ended yet: its process may take a while to die
+    release()
+    expect(await running).toMatchObject({ ended: 'stopped', committed: false })
+  })
+
   it('reports a timeout and an error of the engine, and says what was done', async () => {
     const { w, authority, request } = await ready()
     w.t.engine.on('agent.post', async () => {

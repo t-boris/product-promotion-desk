@@ -324,10 +324,12 @@ describe('a control that publishes is never clicked or chosen by the AI itself, 
 
   it('refuses a control that submits its form natively, whatever its name says (the page marks it, not the words)', async () => {
     const t = setup()
-    t.page.items.push({ ref: 'e9', role: 'button', name: 'Continue', submits: true }, { ref: 'e10', role: 'input:submit', name: 'Go' })
+    t.page.items.push({ ref: 'e9', role: 'button', name: 'Continue', submits: true }, { ref: 'e10', role: 'input:submit', name: 'Go' }, { ref: 'e11', role: 'input:image', name: 'Go' })
     await look(t)
-    expect(await t.toolbox.call('browser_click', { ref: 'e9' })).toMatchObject(PUBLISHING)
-    expect(await t.toolbox.call('browser_click', { ref: 'e10' })).toMatchObject(PUBLISHING)
+    for (const ref of ['e9', 'e10', 'e11']) {
+      expect(await t.toolbox.call('browser_click', { ref }), ref).toMatchObject(PUBLISHING)
+      expect(await t.toolbox.call('browser_select', { ref, option: 'x' }), ref).toMatchObject(PUBLISHING)
+    }
     expect(t.page.steps).toEqual([])
   })
 
@@ -728,6 +730,16 @@ describe('calls that arrive together are taken in turn, and each one is decided 
     expect(t.authority.leases).toBe(1)
   })
 
+  it('a call that waited for its turn while the mission ended is refused at once, and does not wait out a pause for nothing', async () => {
+    const alone = setup()
+    await look(alone)
+    await submitReply(alone)
+    const together = setup()
+    await look(together)
+    await Promise.all([submitReply(together), together.toolbox.call('browser_click', { ref: 'e8' }), together.toolbox.call('browser_select', { ref: 'e8', option: 'x' })])
+    expect(together.sleeps).toEqual(alone.sleeps)
+  })
+
   it('a click sent together with a browser_submit that failed its read-back finds the text in the form and presses nothing', async () => {
     const t = setup()
     t.page.alter = (_ref, value) => value.replace('Natal Mystic', '***')
@@ -979,6 +991,8 @@ describe('browser_submit types only into a text box, presses only a control that
     ['button', 'Add a comment'],
     ['button', 'Post comment'],
     ['input:submit', 'Submit'],
+    ['input:image', 'Submit'],
+    ['input:button', 'Post'],
     ['button', 'Publish'],
     ['button', 'Опубликовать']
   ])('presses a %s named "%s"', async (role, name) => {
@@ -1610,6 +1624,43 @@ describe('pacing: a post mission does not act in milliseconds', () => {
       expect(t.page.log.slice(lastLook, press)).not.toContain('sleep')
       // The wait is still taken, just before that look: the typing of the last field is followed by one.
       expect(t.page.log.slice(0, lastLook)).toContain('sleep')
+    }
+  })
+
+  it('refuses an action that the mission was ended for while it waited out the pause: stopped, over, or already pressed', async () => {
+    const calls: [string, (t: Setup) => Promise<{ isError?: boolean; text: string }>][] = [
+      ['a click', (t) => t.toolbox.call('browser_click', { ref: 'e5' })],
+      ['a choice', (t) => t.toolbox.call('browser_select', { ref: 'e5', option: 'x' })],
+      ['a navigation', (t) => t.toolbox.call('browser_navigate', { url: 'https://fake.test/r/test/comments/abc/slug/' })]
+    ]
+    const endings: [string, string, (t: Setup, abort: AbortController) => void][] = [
+      ['Stop', 'The owner stopped this task', (_t, abort) => abort.abort()],
+      ['the end of the mission', 'This mission is over', (t) => t.authority.seal()],
+      ['the press of another call', 'submitted', (t) => void (t.authority.committed = true)]
+    ]
+    for (const [what, call] of calls) {
+      for (const [ending, words, end] of endings) {
+        const abort = new AbortController()
+        let armed = false
+        let happen = (): void => undefined
+        const t = setup(REPLY, {
+          signal: abort.signal,
+          sleep: async () => {
+            // The first wait of the second call is the pause between actions: that is where the mission ends (not in the settling after the first).
+            if (armed) {
+              armed = false
+              happen()
+            }
+          }
+        })
+        happen = () => end(t, abort)
+        await look(t)
+        expect((await t.toolbox.call('browser_click', { ref: 'e5' })).isError).toBeUndefined() // an action: the next one must wait
+        armed = true
+        const done = t.page.log.filter((l) => l.startsWith('pageStep') || l.startsWith('goto')).length
+        expect(await call(t), `${what} after ${ending}`).toMatchObject({ isError: true, text: expect.stringContaining(words) })
+        expect(t.page.log.filter((l) => l.startsWith('pageStep') || l.startsWith('goto')), `${what} after ${ending}`).toHaveLength(done)
+      }
     }
   })
 
