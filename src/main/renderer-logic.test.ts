@@ -1,9 +1,10 @@
 // The renderer has no test runner of its own (vitest excludes src/renderer), so its pure routing rules are
 // tested from here. The modules under test import only src/shared, which keeps these plain unit tests.
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ApiEvent } from '../shared/api'
 import type { Account, AnalysisStage, AttentionItem, Channel, Claim, Product } from '../shared/types'
+import { createFanOut } from '../renderer/src/fan-out'
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from '../renderer/src/menu-state'
 import { connectChannelHref, fixLinkFor } from '../renderer/src/pages/attention-links'
 import { KIND_TONE, attentionCountTone } from '../renderer/src/pages/attention-tone'
@@ -73,6 +74,108 @@ describe('the navigate event of the native menu (BUG-048)', () => {
 
   it('names a page that the shell knows', () => {
     expect(parseHash(navigateHashOf({ type: 'navigate', hash: '#/settings' }) ?? '').page).toBe('settings')
+  })
+})
+
+describe('one bridge subscription for every screen (BUG-061)', () => {
+  /** The preload bridge: each onEvent call adds one ipcRenderer listener, which Node warns about from the 11th. */
+  const fakeBridge = () => {
+    const listeners = new Set<(event: ApiEvent) => void>()
+    const remove = vi.fn()
+    const onEvent = vi.fn((handler: (event: ApiEvent) => void) => {
+      listeners.add(handler)
+      return () => {
+        remove()
+        listeners.delete(handler)
+      }
+    })
+    return { onEvent, remove, listeners, push: (event: ApiEvent) => [...listeners].forEach((listener) => listener(event)) }
+  }
+  const changed: ApiEvent = { type: 'changed', scope: 'accounts' }
+  const paused: ApiEvent = { type: 'changed', scope: 'settings' }
+
+  it('makes one onEvent call for twenty subscribers, so the bridge holds one listener', () => {
+    const bridge = fakeBridge()
+    const subscribe = createFanOut<ApiEvent>(bridge.onEvent)
+    for (let i = 0; i < 20; i++) subscribe(() => undefined)
+    expect(bridge.onEvent).toHaveBeenCalledTimes(1)
+    expect(bridge.listeners.size).toBe(1)
+  })
+
+  it('hands every event to every handler once, in order', () => {
+    const bridge = fakeBridge()
+    const subscribe = createFanOut<ApiEvent>(bridge.onEvent)
+    const handlers = Array.from({ length: 20 }, () => vi.fn())
+    handlers.forEach((handler) => subscribe(handler))
+    bridge.push(changed)
+    bridge.push(paused)
+    for (const handler of handlers) {
+      expect(handler).toHaveBeenCalledTimes(2)
+      expect(handler).toHaveBeenNthCalledWith(1, changed)
+      expect(handler).toHaveBeenNthCalledWith(2, paused)
+    }
+  })
+
+  it('stops only the handler that unsubscribed', () => {
+    const bridge = fakeBridge()
+    const subscribe = createFanOut<ApiEvent>(bridge.onEvent)
+    const [first, second] = [vi.fn(), vi.fn()]
+    const stopFirst = subscribe(first)
+    subscribe(second)
+    stopFirst()
+    bridge.push(changed)
+    expect(first).not.toHaveBeenCalled()
+    expect(second).toHaveBeenCalledTimes(1)
+    expect(bridge.remove).not.toHaveBeenCalled()
+    expect(bridge.listeners.size).toBe(1)
+  })
+
+  it('removes the bridge listener when the last handler leaves, and registers again on the next subscribe', () => {
+    const bridge = fakeBridge()
+    const subscribe = createFanOut<ApiEvent>(bridge.onEvent)
+    const stopA = subscribe(() => undefined)
+    const stopB = subscribe(() => undefined)
+    stopA()
+    expect(bridge.remove).not.toHaveBeenCalled()
+    stopB()
+    expect(bridge.remove).toHaveBeenCalledTimes(1)
+    expect(bridge.listeners.size).toBe(0)
+
+    const late = vi.fn()
+    subscribe(late)
+    expect(bridge.onEvent).toHaveBeenCalledTimes(2)
+    bridge.push(changed)
+    expect(late).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats a second unsubscribe as nothing, and lets a handler leave while an event is being handed out', () => {
+    const bridge = fakeBridge()
+    const subscribe = createFanOut<ApiEvent>(bridge.onEvent)
+    const calls: string[] = []
+    let stopB = (): void => undefined
+    subscribe(() => {
+      calls.push('a')
+      stopB()
+    })
+    stopB = subscribe(() => calls.push('b'))
+    const stopC = subscribe(() => calls.push('c'))
+    bridge.push(changed)
+    // b left during the event, before its turn: it does not get that event.
+    expect(calls).toEqual(['a', 'c'])
+    stopB()
+    stopC()
+    stopC()
+    expect(bridge.remove).toHaveBeenCalledTimes(0)
+    expect(bridge.listeners.size).toBe(1)
+  })
+
+  it('removes the bridge listener exactly once however often the last handler is unsubscribed', () => {
+    const bridge = fakeBridge()
+    const subscribe = createFanOut<ApiEvent>(bridge.onEvent)
+    const stop = subscribe(() => undefined)
+    stop()
+    stop()
+    expect(bridge.remove).toHaveBeenCalledTimes(1)
   })
 })
 
