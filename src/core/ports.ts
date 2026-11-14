@@ -144,7 +144,12 @@ export type PageStep =
   | { do: 'click'; ref: string }
   | { do: 'key'; key: 'Enter' | 'Tab' | 'Escape' }
 
-/** `done`: carried out. `wrong_host`: the page is not one of `hosts`. `not_found`: no such element (the page changed). `refused`: the element cannot take it (disabled, not a list, not a field). */
+/**
+ * `done`: carried out. `wrong_host`: the page is not one of `hosts`. `not_found`: no such element (the page changed). These two are answered
+ * before any input reaches the page, so they say that nothing was done. `refused`: the element cannot take it (disabled, not a list, not a
+ * field), or a click could not be confirmed: it may follow input that already landed (a mouse press, then a page that replaced its own
+ * document), so a caller that must know whether a click happened (a press that publishes) cannot read "nothing happened" from it.
+ */
 export type PageStepStatus = 'done' | 'wrong_host' | 'not_found' | 'refused'
 
 export interface PageStepResult {

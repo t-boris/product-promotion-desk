@@ -29,7 +29,11 @@ export interface SubmitLease {
    * looking, and a second press is refused. Throws when a press has been attempted already, and when the authority was sealed.
    */
   commit(): void
-  /** The press definitely did not happen (the page refused the step): the point of no return is taken back, another attempt is possible. */
+  /**
+   * The press definitely did not happen (the page answered before any input reached it: the control or the page was not there): the point
+   * of no return is taken back, another attempt is possible. Never for an answer that may follow input that landed; then it stays, and the
+   * read-back of the site decides.
+   */
   release(): void
 }
 

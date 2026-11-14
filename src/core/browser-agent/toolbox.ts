@@ -616,6 +616,7 @@ export class BrowserToolbox implements McpToolHost {
       const leased = await post.authority.lease((lease) => this.typeAndPress(page, parts, submitRef, label, lease))
       this.touched()
       if (!leased.ok) return fail(`Nothing was submitted: ${leased.reason}`)
+      if (leased.value.unclear) return fail(leased.value.unclear)
       if (leased.value.refused) return fail(`Nothing was submitted: ${leased.value.refused}`)
       return this.afterStep(page, `The application typed the approved content and pressed "${label}". ${SUBMITTED}`)
     })
@@ -663,7 +664,7 @@ export class BrowserToolbox implements McpToolHost {
   }
 
   /** The part of a submission that holds the ticket: type, read back, look again, press. Returns why it stopped before the press, or nothing. */
-  private async typeAndPress(page: BrowserPage, parts: Part[], submitRef: string, label: string, lease: SubmitLease): Promise<{ refused?: string }> {
+  private async typeAndPress(page: BrowserPage, parts: Part[], submitRef: string, label: string, lease: SubmitLease): Promise<{ refused?: string; unclear?: string }> {
     const hosts = this.deps.hosts
     for (const part of parts) {
       await this.pace()
@@ -698,10 +699,17 @@ export class BrowserToolbox implements McpToolHost {
     lease.commit()
     const pressed = await page.publishStep({ do: 'click', ref: submitRef }, hosts, lease.ticket)
     this.touched()
-    if (pressed.status !== 'done') {
-      // The page did not receive the press: the point of no return is taken back, and the text stays typed (the page itself tells the next click).
+    if (pressed.status === 'wrong_host' || pressed.status === 'not_found') {
+      // These two are answered before any input reaches the page: nothing was pressed. The point of no return is taken back, and the
+      // text stays typed (the page itself tells the next click).
       lease.release()
       return { refused: `the control could not be pressed (${pressed.detail}).` }
+    }
+    if (pressed.status !== 'done') {
+      // `refused` can follow a mouse press that landed (a full-page navigation replaced the document before the step could see it), so
+      // it does not say that nothing happened. The point of no return stays, and no second press is possible: the application reads the
+      // site afterwards and finds out whether the text is there.
+      return { unclear: `The control was pressed, or may have been: the page did not confirm it (${pressed.detail}). It is not known whether anything was submitted. Do not press anything again and do not click: call report_result with what the page shows, and the application will look on the site.` }
     }
     this.deps.say(`Pressed "${label}"`)
     return {}

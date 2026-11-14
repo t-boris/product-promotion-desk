@@ -695,6 +695,36 @@ describe('browser_submit stops without pressing when the form is not as approved
     expect(t.page.posted).toHaveLength(1)
   })
 
+  it('takes the point of no return back when the page was not there at all (the host), too', async () => {
+    const t = setup()
+    await look(t)
+    t.page.forced.set(1, { status: 'wrong_host', detail: 'the page is not one of this platform' })
+    expect(await submitReply(t)).toMatchObject({ isError: true, text: expect.stringContaining('could not be pressed') })
+    expect(t.authority.committed).toBe(false)
+  })
+
+  it('keeps the point of no return when the press could not be confirmed after input that landed: a full-page navigation replaced the document', async () => {
+    const t = setup()
+    await look(t)
+    // The mouse press reached the page and the comment was posted; the page then replaced its own document, so the step could not find
+    // its marker and answered "refused". Nothing in that answer says that nothing happened.
+    t.page.forced.set(1, { status: 'refused', detail: 'e4 could not be clicked.' })
+    t.page.beforeStep = (step) => {
+      if (step.do === 'click') t.page.posted.push(Object.fromEntries(t.page.fields))
+    }
+
+    const first = await submitReply(t)
+
+    expect(first).toMatchObject({ isError: true, text: expect.stringContaining('may have been') })
+    expect(first.text).not.toContain('Nothing was submitted')
+    expect(t.authority.committed).toBe(true)
+    // No second ticket, no second press: a fresh submit is refused by the authority itself, and so is every click.
+    expect(await submitReply(t)).toMatchObject({ isError: true })
+    expect(t.authority.leases).toBe(1)
+    expect((await t.toolbox.call('browser_click', { ref: 'e4' })).isError).toBe(true)
+    expect(t.page.posted).toHaveLength(1)
+  })
+
   it('keeps the point of no return when the press ended in an error: the content may be out', async () => {
     const t = setup()
     await look(t)
