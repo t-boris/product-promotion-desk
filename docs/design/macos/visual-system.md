@@ -659,6 +659,10 @@ Where the AI helps in 0.10.0: goal ideas (Goal tab), the goal's target action, m
 channel's style, topics and search queries. The first ready engine is selected on the first launch (Settings shows it as "In use"). The numbers and switches that
 decide what goes out (interval, limits, automatic replies) stay the owner's choice. Rewriting a draft of a reply or a post comes with the disclosure check, in a later release.
 
+Two layout facts that come with the AI controls. The AI capsule in the toolbar is bounded (its label is at most 260 px and ends in an ellipsis, the full text is its
+tooltip), because every field can now start an AI run and a long title must not push the engine and the accounts out of the one-line toolbar (V-05). In the channel
+settings, topics and search queries sit on a row of their own, two columns, so the AI's note and Undo have room under each field.
+
 Rules that every AI help keeps (`core/assist/kit.ts`): untrusted text (a website, the owner's own words, the AI's answer) sits in a fenced data block that cannot close
 itself; the answer is cut to the field's rules and refused when it holds a credential (and, for a text that proposes something to do, an instruction to automate posting
 or a promise of results); the log says that a text was written, never what it says.
@@ -667,3 +671,4 @@ or a promise of results); the log says that a text was written, never what it sa
 |---|---|---|---|
 | V-25 | An AI control on a field or form is a secondary or quiet button, 28 px tall, on the label row; no screen shows two filled buttons because of it | tour on Products (Goal, Edit details, New product) and Channels (settings) at both sizes and themes | 0 filled AI buttons; V-06, V-09 hold |
 | V-26 | The AI's text lands in the field, never in storage; Undo restores what was there; typing over the AI's text hides Undo | packaged probe: write, undo, type | as described |
+| V-27 | With the AI capsule showing, no toolbar value (engine, accounts) is cut and the capsule is at most 330 px wide | packaged probe at 1320×880 and 980×640, both themes | true |

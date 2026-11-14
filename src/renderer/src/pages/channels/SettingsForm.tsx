@@ -56,12 +56,14 @@ export function SettingsForm({ channel }: { channel: Channel }) {
             {(id) => <textarea id={id} className="input short" value={draft.style} onChange={(e) => set('style', e.target.value)} data-testid="settings-style" />}
           </AiField>
         </div>
-        <AiField label="Topics to watch" hint="One per line or separated by commas." field="channel.topics" channelId={channel.id} value={draft.topics} onChange={(text) => set('topics', text)} around={around('topics')} blocked={blocked} testId="settings-topics-ai">
-          {(id) => <textarea id={id} className="input short" value={draft.topics} onChange={(e) => set('topics', e.target.value)} data-testid="settings-topics" />}
-        </AiField>
-        <AiField label="Search queries" hint="One per line or separated by commas." field="channel.queries" channelId={channel.id} value={draft.queries} onChange={(text) => set('queries', text)} around={around('queries')} blocked={blocked} testId="settings-queries-ai">
-          {(id) => <textarea id={id} className="input short" value={draft.queries} onChange={(e) => set('queries', e.target.value)} data-testid="settings-queries" />}
-        </AiField>
+        <div className="wide form-pair">
+          <AiField label="Topics to watch" hint="One per line or separated by commas." field="channel.topics" channelId={channel.id} value={draft.topics} onChange={(text) => set('topics', text)} around={around('topics')} blocked={blocked} testId="settings-topics-ai">
+            {(id) => <textarea id={id} className="input short" value={draft.topics} onChange={(e) => set('topics', e.target.value)} data-testid="settings-topics" />}
+          </AiField>
+          <AiField label="Search queries" hint="One per line or separated by commas." field="channel.queries" channelId={channel.id} value={draft.queries} onChange={(text) => set('queries', text)} around={around('queries')} blocked={blocked} testId="settings-queries-ai">
+            {(id) => <textarea id={id} className="input short" value={draft.queries} onChange={(e) => set('queries', e.target.value)} data-testid="settings-queries" />}
+          </AiField>
+        </div>
         <Field label="Messages per hour (at most)" hint="0 means none.">
           <input className="input" inputMode="numeric" value={draft.perHour} onChange={(e) => set('perHour', e.target.value)} data-testid="settings-per-hour" />
         </Field>
