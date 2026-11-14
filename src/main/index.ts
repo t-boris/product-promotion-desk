@@ -159,6 +159,15 @@ async function start(): Promise<void> {
   app.on('second-instance', showWindow)
   core.log.info('app', `${APP_NAME} ${app.getVersion()} started`)
   showWindow()
+  // Every AI help needs an engine: with none chosen yet, the first ready one is used (it can be changed in Settings).
+  core.engines
+    .autoSelect()
+    .then((engine) => {
+      if (!engine) return
+      core.log.info('engines', `AI engine selected automatically: ${engine.label}. Change it in Settings.`)
+      core.events.changed('settings')
+    })
+    .catch((error: unknown) => core.log.warn('engines', `No AI engine was selected automatically: ${error instanceof Error ? error.message : String(error)}`))
   startAutomation(core, { notifier: createNotificationSink(showWindow) }).catch((error: unknown) => {
     core.log.error('lifecycle', `Automation could not start: ${error instanceof Error ? error.message : String(error)}`)
   })
