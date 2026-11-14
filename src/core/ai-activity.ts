@@ -19,6 +19,10 @@ const TITLES: Record<string, string> = {
   'agent.signup': 'Creating the account on the site',
   'agent.profile': 'Filling in the profile on the site',
   'channels.suggest': 'Suggesting channels',
+  'goals.suggest': 'Suggesting a goal',
+  'assist.write': 'Writing a text',
+  'assist.improve': 'Improving a text',
+  'products.from_site': 'Reading the site to propose the product',
   'channels.roles': 'Suggesting roles',
   'channels.plan': 'Planning the channel',
   'channels.site_profile': 'Reading the site to prepare its profile',
@@ -26,6 +30,8 @@ const TITLES: Record<string, string> = {
   'passport.contradictions': 'Looking for contradictions in the passport',
   'passport.code': 'Reading the code',
   'passport.documents': 'Reading the documents',
+  'drafts.write': 'Writing a draft text',
+  'drafts.improve': 'Improving a draft text',
   'draft.reply': 'Drafting a reply',
   'draft.publication': 'Drafting a publication'
 }

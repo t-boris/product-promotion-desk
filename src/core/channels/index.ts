@@ -7,7 +7,7 @@ import type { Core } from '../core'
 import type { Clock, Connector } from '../ports'
 import type { Db } from '../db/database'
 import { AccountsService } from './accounts'
-import { draftSiteProfile, planChannel, proposeProfile, suggestChannels, suggestRoles } from './ai-help'
+import { draftSiteProfile, planChannel, proposeProfile, suggestChannels, suggestGoal, suggestRoles } from './ai-help'
 import { ChannelService } from './channel-service'
 import { ChannelPlanService } from './plan'
 import { LessonService } from './lessons'
@@ -15,6 +15,7 @@ import { MailboxService } from './mailboxes'
 import { listPlatforms } from './platforms'
 import { PersonProfileService } from './person-profile'
 import { ProfileService } from './profiles'
+import { GoalIdeaService } from './goal-ideas'
 import { RoleSuggestionService } from './roles'
 import { AgentRunService } from './agent-runs'
 import { SignInService } from './sign-in'
@@ -39,6 +40,7 @@ export function register(core: Core): void {
   const channels = new ChannelService(core, store, accounts)
   const profiles = new ProfileService(core, accounts, { draftSiteProfile })
   const suggestions = new SuggestionService(core, { suggestChannels })
+  const goalIdeas = new GoalIdeaService(core, { suggestGoal })
   const roles = new RoleSuggestionService(core, { suggestRoles })
   const plans = new ChannelPlanService(core, { planChannel }, store)
   const vault = new VaultService(core, accounts, store)
@@ -110,6 +112,7 @@ export function register(core: Core): void {
     'channels.setMode': (args) => channels.setMode(args),
     'channels.remove': (args) => channels.remove(args.id),
     'channels.suggest': (args) => suggestions.suggest(args),
+    'goals.suggest': (args) => goalIdeas.suggest(args),
     'channels.preparePlan': (args) => plans.prepare(args),
     'channels.draftProfile': (args) => profiles.draftProfile(args),
     'channels.saveProfile': (args) => profiles.saveProfile(args)

@@ -532,6 +532,44 @@ Review:
 - The tour's 980 runs hide the menu, so its V-18 figure (308) is not the real state (lesson 132): measure with the menu shown.
 
 
+## AI-first interface (plan approved by the owner 2026-11-14; plan file `~/.claude/plans/spicy-questing-stonebraker.md` while it lives)
+
+Rule: AI support on every typed field, every "Add ..." and every "Edit ...", through the CLI engines; the embedded browser (MCP) is the main executor for account, scan and post actions. The AI proposes or fills, the owner saves; every outward action still needs the owner's Approve in the app (DEC-008, send ticket, limits).
+
+Stream A (branch `feat/ai-assist-foundation`, this checkout), release 0.10.0:
+- [x] Core of `goals.suggest` (f5a2973, 19 tests).
+- [x] Shared assist kit `src/core/assist/` (helpers moved out of `ai-help.ts`, gate with optional passport), behaviour unchanged.
+- [x] Engine auto-select on first launch (no engine selected and one is ready).
+- [x] `assist.refine` (free text field: write, or improve with an instruction) with a field table; tests.
+- [x] Renderer kit: `AiField`, `AiProposal`, `useAssist`, `assist-block.ts` (pure, tested).
+- [x] Goals UI (propose one at a time, "Use this" fills the form) and Edit with AI.
+- [x] Create a product from its website (name, description, sources proposed).
+- [x] Channel settings proposed by the AI.
+- [ ] Rewrite and fix of drafts (reply, post), disclosure and safety wording: moved to 0.11.0 (see below).
+- [x] Spec (§17), layout shown to the owner, packaged probe (56 checks), tour (76 screens), independent review (10 findings, all but the a11y announcement fixed), PR #20, release 0.10.0 (installed).
+- Later releases: 0.11.0 remaining forms; 0.12.0 "Let the AI do this" per stage and cadence-based post proposals.
+
+Stream B (worktree `../ppd-browser`, branch `feat/ai-browser-missions`, from main): B1 ticket-aware post mission and the honesty fixes; B2 account creation end to end; B3 connect, assess and scan missions.
+
+### 0.11.0: AI in drafts (branch `feat/ai-drafts`)
+
+What exists today (map of 2026-11-14): replies have "Draft with AI" / "Redo with AI" (full redraft, stored, safety-checked); standalone posts have the toolbar "Suggest with AI" (stored, safety-checked) and a manual form with no AI; owner edits (`saveDraft`, `publications.create`, `approve`) are never safety-checked; the disclosure of the connection is a prompt rule plus a model flag (stream B1 adds a code check at approval). `assist.refine` is the wrong tool for drafts (its cleaning strips markdown and links, its guard rejects ordinary words such as "guarantee", it has no thread, claim ids or platform shape).
+
+- [x] `drafts.refine` (core, `src/core/pipeline/draft-help.ts`): for a reply (`opportunityId`) or a post (`channelId`): `field` title | text | all, the form as it is, the owner's wish; context from `buildReplyContext` / `channelView` / `roleView` / `loadKnowledge` (the same as the AI drafts); the thread and everything the owner wrote fenced as data; markdown and links kept; length caps 4000 / 20000 / 300. Returns the text, stores nothing, logs only that a text was produced. Deferred (not built): the platform's shape rules (a reply has no link; a Reddit link post has no text): the connector still refuses them at send time.
+- [x] The AI's text passes `checkDraftSafety` (claims cited, prohibited claims, amounts, links) and the disclosure rule before the owner sees it; one repair retry with the reasons, then refused with the reasons shown. Same contract as the AI drafts: the AI never hands the owner text the pipeline would have blocked.
+- [x] Editor: "Suggest with AI" / "Improve with AI" on the text (reply and post) and on the title (post), Undo, the owner's typing wins (the `AiField` pattern). New publication ("Write one myself"): "Draft with AI" with an optional "what is it about?" line fills title and text; nothing is stored until "Save as draft".
+- [x] "Redo with AI" no longer drops unsaved typing silently (lesson 84): it asks inline when the editor is dirty.
+- [x] Tests (each checked to fail without its fix: 21 mutants of draft-help, all killed; the renderer logic mutants), spec §18 + V-28..V-30, packaged probe with the real engine on an own instance (40 checks, 0 failed: the post written from a subject, typing wins, a wish honoured, an unsafe wish never puts a discount in the editor, a title asked for while a link is typed keeps both, Redo asks first, 4 size/theme layouts), first independent review (1 critical, 4 high, fixed in `7e85a19`).
+- [x] Second independent review of the fixes (4 major, all fixed: a one-word draft was a licence to add facts, invisible characters hid price/link/free from the checks, an answer could land in another channel's form, two helpers at once read each other's old field; plus the key of "knowledge changed", the 300-character wish cut, the progress titles), design tour (76 screens, 2 sizes x 2 themes, clean), PR #21, CI green, owner accepted on 2026-11-14, release 0.11.0.
+- Follow-ups the owner approved on 2026-11-14 (to do next, in this order):
+  - [x] (0.11.1) A title asked for while the text is empty defers the disclosure to the text (the text help and the gate check it): today the AI puts "I work on <product>" into the title.
+  - [x] (0.11.1) Link check (`safety.ts`, shared with the AI drafts): every markdown link target and every `word.tld/path` counts as a host, a longer list of top-level domains; scheme-less short links (`bit.ly/x`) are caught.
+  - [ ] Owner-written text: a warning on approve naming the rule (prohibited statement, a link outside the product's hosts, an amount with no claim), blocking only what the gate already blocks. A new pattern on the approval screen: show the layout to the owner before building it.
+  - [ ] Decide with the owner which of the remaining forms still need AI (account name, schedule time, older discussions, results summary). The platform's shape rules (a reply has no link) stay with the connector.
+- Open decision for the owner (asked, not assumed): owner-written text is still not safety-checked on save or approve; the right design is a warning on approve naming the rule (prohibited claim, link outside the product's hosts, an amount with no claim), blocking only what the gate already blocks. It changes the approval flow, so it waits for the owner's answer.
+- Excluded on purpose (evidence, not prose): passport statements, sources, contradiction resolution. Account e-mail, handle and sign-up belong to stream B2.
+- Known gap, found in the 0.11.0 review (and what the probe showed: a title asked for while the body is empty carries the connection phrase, because the disclosure is read on the finished draft; to ask the owner whether a title-only ask should defer the disclosure to the text), pre-existing and shared with the AI drafts (`safety.ts`): the link check knows 16 top-level domains and needs a scheme, so `bit.ly/x`, a markdown link `[more](evil.de/x)` or `evil.link` pass. Proposed fix (not done, it changes a shared safety rule): treat every markdown link target and every `word.tld/path` as a host and extend the domain list; needs the owner's yes.
+
 ## Stream B1: the AI publishes posts and replies in the account's browser, with the ticket in code (branch `feat/ai-browser-missions`, from main 16c3ec5)
 
 Owner direction (2026-11-14): the embedded browser is the main executor. The owner approves ONCE, then the AI opens the account's browser, puts the approved text in, submits and checks it is visible. DEC-008 and the send ticket stay hard rules in code: nothing is submitted without the owner's approval of that exact content; instructions to the model are never the barrier (REQ-004: "AI instructions alone cannot authorize outgoing actions; application controls enforce authorization for browser actions as well"; DEC-017: "A task that can publish still goes through a connector with a ticket"; DEC-018: "Publishing from an account stays owner-approved through connectors and tickets").

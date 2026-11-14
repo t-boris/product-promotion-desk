@@ -642,3 +642,66 @@ Decisions taken while converting, so the next reader does not reopen them:
   again. Names, roles and test ids did not change (BUG-039).
 - `.dot.info` and `textarea.input.short` are defined in a page css file and should move to `styles.css` with the next shared change.
 
+
+## 17. AI in every field and form (0.10.0)
+
+The direction (owner, 2026-11-14): the owner says what the product is about and the AI proposes or writes the rest, so almost nothing is typed. Every typed
+field, every "Add ..." and every "Edit ..." gets AI help through the CLI engines. The AI proposes, the owner saves: nothing the AI writes is stored until the owner
+presses the form's own button (DEC-009, DEC-019). The shared kit lives in `src/renderer/src/assist/` and `src/core/assist/`.
+
+| Pattern | Markup | Rules |
+|---|---|---|
+| Field with AI | `AiField` (`.field.ai-field` > `.field-head` with the label and one secondary button, the input, the hint) | One small secondary button on the label row: "Suggest with AI" while the field is empty, "Improve with AI" while it holds text. Improve opens one line "What to change?" (optional) with "Improve" and "Cancel"; Enter runs it. The text goes into the field, never into storage. After the AI wrote, "The AI wrote this text. Check it before you save." with Undo, shown only while the field still holds exactly the AI's text (the owner's typing is never replaced silently, lesson 84). A reason it is off sits under the field with the link that fixes it. Never the filled button (V-10) |
+| Ideas, one at a time | `AiProposal` (`.idea.proposal`: title and sentence, the secondary button, what it leaves alone, an optional "lean toward" line, the idea with an Unverified badge, "Use this") | The first press is "Suggest ... with AI", every later one "Another one" and the core is told which ideas were already shown. "Use this" hands the idea to the form below (here: the new goal's form, focus on its first field, "Filled from the AI's idea. Check it, then add the goal." with Undo when something was typed). The AI never saves the idea |
+| Fill from the website | a secondary button on the label row of "Website address" on New product | Reads the site with the app's own reader, fills the empty name and description only (what is typed stays), says what it filled and kept. Nothing is created until "Create product" |
+
+Where the AI helps in 0.10.0: goal ideas (Goal tab), the goal's target action, metrics and notes, a product's description, a new product from its website, a
+channel's style, topics and search queries. The first ready engine is selected on the first launch (Settings shows it as "In use"). The numbers and switches that
+decide what goes out (interval, limits, automatic replies) stay the owner's choice. Rewriting a draft of a reply or a post is §18 (0.11.0).
+
+Two layout facts that come with the AI controls. The AI capsule in the toolbar is bounded (its label is at most 260 px and ends in an ellipsis, the full text is its
+tooltip), and in a toolbar under 840 px it keeps only the ring (working) or a coloured dot (done, failed, stopped), as the automation state does: measured at 980×640
+with the menu shown, even "AI finished" (109 px) cut the engine and the accounts, and the bare words "AI" (57 px) still cut the accounts by 2 px. Every field can now
+start an AI run, so the capsule appears often and must not push the engine and the accounts out of the one-line toolbar (V-05). In the channel
+settings, topics and search queries sit on a row of their own, two columns, so the AI's note and Undo have room under each field.
+
+Rules that every AI help keeps (`core/assist/kit.ts`): untrusted text (a website, the owner's own words, the AI's answer) sits in a fenced data block that cannot close
+itself; the answer is cut to the field's rules and refused when it holds a credential (and, for a text that proposes something to do, an instruction to automate posting
+or a promise of results); the log says that a text was written, never what it says.
+
+| Id | Requirement | Method | Pass |
+|---|---|---|---|
+| V-25 | An AI control on a field or form is a secondary or quiet button, 28 px tall, on the label row; no screen shows two filled buttons because of it | tour on Products (Goal, Edit details, New product) and Channels (settings) at both sizes and themes | 0 filled AI buttons; V-06, V-09 hold |
+| V-26 | The AI's text lands in the field, never in storage; Undo restores what was there; typing over the AI's text hides Undo | packaged probe: write, undo, type | as described |
+| V-27 | With the AI capsule showing (working or finished), no toolbar value (engine, accounts) is cut and the capsule is at most 330 px wide; under 840 px it is the ring or a dot | packaged probe at 1320×880 and 980×640, both themes | true |
+
+
+## 18. AI in drafts (0.11.0)
+
+The same direction for the text that goes out: the owner reads, changes and saves; the AI never stores a draft and never approves one (DEC-008). What is new is what
+the AI's text has to pass before the owner sees it. `drafts.refine` (`src/core/pipeline/draft-help.ts`) writes or improves the title or the text of a reply, of a
+post that has a card, and of a new publication, from the knowledge the AI drafts use (approved facts with their ids, prohibited statements, channel style and limits,
+the role of the login, and for a reply the discussion, the parent chain and the account's earlier replies). The answer passes the checks of an AI draft
+(`checkDraftSafety`: cited facts approved, nothing prohibited, no price, discount or "free" without a cited claim, links only to the product's own addresses, however a link is written: a full address, a bare domain, a short link such as `bit.ly/x`, a `www.` host, the target of a markdown or reference-style link; a link that is not a web address, such as `javascript:`, is refused), a
+credential check, a length limit (a long answer is sent back, never cut) and the disclosure rule (the product's name or website named without saying the author is
+connected with it; read on the finished draft, title and text together, except that a title written while the text is still empty is not asked to carry it: the text help that follows says it; for now the AI's own flag, until the disclosure check of the post mission lands). A failing
+answer is handed back once with the reasons, then refused with them. A post written from nothing must cite an approved fact; any other text must cite one when the AI says it
+states facts about the product that the owner's draft does not state (the same trust as the category of an AI reply; empty or not decides nothing, so a one-word
+draft is no licence to add facts). The checks read the text without its invisible characters (zero-width, bidi marks, variation selectors) and with look-alike
+forms folded, so "fr\u200Bee" or "evil\u200B.com" are caught; the text handed over is the AI's own. If the product knowledge (facts, prohibited statements, the product's
+name or website) changes while the AI writes, the text is refused, not handed over as checked. The owner's text is never cut: a draft too long for the AI to read whole (20,000 characters) is refused. The
+owner's own text next to the AI's is not checked; what the owner saves is the owner's, as before (a check of the owner's own text on save and approve is a separate
+decision). Like the AI drafts, it works with any ready engine; the website-fed helps of §17 refuse engines that are not tool-free.
+
+| Pattern | Markup | Rules |
+|---|---|---|
+| Title and text with AI | `AiTextField` in `DraftEditor` (the §17 field: label row, one secondary button, the wish line, the note and Undo) | The same control as §17: "Suggest with AI" while empty, "Improve with AI" while filled. It is on a card that can still change (not on a sent or locked one), disabled while a save runs, and its state starts over when a new draft row arrives. A reply has the text only. The AI's text is put into the form as it is when the answer arrives (a change to the link or the attachments meanwhile is kept). An answer was checked against the other field and the channel it was asked for: if either changed meanwhile, or the form was busy saving, the answer is dropped and the note says which; typing in the field itself always wins. A wish or subject is limited to 300 characters (the field stops there), never cut. The editor is repeated on every open card, so it only asks whether an engine is chosen; the refusal after a press says if the engine cannot work. |
+| Draft with AI (new publication) | `PostDrafter` (`.field.ai-field`: "What is it about?" with the secondary button "Draft with AI" on the label row, one optional line, a hint) | Offered while the title and the text are both empty, and while its note and Undo are showing; it writes both. It needs an approved passport (the hint names the fix). Typing while it works wins: its post is dropped and the form says so. Undo empties both fields while the owner has not typed over them. |
+| Redo with AI | `ConfirmAction` (secondary, sparkles) when the form holds unsaved changes; the plain button otherwise | A new AI draft replaces the form, so with unsaved changes it asks "The new draft replaces what you changed and did not save." (Replace my changes / Cancel). |
+
+| Id | Requirement | Method | Pass |
+|---|---|---|---|
+| V-28 | The AI controls of the draft editor are secondary or quiet buttons on the label row, 28 px tall; the card keeps its one filled button | tour on Replies and Publications at both sizes and themes | 0 extra filled buttons; V-06, V-09 hold |
+| V-29 | The AI's draft text lands in the editor, never in storage; Undo restores what was there; typing over it hides Undo; "Redo with AI" with unsaved changes asks first | packaged probe with the real engine on an own instance | as described |
+| V-30 | A text the safety checks refuse is never shown to the owner; the refusal names the reasons | `draft-help.test.ts` (each rule, mutation-checked) and the packaged probe | as described |
+

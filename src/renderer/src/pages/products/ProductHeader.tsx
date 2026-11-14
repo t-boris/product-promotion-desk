@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import type { PassportView, Product } from '../../../../shared/types'
 import { productHref, type ProductTab } from '../../route'
+import { AiField } from '../../assist/AiField'
+import { useAssistBlock } from '../../assist/useAssistBlock'
 import { call, useAction } from '../../hooks'
 import { Badge, Button, Card, ConfirmAction, ErrorNote, Field, ObjectHeader, useOpenForm } from '../../ui'
 import { ClampedText } from './ClampedText'
@@ -16,6 +18,7 @@ function EditDetails({ product, onDone }: { product: Product; onDone: () => void
     call('products.update', { id: product.id, name: name.trim(), websiteUrl: websiteUrl.trim() || null, description: description.trim() || null })
   )
   const valid = name.trim() !== '' && (websiteUrl.trim() !== '' || description.trim() !== '')
+  const { blocked } = useAssistBlock({ productId: product.id })
 
   return (
     <form
@@ -31,9 +34,22 @@ function EditDetails({ product, onDone }: { product: Product; onDone: () => void
       <Field label="Website address">
         <input className="input" value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} data-testid="edit-product-url" />
       </Field>
-      <Field label="Description" hint="Keep a website address or a description: the product needs something to be analyzed from.">
-        <textarea className="input" value={description} onChange={(e) => setDescription(e.target.value)} data-testid="edit-product-description" />
-      </Field>
+      <AiField
+        label="Description"
+        hint="Keep a website address or a description: the product needs something to be analyzed from."
+        field="product.description"
+        productId={product.id}
+        value={description}
+        onChange={setDescription}
+        around={[
+          { label: 'Name', text: name },
+          { label: 'Website address', text: websiteUrl }
+        ]}
+        blocked={blocked}
+        testId="edit-product-description-ai"
+      >
+        {(inputId) => <textarea id={inputId} className="input" value={description} onChange={(e) => setDescription(e.target.value)} data-testid="edit-product-description" />}
+      </AiField>
       <ErrorNote error={state.error} />
       <div className="row">
         <Button variant={saveVariant} type="submit" disabled={!valid || state.busy} data-testid="edit-product-save">

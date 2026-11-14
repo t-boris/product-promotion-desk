@@ -27,11 +27,47 @@ export interface SafetyReport {
 const AMOUNT = /(?:[$€£¥₽₹]\s?\d[\d.,]*|\d[\d.,]*\s?(?:[$€£¥₽₹]|(?:usd|eur|gbp|rub|dollars?|euros?|pounds?|bucks)\b))/gi
 const DISCOUNT = /\b(?:discounts?|coupons?|promo(?:tional)?\s+codes?|vouchers?|cash\s?back|rebates?|\d{1,3}\s?%\s?off|percent\s+off|on\s+sale|special\s+offer|limited[- ]time\s+offer|price\s+drop)\b/i
 const FREE = /(?<!\bfeel\s+)\bfree\b|\bfor\s+free\b|\bno\s+(?:cost|charge)\b|\bcomplimentary\b|\bgratis\b|\bfreemium\b|\bzero\s+cost\b|\bcosts?\s+nothing\b/i
-const URL_IN_TEXT = /https?:\/\/[^\s<>)\]]+/gi
-const BARE_DOMAIN = /\b(?:[a-z0-9-]+\.)+(?:com|net|org|io|app|ai|co|dev|me|ru|info|xyz|site|online|shop|store)\b/gi
+// Where a draft can point to an address (REQ-003): a full address, a bare domain, a domain followed by a path, a "www." host, the target of a
+// markdown link or of a reference-style link. Every one of them is a link that must lead to the product's own address; a short link such as
+// "bit.ly/x" is no exception.
+const SCHEME_URL = /\b[a-z][a-z0-9+.-]*:\/\/[^\s<>)\]]+/gi
+const WWW_HOST = /\bwww\.[a-z0-9-]+(?:\.[a-z0-9-]+)+/gi
+const BARE_DOMAIN =
+  /\b(?:[a-z0-9-]+\.)+(?:com|net|org|io|app|ai|co|dev|me|ru|info|xyz|site|online|shop|store|de|fr|uk|us|nl|es|ly|gl|gd|gy|at|tv|biz|link|page|tech|cloud|live|club|top|vip|work|space|fun|click|world|news|blog|agency|digital|network|software|studio|design|email|team|zone)\b/gi
+// A domain followed by a path, whatever its ending: "bit.ly/x", "evil.de/post". Endings that name a file are left out ("Node.js/Express").
+const PATH_DOMAIN = /\b(?:[a-z0-9-]+\.)+([a-z]{2,24})(?=\/)/gi
+const FILE_ENDINGS = new Set(
+  'js jsx ts tsx mjs cjs py rb rs go md txt json yml yaml toml html htm css scss xml csv pdf png jpg jpeg gif svg webp zip tar gz sh bat exe dll so dylib java kt swift cpp hpp c h cs php sql log lock env conf cfg ini'.split(' ')
+)
+const MARKDOWN_TARGET = /\]\(\s*<?([^)\s>]+)/g
+const REFERENCE_TARGET = /^[ \t]{0,3}\[[^\]\n]+\]:[ \t]*<?(\S+)/gm
+const UNSAFE_SCHEME = /^(?:javascript|data|vbscript|file|blob):/i
 
-/** Web addresses in free text, without the punctuation that ends the sentence. */
-const urlsIn = (text: string): string[] => [...text.matchAll(URL_IN_TEXT)].map((m) => m[0].replace(/[.,;:!?'"]+$/, ''))
+const trimEnd = (address: string): string => address.replace(/[.,;:!?'"]+$/, '')
+
+/**
+ * The hosts a text points to, and the targets of its markdown links that are not addresses at all (a "javascript:" or "data:" link).
+ * A relative link (a section, a path) leads nowhere else and is not a host.
+ */
+export function linksIn(text: string): { hosts: string[]; unsafe: string[] } {
+  const hosts = new Set<string>()
+  const unsafe: string[] = []
+  // `named`: the address has a scheme or a domain ending, so a single word ("localhost") is still a host; a bare word in a link target ("docs") is not.
+  const add = (address: string, named = true): void => {
+    const host = hostOf(trimEnd(address))
+    if (host && (named || host.includes('.'))) hosts.add(host)
+  }
+  for (const m of text.matchAll(SCHEME_URL)) add(m[0])
+  for (const m of text.matchAll(WWW_HOST)) add(m[0])
+  for (const m of text.matchAll(BARE_DOMAIN)) add(m[0])
+  for (const m of text.matchAll(PATH_DOMAIN)) if (!FILE_ENDINGS.has(m[1].toLowerCase())) add(m[0])
+  for (const m of [...text.matchAll(MARKDOWN_TARGET), ...text.matchAll(REFERENCE_TARGET)]) {
+    const target = m[1]
+    if (UNSAFE_SCHEME.test(target)) unsafe.push(target.slice(0, 20))
+    else if (!/^(?:[#/.]|mailto:|tel:)/i.test(target)) add(target, /:\/\//.test(target))
+  }
+  return { hosts: [...hosts], unsafe }
+}
 
 const STOP_WORDS = new Set(['the', 'and', 'for', 'with', 'that', 'this', 'are', 'you', 'your', 'our', 'can', 'from', 'has', 'have', 'not', 'but', 'all', 'any', 'its', 'was', 'were', 'will', 'one', 'use', 'get'])
 
@@ -81,8 +117,7 @@ export function allowedHostsFor(website: string | null, approved: ClaimView[]): 
   }
   add(website)
   for (const claim of approved) {
-    for (const url of urlsIn(claim.text)) add(url)
-    for (const m of claim.text.matchAll(BARE_DOMAIN)) add(m[0])
+    for (const host of linksIn(claim.text).hosts) add(host)
   }
   return [...hosts]
 }
@@ -121,16 +156,9 @@ export function checkDraftSafety(input: SafetyInput): SafetyReport {
   if (DISCOUNT.test(body) && !DISCOUNT.test(claimText)) violations.push('it mentions a discount or promotion that no cited approved claim supports')
   if (FREE.test(body) && !FREE.test(claimText)) violations.push('it says something is free that no cited approved claim supports')
 
-  // 4. Links only to the product's own addresses.
-  const hosts = new Set<string>()
-  for (const url of urlsIn(body)) {
-    const host = hostOf(url)
-    if (host) hosts.add(host)
-  }
-  for (const m of body.matchAll(BARE_DOMAIN)) {
-    const host = hostOf(m[0])
-    if (host) hosts.add(host)
-  }
+  // 4. Links only to the product's own addresses: every full address, bare domain, short link and link target.
+  const { hosts: found, unsafe } = linksIn(body)
+  const hosts = new Set(found)
   if (input.link) {
     const host = hostOf(input.link)
     if (host) hosts.add(host)
@@ -138,6 +166,7 @@ export function checkDraftSafety(input: SafetyInput): SafetyReport {
   for (const host of hosts) {
     if (!hostAllowed(host, input.allowedHosts)) violations.push(`it links to ${host}, which is not the product's own address`)
   }
+  if (unsafe.length > 0) violations.push(`it holds a link that is not a web address (${unsafe[0]})`)
 
   return { violations, usedClaims }
 }

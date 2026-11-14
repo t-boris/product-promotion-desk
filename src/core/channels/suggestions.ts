@@ -2,12 +2,12 @@
 // Nothing is connected here. Every idea is unverified; the owner decides, and the channel is assessed after it is connected.
 
 import { ApiError } from '../../shared/api'
-import type { ChannelSuggestion, PassportSection, Product } from '../../shared/types'
+import type { ChannelSuggestion } from '../../shared/types'
 import type { Core } from '../core'
 import { UNIVERSAL_CONNECTOR_ID } from '../connector-registry'
-import { AiError, type AiEngine, type ConnectorRegistry } from '../ports'
+import { prepareAssist, type AssistContext } from '../assist/gate'
+import { AiError, type ConnectorRegistry } from '../ports'
 import type { suggestChannels } from './ai-help'
-import { found, requireText } from './errors'
 import { listPlatforms } from './platforms'
 import { addressOnPlatform, expandHandle, presetFor } from './presets'
 
@@ -41,22 +41,12 @@ export function connectableSuggestions(connectors: ConnectorRegistry, suggestion
 }
 
 /**
- * What every "suggest with AI" feature needs first: the product, an approved passport and a ready engine, refused with the
- * same codes everywhere (no_approved_passport, engine_unavailable). The claims are the approved ones only: the passport's own
- * rules keep prohibited and unverified statements out of the list.
+ * What every "suggest with AI" feature that fits the passport needs first: the product, an approved passport and a ready
+ * engine, refused with the same codes everywhere (no_approved_passport, engine_unavailable). The shared gate is in
+ * assist/gate.ts; the helps that come before the passport use it with `passport: 'optional'`.
  */
-export async function prepareSuggestion(core: Core, rawProductId: unknown): Promise<{ product: Product; engine: AiEngine; claims: { section: PassportSection; text: string }[] }> {
-  const productId = requireText(rawProductId, 'The product')
-  const product = found(() => core.repos.product(productId), 'The product')
-  const knowledge = core.services.knowledge
-  if (!knowledge || knowledge.activeVersionId(product.id) === null) {
-    throw new ApiError('no_approved_passport', 'Approve the product passport first so the suggestions fit it')
-  }
-  const engine = core.engines.selected()
-  if (!engine) throw new ApiError('engine_unavailable', 'No AI engine is selected. Choose Codex or Claude Code in Settings.')
-  const status = await engine.check()
-  if (!status.installed || !status.ready) throw new ApiError('engine_unavailable', status.detail || `${engine.label} is not available.`)
-  return { product, engine, claims: knowledge.approvedClaims(product.id).map((claim) => ({ section: claim.section, text: claim.text })) }
+export function prepareSuggestion(core: Core, rawProductId: unknown): Promise<AssistContext> {
+  return prepareAssist(core, rawProductId, { passport: 'required' })
 }
 
 export class SuggestionService {

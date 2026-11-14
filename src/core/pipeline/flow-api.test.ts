@@ -28,7 +28,8 @@ describe('registered API surface', () => {
       'opportunities.reconcile',
       'publications.suggest',
       'publications.create',
-      'publications.schedule'
+      'publications.schedule',
+      'drafts.refine'
     ]
     for (const method of mine) expect(world.core.router.has(method), method).toBe(true)
     // Registering any of them again must fail loudly, which is how the router protects each area's ownership.

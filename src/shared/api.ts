@@ -26,6 +26,10 @@ import type {
   ChannelMode,
   ChannelSettings,
   ChannelSuggestion,
+  GoalIdea,
+  AssistField,
+  DraftHelpField,
+  DraftHelpResult,
   Claim,
   ClaimKind,
   ClaimSourceRef,
@@ -212,6 +216,25 @@ export interface ApiMethods {
   'channels.preparePlan': [{ channelId: Id }, Channel]
   'channels.suggest': [{ productId: Id }, ChannelSuggestion[]]
   /**
+   * One AI idea for a promotion goal of this product, from its approved passport; null when the AI had no new safe idea.
+   * `avoid` holds the ideas the owner has already seen, `hint` is the owner's own one-line preference. Nothing is saved.
+   */
+  'goals.suggest': [{ productId: Id; hint?: string; avoid?: string[] }, GoalIdea | null]
+  /**
+   * Reads the front page of the site at `url` (and a few related pages) and has the AI propose the product's name and a short description.
+   * Null when the site says nothing usable about a product. Nothing is saved: the owner reads the proposal and creates the product.
+   * Refused with site_unreadable when the site cannot be read, with engine_unavailable when no engine is ready or the engine can use tools
+   * on this computer (such an engine is never shown a website), and like every AI help otherwise.
+   */
+  'products.draftFromSite': [{ url: string }, { name: string; description: string; websiteUrl: string } | null]
+  /**
+   * The AI writes the text of one field (`current` empty) or improves it (`current` filled, steered by the owner's `instruction`).
+   * A product field takes `productId`; a channel field takes `channelId` (the product is the channel's). `around` is what the owner already
+   * wrote in the other fields of the same form. Nothing is saved: the owner reads the text and
+   * saves it with the form. Refused like every AI help: engine_unavailable, and not_found or invalid_input for a bad product or field.
+   */
+  'assist.refine': [{ field: AssistField; productId?: Id; channelId?: Id; current: string; instruction?: string; around?: { label: string; text: string }[] }, { text: string }]
+  /**
    * Reads the site at `url` through the account's browser (read-only) and has the AI prepare a draft profile for the
    * universal connector. Never saves anything and never fails because the AI could not help: the draft then carries
    * manual `instructions`.
@@ -246,6 +269,17 @@ export interface ApiMethods {
    * link) or it was not. Without this an unreachable platform check would lock the item forever.
    */
   'opportunities.resolveUnknown': [{ id: Id; outcome: 'published' | 'not_published'; url?: string }, OpportunityCard]
+  /**
+   * The AI writes (the field is empty, or `post`) or improves (the field is filled, steered by the owner's `instruction`) the title or the
+   * text of a reply or of a post. A card is named by `opportunityId`; a new publication that has no card yet, by `channelId`. `form` is
+   * the editor as it is; `about` is what a new post is about. The text passes the checks every AI draft passes (approved facts, nothing
+   * prohibited, no price or promotion without a claim, links only to the product's own addresses, the connection disclosed) and is
+   * handed back once to be fixed, then refused as suggest_failed with the reasons. Nothing is saved: the owner reads the text and saves the
+   * draft. Refused like every AI help: engine_unavailable; no_knowledge for a post written from nothing when no fact is approved yet; invalid_input for
+   * a malformed call or a draft too long to be read whole (never cut). If the product knowledge changes while the AI writes, the text is refused
+   * (suggest_failed). Like the AI drafts, it works with any ready engine.
+   */
+  'drafts.refine': [{ field: DraftHelpField; opportunityId?: Id; channelId?: Id; form: { title: string; text: string }; instruction?: string; about?: string }, DraftHelpResult]
   'publications.suggest': [{ channelId: Id }, OpportunityCard]
   'publications.create': [{ channelId: Id; draft: DraftInput }, OpportunityCard]
   'publications.schedule': [{ id: Id; at: IsoTime | null }, OpportunityCard]

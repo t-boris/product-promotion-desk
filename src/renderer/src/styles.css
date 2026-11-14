@@ -580,6 +580,20 @@ a:any-link {
     white-space: nowrap;
   }
 }
+@container (max-width: 840px) {
+  /* The AI capsule keeps its ring (working) or a coloured dot (done, failed, stopped); its words stay in the page and are its tooltip. */
+  .ai-pill-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .ai-pill-dot {
+    display: inline-block;
+  }
+}
 @container (max-width: 720px) {
   .topbar-label {
     position: absolute;
@@ -1163,6 +1177,18 @@ table.table {
 .ai-pill-btn {
   /* The capsule is never filled; while a task runs its label is accent text and a small ring turns before it. */
   min-width: 0;
+}
+/* A long title ("Reading the site to propose the product") must not squeeze the engine and the accounts of the toolbar out of sight
+   (V-05): the label is cut with an ellipsis and its full text is the button's tooltip. In a narrow toolbar the words give way altogether
+   (see the container query below): the toolbar has no room for them next to the engine and the accounts at the minimum window. */
+.ai-pill-label {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-pill-dot {
+  display: none;
 }
 .ai-ring {
   flex: none;
