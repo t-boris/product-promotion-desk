@@ -16,3 +16,13 @@ export function nextStep(account: Account, hasPassword: boolean, vaultAvailable:
   if (account.status !== 'ready') return { block: 'signin', text: 'Next: sign in on the site (step 5). If the account does not exist there yet, create it on the platform.' }
   return { block: null, text: 'All set. This account is signed in and ready to use.' }
 }
+
+/**
+ * What the note under "Add account" says comes next. From the library the owner is led through the account's own steps; from a
+ * product's Channels tab the app returns there, and the address, the password and the sign-in wait (the sign-in is needed before the
+ * channel is activated, not to connect it or to write a draft by hand).
+ */
+export function afterCreateNote(product: { name: string | undefined } | null): string {
+  if (!product) return 'After adding it you are told what to do next: set the address and the password, then create the account on the platform or sign in.'
+  return `After adding it you go back to the Channels tab of ${product.name ?? 'this product'} to connect a channel with this account. Its address, password and sign-in come later, in the Accounts section, and are needed before the channel is activated.`
+}

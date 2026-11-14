@@ -18,6 +18,8 @@ interface Props {
   needsAccount: boolean
   /** Every account of the library (DEC-015): any of them can serve this product. */
   accounts: Account[]
+  /** The account to choose first (the one just added from this tab); an unknown one, or none, leaves the product's first account chosen. */
+  firstAccountId: string | null
   /** This product's channels, to explain what happens when a second login joins the same community. */
   channels: Channel[]
   /** The channels of every product, to say which other products an account already serves. */
@@ -31,9 +33,9 @@ interface Props {
 }
 
 /** Connects this product to a channel address through an account of the library. Nothing is posted and nothing is read yet. */
-export function ConnectChannel({ product, needsAccount, accounts, channels, allChannels, platforms, productName, prefill, onConnected, filled }: Props) {
+export function ConnectChannel({ product, needsAccount, accounts, firstAccountId, channels, allChannels, platforms, productName, prefill, onConnected, filled }: Props) {
   const main = useMainVariant()
-  const [accountId, setAccountId] = useState('')
+  const [accountId, setAccountId] = useState(firstAccountId ?? '')
   const [target, setTarget] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
   const [justJoined, setJustJoined] = useState(false)

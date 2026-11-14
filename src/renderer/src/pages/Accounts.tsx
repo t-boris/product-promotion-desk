@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '../hooks'
-import { accountsNewHref, parseAccountsHash, type AccountsRoute } from '../route'
+import { accountsNewHref, parseAccountsHash, productHref, type AccountsRoute } from '../route'
 import { Button, Card, EmptyState, ErrorNote, Loading, OpenFormsScope, Page } from '../ui'
 import { AccountDetail } from './channels/AccountDetail'
 import { AccountList } from './channels/AccountList'
@@ -38,6 +38,9 @@ function AccountsScreen() {
   const profiles = useQuery('profiles.list', undefined, ['accounts'])
   const products = useQuery('products.list', undefined, ['products'])
   const route = useAccountsRoute()
+  // The product whose Channels tab opened the form: the new account is made for it and the app goes back there. A product that
+  // no longer exists is ignored (the same rule as the product filter of Publications).
+  const forProduct = route.productId && (products.data === undefined || products.data.some((p) => p.id === route.productId)) ? route.productId : null
   const [tab, setTab] = useState<Tab>('accounts')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [profileId, setProfileId] = useState<string | null>(null)
@@ -63,8 +66,9 @@ function AccountsScreen() {
     setTab('accounts')
     window.location.hash = accountsNewHref()
   }
-  const closeNew = (): void => {
-    window.location.hash = '#/accounts'
+  /** Leaves the form: to the product's Channels tab when it was opened from a product (with the account just added chosen there), otherwise to the account list. */
+  const closeNew = (createdId?: string): void => {
+    window.location.hash = forProduct ? productHref(forProduct, 'channels', createdId) : '#/accounts'
   }
   /** From a profile to one of its accounts, and back (DEC-019). */
   const openAccount = (id: string): void => {
@@ -124,11 +128,12 @@ function AccountsScreen() {
                 profiles={profiles.data ?? []}
                 accounts={list}
                 role={route.role}
+                product={forProduct ? { id: forProduct, name: products.data?.find((p) => p.id === forProduct)?.name } : null}
                 onCreated={(account) => {
                   setSelectedId(account.id)
-                  closeNew()
+                  closeNew(account.id)
                 }}
-                onCancel={list.length > 0 ? closeNew : undefined}
+                onCancel={list.length > 0 || forProduct ? () => closeNew() : undefined}
               />
             </Card>
           )}

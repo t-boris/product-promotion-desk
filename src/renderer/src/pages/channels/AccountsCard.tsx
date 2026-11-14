@@ -11,12 +11,15 @@ import { platformLabel } from './model'
  * "Add an account" is the tab's filled button while the app has no account at all (`filled`); with accounts it is a bezel.
  */
 export function AccountsCard({
+  productId,
   accounts,
   libraryHasAccounts,
   channels,
   platforms,
   filled
 }: {
+  /** This product: the new-account form is opened from it, so the account is made for it and the app comes back here. */
+  productId: string
   /** The accounts of this product. */
   accounts: Account[]
   /** Whether the app has any account at all: any of them can serve this product (DEC-015). */
@@ -29,7 +32,7 @@ export function AccountsCard({
 }) {
   const main = useMainVariant()
   const add = (
-    <Button variant={filled ? main : 'ghost'} onClick={() => (window.location.hash = accountsNewHref())} data-testid="product-add-account">
+    <Button variant={filled ? main : 'ghost'} onClick={() => (window.location.hash = accountsNewHref(undefined, productId))} data-testid="product-add-account">
       {libraryHasAccounts ? 'Add a new account' : 'Add an account'}
     </Button>
   )

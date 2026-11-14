@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { ChannelSuggestion, RoleSuggestion } from '../../../../shared/types'
 import { useQuery } from '../../hooks'
-import { accountsNewHref } from '../../route'
+import { accountsNewHref, channelsAccountOf } from '../../route'
 import { Disclosure, EmptyState, ErrorNote, Loading } from '../../ui'
 import { AccountsCard } from './AccountsCard'
 import { ChannelDetail } from './ChannelDetail'
@@ -28,6 +28,8 @@ export function ChannelsPanel({ productId }: { productId: string }) {
   const engines = useQuery('engines.list', undefined, ['settings'])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [prefill, setPrefill] = useState<Prefill | null>(null)
+  // The account just added from this tab comes back in the link and is the one "Connect a channel" starts with (BUG-063).
+  const [firstAccountId] = useState(() => channelsAccountOf(window.location.hash))
 
   const channelList = channels.data ?? []
   const accountList = accounts.data ?? []
@@ -60,12 +62,13 @@ export function ChannelsPanel({ productId }: { productId: string }) {
       {(accounts.loading && !accounts.data) || (channels.loading && !channels.data) ? <Loading what="Loading channels" /> : null}
       {accountsKnown && (
         <>
-          <AccountsCard accounts={productAccounts} libraryHasAccounts={hasAccount} channels={channelList} platforms={platformList} filled={stage === 'account'} />
+          <AccountsCard productId={productId} accounts={productAccounts} libraryHasAccounts={hasAccount} channels={channelList} platforms={platformList} filled={stage === 'account'} />
           <ConnectChannel
             product={product}
             needsAccount={!hasAccount}
             filled={stage === 'connect'}
             accounts={accountList}
+            firstAccountId={firstAccountId}
             channels={channelList}
             allChannels={everyChannel.data ?? []}
             platforms={platformList}
@@ -106,7 +109,7 @@ export function ChannelsPanel({ productId }: { productId: string }) {
           )
         }
       >
-        <SuggestRoles productId={productId} blocked={blocked} engineLabel={engineLabel} onUse={(suggestion: RoleSuggestion) => (window.location.hash = accountsNewHref({ name: suggestion.name, voice: suggestion.voice }))} />
+        <SuggestRoles productId={productId} blocked={blocked} engineLabel={engineLabel} onUse={(suggestion: RoleSuggestion) => (window.location.hash = accountsNewHref({ name: suggestion.name, voice: suggestion.voice }, productId))} />
         <SuggestChannels productId={productId} platforms={platformList} blocked={blocked} engineLabel={engineLabel} onUse={(suggestion: ChannelSuggestion) => setPrefill({ suggestion })} />
       </Disclosure>
     </div>

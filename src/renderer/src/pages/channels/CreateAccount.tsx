@@ -2,11 +2,13 @@ import { useState, type FormEvent } from 'react'
 import type { Account, AccountRole, Mailbox, PlatformInfo, Profile } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
 import { Button, ErrorNote, Field, Hint, useOpenForm } from '../../ui'
+import { afterCreateNote } from './next-step'
 import { ROLE_NAME_LIMIT, ROLE_VOICE_LIMIT } from './RoleEditor'
 
 /**
  * Adds an account to the library (DEC-015): a platform, a name for the owner, and optionally an e-mail address and a role.
- * The account belongs to no product. Nothing is registered anywhere: the account gets its own empty browser.
+ * The account belongs to no product (opened from a product's Channels tab it only records that product, DEC-015). Nothing is registered
+ * anywhere: the account gets its own empty browser.
  */
 export function CreateAccount({
   platforms,
@@ -14,6 +16,7 @@ export function CreateAccount({
   profiles,
   accounts,
   role,
+  product,
   onCreated,
   onCancel
 }: {
@@ -25,8 +28,10 @@ export function CreateAccount({
   accounts: Account[]
   /** A role to start from ("Use this role" on the product page). */
   role: AccountRole | null
+  /** The product whose Channels tab opened the form: the account is made for it (`name` is absent until the products have loaded). */
+  product: { id: string; name: string | undefined } | null
   onCreated: (account: Account) => void
-  /** Absent while there is no account yet: the form is then the only thing to do. */
+  /** Absent while there is no account yet and no product to go back to: the form is then the only thing to do. */
   onCancel?: () => void
 }) {
   // The form is the next step of the screen and owns its one filled button; the account behind it keeps bezels meanwhile.
@@ -39,7 +44,7 @@ export function CreateAccount({
   const [email, setEmail] = useState('')
   const [chosenMailbox, setChosenMailbox] = useState('')
   const [fromMailbox, setFromMailbox] = useState<string | null>(null)
-  const [create, state] = useAction((args: { platform: string; label: string; role?: AccountRole; email?: string; mailboxId?: string; profileId?: string }) => call('accounts.create', args))
+  const [create, state] = useAction((args: { productId?: string; platform: string; label: string; role?: AccountRole; email?: string; mailboxId?: string; profileId?: string }) => call('accounts.create', args))
   const mailboxId = mailboxes.some((m) => m.id === chosenMailbox) ? chosenMailbox : (mailboxes[0]?.id ?? '')
   const [propose, proposing] = useAction(async (platformKey: string) => {
     const result = await call('accounts.proposeEmail', { mailboxId, platform: platformKey })
@@ -60,6 +65,7 @@ export function CreateAccount({
     if (!label.trim() || !platform || roleIncomplete) return
     const wanted = !profile && roleName.trim() ? { name: roleName.trim(), voice: roleVoice.trim() } : undefined
     const account = await create({
+      ...(product ? { productId: product.id } : {}),
       platform,
       label: label.trim(),
       ...(wanted ? { role: wanted } : {}),
@@ -147,7 +153,7 @@ export function CreateAccount({
         {createBlocker && <Hint data-testid="account-create-reason">{createBlocker}</Hint>}
       </div>
       <p className="muted small" data-testid="account-create-note">
-        After adding it you are told what to do next: set the address and the password, then create the account on the platform or sign in.
+        {afterCreateNote(product)}
       </p>
       <ErrorNote error={state.error ?? proposing.error} />
     </form>

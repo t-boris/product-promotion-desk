@@ -18,10 +18,10 @@ import { resolveSelected } from '../renderer/src/pages/products/product-selectio
 import { isMirroredSource } from '../renderer/src/pages/products/source-view'
 import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block'
 import { activateBlocker, canActivate, canPause, neverAssessed, setupStage } from '../renderer/src/pages/channels/setup-stage'
-import { nextStep } from '../renderer/src/pages/channels/next-step'
+import { afterCreateNote, nextStep } from '../renderer/src/pages/channels/next-step'
 import { channelLabel } from '../renderer/src/pages/review/channel-label'
 import { platformMismatch } from '../renderer/src/pages/channels/platform-hint'
-import { MOVED_PAGES, accountHref, accountsNewHref, navigateHashOf, parseAccountsHash, parseHash, productHref, publicationsHref, publicationsProductOf } from '../renderer/src/route'
+import { MOVED_PAGES, accountHref, accountsNewHref, channelsAccountOf, navigateHashOf, parseAccountsHash, parseHash, productHref, publicationsHref, publicationsProductOf } from '../renderer/src/route'
 import { accountText, accountsGroupName, accountsSummary, automationText, engineGroupName } from '../renderer/src/status-labels'
 
 describe('hash routes (DEC-009)', () => {
@@ -53,6 +53,28 @@ describe('hash routes (DEC-009)', () => {
     expect(productHref('p1')).toBe('#/products/p1')
     expect(productHref(null, 'channels')).toBe('#/products')
     expect(productHref(undefined)).toBe('#/products')
+  })
+
+  it('carries the account a Channels tab should choose in "Connect a channel" (BUG-063)', () => {
+    expect(productHref('p1', 'channels', 'a1')).toBe('#/products/p1/channels?account=a1')
+    // The query is not part of the path: the product and the tab are read as before.
+    expect(parseHash('#/products/p1/channels?account=a1')).toEqual({ page: 'products', productId: 'p1', tab: 'channels' })
+    expect(channelsAccountOf(productHref('p1', 'channels', 'a1'))).toBe('a1')
+    // Ids that need escaping round-trip, in the product and in the account.
+    const href = productHref('a b/c', 'channels', 'x y/z&w=1')
+    expect(parseHash(href)).toEqual({ page: 'products', productId: 'a b/c', tab: 'channels' })
+    expect(channelsAccountOf(href)).toBe('x y/z&w=1')
+    // No account, a blank one or another tab: the old link and no choice.
+    expect(productHref('p1', 'channels', '')).toBe('#/products/p1/channels')
+    expect(productHref('p1', 'goal', 'a1')).toBe('#/products/p1/goal')
+    expect(productHref(null, 'channels', 'a1')).toBe('#/products')
+    expect(channelsAccountOf('#/products/p1/channels')).toBeNull()
+    expect(channelsAccountOf('#/products/p1/channels?account=%20')).toBeNull()
+    expect(channelsAccountOf('#/products/p1/channels?other=1')).toBeNull()
+    expect(channelsAccountOf('#/products/p1/goal?account=a1')).toBeNull()
+    expect(channelsAccountOf('#/products/p1?account=a1')).toBeNull()
+    expect(channelsAccountOf('#/accounts/p1/channels?account=a1')).toBeNull()
+    expect(channelsAccountOf('')).toBeNull()
   })
 
   it('sends the old Channels and Results routes to the product list', () => {
@@ -249,30 +271,47 @@ describe('the main menu can be hidden and the choice is remembered', () => {
 describe('the new-account form of the Accounts section', () => {
   it('is reached by a link, with or without a role', () => {
     expect(accountsNewHref()).toBe('#/accounts/new')
-    expect(parseAccountsHash('#/accounts')).toEqual({ adding: false, accountId: null, role: null })
-    expect(parseAccountsHash('#/accounts/new')).toEqual({ adding: true, accountId: null, role: null })
-    expect(parseAccountsHash('#/products/p1/channels')).toEqual({ adding: false, accountId: null, role: null })
+    expect(parseAccountsHash('#/accounts')).toEqual({ adding: false, accountId: null, productId: null, role: null })
+    expect(parseAccountsHash('#/accounts/new')).toEqual({ adding: true, accountId: null, productId: null, role: null })
+    expect(parseAccountsHash('#/products/p1/channels')).toEqual({ adding: false, accountId: null, productId: null, role: null })
   })
 
   it('names an account by #/accounts/<id>, whatever characters the id holds, and "new" stays the form (BUG-043)', () => {
     expect(accountHref('a1')).toBe('#/accounts/a1')
-    expect(parseAccountsHash('#/accounts/a1')).toEqual({ adding: false, accountId: 'a1', role: null })
+    expect(parseAccountsHash('#/accounts/a1')).toEqual({ adding: false, accountId: 'a1', productId: null, role: null })
     expect(accountHref('a b/c')).toBe('#/accounts/a%20b%2Fc')
-    expect(parseAccountsHash(accountHref('a b/c'))).toEqual({ adding: false, accountId: 'a b/c', role: null })
+    expect(parseAccountsHash(accountHref('a b/c'))).toEqual({ adding: false, accountId: 'a b/c', productId: null, role: null })
     // An id that is not valid percent-encoding is taken as written instead of throwing.
-    expect(parseAccountsHash('#/accounts/100%')).toEqual({ adding: false, accountId: '100%', role: null })
+    expect(parseAccountsHash('#/accounts/100%')).toEqual({ adding: false, accountId: '100%', productId: null, role: null })
     // Only the Accounts page reads an account id; the form is never an account.
-    expect(parseAccountsHash('#/products/a1')).toEqual({ adding: false, accountId: null, role: null })
+    expect(parseAccountsHash('#/products/a1')).toEqual({ adding: false, accountId: null, productId: null, role: null })
     expect(parseAccountsHash('#/accounts/new').accountId).toBeNull()
     // The page is still Accounts for the shell.
     expect(parseHash(accountHref('a1')).page).toBe('accounts')
   })
 
+  it('carries the product it was opened from, alone or together with a role (BUG-063)', () => {
+    expect(accountsNewHref(undefined, 'p1')).toBe('#/accounts/new?product=p1')
+    expect(parseAccountsHash(accountsNewHref(undefined, 'p1'))).toEqual({ adding: true, accountId: null, productId: 'p1', role: null })
+    // An id that needs escaping round-trips.
+    expect(parseAccountsHash(accountsNewHref(undefined, 'a b/c&d=1'))).toMatchObject({ adding: true, productId: 'a b/c&d=1' })
+    // The role and the product travel together, and the role-only link is unchanged.
+    const role = { name: 'Astro & Co', voice: 'Calm, plain words' }
+    expect(parseAccountsHash(accountsNewHref(role, 'p1'))).toEqual({ adding: true, accountId: null, productId: 'p1', role })
+    expect(accountsNewHref(role)).toBe(`#/accounts/new?${new URLSearchParams({ name: role.name, voice: role.voice }).toString()}`)
+    expect(parseAccountsHash(accountsNewHref(role))).toMatchObject({ productId: null, role })
+    // No product: no query. An empty or blank product is no product, and only the form reads one.
+    expect(accountsNewHref(undefined, '')).toBe('#/accounts/new')
+    expect(parseAccountsHash('#/accounts/new?product=%20')).toMatchObject({ adding: true, productId: null })
+    expect(parseAccountsHash('#/accounts?product=p1')).toMatchObject({ adding: false, productId: null })
+    expect(parseAccountsHash('#/accounts/a1?product=p1')).toMatchObject({ adding: false, accountId: 'a1', productId: null })
+  })
+
   it('carries a role through the address, whatever characters it holds', () => {
     const role = { name: 'Astro & Co', voice: 'Calm, "plain" words: no jargon / no ?marks=1' }
-    expect(parseAccountsHash(accountsNewHref(role))).toEqual({ adding: true, accountId: null, role })
-    expect(parseAccountsHash('#/accounts/new?name=%20&voice=x')).toEqual({ adding: true, accountId: null, role: null })
-    expect(parseAccountsHash('#/accounts?name=Dev')).toEqual({ adding: false, accountId: null, role: null })
+    expect(parseAccountsHash(accountsNewHref(role))).toEqual({ adding: true, accountId: null, productId: null, role })
+    expect(parseAccountsHash('#/accounts/new?name=%20&voice=x')).toEqual({ adding: true, accountId: null, productId: null, role: null })
+    expect(parseAccountsHash('#/accounts?name=Dev')).toEqual({ adding: false, accountId: null, productId: null, role: null })
   })
 })
 
@@ -289,6 +328,18 @@ describe('the next step of an account', () => {
 
   it('does not ask for a password where the Mac keeps none', () => {
     expect(nextStep(account({ email: 'a@b.co' }), false, false).block).toBe('signin')
+  })
+
+  it('the note under "Add account" tells where the owner goes next, and from a product that is back to its channels, not into sign-in setup (BUG-063)', () => {
+    expect(afterCreateNote(null)).toMatch(/^After adding it you are told what to do next: set the address and the password/)
+    const fromProduct = afterCreateNote({ name: 'Natal Mystic' })
+    expect(fromProduct).toContain('Channels tab of Natal Mystic')
+    expect(fromProduct).toMatch(/connect a channel/i)
+    // The address, the password and the sign-in are named as later work, not as the next step.
+    expect(fromProduct).not.toMatch(/you are told what to do next/)
+    expect(fromProduct).toMatch(/later/i)
+    // A product whose name has not arrived yet is still a product.
+    expect(afterCreateNote({ name: undefined })).toContain('Channels tab of this product')
   })
 })
 
