@@ -98,16 +98,23 @@ function SourceRow({ source, product }: { source: ProductSource; product: Produc
   )
 }
 
+/** Below this many sources the "Add a source" form comes first, so its action row is in view without scrolling (BUG-033). */
+const FORM_FIRST_BELOW = 3
+
 export function SourcesTab({ view }: { view: PassportView }) {
+  const formFirst = view.sources.length < FORM_FIRST_BELOW
+  // One keyed element in two places: React moves it when the order flips, so a half-typed source is not lost.
+  const form = <AddSource key="add-source" productId={view.product.id} />
   return (
     <div className="stack" data-testid="sources-tab">
+      {formFirst && form}
       <Card title="Sources">
         <Hint>The analysis reads only what is listed here.</Hint>
         <More label="What is read, and what never is">
           <Hint>Project code is read, never run. Secrets, environment files and dependencies are never sent to the AI engine.</Hint>
         </More>
         {view.sources.length === 0 ? (
-          <EmptyState title="No sources yet">Add a website, notes, a document or a project folder below.</EmptyState>
+          <EmptyState title="No sources yet">Add a website, notes, a document or a project folder {formFirst ? 'above' : 'below'}.</EmptyState>
         ) : (
           <div className="stack source-list">
             {view.sources.map((source) => (
@@ -116,7 +123,7 @@ export function SourcesTab({ view }: { view: PassportView }) {
           </div>
         )}
       </Card>
-      <AddSource productId={view.product.id} />
+      {!formFirst && form}
     </div>
   )
 }
