@@ -27,6 +27,7 @@ import type {
   ChannelSettings,
   ChannelSuggestion,
   GoalIdea,
+  AssistField,
   Claim,
   ClaimKind,
   ClaimSourceRef,
@@ -217,6 +218,12 @@ export interface ApiMethods {
    * `avoid` holds the ideas the owner has already seen, `hint` is the owner's own one-line preference. Nothing is saved.
    */
   'goals.suggest': [{ productId: Id; hint?: string; avoid?: string[] }, GoalIdea | null]
+  /**
+   * The AI writes the text of one field (`current` empty) or improves it (`current` filled, steered by the owner's `instruction`).
+   * `around` is what the owner already wrote in the other fields of the same form. Nothing is saved: the owner reads the text and
+   * saves it with the form. Refused like every AI help: engine_unavailable, and not_found or invalid_input for a bad product or field.
+   */
+  'assist.refine': [{ field: AssistField; productId?: Id; current: string; instruction?: string; around?: { label: string; text: string }[] }, { text: string }]
   /**
    * Reads the site at `url` through the account's browser (read-only) and has the AI prepare a draft profile for the
    * universal connector. Never saves anything and never fails because the AI could not help: the draft then carries

@@ -20,6 +20,8 @@ const TITLES: Record<string, string> = {
   'agent.profile': 'Filling in the profile on the site',
   'channels.suggest': 'Suggesting channels',
   'goals.suggest': 'Suggesting a goal',
+  'assist.write': 'Writing a text',
+  'assist.improve': 'Improving a text',
   'channels.roles': 'Suggesting roles',
   'channels.plan': 'Planning the channel',
   'channels.site_profile': 'Reading the site to prepare its profile',
