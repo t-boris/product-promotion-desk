@@ -26,7 +26,10 @@ describe('Startup sequence after a manual launch (DEC-003, REQ-005)', () => {
     expect(automation.recovery).toMatchObject({ uncleanShutdown: true, interruptedRuns: 1 })
     const stale = h.core.runs.list({ limit: 20 }).find((r) => r.id === 'stale')
     expect(stale).toMatchObject({ status: 'failed', summary: 'Interrupted by application stop' })
-    expect(h.core.log.list(50, 'warn').some((l) => l.message.includes('did not shut down cleanly'))).toBe(true)
+    // BUG-060: the message carries no time. It was the previous launch's ISO timestamp in UTC, next to a Time column in local time.
+    const warning = h.core.log.list(50, 'warn').find((l) => l.message.includes('did not shut down cleanly'))
+    expect(warning?.message).toBe('The previous session did not shut down cleanly; recovering interrupted work')
+    expect(warning?.message).not.toMatch(/\d{4}-\d{2}-\d{2}T/)
     // While running, the marker says "not shut down yet", so a crash is detectable next time.
     expect(marker(h)).toMatchObject({ clean: false })
   })

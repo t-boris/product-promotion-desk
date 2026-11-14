@@ -55,7 +55,7 @@ export function recoverOnStart(core: Core, store: ScheduleStore): RecoveryReport
   const previous = core.settings.getRaw<ShutdownMarker | null>(SHUTDOWN_KEY, null)
   const uncleanShutdown = previous !== null && previous.clean !== true
   if (uncleanShutdown) {
-    core.log.warn('lifecycle', `The previous session did not shut down cleanly (started ${previous.at}); recovering interrupted work`)
+    core.log.warn('lifecycle', 'The previous session did not shut down cleanly; recovering interrupted work')
   }
 
   // Permissions first: nothing is resumed for an account that needs a login or a capability the platform restricts.
