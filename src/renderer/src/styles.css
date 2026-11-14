@@ -294,7 +294,7 @@ code {
   background: var(--bad);
   color: #fff;
   border-radius: 999px;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-caption);
   padding: 0 7px;
   min-width: 20px;
   text-align: center;
@@ -677,7 +677,7 @@ table.table {
   vertical-align: top;
 }
 .table th {
-  font-size: var(--fs-xs);
+  font-size: var(--fs-caption);
   color: var(--muted);
   font-weight: 600;
 }
@@ -750,11 +750,11 @@ table.table {
   align-items: center;
   gap: 8px;
 }
+/* What the AI says while it works is prose: the interface font, never smaller than 13px. */
 .ai-lines {
   margin: 6px 0 0;
   padding-left: 18px;
-  font-family: var(--mono);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-caption);
   color: var(--muted);
   overflow-wrap: anywhere;
 }

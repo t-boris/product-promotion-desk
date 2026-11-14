@@ -97,14 +97,19 @@ textarea.input.short {
   grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
+/* Paths stay monospace, but 13px, and a long one wraps at a slash or where it must, not in the middle of every word. */
 .preview-list {
   margin: 6px 0 0;
   padding-left: 18px;
   max-height: 220px;
   overflow: auto;
   font-family: var(--mono);
-  font-size: var(--fs-xs);
-  word-break: break-all;
+  font-size: var(--fs-caption);
+  overflow-wrap: anywhere;
+}
+/* The reason a path is held back is a sentence: the interface font. */
+.preview-list .muted {
+  font-family: var(--font);
 }
 
 .claim {
