@@ -1011,13 +1011,38 @@ input[type='radio'] {
 }
 /* The same, as an inline "More about this" under a short line. */
 .more > summary {
+  /* A real target: at least 28px tall, with the same chevron as a folded block (Disclosure). */
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 28px;
+  padding: var(--space-1) var(--space-2) var(--space-1) 0;
   cursor: pointer;
+  list-style: none;
   color: var(--accent);
   font-size: var(--fs-caption);
   width: fit-content;
+  border-radius: var(--radius-sm);
+}
+.more > summary::-webkit-details-marker {
+  display: none;
+}
+.more > summary::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-left: var(--space-1);
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.more[open] > summary::before {
+  transform: rotate(45deg);
 }
 .more[open] > summary {
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-1);
 }
 
 /* An empty state that offers its one next action. */
