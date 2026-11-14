@@ -28,6 +28,11 @@ if (!app.requestSingleInstanceLock()) {
 async function start(): Promise<void> {
   await app.whenReady()
 
+  // Chromium builds the accessibility tree of a page only after an assistive client asks for it. A client that does not ask (a UI test or
+  // automation tool reading the macOS accessibility tree) saw an empty window with the three traffic-light buttons and nothing else (BUG-002),
+  // although the page is marked up with real links, headings and buttons. So the tree is exposed from the start. It must be called after ready.
+  app.setAccessibilitySupportEnabled(true)
+
   // The tools the AI uses in an account's browser reach it through a socket and a small program the engine starts (DEC-018).
   const gateway = new McpGateway({
     socketPath: join(tmpdir(), `ppd-mcp-${process.pid}.sock`),
