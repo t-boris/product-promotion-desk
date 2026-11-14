@@ -122,3 +122,195 @@ describe('the verdict', () => {
     expect(disclosureProblem(text('I built a shed last summer. Natal Mystic is a nice chart app.'), NATAL)).not.toBeNull()
   })
 })
+
+// The samples of the independent review of the post mission (finding H3): each of these passed the check while it denied the
+// connection or only told what a customer says.
+describe('a denial is never a disclosure, and is itself a problem', () => {
+  it.each([
+    "No affiliation, just a happy user.",
+    "I'm not affiliated with Natal Mystic",
+    "Disclaimer: I have no connection to Natal Mystic.",
+    "I'm not a developer of Natal Mystic",
+    "I'm not the developer behind Natal Mystic",
+    "Natal Mystic is great. Not affiliated, just a fan.",
+    'Natal Mystic is great, and I have no ties to them.',
+    'Natal Mystic is great. I am in no way connected with them.',
+    "Full disclosure: I don't work for Natal Mystic.",
+    'Honest review of Natal Mystic. This is not an ad.',
+    'Natal Mystic is great. No conflict of interest here.',
+    'Natal Mystic works. Unaffiliated, I just use it.',
+    "We're not the team behind Natal Mystic, we just like it.",
+    'I did not create Natal Mystic, I only use it.',
+    'Natal Mystic is great. I have nothing to do with the company.',
+    'Disclosure: I am just a customer of Natal Mystic.',
+    'Я не связан с Natal Mystic, просто пользуюсь.',
+    'Natal Mystic отличный. Нет никакой связи, я просто пользователь.',
+    'Я не разработчик Natal Mystic.',
+    'Natal Mystic хорош. Это не реклама.'
+  ])('refuses: %s', (body) => {
+    const problem = disclosureProblem(text(body), NATAL)
+    expect(problem).not.toBeNull()
+    expect(problem).toContain('not connected')
+  })
+
+  it('refuses a denial in the title, or next to a link to the product', () => {
+    expect(disclosureProblem({ title: 'No affiliation, just a fan', text: 'Charts got faster.' }, NATAL)).toContain('not connected')
+    expect(disclosureProblem(text('No affiliation, just a happy user.', { link: 'https://natalmystic.com/' }), NATAL)).toContain('not connected')
+  })
+
+  it('refuses a denial that names nobody, also in a text that does not mention the product', () => {
+    expect(disclosureProblem(text('No affiliation, just a happy user.'), NATAL)).toContain('not connected')
+    expect(disclosureProblem(text("I'm not affiliated, I just use it."), NATAL)).toContain('not connected')
+    expect(disclosureProblem(text('Я просто пользователь.'), NATAL)).toContain('not connected')
+  })
+
+  it('leaves alone a denial that is about something else, in a text that does not mention the product', () => {
+    expect(disclosureProblem(text("I'm not affiliated with Reddit, but the rules say so."), NATAL)).toBeNull()
+    expect(disclosureProblem(text('Not connected to the company that runs the forum.'), NATAL)).not.toBeNull() // names nobody: bare
+  })
+
+  it('a denial beats a statement: the text is refused even when it also says it is connected', () => {
+    const body = "I'm the developer of Natal Mystic. I'm not affiliated with Natal Mystic."
+    expect(statesConnection(text(body), NATAL)).toBe(false)
+    expect(disclosureProblem(text(body), NATAL)).toContain('not connected')
+  })
+
+  it('does not take a denial for what it is not', () => {
+    for (const body of [
+      "I work on Natal Mystic. I'm not sure I built it right.",
+      "I'm the developer of Natal Mystic, not just a user.",
+      "I'm not a lawyer, but I'm the developer of Natal Mystic.",
+      'Disclosure: I built Natal Mystic. There is no connection between the planets and your day, though.',
+      "I'm the founder of Natal Mystic. I have no interest in astrology fads, only in good charts."
+    ]) {
+      expect(disclosureProblem(text(body), NATAL), body).toBeNull()
+    }
+  })
+})
+
+describe('a customer is not connected with the product', () => {
+  it.each([
+    'Natal Mystic fixed my site speed problems',
+    'This saved my business: Natal Mystic.',
+    'I used it for my project and Natal Mystic helped.',
+    "I've built my whole workflow around Natal Mystic.",
+    'I run it every day, Natal Mystic is great.',
+    'I tried Natal Mystic and I made it work in five minutes.',
+    'I built my site with Natal Mystic in a weekend.',
+    'I made a video about Natal Mystic last week.',
+    'My app works great with Natal Mystic.',
+    "I work at a bank, and Natal Mystic is great.",
+    'I wrote a long review of Natal Mystic.',
+    'I started using Natal Mystic last year.',
+    "I'm a founder of a small bank and I love Natal Mystic.",
+    'We use Natal Mystic in our company.',
+    'Our team loves Natal Mystic.',
+    'The team behind Natal Mystic is great.',
+    'Я сделал сайт с помощью Natal Mystic.',
+    'Natal Mystic помог моему бизнесу.',
+    'Я использовал Natal Mystic в моём проекте.'
+  ])('does not count: %s', (body) => {
+    expect(statesConnection(text(body), NATAL)).toBe(false)
+    expect(disclosureProblem(text(body), NATAL)).toContain('does not say that you are connected')
+  })
+})
+
+describe('honest disclosures still pass', () => {
+  it.each([
+    'Disclosure: I work on Natal Mystic',
+    "Natal Mystic builds a chart from your birth data. I'm the developer of it.",
+    'Natal Mystic строит натальную карту. Я разработчик Natal Mystic.',
+    'Natal Mystic is free for a week. Disclosure: I am the developer.',
+    'I built Natal Mystic, and it is free for a week.',
+    "I'm one of the people behind Natal Mystic.",
+    'We are the team behind Natal Mystic.',
+    "I'm a co-founder of Natal Mystic.",
+    'Natal Mystic is my app, so I am biased.',
+    "It's my side project, Natal Mystic.",
+    'Natal Mystic - my app. Charts got faster.',
+    'My app Natal Mystic got faster charts.',
+    'Natal Mystic is our product. Charts got faster.',
+    'Our product Natal Mystic is free for a week.',
+    'Full disclosure: I work on the app, Natal Mystic.',
+    "I'm working on Natal Mystic and charts got faster.",
+    'As the founder of Natal Mystic, I can say it is free.',
+    'Я создал Natal Mystic, и карты стали быстрее.',
+    'Natal Mystic — мой проект.',
+    'Natal Mystic — это наш продукт.',
+    'Раскрытие информации: я работаю над Natal Mystic.'
+  ])('passes: %s', (body) => {
+    expect(disclosureProblem(text(body), NATAL)).toBeNull()
+  })
+})
+
+describe('what is written to hide the name, and what is only alike', () => {
+  it.each([
+    'Try NatalMystic today',
+    'Try natal-mystic today',
+    'Try Natal\u200BMystic today',
+    'Try Nat\u200Bal Mystic today',
+    'Try Natal\u2060 Mystic today',
+    'Try Natal\u00ADMystic today',
+    'Try Natal\uFEFFMystic today',
+    'See natal\u200Bmystic.com',
+    'See natalmystic\u200D.com'
+  ])('still finds the product in: %s', (body) => {
+    expect(mentionsProductIn(text(body), NATAL)).toBe(true)
+    expect(disclosureProblem(text(body), NATAL)).toContain('does not say that you are connected')
+  })
+
+  it('sees through a hidden character in the link and in a statement', () => {
+    expect(mentionsProductIn(text('Charts got faster.', { link: 'https://natal\u200Bmystic.com/blog' }), NATAL)).toBe(true)
+    expect(disclosureProblem(text('Try Natal\u200BMystic. I\u200B am the developer of it.'), NATAL)).toBeNull()
+    expect(disclosureProblem(text("Try NatalMystic. I'm not affili\u200Bated with it."), NATAL)).toContain('not connected')
+  })
+
+  it('does not take a joined or hyphenated look-alike for the name', () => {
+    expect(mentionsProductIn(text('See natalmystic.com.evil.example'), NATAL)).toBe(false)
+    expect(mentionsProductIn(text('See natalmysticism'), NATAL)).toBe(false)
+    expect(mentionsProductIn(text('See supernatalmystic'), NATAL)).toBe(false)
+    expect(mentionsProductIn(text('See natal-mysticism'), NATAL)).toBe(false)
+  })
+})
+
+describe('a website on a host that holds many sites', () => {
+  const TOOL = { name: 'ToolX', websiteUrl: 'https://github.com/me/toolx' }
+
+  it('does not make every mention of the host a mention of the product', () => {
+    expect(mentionsProductIn(text('I keep my code on github.com, of course'), TOOL)).toBe(false)
+    expect(mentionsProductIn(text('See https://github.com/someone/else for another one'), TOOL)).toBe(false)
+    expect(mentionsProductIn(text('Read this', { link: 'https://github.com/someone/else' }), TOOL)).toBe(false)
+    expect(mentionsProductIn(text('Read this', { link: 'https://github.com/me' }), TOOL)).toBe(false)
+    expect(mentionsProductIn(text('See github.com/me/toolx-two'), TOOL)).toBe(false)
+    expect(mentionsProductIn(text('See github.com/me/toolx2'), TOOL)).toBe(false)
+    expect(disclosureProblem(text('Thanks, I keep it on github.com too.'), TOOL)).toBeNull()
+  })
+
+  it('still finds the product by its own path', () => {
+    expect(mentionsProductIn(text('See github.com/me/toolx for the source'), TOOL)).toBe(true)
+    expect(mentionsProductIn(text('See https://github.com/me/toolx/issues/3'), TOOL)).toBe(true)
+    expect(mentionsProductIn(text('See https://www.github.com/Me/ToolX.'), TOOL)).toBe(true)
+    expect(mentionsProductIn(text('Read this', { link: 'https://github.com/me/toolx' }), TOOL)).toBe(true)
+    expect(mentionsProductIn(text('Read this', { link: 'https://github.com/me/toolx/releases' }), TOOL)).toBe(true)
+    expect(disclosureProblem(text('The source is at github.com/me/toolx'), TOOL)).toContain('does not say that you are connected')
+  })
+
+  it('names nothing by a bare shared host, and a site of its own is told by its host as before', () => {
+    expect(mentionsProductIn(text('I keep my code on github.com'), { name: 'ToolX', websiteUrl: 'https://github.com' })).toBe(false)
+    expect(mentionsProductIn(text('Read this', { link: 'https://github.com/anyone' }), { name: 'ToolX', websiteUrl: 'https://github.com/' })).toBe(false)
+    const pages = { name: 'ToolX', websiteUrl: 'https://me.github.io' }
+    expect(mentionsProductIn(text('See me.github.io'), pages)).toBe(true)
+    expect(mentionsProductIn(text('See other.github.io'), pages)).toBe(false)
+    expect(mentionsProductIn(text('See natalmystic.com/pricing'), { name: 'Natal Mystic', websiteUrl: 'https://natalmystic.com/app' })).toBe(true)
+  })
+})
+
+describe('the documented trade-off for very short names', () => {
+  it('a name of five letters or fewer matches only as written, so a sentence that starts with the word is taken for the product', () => {
+    const go = { name: 'Go', websiteUrl: null }
+    expect(mentionsProductIn(text('Go to settings and turn it off'), go)).toBe(true)
+    expect(mentionsProductIn(text('you can go to settings'), go)).toBe(false)
+    expect(disclosureProblem(text('Go to settings and turn it off'), go)).toContain('does not say that you are connected')
+    expect(disclosureProblem(text('Go to settings. Disclosure: I work on Go.'), go)).toBeNull()
+  })
+})
