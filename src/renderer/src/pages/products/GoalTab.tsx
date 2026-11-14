@@ -1,14 +1,18 @@
-import { useEffect, useState } from 'react'
-import type { Id, Product, PromotionGoal } from '../../../../shared/types'
+import { useEffect, useRef, useState } from 'react'
+import type { GoalIdea, Id, Product, PromotionGoal } from '../../../../shared/types'
+import { AiField } from '../../assist/AiField'
+import type { Blocked } from '../../assist/block'
+import { useAssistBlock } from '../../assist/useAssistBlock'
 import { call, useAction } from '../../hooks'
-import { Badge, Button, Card, ConfirmAction, ErrorNote, Field, Hint, More, useOpenForm } from '../../ui'
+import { Badge, Button, Card, ConfirmAction, ErrorNote, Hint, More, useOpenForm } from '../../ui'
+import { GoalIdeas } from './GoalIdeas'
+import { around, fieldsFromIdea, hasText, type GoalFields } from './goal-ideas'
 import { useTabMainVariant } from './LaunchPath'
 import { lines } from './model'
 
-interface GoalFields {
-  targetAction: string
-  metrics: string
-  notes: string
+/** What "Use this" hands to the new goal's form. Cleared by the form once it has taken it. */
+interface Prefill {
+  fields: GoalFields
 }
 
 const fieldsOf = (goal: PromotionGoal | null): GoalFields => ({ targetAction: goal?.targetAction ?? '', metrics: (goal?.successMetrics ?? []).join('\n'), notes: goal?.notes ?? '' })
@@ -20,8 +24,9 @@ const sameFields = (a: GoalFields, b: GoalFields): boolean => a.targetAction ===
 
 /**
  * The promotion goals (REQ-006, DEC-012): what a person should do after meeting the product, and how the owner judges it. A product
- * can have several. In version 1 they are kept with the product and shown on the Results tab; they do not steer the AI and do not
- * measure conversions.
+ * can have several. They are kept with the product and shown on the Results tab, and the AI sees them when it plans a channel; they do
+ * not change the replies and posts it drafts and do not measure conversions. The AI proposes one goal at a time and can write or
+ * improve each field; the owner always saves the goal.
  */
 export function GoalTab({ product, onOpenResults }: { product: Product; onOpenResults: () => void }) {
   // The list is taken from every save and removal at once, so the screen does not wait for the product to reload.
@@ -33,6 +38,14 @@ export function GoalTab({ product, onOpenResults }: { product: Product; onOpenRe
   // The goal saved last. Only its card shows the confirmation, so the owner sees one message and not one per card; a new goal's card is
   // replaced by the card of the stored goal, which is why this lives here and not in the card.
   const [savedId, setSavedId] = useState<Id | null>(null)
+  // "Use this" on an idea: opens the new goal's card and hands it the idea's text. Ideas need the approved passport; writing a field does not.
+  const ideaHelp = useAssistBlock({ productId: product.id, needsPassport: true })
+  const fieldHelp = useAssistBlock({ productId: product.id, needsPassport: false })
+  const [prefill, setPrefill] = useState<Prefill | null>(null)
+  const useIdea = (idea: GoalIdea): void => {
+    setAdding(true)
+    setPrefill({ fields: fieldsFromIdea(idea) })
+  }
 
   return (
     <Card title="Promotion goals">
@@ -40,8 +53,9 @@ export function GoalTab({ product, onOpenResults }: { product: Product; onOpenRe
         <Hint tone="strong">What should a person do after they meet {product.name}? Each goal is a note kept with the product and shown on the Results tab next to the platforms’ numbers.</Hint>
         <More label="What a goal does and does not do">
           <Hint>A goal is the one thing you want people to do, and how you will judge it.</Hint>
-          <Hint>In this version goals do not change what the AI writes, and they do not count sign-ups or purchases: the app has no access to your own site’s data.</Hint>
+          <Hint>The AI sees your goals when it plans a channel; they do not change the replies and posts it drafts, and they do not count sign-ups or purchases: the app has no access to your own site’s data.</Hint>
         </More>
+        <GoalIdeas productId={product.id} blocked={ideaHelp.blocked} engineLabel={ideaHelp.engineLabel} onUse={useIdea} />
       <div className="rows">
         {goals.map((goal, index) => (
           <GoalCard
@@ -50,6 +64,7 @@ export function GoalTab({ product, onOpenResults }: { product: Product; onOpenRe
             goal={goal}
             heading={`Goal ${index + 1}`}
             saved={goal.id === savedId}
+            fieldBlock={fieldHelp.blocked}
             onEdit={() => setSavedId((id) => (id === goal.id ? null : id))}
             onChanged={(next, savedGoalId) => {
               setGoals(next.goals)
@@ -65,6 +80,9 @@ export function GoalTab({ product, onOpenResults }: { product: Product; onOpenRe
             goal={null}
             heading={`Goal ${goals.length + 1}`}
             saved={false}
+            fieldBlock={fieldHelp.blocked}
+            prefill={prefill}
+            onPrefillTaken={() => setPrefill(null)}
             onEdit={() => undefined}
             onChanged={(next) => {
               setSavedId(next.goals.find((g) => !goals.some((known) => known.id === g.id))?.id ?? null)
@@ -94,6 +112,9 @@ function GoalCard({
   goal,
   heading,
   saved,
+  fieldBlock,
+  prefill,
+  onPrefillTaken,
   onEdit,
   onChanged,
   onCancel,
@@ -104,6 +125,11 @@ function GoalCard({
   heading: string
   /** True while this is the goal saved last and it has not been edited since. */
   saved: boolean
+  /** Why the AI cannot write or improve a field (null when it can). */
+  fieldBlock: Blocked | null
+  /** An idea the owner chose with "Use this"; only a new goal's card takes it. */
+  prefill?: Prefill | null
+  onPrefillTaken?: () => void
   onEdit: () => void
   /** The product after a save or a removal, and the id of the goal that was saved (null after a removal). */
   onChanged: (product: Product, savedGoalId: Id | null) => void
@@ -111,6 +137,18 @@ function GoalCard({
   onOpenResults: () => void
 }) {
   const [fields, setFields] = useState<GoalFields>(() => fieldsOf(goal))
+  // An idea that filled this form: what was in it before (to undo), and what the idea wrote (the note shows while the owner has not changed it).
+  const [fromIdea, setFromIdea] = useState<{ before: GoalFields; filled: GoalFields } | null>(null)
+  const fieldsRef = useRef(fields)
+  fieldsRef.current = fields
+  const targetRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (!prefill || goal !== null) return
+    setFromIdea({ before: fieldsRef.current, filled: prefill.fields })
+    setFields(prefill.fields)
+    onPrefillTaken?.()
+    targetRef.current?.focus()
+  }, [prefill, goal, onPrefillTaken])
   // What is stored for this goal right now; a new goal has nothing stored.
   const [stored, setStored] = useState<GoalFields | null>(() => (goal ? normalized(fieldsOf(goal)) : null))
   // A stored goal is a compact card (what to do, how it is judged) until the owner presses Edit; a new goal is a form from the start.
@@ -203,15 +241,61 @@ function GoalCard({
   return (
     <div className="goal-card" data-testid={`goal-card-${id}`}>
       <strong>{heading}</strong>
-      <Field label="Target action" hint="The one thing you want people to do, for example: create the first natal chart, join the waitlist.">
-        <input className="input" value={fields.targetAction} onChange={(e) => change({ targetAction: e.target.value })} data-testid={`goal-target-${id}`} />
-      </Field>
-      <Field label="Success metrics" hint="One per line, for example: charts created, sign-ups, return visits.">
-        <textarea className="input" value={fields.metrics} onChange={(e) => change({ metrics: e.target.value })} data-testid={`goal-metrics-${id}`} />
-      </Field>
-      <Field label="Notes (optional)">
-        <textarea className="input" value={fields.notes} onChange={(e) => change({ notes: e.target.value })} data-testid={`goal-notes-${id}`} />
-      </Field>
+      {fromIdea && sameFields(normalized(fields), normalized(fromIdea.filled)) && (
+        <div className="ai-undo" role="status" data-testid={`goal-from-idea-${id}`}>
+          <span className="hint">Filled from the AI’s idea. Check it, then add the goal.</span>
+          {hasText(fromIdea.before) && (
+            <Button
+              variant="quiet"
+              onClick={() => {
+                setFields(fromIdea.before)
+                setFromIdea(null)
+              }}
+              data-testid={`goal-from-idea-undo-${id}`}
+            >
+              Undo
+            </Button>
+          )}
+        </div>
+      )}
+      <AiField
+        label="Target action"
+        hint="The one thing you want people to do, for example: create the first natal chart, join the waitlist."
+        field="goal.targetAction"
+        productId={productId}
+        value={fields.targetAction}
+        onChange={(text) => change({ targetAction: text })}
+        around={around(fields, 'targetAction')}
+        blocked={fieldBlock}
+        testId={`goal-target-ai-${id}`}
+      >
+        {(inputId) => <input id={inputId} ref={targetRef} className="input" value={fields.targetAction} onChange={(e) => change({ targetAction: e.target.value })} data-testid={`goal-target-${id}`} />}
+      </AiField>
+      <AiField
+        label="Success metrics"
+        hint="One per line, for example: charts created, sign-ups, return visits."
+        field="goal.metrics"
+        productId={productId}
+        value={fields.metrics}
+        onChange={(text) => change({ metrics: text })}
+        around={around(fields, 'metrics')}
+        blocked={fieldBlock}
+        testId={`goal-metrics-ai-${id}`}
+      >
+        {(inputId) => <textarea id={inputId} className="input" value={fields.metrics} onChange={(e) => change({ metrics: e.target.value })} data-testid={`goal-metrics-${id}`} />}
+      </AiField>
+      <AiField
+        label="Notes (optional)"
+        field="goal.notes"
+        productId={productId}
+        value={fields.notes}
+        onChange={(text) => change({ notes: text })}
+        around={around(fields, 'notes')}
+        blocked={fieldBlock}
+        testId={`goal-notes-ai-${id}`}
+      >
+        {(inputId) => <textarea id={inputId} className="input" value={fields.notes} onChange={(e) => change({ notes: e.target.value })} data-testid={`goal-notes-${id}`} />}
+      </AiField>
       <ErrorNote error={saving.error ?? removing.error} />
       <div className="row">
         <Button variant={onDemand ? saveVariant : restingVariant} onClick={() => void save()} disabled={!canSave} data-testid={`goal-save-${id}`}>

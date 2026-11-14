@@ -53,6 +53,17 @@ export interface PromotionGoal {
 /** A goal as the owner edits it: no id yet while it is new. */
 export type PromotionGoalInput = Omit<PromotionGoal, 'id'> & { id?: Id }
 
+/** The text fields the AI can write or improve (assist.refine). The core holds the rules of each one. */
+export type AssistField = 'goal.targetAction' | 'goal.metrics' | 'goal.notes' | 'product.description' | 'channel.style' | 'channel.topics' | 'channel.queries'
+
+/** One goal the AI proposes. Nothing is stored: the owner turns it into a goal by pressing "Use this" and "Add goal". */
+export interface GoalIdea {
+  targetAction: string
+  successMetrics: string[]
+  /** One plain sentence on why this goal fits the product. */
+  reason: string
+}
+
 export type AnalysisStatus = 'idle' | 'running' | 'paused' | 'failed' | 'complete'
 
 export interface Product {

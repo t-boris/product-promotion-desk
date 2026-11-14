@@ -92,4 +92,20 @@ export class EngineRegistry {
   async checkAll(): Promise<EngineStatus[]> {
     return Promise.all(this.all().map((e) => e.check()))
   }
+
+  /**
+   * First launch: when no engine is in use, the first one that is installed and ready is selected, so every AI help works without
+   * a visit to Settings. A tool-free engine goes first (its drafts can be used for automatic replies). A choice the owner made is
+   * never replaced, even while that engine is not ready. Returns the engine that was selected, or null when nothing changed.
+   */
+  async autoSelect(): Promise<AiEngine | null> {
+    if (this.selected()) return null
+    const statuses = await this.checkAll()
+    const ready = this.all().filter((engine) => statuses.some((status) => status.id === engine.id && status.installed && status.ready))
+    const pick = ready.find((engine) => engine.toolFree) ?? ready[0]
+    // The checks take a moment: a choice the owner made in the meantime stands.
+    if (!pick || this.selected()) return null
+    this.settings.updateApp({ engineId: pick.id })
+    return pick
+  }
 }
