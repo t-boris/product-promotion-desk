@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import type { PassportView, Product, ProductSource } from '../../../../shared/types'
 import type { SourcePreview } from '../../../../shared/api'
 import { call, useAction } from '../../hooks'
@@ -8,39 +8,7 @@ import { SOURCE_LABELS } from './labels'
 import { describeScope } from './model'
 import { isMirroredSource, isProse } from './source-view'
 import { SourcePreviewPanel } from './SourcePreviewPanel'
-
-/**
- * A text source shows three lines in the interface font, wrapped at words, and opens in full on request (BUG-010, QA finding 23).
- * Whether there is more to show is measured, not guessed from a character count: the width of the window decides.
- */
-function SourceText({ text, lines }: { text: string; lines: number }) {
-  const box = useRef<HTMLParagraphElement>(null)
-  const [open, setOpen] = useState(false)
-  const [cut, setCut] = useState(false)
-  useEffect(() => {
-    const el = box.current
-    if (!el) return
-    const measure = (): void => {
-      if (!open) setCut(el.scrollHeight > el.clientHeight + 1)
-    }
-    measure()
-    const observer = new ResizeObserver(measure)
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [text, open])
-  return (
-    <>
-      <p ref={box} className={`source-text${open ? ' open' : ''}`} style={{ ['--lines' as string]: lines }} data-testid="source-text">
-        {text}
-      </p>
-      {(cut || open) && (
-        <button type="button" className="link-btn" onClick={() => setOpen((v) => !v)} aria-expanded={open} data-testid="source-toggle">
-          {open ? 'Show less' : 'Show full text'}
-        </button>
-      )}
-    </>
-  )
-}
+import { ClampedText } from './ClampedText'
 
 function SourceRow({
   source,
@@ -93,7 +61,7 @@ function SourceRow({
             {source.label && <strong>{source.label}</strong>}
             {mirrored && <Badge>From product details</Badge>}
           </div>
-          {isProse(source) ? <SourceText text={source.ref} lines={mirrored ? 2 : 3} /> : <div className="source-ref mono">{source.ref}</div>}
+          {isProse(source) ? <ClampedText text={source.ref} lines={mirrored ? 2 : 3} /> : <div className="source-ref mono">{source.ref}</div>}
           <Hint>
             Added {formatTime(source.addedAt)}
             {scope ? ` · ${scope}` : ''}

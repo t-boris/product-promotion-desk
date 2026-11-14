@@ -47,18 +47,30 @@ export function SettingsPage() {
             return (
               <div key={engine.id} className="list-row engine-row" data-testid={`engine-${engine.id}`}>
                 <div className="engine-main">
+                  {/* One line says what is installed: "Claude Code 2.1.325 · Ready". The path is a detail (BUG-037). */}
                   <div className="row">
                     <strong>{engine.label}</strong>
+                    {engine.version && (
+                      <span className="hint" data-testid={`engine-version-${engine.id}`}>
+                        {engine.version}
+                      </span>
+                    )}
                     {selected && <Badge tone="info">Selected</Badge>}
                     {recommended && !selected && <Badge tone="info">Recommended</Badge>}
                     {engine.installed ? <Badge tone={engine.ready ? 'good' : 'warn'}>{engine.ready ? 'Ready' : 'Installed'}</Badge> : <Badge>Not installed</Badge>}
                   </div>
-                  {!engine.installed && <div className="hint">Install {engine.label} on this Mac, then press Re-check.</div>}
-                  {engine.version && <div className="hint">Version {engine.version}</div>}
-                  {engine.path && <div className="mono engine-path">{engine.path}</div>}
-                  {detail.summary && <div className="hint">{detail.summary}</div>}
+                  {/* The engine's own summary repeats the version and the badge when it answers; it is shown only when it says what is wrong:
+                      "codex was not found. Install Codex, then re-check.", or why the check failed. */}
+                  {!engine.ready && detail.summary && <div className="hint">{detail.summary}</div>}
                   {detail.writing && <div className={`hint${detail.limits ? ' warn' : ''}`}>{detail.writing}</div>}
                   {detail.missions && <div className="hint">{detail.missions}</div>}
+                  {engine.path && (
+                    <More label="Details">
+                      <div className="mono engine-path" data-testid={`engine-path-${engine.id}`}>
+                        {engine.path}
+                      </div>
+                    </More>
+                  )}
                 </div>
                 {selected ? (
                   <span className="in-use" data-testid={`engine-in-use-${engine.id}`}>
