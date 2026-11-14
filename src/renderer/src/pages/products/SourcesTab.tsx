@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { PassportView, Product, ProductSource } from '../../../../shared/types'
 import type { SourcePreview } from '../../../../shared/api'
 import { call, useAction } from '../../hooks'
-import { Badge, Button, Card, EmptyState, ErrorNote, formatTime, Hint, More } from '../../ui'
+import { Badge, Button, Card, ConfirmAction, EmptyState, ErrorNote, formatTime, Hint, More } from '../../ui'
 import { AddSource, SOURCE_SAVED_TEXT, SourceForm } from './AddSource'
 import { SOURCE_LABELS } from './labels'
 import { describeScope } from './model'
@@ -24,7 +24,6 @@ function SourceRow({
   onEdit: (open: boolean) => void
 }) {
   const [preview, setPreview] = useState<SourcePreview | null>(null)
-  const [confirming, setConfirming] = useState(false)
   // "Edit" opens the source in place, in the same form as "Add a source"; after a save the row says what it means (BUG-034).
   const [saved, setSaved] = useState(false)
   const [remove, removing] = useAction(() => call('sources.remove', { id: source.id }))
@@ -74,7 +73,7 @@ function SourceRow({
               What the AI sees
             </Button>
           )}
-          {!mirrored && !confirming && (
+          {!mirrored && (
             <Button
               variant="quiet"
               onClick={() => {
@@ -86,22 +85,20 @@ function SourceRow({
               Edit
             </Button>
           )}
-          {!mirrored &&
-            (confirming ? (
-              <>
-                <span className="hint strong">Remove this source?</span>
-                <Button variant="danger" onClick={() => void remove()} disabled={removing.busy} data-testid={`source-remove-confirm-${source.id}`}>
-                  {removing.busy ? 'Removing…' : 'Remove'}
-                </Button>
-                <Button variant="quiet" onClick={() => setConfirming(false)}>
-                  Keep
-                </Button>
-              </>
-            ) : (
-              <Button variant="quiet" className="danger" onClick={() => setConfirming(true)} data-testid={`source-remove-${source.id}`}>
-                Remove
-              </Button>
-            ))}
+          {!mirrored && (
+            <ConfirmAction
+              label="Remove"
+              variant="quiet"
+              className="danger"
+              question="Remove this source?"
+              confirmLabel="Remove"
+              busyLabel="Removing…"
+              cancelLabel="Keep"
+              onConfirm={() => remove()}
+              testId={`source-remove-${source.id}`}
+              confirmTestId={`source-remove-confirm-${source.id}`}
+            />
+          )}
         </div>
       </div>
       {saved && (

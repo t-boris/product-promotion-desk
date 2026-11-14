@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { AgentLesson, PlatformInfo } from '../../../shared/types'
 import { call, useAction, useQuery } from '../hooks'
-import { Badge, Button, Card, ErrorNote, Field, Hint, More } from '../ui'
+import { Badge, Button, Card, ConfirmAction, ErrorNote, Field, Hint, More } from '../ui'
 import './settings.css'
 
 const RULE_LIMIT = 200
@@ -102,9 +102,17 @@ function LessonRow({ lesson, platforms }: { lesson: AgentLesson; platforms: Plat
           <Button variant="quiet" onClick={() => void toggle()} disabled={busy} data-testid={`lesson-toggle-${lesson.id}`}>
             {lesson.enabled ? 'Switch off' : 'Switch on'}
           </Button>
-          <Button variant="quiet" className="danger" onClick={() => void remove()} disabled={busy} data-testid={`lesson-remove-${lesson.id}`}>
-            Remove
-          </Button>
+          <ConfirmAction
+            label="Remove"
+            variant="quiet"
+            className="danger"
+            question="Removes this rule. The AI no longer follows it."
+            confirmLabel="Remove rule"
+            onConfirm={() => remove()}
+            disabled={busy}
+            testId={`lesson-remove-${lesson.id}`}
+            confirmTestId={`lesson-remove-confirm-${lesson.id}`}
+          />
           <Button onClick={() => void save()} disabled={busy || !dirty || rule.trim().length < 8} data-testid={`lesson-save-${lesson.id}`}>
             Save
           </Button>

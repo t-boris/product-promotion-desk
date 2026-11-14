@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import type { Mailbox } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Button, Card, ErrorNote, Field, Hint } from '../../ui'
+import { Button, Card, ConfirmAction, ErrorNote, Field, Hint } from '../../ui'
 
 /**
  * The owner's base mailboxes (DEC-015): an ordinary mailbox from which every account gets an address of its own. With none, the sentence
@@ -30,9 +30,14 @@ export function MailboxesCard({ mailboxes }: { mailboxes: Mailbox[] }) {
           {mailboxes.map((m) => (
             <div className="group-row" key={m.id} data-testid={`mailbox-${m.id}`}>
               <strong className="row-main">{m.address}</strong>
-              <Button variant="danger" onClick={() => void remove(m.id)} disabled={removing.busy} data-testid={`mailbox-remove-${m.id}`}>
-                Remove
-              </Button>
+              <ConfirmAction
+                label="Remove"
+                question="Removes this mailbox from the list. Addresses already given to accounts stay."
+                confirmLabel="Remove mailbox"
+                onConfirm={() => remove(m.id)}
+                testId={`mailbox-remove-${m.id}`}
+                confirmTestId={`mailbox-remove-confirm-${m.id}`}
+              />
             </div>
           ))}
         </div>

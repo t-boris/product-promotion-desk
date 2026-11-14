@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import type { Account } from '../../../../shared/types'
 import { generatePassword } from '../../../../shared/password'
 import { call, useAction } from '../../hooks'
-import { Button, ErrorNote, Field, useMainVariant, useOpenForm } from '../../ui'
+import { Button, ConfirmAction, ErrorNote, Field, useMainVariant, useOpenForm } from '../../ui'
 import { AccountBlock } from './AccountBlock'
 import type { NextStep } from './next-step'
 
@@ -19,7 +19,6 @@ export function AccountPassword({ account, vaultAvailable, hasPassword, next }: 
   const [password, setPassword] = useState('')
   const [revealed, setRevealed] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-  const [confirmRemove, setConfirmRemove] = useState(false)
 
   const [save, saving] = useAction(async () => {
     await call('vault.savePassword', { accountId: account.id, loginName: loginName.trim(), password })
@@ -29,7 +28,6 @@ export function AccountPassword({ account, vaultAvailable, hasPassword, next }: 
   })
   const [remove, removing] = useAction(async () => {
     await call('vault.removePassword', { accountId: account.id })
-    setConfirmRemove(false)
     setEditing(false)
     setRevealed(null)
   })
@@ -141,25 +139,23 @@ export function AccountPassword({ account, vaultAvailable, hasPassword, next }: 
             <Button variant={saveVariant} type="submit" disabled={saving.busy || loginName.trim() === '' || password === ''} data-testid={`password-save-${account.id}`}>
               {saving.busy ? 'Saving…' : 'Save password'}
             </Button>
-            {hasPassword &&
-              (confirmRemove ? (
-                <>
-                  <span className="muted small row-note">Forgets the password; the account stays.</span>
-                  <Button variant="danger" onClick={() => void remove()} disabled={removing.busy} data-testid={`password-remove-confirm-${account.id}`}>
-                    Remove password
-                  </Button>
-                </>
-              ) : (
-                <Button onClick={() => setConfirmRemove(true)} data-testid={`password-remove-${account.id}`}>
-                  Remove password
-                </Button>
-              ))}
+            {hasPassword && (
+              <ConfirmAction
+                label="Remove password"
+                variant="ghost"
+                question="Forgets the password; the account stays."
+                confirmLabel="Remove password"
+                cancelLabel="Keep password"
+                onConfirm={() => remove()}
+                testId={`password-remove-${account.id}`}
+                confirmTestId={`password-remove-confirm-${account.id}`}
+              />
+            )}
             <Button
               onClick={() => {
                 setEditing(false)
                 setPassword('')
                 setRevealed(null)
-                setConfirmRemove(false)
               }}
             >
               Cancel

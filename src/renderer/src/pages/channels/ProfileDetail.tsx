@@ -3,7 +3,7 @@ import type { Account, PlatformInfo, Product, Profile, ProfileFields, ProfileGen
 import { fieldsOf, profileLine, sameFields } from '../../../../shared/profile'
 import { AiProgressPanel } from '../../AiProgress'
 import { call, useAction } from '../../hooks'
-import { Badge, Button, Card, ErrorNote, Field, ObjectHeader } from '../../ui'
+import { Badge, Button, Card, ConfirmAction, ErrorNote, Field, ObjectHeader } from '../../ui'
 import { productLabels } from '../products/product-labels'
 import { ProfileAccounts } from './ProfileAccounts'
 import { ROLE_NAME_LIMIT, ROLE_VOICE_LIMIT } from './RoleEditor'
@@ -302,9 +302,17 @@ export function ProfileDetail({
       <ProfileAccounts profile={profile} accounts={accounts} platforms={platforms} onOpenAccount={onOpenAccount} main={!formFilled} />
 
       <div className="row">
-        <Button onClick={() => void remove()} disabled={removing.busy || accounts.length > 0} data-testid={`profile-remove-${profile.id}`}>
-          {removing.busy ? 'Removing…' : 'Remove this profile'}
-        </Button>
+        <ConfirmAction
+          label="Remove this profile"
+          variant="ghost"
+          question="Removes this profile with its strategy and picture. This cannot be undone."
+          confirmLabel="Remove profile"
+          busyLabel="Removing…"
+          onConfirm={() => remove()}
+          disabled={accounts.length > 0}
+          testId={`profile-remove-${profile.id}`}
+          confirmTestId={`profile-remove-confirm-${profile.id}`}
+        />
         {accounts.length > 0 && <span className="muted small">It has {accounts.length} account{accounts.length === 1 ? '' : 's'}: take them out of the profile first ({accounts.map((a) => platformLabel(a.platform, platforms)).join(', ')}).</span>}
       </div>
     </div>

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { PassportView, Product } from '../../../../shared/types'
 import { productHref, type ProductTab } from '../../route'
 import { call, useAction } from '../../hooks'
-import { Badge, Button, Card, ErrorNote, Field, ObjectHeader, useOpenForm } from '../../ui'
+import { Badge, Button, Card, ConfirmAction, ErrorNote, Field, ObjectHeader, useOpenForm } from '../../ui'
 import { ClampedText } from './ClampedText'
 import { ANALYSIS_LABELS, ANALYSIS_TONES } from './labels'
 import { deleteBlocker, NOT_ANALYZED_HINT, passportStatus } from './product-status'
@@ -57,15 +57,8 @@ export function ProductHeader({ view, channels, onDeleted, onOpenTab }: { view: 
   if (asked && channels === 0) setAsked(false)
   const blocker = asked ? deleteBlocker(channels) : null
   const [remove, removing] = useAction(async () => {
-    if (deleteBlocker(channels)) {
-      setAsked(true)
-      return false
-    }
-    const message = `Delete "${product.name}" with its sources, passport and version history? This cannot be undone.`
-    if (!window.confirm(message)) return false
     await call('products.delete', { id: product.id })
     onDeleted()
-    return true
   })
 
   return (
@@ -77,9 +70,21 @@ export function ProductHeader({ view, channels, onDeleted, onOpenTab }: { view: 
             <Button onClick={() => setEditing((v) => !v)} data-testid="edit-product">
               {editing ? 'Close' : 'Edit details'}
             </Button>
-            <Button variant="danger" onClick={() => void remove()} disabled={removing.busy} data-testid="delete-product">
-              Delete
-            </Button>
+            {channels > 0 ? (
+              <Button variant="danger" onClick={() => setAsked(true)} data-testid="delete-product">
+                Delete
+              </Button>
+            ) : (
+              <ConfirmAction
+                label="Delete"
+                question={`Delete "${product.name}" with its sources, passport and version history? This cannot be undone.`}
+                confirmLabel="Delete product"
+                busyLabel="Deleting…"
+                onConfirm={() => remove()}
+                testId="delete-product"
+                confirmTestId="delete-product-confirm"
+              />
+            )}
           </>
         }
       />

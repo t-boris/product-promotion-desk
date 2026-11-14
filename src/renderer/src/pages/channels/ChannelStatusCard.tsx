@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Channel, Product } from '../../../../shared/types'
 import { call, useAction, useQuery } from '../../hooks'
-import { Badge, Button, Card, ErrorNote, formatTime, Hint, useMainVariant } from '../../ui'
+import { Badge, Button, Card, ConfirmAction, ErrorNote, formatTime, Hint, useMainVariant } from '../../ui'
 import { CHANNEL_STATUS_LABEL, CHANNEL_STATUS_TONE, nextCheckText } from './model'
 import { activateBlocker, canActivate, canPause } from './setup-stage'
 
@@ -11,7 +11,6 @@ import { activateBlocker, canActivate, canPause } from './setup-stage'
  */
 export function ChannelStatusCard({ channel, product, accountLabel, filled, onRemoved }: { channel: Channel; product: Product | undefined; accountLabel: string; filled: boolean; onRemoved: () => void }) {
   const main = useMainVariant()
-  const [confirmRemove, setConfirmRemove] = useState(false)
   const runs = useQuery('runs.list', { channelId: channel.id, limit: 1 }, ['logs', 'channels'])
   const lastRun = runs.data?.[0]
   // A channel with send history cannot be removed (that history prevents sending the same thing twice); the reason is
@@ -27,7 +26,6 @@ export function ChannelStatusCard({ channel, product, accountLabel, filled, onRe
       await call('channels.remove', { id: channel.id })
     } catch (e) {
       setRefusal(e instanceof Error ? e.message : String(e))
-      setConfirmRemove(false)
       return
     }
     onRemoved()
@@ -98,19 +96,14 @@ export function ChannelStatusCard({ channel, product, accountLabel, filled, onRe
           </Button>
         )}
         <span className="sep" />
-        {confirmRemove ? (
-          <>
-            <span className="muted small row-note">Deletes this channel with its discussions and drafts. The account stays. A channel that has already sent something cannot be removed, only paused.</span>
-            <Button variant="danger" onClick={() => void remove()} disabled={removing.busy} data-testid="channel-remove-confirm">
-              Remove channel
-            </Button>
-            <Button onClick={() => setConfirmRemove(false)}>Cancel</Button>
-          </>
-        ) : (
-          <Button variant="danger" onClick={() => setConfirmRemove(true)} data-testid="channel-remove">
-            Remove
-          </Button>
-        )}
+        <ConfirmAction
+          label="Remove"
+          question="Deletes this channel with its discussions and drafts. The account stays. A channel that has already sent something cannot be removed, only paused."
+          confirmLabel="Remove channel"
+          onConfirm={() => remove()}
+          testId="channel-remove"
+          confirmTestId="channel-remove-confirm"
+        />
       </div>
     </Card>
   )

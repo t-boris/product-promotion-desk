@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import type { Account } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Button, Disclosure, ErrorNote } from '../../ui'
+import { Button, ConfirmAction, Disclosure, ErrorNote } from '../../ui'
 
 /** The rare controls of an account, out of the way: take or give back the browser, open another page, remove the account. */
 export function AccountMore({ account }: { account: Account }) {
   const [address, setAddress] = useState('')
-  const [confirmRemove, setConfirmRemove] = useState(false)
   const [open, opening] = useAction(() => call('accounts.openBrowser', { accountId: account.id, url: address.trim() }))
   const [take, taking] = useAction(() => call('accounts.takeControl', { accountId: account.id }))
   const [release, releasing] = useAction(() => call('accounts.releaseControl', { accountId: account.id }))
@@ -30,19 +29,14 @@ export function AccountMore({ account }: { account: Account }) {
         </Button>
       </div>
       <div className="row">
-        {confirmRemove ? (
-          <>
-            <span className="muted row-note">Removes the account and erases its saved sign-in from this Mac.</span>
-            <Button variant="danger" onClick={() => void remove()} disabled={removing.busy} data-testid={`account-remove-confirm-${account.id}`}>
-              Remove
-            </Button>
-            <Button onClick={() => setConfirmRemove(false)}>Cancel</Button>
-          </>
-        ) : (
-          <Button variant="danger" onClick={() => setConfirmRemove(true)} data-testid={`account-remove-${account.id}`}>
-            Remove account
-          </Button>
-        )}
+        <ConfirmAction
+          label="Remove account"
+          question="Removes the account and erases its saved sign-in from this Mac."
+          confirmLabel="Remove"
+          onConfirm={() => remove()}
+          testId={`account-remove-${account.id}`}
+          confirmTestId={`account-remove-confirm-${account.id}`}
+        />
       </div>
       <ErrorNote error={error} />
     </Disclosure>

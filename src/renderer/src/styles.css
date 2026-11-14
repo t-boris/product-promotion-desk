@@ -1601,6 +1601,32 @@ input[type='radio'] {
   flex: none;
 }
 
+/* A removal asks in the place of its button (BUG-059, `ConfirmAction`): the question, the confirming button and Cancel. The wrapper
+   draws no box, so the question and the pair of buttons are items of the row the button was in; the sentence takes the free width and
+   wraps, the buttons keep their size and stay together. A row that cannot wrap by itself (the header actions, a mailbox or a rule row)
+   is allowed to, and the header's actions take the whole line, to the right, while a question is open. */
+.confirm {
+  display: contents;
+}
+.confirm-ask {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.confirm-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+.obj-actions:has(.confirm-ask) {
+  flex: 1 1 100%;
+  justify-content: flex-end;
+}
+.obj-actions:has(.confirm-ask),
+.group-row:has(.confirm-ask) {
+  flex-wrap: wrap;
+}
+
 /* Rows inside a group box are split by hairlines; a row is never a bordered box inside the box. */
 .rows {
   display: flex;

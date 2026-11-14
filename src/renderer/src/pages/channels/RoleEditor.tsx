@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Account } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Button, ErrorNote, Field, useOpenForm } from '../../ui'
+import { Button, ConfirmAction, ErrorNote, Field, useOpenForm } from '../../ui'
 import { AccountBlock } from './AccountBlock'
 
 export const ROLE_NAME_LIMIT = 40
@@ -93,9 +93,18 @@ export function RoleEditor({ account }: { account: Account }) {
               {saving.busy ? 'Saving…' : 'Save role'}
             </Button>
             {account.role && (
-              <Button onClick={() => void submit(null)} disabled={saving.busy} data-testid={`account-role-remove-${account.id}`}>
-                Remove role
-              </Button>
+              <ConfirmAction
+                label="Remove role"
+                variant="ghost"
+                question="Removes this role. The account then writes in the reply style of each channel it is used in."
+                confirmLabel="Remove role"
+                busyLabel="Removing…"
+                cancelLabel="Keep role"
+                onConfirm={() => submit(null)}
+                disabled={saving.busy}
+                testId={`account-role-remove-${account.id}`}
+                confirmTestId={`account-role-remove-confirm-${account.id}`}
+              />
             )}
             <Button onClick={() => setEditing(false)} disabled={saving.busy}>
               Cancel
