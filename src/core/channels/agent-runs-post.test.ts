@@ -327,6 +327,17 @@ describe('how a post mission ends: the authority says whether the control was pr
     expect(authority.leases).toBe(0)
   })
 
+  it('asks the engine to be confined, and the failure of an engine that was confined says only that it failed', async () => {
+    const { w, request } = await ready()
+    w.t.engine.on('agent.post', async (task) => {
+      expect(task.agent?.confined).toBe(true)
+      throw new AiError('failed', 'Fake engine exited with code 2.')
+    })
+    expect(await run(w, request)).toMatchObject({ ended: 'error', committed: false, error: 'Fake engine exited with code 2.' })
+    expect(w.t.engine.calls).toHaveLength(1)
+    expect(w.t.engine.calls[0]?.agent?.confined).toBe(true)
+  })
+
   it('keeps committed when the engine dies after the press: the content may be out, and the send flow reads the page', async () => {
     const { w, request } = await ready()
     asTheAI(w, async (call) => {

@@ -353,6 +353,42 @@ describe('failure mapping (an engine problem never crashes the app)', () => {
   })
 })
 
+describe('a confined run (the post mission) puts nothing the engine printed into an error', () => {
+  const task = { label: 'agent.post', prompt: 'x', agent: { server: 'ppd', launch: LAUNCH, confined: true } }
+
+  it('says only that the engine failed, with its exit code', async () => {
+    const error = await new ClaudeCodeEngine({ searchPaths: [binDir], env: env('fail') }).run(task).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(AiError)
+    expect(error).toMatchObject({ kind: 'failed', message: 'Claude Code exited with code 2.' })
+  })
+
+  it('says only that the engine is not signed in', async () => {
+    const error = await new ClaudeCodeEngine({ searchPaths: [binDir], env: env('auth') }).run(task).catch((e: unknown) => e)
+    expect(error).toMatchObject({ kind: 'unavailable', message: expect.not.stringContaining('login') })
+  })
+
+  it('says only that a signal ended it', async () => {
+    const error = await new ClaudeCodeEngine({ searchPaths: [binDir], env: env('crash') }).run(task).catch((e: unknown) => e)
+    expect(error).toMatchObject({ kind: 'failed', message: expect.stringMatching(/^Claude Code was terminated by \w+\.$/) })
+  })
+
+  it('leaves out the system\'s words when the engine cannot be started', async () => {
+    const notExecutable = join(binDir, 'broken')
+    writeFileSync(notExecutable, '#!/nonexistent/interpreter\n')
+    chmodSync(notExecutable, 0o755)
+    const error = await new ClaudeCodeEngine({ commandOverride: notExecutable, env: env('ok') }).run(task).catch((e: unknown) => e)
+    expect((error as AiError).kind).toBe('unavailable')
+    expect((error as AiError).message).toMatch(/^Claude Code could not be started( \(\w+\))?\.$/)
+  })
+
+  it('keeps what an engine prints in the message of a run that is not confined', async () => {
+    const error = await new ClaudeCodeEngine({ searchPaths: [binDir], env: env('fail') }).run({ label: 'job', prompt: 'x' }).catch((e: unknown) => e)
+    expect((error as AiError).message).toBe('Claude Code exited with code 2: something broke')
+    const unconfined = await new ClaudeCodeEngine({ searchPaths: [binDir], env: env('fail') }).run({ ...task, agent: { ...task.agent, confined: undefined } }).catch((e: unknown) => e)
+    expect((unconfined as AiError).message).toBe('Claude Code exited with code 2: something broke')
+  })
+})
+
 describe('timeout and cancellation', () => {
   it('enforces the timeout and kills the whole process group', async () => {
     const engine = new ClaudeCodeEngine({ searchPaths: [binDir], env: env('hang'), killGraceMs: 200 })

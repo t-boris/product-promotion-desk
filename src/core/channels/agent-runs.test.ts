@@ -284,6 +284,7 @@ describe('a mission', () => {
     await finished(w)
     const task = w.t.engine.calls[0]
     expect(task.agent).toEqual({ server: 'ppd', launch: { command: '/fake/ppd', args: ['/fake/shim.js'], env: { PPD_MCP_TOKEN: 'fake-token' } } })
+    expect(task.agent).not.toHaveProperty('confined') // only the post mission is confined: the other missions run as they did
     expect(task.timeoutMs).toBe(30 * 60 * 1000)
     expect(task.prompt).toContain('GOAL: Create a new account')
     expect(task.prompt).toContain('Natal Mystic Reddit')

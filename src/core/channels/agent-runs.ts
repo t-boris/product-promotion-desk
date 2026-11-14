@@ -268,7 +268,7 @@ export class AgentRunService implements PostMissionService {
         maxCalls: spec.maxCalls,
         post: { authority: request.authority, minGapMs: POST_MIN_GAP_MS, now: () => this.core.clock.now().getTime() }
       })
-      const said = await this.runEngine(live, engine, toolbox, 'agent.post', account.profileId ?? account.id, postMissionPrompt(request, this.core.clock.now().toISOString().slice(0, 10)), spec.timeoutMs)
+      const said = await this.runEngine(live, engine, toolbox, 'agent.post', account.profileId ?? account.id, postMissionPrompt(request, this.core.clock.now().toISOString().slice(0, 10)), spec.timeoutMs, true)
       if (said.trim()) this.say(live, `The AI: ${said.trim().replace(/\s+/g, ' ').slice(0, 240)}`)
     } catch (caught) {
       if (caught instanceof AiError && caught.kind === 'cancelled') ended = 'stopped'
@@ -421,12 +421,12 @@ export class AgentRunService implements PostMissionService {
   }
 
   /** Offers the toolbox to the engine, lets the engine work the mission, and closes the tools again, however it ends. Resolves with what the engine said last. */
-  private async runEngine(live: Live, engine: AiEngine, toolbox: BrowserToolbox, label: string, subject: string, prompt: string, timeoutMs: number): Promise<string> {
+  private async runEngine(live: Live, engine: AiEngine, toolbox: BrowserToolbox, label: string, subject: string, prompt: string, timeoutMs: number, confined = false): Promise<string> {
     const bridge = this.core.agentBridge
     if (!bridge) throw new ApiError('no_agent_bridge', 'The AI browser agent is not available in this build.')
     const opened = await bridge.open(toolbox)
     try {
-      return await engine.run({ label, subject, prompt, agent: { server: SERVER_NAME, launch: opened.launch }, timeoutMs }, { signal: live.abort.signal })
+      return await engine.run({ label, subject, prompt, agent: { server: SERVER_NAME, launch: opened.launch, ...(confined ? { confined: true } : {}) }, timeoutMs }, { signal: live.abort.signal })
     } finally {
       opened.close()
     }

@@ -41,7 +41,16 @@ export interface AiTask {
    * An agent run (DEC-018): the engine owns a goal and works for as long as it needs by calling the tools of this MCP server. It then runs with
    * FULL ACCESS, as the owner decided (like MarkView's agents). Without it the engine only answers with text, and a tool-free engine has no tools.
    */
-  agent?: { server: string; launch: McpLaunch }
+  agent?: {
+    server: string
+    launch: McpLaunch
+    /**
+     * The post mission (B1): the engine is held to the tools of this MCP server, and nothing it prints on a failure is put into an error
+     * message (a failure says only that the engine failed and its exit code): what an engine prints can echo the pages it worked on, and an
+     * error message reaches the log and the owner's lists. Without it the run has full access, as in DEC-018.
+     */
+    confined?: boolean
+  }
   /**
    * The engine may create files in this folder and nowhere else (the sandbox allows writing in it): the pictures of account profiles (DEC-019),
    * made with the engine's own image tool. Only an engine with `makesImages` accepts it.
