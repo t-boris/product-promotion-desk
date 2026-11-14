@@ -64,11 +64,25 @@ export function ReviewButtons({ card, actions, dirty, input, primaryAction = fal
             Save draft
           </Button>
         )}
-        {PREPARABLE_STATES.includes(opp.state) && opp.kind === 'reply' && (
-          <Button variant="secondary" icon="sparkles" onClick={() => void actions.prepare(id)} disabled={busy} data-testid="prepare">
-            {card.draft ? 'Redo with AI' : 'Draft with AI'}
-          </Button>
-        )}
+        {PREPARABLE_STATES.includes(opp.state) && opp.kind === 'reply' &&
+          (dirty ? (
+            // A new draft replaces the form: what the owner typed and has not saved is never dropped without asking (lesson 84).
+            <ConfirmAction
+              label={card.draft ? 'Redo with AI' : 'Draft with AI'}
+              icon="sparkles"
+              variant="secondary"
+              question="The new draft replaces what you changed and did not save."
+              confirmLabel="Replace my changes"
+              onConfirm={() => actions.prepare(id)}
+              disabled={busy}
+              testId="prepare"
+              confirmTestId="prepare-confirm"
+            />
+          ) : (
+            <Button variant="secondary" icon="sparkles" onClick={() => void actions.prepare(id)} disabled={busy} data-testid="prepare">
+              {card.draft ? 'Redo with AI' : 'Draft with AI'}
+            </Button>
+          ))}
         {main === 'send' ? (
           <Button variant={mainVariant} onClick={() => void actions.send(id)} disabled={busy} data-testid="send">
             Send now

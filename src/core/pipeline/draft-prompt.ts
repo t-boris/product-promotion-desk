@@ -17,9 +17,9 @@ export const PUBLICATION_LABEL = 'draft.publication'
 
 const CATEGORIES: CommentCategory[] = ['product_question', 'thanks', 'purchase_interest', 'complaint', 'criticism', 'irrelevant', 'spam']
 const DECISIONS: OpportunityDecision[] = ['reply', 'ask_user', 'handoff', 'ignore']
-const MAX_REPLY_CHARS = 4000
-const MAX_POST_CHARS = 20_000
-const MAX_TITLE_CHARS = 300
+export const MAX_REPLY_CHARS = 4000
+export const MAX_POST_CHARS = 20_000
+export const MAX_TITLE_CHARS = 300
 
 // ───────────── replies ─────────────
 

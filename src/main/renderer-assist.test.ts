@@ -3,10 +3,11 @@
 
 import { describe, expect, it } from 'vitest'
 import { assistBlock, type BlockFacts } from '../renderer/src/assist/block'
-import { canApply, canUndo, fieldAction, ideaButtonLabel, rememberShown } from '../renderer/src/assist/field-logic'
+import { answerFate, canApply, canUndo, fieldAction, ideaButtonLabel, rememberShown, skippedNote } from '../renderer/src/assist/field-logic'
 import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block'
 import { around, fieldsFromIdea, hasText } from '../renderer/src/pages/products/goal-ideas'
 import { applySiteProposal, proposalFits, siteProposalNote } from '../renderer/src/pages/products/site-proposal'
+import { canApplyPost, postAnswerFate, postFormEmpty, postUndoable, showPostHelper } from '../renderer/src/pages/review/post-draft'
 
 const READY = { id: 'claude', ready: true, detail: 'ok', label: 'Claude Code' }
 const base: BlockFacts = { productId: 'p1', needsPassport: false, approved: false, engineId: 'claude', engines: [READY], ready: true }
@@ -30,6 +31,66 @@ describe('assistBlock', () => {
   it('keeps the channel helps as they were: the passport is required', () => {
     const facts = { productId: 'p1', approved: false, engineId: 'claude', engines: [READY], ready: true }
     expect(suggestionBlock(facts)).toEqual(assistBlock({ ...facts, needsPassport: true }))
+  })
+})
+
+describe('answerFate: an answer that arrives after the owner moved on', () => {
+  const asked = { value: 'Weekly update', around: '["ch1","I work on Natal Mystic."]' }
+  const now = { ...asked, locked: false }
+
+  it('applies when nothing moved', () => {
+    expect(answerFate(asked, now)).toBe('apply')
+    expect(skippedNote('apply')).toBeNull()
+  })
+
+  it('lets the owner\'s typing in the field itself win', () => {
+    expect(answerFate(asked, { ...now, value: 'Weekly update!' })).toBe('typed')
+  })
+
+  it('drops an answer checked against another field or another channel that has changed since (the title answer read the old text, the text answer the old title)', () => {
+    expect(answerFate(asked, { ...now, around: '["ch1","text without the disclosure"]' })).toBe('draft_changed')
+    expect(answerFate(asked, { ...now, around: '["ch2","I work on Natal Mystic."]' })).toBe('draft_changed')
+  })
+
+  it('drops an answer that lands while the form is being saved', () => {
+    expect(answerFate(asked, { ...now, locked: true })).toBe('locked')
+  })
+
+  it('says typing first when both happened, and a field with nothing around it never reports a change there', () => {
+    expect(answerFate(asked, { ...now, value: 'x', around: 'other', locked: true })).toBe('typed')
+    expect(answerFate({ value: 'a', around: null }, { value: 'a', around: null, locked: false })).toBe('apply')
+  })
+
+  it('tells the owner why, in words that name what happened', () => {
+    expect(skippedNote('typed')).toMatch(/You changed the text/)
+    expect(skippedNote('typed', 'post')).toMatch(/title or the text.*its post/)
+    expect(skippedNote('draft_changed')).toMatch(/other field or the channel/)
+    expect(skippedNote('locked')).toMatch(/being saved/)
+  })
+})
+
+describe('postAnswerFate: the AI\'s whole post when it arrives', () => {
+  const asked = { title: '', text: '', channelId: 'ch1' }
+
+  it('applies into the form it was asked for', () => {
+    expect(postAnswerFate(asked, { ...asked })).toBe('apply')
+  })
+
+  it('lets typing win, and does not put a post written for one channel into a form that now points at another', () => {
+    expect(postAnswerFate(asked, { ...asked, title: 'Mine' })).toBe('typed')
+    expect(postAnswerFate(asked, { ...asked, channelId: 'ch2' })).toBe('channel')
+    expect(postAnswerFate(asked, { title: 'Mine', text: '', channelId: 'ch2' })).toBe('typed')
+  })
+})
+
+describe('assistBlock for a control repeated on every open card', () => {
+  it('only says that no engine is chosen; it does not judge whether the chosen one is ready', () => {
+    const notReady = { ...base, checkReady: false, engines: undefined }
+    expect(assistBlock(notReady)).toBeNull()
+    expect(assistBlock({ ...notReady, engineId: null })).toMatchObject({ text: 'Choose an AI engine in Settings first.' })
+    // Without the option the same facts do block: the engine list is missing, so the engine is not known to be ready.
+    expect(assistBlock({ ...base, engines: undefined })).not.toBeNull()
+    expect(assistBlock({ ...base, engines: [{ ...READY, ready: false, detail: 'Claude Code was not found.' }], checkReady: false })).toBeNull()
   })
 })
 
@@ -125,5 +186,37 @@ describe('fill from the website', () => {
     const none = applySiteProposal({ name: 'A', websiteUrl: 'x.test', description: 'B' }, proposal)
     expect(none.form).toMatchObject({ name: 'A', description: 'B' })
     expect(siteProposalNote(none)).toBe('Kept what you wrote. Clear a field to let the site fill it.')
+  })
+})
+
+describe('"Draft with AI" for a new publication', () => {
+  const none = { title: '', text: '' }
+  const wrote = { title: 'How a chart is built', text: 'It needs a birth date.' }
+
+  it('is offered while the title and the text are both empty, and not once the owner has written something', () => {
+    expect(postFormEmpty(none)).toBe(true)
+    expect(postFormEmpty({ title: '  ', text: '\n' })).toBe(true)
+    expect(postFormEmpty({ title: 'T', text: '' })).toBe(false)
+    expect(postFormEmpty({ title: '', text: 'x' })).toBe(false)
+  })
+
+  it('puts the AI\'s post in only if neither field changed while it worked (typing wins)', () => {
+    expect(canApplyPost(none, none)).toBe(true)
+    expect(canApplyPost(none, { title: 'T', text: '' })).toBe(false)
+    expect(canApplyPost(none, { title: '', text: 'x' })).toBe(false)
+  })
+
+  it('offers Undo only while both fields hold exactly what the AI wrote', () => {
+    expect(postUndoable(wrote, wrote)).toBe(true)
+    expect(postUndoable({ ...wrote, text: `${wrote.text} More.` }, wrote)).toBe(false)
+    expect(postUndoable({ ...wrote, title: 'Mine' }, wrote)).toBe(false)
+    expect(postUndoable(wrote, null)).toBe(false)
+  })
+
+  it('stays on the screen while it is offered or while its note and Undo are', () => {
+    expect(showPostHelper(none, null)).toBe(true)
+    expect(showPostHelper(wrote, wrote)).toBe(true)
+    expect(showPostHelper(wrote, null)).toBe(false)
+    expect(showPostHelper({ ...wrote, text: 'edited' }, wrote)).toBe(false)
   })
 })

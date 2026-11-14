@@ -30,6 +30,8 @@ const TITLES: Record<string, string> = {
   'passport.contradictions': 'Looking for contradictions in the passport',
   'passport.code': 'Reading the code',
   'passport.documents': 'Reading the documents',
+  'drafts.write': 'Writing a draft text',
+  'drafts.improve': 'Improving a draft text',
   'draft.reply': 'Drafting a reply',
   'draft.publication': 'Drafting a publication'
 }

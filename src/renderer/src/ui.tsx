@@ -340,6 +340,7 @@ export function ConfirmBar({
  */
 export function ConfirmAction({
   label,
+  icon,
   question,
   confirmLabel,
   busyLabel,
@@ -355,12 +356,13 @@ export function ConfirmAction({
 }: {
   /** The button that is pressed first. */
   label: string
+  icon?: IconName
   question: ReactNode
   confirmLabel: string
   busyLabel?: string
   cancelLabel?: string
   onConfirm: () => unknown
-  variant?: 'ghost' | 'danger' | 'quiet'
+  variant?: 'secondary' | 'ghost' | 'danger' | 'quiet'
   className?: string
   disabled?: boolean
   title?: string
@@ -394,7 +396,7 @@ export function ConfirmAction({
   if (!asking) {
     return (
       <span className="confirm" ref={box}>
-        <Button variant={variant} className={className} disabled={disabled} title={title} onClick={() => setAsking(true)} data-testid={testId}>
+        <Button variant={variant} icon={icon} className={className} disabled={disabled} title={title} onClick={() => setAsking(true)} data-testid={testId}>
           {label}
         </Button>
       </span>

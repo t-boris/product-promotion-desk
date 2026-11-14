@@ -15,6 +15,11 @@ export interface BlockFacts {
   engines: { id: string; ready: boolean; detail: string; label: string }[] | undefined
   /** False until the settings and the engines have arrived: nothing is blocked on a guess. */
   ready: boolean
+  /**
+   * False for a control that is repeated many times on a screen (the editor of every open card): it only says that no engine is chosen. Whether the
+   * chosen engine is installed and ready is not asked (that check starts the engine's program); the refusal after the press says it.
+   */
+  checkReady?: boolean
 }
 
 export interface Blocked {
@@ -29,6 +34,7 @@ export function assistBlock(facts: BlockFacts): Blocked | null {
   }
   if (!facts.ready) return null
   if (!facts.engineId) return { text: 'Choose an AI engine in Settings first.', fix: { label: 'Open Settings', href: '#/settings' } }
+  if (facts.checkReady === false) return null
   const engine = facts.engines?.find((e) => e.id === facts.engineId)
   if (!engine || !engine.ready) {
     return { text: engine?.detail || `${engine?.label ?? 'The selected AI engine'} is not available. Check it in Settings.`, fix: { label: 'Open Settings', href: '#/settings' } }
