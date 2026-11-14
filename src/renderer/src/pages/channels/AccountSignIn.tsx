@@ -60,8 +60,9 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword, next
 
   const summary = (
     <>
-      <AccountStatusLine status={account.status} />{' '}
+      <AccountStatusLine status={account.status} />
       <span data-testid={`account-identity-${account.id}`} className="muted">
+        {' · '}
         {account.identity ? `Signed in as ${account.identity}` : ready ? 'The site does not show the account name, so the app cannot read it.' : 'The account name on the platform is not confirmed yet.'}
       </span>
     </>
