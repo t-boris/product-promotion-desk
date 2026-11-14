@@ -383,3 +383,11 @@ Done: `agent_lessons` (migration 208) + `LessonService` (`lessons.list|add|save|
 Checked live (scratch copy, real Codex): the shrinker on a 2.5 MB Codex picture (500 KB limit -> 283 KB, 150 KB -> 130 KB, 20 KB -> 19 KB); lessons API and Settings screen; a profile made from a TikTok account `mira.volkova.cooks` with e-mail `mira.volkova.cooks@example.invalid`: the AI proposed "Mira Volkova" with the same user name and said in the reasons that the existing account decided it. Unit tests added and passing: toolbox (shrink, remember) and the mission brief (7 tests in 2 files).
 
 NOT verified: that a real Claude Code / Codex mission actually calls `remember_lesson` after the owner answers, and follows a rule on a later mission (needs a real site that asks a question). Stale tests of the 0.6.0 API still fail to compile (see the 0.6.0 review).
+
+### CI repair (owner, 2026-11-13: "Fix CI!!!")
+
+Cause: CI was red since 0.6.0. `npm run typecheck` (first CI step, compiles test files too) failed with 82 errors in 5 test files that still used the 0.5.0 per-account profile API; behind them 51 tests failed at run time (the proposal crashed on the missing `accounts`, and `accounts.setRole` is refused for an account that has a profile).
+
+Done (tests only, no application code changed): `person-profile.test.ts` ported to `profiles.*` with a profile id (16 tests kept, 5 added: a profile takes the accounts a person already has, one account per platform and one profile per account, refusals for an empty name / unknown product / unknown platform, the accounts reach the proposal prompt, and removal of a profile is refused while accounts belong to it); `agent-runs.test.ts` (a profile is made for the account with `profiles.create`; the role is set on the profile; the "no profile" reason has the new wording; the picture folder is the profile's); `profile-proposal.test.ts` (`platforms`, `accounts`); `Account` fixtures in `electron-browser-service.test.ts` and `renderer-logic.test.ts` (`profileId: null`). Two weak spots of the old tests were closed on the way: "a new proposal needs approval again" now approves before it proposes again, and the picture folder is checked per profile.
+
+Checked: `npm run typecheck`, `npm run lint`, `npm test` (79 files, 1536 tests, was 51 failing) and `npm run build` all pass locally, the same four steps as CI.

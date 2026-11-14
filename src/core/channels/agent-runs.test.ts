@@ -39,16 +39,28 @@ const PROFILE = {
   pictureIdea: 'A friendly portrait of a woman at a desk'
 }
 
+/** The person the account logs in as (DEC-019): a profile made for this account, filled with the owner's values and approved unless asked not to. Returns its id. */
+async function giveProfile(w: World, approve = true): Promise<string> {
+  const made = await w.call('profiles.create', { label: 'Selena, Natal Mystic', productId: w.productId, accountIds: [w.account.id] })
+  await w.call('profiles.save', { id: made.id, profile: PROFILE, purpose: 'Be the approachable developer for hobby astrologers' })
+  if (approve) await w.call('profiles.approve', { id: made.id })
+  return made.id
+}
+
+/** The profile the account belongs to now. */
+async function profileOf(w: World): Promise<string> {
+  const profileId = (await w.call('accounts.list', undefined)).find((a) => a.id === w.account.id)?.profileId
+  if (!profileId) throw new Error('the account has no profile')
+  return profileId
+}
+
 /** An account with an e-mail and a saved password, and a page that shows the form. The profile is the owner's decision: approved, or absent when asked. */
 async function ready(options: { profile?: boolean } = {}): Promise<World> {
   const w = await makeReadyWorld()
   await w.call('accounts.setEmail', { accountId: w.account.id, email: EMAIL })
   await w.call('vault.savePassword', { accountId: w.account.id, loginName: EMAIL, password: PASSWORD })
   w.t.browser.page(w.account.id).responses = [{ match: 'agent-snapshot', value: form }]
-  if (options.profile !== false) {
-    await w.call('profile.save', { accountId: w.account.id, profile: PROFILE, purpose: 'Be the approachable developer for hobby astrologers' })
-    await w.call('profile.approve', { accountId: w.account.id })
-  }
+  if (options.profile !== false) await giveProfile(w)
   return w
 }
 const page = (w: World) => w.t.browser.page(w.account.id)
@@ -120,13 +132,13 @@ describe('what a mission needs before it starts', () => {
   it('needs the profile the owner approved: none, a proposal and an edited profile are not enough (DEC-019)', async () => {
     const w = await ready({ profile: false })
     expect(await w.refusal('agent.start', { accountId: w.account.id, kind: 'signup' })).toBe('no_profile')
-    expect(await w.call('agent.canStart', { accountId: w.account.id, kind: 'signup' })).toMatchObject({ ready: false, reason: expect.stringContaining('no profile') })
-    await w.call('profile.save', { accountId: w.account.id, profile: PROFILE })
+    expect(await w.call('agent.canStart', { accountId: w.account.id, kind: 'signup' })).toMatchObject({ ready: false, reason: expect.stringContaining('does not belong to a profile') })
+    const id = await giveProfile(w, false)
     expect(await w.refusal('agent.start', { accountId: w.account.id, kind: 'signup' })).toBe('profile_not_approved')
-    await w.call('profile.approve', { accountId: w.account.id })
+    await w.call('profiles.approve', { id })
     expect(await w.call('agent.canStart', { accountId: w.account.id, kind: 'signup' })).toEqual({ ready: true, reason: null })
     // The owner changes a value: the profile is a proposal again until it is approved on purpose.
-    await w.call('profile.save', { accountId: w.account.id, profile: { ...PROFILE, about: 'Changed' } })
+    await w.call('profiles.save', { id, profile: { ...PROFILE, about: 'Changed' } })
     expect(await w.refusal('agent.start', { accountId: w.account.id, kind: 'profile' })).toBe('profile_not_approved')
     expect(w.t.engine.calls).toEqual([])
     expect(page(w).log).toEqual([])
@@ -215,7 +227,10 @@ describe('a mission', () => {
 
   it('gives the engine a goal and the MCP server, not a list of steps', async () => {
     const w = await ready()
-    await w.call('accounts.setRole', { accountId: w.account.id, role: { name: 'astrologer', voice: 'warm and curious' } })
+    // The role is the person's: it lives on the profile, and the account speaks with it (a change needs a new approval).
+    const profileId = await profileOf(w)
+    await w.call('profiles.save', { id: profileId, profile: PROFILE, role: { name: 'astrologer', voice: 'warm and curious' } })
+    await w.call('profiles.approve', { id: profileId })
     asTheAI(w, async (_tools, call) => void (await call('report_result', { status: 'needs_owner', reason: 'stop' })))
     await start(w)
     await finished(w)
@@ -259,8 +274,9 @@ describe('a mission', () => {
     const w = await ready()
     const png = join(w.core.dataDir, 'mine.png')
     writeFileSync(png, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'))
-    await w.call('profile.setPicture', { accountId: w.account.id, path: png })
-    await w.call('profile.approve', { accountId: w.account.id })
+    const profileId = await profileOf(w)
+    await w.call('profiles.setPicture', { id: profileId, path: png })
+    await w.call('profiles.approve', { id: profileId })
     page(w).responses = [
       { match: 'agent-snapshot', value: { ...form, elements: [...form.elements, { ref: 'e4', role: 'input:file', name: 'Profile photo' }] } }
     ]
@@ -279,7 +295,7 @@ describe('a mission', () => {
     const prompt = w.t.engine.calls[0].prompt
     expect(prompt).toContain('PICTURE')
     expect(prompt).not.toContain(w.core.dataDir)
-    expect(page(w).steps.at(-1)?.step).toMatchObject({ do: 'upload', ref: 'e4', path: join(w.core.dataDir, 'profiles', w.account.id, 'picture.png') })
+    expect(page(w).steps.at(-1)?.step).toMatchObject({ do: 'upload', ref: 'e4', path: join(w.core.dataDir, 'profiles', profileId, 'picture.png') })
   })
 
   it('fills in the profile of an account that exists: its own goal, only the profile fields, no password', async () => {

@@ -252,3 +252,13 @@
 
 85. The version of the application is always visible in the top bar (owner: "it is terrible, it is not clear which version we have"). Anything the owner must be able to tell at a glance (the version, what the AI is doing) lives in the header, not only on a Settings page.
 86. A block that reads another list (the profile of an account) must not say "none" while that list is still loading: show a loading line until it arrives. Found in a screenshot taken a moment after the page opened.
+
+## 2026-11-13 (the owner): "Fix CI!!!"
+
+**What happened.** CI on `main` was red for every push since 0.6.0: of the five runs after 0.5.0, two failed and three were cancelled by the next push, so none ever got past Typecheck to the Test step. The cause was known and written down in `tasks/todo.md`: the owner had said "no tests for 0.6.0", the profile became its own entity, and five test files kept the old per-account API (`profile.*` calls, `platform`, an `Account` without `profileId`). The note said "port them before the next `npm test`" and I went on releasing 0.7.0 and 0.7.1 on top of it, running only the new test files, so the red was never in front of me. CI stops at Typecheck, because `tsc` also compiles the test files: the 82 type errors hid one more failure that only a run shows (`accounts.setRole` is refused for an account that has a profile; 51 tests failed at run time).
+
+**Rules for myself.**
+
+87. A note "tests are stale, port them later" is a red `main`, not a plan. When the owner says to skip tests for a release, say in one line that CI will be red until they are ported, and port them in the very next commit, before any new feature.
+88. Before every push to `main`, run the whole `npm run verify` (typecheck, lint, the WHOLE test suite, build), the same four steps as `.github/workflows/ci.yml`, not only the test files I touched. Running a few files hides the stale ones. If a push is red, fixing it comes before the next feature.
+89. A type-clean test file is not a passing one: when an entity's rules change (the role moved from the account to the profile), the tests that compile can still fail at run time. After porting types, run the suite and read each failure as a changed rule: port the test to the new rule, never loosen it.

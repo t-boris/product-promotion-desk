@@ -12,9 +12,10 @@ const input: ProfileProposeInput = {
     { section: 'offer', text: 'Calculates a natal chart from birth data' },
     { section: 'audience', text: 'Hobby astrologers, mostly women 25 to 45' }
   ],
-  platform: { platform: 'reddit', label: 'Reddit' },
+  platforms: [{ platform: 'reddit', label: 'Reddit' }],
   role: { name: 'developer', voice: 'Builds the tool and says so' },
   others: [{ displayName: 'Nora Vale', gender: 'female', birthYear: '1990', place: 'Berlin', about: 'I build Natal Mystic.' }],
+  accounts: [],
   today: '2026-11-08'
 }
 

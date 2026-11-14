@@ -128,7 +128,7 @@ describe('the new-account form of the Accounts section', () => {
 })
 
 describe('the next step of an account', () => {
-  const account = (over: Partial<Account>): Account => ({ id: 'a', platform: 'reddit', label: 'A', identity: null, partition: 'p', status: 'login_required', createdAt: '', productId: null, role: null, loginName: null, email: null, mailboxId: null, ...over })
+  const account = (over: Partial<Account>): Account => ({ id: 'a', platform: 'reddit', label: 'A', identity: null, partition: 'p', status: 'login_required', createdAt: '', productId: null, role: null, loginName: null, email: null, mailboxId: null, profileId: null, ...over })
 
   it('goes through address, password and sign-in, in that order', () => {
     expect(nextStep(account({}), false, true).block).toBe('email')
