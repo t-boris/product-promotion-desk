@@ -262,3 +262,22 @@
 87. A note "tests are stale, port them later" is a red `main`, not a plan. When the owner says to skip tests for a release, say in one line that CI will be red until they are ported, and port them in the very next commit, before any new feature.
 88. Before every push to `main`, run the whole `npm run verify` (typecheck, lint, the WHOLE test suite, build), the same four steps as `.github/workflows/ci.yml`, not only the test files I touched. Running a few files hides the stale ones. If a push is red, fixing it comes before the next feature.
 89. A type-clean test file is not a passing one: when an entity's rules change (the role moved from the account to the profile), the tests that compile can still fail at run time. After porting types, run the suite and read each failure as a changed rule: port the test to the new rule, never loosen it.
+
+## 2026-11-13 (the owner, during the QA bug batch): "Explain everything in Russian" and "Do not forget the bug statuses in MarkView"
+
+**What happened.** (1) I explained the whole investigation in English and the owner had to ask for Russian. (2) The goal prompt ended with a MarkView status step (request `open` for a bug that is not fixed, `resolved` for a fixed one, add the branch to the report). I planned the code and the commits and left the statuses for the very end, and the owner had to remind me. (3) To look at the accessibility tree I pointed System Events at the process BY NAME, which hit the owner's own running app (I read it and flipped one in-memory attribute and back). A few minutes later the owner's app was closed; the owner thinks they closed it by mistake, but from my side I could not prove it was not me.
+
+**Rules for myself.**
+
+90. Everything said to the owner is in Russian when they ask for it or write in Russian (files, code comments and commit messages stay in English). Switch at once and keep it for the whole session, including the text of questions.
+91. A goal with a lifecycle in a tool (MarkView statuses) is planned with that lifecycle: the checklist at the start lists the status requests, the report sections and the check of the outcome next to the commits, and the last answer says what each status is and why. In this project the bug statuses are only new, active, resolved and closed (no `open`), and `resolved` is refused until the work is merged, checked and released: say that plainly instead of trying to force it.
+92. A GUI app the owner may be using is never the test subject. Run my own instance (own `--user-data-dir` and `PPD_DATA_DIR`), aim every tool at its pid, never at the process name, and note before and after whether the owner's instance is alive. Signal only the pids I started.
+
+## 2026-11-13 (the owner): "You have the right to open a pull request and merge everything you work on, if it does not go against our flow."
+
+**What happened.** I finished the QA bug batch, pushed the branch, opened the pull request and then stopped to ask whether to merge it and cut the release. MarkView moves a bug to `resolved` only after merge, passed checks and a published GitHub release, so stopping at "PR is open" left both bugs open for no reason. The owner answered yes and made it a standing rule.
+
+**Rules for myself.**
+
+93. Work I did myself is delivered by me to the end: pull request, CI green, merge, release, install. I do not ask again for the merge or the release of my own work. The flow: one branch per batch; merge with a merge commit (it keeps one commit per bug with the bug id first); the version bump in its own `chore: release X.Y.Z` commit (DEC-011); tag `vX.Y.Z` on the merge commit; a GitHub release (MarkView needs one); `npm run deploy:local`; then ask MarkView for the status the lifecycle allows. The merged branch is not deleted (the reports name it).
+94. "Against the flow" is where I still stop and ask: CI red or not run; the branch carries work the owner did not name; a destructive step (force-push, deleting data or the owner's branches); a decision that is the owner's first (architecture, a new library, an unapproved design).
