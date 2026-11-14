@@ -35,7 +35,7 @@ describe('assist.refine: gate and input', () => {
     expect(w.t.engine.calls).toEqual([])
   })
 
-  it('needs the product for a product field, and refuses an unknown one', async () => {
+  it('needs the product, and refuses an unknown one', async () => {
     const w = await world()
     expect(await w.refusal('assist.refine', { field: 'goal.targetAction', current: '' })).toBe('invalid_input')
     expect(await w.refusal('assist.refine', { field: 'goal.targetAction', productId: 'nope', current: '' })).toBe('not_found')
@@ -51,13 +51,6 @@ describe('assist.refine: gate and input', () => {
     w.core.settings.updateApp({ engineId: w.t.engine.id })
     w.t.engine.installed = false
     await expect(w.call('assist.refine', { field: 'goal.targetAction', productId: w.productId, current: '' })).rejects.toMatchObject({ code: 'engine_unavailable', message: 'not installed' })
-  })
-
-  it('works for a field that has no product, without a product block in the prompt', async () => {
-    const w = await world()
-    w.t.engine.on('assist.write', text('Compress a picture to under 500 KB before uploading it'))
-    expect(await w.call('assist.refine', { field: 'lesson.rule', current: '' })).toEqual({ text: 'Compress a picture to under 500 KB before uploading it' })
-    expect(w.t.engine.calls[0].prompt).not.toContain('product_data')
   })
 })
 
@@ -138,11 +131,11 @@ describe('assist.refine: nothing is stored, nothing leaks into the log', () => {
         throw new AiError('timeout', 'The AI took too long.')
       }
     } satisfies RefineHelp)
-    await expect(failing.refine({ field: 'lesson.rule', current: '' })).rejects.toMatchObject({ code: 'suggest_failed', message: 'The AI took too long.' })
+    await expect(failing.refine({ field: 'goal.notes', productId: w.productId, current: '' })).rejects.toMatchObject({ code: 'suggest_failed', message: 'The AI took too long.' })
 
     w.t.engine.on('assist.write', 'not json at all')
     w.t.engine.on('assist.write.repair', 'still not json')
-    await expect(w.call('assist.refine', { field: 'lesson.rule', current: '' })).rejects.toMatchObject({ code: 'suggest_failed' })
+    await expect(w.call('assist.refine', { field: 'goal.notes', productId: w.productId, current: '' })).rejects.toMatchObject({ code: 'suggest_failed' })
     expect(w.t.engine.calls.map((c) => c.label)).toEqual(['assist.write', 'assist.write.repair'])
   })
 
@@ -195,7 +188,7 @@ describe('readRefined (the answer is untrusted text)', () => {
 
 describe('refinePrompt', () => {
   it('limits the text to what the field allows', () => {
-    const prompt = refinePrompt({ field: 'goal.metrics', product: null, claims: [], around: [], current: '', instruction: '' }).prompt
+    const prompt = refinePrompt({ field: 'goal.metrics', product: { name: 'Natal Mystic', websiteUrl: null, description: null }, claims: [], around: [], current: '', instruction: '' }).prompt
     expect(prompt).toContain('at most 4 lines, at most 100 characters each')
     expect(prompt).toContain('{"text":"first item\\nsecond item"}')
   })

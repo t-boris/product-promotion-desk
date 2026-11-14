@@ -5,8 +5,8 @@ import type { Core } from '../core'
 import { AiError } from '../ports'
 import { collapseWhitespace } from '../passports/text'
 import { isAssistField, FIELDS } from './fields'
-import { prepareAssist, readyEngine } from './gate'
-import type { Claim, ProductFacts } from './kit'
+import { prepareAssist } from './gate'
+import type { ProductFacts } from './kit'
 import { refineText } from './refine'
 
 /** The AI helper this service calls (refine.ts); injectable so tests can script it. */
@@ -45,22 +45,14 @@ export class AssistService {
     const field = args.field
     const spec = FIELDS[field]
 
-    let product: ProductFacts | null = null
-    let claims: Claim[] = []
-    let engine
-    if (spec.needsProduct) {
-      const prepared = await prepareAssist(this.core, args.productId, { passport: 'optional' })
-      engine = prepared.engine
-      product = { name: prepared.product.name, websiteUrl: prepared.product.websiteUrl, description: prepared.product.description }
-      claims = prepared.claims
-    } else {
-      engine = await readyEngine(this.core)
-    }
+    // The AI writes for one product: its name and approved statements (when there are any) are what it may rely on.
+    const { product, engine, claims } = await prepareAssist(this.core, args.productId, { passport: 'optional' })
+    const facts: ProductFacts = { name: product.name, websiteUrl: product.websiteUrl, description: product.description }
 
     const current = typeof args.current === 'string' ? args.current.slice(0, MAX_CURRENT) : ''
     const instruction = typeof args.instruction === 'string' ? collapseWhitespace(args.instruction).slice(0, MAX_INSTRUCTION) : ''
     try {
-      const text = await this.ai.refineText(engine, { field, product, claims, around: readAround(args.around), current, instruction })
+      const text = await this.ai.refineText(engine, { field, product: facts, claims, around: readAround(args.around), current, instruction })
       // The log says that a text was written, not what it says.
       this.core.log.info('passports', `The AI ${current.trim() ? 'improved' : 'wrote'} the ${spec.label}. Nothing is saved.`)
       return { text }

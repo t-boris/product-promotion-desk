@@ -14,8 +14,6 @@ export interface FieldSpec {
   max: number
   /** Most lines (`lines` only). */
   maxLines: number
-  /** The text belongs to a product, so its name and approved statements are given to the AI. */
-  needsProduct: boolean
   /**
    * What an answer must not hold. `all`: a credential, automation of posting or replying, a promise of results (text that proposes
    * something to do). `credentials`: only a credential (text about the owner's own product may say "guarantee" or "automatic").
@@ -30,7 +28,6 @@ export const FIELDS: Record<AssistField, FieldSpec> = {
     shape: 'line',
     max: 300,
     maxLines: 1,
-    needsProduct: true,
     guard: 'all'
   },
   'goal.metrics': {
@@ -40,7 +37,6 @@ export const FIELDS: Record<AssistField, FieldSpec> = {
     shape: 'lines',
     max: 100,
     maxLines: 4,
-    needsProduct: true,
     guard: 'all'
   },
   'goal.notes': {
@@ -49,7 +45,6 @@ export const FIELDS: Record<AssistField, FieldSpec> = {
     shape: 'prose',
     max: 1000,
     maxLines: 1,
-    needsProduct: true,
     guard: 'all'
   },
   'product.description': {
@@ -58,17 +53,7 @@ export const FIELDS: Record<AssistField, FieldSpec> = {
     shape: 'prose',
     max: 600,
     maxLines: 1,
-    needsProduct: true,
     guard: 'credentials'
-  },
-  'lesson.rule': {
-    label: 'rule for the AI assistant that works in the browser',
-    purpose: 'One short instruction the assistant must follow on a website, for example: "compress a picture to under 500 KB before uploading it".',
-    shape: 'line',
-    max: 200,
-    maxLines: 1,
-    needsProduct: false,
-    guard: 'all'
   }
 }
 
