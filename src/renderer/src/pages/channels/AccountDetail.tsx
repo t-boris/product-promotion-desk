@@ -44,7 +44,7 @@ export function AccountDetail({ account, platforms, mailboxes, vault, onOpenProf
       <RoleEditor account={account} />
       <AccountProfileLine account={account} onOpenProfile={onOpenProfile} />
       <AccountEmail account={account} mailboxes={mailboxes} next={step.block} />
-      {vault && <AccountPassword account={account} vaultAvailable={vault.available} hasPassword={hasPassword} next={step.block} />}
+      {vault && <AccountPassword account={account} unavailable={vault.unavailable} hasPassword={hasPassword} next={step.block} />}
       <AccountSignIn account={account} info={info} vaultAvailable={vault?.available ?? false} hasPassword={hasPassword} next={step.block} />
       <AccountMore account={account} />
     </div>

@@ -3,34 +3,56 @@
 // Electron's `safeStorage` encrypts with a key kept in the macOS Keychain, so the file is useless on another machine or
 // to another user. Every value is encrypted on its own and the file is written atomically with owner-only permissions.
 // Without a usable keychain nothing is stored at all: there is no plain-text fallback.
+//
+// The keychain is asked only when a value is saved, shown or used (BUG-041): `has`, `delete` and `blocked` read the file or a remembered
+// answer and never call the encryptor. Everything that does ask is asynchronous, because macOS may show a prompt for it and the
+// application must go on answering while that prompt is open.
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import type { SecretClipboard, SecretStore } from '../core/ports'
+import { SecretOpenError, type SecretClipboard, type SecretStore } from '../core/ports'
+import type { VaultUnavailable } from '../shared/types'
 
-/** The part of Electron's `safeStorage` the vault uses; a test supplies its own. */
+/**
+ * The part of Electron's `safeStorage` the vault uses; a test supplies its own. It is the asynchronous API: the synchronous one
+ * (`isEncryptionAvailable`, `encryptString`, `decryptString`) is deprecated and blocks the main process while a keychain prompt is open.
+ * Electron documents that what `encryptString` wrote still decrypts with `decryptStringAsync`, so a vault file made by an earlier
+ * version stays readable.
+ */
 export interface Encryptor {
-  isEncryptionAvailable(): boolean
-  encryptString(plain: string): Buffer
-  decryptString(encrypted: Buffer): string
+  isAsyncEncryptionAvailable(): Promise<boolean>
+  encryptStringAsync(plain: string): Promise<Buffer>
+  decryptStringAsync(encrypted: Buffer): Promise<{ shouldReEncrypt: boolean; result: string }>
 }
 
 type VaultFile = { version: 1; values: Record<string, string> }
 
 export class FileVault implements SecretStore {
   private cache: VaultFile | null = null
+  /** What the last real question to the keychain found: null while it worked or nobody has asked yet. */
+  private block: VaultUnavailable | null = null
 
   constructor(
     private readonly path: string,
-    private readonly encryptor: Encryptor
+    private readonly encryptor: Encryptor,
+    private readonly platform: NodeJS.Platform = process.platform
   ) {}
 
-  available(): boolean {
+  /** Asks the keychain (and so may show the macOS prompt, without stopping the application). Only a save, a reveal or a sign-in gets here. */
+  async available(): Promise<boolean> {
+    let usable = false
     try {
-      return this.encryptor.isEncryptionAvailable()
+      usable = await this.encryptor.isAsyncEncryptionAvailable()
     } catch {
-      return false
+      // A keychain that cannot be asked is the same as one that said no.
     }
+    // On a Mac there is always a keychain, so "no" means macOS refused the app its item or the keychain is locked; elsewhere there is none.
+    this.block = usable ? null : this.platform === 'darwin' ? 'refused' : 'no_keychain'
+    return usable
+  }
+
+  blocked(): VaultUnavailable | null {
+    return this.block
   }
 
   private load(): VaultFile {
@@ -57,26 +79,29 @@ export class FileVault implements SecretStore {
     this.cache = file
   }
 
+  /** The file alone says whether a value is stored: the keychain is not asked. */
   has(key: string): boolean {
-    return this.available() && Object.hasOwn(this.load().values, key)
+    return Object.hasOwn(this.load().values, key)
   }
 
-  get(key: string): string | null {
-    if (!this.available()) return null
+  async get(key: string): Promise<string | null> {
     const stored = this.load().values[key]
     if (typeof stored !== 'string') return null
+    if (!(await this.available())) throw new SecretOpenError(this.block)
     try {
-      return this.encryptor.decryptString(Buffer.from(stored, 'base64'))
+      // `shouldReEncrypt` (a rotated key) is not acted on: the value is still read, and the next save writes it in the current form.
+      return (await this.encryptor.decryptStringAsync(Buffer.from(stored, 'base64'))).result
     } catch {
-      // A value this keychain cannot open (another user, a reset keychain) is the same as no value.
-      return null
+      // The keychain answered but not this value (another user, a reset keychain): it is stored, so it is not "no value".
+      throw new SecretOpenError(null)
     }
   }
 
-  set(key: string, value: string): void {
-    if (!this.available()) throw new Error('The password vault is not available on this system.')
-    const file = this.load()
-    this.write({ version: 1, values: { ...file.values, [key]: this.encryptor.encryptString(value).toString('base64') } })
+  async set(key: string, value: string): Promise<void> {
+    if (!(await this.available())) throw new Error('The password vault is not available on this system.')
+    const encrypted = (await this.encryptor.encryptStringAsync(value)).toString('base64')
+    // The file is read after the waiting, so a save that overlapped another one cannot drop its value.
+    this.write({ version: 1, values: { ...this.load().values, [key]: encrypted } })
   }
 
   delete(key: string): void {

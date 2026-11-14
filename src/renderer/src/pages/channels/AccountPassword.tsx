@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
-import type { Account } from '../../../../shared/types'
+import type { Account, VaultUnavailable } from '../../../../shared/types'
 import { generatePassword } from '../../../../shared/password'
+import { vaultUnavailableText } from '../../../../shared/vault-message'
 import { call, useAction } from '../../hooks'
 import { Button, ConfirmAction, ErrorNote, Field, useMainVariant, useOpenForm } from '../../ui'
 import { AccountBlock } from './AccountBlock'
@@ -10,7 +11,7 @@ import type { NextStep } from './next-step'
  * The saved password of one account (REQ-012, DEC-014). The password lives in the system keychain's vault, never in the
  * database; this block only ever holds it while the owner types, generates or asks to see it.
  */
-export function AccountPassword({ account, vaultAvailable, hasPassword, next }: { account: Account; vaultAvailable: boolean; hasPassword: boolean; /** The step the account needs next: "Save a password" is the filled button only when it is this one. */ next: NextStep['block'] }) {
+export function AccountPassword({ account, unavailable, hasPassword, next }: { account: Account; /** Why the vault cannot be used, once a save, a reveal or a sign-in has found out; null while it can. */ unavailable: VaultUnavailable | null; hasPassword: boolean; /** The step the account needs next: "Save a password" is the filled button only when it is this one. */ next: NextStep['block'] }) {
   const [editing, setEditing] = useState(false)
   // The open form owns the filled button while it is the form opened last; the resting "Save a password" is filled only while it is the account's next step.
   const saveVariant = useOpenForm(editing)
@@ -39,15 +40,8 @@ export function AccountPassword({ account, vaultAvailable, hasPassword, next }: 
   })
   const error = saving.error ?? removing.error ?? revealing.error ?? copying.error
 
-  if (!vaultAvailable) {
-    return (
-      <AccountBlock
-        step={4}
-        title="Password"
-        testId={`vault-unavailable-${account.id}`}
-        summary={<span className="muted">This Mac has no usable system keychain, so the app cannot keep passwords safely and stores none. Sign in on the site itself.</span>}
-      />
-    )
+  if (unavailable) {
+    return <AccountBlock step={4} title="Password" testId={`vault-unavailable-${account.id}`} summary={<span className="muted">{vaultUnavailableText(unavailable)}</span>} />
   }
 
   function submit(event: FormEvent): void {

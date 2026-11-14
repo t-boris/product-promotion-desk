@@ -10,6 +10,9 @@ const appName = `${pkg.productName}.app`
 const built = join(root, 'dist', 'mac-arm64', appName)
 const installDir = process.env.PPD_INSTALL_DIR || '/Applications'
 const target = join(installDir, appName)
+// A stable code-signing identity (the name or hash `security find-identity -v -p codesigning` lists) keeps the keychain item of the password
+// vault trusting the app across installs; the default `-` is an ad-hoc signature, which changes with every build (BUG-041, DEC-014).
+const identity = process.env.PPD_SIGN_IDENTITY || '-'
 
 const run = (cmd, args) => execFileSync(cmd, args, { stdio: 'inherit' })
 const read = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8' }).trim()
@@ -35,8 +38,9 @@ try {
 
 if (existsSync(target)) rmSync(target, { recursive: true, force: true })
 run('ditto', [built, target])
-// Unsigned local build: ad-hoc sign (required on Apple Silicon) and drop the quarantine flag.
-run('codesign', ['--force', '--deep', '--sign', '-', target])
+// Unsigned local build: sign it (a signature is required on Apple Silicon; ad hoc unless PPD_SIGN_IDENTITY names an identity) and drop the quarantine flag.
+console.log(identity === '-' ? 'Signing ad hoc (set PPD_SIGN_IDENTITY to sign with a code-signing identity).' : `Signing with the identity "${identity}".`)
+run('codesign', ['--force', '--deep', '--sign', identity, target])
 try {
   run('xattr', ['-cr', target])
 } catch {
