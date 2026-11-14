@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import type { Account, Channel, ChannelSuggestion, PlatformInfo, Product } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Button, Card, ErrorNote, Field } from '../../ui'
+import { Button, Card, ErrorNote, Field, Hint } from '../../ui'
 import { accountOptionLabel, addressExample, isSameAddress, isWebAddress, platformLabel, platformOfSuggestion, typedAddress } from './model'
 import { PrepareSiteProfile } from './PrepareSiteProfile'
 
@@ -79,12 +79,11 @@ export function ConnectChannel({ product, accounts, channels, allChannels, platf
   return (
     <Card title="Connect a channel">
       {!product && <p className="muted">This product was not found.</p>}
-      {product && accounts.length === 0 && (
-        <p className="muted">
-          There is no account yet. Add one <a href="#/accounts">in the Accounts section</a> or above.
-        </p>
+      {product && (
+        <Hint>
+          {accounts.length === 0 ? 'Add an account above first. ' : ''}Connecting saves the address for <strong>{product.name}</strong>: nothing is posted and nothing is read yet.
+        </Hint>
       )}
-      {product && <p className="muted small">The channel is for <strong>{product.name}</strong>.</p>}
       <form onSubmit={(e) => void submit(e)} data-testid="connect-form">
         <div className="settings-grid">
           <Field label="Account">
@@ -110,7 +109,7 @@ export function ConnectChannel({ product, accounts, channels, allChannels, platf
               )}
             </select>
           </Field>
-          <Field label="Channel address" hint={address !== target.trim() ? `Address: ${address}. Connecting only saves it: nothing is posted.` : (info?.hint ?? 'Connecting only saves it: nothing is posted.')}>
+          <Field label="Channel address" hint={address !== target.trim() ? `Address: ${address}.` : info?.hint}>
             <input
               className="input"
               value={target}
@@ -141,9 +140,15 @@ export function ConnectChannel({ product, accounts, channels, allChannels, platf
           </div>
         )}
         <ErrorNote error={state.error} />
-        <Button variant="primary" type="submit" disabled={!ready || state.busy} data-testid="connect-submit">
-          {state.busy ? 'Connecting…' : 'Connect channel'}
-        </Button>
+        <div className="row">
+          <Button variant="primary" type="submit" disabled={!ready || state.busy} data-testid="connect-submit">
+            {state.busy ? 'Connecting…' : 'Connect channel'}
+          </Button>
+          {/* Why the button is off, beside it. */}
+          {!ready && product && (
+            <Hint data-testid="connect-reason">{account === undefined ? 'Add an account first.' : 'Type the channel address.'}</Hint>
+          )}
+        </div>
       </form>
       {account && info && !info.prepared && isWebAddress(address) && <PrepareSiteProfile key={`${account.id}|${address}`} productId={productId} accountId={account.id} url={address} />}
     </Card>

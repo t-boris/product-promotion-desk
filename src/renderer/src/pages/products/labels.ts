@@ -63,7 +63,7 @@ export const SOURCE_LABELS: Record<SourceKind, string> = {
   text: 'Text',
   document: 'Document',
   image: 'Image',
-  code_folder: 'Code folder'
+  code_folder: 'Project folder'
 }
 
 export const SOURCE_PLACEHOLDERS: Record<SourceKind, string> = {

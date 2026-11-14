@@ -3,8 +3,9 @@
   --panel: #ffffff;
   --panel-2: #f0f2f5;
   --border: #dfe3e8;
+  --border-strong: #c3cad4;
   --text: #1c2026;
-  --muted: #667085;
+  --muted: #566074;
   --accent: #4f46e5;
   --accent-text: #ffffff;
   --good: #1a7f4b;
@@ -37,9 +38,10 @@
     --bg: #14161a;
     --panel: #1c1f25;
     --panel-2: #23272e;
-    --border: #2c313a;
+    --border: #363c47;
+    --border-strong: #4a5160;
     --text: #e7e9ee;
-    --muted: #9aa3b2;
+    --muted: #b0b8c6;
     --accent: #7c83ff;
     --accent-text: #0f1020;
     --good: #5fd39a;
@@ -97,7 +99,7 @@ code {
   color: var(--muted);
 }
 .small {
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
 }
 .row {
   display: flex;
@@ -146,10 +148,20 @@ code {
   -webkit-app-region: no-drag;
 }
 .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   font-weight: 700;
   font-size: var(--fs-lg);
   padding: 0 10px;
   letter-spacing: -0.01em;
+}
+.brand-mark {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #ff7ab8));
 }
 .nav-item {
   display: flex;
@@ -184,7 +196,7 @@ code {
 }
 /* The window's own buttons sit at the top left of the window; without the menu the top bar starts after them. */
 .shell.menu-closed .topbar {
-  padding-left: 88px;
+  padding-left: 100px;
 }
 .sidebar-foot {
   margin-top: auto;
@@ -215,6 +227,31 @@ code {
 .topbar button,
 .topbar a {
   -webkit-app-region: no-drag;
+}
+.topbar-label {
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  margin-left: 6px;
+  padding-left: 14px;
+  border-left: 1px solid var(--border);
+}
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--text);
+}
+a.badge {
+  text-decoration: none;
+}
+a.badge:hover {
+  filter: brightness(1.15);
+  text-decoration: underline;
+}
+a.btn {
+  text-decoration: none;
 }
 .content {
   flex: 1;
@@ -273,8 +310,11 @@ code {
   background: var(--panel-2);
 }
 .btn:disabled {
-  opacity: 0.5;
-  cursor: default;
+  /* Flat and grey, but the words stay readable: a faded button hid why it was off (QA findings 10, 30). */
+  background: var(--panel-2);
+  border-color: var(--border);
+  color: var(--muted);
+  cursor: not-allowed;
 }
 .btn-primary {
   background: var(--accent);
@@ -292,8 +332,9 @@ code {
 
 .badge {
   display: inline-block;
-  font-size: var(--fs-xs);
-  padding: 1px 8px;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  padding: 1px 10px;
   border-radius: 999px;
   background: var(--panel-2);
   color: var(--muted);
@@ -403,8 +444,8 @@ textarea.input {
 
 .empty {
   text-align: center;
-  padding: 28px 12px;
-  border: 1px dashed var(--border);
+  padding: 28px 16px;
+  border: 1px dashed var(--border-strong);
   border-radius: var(--radius);
 }
 .plain-list {
@@ -606,4 +647,450 @@ table.table {
   font-size: var(--fs-xs);
   color: var(--muted);
   overflow-wrap: anywhere;
+}
+
+/* ───────────── Shared building blocks of the QA clarity batch ───────────── */
+
+/* Explanations are read, so they are 13px and light enough; the long ones sit in a Disclosure. */
+.hint {
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--muted);
+}
+.hint.strong {
+  color: var(--text);
+}
+.hint a,
+.note a,
+.empty a:not(.btn) {
+  color: var(--accent);
+}
+.hint.warn {
+  color: var(--warn);
+}
+.mono {
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+}
+
+/* A quiet button: no frame until it is pointed at. For the second and third actions of a row. */
+.btn-quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+  min-width: 0;
+}
+.btn-quiet:hover:not(:disabled) {
+  background: var(--panel-2);
+  color: var(--text);
+}
+.btn-quiet.accent {
+  color: var(--accent);
+}
+.btn-quiet.danger:hover:not(:disabled) {
+  color: var(--bad);
+}
+.btn-quiet:disabled {
+  background: transparent;
+  border-color: transparent;
+}
+.btn-danger:disabled {
+  color: var(--muted);
+  border-color: var(--border);
+}
+
+/* Checkboxes and radio buttons: a real tap target, the whole row clicks. */
+input[type='checkbox'],
+input[type='radio'] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex: none;
+  accent-color: var(--accent);
+}
+.check {
+  min-height: 32px;
+  cursor: pointer;
+}
+
+/* An on/off switch (Settings). It is a checkbox with the switch role, so it keeps the keyboard and the screen reader. */
+.switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+  cursor: pointer;
+}
+.switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.switch-track {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  transition: background 0.15s ease;
+}
+.switch-track::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--panel);
+  transition: transform 0.15s ease;
+}
+.switch input:checked + .switch-track {
+  background: var(--accent);
+}
+.switch input:checked + .switch-track::after {
+  transform: translateX(18px);
+}
+.switch input:focus-visible + .switch-track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.switch input:disabled + .switch-track {
+  opacity: 0.5;
+}
+.switch-text {
+  display: flex;
+  flex-direction: column;
+}
+
+/* One choice out of a few, as buttons: at least the control height, the whole label clicks (replaces small radio buttons). */
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--control-radius) + 4px);
+}
+.segmented-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--control-radius);
+  color: var(--muted);
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+}
+.segmented-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.segmented-option:hover {
+  color: var(--text);
+}
+.segmented-option.on {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.segmented-option:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* A folded block: the summary is always readable, the long text opens on demand. */
+.disclosure {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 600;
+}
+.disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.disclosure > summary::before {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+.disclosure[open] > summary::before {
+  transform: rotate(45deg);
+}
+.disclosure-aside {
+  margin-left: auto;
+  font-weight: 400;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.disclosure-body {
+  padding: 4px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* The same, as an inline "More about this" under a short line. */
+.more > summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: var(--fs-sm);
+  width: fit-content;
+}
+.more[open] > summary {
+  margin-bottom: 6px;
+}
+
+/* An empty state that offers its one next action. */
+.empty .empty-action {
+  margin-top: 14px;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.empty p {
+  margin: 4px auto 0;
+  max-width: 60ch;
+}
+.empty.fill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 280px;
+}
+
+/* A small menu that opens under its button (Reject / Prohibit / Delete of a statement). */
+.menu {
+  position: relative;
+}
+.menu-pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 15;
+  min-width: 260px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 30%);
+}
+.menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.menu-item:hover:not(:disabled) {
+  background: var(--panel-2);
+}
+.menu-item:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+.menu-item .menu-note {
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  font-weight: 400;
+}
+.menu-item.danger {
+  color: var(--bad);
+}
+
+/* A status with a coloured dot: the state reads at a glance and is not only grey text. */
+.dot {
+  display: inline-block;
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.dot.good {
+  background: var(--good);
+}
+.dot.warn {
+  background: var(--warn);
+}
+.dot.bad {
+  background: var(--bad);
+}
+
+/* "Getting started" on an empty Attention page. */
+.start-steps {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.start-steps li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.start-steps li:first-child {
+  border-top: 0;
+}
+.start-mark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border-strong);
+  border-radius: 50%;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+.start-steps li.done .start-mark {
+  background: var(--good);
+  border-color: var(--good);
+  color: var(--panel);
+}
+.start-steps li.done .start-text {
+  opacity: 0.7;
+}
+.start-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* A product card in the list: it says it can be opened, and which one is open. */
+.product-card {
+  position: relative;
+  padding-right: 36px;
+}
+.product-card::after {
+  content: '';
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--muted);
+  border-top: 2px solid var(--muted);
+  transform: translateY(-50%) rotate(45deg);
+}
+.product-card:hover {
+  border-color: var(--border-strong);
+  background: var(--panel-2);
+}
+.product-card.active {
+  border-color: var(--accent);
+  background: var(--panel-2);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.product-card.active::after {
+  border-color: var(--accent);
+}
+.product-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* A button that reads as a link: for the next step beside a status. */
+.link-btn {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.link-btn:hover {
+  text-decoration: underline;
+}
+.stack > .link-btn {
+  align-self: flex-start;
+}
+
+/* Settings: an engine row reads as lines (name, version, path, then what it can do), and the selected one says "In use". */
+.engine-row {
+  align-items: flex-start;
+}
+.engine-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.engine-path {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.in-use {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--control-h);
+  padding: 0 var(--control-pad-x);
+  color: var(--good);
+  font-weight: 600;
+  white-space: nowrap;
+}
+/* A list under its own heading, apart from the form above it. */
+.list-title {
+  margin: 20px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-lg);
+}
+.rule-row {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+/* Spacing after a folded "More" line inside a card, so the next block does not touch it. */
+.card > .more + *,
+.card > .hint + * {
+  margin-top: 12px;
+}
+.card > .hint + .more {
+  margin-top: 4px;
+}
+
+/* A badge may wrap in a narrow column instead of running out of its card. */
+.kv .badge {
+  white-space: normal;
 }

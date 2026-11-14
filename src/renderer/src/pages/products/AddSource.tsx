@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { SourcePreview } from '../../../../shared/api'
 import type { Id, SourceKind } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Button, Card, ErrorNote, Field } from '../../ui'
+import { Button, Card, ErrorNote, Field, Hint, SegmentedControl } from '../../ui'
 import { SOURCE_LABELS, SOURCE_PLACEHOLDERS } from './labels'
 import { scopeFromText } from './model'
 import { SourcePreviewPanel } from './SourcePreviewPanel'
@@ -47,25 +47,28 @@ export function AddSource({ productId }: { productId: Id }) {
 
   return (
     <Card title="Add a source">
-      <div className="row" role="radiogroup" aria-label="Kind of source">
-        {KINDS.map((k) => (
-          <label key={k} className="check">
-            <input type="radio" name="source-kind" checked={kind === k} onChange={() => changed(setKind)(k)} data-testid={`source-kind-${k}`} />
-            {SOURCE_LABELS[k]}
-          </label>
-        ))}
+      <div className="stack">
+      <SegmentedControl
+        label="Kind of source"
+        name="source-kind"
+        value={kind}
+        onChange={changed(setKind)}
+        options={KINDS.map((k) => ({ value: k, label: SOURCE_LABELS[k] }))}
+        testIdPrefix="source-kind-"
+      />
+      <Hint>{KIND_HINTS[kind]}</Hint>
+      <div className={kind === 'text' ? 'stack' : 'source-fields'}>
+        <Field label={kind === 'text' ? 'Text' : kind === 'url' ? 'Address' : 'Path'}>
+          {kind === 'text' ? (
+            <textarea className="input" value={ref} onChange={(e) => changed(setRef)(e.target.value)} placeholder={SOURCE_PLACEHOLDERS[kind]} data-testid="source-ref" />
+          ) : (
+            <input className="input" value={ref} onChange={(e) => changed(setRef)(e.target.value)} placeholder={SOURCE_PLACEHOLDERS[kind]} data-testid="source-ref" />
+          )}
+        </Field>
+        <Field label="Name (optional)">
+          <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} data-testid="source-label" />
+        </Field>
       </div>
-      <p className="muted small">{KIND_HINTS[kind]}</p>
-      <Field label={kind === 'text' ? 'Text' : kind === 'url' ? 'Address' : 'Path'}>
-        {kind === 'text' ? (
-          <textarea className="input" value={ref} onChange={(e) => changed(setRef)(e.target.value)} placeholder={SOURCE_PLACEHOLDERS[kind]} data-testid="source-ref" />
-        ) : (
-          <input className="input" value={ref} onChange={(e) => changed(setRef)(e.target.value)} placeholder={SOURCE_PLACEHOLDERS[kind]} data-testid="source-ref" />
-        )}
-      </Field>
-      <Field label="Name (optional)">
-        <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} data-testid="source-label" />
-      </Field>
       {kind === 'code_folder' && (
         <div className="scope-grid">
           <Field label="Read only these paths" hint="One folder or file per line, relative to the project. Empty means the whole project.">
@@ -78,13 +81,14 @@ export function AddSource({ productId }: { productId: Id }) {
       )}
       <ErrorNote error={adding.error ?? previewing.error} />
       {preview && <SourcePreviewPanel preview={preview} />}
-      <div className="row">
+      <div className="row source-add-actions">
         <Button onClick={() => void showPreview()} disabled={!ready || previewing.busy} data-testid="source-preview-button">
           {previewing.busy ? 'Checking…' : 'Preview what the AI will see'}
         </Button>
         <Button variant="primary" onClick={() => void add()} disabled={!ready || adding.busy} data-testid="source-add">
           {adding.busy ? 'Adding…' : 'Add source'}
         </Button>
+      </div>
       </div>
     </Card>
   )

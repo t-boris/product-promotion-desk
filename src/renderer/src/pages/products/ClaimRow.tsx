@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Claim, ClaimStatus } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Badge, Button, ErrorNote, formatTime } from '../../ui'
+import { Badge, Button, ErrorNote, formatTime, MenuItem, RowMenu } from '../../ui'
 import { ClaimForm } from './ClaimForm'
 import { KIND_HELP, KIND_LABELS, KIND_TONES, SECTION_LABELS, STATUS_LABELS, STATUS_TONES } from './labels'
 import { conflicting } from './model'
@@ -78,18 +78,8 @@ export function ClaimRow({ claim, all, productId }: { claim: Claim; all: Claim[]
       <ErrorNote error={statusState.error ?? removeState.error} />
       <div className="row claim-actions">
         {canApprove && (
-          <Button onClick={() => void setStatus('approved')} disabled={busy} data-testid={`claim-approve-${claim.id}`}>
+          <Button variant="primary" onClick={() => void setStatus('approved')} disabled={busy} data-testid={`claim-approve-${claim.id}`}>
             Approve
-          </Button>
-        )}
-        {claim.status !== 'rejected' && (
-          <Button onClick={() => void setStatus('rejected')} disabled={busy} data-testid={`claim-reject-${claim.id}`}>
-            {isContradiction ? 'Not a conflict' : 'Reject'}
-          </Button>
-        )}
-        {claim.status !== 'prohibited' && !isContradiction && (
-          <Button onClick={() => void setStatus('prohibited')} disabled={busy} title="Never to be said in promotion" data-testid={`claim-prohibit-${claim.id}`}>
-            Prohibit
           </Button>
         )}
         {claim.status !== 'proposed' && (
@@ -100,9 +90,51 @@ export function ClaimRow({ claim, all, productId }: { claim: Claim; all: Claim[]
         <Button onClick={() => setEditing(true)} disabled={busy} data-testid={`claim-edit-${claim.id}`}>
           {isContradiction ? 'Settle…' : 'Edit'}
         </Button>
-        <Button variant="danger" onClick={() => void remove()} disabled={busy} data-testid={`claim-delete-${claim.id}`}>
-          Delete
-        </Button>
+        {/* Reject, Prohibit and Delete are rare and different in weight: they sit in a menu, each with a line on what it does. */}
+        <RowMenu label="More" testId={`claim-more-${claim.id}`}>
+          {(close) => (
+            <>
+              {claim.status !== 'rejected' && (
+                <MenuItem
+                  onClick={() => {
+                    close()
+                    void setStatus('rejected')
+                  }}
+                  disabled={busy}
+                  note={isContradiction ? 'These statements do not really disagree.' : 'Not true or not needed. It stays here, struck through, and is never used.'}
+                  data-testid={`claim-reject-${claim.id}`}
+                >
+                  {isContradiction ? 'Not a conflict' : 'Reject'}
+                </MenuItem>
+              )}
+              {claim.status !== 'prohibited' && !isContradiction && (
+                <MenuItem
+                  onClick={() => {
+                    close()
+                    void setStatus('prohibited')
+                  }}
+                  disabled={busy}
+                  note="Never to be said in promotion. Drafts that say it are stopped."
+                  data-testid={`claim-prohibit-${claim.id}`}
+                >
+                  Prohibit
+                </MenuItem>
+              )}
+              <MenuItem
+                danger
+                onClick={() => {
+                  close()
+                  void remove()
+                }}
+                disabled={busy}
+                note="Removes the statement for good."
+                data-testid={`claim-delete-${claim.id}`}
+              >
+                Delete
+              </MenuItem>
+            </>
+          )}
+        </RowMenu>
       </div>
     </div>
   )

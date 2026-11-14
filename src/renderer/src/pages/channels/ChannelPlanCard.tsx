@@ -21,13 +21,13 @@ export function ChannelPlanCard({ channel, platforms, blockedReason }: { channel
         </Button>
       }
     >
-      <p className="muted small">
+      <p className="hint">
         The AI reads the approved passport, your goals and what {platform} accepts, and proposes what to do on this channel. It is advice only: the app does nothing from it, and nothing is published without your approval.
       </p>
       {blockedReason && (
-        <div className="note warn" data-testid="plan-blocked">
+        <p className="hint warn" data-testid="plan-blocked">
           {blockedReason}
-        </div>
+        </p>
       )}
       <ErrorNote error={state.error} />
       {!plan && !state.busy && !state.error && <p className="muted">No plan yet. Press “Plan with AI”.</p>}

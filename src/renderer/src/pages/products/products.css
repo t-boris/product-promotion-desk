@@ -18,13 +18,65 @@ textarea.input.short {
   min-height: 56px;
 }
 
-.source-main {
-  min-width: 0;
+.source-list {
+  gap: 10px;
 }
+.source-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.source-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.source-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+/* A text source is prose: the interface font at 14px, lines that break between words, three lines and then "Show full text".
+   It used to be set like code (monospace, break anywhere), which cut words in the middle (BUG-010). */
+.source-text {
+  margin: 0;
+  font: inherit;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: normal;
+  overflow-wrap: break-word;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--lines, 3);
+  overflow: hidden;
+}
+.source-text.open {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+/* A reference (a statement's source, an address, a path) wraps at word edges and only breaks a string that cannot fit its line. */
 .source-ref {
-  font-family: var(--mono);
-  font-size: var(--fs-sm);
-  word-break: break-all;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+.source-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 0 12px;
+  align-items: start;
+}
+.source-add-actions {
+  margin-top: 4px;
 }
 
 .scope-grid {
@@ -132,10 +184,76 @@ textarea.input.short {
 @media (max-width: 900px) {
   .products-layout,
   .scope-grid,
+  .source-fields,
   .preview-columns {
     grid-template-columns: 1fr;
   }
   .products-list {
     position: static;
+  }
+}
+
+/* A section with nothing in it is one slim line; a statement keeps a calm vertical rhythm. */
+.passport-section.compact {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.passport-section.compact .card-head {
+  margin-bottom: 2px;
+}
+.claim-list {
+  gap: 10px;
+  margin-top: 8px;
+}
+.blocker {
+  font-size: var(--fs-md);
+}
+
+/* An analysis step that has nothing to work on: quieter than a step that will run. */
+.list-row.not-needed {
+  background: transparent;
+  border-style: dashed;
+}
+.list-row.not-needed strong {
+  color: var(--muted);
+  font-weight: 500;
+}
+.analysis-points {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* A stored goal: what to do, how it is judged, and the confirmation next to it. */
+.goal-summary-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.goal-target {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+
+/* In a narrow window the two columns left the tabs of the product no room (the sixth ran out of the page, an old fault of the
+   installed build too): the list becomes a row of cards above the product, which gets the full width. */
+@media (max-width: 1040px) {
+  .products-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .products-list {
+    position: static;
+  }
+  .products-list .stack {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .products-list .stack > * {
+    flex: 1 1 220px;
+    min-width: 0;
   }
 }

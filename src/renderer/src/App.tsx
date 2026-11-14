@@ -62,7 +62,10 @@ export function App() {
     <div className={`shell ${menuOpen ? '' : 'menu-closed'}`} data-testid="shell">
       {menuOpen && (
         <aside className="sidebar" data-testid="sidebar">
-          <div className="brand">Promotion Desk</div>
+          <div className="brand">
+            <span className="brand-mark" aria-hidden="true" />
+            <span>Promotion Desk</span>
+          </div>
           <nav aria-label="Work areas">
             {PAGES.map((page) => (
               <a
@@ -102,11 +105,17 @@ export function App() {
             {/* Each label and its value are one named group, so a screen reader or a test tool reads "AI engine: Codex" and
                 "Accounts: None connected", not two loose texts. The groups add no box of their own (display: contents). */}
             <span className="status-group" role="group" aria-label={engineGroupName(engine)}>
-              <span className="muted small">AI engine</span>
-              {engine ? <Badge tone={engine.ready ? 'good' : 'warn'}>{engine.label}</Badge> : <Badge tone="warn">{NO_ENGINE}</Badge>}
+              <span className="topbar-label">AI engine</span>
+              {engine ? (
+                <Badge tone={engine.ready ? 'good' : 'warn'}>{engine.label}</Badge>
+              ) : (
+                <a className="badge badge-warn" href="#/settings" title="Choose an AI engine in Settings">
+                  {NO_ENGINE}
+                </a>
+              )}
             </span>
             <span className="status-group" role="group" aria-label={accountsGroupName(accounts.data)}>
-              <span className="muted small sep">Accounts</span>
+              <span className="topbar-label">Accounts</span>
               {accounts.data && accounts.data.length > 0 ? (
                 accounts.data.map((a) => (
                   <Badge key={a.id} tone={a.status === 'ready' ? 'good' : 'warn'}>
@@ -114,18 +123,29 @@ export function App() {
                   </Badge>
                 ))
               ) : (
-                <Badge>{NO_ACCOUNTS}</Badge>
+                <a className="badge badge-warn" href="#/accounts/new" title="Connect an account: nothing can run without one" data-testid="connect-account-link">
+                  {NO_ACCOUNTS}
+                </a>
               )}
             </span>
           </div>
           <div className="row">
             <AiPill />
             {state?.background && <Badge tone="info">Background</Badge>}
-            {/* One text, not "Automation " and "running" as two nodes: the state reads as one statement in the accessibility tree. */}
-            <span className="muted small" data-testid="automation-state">
-              {automationText(state)}
+            {/* One text, not "Automation " and "running" as two nodes: the state reads as one statement in the accessibility tree.
+                The dot gives the state a colour (amber while paused) so it does not read as a grey caption. */}
+            <span className="status-pill" data-testid="automation-state-pill">
+              <span className={`dot ${state ? (state.paused ? 'warn' : 'good') : ''}`} aria-hidden="true" />
+              <span data-testid="automation-state">{automationText(state)}</span>
             </span>
-            <Button variant={state?.paused ? 'primary' : 'ghost'} onClick={() => void setPaused(!state?.paused)} disabled={!state} data-testid="pause-toggle">
+            {/* Never the filled button: the page's own main action ("New product") keeps that, and a paused app must stay resumable. */}
+            <Button
+              variant="ghost"
+              onClick={() => void setPaused(!state?.paused)}
+              disabled={!state}
+              title={state?.paused && accounts.data?.length === 0 ? 'Nothing would run yet: no account is connected.' : undefined}
+              data-testid="pause-toggle"
+            >
               {state?.paused ? 'Resume automation' : 'Pause automation'}
             </Button>
           </div>

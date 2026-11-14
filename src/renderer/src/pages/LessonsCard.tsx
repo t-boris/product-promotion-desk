@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { AgentLesson, PlatformInfo } from '../../../shared/types'
 import { call, useAction, useQuery } from '../hooks'
-import { Badge, Button, Card, ErrorNote, Field } from '../ui'
+import { Badge, Button, Card, ErrorNote, Field, Hint, More } from '../ui'
 
 const RULE_LIMIT = 200
 
@@ -22,11 +22,12 @@ export function LessonsCard() {
   const list = lessons.data ?? []
   return (
     <Card title="What the AI learned">
-      <p className="muted small" data-testid="lessons-note">
-        When you answer the AI’s question with a rule (“compress the picture”, “edit only the editable fields”), it keeps the rule and follows it on the next accounts, without asking again. You can write a rule yourself too.
-      </p>
+      <Hint data-testid="lessons-note">When you answer the AI’s question with a rule, it keeps the rule and follows it on the next accounts, without asking again. You can write a rule yourself too.</Hint>
+      <More label="Examples">
+        <Hint>“Compress the picture”, “edit only the editable fields”.</Hint>
+      </More>
       <div className="form-row">
-        <Field label="A rule of your own" hint="One short sentence.">
+        <Field label="A rule of your own" hint="One short sentence, at least 8 characters.">
           <input className="input" value={rule} maxLength={RULE_LIMIT} onChange={(e) => setRule(e.target.value)} data-testid="lesson-new-rule" />
         </Field>
         <Field label="For" hint="One platform, or all of them.">
@@ -44,8 +45,13 @@ export function LessonsCard() {
         <Button variant="primary" onClick={() => void add()} disabled={adding.busy || rule.trim().length < 8} data-testid="lesson-add">
           {adding.busy ? 'Adding…' : 'Add the rule'}
         </Button>
+        {/* Why the button is off, beside it (QA finding 9). */}
+        {rule.trim().length < 8 && (
+          <Hint data-testid="lesson-add-reason">{rule.trim().length === 0 ? 'Write a rule of at least 8 characters.' : `${8 - rule.trim().length} more character${8 - rule.trim().length === 1 ? '' : 's'} needed.`}</Hint>
+        )}
       </div>
       <ErrorNote error={adding.error ?? lessons.error} />
+      <h3 className="list-title">Saved rules{list.length > 0 ? ` (${list.length})` : ''}</h3>
       {list.length === 0 ? (
         <p className="muted" data-testid="lessons-empty">
           Nothing learned yet.
@@ -70,7 +76,7 @@ function LessonRow({ lesson, platforms }: { lesson: AgentLesson; platforms: Plat
   const dirty = rule.trim() !== lesson.rule || platform !== (lesson.platform ?? '')
   const busy = saving.busy || toggling.busy || removing.busy
   return (
-    <div className="stack" data-testid={`lesson-${lesson.id}`}>
+    <div className="stack rule-row" data-testid={`lesson-${lesson.id}`}>
       <div className="form-row">
         <input className="input" value={rule} maxLength={RULE_LIMIT} onChange={(e) => setRule(e.target.value)} aria-label="The rule" data-testid={`lesson-rule-${lesson.id}`} />
         <select className="input" value={platform} onChange={(e) => setPlatform(e.target.value)} aria-label="Platform of the rule" data-testid={`lesson-platform-${lesson.id}`}>
@@ -93,7 +99,7 @@ function LessonRow({ lesson, platforms }: { lesson: AgentLesson; platforms: Plat
         <Button onClick={() => void remove()} disabled={busy} data-testid={`lesson-remove-${lesson.id}`}>
           Remove
         </Button>
-        <span className="muted small">
+        <span className="hint">
           {lesson.uses === 0 ? 'not used yet' : `used in ${lesson.uses} mission${lesson.uses === 1 ? '' : 's'}`}
           {lesson.answer ? ` · you said: “${lesson.answer}”` : ' · written by you'}
         </span>

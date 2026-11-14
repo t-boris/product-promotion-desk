@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { AttentionKind, Id } from '../../../shared/types'
-import { useQuery } from '../hooks'
+import { useAutomation, useQuery } from '../hooks'
 import { Badge, Button, EmptyState, ErrorNote, Loading, Page, type Tone } from '../ui'
 import { fixLinkFor } from './attention-links'
+import { startSteps } from './attention-start'
 import { useProductDirectory, type ProductDirectory } from './review/products'
 import { ReviewCard } from './review/ReviewCard'
 
@@ -52,6 +53,65 @@ function DecisionCard({ id, stillWaiting, onDismiss, directory }: { id: Id; stil
   )
 }
 
+/**
+ * Nothing needs the owner: say so, and say what to do next (QA findings 1, 5, 6). The next step comes from the state of the app
+ * (no product, no account, automation paused), so the page is never a thin strip with a sentence in it.
+ */
+function NothingNeedsYou({ products, accounts, paused, onResume }: { products: number; accounts: number; paused: boolean | undefined; onResume: () => void }) {
+  const steps = startSteps({ products, accounts, paused })
+  const next = steps.find((step) => !step.done)
+  return (
+    <div className="stack" data-testid="attention-empty">
+      <EmptyState
+        fill
+        title="Nothing needs you right now"
+        action={
+          next ? (
+            next.id === 'resume' ? (
+              <Button variant="primary" onClick={onResume} data-testid="attention-resume">
+                Resume automation
+              </Button>
+            ) : (
+              <a className="btn btn-primary" href={next.href} data-testid={`attention-next-${next.id}`}>
+                {next.action}
+              </a>
+            )
+          ) : (
+            <a className="btn" href="#/opportunities" data-testid="attention-next-opportunities">
+              Open Opportunities
+            </a>
+          )
+        }
+      >
+        New comments, drafts to approve and connection problems appear here.
+      </EmptyState>
+      {next && (
+        <section className="card" aria-label="Getting started" data-testid="attention-start">
+          <h2>Getting started</h2>
+          <ol className="start-steps">
+            {steps.map((step) => (
+              <li key={step.id} className={step.done ? 'done' : ''}>
+                <span className="start-mark" aria-hidden="true">
+                  {step.done ? '✓' : ''}
+                </span>
+                <span className="start-text">
+                  <strong>{step.title}</strong>
+                  <span className="hint">{step.hint}</span>
+                </span>
+                {!step.done && step.id !== 'resume' && (
+                  <a className="btn" href={step.href}>
+                    {step.action}
+                  </a>
+                )}
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+    </div>
+  )
+}
+
 export function AttentionPage() {
   const attention = useQuery('attention.list', undefined, ['attention', 'opportunities', 'channels', 'accounts'])
   const directory = useProductDirectory()
@@ -59,6 +119,8 @@ export function AttentionPage() {
   const channels = useQuery('channels.list', undefined, ['channels'])
   const products = useQuery('products.list', undefined, ['products'])
   const links = { channels: channels.data ?? [], products: products.data ?? [] }
+  const accounts = useQuery('accounts.list', undefined, ['accounts'])
+  const { state: automation, setPaused } = useAutomation()
   const items = attention.data ?? []
   const decisionIds = [...new Set(items.filter((i) => i.refType === 'opportunity').map((i) => i.refId))]
   const problems = items.filter((i) => i.refType !== 'opportunity')
@@ -79,7 +141,9 @@ export function AttentionPage() {
     <Page title="Attention" subtitle="Comments, drafts, questions and connection problems that need you">
       <ErrorNote error={attention.error} />
       {attention.loading && !attention.data && <Loading what="Loading" />}
-      {attention.data && ordered.length === 0 && problems.length === 0 && <EmptyState title="Nothing needs you right now">New comments, drafts to approve and connection problems appear here.</EmptyState>}
+      {attention.data && ordered.length === 0 && problems.length === 0 && products.data && accounts.data && (
+        <NothingNeedsYou products={products.data.length} accounts={accounts.data.length} paused={automation?.paused} onResume={() => void setPaused(false)} />
+      )}
 
       {problems.length > 0 && (
         <div className="stack" data-testid="problem-list">
