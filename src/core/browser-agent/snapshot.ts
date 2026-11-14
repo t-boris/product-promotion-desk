@@ -29,6 +29,8 @@ export interface SnapshotElement {
   options?: string[]
   /** Where a link goes (path, or host for another site). */
   to?: string
+  /** Pressing it submits its form natively: a submit button of a form, an input of type submit or image. */
+  submits?: boolean
 }
 
 export interface PageSnapshot {
@@ -96,6 +98,7 @@ export function snapshotScript(): string {
     else if (tag === 'select') item.value = clean(el.options[el.selectedIndex] ? el.options[el.selectedIndex].textContent : '', ${MAX_VALUE});
     if (roleAttr === 'combobox' && tag !== 'input') { const held = clean(el.innerText, ${MAX_VALUE}); if (held && held !== name) item.value = held.replace(name, '').trim() || held; }
     if (tag === 'select') item.options = [...el.options].slice(0, ${MAX_OPTIONS}).map((o) => clean(o.textContent, 40)).filter((t) => t !== '');
+    if (((tag === 'button' && el.type === 'submit' && el.form) || (tag === 'input' && (type === 'submit' || type === 'image')))) item.submits = true;
     if (el.disabled || el.getAttribute('aria-disabled') === 'true') item.disabled = true;
     if (el.required || el.getAttribute('aria-required') === 'true') item.required = true;
     elements.push(item);
@@ -148,6 +151,7 @@ export function parseSnapshot(raw: unknown): PageSnapshot | null {
     if (e.required === true) element.required = true
     if (Array.isArray(e.options)) element.options = e.options.slice(0, MAX_OPTIONS).map((o) => str(o, 40)).filter((o) => o !== '')
     if (typeof e.to === 'string') element.to = str(e.to, 40)
+    if (e.submits === true) element.submits = true
     elements.push(element)
   }
   return {

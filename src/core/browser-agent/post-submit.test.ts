@@ -99,6 +99,12 @@ describe('reading what the form holds', () => {
     ref?: string
     role?: string
     shadow?: Node[]
+    /** The `type` attribute as written, when it differs from the `type` property a browser resolves from it. */
+    attribute?: string
+    name?: string
+    /** The document of a same-origin frame; `blocked` is a frame of another origin: the browser lets a script in neither way. */
+    frame?: Node[]
+    blocked?: boolean
   }
   const pageOf = (nodes: Node[]) => {
     const toElement = (n: Node): unknown => ({
@@ -107,12 +113,20 @@ describe('reading what the form holds', () => {
       isContentEditable: n.editable === true,
       innerText: n.text,
       textContent: n.text,
-      getAttribute: (name: string) => (name === 'type' ? (n.type ?? null) : name === 'data-ppd-ref' ? (n.ref ?? null) : null),
-      shadowRoot: n.shadow ? rootOf(n.shadow) : null
+      // The property, as a browser resolves it: an input without a type, or with one it does not know, is a text input.
+      type: n.tag === 'input' ? (n.type ?? 'text') : undefined,
+      name: n.name ?? '',
+      id: '',
+      getAttribute: (name: string) => (name === 'type' ? (n.attribute ?? n.type ?? null) : name === 'data-ppd-ref' ? (n.ref ?? null) : null),
+      shadowRoot: n.shadow ? rootOf(n.shadow) : null,
+      get contentDocument(): unknown {
+        if (n.blocked) throw new Error('Blocked a frame from accessing a cross-origin frame.')
+        return n.frame ? rootOf(n.frame) : null
+      }
     })
     const matches = (n: Node): boolean => ['input', 'textarea'].includes(n.tag) || n.editable === true || n.role === 'textbox'
     const rootOf = (list: Node[]): unknown => ({
-      querySelectorAll: (selector: string) => (selector === '*' ? list.map(toElement) : list.filter(matches).map(toElement))
+      querySelectorAll: (selector: string) => (selector === '*' ? list.map(toElement) : selector.startsWith('iframe') ? list.filter((n) => n.tag === 'iframe').map(toElement) : list.filter(matches).map(toElement))
     })
     return rootOf(nodes)
   }
@@ -152,12 +166,51 @@ describe('reading what the form holds', () => {
         { tag: 'textarea', value: '\u200b\u200c\u200d\u2060\ufeff' },
         { tag: 'input', type: 'password', value: 'secret' },
         { tag: 'input', type: 'checkbox', value: 'on' },
-        { tag: 'input', type: 'hidden', value: 'token' },
+        { tag: 'input', type: 'hidden', value: 'token', name: 'uh' },
+        { tag: 'input', type: 'hidden', value: 'abc123', name: 'thing_id' },
         { tag: 'input', type: 'submit', value: 'Post' },
         { tag: 'input', type: 'file', value: 'C:\\fakepath\\x.png' },
         { tag: 'div', editable: false, role: 'textbox', text: 'not editable' }
       ])
     ).toEqual([])
+  })
+
+  it('reads the type PROPERTY, as a browser resolves it, not the attribute: a type it does not know is a text box', () => {
+    // <input type="comment"> is a text box to a browser; its attribute says something that is not in any list.
+    expect(read([{ tag: 'input', attribute: 'comment', type: 'text', value: 'typed', ref: 'e5' }])).toEqual([{ ref: 'e5', text: 'typed' }])
+    expect(read([{ tag: 'input', attribute: 'TEXT', type: 'text', value: 'typed' }])).toEqual([{ ref: null, text: 'typed' }])
+    // And a type the browser knows to be something else is not one, whatever it is called by the page.
+    expect(read([{ tag: 'input', attribute: 'text', type: 'checkbox', value: 'on' }])).toEqual([])
+  })
+
+  it('reads a hidden input that mirrors a body, a title or a link, and not the hidden inputs that hold tokens and ids', () => {
+    expect(
+      read([
+        { tag: 'input', type: 'hidden', name: 'selftext', value: 'a draft mirrored by an editor' },
+        { tag: 'input', type: 'hidden', name: 'title', value: 'a title' },
+        { tag: 'input', type: 'hidden', name: 'modhash', value: 'zzz' },
+        { tag: 'input', type: 'hidden', name: 'sr', value: 'astrology' }
+      ])
+    ).toEqual([
+      { ref: null, text: 'a draft mirrored by an editor' },
+      { ref: null, text: 'a title' }
+    ])
+  })
+
+  it('walks into a frame of the same origin, and does not fail on one of another origin, which it cannot read', () => {
+    expect(
+      read([
+        { tag: 'iframe', frame: [{ tag: 'textarea', value: 'in a frame', ref: 'e9' }] },
+        { tag: 'iframe', blocked: true },
+        { tag: 'iframe' },
+        { tag: 'textarea', value: 'outside' }
+      ])
+    ).toEqual([
+      { ref: null, text: 'outside' },
+      { ref: 'e9', text: 'in a frame' }
+    ])
+    // A frame of another origin is not known to be empty and is not reported as holding text.
+    expect(read([{ tag: 'iframe', blocked: true }])).toEqual([])
   })
 
   it('looks into shadow roots, where a site keeps its editors', () => {

@@ -249,7 +249,7 @@ describe('how a post mission ends: the authority says whether the control was pr
     expect((await state(w))?.status).toBe('needs_owner')
   })
 
-  it('is not committed when the AI clicks the button itself, and the page is then asked nothing the AI typed', async () => {
+  it('is not committed when the AI clicks the button itself: the click is refused, and the page is asked nothing, nothing the AI typed either', async () => {
     const { w, authority, request } = await ready()
     asTheAI(w, async (call) => {
       await call('browser_snapshot')
@@ -262,7 +262,7 @@ describe('how a post mission ends: the authority says whether the control was pr
     expect(outcome.committed).toBe(false)
     expect(authority.leases).toBe(0)
     const steps = w.t.browser.page(w.account.id).steps.map((s) => s.step)
-    expect(steps).toEqual([{ do: 'click', ref: 'e4' }])
+    expect(steps).toEqual([])
     expect(w.t.browser.page(w.account.id).log.some((l) => l.includes('my own text'))).toBe(false)
   })
 

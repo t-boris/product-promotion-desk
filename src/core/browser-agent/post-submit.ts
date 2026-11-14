@@ -142,29 +142,47 @@ const MAX_HELD = 20
 const MAX_HELD_TEXT = 20_000
 
 /**
- * Reads every place on the whole page (shadow roots included, hidden elements too) where a person could have put text: text-like
- * inputs, textareas, editable elements. Answers the ones that hold something other than blanks, with what they hold. Read-only.
- * The page is the one fact the application trusts about "is there text in a form": a flag kept by the application cannot know what a
- * same-document navigation, a draft the site restored or an address that prefilled the form left in it.
+ * Reads every place the page keeps text a person could have put into a form, and answers the ones that hold something other than blanks,
+ * with what they hold. Read-only. The page is the one fact the application trusts about "is there text in a form": a flag kept by the
+ * application cannot know what a same-document navigation, a draft the site restored or an address that prefilled the form left in it.
+ *
+ * What it reads: text boxes (the `type` PROPERTY of an input, as a browser resolves it: an unknown or missing type is a text box, which an
+ * attribute check would call something else), textareas, editable elements (contenteditable, any tag), hidden inputs that are named like
+ * a body, a title or a link (a site mirrors an editor's text there; the other hidden inputs hold tokens and ids and would hide every
+ * page), with shadow roots and same-origin frames walked.
+ * What it cannot read: a frame of another origin (the browser does not let a script in), a closed shadow root, and text a site keeps in
+ * script memory and draws on a canvas. Such a place is not known to be empty and is not reported as holding text either.
  */
 export function formTextScript(): string {
   return `(() => {
   /* ppd-form-text */
-  const TYPES = ['', 'text', 'search', 'url', 'email', 'tel'];
+  const TYPES = ['text', 'search', 'url', 'email', 'tel'];
+  const MIRRORS = /^(?:text|body|title|comment|content|message|selftext|description|url|link|reply)$/i;
   const blank = (text) => text.replace(/[\\s\\u200b-\\u200d\\u2060\\ufeff]/g, '') === '';
   const found = [];
+  const seen = new Set();
   const walk = (root) => {
+    if (!root || seen.has(root)) return;
+    seen.add(root);
     for (const el of root.querySelectorAll('input,textarea,[contenteditable],[role=textbox]')) {
       const tag = el.tagName.toLowerCase();
       let text = '';
       if (tag === 'textarea') text = String(el.value);
-      else if (tag === 'input') { if (!TYPES.includes((el.getAttribute('type') || '').toLowerCase())) continue; text = String(el.value); }
+      else if (tag === 'input') {
+        const type = String(el.type || 'text').toLowerCase();
+        if (type === 'hidden') { if (!MIRRORS.test(el.name || el.id || '')) continue; }
+        else if (!TYPES.includes(type)) continue;
+        text = String(el.value);
+      }
       else if (el.isContentEditable) text = String(el.innerText || el.textContent || '');
       else continue;
       if (blank(text)) continue;
       found.push({ ref: el.getAttribute('data-ppd-ref'), text: text.slice(0, ${MAX_HELD_TEXT}) });
     }
     for (const el of root.querySelectorAll('*')) if (el.shadowRoot) walk(el.shadowRoot);
+    for (const frame of root.querySelectorAll('iframe,frame')) {
+      try { walk(frame.contentDocument); } catch (e) { /* a frame of another origin: not readable */ }
+    }
   };
   walk(document);
   return found.slice(0, ${MAX_HELD});
@@ -243,6 +261,18 @@ export function looksLikeSubmit(name: string): boolean {
   if (!verb || words.length > 4 || !SUBMIT_VERBS.includes(verb)) return false
   const nouns = rest.filter((w) => !SUBMIT_FILLER.includes(w))
   return nouns.length <= 1 && nouns.every((w) => SUBMIT_NOUNS.includes(w))
+}
+
+/**
+ * Whether a control is one that a post mission never clicks or chooses itself, whatever the page holds: one the page marks as submitting
+ * its form natively (a submit button of a form, an input of type submit or image), or a button or an input button that is named like a
+ * control that publishes (`looksLikeSubmit`). A link is not one (it opens a form, and cannot submit one without a script), and neither is
+ * a text box. The consequence for the AI: on a page that offers the composer only behind a button named "Reply" or "Add a comment", it
+ * opens the form some other way (a link, the same address on the old layout of the site) and browser_submit does the rest.
+ */
+export function isPublishingControl(control: { role: string; name: string; submits?: boolean }): boolean {
+  if (control.submits === true || control.role === 'input:submit' || control.role === 'input:image') return true
+  return /^(?:button|input:button)$/.test(control.role) && looksLikeSubmit(control.name)
 }
 
 const PLATFORM_WARNING =

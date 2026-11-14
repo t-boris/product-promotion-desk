@@ -18,6 +18,9 @@ interface NodeSpec {
   label?: string
   src?: string
   editable?: boolean
+  /** The `type` property of a button, and whether it sits in a form (a browser answers `submit` for a button without a type). */
+  buttonType?: string
+  inForm?: boolean
 }
 class FakeNode {
   readonly attributes = new Map<string, string>()
@@ -38,6 +41,8 @@ class FakeNode {
   get required(): boolean { return this.spec.required ?? false }
   get placeholder(): string { return this.spec.placeholder ?? '' }
   get isContentEditable(): boolean { return this.spec.editable ?? false }
+  get type(): string { return this.spec.buttonType ?? 'submit' }
+  get form(): object | null { return this.spec.inForm ? {} : null }
   get title(): string { return '' }
   get name(): string { return '' }
   get labels(): { innerText: string }[] | null { return this.spec.label ? [{ innerText: this.spec.label }] : null }
@@ -116,6 +121,31 @@ describe('snapshotScript: the page as a list of labelled elements', () => {
     ])
   })
 
+  it('marks a control whose press submits its form natively, whatever its name or its role attribute says', () => {
+    const s = runSnapshot({
+      interactive: [
+        { tag: 'button', text: 'Continue', inForm: true },
+        { tag: 'button', text: 'Looks harmless', attrs: { role: 'link' }, inForm: true },
+        { tag: 'button', text: 'Not in a form', inForm: false },
+        { tag: 'button', text: 'Opens a menu', buttonType: 'button', inForm: true },
+        { tag: 'input', attrs: { type: 'submit' }, value: 'Go' },
+        { tag: 'input', attrs: { type: 'image' } },
+        { tag: 'input', attrs: { type: 'button' }, value: 'Plain' },
+        { tag: 'a', text: 'A link', attrs: { href: '/x' } }
+      ]
+    })
+    expect(s.elements.map((e) => [e.name, e.submits === true])).toEqual([
+      ['Continue', true],
+      ['Looks harmless', true],
+      ['Not in a form', false],
+      ['Opens a menu', false],
+      ['Go', true],
+      ['', true],
+      ['Plain', false],
+      ['A link', false]
+    ])
+  })
+
   it('keeps the field role of an input that the site calls a combobox, and shows what a drop-down holds', () => {
     const s = runSnapshot({
       interactive: [
@@ -180,6 +210,8 @@ describe('parseSnapshot and its lines', () => {
     expect(s?.alerts).toEqual(['ok'])
     expect(parseSnapshot(null)).toBeNull()
     expect(parseSnapshot({ elements: 'x' })).toBeNull()
+    const marked = parseSnapshot({ url: 'u', title: 't', text: '', alerts: [], humanCheck: '', elements: [{ ref: 'e1', role: 'button', name: 'a', submits: true }, { ref: 'e2', role: 'button', name: 'b', submits: 'yes' }] })
+    expect(marked?.elements.map((e) => e.submits)).toEqual([true, undefined])
   })
 
   it('lists the elements one per line the way MarkView does', () => {

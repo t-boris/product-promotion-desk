@@ -15,6 +15,7 @@ interface Item {
   role: string
   name: string
   disabled?: boolean
+  submits?: boolean
 }
 
 /** A compose form that behaves like a site: typed text lands in fields, a press of the submit control posts what the fields hold. */
@@ -25,7 +26,9 @@ class FormPage extends FakePage {
     { ref: 'e3', role: 'input:url', name: 'Link' },
     { ref: 'e4', role: 'button', name: 'Reply' },
     { ref: 'e5', role: 'link', name: 'Cancel' },
-    { ref: 'e6', role: 'button', name: 'Post (disabled)', disabled: true }
+    { ref: 'e6', role: 'button', name: 'Post (disabled)', disabled: true },
+    // A control whose name does not say that it publishes, and whose press submits the form all the same: what the held-text guard is for.
+    { ref: 'e8', role: 'button', name: 'Continue' }
   ]
   fields = new Map<string, string>()
   alerts: string[] = []
@@ -111,7 +114,7 @@ class FormPage extends FakePage {
       if (this.crashOnClick) throw new Error('the page crashed')
       if (item.disabled) return { status: 'refused', detail: 'disabled' }
       this.clicked.push(step.ref)
-      if (step.ref === 'e4') {
+      if (step.ref === 'e4' || step.ref === 'e8') {
         this.posted.push(Object.fromEntries(this.fields))
         // A site empties its form once the comment is posted.
         this.fields.clear()
@@ -214,7 +217,7 @@ describe('a click of the AI\'s own publishes nothing: the form is empty until th
   it('leaves every field empty and posts nothing when the AI presses the control itself', async () => {
     const t = setup()
     await look(t)
-    const result = await t.toolbox.call('browser_click', { ref: 'e4' })
+    const result = await t.toolbox.call('browser_click', { ref: 'e8' })
     expect(result.isError).toBeUndefined()
     // The page received a press, but no field holds anything: there was nothing to publish.
     expect(t.page.posted).toEqual([{}])
@@ -226,8 +229,8 @@ describe('a click of the AI\'s own publishes nothing: the form is empty until th
   const HOLDS_TEXT = { isError: true, text: expect.stringContaining('holds text') }
   /** Both ways the AI has to click: a click, and a choice in a list, which is a click on anything that is not a list. */
   const handsOff = async (t: Setup, leases = 0) => {
-    expect(await t.toolbox.call('browser_click', { ref: 'e4' })).toMatchObject(HOLDS_TEXT)
-    expect(await t.toolbox.call('browser_select', { ref: 'e4', option: 'anything' })).toMatchObject(HOLDS_TEXT)
+    expect(await t.toolbox.call('browser_click', { ref: 'e8' })).toMatchObject(HOLDS_TEXT)
+    expect(await t.toolbox.call('browser_select', { ref: 'e8', option: 'anything' })).toMatchObject(HOLDS_TEXT)
     expect(t.page.clicked).toEqual([])
     expect(t.page.posted).toEqual([])
     expect(t.authority.leases).toBe(leases)
@@ -285,8 +288,8 @@ describe('a click of the AI\'s own publishes nothing: the form is empty until th
     const t = setup()
     await look(t)
     t.page.fieldsUnreadable = true
-    expect(await t.toolbox.call('browser_click', { ref: 'e4' })).toMatchObject({ isError: true, text: expect.stringContaining('could not be read') })
-    expect(await t.toolbox.call('browser_select', { ref: 'e4', option: 'x' })).toMatchObject({ isError: true, text: expect.stringContaining('could not be read') })
+    expect(await t.toolbox.call('browser_click', { ref: 'e8' })).toMatchObject({ isError: true, text: expect.stringContaining('could not be read') })
+    expect(await t.toolbox.call('browser_select', { ref: 'e8', option: 'x' })).toMatchObject({ isError: true, text: expect.stringContaining('could not be read') })
     expect(t.page.clicked).toEqual([])
   })
 
@@ -298,11 +301,53 @@ describe('a click of the AI\'s own publishes nothing: the form is empty until th
   })
 })
 
+describe('a control that publishes is never clicked or chosen by the AI itself, whatever the page holds', () => {
+  const NAMES = ['Post', 'Reply', 'Comment', 'Submit', 'Send', 'Publish', 'Save', 'Add a comment', 'Post comment', 'Опубликовать', 'Ответить', 'Отправить']
+  const PUBLISHING = { isError: true, text: expect.stringContaining('only browser_submit presses') }
+
+  it.each(NAMES)('refuses a click and a choice on a button named "%s" on a page whose forms are empty, and sends nothing to the page', async (name) => {
+    const t = setup()
+    t.page.items.push({ ref: 'e9', role: 'button', name })
+    await look(t)
+    expect(await t.toolbox.call('browser_click', { ref: 'e9' })).toMatchObject(PUBLISHING)
+    expect(await t.toolbox.call('browser_select', { ref: 'e9', option: 'x' })).toMatchObject(PUBLISHING)
+    expect(t.page.steps).toEqual([])
+    expect(t.page.clicked).toEqual([])
+    expect(t.authority.leases).toBe(0)
+  })
+
+  it('refuses a control that submits its form natively, whatever its name says (the page marks it, not the words)', async () => {
+    const t = setup()
+    t.page.items.push({ ref: 'e9', role: 'button', name: 'Continue', submits: true }, { ref: 'e10', role: 'input:submit', name: 'Go' })
+    await look(t)
+    expect(await t.toolbox.call('browser_click', { ref: 'e9' })).toMatchObject(PUBLISHING)
+    expect(await t.toolbox.call('browser_click', { ref: 'e10' })).toMatchObject(PUBLISHING)
+    expect(t.page.steps).toEqual([])
+  })
+
+  it('judges the element by the last look too: a page that renumbered its elements cannot turn the Reply button of the AI\'s snapshot into something else', async () => {
+    const t = setup()
+    await look(t)
+    // After the look the page is rebuilt: e4 is now a harmless link, but the AI was shown "Reply" as e4.
+    t.page.items = t.page.items.map((i) => (i.ref === 'e4' ? { ref: 'e4', role: 'link', name: 'Show more' } : i))
+    expect(await t.toolbox.call('browser_click', { ref: 'e4' })).toMatchObject(PUBLISHING)
+    expect(t.page.steps).toEqual([])
+  })
+
+  it('does not refuse what is not a publishing control: a link, a text box, a button of another purpose', async () => {
+    const t = setup()
+    t.page.items.push({ ref: 'e9', role: 'button', name: 'Expand comment' }, { ref: 'e10', role: 'link', name: 'Reply' }, { ref: 'e11', role: 'button', name: 'Add flair' })
+    await look(t)
+    for (const ref of ['e5', 'e9', 'e10', 'e11', 'e1']) expect((await t.toolbox.call('browser_click', { ref })).isError).toBeUndefined()
+    expect(t.page.clicked).toEqual(['e5', 'e9', 'e10', 'e11', 'e1'])
+  })
+})
+
 describe('calls that arrive together are taken in turn, and each one is decided when its turn comes', () => {
   it('a click sent together with browser_submit is refused after the press, and presses nothing a second time', async () => {
     const t = setup()
     await look(t)
-    const [submitted, clicked] = await Promise.all([submitReply(t), t.toolbox.call('browser_click', { ref: 'e4' })])
+    const [submitted, clicked] = await Promise.all([submitReply(t), t.toolbox.call('browser_click', { ref: 'e8' })])
     expect(submitted.isError).toBeUndefined()
     expect(clicked).toMatchObject({ isError: true, text: expect.stringContaining('nothing more may be clicked') })
     expect(t.page.clicked).toEqual(['e4']) // the application's own press, once
@@ -314,7 +359,7 @@ describe('calls that arrive together are taken in turn, and each one is decided 
     const t = setup()
     t.page.alter = (_ref, value) => value.replace('Natal Mystic', '***')
     await look(t)
-    const [submitted, clicked] = await Promise.all([submitReply(t), t.toolbox.call('browser_click', { ref: 'e4' })])
+    const [submitted, clicked] = await Promise.all([submitReply(t), t.toolbox.call('browser_click', { ref: 'e8' })])
     expect(submitted).toMatchObject({ isError: true, text: expect.stringContaining('does not hold exactly the approved text') })
     expect(clicked).toMatchObject({ isError: true, text: expect.stringContaining('holds text') })
     expect(t.page.clicked).toEqual([])
@@ -324,7 +369,7 @@ describe('calls that arrive together are taken in turn, and each one is decided 
   it('a choice sent together with browser_submit, and a second browser_submit, are refused after the press', async () => {
     const t = setup()
     await look(t)
-    const [first, chosen, second] = await Promise.all([submitReply(t), t.toolbox.call('browser_select', { ref: 'e4', option: 'x' }), submitReply(t)])
+    const [first, chosen, second] = await Promise.all([submitReply(t), t.toolbox.call('browser_select', { ref: 'e8', option: 'x' }), submitReply(t)])
     expect(first.isError).toBeUndefined()
     expect(chosen).toMatchObject({ isError: true })
     expect(second).toMatchObject({ isError: true, text: expect.stringContaining('submitted') })
@@ -629,7 +674,7 @@ describe('browser_submit stops without pressing when the form is not as approved
     expect(t.page.posted).toEqual([])
     expect(t.authority.committed).toBe(false)
     // The text sits in the form unsent: a click of the AI's own could publish it, so none is allowed until the page is opened again.
-    expect(await t.toolbox.call('browser_click', { ref: 'e4' })).toMatchObject({ isError: true, text: expect.stringContaining('holds text') })
+    expect(await t.toolbox.call('browser_click', { ref: 'e8' })).toMatchObject({ isError: true, text: expect.stringContaining('holds text') })
     expect(await t.toolbox.call('browser_select', { ref: 'e1', option: 'x' })).toMatchObject({ isError: true })
     expect(t.page.clicked).toEqual([])
     // The ticket of that attempt is gone.
