@@ -95,7 +95,9 @@ export function AiPill() {
     : `AI: ${tasks[0].title} ${tasks[0].status === 'done' ? 'finished' : tasks[0].status}`
   return (
     <div className="ai-pill" data-testid="ai-pill">
-      <Button variant={lead ? 'primary' : 'ghost'} onClick={() => setOpen(!open)} aria-expanded={open} data-testid="ai-pill-button">
+      {/* A toolbar capsule, never filled (a toolbar has no filled button): the accent label and a progress ring say it is working. */}
+      <Button variant={lead ? 'secondary' : 'ghost'} className="btn-toolbar ai-pill-btn" onClick={() => setOpen(!open)} aria-expanded={open} data-testid="ai-pill-button">
+        {lead && <span className="ai-ring" aria-hidden="true" />}
         {label}
       </Button>
       {open && (

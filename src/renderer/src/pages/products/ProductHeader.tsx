@@ -2,12 +2,13 @@ import { useState } from 'react'
 import type { PassportView, Product } from '../../../../shared/types'
 import { productHref, type ProductTab } from '../../route'
 import { call, useAction } from '../../hooks'
-import { Badge, Button, Card, ErrorNote, Field } from '../../ui'
+import { Badge, Button, Card, ConfirmAction, ErrorNote, Field, ObjectHeader, useOpenForm } from '../../ui'
 import { ClampedText } from './ClampedText'
 import { ANALYSIS_LABELS, ANALYSIS_TONES } from './labels'
-import { NOT_ANALYZED_HINT, passportStatus } from './product-status'
+import { deleteBlocker, NOT_ANALYZED_HINT, passportStatus } from './product-status'
 
 function EditDetails({ product, onDone }: { product: Product; onDone: () => void }) {
+  const saveVariant = useOpenForm()
   const [name, setName] = useState(product.name)
   const [websiteUrl, setWebsiteUrl] = useState(product.websiteUrl ?? '')
   const [description, setDescription] = useState(product.description ?? '')
@@ -35,7 +36,7 @@ function EditDetails({ product, onDone }: { product: Product; onDone: () => void
       </Field>
       <ErrorNote error={state.error} />
       <div className="row">
-        <Button variant="primary" type="submit" disabled={!valid || state.busy} data-testid="edit-product-save">
+        <Button variant={saveVariant} type="submit" disabled={!valid || state.busy} data-testid="edit-product-save">
           {state.busy ? 'Saving…' : 'Save'}
         </Button>
         <Button type="button" onClick={onDone}>
@@ -46,34 +47,51 @@ function EditDetails({ product, onDone }: { product: Product; onDone: () => void
   )
 }
 
-export function ProductHeader({ view, onDeleted, onOpenTab }: { view: PassportView; onDeleted: () => void; onOpenTab: (tab: ProductTab) => void }) {
+export function ProductHeader({ view, channels, onDeleted, onOpenTab }: { view: PassportView; channels: number; onDeleted: () => void; onOpenTab: (tab: ProductTab) => void }) {
   const { product } = view
   const passport = passportStatus(product, view.version, view.claims)
   const [editing, setEditing] = useState(false)
+  // A connected channel stands in the way of a delete (BUG-046). Pressing Delete says so before any question; the note is worked out from the
+  // channel count on every render, so it goes with the last channel and is never left on screen after its cause is gone.
+  const [asked, setAsked] = useState(false)
+  if (asked && channels === 0) setAsked(false)
+  const blocker = asked ? deleteBlocker(channels) : null
   const [remove, removing] = useAction(async () => {
-    const message = `Delete "${product.name}" with its sources, passport and version history? This cannot be undone.`
-    if (!window.confirm(message)) return false
     await call('products.delete', { id: product.id })
     onDeleted()
-    return true
   })
 
   return (
-    <Card
-      title={product.name}
-      actions={
-        <>
-          <Button onClick={() => setEditing((v) => !v)} data-testid="edit-product">
-            {editing ? 'Close' : 'Edit details'}
-          </Button>
-          <Button variant="danger" onClick={() => void remove()} disabled={removing.busy} data-testid="delete-product">
-            Delete
-          </Button>
-        </>
-      }
-    >
+    <div className="obj">
+      <ObjectHeader
+        title={product.name}
+        actions={
+          <>
+            <Button onClick={() => setEditing((v) => !v)} data-testid="edit-product">
+              {editing ? 'Close' : 'Edit details'}
+            </Button>
+            {channels > 0 ? (
+              <Button variant="danger" onClick={() => setAsked(true)} data-testid="delete-product">
+                Delete
+              </Button>
+            ) : (
+              <ConfirmAction
+                label="Delete"
+                question={`Delete "${product.name}" with its sources, passport and version history? This cannot be undone.`}
+                confirmLabel="Delete product"
+                busyLabel="Deleting…"
+                onConfirm={() => remove()}
+                testId="delete-product"
+                confirmTestId="delete-product-confirm"
+              />
+            )}
+          </>
+        }
+      />
       {editing ? (
-        <EditDetails product={product} onDone={() => setEditing(false)} />
+        <Card title="Edit details">
+          <EditDetails product={product} onDone={() => setEditing(false)} />
+        </Card>
       ) : (
         <dl className="kv" data-testid="product-details">
           <dt>Website</dt>
@@ -119,7 +137,15 @@ export function ProductHeader({ view, onDeleted, onOpenTab }: { view: PassportVi
           </dd>
         </dl>
       )}
+      {blocker && (
+        <div className="note" role="status" data-testid="delete-product-blocked">
+          {blocker}{' '}
+          <a href={productHref(product.id, 'channels')} data-testid="delete-product-open-channels">
+            Open the Channels tab
+          </a>
+        </div>
+      )}
       <ErrorNote error={removing.error} />
-    </Card>
+    </div>
   )
 }

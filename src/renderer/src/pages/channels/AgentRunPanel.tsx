@@ -27,8 +27,8 @@ export function AgentRunPanel({ run, onStop, stopping, testId }: { run: AgentRun
       </div>
       <Learned run={run} />
       {run.lines.length > 0 && (
-        <details open={run.status === 'running'} data-testid={`${testId}-lines`}>
-          <summary className="small">What the AI did ({run.lines.length})</summary>
+        <details className="more" open={run.status === 'running'} data-testid={`${testId}-lines`}>
+          <summary>What the AI did ({run.lines.length})</summary>
           <ol className="plain-lines small">
             {run.lines.map((line, index) => (
               <li key={index}>{line}</li>
@@ -37,7 +37,7 @@ export function AgentRunPanel({ run, onStop, stopping, testId }: { run: AgentRun
         </details>
       )}
       {run.typed.length > 0 && (
-        <div className="small" data-testid={`${testId}-typed`}>
+        <div className="well" data-testid={`${testId}-typed`}>
           <strong>Values the AI chose on the site</strong>
           <ul className="plain-lines">
             {run.typed.map((value) => (

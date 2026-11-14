@@ -12,11 +12,11 @@ import type { ReviewActions } from './useReviewActions'
 export function ResolveUnknown({ id, actions }: { id: Id; actions: ReviewActions }) {
   const [url, setUrl] = useState('')
   return (
-    <div data-testid="resolve-unknown">
+    <div className="review-resolve" data-testid="resolve-unknown">
       <Field label="I checked the platform myself" hint="If it was published, paste the link to it (optional).">
         <input className="input" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" data-testid="resolve-url" />
       </Field>
-      <div className="row">
+      <div className="review-actions-main">
         <Button onClick={() => void actions.resolveUnknown(id, 'published', url.trim())} disabled={actions.busy} data-testid="resolve-published">
           It was published
         </Button>

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import type { Account, Channel, ChannelSuggestion, PlatformInfo, Product } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Button, Card, ErrorNote, Field, Hint } from '../../ui'
+import { Button, Card, ErrorNote, Field, Hint, useMainVariant } from '../../ui'
 import { accountOptionLabel, addressExample, isSameAddress, isWebAddress, platformLabel, platformOfSuggestion, typedAddress } from './model'
 import { PrepareSiteProfile } from './PrepareSiteProfile'
 
@@ -18,6 +18,8 @@ interface Props {
   needsAccount: boolean
   /** Every account of the library (DEC-015): any of them can serve this product. */
   accounts: Account[]
+  /** The account to choose first (the one just added from this tab); an unknown one, or none, leaves the product's first account chosen. */
+  firstAccountId: string | null
   /** This product's channels, to explain what happens when a second login joins the same community. */
   channels: Channel[]
   /** The channels of every product, to say which other products an account already serves. */
@@ -26,11 +28,14 @@ interface Props {
   productName: (productId: string | null) => string
   prefill: Prefill | null
   onConnected: (channel: Channel) => void
+  /** Setting up is at this step (an account exists, no channel yet): "Connect channel" is the tab's one filled button. */
+  filled: boolean
 }
 
 /** Connects this product to a channel address through an account of the library. Nothing is posted and nothing is read yet. */
-export function ConnectChannel({ product, needsAccount, accounts, channels, allChannels, platforms, productName, prefill, onConnected }: Props) {
-  const [accountId, setAccountId] = useState('')
+export function ConnectChannel({ product, needsAccount, accounts, firstAccountId, channels, allChannels, platforms, productName, prefill, onConnected, filled }: Props) {
+  const main = useMainVariant()
+  const [accountId, setAccountId] = useState(firstAccountId ?? '')
   const [target, setTarget] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
   const [justJoined, setJustJoined] = useState(false)
@@ -90,7 +95,7 @@ export function ConnectChannel({ product, needsAccount, accounts, channels, allC
           </Hint>
         ))}
       <form onSubmit={(e) => void submit(e)} data-testid="connect-form">
-        <div className="settings-grid">
+        <div className="form-row">
           <Field label="Account">
             <select className="input" value={account?.id ?? ''} onChange={(e) => setAccountId(e.target.value)} disabled={accounts.length === 0} data-testid="connect-account">
               {account === undefined && <option value="">Choose an account</option>}
@@ -147,7 +152,7 @@ export function ConnectChannel({ product, needsAccount, accounts, channels, allC
         )}
         <ErrorNote error={state.error} />
         <div className="row">
-          <Button variant="primary" type="submit" disabled={!ready || state.busy} data-testid="connect-submit">
+          <Button variant={filled ? main : 'ghost'} type="submit" disabled={!ready || state.busy} data-testid="connect-submit">
             {state.busy ? 'Connecting…' : 'Connect channel'}
           </Button>
           {/* Why the button is off, beside it. */}

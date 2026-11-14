@@ -1,22 +1,30 @@
 // The renderer has no test runner of its own (vitest excludes src/renderer), so its pure routing rules are
 // tested from here. The modules under test import only src/shared, which keeps these plain unit tests.
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import type { ApiEvent } from '../shared/api'
 import type { Account, AnalysisStage, AttentionItem, Channel, Claim, Product } from '../shared/types'
+import { createFanOut } from '../renderer/src/fan-out'
+import { closeForm, mainForm, openForm, type OpenFormIds } from '../renderer/src/open-forms'
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from '../renderer/src/menu-state'
 import { connectChannelHref, fixLinkFor } from '../renderer/src/pages/attention-links'
 import { KIND_TONE, attentionCountTone } from '../renderer/src/pages/attention-tone'
-import { startSteps } from '../renderer/src/pages/attention-start'
+import { startHeadline, startSteps } from '../renderer/src/pages/attention-start'
 import { engineChoiceVariant, recommendedEngineId, splitEngineDetail } from '../renderer/src/pages/engine-detail'
 import { describeSources, planStages, progressOf } from '../renderer/src/pages/products/analysis-plan'
-import { launchCounts, launchProgress, launchStages } from '../renderer/src/pages/products/launch-path'
+import { TAB_STAGE, launchCounts, launchProgress, launchStages, nextStage, tabAccent, type LaunchFacts } from '../renderer/src/pages/products/launch-path'
 import { approvableClaims } from '../renderer/src/pages/products/model'
-import { nextProductStep, passportStatus } from '../renderer/src/pages/products/product-status'
+import { productLabels } from '../renderer/src/pages/products/product-labels'
+import { deleteBlocker, nextProductStep, passportStatus, websiteHost } from '../renderer/src/pages/products/product-status'
+import { resolveSelected } from '../renderer/src/pages/products/product-selection'
 import { isMirroredSource } from '../renderer/src/pages/products/source-view'
 import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block'
-import { nextStep } from '../renderer/src/pages/channels/next-step'
+import { activateBlocker, canActivate, canPause, neverAssessed, setupStage } from '../renderer/src/pages/channels/setup-stage'
+import { afterCreateNote, nextStep } from '../renderer/src/pages/channels/next-step'
+import { approveLabels } from '../renderer/src/pages/review/approve-labels'
+import { channelLabel } from '../renderer/src/pages/review/channel-label'
 import { platformMismatch } from '../renderer/src/pages/channels/platform-hint'
-import { MOVED_PAGES, accountsNewHref, parseAccountsHash, parseHash, productHref, publicationsHref, publicationsProductOf } from '../renderer/src/route'
+import { MOVED_PAGES, PRODUCT_TABS, accountHref, accountsNewHref, channelsAccountOf, navigateHashOf, parseAccountsHash, parseHash, productHref, publicationsHref, publicationsProductOf } from '../renderer/src/route'
 import { accountText, accountsGroupName, accountsSummary, automationText, engineGroupName } from '../renderer/src/status-labels'
 
 describe('hash routes (DEC-009)', () => {
@@ -50,8 +58,150 @@ describe('hash routes (DEC-009)', () => {
     expect(productHref(undefined)).toBe('#/products')
   })
 
+  it('carries the account a Channels tab should choose in "Connect a channel" (BUG-063)', () => {
+    expect(productHref('p1', 'channels', 'a1')).toBe('#/products/p1/channels?account=a1')
+    // The query is not part of the path: the product and the tab are read as before.
+    expect(parseHash('#/products/p1/channels?account=a1')).toEqual({ page: 'products', productId: 'p1', tab: 'channels' })
+    expect(channelsAccountOf(productHref('p1', 'channels', 'a1'))).toBe('a1')
+    // Ids that need escaping round-trip, in the product and in the account.
+    const href = productHref('a b/c', 'channels', 'x y/z&w=1')
+    expect(parseHash(href)).toEqual({ page: 'products', productId: 'a b/c', tab: 'channels' })
+    expect(channelsAccountOf(href)).toBe('x y/z&w=1')
+    // No account, a blank one or another tab: the old link and no choice.
+    expect(productHref('p1', 'channels', '')).toBe('#/products/p1/channels')
+    expect(productHref('p1', 'goal', 'a1')).toBe('#/products/p1/goal')
+    expect(productHref(null, 'channels', 'a1')).toBe('#/products')
+    expect(channelsAccountOf('#/products/p1/channels')).toBeNull()
+    expect(channelsAccountOf('#/products/p1/channels?account=%20')).toBeNull()
+    expect(channelsAccountOf('#/products/p1/channels?other=1')).toBeNull()
+    expect(channelsAccountOf('#/products/p1/goal?account=a1')).toBeNull()
+    expect(channelsAccountOf('#/products/p1?account=a1')).toBeNull()
+    expect(channelsAccountOf('#/accounts/p1/channels?account=a1')).toBeNull()
+    expect(channelsAccountOf('')).toBeNull()
+  })
+
   it('sends the old Channels and Results routes to the product list', () => {
     expect(MOVED_PAGES).toEqual({ channels: 'products', results: 'products' })
+  })
+})
+
+describe('the navigate event of the native menu (BUG-048)', () => {
+  it('asks for a page only through a navigate event with a hash route', () => {
+    expect(navigateHashOf({ type: 'navigate', hash: '#/settings' })).toBe('#/settings')
+    expect(navigateHashOf({ type: 'navigate', hash: '#/products/p1/channels' })).toBe('#/products/p1/channels')
+  })
+
+  it('ignores every other event and a hash that is not a route', () => {
+    expect(navigateHashOf({ type: 'changed', scope: 'settings' })).toBeNull()
+    for (const hash of ['', '#', 'settings', 'https://example.com/#/settings', '#/set tings']) {
+      expect(navigateHashOf({ type: 'navigate', hash } satisfies ApiEvent)).toBeNull()
+    }
+  })
+
+  it('names a page that the shell knows', () => {
+    expect(parseHash(navigateHashOf({ type: 'navigate', hash: '#/settings' }) ?? '').page).toBe('settings')
+  })
+})
+
+describe('one bridge subscription for every screen (BUG-061)', () => {
+  /** The preload bridge: each onEvent call adds one ipcRenderer listener, which Node warns about from the 11th. */
+  const fakeBridge = () => {
+    const listeners = new Set<(event: ApiEvent) => void>()
+    const remove = vi.fn()
+    const onEvent = vi.fn((handler: (event: ApiEvent) => void) => {
+      listeners.add(handler)
+      return () => {
+        remove()
+        listeners.delete(handler)
+      }
+    })
+    return { onEvent, remove, listeners, push: (event: ApiEvent) => [...listeners].forEach((listener) => listener(event)) }
+  }
+  const changed: ApiEvent = { type: 'changed', scope: 'accounts' }
+  const paused: ApiEvent = { type: 'changed', scope: 'settings' }
+
+  it('makes one onEvent call for twenty subscribers, so the bridge holds one listener', () => {
+    const bridge = fakeBridge()
+    const subscribe = createFanOut<ApiEvent>(bridge.onEvent)
+    for (let i = 0; i < 20; i++) subscribe(() => undefined)
+    expect(bridge.onEvent).toHaveBeenCalledTimes(1)
+    expect(bridge.listeners.size).toBe(1)
+  })
+
+  it('hands every event to every handler once, in order', () => {
+    const bridge = fakeBridge()
+    const subscribe = createFanOut<ApiEvent>(bridge.onEvent)
+    const handlers = Array.from({ length: 20 }, () => vi.fn())
+    handlers.forEach((handler) => subscribe(handler))
+    bridge.push(changed)
+    bridge.push(paused)
+    for (const handler of handlers) {
+      expect(handler).toHaveBeenCalledTimes(2)
+      expect(handler).toHaveBeenNthCalledWith(1, changed)
+      expect(handler).toHaveBeenNthCalledWith(2, paused)
+    }
+  })
+
+  it('stops only the handler that unsubscribed', () => {
+    const bridge = fakeBridge()
+    const subscribe = createFanOut<ApiEvent>(bridge.onEvent)
+    const [first, second] = [vi.fn(), vi.fn()]
+    const stopFirst = subscribe(first)
+    subscribe(second)
+    stopFirst()
+    bridge.push(changed)
+    expect(first).not.toHaveBeenCalled()
+    expect(second).toHaveBeenCalledTimes(1)
+    expect(bridge.remove).not.toHaveBeenCalled()
+    expect(bridge.listeners.size).toBe(1)
+  })
+
+  it('removes the bridge listener when the last handler leaves, and registers again on the next subscribe', () => {
+    const bridge = fakeBridge()
+    const subscribe = createFanOut<ApiEvent>(bridge.onEvent)
+    const stopA = subscribe(() => undefined)
+    const stopB = subscribe(() => undefined)
+    stopA()
+    expect(bridge.remove).not.toHaveBeenCalled()
+    stopB()
+    expect(bridge.remove).toHaveBeenCalledTimes(1)
+    expect(bridge.listeners.size).toBe(0)
+
+    const late = vi.fn()
+    subscribe(late)
+    expect(bridge.onEvent).toHaveBeenCalledTimes(2)
+    bridge.push(changed)
+    expect(late).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats a second unsubscribe as nothing, and lets a handler leave while an event is being handed out', () => {
+    const bridge = fakeBridge()
+    const subscribe = createFanOut<ApiEvent>(bridge.onEvent)
+    const calls: string[] = []
+    let stopB = (): void => undefined
+    subscribe(() => {
+      calls.push('a')
+      stopB()
+    })
+    stopB = subscribe(() => calls.push('b'))
+    const stopC = subscribe(() => calls.push('c'))
+    bridge.push(changed)
+    // b left during the event, before its turn: it does not get that event.
+    expect(calls).toEqual(['a', 'c'])
+    stopB()
+    stopC()
+    stopC()
+    expect(bridge.remove).toHaveBeenCalledTimes(0)
+    expect(bridge.listeners.size).toBe(1)
+  })
+
+  it('removes the bridge listener exactly once however often the last handler is unsubscribed', () => {
+    const bridge = fakeBridge()
+    const subscribe = createFanOut<ApiEvent>(bridge.onEvent)
+    const stop = subscribe(() => undefined)
+    stop()
+    stop()
+    expect(bridge.remove).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -68,15 +218,15 @@ describe('attention links to the product page (DEC-009)', () => {
     expect(fixLinkFor(item('channel', 'c2'), sources)).toEqual({ href: '#/products/p2/channels', label: 'Open Other channels', productName: 'Other' })
   })
 
-  it('sends a sign-in problem to the Accounts section and names the products that use the account (DEC-015)', () => {
-    expect(fixLinkFor(item('account', 'a1'), sources)).toEqual({ href: '#/accounts', label: 'Open Accounts', productName: 'Natal Mystic' })
-    expect(fixLinkFor(item('account', 'legacy'), sources)).toEqual({ href: '#/accounts', label: 'Open Accounts', productName: 'Other' })
+  it('sends a sign-in problem to the account it names in the Accounts section, and names the products that use it (DEC-015, BUG-043)', () => {
+    expect(fixLinkFor(item('account', 'a1'), sources)).toEqual({ href: '#/accounts/a1', label: 'Open Accounts', productName: 'Natal Mystic' })
+    expect(fixLinkFor(item('account', 'legacy'), sources)).toEqual({ href: '#/accounts/legacy', label: 'Open Accounts', productName: 'Other' })
   })
 
   it('names every product that uses a shared account, and none for an account nothing uses', () => {
     const shared = { ...sources, channels: [...sources.channels, { id: 'c4', productId: 'p1', accountId: 'legacy' } as Channel] }
     expect(fixLinkFor(item('account', 'legacy'), shared)).toMatchObject({ productName: 'Other, Natal Mystic' })
-    expect(fixLinkFor(item('account', 'unused'), sources)).toEqual({ href: '#/accounts', label: 'Open Accounts', productName: null })
+    expect(fixLinkFor(item('account', 'unused'), sources)).toEqual({ href: '#/accounts/unused', label: 'Open Accounts', productName: null })
   })
 
   it('falls back to the product list when the product cannot be resolved, and has no link for decisions', () => {
@@ -124,16 +274,47 @@ describe('the main menu can be hidden and the choice is remembered', () => {
 describe('the new-account form of the Accounts section', () => {
   it('is reached by a link, with or without a role', () => {
     expect(accountsNewHref()).toBe('#/accounts/new')
-    expect(parseAccountsHash('#/accounts')).toEqual({ adding: false, role: null })
-    expect(parseAccountsHash('#/accounts/new')).toEqual({ adding: true, role: null })
-    expect(parseAccountsHash('#/products/p1/channels')).toEqual({ adding: false, role: null })
+    expect(parseAccountsHash('#/accounts')).toEqual({ adding: false, accountId: null, productId: null, role: null })
+    expect(parseAccountsHash('#/accounts/new')).toEqual({ adding: true, accountId: null, productId: null, role: null })
+    expect(parseAccountsHash('#/products/p1/channels')).toEqual({ adding: false, accountId: null, productId: null, role: null })
+  })
+
+  it('names an account by #/accounts/<id>, whatever characters the id holds, and "new" stays the form (BUG-043)', () => {
+    expect(accountHref('a1')).toBe('#/accounts/a1')
+    expect(parseAccountsHash('#/accounts/a1')).toEqual({ adding: false, accountId: 'a1', productId: null, role: null })
+    expect(accountHref('a b/c')).toBe('#/accounts/a%20b%2Fc')
+    expect(parseAccountsHash(accountHref('a b/c'))).toEqual({ adding: false, accountId: 'a b/c', productId: null, role: null })
+    // An id that is not valid percent-encoding is taken as written instead of throwing.
+    expect(parseAccountsHash('#/accounts/100%')).toEqual({ adding: false, accountId: '100%', productId: null, role: null })
+    // Only the Accounts page reads an account id; the form is never an account.
+    expect(parseAccountsHash('#/products/a1')).toEqual({ adding: false, accountId: null, productId: null, role: null })
+    expect(parseAccountsHash('#/accounts/new').accountId).toBeNull()
+    // The page is still Accounts for the shell.
+    expect(parseHash(accountHref('a1')).page).toBe('accounts')
+  })
+
+  it('carries the product it was opened from, alone or together with a role (BUG-063)', () => {
+    expect(accountsNewHref(undefined, 'p1')).toBe('#/accounts/new?product=p1')
+    expect(parseAccountsHash(accountsNewHref(undefined, 'p1'))).toEqual({ adding: true, accountId: null, productId: 'p1', role: null })
+    // An id that needs escaping round-trips.
+    expect(parseAccountsHash(accountsNewHref(undefined, 'a b/c&d=1'))).toMatchObject({ adding: true, productId: 'a b/c&d=1' })
+    // The role and the product travel together, and the role-only link is unchanged.
+    const role = { name: 'Astro & Co', voice: 'Calm, plain words' }
+    expect(parseAccountsHash(accountsNewHref(role, 'p1'))).toEqual({ adding: true, accountId: null, productId: 'p1', role })
+    expect(accountsNewHref(role)).toBe(`#/accounts/new?${new URLSearchParams({ name: role.name, voice: role.voice }).toString()}`)
+    expect(parseAccountsHash(accountsNewHref(role))).toMatchObject({ productId: null, role })
+    // No product: no query. An empty or blank product is no product, and only the form reads one.
+    expect(accountsNewHref(undefined, '')).toBe('#/accounts/new')
+    expect(parseAccountsHash('#/accounts/new?product=%20')).toMatchObject({ adding: true, productId: null })
+    expect(parseAccountsHash('#/accounts?product=p1')).toMatchObject({ adding: false, productId: null })
+    expect(parseAccountsHash('#/accounts/a1?product=p1')).toMatchObject({ adding: false, accountId: 'a1', productId: null })
   })
 
   it('carries a role through the address, whatever characters it holds', () => {
     const role = { name: 'Astro & Co', voice: 'Calm, "plain" words: no jargon / no ?marks=1' }
-    expect(parseAccountsHash(accountsNewHref(role))).toEqual({ adding: true, role })
-    expect(parseAccountsHash('#/accounts/new?name=%20&voice=x')).toEqual({ adding: true, role: null })
-    expect(parseAccountsHash('#/accounts?name=Dev')).toEqual({ adding: false, role: null })
+    expect(parseAccountsHash(accountsNewHref(role))).toEqual({ adding: true, accountId: null, productId: null, role })
+    expect(parseAccountsHash('#/accounts/new?name=%20&voice=x')).toEqual({ adding: true, accountId: null, productId: null, role: null })
+    expect(parseAccountsHash('#/accounts?name=Dev')).toEqual({ adding: false, accountId: null, productId: null, role: null })
   })
 })
 
@@ -150,6 +331,18 @@ describe('the next step of an account', () => {
 
   it('does not ask for a password where the Mac keeps none', () => {
     expect(nextStep(account({ email: 'a@b.co' }), false, false).block).toBe('signin')
+  })
+
+  it('the note under "Add account" tells where the owner goes next, and from a product that is back to its channels, not into sign-in setup (BUG-063)', () => {
+    expect(afterCreateNote(null)).toMatch(/^After adding it you are told what to do next: set the address and the password/)
+    const fromProduct = afterCreateNote({ name: 'Natal Mystic' })
+    expect(fromProduct).toContain('Channels tab of Natal Mystic')
+    expect(fromProduct).toMatch(/connect a channel/i)
+    // The address, the password and the sign-in are named as later work, not as the next step.
+    expect(fromProduct).not.toMatch(/you are told what to do next/)
+    expect(fromProduct).toMatch(/later/i)
+    // A product whose name has not arrived yet is still a product.
+    expect(afterCreateNote({ name: undefined })).toContain('Channels tab of this product')
   })
 })
 
@@ -224,7 +417,7 @@ describe('QA clarity batch: what the screens say', () => {
   const stage = (name: AnalysisStage['name'], status: AnalysisStage['status'] = 'pending'): AnalysisStage => ({ productId: 'p', name, status, detail: '', updatedAt: '' })
   const ALL_STAGES = [stage('read_site'), stage('analyze_documents'), stage('scan_code'), stage('synthesize'), stage('find_contradictions')]
 
-  it('Attention: the getting-started steps follow the state of the app, and the first open one is the next step', () => {
+  it('Attention: the getting-started steps follow the state of the app, and the first open one is the next step (with no launch stage in the way)', () => {
     const fresh = startSteps({ products: 0, accounts: 0, paused: true })
     expect(fresh.map((x) => x.done)).toEqual([false, false, false])
     expect(fresh.find((x) => !x.done)?.id).toBe('product')
@@ -234,6 +427,36 @@ describe('QA clarity batch: what the screens say', () => {
     expect(startSteps({ products: 2, accounts: 1, paused: false }).every((x) => x.done)).toBe(true)
     // Until the state of the automation arrived nothing claims it is running.
     expect(startSteps({ products: 1, accounts: 1, paused: undefined }).find((x) => x.id === 'resume')?.done).toBe(false)
+  })
+
+  it('Attention (BUG-058): the newest product\'s next stage leads the checklist, ahead of the account and the automation, and is the step the path and the button name', () => {
+    const stageOf = (over: Partial<LaunchFacts>) => nextStage(launchStages('p1', { hasSources: true, passportApproved: false, goals: 0, channels: 0, approvedPublications: 0, ...over }))
+    // Products but no account, automation paused (the report): the passport is the first open step, the account comes after it.
+    const passport = startSteps({ products: 3, accounts: 0, paused: true, stage: stageOf({}) })
+    expect(passport.map((x) => x.id)).toEqual(['product', 'launch', 'account', 'resume'])
+    expect(passport.map((x) => x.done)).toEqual([true, false, false, false])
+    expect(passport.find((x) => !x.done)).toMatchObject({ id: 'launch', title: 'Build the passport', action: 'Build the passport', hint: 'Build and approve the passport.', href: '#/products/p1/passport' })
+    expect(startSteps({ products: 3, accounts: 0, paused: true, stage: stageOf({ passportApproved: true }) }).find((x) => !x.done)).toMatchObject({ id: 'launch', action: 'Write a goal', href: '#/products/p1/goal' })
+    expect(startSteps({ products: 3, accounts: 0, paused: true, stage: stageOf({ passportApproved: true, goals: 1 }) }).find((x) => !x.done)).toMatchObject({ id: 'launch', action: 'Connect a channel', href: '#/products/p1/channels' })
+    // An account and a running automation do not move the path's stage out of the first place.
+    expect(startSteps({ products: 1, accounts: 1, paused: false, stage: stageOf({}) }).find((x) => !x.done)?.id).toBe('launch')
+    // With every setup stage done (the Publication stage is the work, not the setup) or no stage, the three steps stay as they were.
+    for (const stage of [stageOf({ passportApproved: true, goals: 1, channels: 1 }), stageOf({ passportApproved: true, goals: 1, channels: 1, approvedPublications: 1 }), null, undefined]) {
+      expect(startSteps({ products: 2, accounts: 0, paused: true, stage }).map((x) => x.id)).toEqual(['product', 'account', 'resume'])
+    }
+    // The first open step, the filled button under the card and the path's "Next" tag are one step: the same action as nextStage.
+    for (const over of [{}, { passportApproved: true }, { passportApproved: true, goals: 1 }]) {
+      const stages = launchStages('p1', { hasSources: true, passportApproved: false, goals: 0, channels: 0, approvedPublications: 0, ...over })
+      const first = startSteps({ products: 1, accounts: 0, paused: true, stage: nextStage(stages) }).find((x) => !x.done)
+      expect({ action: first?.action, href: first?.href }).toEqual({ action: nextStage(stages)?.action, href: nextStage(stages)?.href })
+    }
+  })
+
+  it('Attention (BUG-058): the headline names the product the path is about, and asks for the first product when there is none', () => {
+    expect(startHeadline(null)).toBe('Launch your first product')
+    expect(startHeadline('Northwind Notes')).toBe('Launch Northwind Notes')
+    // A label that tells products of one name apart (BUG-054) is named as it is.
+    expect(startHeadline('Lumen Reader · 14 Nov 13:46')).toBe('Launch Lumen Reader · 14 Nov 13:46')
   })
 
   it('Attention (BUG-029): the "Resume automation" hint follows the state, the title stays', () => {
@@ -255,18 +478,30 @@ describe('QA clarity batch: what the screens say', () => {
     expect(passportStatus(none, null, [])).toEqual({ tone: 'warn', label: 'No approved passport' })
   })
 
-  it('product list: the next step goes passport, goal, channel, publication, and is gone once the path is complete (BUG-014)', () => {
-    const none = { channels: 0, approvedPublications: 0, draftPublications: 0 }
-    const goals = [{ id: 'g', targetAction: 'a', successMetrics: [], notes: '' }]
-    expect(nextProductStep({ activePassportVersionId: null, analysisStatus: 'idle', goals: [] }, none)).toBe('Next: run the analysis')
-    expect(nextProductStep({ activePassportVersionId: null, analysisStatus: 'complete', goals: [] }, none)).toBe('Next: approve the passport')
-    expect(nextProductStep({ activePassportVersionId: 'v', analysisStatus: 'complete', goals: [] }, none)).toBe('Next: write a goal')
-    const ready = { activePassportVersionId: 'v', analysisStatus: 'complete' as const, goals }
-    expect(nextProductStep(ready, none)).toBe('Next: connect a channel')
+  it('product list: the next step is the next stage of the launch path, in the words of its action, and is gone once the path is complete (BUG-014, BUG-064)', () => {
+    const rowOf = (facts: Partial<LaunchFacts>) => nextProductStep(launchStages('p1', { hasSources: true, passportApproved: false, goals: 0, channels: 0, approvedPublications: 0, ...facts }))
+    // No approved passport: the row names the stage, never the analysis, whatever the analysis or a hand-built draft did (the row has no say in it).
+    expect(rowOf({})).toBe('Next: build the passport')
+    expect(rowOf({ passportApproved: true })).toBe('Next: write a goal')
+    expect(rowOf({ passportApproved: true, goals: 1 })).toBe('Next: connect a channel')
     // A product with a channel no longer asks for one.
-    expect(nextProductStep(ready, { ...none, channels: 1 })).toBe('Next: write a publication')
-    expect(nextProductStep(ready, { ...none, channels: 1, draftPublications: 2 })).toBe('Next: approve a draft')
-    expect(nextProductStep(ready, { channels: 1, approvedPublications: 1, draftPublications: 2 })).toBeNull()
+    expect(rowOf({ passportApproved: true, goals: 1, channels: 1 })).toBe('Next: write a publication')
+    expect(rowOf({ passportApproved: true, goals: 1, channels: 1, draftPublications: 2 })).toBe('Next: approve a draft')
+    expect(rowOf({ passportApproved: true, goals: 1, channels: 1, approvedPublications: 1, draftPublications: 2 })).toBeNull()
+    // The stage that is not done decides, whatever stands behind it: a channel connected before the goal was written leaves the goal next.
+    expect(rowOf({ passportApproved: true, channels: 1 })).toBe('Next: write a goal')
+    // The row and the header path read the same stages, so they name the same step.
+    for (const facts of [{}, { passportApproved: true }, { passportApproved: true, goals: 1 }, { passportApproved: true, goals: 1, channels: 1 }]) {
+      const stages = launchStages('p1', { hasSources: true, passportApproved: false, goals: 0, channels: 0, approvedPublications: 0, ...facts })
+      expect(nextProductStep(stages)?.toLowerCase()).toBe(`next: ${nextStage(stages)?.action.toLowerCase()}`)
+    }
+  })
+
+  it('review buttons (BUG-057): an edited draft says "Save, approve and send", never "Save and approve and send"', () => {
+    expect(approveLabels(false)).toEqual({ approve: 'Approve', approveAndSend: 'Approve and send' })
+    expect(approveLabels(true)).toEqual({ approve: 'Save and approve', approveAndSend: 'Save, approve and send' })
+    // The send button names its steps with commas; two "and"s in a row are gone.
+    for (const dirty of [false, true]) expect(approveLabels(dirty).approveAndSend).not.toMatch(/ and .* and /)
   })
 
   it('Analysis: a step with nothing to work on says why instead of "Waiting", and is not counted', () => {
@@ -339,6 +574,73 @@ describe('QA clarity batch: what the screens say', () => {
     expect(launchStages('p1', { ...facts, passportApproved: false }).find((s) => s.state === 'current')?.id).toBe('passport')
   })
 
+  it('Launch path (BUG-064): the passport stage asks to build and approve it, and every stage has the words of its button', () => {
+    const stages = launchStages('p1', { hasSources: true, passportApproved: false, goals: 0, channels: 0, approvedPublications: 0 })
+    expect(stages.find((s) => s.id === 'passport')?.todo).toBe('Build and approve the passport.')
+    expect(stages.map((s) => s.action)).toEqual(['Add a source', 'Build the passport', 'Write a goal', 'Connect a channel', 'Write a publication'])
+    // The Publication stage reads the drafts: with one waiting, the step is to approve it.
+    expect(launchStages('p1', { hasSources: true, passportApproved: true, goals: 1, channels: 1, approvedPublications: 0, draftPublications: 1 }).at(-1)?.action).toBe('Approve a draft')
+    expect(launchStages('p1', { hasSources: true, passportApproved: true, goals: 1, channels: 1, approvedPublications: 0, draftPublications: 0 }).at(-1)?.action).toBe('Write a publication')
+  })
+
+  it('Launch path (BUG-064, BUG-065): the next stage is the first stage that is not done, and none once every stage is done', () => {
+    const facts = { hasSources: false, passportApproved: false, goals: 0, channels: 0, approvedPublications: 0 }
+    // Every stage in turn is the next one while the stages before it are done.
+    expect(nextStage(launchStages('p1', facts))?.id).toBe('product')
+    expect(nextStage(launchStages('p1', { ...facts, hasSources: true }))?.id).toBe('passport')
+    expect(nextStage(launchStages('p1', { ...facts, hasSources: true, passportApproved: true }))?.id).toBe('goal')
+    expect(nextStage(launchStages('p1', { ...facts, hasSources: true, passportApproved: true, goals: 1 }))?.id).toBe('channel')
+    const publication = nextStage(launchStages('p1', { ...facts, hasSources: true, passportApproved: true, goals: 1, channels: 1 }))
+    expect(publication).toMatchObject({ id: 'publication', href: '#/publications/p1', action: 'Write a publication' })
+    expect(nextStage(launchStages('p1', { hasSources: true, passportApproved: true, goals: 1, channels: 1, approvedPublications: 1 }))).toBeNull()
+    // A done stage in the middle does not move the next step: the first stage that is not done keeps it.
+    const middle = nextStage(launchStages('p1', { ...facts, hasSources: true, passportApproved: true, channels: 1 }))
+    expect(middle).toMatchObject({ id: 'goal', state: 'current', href: '#/products/p1/goal', action: 'Write a goal' })
+    expect(nextStage(launchStages('p1', { ...facts, hasSources: true, goals: 1, channels: 1 }))?.id).toBe('passport')
+    expect(nextStage([])).toBeNull()
+  })
+
+  it('Product tabs (BUG-065): a tab keeps its filled action only while its own stage is the next one; every other tab points at the next stage', () => {
+    const facts = { hasSources: true, passportApproved: false, goals: 0, channels: 0, approvedPublications: 0 }
+    const accents = (over: Partial<LaunchFacts>) => {
+      const stages = launchStages('p1', { ...facts, ...over })
+      return Object.fromEntries(PRODUCT_TABS.map((tab) => [tab, (({ own, next }) => (own ? 'own' : (next?.id ?? 'none')))(tabAccent(stages, tab))]))
+    }
+    // A product with a source and no passport: Passport (and the Analysis that builds it) hold the accent; the finished Sources tab does not.
+    expect(accents({})).toEqual({ sources: 'passport', passport: 'own', analysis: 'own', goal: 'passport', channels: 'passport', results: 'passport' })
+    // Approved passport: the Goal tab is next, and the Passport and Analysis tabs hand the accent on.
+    expect(accents({ passportApproved: true })).toEqual({ sources: 'goal', passport: 'goal', analysis: 'goal', goal: 'own', channels: 'goal', results: 'goal' })
+    // Saved goal: Channels (and the Results tab, whose one action is "Connect a channel") hold it.
+    expect(accents({ passportApproved: true, goals: 1 })).toEqual({ sources: 'channel', passport: 'channel', analysis: 'channel', goal: 'channel', channels: 'own', results: 'own' })
+    // A connected channel: the Channels tab hands it on (its "Assess channel" and "Activate" are bezels); only Publication is left, and no tab is its own.
+    expect(accents({ passportApproved: true, goals: 1, channels: 1 })).toEqual({ sources: 'publication', passport: 'publication', analysis: 'publication', goal: 'publication', channels: 'publication', results: 'publication' })
+    // A product without a source: Sources holds it.
+    expect(accents({ hasSources: false }).sources).toBe('own')
+    // A done stage in the middle: a channel connected before the goal was written leaves the Goal tab as the owner.
+    expect(accents({ passportApproved: true, channels: 1 })).toMatchObject({ goal: 'own', channels: 'goal' })
+    // The path is complete: nothing is next, so no tab holds a filled button.
+    expect(accents({ passportApproved: true, goals: 1, channels: 1, approvedPublications: 1 })).toEqual({ sources: 'none', passport: 'none', analysis: 'none', goal: 'none', channels: 'none', results: 'none' })
+    expect(tabAccent(launchStages('p1', facts), 'goal').next).toMatchObject({ id: 'passport', href: '#/products/p1/passport', action: 'Build the passport' })
+  })
+
+  it('Product tabs (BUG-065): whatever the facts, each tab either holds the filled action or points at the path\'s next stage, never both and never neither while a stage is left', () => {
+    for (let n = 0; n < 32; n++) {
+      const facts: LaunchFacts = { hasSources: (n & 1) === 1, passportApproved: (n & 2) === 2, goals: (n & 4) === 4 ? 1 : 0, channels: (n & 8) === 8 ? 1 : 0, approvedPublications: (n & 16) === 16 ? 1 : 0 }
+      const stages = launchStages('p1', facts)
+      const next = nextStage(stages)
+      for (const tab of PRODUCT_TABS) {
+        const accent = tabAccent(stages, tab)
+        expect(accent.own && accent.next !== null).toBe(false)
+        if (!accent.own) expect(accent.next).toEqual(next)
+        if (!accent.own && next !== null) expect(accent.next?.state).toBe('current')
+      }
+      // At most one stage is next, so the owners are all tabs of that one stage: never two stages' accents on a screen.
+      const owners = PRODUCT_TABS.filter((tab) => tabAccent(stages, tab).own)
+      expect(owners.length).toBeLessThanOrEqual(2)
+      for (const tab of owners) expect(TAB_STAGE[tab]).toBe(next?.id)
+    }
+  })
+
   it('Launch path (BUG-012): channels, approved publications and drafts are counted per product; replies do not count', () => {
     const pub = (productId: string, state: string, kind = 'standalone') => ({ opportunity: { productId, state, kind } }) as Parameters<typeof launchCounts>[1][number]
     const counts = launchCounts(
@@ -364,6 +666,14 @@ describe('QA clarity batch: what the screens say', () => {
     expect(connectChannelHref('p 1')).toBe('#/products/p%201/channels')
     expect(connectChannelHref('')).toBe('#/products')
     expect(connectChannelHref(null)).toBe('#/products')
+  })
+
+  it('Publications and Opportunities (BUG-067): the Channel pop-up names the product only while no product is chosen', () => {
+    expect(channelLabel('Northwind Notes', 'r/test_sandbox', false)).toBe('Northwind Notes · r/test_sandbox')
+    expect(channelLabel('Northwind Notes', 'r/test_sandbox', true)).toBe('r/test_sandbox')
+    // A channel whose product is not known yet is named by its target in both cases.
+    expect(channelLabel(undefined, 'r/test_sandbox', false)).toBe('r/test_sandbox')
+    expect(channelLabel('', 'r/test_sandbox', false)).toBe('r/test_sandbox')
   })
 
   it('Menu (BUG-016): the Attention count is amber, and red only while one of the items is a failure', () => {
@@ -399,5 +709,242 @@ describe('QA clarity batch: what the screens say', () => {
     // Nothing is blocked on a guess while the settings are still loading.
     expect(suggestionBlock({ ...base, engineId: undefined, ready: false })).toBeNull()
     expect(suggestionBlock({ ...base, approved: null })).toBeNull()
+  })
+})
+
+describe('Channels tab: one step at a time (DEC-023)', () => {
+  const channel = (over: Partial<Channel>): Channel =>
+    ({ status: 'setup', baselineDoneAt: null, capabilities: [{ key: 'read_posts', status: 'unknown', detail: '', checkedAt: null }], ...over }) as Channel
+  const assessed = [{ key: 'read_posts', status: 'verified', detail: '', checkedAt: '2026-11-14T00:00:00.000Z' }] as Channel['capabilities']
+
+  it('the Channels tab asks for one step at a time, in order', () => {
+    expect(setupStage({ hasAccount: false, channelCount: 0, selected: undefined })).toBe('account')
+    // An account is asked for first, even when channels exist.
+    expect(setupStage({ hasAccount: false, channelCount: 2, selected: channel({}) })).toBe('account')
+    expect(setupStage({ hasAccount: true, channelCount: 0, selected: undefined })).toBe('connect')
+    // Several channels and none picked: the owner chooses, nothing is filled.
+    expect(setupStage({ hasAccount: true, channelCount: 2, selected: undefined })).toBe('choose')
+    expect(setupStage({ hasAccount: true, channelCount: 1, selected: channel({}) })).toBe('assess')
+    expect(setupStage({ hasAccount: true, channelCount: 1, selected: channel({ capabilities: assessed }) })).toBe('activate')
+    expect(setupStage({ hasAccount: true, channelCount: 1, selected: channel({ capabilities: assessed, status: 'active' }) })).toBe('running')
+    // Nothing is left to start: a paused channel, and one that needed the owner after its baseline was read.
+    expect(setupStage({ hasAccount: true, channelCount: 1, selected: channel({ capabilities: assessed, status: 'paused' }) })).toBe('running')
+    expect(
+      setupStage({ hasAccount: true, channelCount: 1, selected: channel({ capabilities: assessed, status: 'needs_user', baselineDoneAt: '2026-11-14T00:00:00.000Z' }) })
+    ).toBe('running')
+  })
+
+  it('a channel counts as assessed once any of its abilities was checked', () => {
+    expect(neverAssessed(channel({}))).toBe(true)
+    expect(neverAssessed(channel({ capabilities: [] }))).toBe(true)
+    expect(neverAssessed(channel({ capabilities: assessed }))).toBe(false)
+  })
+
+  it('a channel that needed the owner before its first baseline can be started, one that had a baseline can be paused', () => {
+    expect(canActivate(channel({ status: 'setup' }))).toBe(true)
+    expect(canActivate(channel({ status: 'needs_user' }))).toBe(true)
+    expect(canActivate(channel({ status: 'error' }))).toBe(true)
+    expect(canActivate(channel({ status: 'needs_user', baselineDoneAt: '2026-11-14T00:00:00.000Z' }))).toBe(false)
+    expect(canActivate(channel({ status: 'active' }))).toBe(false)
+    expect(canActivate(channel({ status: 'paused' }))).toBe(false)
+    expect(canPause(channel({ status: 'active' }))).toBe(true)
+    expect(canPause(channel({ status: 'error' }))).toBe(true)
+    expect(canPause(channel({ status: 'needs_user', baselineDoneAt: '2026-11-14T00:00:00.000Z' }))).toBe(true)
+    expect(canPause(channel({ status: 'needs_user' }))).toBe(false)
+    expect(canPause(channel({ status: 'setup' }))).toBe(false)
+    expect(canPause(channel({ status: 'paused' }))).toBe(false)
+  })
+
+  it('Activate waits for the assessment, and the sentence that says so is the one that disables it (BUG-055)', () => {
+    const baselineDone = '2026-11-14T00:00:00.000Z'
+    // A channel in setup that was never assessed: Activate is off and the reason is the next step.
+    expect(activateBlocker(channel({ status: 'setup' }))).toMatch(/^Assess the channel first to see what this account can do here\./)
+    // Once any ability was checked there is nothing to wait for.
+    expect(activateBlocker(channel({ status: 'setup', capabilities: assessed }))).toBeNull()
+    // A channel that is not to be started has no Activate, so nothing blocks it.
+    expect(activateBlocker(channel({ status: 'active' }))).toBeNull()
+    expect(activateBlocker(channel({ status: 'paused' }))).toBeNull()
+    // needs_user: without a baseline it can still be started, so it waits for the assessment too; with a baseline it cannot be started at all.
+    expect(activateBlocker(channel({ status: 'needs_user' }))).not.toBeNull()
+    expect(activateBlocker(channel({ status: 'needs_user', capabilities: assessed }))).toBeNull()
+    expect(activateBlocker(channel({ status: 'needs_user', baselineDoneAt: baselineDone }))).toBeNull()
+    // The button and its reason come from one rule: a blocked channel is exactly an activatable, never assessed one.
+    for (const status of ['setup', 'needs_user', 'error', 'active', 'paused'] as const) {
+      for (const baselineDoneAt of [null, baselineDone]) {
+        for (const capabilities of [channel({}).capabilities, assessed]) {
+          const c = channel({ status, baselineDoneAt, capabilities })
+          expect(activateBlocker(c) !== null).toBe(canActivate(c) && neverAssessed(c))
+        }
+      }
+    }
+  })
+})
+
+describe('the product that is open on the Products page (BUG-042)', () => {
+  const ids = ['p1', 'p2']
+
+  it('a product in the list is the selected one', () => {
+    expect(resolveSelected(ids, 'p2', null)).toBe('p2')
+    expect(resolveSelected(ids, 'p1', 'p3')).toBe('p1')
+  })
+
+  it('a product that was just created stays selected before the list has loaded it', () => {
+    // After "Create product" the route names the new product while `products.list` still holds the old rows.
+    expect(resolveSelected(ids, 'p3', 'p3')).toBe('p3')
+    expect(resolveSelected([], 'p3', 'p3')).toBe('p3')
+  })
+
+  it('an id that is neither in the list nor the one just created selects nothing', () => {
+    expect(resolveSelected(ids, 'gone', null)).toBeNull()
+    expect(resolveSelected(ids, 'gone', 'p3')).toBeNull()
+    expect(resolveSelected(ids, null, 'p3')).toBeNull()
+    expect(resolveSelected(ids, null, null)).toBeNull()
+  })
+
+  it('the "always open" effect does not fire for a created product: it acts only on a null selection', () => {
+    // Products.tsx re-selects the last or first product only when this is null. A created product must not be null, or
+    // the effect replaces the route with an old product (the defect behind BUG-042, BUG-068 and BUG-069).
+    expect(resolveSelected(ids, 'p3', 'p3')).not.toBeNull()
+    // Once the list holds it, the normal rule applies and the created id no longer matters.
+    expect(resolveSelected(['p1', 'p2', 'p3'], 'p3', 'p3')).toBe('p3')
+    expect(resolveSelected(ids, 'p3', null)).toBeNull()
+  })
+})
+
+describe('the website a product row shows (BUG-062)', () => {
+  it('shows the host: no scheme, no "www.", no trailing slash, no path', () => {
+    expect(websiteHost('https://northwind.example.com/')).toBe('northwind.example.com')
+    expect(websiteHost('http://www.northwind.example.com')).toBe('northwind.example.com')
+    expect(websiteHost('https://northwind-notes-team-workspace.example.com/products/meeting-notes?ref=1#top')).toBe('northwind-notes-team-workspace.example.com')
+  })
+
+  it('keeps a port, which tells two sites on one host apart', () => {
+    expect(websiteHost('http://localhost:3000/')).toBe('localhost:3000')
+  })
+
+  it('keeps the raw text when it is not an address', () => {
+    expect(websiteHost('northwind.example.com')).toBe('northwind.example.com')
+    expect(websiteHost('not a url')).toBe('not a url')
+    expect(websiteHost('')).toBe('')
+  })
+})
+
+describe('the labels that tell products of one name apart (BUG-054)', () => {
+  // Local time on purpose: the label shows the owner's clock, so a fixture built in local time reads the same in any time zone.
+  const at = (hour: number, minute: number, second = 0): string => new Date(2026, 10, 14, hour, minute, second).toISOString()
+  const product = (id: string, name: string, createdAt: string) => ({ id, name, createdAt })
+
+  it('leaves a name that only one product has exactly as it is', () => {
+    const labels = productLabels([product('p1', 'Northwind Notes', at(13, 46)), product('p2', 'Lumen Reader', at(14, 2))])
+    expect(labels.get('p1')).toBe('Northwind Notes')
+    expect(labels.get('p2')).toBe('Lumen Reader')
+  })
+
+  it('gives every product of a shared name its creation time, and leaves the others alone', () => {
+    const labels = productLabels([product('p1', 'Natal charts', at(13, 46)), product('p2', 'Natal charts', at(15, 5)), product('p3', 'Lumen Reader', at(14, 2))])
+    expect(labels.get('p1')).toBe('Natal charts · 14 Nov 13:46')
+    expect(labels.get('p2')).toBe('Natal charts · 14 Nov 15:05')
+    expect(labels.get('p3')).toBe('Lumen Reader')
+  })
+
+  it('compares names without case and without the spaces around them, and keeps each product\'s own spelling', () => {
+    const labels = productLabels([product('p1', 'Natal Charts', at(9, 0)), product('p2', '  natal charts ', at(10, 0))])
+    expect(labels.get('p1')).toBe('Natal Charts · 14 Nov 09:00')
+    expect(labels.get('p2')).toBe('natal charts · 14 Nov 10:00')
+  })
+
+  it('gives the same labels whatever the order of the list', () => {
+    const list = [product('p1', 'Twin', at(8, 0)), product('p2', 'Solo', at(8, 1)), product('p3', 'Twin', at(8, 2)), product('p4', 'Twin', at(8, 2, 30))]
+    const forward = productLabels(list)
+    const backward = productLabels([...list].reverse())
+    for (const p of list) expect(backward.get(p.id)).toBe(forward.get(p.id))
+  })
+
+  it('adds a short id when two products of one name were created in the same minute', () => {
+    const labels = productLabels([product('aaaa1111', 'Twin', at(8, 2)), product('bbbb2222', 'Twin', at(8, 2, 40)), product('cccc3333', 'Twin', at(9, 0))])
+    expect(labels.get('aaaa1111')).toBe('Twin · 14 Nov 08:02 · #aaaa')
+    expect(labels.get('bbbb2222')).toBe('Twin · 14 Nov 08:02 · #bbbb')
+    expect(labels.get('cccc3333')).toBe('Twin · 14 Nov 09:00')
+  })
+
+  it('tells products apart by id when createdAt is the same too, and lengthens the id until it differs', () => {
+    const same = at(8, 2)
+    const labels = productLabels([product('abcd0001', 'Twin', same), product('abcd0002', 'Twin', same)])
+    expect(labels.get('abcd0001')).toBe('Twin · 14 Nov 08:02 · #abcd0001')
+    expect(labels.get('abcd0002')).toBe('Twin · 14 Nov 08:02 · #abcd0002')
+  })
+
+  it('never gives two products of the list one label', () => {
+    const list = [
+      product('a1', 'Same', at(7, 0)),
+      product('a2', 'same', at(7, 0)),
+      product('a3', 'SAME ', at(7, 0, 59)),
+      product('b1', 'Other', at(7, 0)),
+      product('b2', 'Other', 'not a date')
+    ]
+    const labels = [...productLabels(list).values()]
+    expect(new Set(labels).size).toBe(list.length)
+  })
+})
+
+describe('the on-demand form that owns the filled button (BUG-040)', () => {
+  const open = (...ids: string[]): OpenFormIds => ids.reduce<OpenFormIds>((forms, id) => openForm(forms, id), [])
+
+  it('nobody owns it while no form is open', () => {
+    expect(mainForm([])).toBeNull()
+  })
+
+  it('the form opened last owns it, and a form opened before it does not', () => {
+    expect(mainForm(open('a'))).toBe('a')
+    expect(mainForm(open('a', 'b'))).toBe('b')
+    expect(mainForm(open('a', 'b', 'c'))).toBe('c')
+  })
+
+  it('closing the form that owns it hands it to the one opened before', () => {
+    expect(mainForm(closeForm(open('a', 'b', 'c'), 'c'))).toBe('b')
+    expect(mainForm(closeForm(closeForm(open('a', 'b', 'c'), 'c'), 'b'))).toBe('a')
+    expect(mainForm(closeForm(open('a'), 'a'))).toBeNull()
+  })
+
+  it('closing a form that does not own it leaves the owner as it is', () => {
+    expect(mainForm(closeForm(open('a', 'b', 'c'), 'a'))).toBe('c')
+    expect(mainForm(closeForm(open('a', 'b', 'c'), 'b'))).toBe('c')
+  })
+
+  it('registering a form again does not duplicate it and does not take the button from a newer form', () => {
+    const forms = open('a', 'b')
+    expect(openForm(forms, 'a')).toEqual(['a', 'b'])
+    expect(mainForm(openForm(forms, 'a'))).toBe('b')
+    expect(openForm(forms, 'b')).toBe(forms)
+  })
+
+  it('an id is in the list once, however often it is registered', () => {
+    expect(open('a', 'a', 'b', 'a', 'b')).toEqual(['a', 'b'])
+  })
+
+  it('closing a form that is not open changes nothing', () => {
+    const forms = open('a', 'b')
+    expect(closeForm(forms, 'x')).toBe(forms)
+  })
+
+  it('a form that was closed and opens again is the newest', () => {
+    expect(mainForm(openForm(closeForm(open('a', 'b'), 'a'), 'a'))).toBe('a')
+    expect(open('a', 'b').length).toBe(2)
+  })
+})
+
+describe('why a product cannot be deleted yet (BUG-046)', () => {
+  it('says nothing while the product has no channel, so the confirm may be asked', () => {
+    expect(deleteBlocker(0)).toBeNull()
+  })
+
+  it('names the one channel in the singular and says where to remove it', () => {
+    expect(deleteBlocker(1)).toBe('This product still has 1 connected channel. Remove it on the Channels tab first.')
+  })
+
+  it('writes the plural properly, never "channel(s)"', () => {
+    expect(deleteBlocker(2)).toBe('This product still has 2 connected channels. Remove them on the Channels tab first.')
+    expect(deleteBlocker(12)).toBe('This product still has 12 connected channels. Remove them on the Channels tab first.')
+    expect(deleteBlocker(2)).not.toMatch(/\(s\)/)
   })
 })

@@ -3,7 +3,7 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Account, EngineId, EngineStatus, PageReport } from '../../shared/types'
+import type { Account, EngineId, EngineStatus, PageReport, VaultUnavailable } from '../../shared/types'
 import { ControlledSession, type RawPage } from '../browser-session'
 import { Core, type CoreDeps } from '../core'
 import type { AgentBridge, McpLaunch, McpToolHost } from '../mcp/protocol'
@@ -17,6 +17,7 @@ import {
   type Clock,
   type Connector,
   type SecretClipboard,
+  SecretOpenError,
   type SecretStore,
   type PageStep,
   type PageStepResult,
@@ -24,20 +25,44 @@ import {
   type SignInStatus
 } from '../ports'
 
-/** A vault in memory, for tests. `encryptable = false` plays a system whose keychain cannot encrypt. */
+/**
+ * A vault in memory, for tests. `encryptable = false` plays a keychain that cannot be used (`cause` says why); `unreadable` lists keys whose
+ * value cannot be opened although the keychain answers. `touches` counts every call that would ask the real keychain (`available`, `get`,
+ * `set`): a test that says "this does not touch the keychain" asserts it did not move. Like the real vault, `blocked` only changes when
+ * something asks.
+ */
 export class MemorySecretStore implements SecretStore {
   readonly values = new Map<string, string>()
+  readonly unreadable = new Set<string>()
   encryptable = true
-  available(): boolean {
+  cause: VaultUnavailable = 'refused'
+  touches = 0
+  /** What the last question found, as the real vault remembers it: null until something asks, and null again after a yes. */
+  private block: VaultUnavailable | null = null
+  private ask(): void {
+    this.touches++
+    this.block = this.encryptable ? null : this.cause
+  }
+  async available(): Promise<boolean> {
+    this.ask()
     return this.encryptable
   }
+  blocked(): VaultUnavailable | null {
+    return this.block
+  }
   has(key: string): boolean {
-    return this.encryptable && this.values.has(key)
+    return this.values.has(key)
   }
-  get(key: string): string | null {
-    return this.encryptable ? (this.values.get(key) ?? null) : null
+  async get(key: string): Promise<string | null> {
+    // Like the real vault: no value, no question to the keychain.
+    if (!this.values.has(key)) return null
+    this.ask()
+    if (!this.encryptable) throw new SecretOpenError(this.cause)
+    if (this.unreadable.has(key)) throw new SecretOpenError(null)
+    return this.values.get(key) ?? null
   }
-  set(key: string, value: string): void {
+  async set(key: string, value: string): Promise<void> {
+    this.ask()
     if (!this.encryptable) throw new Error('The password vault is not available on this system.')
     this.values.set(key, value)
   }

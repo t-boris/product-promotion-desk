@@ -1,6 +1,8 @@
 // Hash routes shared by the shell, the product page and the attention list. Kept apart from the components so the
 // rules (which hashes exist, where old links go) live in one place.
 
+import type { ApiEvent } from '../../shared/api'
+
 /** Tabs of the product page in display order (DEC-009: Channels and Results live here, not in the main menu). */
 export const PRODUCT_TABS = ['sources', 'passport', 'analysis', 'goal', 'channels', 'results'] as const
 export type ProductTab = (typeof PRODUCT_TABS)[number]
@@ -34,12 +36,16 @@ const safeDecode = (value: string): string => {
   }
 }
 
-/** Reads `#/page`, `#/products/<productId>` and `#/products/<productId>/<tab>`. */
+/** The path segments of a hash, and the query after them. */
+function splitHash(hash: string): { segments: string[]; query: URLSearchParams } {
+  const body = hash.replace(/^#\/?/, '')
+  const at = body.indexOf('?')
+  return { segments: (at < 0 ? body : body.slice(0, at)).split('/').filter((segment) => segment !== ''), query: new URLSearchParams(at < 0 ? '' : body.slice(at + 1)) }
+}
+
+/** Reads `#/page`, `#/products/<productId>` and `#/products/<productId>/<tab>`; a query after the path is not part of it. */
 export function parseHash(hash: string): ParsedHash {
-  const [page = '', productId, tab] = hash
-    .replace(/^#\/?/, '')
-    .split('/')
-    .filter((segment) => segment !== '')
+  const [page = '', productId, tab] = splitHash(hash).segments
   const onProductPage = page === 'products' && !!productId
   return {
     page,
@@ -48,11 +54,21 @@ export function parseHash(hash: string): ParsedHash {
   }
 }
 
-/** Link to a product (and optionally one of its tabs); without a product, the product list. */
-export function productHref(productId: string | null | undefined, tab?: ProductTab): string {
+/**
+ * Link to a product (and optionally one of its tabs); without a product, the product list. On the Channels tab, `accountId` is the account
+ * "Connect a channel" chooses first: the one just added from that tab (BUG-063).
+ */
+export function productHref(productId: string | null | undefined, tab?: ProductTab, accountId?: string): string {
   if (!productId) return '#/products'
   const base = `#/products/${encodeURIComponent(productId)}`
-  return tab ? `${base}/${tab}` : base
+  if (!tab) return base
+  return tab === 'channels' && accountId ? `${base}/${tab}?${new URLSearchParams({ account: accountId }).toString()}` : `${base}/${tab}`
+}
+
+/** The account a `#/products/<productId>/channels?account=<accountId>` link asks "Connect a channel" to choose first, or null. */
+export function channelsAccountOf(hash: string): string | null {
+  const { segments: [page, productId, tab], query } = splitHash(hash)
+  return page === 'products' && productId && tab === 'channels' ? query.get('account')?.trim() || null : null
 }
 
 /** Link to Publications, filtered by one product when one is given (the last stage of a product's launch path). */
@@ -69,25 +85,54 @@ export function publicationsProductOf(hash: string): string | null {
   return page === 'publications' && productId ? safeDecode(productId) : null
 }
 
-/** What the Accounts section was asked to show: the new-account form, possibly with a role already filled in. */
+/** What the Accounts section was asked to show: the new-account form (possibly with a role already filled in, or the product it was opened from), or one account. */
 export interface AccountsRoute {
   adding: boolean
+  /** `#/accounts/<accountId>`: the account to select. Null for the bare list and for the new-account form. */
+  accountId: string | null
+  /** `#/accounts/new?product=<productId>`: the product the form was opened from, which the app returns to afterwards. Only the form carries one. */
+  productId: string | null
   role: { name: string; voice: string } | null
 }
 
-/** Link to the new-account form of the Accounts section; "Use this role" on the product page passes the role along. */
-export function accountsNewHref(role?: { name: string; voice: string }): string {
-  if (!role) return '#/accounts/new'
-  return `#/accounts/new?${new URLSearchParams({ name: role.name, voice: role.voice }).toString()}`
+/** Link to one account of the Accounts section (the account an Attention item is about). */
+export function accountHref(accountId: string): string {
+  return `${ACCOUNTS_HREF}/${encodeURIComponent(accountId)}`
 }
 
-/** Reads `#/accounts` and `#/accounts/new?name=…&voice=…`. */
+/**
+ * Link to the new-account form of the Accounts section. "Use this role" on the product page passes the role along; a product's Channels tab
+ * passes the product, so that the new account is made for it and the app returns to that tab afterwards.
+ */
+export function accountsNewHref(role?: { name: string; voice: string }, productId?: string): string {
+  const params = new URLSearchParams()
+  if (role) {
+    params.set('name', role.name)
+    params.set('voice', role.voice)
+  }
+  if (productId) params.set('product', productId)
+  const query = params.toString()
+  return query ? `#/accounts/new?${query}` : '#/accounts/new'
+}
+
+/** Reads `#/accounts`, `#/accounts/<accountId>` and `#/accounts/new?name=…&voice=…&product=…`. */
 export function parseAccountsHash(hash: string): AccountsRoute {
   const body = hash.replace(/^#\/?/, '')
   const at = body.indexOf('?')
   const segments = (at < 0 ? body : body.slice(0, at)).split('/').filter((segment) => segment !== '')
-  const adding = segments[0] === 'accounts' && segments[1] === 'new'
+  const onAccounts = segments[0] === 'accounts'
+  const adding = onAccounts && segments[1] === 'new'
   const params = new URLSearchParams(at < 0 ? '' : body.slice(at + 1))
   const name = params.get('name')?.trim() ?? ''
-  return { adding, role: adding && name ? { name, voice: params.get('voice')?.trim() ?? '' } : null }
+  return {
+    adding,
+    accountId: onAccounts && !adding && segments[1] ? safeDecode(segments[1]) : null,
+    productId: adding ? params.get('product')?.trim() || null : null,
+    role: adding && name ? { name, voice: params.get('voice')?.trim() ?? '' } : null
+  }
+}
+
+/** The hash a `navigate` event from the main process asks the window to show (the "Settings…" menu item), or null for any other event or a malformed hash. */
+export function navigateHashOf(event: ApiEvent): string | null {
+  return event.type === 'navigate' && /^#\/\S*$/.test(event.hash) ? event.hash : null
 }

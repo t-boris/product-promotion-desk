@@ -128,9 +128,8 @@ export function capabilityOf(channel: Channel, key: CapabilityKey): Capability |
   return channel.capabilities.find((c) => c.key === key)
 }
 
-export function neverAssessed(channel: Channel): boolean {
-  return channel.capabilities.every((c) => c.checkedAt === null)
-}
+// Where "never assessed" is decided together with the setup stage, in a module without components.
+export { neverAssessed } from './setup-stage'
 
 export const MODE_OPTIONS: { id: ChannelMode; label: string; summary: string }[] = [
   { id: 'observe', label: 'Observe', summary: 'Shows new discussions and comments as events. Nothing is drafted and nothing is sent.' },

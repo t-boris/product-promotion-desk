@@ -1,16 +1,20 @@
 import { useState, type FormEvent } from 'react'
 import type { Account, Mailbox } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Button, ErrorNote, Field } from '../../ui'
+import { Button, ErrorNote, Field, useMainVariant, useOpenForm } from '../../ui'
 import { AccountBlock } from './AccountBlock'
 import { CopyButton } from './CopyButton'
+import type { NextStep } from './next-step'
 
 /**
  * The e-mail address of one account (DEC-015): what it signs up with and where the platform writes to it. An address can be
  * typed, or proposed from a base mailbox, which gives every account an address of its own.
  */
-export function AccountEmail({ account, mailboxes }: { account: Account; mailboxes: Mailbox[] }) {
+export function AccountEmail({ account, mailboxes, next }: { account: Account; mailboxes: Mailbox[]; /** The step the account needs next: "Set an address" is the filled button only when it is this one. */ next: NextStep['block'] }) {
   const [editing, setEditing] = useState(false)
+  // The open form owns the filled button while it is the form opened last; the resting "Set an address" is filled only while it is the account's next step.
+  const saveVariant = useOpenForm(editing)
+  const main = useMainVariant()
   const [address, setAddress] = useState(account.email ?? '')
   const [chosenMailbox, setChosenMailbox] = useState<string>(account.mailboxId ?? '')
   // Derived, not copied at mount: the mailbox list can arrive after this block was first drawn.
@@ -59,6 +63,7 @@ export function AccountEmail({ account, mailboxes }: { account: Account; mailbox
           <>
             {account.email && <CopyButton text={account.email} testId={`email-copy-${account.id}`} />}
             <Button
+              variant={next === 'email' ? main : 'ghost'}
               onClick={() => {
                 setAddress(account.email ?? '')
                 setFromMailbox(account.mailboxId)
@@ -95,7 +100,7 @@ export function AccountEmail({ account, mailboxes }: { account: Account; mailbox
                   </option>
                 ))}
               </select>
-              <Button onClick={() => void propose()} disabled={proposing.busy || mailboxId === ''} data-testid={`email-propose-${account.id}`}>
+              <Button variant="secondary" onClick={() => void propose()} disabled={proposing.busy || mailboxId === ''} data-testid={`email-propose-${account.id}`}>
                 Propose an address from this mailbox
               </Button>
             </div>
@@ -103,7 +108,7 @@ export function AccountEmail({ account, mailboxes }: { account: Account; mailbox
             <p className="muted small">To get proposed addresses, add your own mailbox on the “Mailboxes” tab.</p>
           )}
           <div className="row">
-            <Button variant="primary" type="submit" disabled={saving.busy || address.trim() === ''} data-testid={`email-save-${account.id}`}>
+            <Button variant={saveVariant} type="submit" disabled={saving.busy || address.trim() === ''} data-testid={`email-save-${account.id}`}>
               {saving.busy ? 'Saving…' : 'Save address'}
             </Button>
             {account.email && (

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { SavedSiteProfile, SiteProfileDraft } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Badge, Button, ErrorNote } from '../../ui'
+import { Badge, Button, ErrorNote, useOpenForm } from '../../ui'
 
 /**
  * "Prepare a site profile with AI" for a site the app has no prepared support for. The app only looks at the site (it
@@ -27,21 +27,23 @@ export function PrepareSiteProfile({ productId, accountId, url }: { productId: s
   }
 
   const reviewable = draft !== null && draft.valid && draft.instructions.length === 0
+  // A draft waiting to be saved owns the filled button while it is the form opened last; the channel's own next step steps back until it is saved or discarded.
+  const saveVariant = useOpenForm(reviewable && saved === null)
 
   return (
     <div className="site-profile" data-testid="site-profile">
       <div className="row">
-        <Button onClick={() => void run()} disabled={preparing.busy || saving.busy} data-testid="profile-prepare">
+        <Button variant="secondary" onClick={() => void run()} disabled={preparing.busy || saving.busy} data-testid="profile-prepare">
           {preparing.busy ? 'Reading the site…' : 'Prepare a site profile with AI'}
         </Button>
-        <span className="muted small">
+        <span className="muted small row-note">
           A site profile tells the app how to read this kind of site. The app only looks at the site in this account’s browser: it does not type, click or send anything. It can take up to a minute.
         </span>
       </div>
       <ErrorNote error={preparing.error} />
 
       {draft && reviewable && (
-        <div className="stack" data-testid="profile-draft">
+        <div className="stack well" data-testid="profile-draft">
           <div>
             <strong>Profile for {draft.host}</strong>{' '}
             {saved ? <Badge tone="good">Saved, version {saved.version}</Badge> : <Badge tone="info">Draft, not saved</Badge>}
@@ -59,7 +61,7 @@ export function PrepareSiteProfile({ productId, accountId, url }: { productId: s
             </div>
           ) : (
             <div className="row">
-              <Button variant="primary" onClick={() => void keep(draft)} disabled={saving.busy} data-testid="profile-save">
+              <Button variant={saveVariant} onClick={() => void keep(draft)} disabled={saving.busy} data-testid="profile-save">
                 {saving.busy ? 'Saving…' : 'Save this profile'}
               </Button>
               <Button onClick={() => setDraft(null)} disabled={saving.busy} data-testid="profile-discard">

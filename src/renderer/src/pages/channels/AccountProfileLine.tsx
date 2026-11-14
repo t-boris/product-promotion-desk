@@ -23,7 +23,7 @@ export function AccountProfileLine({ account, onOpenProfile }: { account: Accoun
 
   const summary = current ? (
     <span data-testid={`account-profile-state-${account.id}`}>
-      <Badge tone={current.status === 'approved' ? 'good' : 'warn'}>{current.status === 'approved' ? 'Approved' : 'Proposed'}</Badge> <strong>{current.label}</strong>
+      <Badge tone={current.status === 'approved' ? 'neutral' : 'warn'}>{current.status === 'approved' ? 'Approved' : 'Proposed'}</Badge> <strong>{current.label}</strong>
       {current.displayName && <span className="muted"> · {profileLine(current, new Date())}</span>}
     </span>
   ) : account.profileId ? (
@@ -51,7 +51,7 @@ export function AccountProfileLine({ account, onOpenProfile }: { account: Accoun
         )
       }
     >
-      <div className="row">
+      <div className="pick-row">
         <select
           className="input"
           value={account.profileId ?? ''}

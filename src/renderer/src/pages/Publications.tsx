@@ -2,15 +2,26 @@ import { useEffect, useState } from 'react'
 import type { Id } from '../../../shared/types'
 import { call, useAction, useQuery } from '../hooks'
 import { publicationsProductOf } from '../route'
-import { Badge, Button, Card, EmptyState, ErrorNote, Field, Hint, Loading, Page } from '../ui'
+import { Button, EmptyState, ErrorNote, Field, Hint, Loading, OpenFormsScope, Page } from '../ui'
 import { connectChannelHref } from './attention-links'
+import { useMainActionOwner } from './review/main-action'
 import { PublicationForm } from './review/PublicationForm'
 import { ProductFilter, useProductDirectory, useProductFilter } from './review/products'
 import { ReviewCard } from './review/ReviewCard'
+import './review/review.css'
 
 const CLOSED = ['confirmed', 'cancelled']
 
 export function PublicationsPage() {
+  return (
+    // The new-publication form is opened on demand: while it is open it owns the screen's filled button.
+    <OpenFormsScope>
+      <PublicationsScreen />
+    </OpenFormsScope>
+  )
+}
+
+function PublicationsScreen() {
   const directory = useProductDirectory()
   const [chosenProduct, setProduct] = useProductFilter('publications')
   // The last stage of a product's launch path links here as #/publications/<productId>: show that product.
@@ -42,10 +53,15 @@ export function PublicationsPage() {
   const pending = cards.filter((c) => !CLOSED.includes(c.opportunity.state))
   const sent = cards.filter((c) => c.opportunity.state === 'confirmed')
   const cancelled = cards.filter((c) => c.opportunity.state === 'cancelled')
+  // The first open draft that offers a main action has the screen's one filled button.
+  const mainAction = useMainActionOwner(pending.map((card) => card.opportunity.id))
+  // With nothing to show, the empty state below offers "Write one myself" as the screen's filled button; the toolbar then does not offer a
+  // second one with the same name (BUG-057). Both are worked out from this one condition.
+  const emptyOffersWrite = Boolean(channelId) && list.data !== undefined && pending.length === 0 && !writing
 
   return (
     <Page title="Publications" subtitle="Drafts, scheduled and sent material">
-      <Card>
+      <div className="list-head">
         <div className="toolbar">
           <ProductFilter products={directory.products} value={productId} onChange={setProduct} />
           <Field label="Channel">
@@ -58,17 +74,20 @@ export function PublicationsPage() {
               )}
               {inScope.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {directory.channelLabel(c)}
+                  {directory.channelLabel(c, productId !== '')}
                 </option>
               ))}
             </select>
           </Field>
-          <Button variant="primary" onClick={() => void suggest()} disabled={!channelId || suggesting.busy} data-testid="suggest-publication">
+          {/* An AI helper is never the filled button: the owner's own way ("Write one myself") is as near as the AI's. */}
+          <Button variant="secondary" icon="sparkles" onClick={() => void suggest()} disabled={!channelId || suggesting.busy} data-testid="suggest-publication">
             {suggesting.busy ? 'Asking the AI…' : 'Suggest with AI'}
           </Button>
-          <Button onClick={() => setWriting(true)} disabled={!channelId || writing} data-testid="write-publication">
-            Write one myself
-          </Button>
+          {!emptyOffersWrite && (
+            <Button onClick={() => setWriting(true)} disabled={!channelId || writing} data-testid="write-publication">
+              Write one myself
+            </Button>
+          )}
           {/* Why the two buttons are off, beside them, with the way to fix it. */}
           {directory.ready && !channelId && (
             <Hint className="toolbar-hint" data-testid="publication-needs-channel">
@@ -78,20 +97,23 @@ export function PublicationsPage() {
         </div>
         <ErrorNote error={directory.error ?? suggesting.error} />
         {cannotPost && (
-          <div className="row" data-testid="post-warning">
-            <Badge tone="warn">Posting not available</Badge>
-            <span className="muted small">
+          <div className="note warn" data-testid="post-warning">
+            <div>
+              <strong>Posting not available</strong>
+            </div>
+            <div>
               Publishing posts is {postAbility.status} in this channel{postAbility.detail ? `: ${postAbility.detail}` : ''}. You can still prepare drafts.
-            </span>
+            </div>
           </div>
         )}
-        <p className="muted small">
+        <Hint>
           The AI proposes a topic and a draft from your approved product knowledge and the channel's rules. Every publication needs your own approval; the automatic rules never publish posts.
-        </p>
-      </Card>
+        </Hint>
+      </div>
 
       {directory.ready && inScope.length === 0 && (
         <EmptyState
+          fill
           art="channel"
           title="No channels yet"
           action={
@@ -111,27 +133,56 @@ export function PublicationsPage() {
 
       {channelId && list.data && (
         <>
-          <section className="stack" data-testid="pending-publications">
+          <section className="review-section" data-testid="pending-publications">
             <h2>Drafts, approved and scheduled</h2>
-            {pending.length === 0 && <EmptyState art="draft" title="No drafts">Ask the AI for a suggestion or write one yourself.</EmptyState>}
-            {pending.map((card) => (
-              <ReviewCard key={card.opportunity.id} card={card} collapsible defaultOpen={pending.length === 1} productName={productName} />
-            ))}
+            {pending.length === 0 && (
+              <EmptyState
+                art="draft"
+                title="No drafts"
+                action={
+                  // The next step; filled because nothing else on the screen is: no draft has an Approve, and the form is closed.
+                  emptyOffersWrite && (
+                    <Button variant="primary" onClick={() => setWriting(true)} data-testid="write-publication-empty">
+                      Write one myself
+                    </Button>
+                  )
+                }
+              >
+                Ask the AI for a suggestion or write one yourself.
+              </EmptyState>
+            )}
+            <div className="review-list">
+              {pending.map((card) => (
+                <ReviewCard
+                  key={card.opportunity.id}
+                  card={card}
+                  collapsible
+                  defaultOpen={pending.length === 1}
+                  productName={productName}
+                  primaryAction={mainAction.isOwner(card.opportunity.id)}
+                  onMainAction={mainAction.offer}
+                />
+              ))}
+            </div>
           </section>
           {sent.length > 0 && (
-            <section className="stack" data-testid="sent-publications">
+            <section className="review-section" data-testid="sent-publications">
               <h2>Sent</h2>
-              {sent.map((card) => (
-                <ReviewCard key={card.opportunity.id} card={card} collapsible defaultOpen={false} productName={productName} />
-              ))}
+              <div className="review-list">
+                {sent.map((card) => (
+                  <ReviewCard key={card.opportunity.id} card={card} collapsible defaultOpen={false} productName={productName} />
+                ))}
+              </div>
             </section>
           )}
           {cancelled.length > 0 && (
-            <section className="stack">
+            <section className="review-section">
               <h2>Rejected</h2>
-              {cancelled.map((card) => (
-                <ReviewCard key={card.opportunity.id} card={card} collapsible defaultOpen={false} productName={productName} />
-              ))}
+              <div className="review-list">
+                {cancelled.map((card) => (
+                  <ReviewCard key={card.opportunity.id} card={card} collapsible defaultOpen={false} productName={productName} />
+                ))}
+              </div>
             </section>
           )}
         </>

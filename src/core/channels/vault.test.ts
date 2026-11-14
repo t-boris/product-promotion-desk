@@ -2,12 +2,24 @@
 
 import { describe, expect, it } from 'vitest'
 import { vi } from 'vitest'
-import { LOCAL_ONLY_METHODS } from '../../shared/api'
+import { ApiError, LOCAL_ONLY_METHODS, type ApiArgs, type ApiMethod } from '../../shared/api'
+import { vaultUnavailableText } from '../../shared/vault-message'
 import { makeReadyWorld, type World } from './test-helpers'
 
 const PASSWORD = 'S3cret-Pa$$w0rd!'
 const save = (w: World, extra: Partial<{ loginName: string; password: string }> = {}) => w.call('vault.savePassword', { accountId: w.account.id, loginName: 'natal_bot', password: PASSWORD, ...extra })
 const page = (w: World) => w.t.browser.page(w.account.id)
+
+/** What a refused call carries: the code, and the words the owner reads. */
+async function refusedWith<M extends ApiMethod>(w: World, method: M, args: ApiArgs<M>): Promise<{ code: string; message: string }> {
+  try {
+    await w.call(method, args)
+  } catch (error) {
+    if (error instanceof ApiError) return { code: error.code, message: error.message }
+    throw error
+  }
+  throw new Error(`${method} was expected to be refused`)
+}
 
 /** Everything an owner, a log reader or a web client could see, as one text. */
 function everythingVisible(w: World): string {
@@ -25,15 +37,15 @@ function everythingVisible(w: World): string {
 describe('the vault', () => {
   it('saves a login name and a password; only the name is in the database and the account list', async () => {
     const w = await makeReadyWorld()
-    expect(await w.call('vault.status', undefined)).toEqual({ available: true, accountIds: [] })
+    expect(await w.call('vault.status', undefined)).toEqual({ available: true, unavailable: null, accountIds: [] })
     const account = await save(w)
     expect(account.loginName).toBe('natal_bot')
-    expect(await w.call('vault.status', undefined)).toEqual({ available: true, accountIds: [w.account.id] })
+    expect(await w.call('vault.status', undefined)).toEqual({ available: true, unavailable: null, accountIds: [w.account.id] })
 
     expect(JSON.stringify(await w.call('accounts.list', undefined))).not.toContain(PASSWORD)
     expect(JSON.stringify(await w.call('vault.status', undefined))).not.toContain(PASSWORD)
     expect(everythingVisible(w)).not.toContain(PASSWORD)
-    expect(w.core.secrets.get(`account:${w.account.id}`)).toBe(PASSWORD)
+    expect(await w.core.secrets.get(`account:${w.account.id}`)).toBe(PASSWORD)
   })
 
   it('writes nothing to the log that contains the password, and says that a password was saved', async () => {
@@ -48,10 +60,10 @@ describe('the vault', () => {
     const w = await makeReadyWorld()
     await save(w)
     await save(w, { password: 'second-password' })
-    expect(w.core.secrets.get(`account:${w.account.id}`)).toBe('second-password')
+    expect(await w.core.secrets.get(`account:${w.account.id}`)).toBe('second-password')
 
     await w.call('vault.removePassword', { accountId: w.account.id })
-    expect(await w.call('vault.status', undefined)).toEqual({ available: true, accountIds: [] })
+    expect(await w.call('vault.status', undefined)).toEqual({ available: true, unavailable: null, accountIds: [] })
     expect(w.core.repos.account(w.account.id).loginName).toBe('natal_bot')
 
     await save(w)
@@ -70,13 +82,43 @@ describe('the vault', () => {
     expect(w.t.secrets.values.size).toBe(0)
   })
 
-  it('says so and stores nothing when the system keychain cannot encrypt', async () => {
+  it('says so and stores nothing when the keychain refuses the app, and only after something asked it', async () => {
     const w = await makeReadyWorld()
     w.t.secrets.encryptable = false
-    expect(await w.call('vault.status', undefined)).toEqual({ available: false, accountIds: [] })
-    expect(await w.refusal('vault.savePassword', { accountId: w.account.id, loginName: 'x', password: PASSWORD })).toBe('vault_unavailable')
+    // Looking at the screen asks nothing, so nothing is known yet.
+    expect(await w.call('vault.status', undefined)).toEqual({ available: true, unavailable: null, accountIds: [] })
+    expect(w.t.secrets.touches).toBe(0)
+
+    const announced = w.changes.length
+    const refused = await refusedWith(w, 'vault.savePassword', { accountId: w.account.id, loginName: 'x', password: PASSWORD })
+    expect(refused).toEqual({ code: 'vault_unavailable', message: vaultUnavailableText('refused') })
+    // What the click found out is announced, so the open screen reads the status again and shows its Password block.
+    expect(w.changes.slice(announced)).toContain('accounts')
+    expect(refused.message).not.toMatch(/no (usable )?(system )?keychain/i)
+    expect(await w.call('vault.status', undefined)).toEqual({ available: false, unavailable: 'refused', accountIds: [] })
     expect(w.t.secrets.values.size).toBe(0)
     expect(w.core.repos.account(w.account.id).loginName).toBeNull()
+  })
+
+  it('says there is no keychain only when the system has none', async () => {
+    const w = await makeReadyWorld()
+    w.t.secrets.encryptable = false
+    w.t.secrets.cause = 'no_keychain'
+    expect(await w.refusal('vault.savePassword', { accountId: w.account.id, loginName: 'x', password: PASSWORD })).toBe('vault_unavailable')
+    expect(await w.call('vault.status', undefined)).toEqual({ available: false, unavailable: 'no_keychain', accountIds: [] })
+  })
+
+  it('does not touch the keychain to say which passwords are saved, however often it is asked (BUG-041)', async () => {
+    const w = await makeReadyWorld()
+    await save(w)
+    w.t.secrets.touches = 0
+    // Even a keychain that would refuse is not asked: the answer comes from the vault file.
+    w.t.secrets.encryptable = false
+    for (let i = 0; i < 3; i++) {
+      expect(await w.call('vault.status', undefined)).toEqual({ available: true, unavailable: null, accountIds: [w.account.id] })
+      await w.call('accounts.list', undefined)
+    }
+    expect(w.t.secrets.touches).toBe(0)
   })
 
   it('shows and copies the password only on request, and the copy is cleared after 30 seconds', async () => {
@@ -86,6 +128,29 @@ describe('the vault', () => {
     expect(await w.call('vault.revealPassword', { accountId: w.account.id })).toEqual({ password: PASSWORD })
     await w.call('vault.copyPassword', { accountId: w.account.id })
     expect(w.t.clipboard.copies).toEqual([{ text: PASSWORD, clearAfterMs: 30_000 }])
+  })
+
+  it('says a saved password cannot be opened, not that none is saved, when the keychain refuses the app', async () => {
+    const w = await makeReadyWorld()
+    await save(w)
+    w.t.secrets.encryptable = false
+    for (const method of ['vault.revealPassword', 'vault.copyPassword'] as const) {
+      expect(await refusedWith(w, method, { accountId: w.account.id })).toEqual({ code: 'vault_unavailable', message: vaultUnavailableText('refused') })
+    }
+    expect(w.t.clipboard.copies).toEqual([])
+    // The screen is told to read the status again, and the status now says what happened; the saved password is still counted.
+    expect(await w.call('vault.status', undefined)).toEqual({ available: false, unavailable: 'refused', accountIds: [w.account.id] })
+  })
+
+  it('says a saved password cannot be opened with this keychain when only that value is unreadable', async () => {
+    const w = await makeReadyWorld()
+    await save(w)
+    w.t.secrets.unreadable.add(`account:${w.account.id}`)
+    const error = await refusedWith(w, 'vault.revealPassword', { accountId: w.account.id })
+    expect(error.code).toBe('vault_unavailable')
+    expect(error.message).toContain('cannot be opened with this keychain')
+    expect(error.message).not.toContain('Always Allow')
+    expect(await w.call('vault.status', undefined)).toMatchObject({ available: true, unavailable: null })
   })
 
   it('marks exactly the methods that return a secret as local only', () => {
@@ -114,11 +179,12 @@ describe('sign in with the saved password', () => {
     expect(page(w).signIns).toEqual([])
   })
 
-  it('does not sign in when the system cannot decrypt the password', async () => {
+  it('does not sign in when the keychain will not open the password, and says so instead of "no password"', async () => {
     const w = await makeReadyWorld()
     await save(w)
     w.t.secrets.encryptable = false
-    expect(await w.refusal('accounts.signIn', { accountId: w.account.id })).toBe('no_password')
+    expect(await refusedWith(w, 'accounts.signIn', { accountId: w.account.id })).toEqual({ code: 'vault_unavailable', message: vaultUnavailableText('refused') })
+    expect(page(w).signIns).toEqual([])
   })
 
   it.each([
@@ -197,6 +263,32 @@ describe('automatic sign-in when an account is found signed out', () => {
     await w.call('accounts.checkLogin', { accountId: w.account.id })
     await settle()
     expect(page(w).signIns).toEqual([])
+  })
+
+  it('does not touch the keychain for an account with no saved password (BUG-041)', async () => {
+    const w = await makeReadyWorld()
+    signedOut(w)
+    await w.call('accounts.checkLogin', { accountId: w.account.id })
+    await settle()
+    expect(w.t.secrets.touches).toBe(0)
+  })
+
+  it('logs a refusal of the keychain as the reason it did not run, and does not ask a keychain that refused again', async () => {
+    const w = await makeReadyWorld()
+    await save(w)
+    w.t.secrets.encryptable = false
+    signedOut(w)
+    await w.call('accounts.checkLogin', { accountId: w.account.id })
+    await vi.waitFor(() => expect(JSON.stringify(w.core.db.prepare("SELECT * FROM log_events WHERE level = 'warn'").all())).toContain('macOS did not let the app use its keychain item'))
+    expect(page(w).signIns).toEqual([])
+    const asked = w.t.secrets.touches
+    expect(w.core.secrets.blocked()).toBe('refused')
+
+    // The next time it is found signed out, the background does not ask the keychain again.
+    w.t.clock.advance(2 * 60 * 60 * 1000)
+    await w.call('accounts.checkLogin', { accountId: w.account.id })
+    await settle()
+    expect(w.t.secrets.touches).toBe(asked)
   })
 
   it('tries at most once an hour, even if the password is wrong', async () => {

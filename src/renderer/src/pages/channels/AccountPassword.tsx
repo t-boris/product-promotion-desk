@@ -1,21 +1,25 @@
 import { useState, type FormEvent } from 'react'
-import type { Account } from '../../../../shared/types'
+import type { Account, VaultUnavailable } from '../../../../shared/types'
 import { generatePassword } from '../../../../shared/password'
+import { vaultUnavailableText } from '../../../../shared/vault-message'
 import { call, useAction } from '../../hooks'
-import { Button, ErrorNote, Field } from '../../ui'
+import { Button, ConfirmAction, ErrorNote, Field, useMainVariant, useOpenForm } from '../../ui'
 import { AccountBlock } from './AccountBlock'
+import type { NextStep } from './next-step'
 
 /**
  * The saved password of one account (REQ-012, DEC-014). The password lives in the system keychain's vault, never in the
  * database; this block only ever holds it while the owner types, generates or asks to see it.
  */
-export function AccountPassword({ account, vaultAvailable, hasPassword }: { account: Account; vaultAvailable: boolean; hasPassword: boolean }) {
+export function AccountPassword({ account, unavailable, hasPassword, next }: { account: Account; /** Why the vault cannot be used, once a save, a reveal or a sign-in has found out; null while it can. */ unavailable: VaultUnavailable | null; hasPassword: boolean; /** The step the account needs next: "Save a password" is the filled button only when it is this one. */ next: NextStep['block'] }) {
   const [editing, setEditing] = useState(false)
+  // The open form owns the filled button while it is the form opened last; the resting "Save a password" is filled only while it is the account's next step.
+  const saveVariant = useOpenForm(editing)
+  const main = useMainVariant()
   const [loginName, setLoginName] = useState(account.loginName ?? account.email ?? '')
   const [password, setPassword] = useState('')
   const [revealed, setRevealed] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-  const [confirmRemove, setConfirmRemove] = useState(false)
 
   const [save, saving] = useAction(async () => {
     await call('vault.savePassword', { accountId: account.id, loginName: loginName.trim(), password })
@@ -25,7 +29,6 @@ export function AccountPassword({ account, vaultAvailable, hasPassword }: { acco
   })
   const [remove, removing] = useAction(async () => {
     await call('vault.removePassword', { accountId: account.id })
-    setConfirmRemove(false)
     setEditing(false)
     setRevealed(null)
   })
@@ -37,15 +40,8 @@ export function AccountPassword({ account, vaultAvailable, hasPassword }: { acco
   })
   const error = saving.error ?? removing.error ?? revealing.error ?? copying.error
 
-  if (!vaultAvailable) {
-    return (
-      <AccountBlock
-        step={4}
-        title="Password"
-        testId={`vault-unavailable-${account.id}`}
-        summary={<span className="muted">This Mac has no usable system keychain, so the app cannot keep passwords safely and stores none. Sign in on the site itself.</span>}
-      />
-    )
+  if (unavailable) {
+    return <AccountBlock step={4} title="Password" testId={`vault-unavailable-${account.id}`} summary={<span className="muted">{vaultUnavailableText(unavailable)}</span>} />
   }
 
   function submit(event: FormEvent): void {
@@ -91,6 +87,7 @@ export function AccountPassword({ account, vaultAvailable, hasPassword }: { acco
           </>
         ) : (
           <Button
+            variant={next === 'password' ? main : 'ghost'}
             onClick={() => {
               setLoginName(account.loginName ?? account.email ?? '')
               setEditing(true)
@@ -121,6 +118,7 @@ export function AccountPassword({ account, vaultAvailable, hasPassword }: { acco
           </div>
           <div className="row">
             <Button
+              variant="secondary"
               onClick={() => {
                 setPassword(generatePassword())
                 setRevealed('')
@@ -129,31 +127,29 @@ export function AccountPassword({ account, vaultAvailable, hasPassword }: { acco
             >
               Generate a strong password
             </Button>
-            <span className="muted small">It is shown here until you save it. Use the same one when you create the account on the site.</span>
+            <span className="muted small row-note">It is shown here until you save it. Use the same one when you create the account on the site.</span>
           </div>
           <div className="row">
-            <Button variant="primary" type="submit" disabled={saving.busy || loginName.trim() === '' || password === ''} data-testid={`password-save-${account.id}`}>
+            <Button variant={saveVariant} type="submit" disabled={saving.busy || loginName.trim() === '' || password === ''} data-testid={`password-save-${account.id}`}>
               {saving.busy ? 'Saving…' : 'Save password'}
             </Button>
-            {hasPassword &&
-              (confirmRemove ? (
-                <>
-                  <span className="muted small">Forgets the password; the account stays.</span>
-                  <Button variant="danger" onClick={() => void remove()} disabled={removing.busy} data-testid={`password-remove-confirm-${account.id}`}>
-                    Remove password
-                  </Button>
-                </>
-              ) : (
-                <Button onClick={() => setConfirmRemove(true)} data-testid={`password-remove-${account.id}`}>
-                  Remove password
-                </Button>
-              ))}
+            {hasPassword && (
+              <ConfirmAction
+                label="Remove password"
+                variant="ghost"
+                question="Forgets the password; the account stays."
+                confirmLabel="Remove password"
+                cancelLabel="Keep password"
+                onConfirm={() => remove()}
+                testId={`password-remove-${account.id}`}
+                confirmTestId={`password-remove-confirm-${account.id}`}
+              />
+            )}
             <Button
               onClick={() => {
                 setEditing(false)
                 setPassword('')
                 setRevealed(null)
-                setConfirmRemove(false)
               }}
             >
               Cancel

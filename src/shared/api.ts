@@ -277,12 +277,16 @@ export type ChangeScope =
   | 'settings'
   | 'ai'
 
-/** Pushed from the core to every connected UI. */
+/**
+ * Pushed from the core to every connected UI. `navigate` is the exception: the main process sends it straight to its own windows
+ * (the "Settings…" menu item, BUG-048), never through the core's events, so the loopback web mode is not driven by the desktop menu.
+ */
 export type ApiEvent =
   | { type: 'automation'; state: AutomationState }
   | { type: 'changed'; scope: ChangeScope }
   | { type: 'analysis'; productId: Id; stage: AnalysisStage }
   | { type: 'run'; run: Run }
+  | { type: 'navigate'; hash: string }
 
 export interface ApiErrorShape {
   code: string

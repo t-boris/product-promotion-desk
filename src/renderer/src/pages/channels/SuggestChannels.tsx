@@ -48,9 +48,9 @@ export function SuggestChannels({
       <ErrorNote error={state.error} />
       {ideas && ideas.length === 0 && <p className="muted">The AI had no safe suggestion this time.</p>}
       {ideas && ideas.length > 0 && (
-        <div className="stack" data-testid="suggestions">
+        <div className="rows" data-testid="suggestions">
           {ideas.map((idea, index) => (
-            <div className="list-row suggestion" key={`${idea.platform}:${idea.target}:${index}`} data-testid="suggestion">
+            <div className="suggestion-row" key={`${idea.platform}:${idea.target}:${index}`} data-testid="suggestion">
               <div>
                 <strong>{idea.target}</strong> <span className="muted">{platformLabel(idea.platform, platforms)}</span> <Badge tone="warn">Unverified</Badge>
                 <div className="hint">{idea.reason}</div>

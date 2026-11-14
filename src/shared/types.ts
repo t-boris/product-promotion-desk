@@ -199,9 +199,20 @@ export interface Mailbox {
   createdAt: IsoTime
 }
 
-/** What the vault holds, without any secret: whether it can encrypt, and which accounts have a password saved (DEC-014). */
+/**
+ * Why the vault cannot encrypt, as far as a real attempt has shown: `refused` is macOS not letting the app use its keychain item (the
+ * owner pressed Deny, or the keychain is locked); `no_keychain` is a system without one.
+ */
+export type VaultUnavailable = 'refused' | 'no_keychain'
+
+/**
+ * What the vault holds, without any secret: whether it can encrypt, and which accounts have a password saved (DEC-014). Asking never
+ * touches the keychain, so `available` is true until a save, a reveal or a sign-in has found otherwise.
+ */
 export interface VaultStatus {
   available: boolean
+  /** Why `available` is false; null while it is true. */
+  unavailable: VaultUnavailable | null
   accountIds: Id[]
 }
 

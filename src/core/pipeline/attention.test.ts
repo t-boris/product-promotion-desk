@@ -52,7 +52,14 @@ describe('attention.list (SRC-001 "Требует внимания")', () => {
     expect(byId.get(`draft:${s.draft}`)).toMatchObject({ kind: 'draft', refType: 'opportunity', title: 'Review draft publication in r/astrology' })
     expect(byId.get(`question:${s.question}`)).toMatchObject({ kind: 'question', detail: 'Which price should I quote?' })
     expect(byId.get(`unknown_result:${s.actionId}`)).toMatchObject({ kind: 'unknown_result', refType: 'opportunity', refId: s.unknownOpp })
-    expect(byId.get(`login:${s.expired.id}`)).toMatchObject({ kind: 'login', refType: 'account', refId: s.expired.id })
+    // BUG-052: `login_required` is also the state of an account that was never signed in, so the wording claims no expiry.
+    expect(byId.get(`login:${s.expired.id}`)).toMatchObject({
+      kind: 'login',
+      refType: 'account',
+      refId: s.expired.id,
+      title: 'Sign in to Old login',
+      detail: 'This account is not signed in. Work on this account is suspended until you sign in.'
+    })
     expect(byId.get(`captcha:${s.captcha.id}`)).toMatchObject({ kind: 'captcha', refType: 'account' })
     expect(byId.get(`error:${s.broken.id}`)).toMatchObject({ kind: 'error', refType: 'channel', detail: 'Page structure changed' })
     expect(byId.get(`connection:${s.stuck.id}`)).toMatchObject({ kind: 'connection', refType: 'channel', detail: 'Rules forbid bots' })

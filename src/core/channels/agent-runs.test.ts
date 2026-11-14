@@ -167,6 +167,31 @@ describe('what the screen is told before the click', () => {
     expect(await state(w)).toBeNull()
   })
 
+  it('does not read the password to answer, so opening an account never asks the keychain (BUG-041)', async () => {
+    const w = await ready()
+    w.t.secrets.touches = 0
+    // Even a keychain that would refuse the app does not change the answer: only starting a run needs the password itself.
+    w.t.secrets.encryptable = false
+    for (let i = 0; i < 3; i++) expect(await can(w)).toEqual({ ready: true, reason: null })
+    expect(w.t.secrets.touches).toBe(0)
+
+    const bare = await makeReadyWorld()
+    await bare.call('accounts.setEmail', { accountId: bare.account.id, email: EMAIL })
+    expect(await bare.call('agent.canStart', { accountId: bare.account.id, kind: 'signup' })).toMatchObject({ ready: false, reason: expect.stringContaining('saved for') })
+    expect(bare.t.secrets.touches).toBe(0)
+  })
+
+  it('reads the password only when the run starts, and a keychain that refuses stops the start with the honest reason', async () => {
+    const w = await ready()
+    w.t.secrets.touches = 0
+    w.t.secrets.encryptable = false
+    expect(await w.refusal('agent.start', { accountId: w.account.id, kind: 'signup' })).toBe('vault_unavailable')
+    expect(w.t.secrets.touches).toBe(1)
+    expect(w.t.engine.calls).toEqual([])
+    expect(page(w).log).toEqual([])
+    expect(await state(w)).toBeNull()
+  })
+
   it('says what is missing, in words, one thing at a time', async () => {
     const w = await makeReadyWorld()
     expect(await can(w)).toMatchObject({ ready: false, reason: expect.stringContaining('e-mail') })

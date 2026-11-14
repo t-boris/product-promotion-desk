@@ -2,6 +2,8 @@ import { useState } from 'react'
 import type { Channel, Id, Product } from '../../../../shared/types'
 import { useQuery } from '../../hooks'
 import { Field } from '../../ui'
+import { productLabels } from '../products/product-labels'
+import { channelLabel } from './channel-label'
 
 /** The choice that means "do not filter by product". */
 export const ALL_PRODUCTS = ''
@@ -33,8 +35,8 @@ export interface ProductDirectory {
   /** The channels of the product (all channels when no product is chosen). */
   channelsOf(productId: Id | ''): Channel[]
   productNameOfChannel(channelId: Id): string | undefined
-  /** "Product · channel", the way a channel is named wherever products are mixed. */
-  channelLabel(channel: Channel): string
+  /** "Product · channel" wherever products are mixed; the channel alone once a product is chosen. */
+  channelLabel(channel: Channel, productChosen: boolean): string
 }
 
 /**
@@ -46,7 +48,8 @@ export function useProductDirectory(): ProductDirectory {
   const channelsQuery = useQuery('channels.list', undefined, ['channels', 'products'])
   const products = productsQuery.data ?? []
   const channels = channelsQuery.data ?? []
-  const nameOf = new Map(products.map((p) => [p.id, p.name]))
+  // Products of one name are told apart by their creation time wherever the pop-ups and the cards list them (BUG-054).
+  const nameOf = productLabels(products)
   const productOfChannel = new Map(channels.map((c) => [c.id, c.productId]))
   const productName = (channel: Channel): string | undefined => nameOf.get(channel.productId)
 
@@ -61,21 +64,19 @@ export function useProductDirectory(): ProductDirectory {
       const productId = productOfChannel.get(channelId)
       return productId ? nameOf.get(productId) : undefined
     },
-    channelLabel: (channel) => {
-      const name = productName(channel)
-      return name ? `${name} · ${channel.target}` : channel.target
-    }
+    channelLabel: (channel, productChosen) => channelLabel(productName(channel), channel.target, productChosen)
   }
 }
 
 export function ProductFilter({ products, value, onChange }: { products: Product[]; value: Id | ''; onChange: (id: Id | '') => void }) {
+  const labels = productLabels(products)
   return (
     <Field label="Product">
       <select className="input" value={value} onChange={(e) => onChange(e.target.value)} data-testid="product-filter">
         <option value={ALL_PRODUCTS}>All products</option>
         {products.map((p) => (
           <option key={p.id} value={p.id}>
-            {p.name}
+            {labels.get(p.id) ?? p.name}
           </option>
         ))}
       </select>

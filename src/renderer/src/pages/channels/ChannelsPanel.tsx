@@ -1,18 +1,24 @@
 import { useState } from 'react'
 import type { ChannelSuggestion, RoleSuggestion } from '../../../../shared/types'
 import { useQuery } from '../../hooks'
-import { accountsNewHref } from '../../route'
-import { Badge, Disclosure, EmptyState, ErrorNote, Loading } from '../../ui'
+import { accountsNewHref, channelsAccountOf } from '../../route'
+import { Disclosure, EmptyState, ErrorNote, Loading } from '../../ui'
+import { useTabAccent } from '../products/LaunchPath'
 import { AccountsCard } from './AccountsCard'
 import { ChannelDetail } from './ChannelDetail'
 import { ChannelList } from './ChannelList'
 import { ConnectChannel, type Prefill } from './ConnectChannel'
 import { SuggestRoles } from './SuggestRoles'
 import { SuggestChannels } from './SuggestChannels'
+import { setupStage, type SetupStage } from './setup-stage'
 import { suggestionBlock } from './suggestion-block'
 import './channels.css'
 
-/** Channels of one product and the accounts it works with (DEC-009, DEC-015): the content of the product page's Channels tab. */
+/**
+ * Channels of one product and the accounts it works with (DEC-009, DEC-015): the content of the product page's Channels tab. The tab is a
+ * single column (the product page already has its list beside it): the accounts line, "Connect a channel", the channel list, the picked
+ * channel's group boxes and the AI ideas. Exactly one button is filled, the one of the setup stage (`setupStage`).
+ */
 export function ChannelsPanel({ productId }: { productId: string }) {
   const accounts = useQuery('accounts.list', undefined, ['accounts'])
   const channels = useQuery('channels.list', { productId }, ['channels'])
@@ -23,6 +29,8 @@ export function ChannelsPanel({ productId }: { productId: string }) {
   const engines = useQuery('engines.list', undefined, ['settings'])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [prefill, setPrefill] = useState<Prefill | null>(null)
+  // The account just added from this tab comes back in the link and is the one "Connect a channel" starts with (BUG-063).
+  const [firstAccountId] = useState(() => channelsAccountOf(window.location.hash))
 
   const channelList = channels.data ?? []
   const accountList = accounts.data ?? []
@@ -37,6 +45,10 @@ export function ChannelsPanel({ productId }: { productId: string }) {
   const product = allProducts.find((p) => p.id === productId)
   const productName = (id: string | null): string => allProducts.find((p) => p.id === id)?.name ?? 'another product'
   const selected = channelList.find((c) => c.id === selectedId) ?? (channelList.length === 1 ? channelList[0] : undefined)
+  const stage = setupStage({ hasAccount, channelCount: channelList.length, selected })
+  // The stage of this tab names its own next step, but the path decides whether that step is the screen's filled button: only while the Channel
+  // stage is the path's next one. A connected channel ends it, so "Assess channel" and "Activate" are bezels and the next stage is filled (BUG-065).
+  const filledStage: SetupStage | null = useTabAccent('channels').own ? stage : null
 
   const blocked = suggestionBlock({
     productId,
@@ -49,16 +61,18 @@ export function ChannelsPanel({ productId }: { productId: string }) {
   const engineLabel = engines.data?.find((e) => e.id === settings.data?.engineId)?.label
 
   return (
-    <div className="stack" data-testid="channels-panel">
+    <div className="pane" data-testid="channels-panel">
       <ErrorNote error={accounts.error ?? channels.error ?? products.error ?? platforms.error} />
       {(accounts.loading && !accounts.data) || (channels.loading && !channels.data) ? <Loading what="Loading channels" /> : null}
       {accountsKnown && (
         <>
-          <AccountsCard accounts={productAccounts} libraryHasAccounts={hasAccount} channels={channelList} platforms={platformList} />
+          <AccountsCard productId={productId} accounts={productAccounts} libraryHasAccounts={hasAccount} channels={channelList} platforms={platformList} filled={filledStage === 'account'} />
           <ConnectChannel
             product={product}
             needsAccount={!hasAccount}
+            filled={filledStage === 'connect'}
             accounts={accountList}
+            firstAccountId={firstAccountId}
             channels={channelList}
             allChannels={everyChannel.data ?? []}
             platforms={platformList}
@@ -72,18 +86,14 @@ export function ChannelsPanel({ productId }: { productId: string }) {
         // Without an account the strip above already says what to do; an empty "No channels yet" would only repeat it.
         hasAccount && <EmptyState art="channel" title="No channels yet">Connect your first channel above.</EmptyState>
       ) : (
-        <div className="channels-layout">
-          <aside className="channels-list">
-            <ChannelList channels={channelList} products={allProducts.filter((p) => p.id === productId)} selectedId={selected?.id ?? null} onSelect={setSelectedId} />
-          </aside>
-          <div className="channels-detail">
-            {selected ? (
-              <ChannelDetail key={selected.id} channel={selected} products={allProducts} accounts={accountList} platforms={platformList} planBlockedReason={blockedReason} onRemoved={() => setSelectedId(null)} />
-            ) : (
-              <EmptyState title="Select a channel">Pick a channel to see its status and abilities, assess it, and set how the app behaves there.</EmptyState>
-            )}
-          </div>
-        </div>
+        <>
+          <ChannelList channels={channelList} products={allProducts.filter((p) => p.id === productId)} selectedId={selected?.id ?? null} onSelect={setSelectedId} />
+          {selected ? (
+            <ChannelDetail key={selected.id} channel={selected} products={allProducts} accounts={accountList} platforms={platformList} planBlockedReason={blockedReason} stage={filledStage} onRemoved={() => setSelectedId(null)} />
+          ) : (
+            <EmptyState title="Select a channel">Pick a channel to see its status and abilities, assess it, and set how the app behaves there.</EmptyState>
+          )}
+        </>
       )}
       {/* Ideas are optional help, so they are folded; the reason they are off stays on the summary line, in view. */}
       <Disclosure
@@ -96,11 +106,14 @@ export function ChannelsPanel({ productId }: { productId: string }) {
               {blocked.text}
             </span>
           ) : (
-            <Badge tone="good">Ready · {engineLabel ?? 'AI engine'}</Badge>
+            <span className="dot-line">
+              <span className="dot good" aria-hidden="true" />
+              Ready · {engineLabel ?? 'AI engine'}
+            </span>
           )
         }
       >
-        <SuggestRoles productId={productId} blocked={blocked} engineLabel={engineLabel} onUse={(suggestion: RoleSuggestion) => (window.location.hash = accountsNewHref({ name: suggestion.name, voice: suggestion.voice }))} />
+        <SuggestRoles productId={productId} blocked={blocked} engineLabel={engineLabel} onUse={(suggestion: RoleSuggestion) => (window.location.hash = accountsNewHref({ name: suggestion.name, voice: suggestion.voice }, productId))} />
         <SuggestChannels productId={productId} platforms={platformList} blocked={blocked} engineLabel={engineLabel} onUse={(suggestion: ChannelSuggestion) => setPrefill({ suggestion })} />
       </Disclosure>
     </div>

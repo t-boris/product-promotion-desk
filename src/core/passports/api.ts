@@ -124,7 +124,8 @@ export function registerHandlers(core: Core, mod: PassportModule): void {
         throw new ApiError('conflict', `"${product.name}" has publication history, which must be kept. Products with publications cannot be deleted.`)
       }
       if (dependents.channels > 0) {
-        throw new ApiError('conflict', `"${product.name}" still has ${dependents.channels} connected channel(s). Remove them first.`)
+        const one = dependents.channels === 1
+        throw new ApiError('conflict', `"${product.name}" still has ${dependents.channels} connected ${one ? 'channel. Remove it' : 'channels. Remove them'} first.`)
       }
       await analysis.stop(id)
       store.remove(id)
@@ -139,6 +140,8 @@ export function registerHandlers(core: Core, mod: PassportModule): void {
         throw new ApiError('conflict', `A product can have at most ${MAX_GOALS} goals. Remove one before adding another.`)
       }
       const product = store.saveGoal(id, goal)
+      // The log says that the goal changed, not what it says (BUG-066).
+      core.log.info('passports', `Goal ${goal.id === undefined ? 'added' : 'changed'} for ${product.name}`)
       mod.touch()
       return product
     },
@@ -146,6 +149,7 @@ export function registerHandlers(core: Core, mod: PassportModule): void {
     'products.removeGoal': (args) => {
       const id = requireId(args?.id, 'The product')
       const product = store.removeGoal(id, requireId(args?.goalId, 'The goal'))
+      core.log.info('passports', `Goal removed for ${product.name}`)
       mod.touch()
       return product
     },

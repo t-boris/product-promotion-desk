@@ -194,6 +194,32 @@ describe('products and sources (REQ-001)', () => {
     expect((await h.call('products.removeGoal', { id: productId, goalId: b.id })).goals).toEqual([])
   })
 
+  it('writes a log entry when a goal is added, changed or removed, without the goal text (BUG-066)', async () => {
+    const h = makeHarness()
+    const productId = await newProduct(h)
+    const entries = () => h.core.log.list(50).filter((e) => e.source === 'passports' && /^Goal /.test(e.message)).map((e) => e.message).reverse()
+
+    const added = await h.call('products.saveGoal', { id: productId, goal: { targetAction: 'Create the first natal chart', successMetrics: [], notes: 'Start with Reddit' } })
+    expect(entries()).toEqual(['Goal added for Natal Mystic'])
+
+    await h.call('products.saveGoal', { id: productId, goal: { id: added.goals[0].id, targetAction: 'Create two charts', successMetrics: [], notes: '' } })
+    expect(entries()).toEqual(['Goal added for Natal Mystic', 'Goal changed for Natal Mystic'])
+
+    await h.call('products.removeGoal', { id: productId, goalId: added.goals[0].id })
+    expect(entries()).toEqual(['Goal added for Natal Mystic', 'Goal changed for Natal Mystic', 'Goal removed for Natal Mystic'])
+    // The log says that the goal changed, not what it says.
+    expect(h.core.log.list(50).some((e) => /natal chart|two charts|Reddit/.test(e.message))).toBe(false)
+  })
+
+  it('logs nothing for a goal that was refused (BUG-066)', async () => {
+    const h = makeHarness()
+    const productId = await newProduct(h)
+    await expect(h.call('products.saveGoal', { id: productId, goal: { targetAction: '   ', successMetrics: [], notes: '' } })).rejects.toMatchObject({ code: 'invalid_input' })
+    await expect(h.call('products.saveGoal', { id: productId, goal: { id: 'missing', targetAction: 'x', successMetrics: [], notes: '' } })).rejects.toMatchObject({ code: 'not_found' })
+    await expect(h.call('products.removeGoal', { id: productId, goalId: 'missing' })).rejects.toMatchObject({ code: 'not_found' })
+    expect(h.core.log.list(50).some((e) => /^Goal /.test(e.message))).toBe(false)
+  })
+
   it('limits the number of goals of one product', async () => {
     const h = makeHarness()
     const productId = await newProduct(h)
@@ -542,7 +568,14 @@ describe('products with history and persistence', () => {
     h.core.db
       .prepare("INSERT INTO channels (id, product_id, account_id, platform, connector_id, target, url, settings_json, created_at) VALUES (?, ?, ?, 'reddit', 'reddit', 'r/x', 'u', '{}', ?)")
       .run(channelId, productId, accountId, now)
-    await expect(h.call('products.delete', { id: productId })).rejects.toMatchObject({ code: 'conflict' })
+    await expect(h.call('products.delete', { id: productId })).rejects.toMatchObject({ code: 'conflict', message: expect.stringContaining('still has 1 connected channel. Remove it first.') })
+    // A second channel is counted and the sentence is plural, never "channel(s)" (BUG-046).
+    h.core.db
+      .prepare("INSERT INTO channels (id, product_id, account_id, platform, connector_id, target, url, settings_json, created_at) VALUES (?, ?, ?, 'reddit', 'reddit', 'r/y', 'u2', '{}', ?)")
+      .run(newId(), productId, accountId, now)
+    const refusal = await h.call('products.delete', { id: productId }).catch((e: Error) => e.message)
+    expect(refusal).toContain('still has 2 connected channels. Remove them first.')
+    expect(refusal).not.toContain('(s)')
     expect(await h.call('products.list', undefined)).toHaveLength(1)
   })
 

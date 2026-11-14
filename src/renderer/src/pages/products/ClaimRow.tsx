@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Claim, ClaimStatus } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Badge, Button, ErrorNote, formatTime, MenuItem, RowMenu } from '../../ui'
+import { Badge, Button, ConfirmBar, ErrorNote, formatTime, MenuItem, RowMenu } from '../../ui'
 import { ClaimForm } from './ClaimForm'
 import { KIND_HELP, KIND_LABELS, KIND_TONES, SECTION_LABELS, STATUS_LABELS, STATUS_TONES } from './labels'
 import { conflicting } from './model'
@@ -9,6 +9,16 @@ import { conflicting } from './model'
 /** One statement of the passport with everything the user needs to judge it: type, status, sources and dates. */
 export function ClaimRow({ claim, all, productId }: { claim: Claim; all: Claim[]; productId: string }) {
   const [editing, setEditing] = useState(false)
+  // "Delete" is an entry of the More menu, so its question replaces the row's buttons (ConfirmBar) instead of the entry.
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const actions = useRef<HTMLDivElement>(null)
+  const backToMenu = useRef(false)
+  useEffect(() => {
+    // After "Cancel" the menu button is drawn again; keyboard focus goes back to it, not to the page.
+    if (confirmingDelete || !backToMenu.current) return
+    backToMenu.current = false
+    actions.current?.querySelector<HTMLElement>('[aria-haspopup]')?.focus()
+  }, [confirmingDelete])
   const [setStatus, statusState] = useAction((status: ClaimStatus) => call('passport.claim.setStatus', { claimId: claim.id, status }))
   const [remove, removeState] = useAction(() => call('passport.claim.delete', { claimId: claim.id }))
   const busy = statusState.busy || removeState.busy
@@ -76,65 +86,81 @@ export function ClaimRow({ claim, all, productId }: { claim: Claim; all: Claim[]
       )}
 
       <ErrorNote error={statusState.error ?? removeState.error} />
-      <div className="row claim-actions">
+      <div className="row claim-actions" ref={actions}>
         {canApprove && (
           <Button variant="secondary" onClick={() => void setStatus('approved')} disabled={busy} data-testid={`claim-approve-${claim.id}`}>
             Approve
           </Button>
         )}
         {claim.status !== 'proposed' && (
-          <Button onClick={() => void setStatus('proposed')} disabled={busy} data-testid={`claim-reopen-${claim.id}`}>
+          <Button variant="quiet" onClick={() => void setStatus('proposed')} disabled={busy} data-testid={`claim-reopen-${claim.id}`}>
             Back to review
           </Button>
         )}
-        <Button onClick={() => setEditing(true)} disabled={busy} data-testid={`claim-edit-${claim.id}`}>
+        <Button variant="quiet" onClick={() => setEditing(true)} disabled={busy} data-testid={`claim-edit-${claim.id}`}>
           {isContradiction ? 'Settle…' : 'Edit'}
         </Button>
         {/* Reject, Prohibit and Delete are rare and different in weight: they sit in a menu, each with a line on what it does. */}
-        <RowMenu label="More" testId={`claim-more-${claim.id}`}>
-          {(close) => (
-            <>
-              {claim.status !== 'rejected' && (
+        {confirmingDelete ? (
+          <ConfirmBar
+            question="Removes the statement for good."
+            confirmLabel="Delete statement"
+            busyLabel="Deleting…"
+            quiet
+            busy={removeState.busy}
+            onConfirm={() => void remove().finally(() => setConfirmingDelete(false))}
+            onCancel={() => {
+              backToMenu.current = true
+              setConfirmingDelete(false)
+            }}
+            confirmTestId={`claim-delete-confirm-${claim.id}`}
+          />
+        ) : (
+          <RowMenu label="More" variant="quiet" testId={`claim-more-${claim.id}`}>
+            {(close) => (
+              <>
+                {claim.status !== 'rejected' && (
+                  <MenuItem
+                    onClick={() => {
+                      close()
+                      void setStatus('rejected')
+                    }}
+                    disabled={busy}
+                    note={isContradiction ? 'These statements do not really disagree.' : 'Not true or not needed. It stays here, struck through, and is never used.'}
+                    data-testid={`claim-reject-${claim.id}`}
+                  >
+                    {isContradiction ? 'Not a conflict' : 'Reject'}
+                  </MenuItem>
+                )}
+                {claim.status !== 'prohibited' && !isContradiction && (
+                  <MenuItem
+                    onClick={() => {
+                      close()
+                      void setStatus('prohibited')
+                    }}
+                    disabled={busy}
+                    note="Never to be said in promotion. Drafts that say it are stopped."
+                    data-testid={`claim-prohibit-${claim.id}`}
+                  >
+                    Prohibit
+                  </MenuItem>
+                )}
                 <MenuItem
+                  danger
                   onClick={() => {
                     close()
-                    void setStatus('rejected')
+                    setConfirmingDelete(true)
                   }}
                   disabled={busy}
-                  note={isContradiction ? 'These statements do not really disagree.' : 'Not true or not needed. It stays here, struck through, and is never used.'}
-                  data-testid={`claim-reject-${claim.id}`}
+                  note="Removes the statement for good."
+                  data-testid={`claim-delete-${claim.id}`}
                 >
-                  {isContradiction ? 'Not a conflict' : 'Reject'}
+                  Delete
                 </MenuItem>
-              )}
-              {claim.status !== 'prohibited' && !isContradiction && (
-                <MenuItem
-                  onClick={() => {
-                    close()
-                    void setStatus('prohibited')
-                  }}
-                  disabled={busy}
-                  note="Never to be said in promotion. Drafts that say it are stopped."
-                  data-testid={`claim-prohibit-${claim.id}`}
-                >
-                  Prohibit
-                </MenuItem>
-              )}
-              <MenuItem
-                danger
-                onClick={() => {
-                  close()
-                  void remove()
-                }}
-                disabled={busy}
-                note="Removes the statement for good."
-                data-testid={`claim-delete-${claim.id}`}
-              >
-                Delete
-              </MenuItem>
-            </>
-          )}
-        </RowMenu>
+              </>
+            )}
+          </RowMenu>
+        )}
       </div>
     </div>
   )

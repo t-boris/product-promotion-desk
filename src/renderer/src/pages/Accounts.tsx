@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '../hooks'
-import { accountsNewHref, parseAccountsHash, type AccountsRoute } from '../route'
-import { Button, Card, EmptyState, ErrorNote, Loading, Page } from '../ui'
+import { accountsNewHref, parseAccountsHash, productHref, type AccountsRoute } from '../route'
+import { Button, Card, EmptyState, ErrorNote, Loading, OpenFormsScope, Page } from '../ui'
 import { AccountDetail } from './channels/AccountDetail'
 import { AccountList } from './channels/AccountList'
 import { CreateAccount } from './channels/CreateAccount'
@@ -25,8 +25,12 @@ function useAccountsRoute(): AccountsRoute {
  * The account library (DEC-015, REQ-014): every account the owner promotes from. An account is added here, given a role, an
  * e-mail address and a password, and signed in. It is only about the account: channels and products are not shown here; an
  * account is chosen where a channel is connected.
+ *
+ * One filled button per screen state (visual-system.md §10.3): the header's "Add account" is a bezel, off while the new-account form
+ * is on screen (like "New product"); the form owns the filled button while it is open (the scope below makes the account behind it
+ * step back), otherwise the next step of the account.
  */
-export function AccountsPage() {
+function AccountsScreen() {
   const accounts = useQuery('accounts.list', undefined, ['accounts'])
   const platforms = useQuery('platforms.list', undefined, [])
   const mailboxes = useQuery('mailboxes.list', undefined, ['accounts'])
@@ -34,6 +38,9 @@ export function AccountsPage() {
   const profiles = useQuery('profiles.list', undefined, ['accounts'])
   const products = useQuery('products.list', undefined, ['products'])
   const route = useAccountsRoute()
+  // The product whose Channels tab opened the form: the new account is made for it and the app goes back there. A product that
+  // no longer exists is ignored (the same rule as the product filter of Publications).
+  const forProduct = route.productId && (products.data === undefined || products.data.some((p) => p.id === route.productId)) ? route.productId : null
   const [tab, setTab] = useState<Tab>('accounts')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [profileId, setProfileId] = useState<string | null>(null)
@@ -47,13 +54,21 @@ export function AccountsPage() {
   useEffect(() => {
     if (route.adding) setTab('accounts')
   }, [route.adding])
+  // `#/accounts/<id>` (an Attention item) selects that account; an id that is not in the library falls back to the first one.
+  useEffect(() => {
+    if (route.accountId) {
+      setSelectedId(route.accountId)
+      setTab('accounts')
+    }
+  }, [route.accountId])
 
   const goNew = (): void => {
     setTab('accounts')
     window.location.hash = accountsNewHref()
   }
-  const closeNew = (): void => {
-    window.location.hash = '#/accounts'
+  /** Leaves the form: to the product's Channels tab when it was opened from a product (with the account just added chosen there), otherwise to the account list. */
+  const closeNew = (createdId?: string): void => {
+    window.location.hash = forProduct ? productHref(forProduct, 'channels', createdId) : '#/accounts'
   }
   /** From a profile to one of its accounts, and back (DEC-019). */
   const openAccount = (id: string): void => {
@@ -70,7 +85,7 @@ export function AccountsPage() {
       title="Accounts"
       subtitle="Your logins on the platforms, and the profiles (people) behind them: a profile has one login per platform."
       actions={
-        <Button variant="primary" onClick={goNew} data-testid="account-add">
+        <Button icon="plus" onClick={goNew} disabled={adding} data-testid="account-add">
           Add account
         </Button>
       }
@@ -113,20 +128,21 @@ export function AccountsPage() {
                 profiles={profiles.data ?? []}
                 accounts={list}
                 role={route.role}
+                product={forProduct ? { id: forProduct, name: products.data?.find((p) => p.id === forProduct)?.name } : null}
                 onCreated={(account) => {
                   setSelectedId(account.id)
-                  closeNew()
+                  closeNew(account.id)
                 }}
-                onCancel={list.length > 0 ? closeNew : undefined}
+                onCancel={list.length > 0 || forProduct ? () => closeNew() : undefined}
               />
             </Card>
           )}
           {list.length > 0 && (
-            <div className="accounts-layout">
-              <aside>
+            <div className="split">
+              <aside className="split-list">
                 <AccountList accounts={list} platforms={platforms.data ?? []} selectedId={selected?.id ?? null} onSelect={setSelectedId} />
               </aside>
-              <div className="acct-detail-wrap">
+              <div className="split-detail">
                 {selected ? (
                   <AccountDetail key={selected.id} account={selected} platforms={platforms.data ?? []} mailboxes={mailboxes.data ?? []} vault={vault.data} onOpenProfile={openProfile} />
                 ) : (
@@ -138,5 +154,13 @@ export function AccountsPage() {
         </>
       )}
     </Page>
+  )
+}
+
+export function AccountsPage() {
+  return (
+    <OpenFormsScope>
+      <AccountsScreen />
+    </OpenFormsScope>
   )
 }

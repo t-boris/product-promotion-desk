@@ -7,7 +7,7 @@ import { ResultsPanel } from '../results/ResultsPanel'
 import { AnalysisTab } from './AnalysisTab'
 import { GoalTab } from './GoalTab'
 import { launchStages, type LaunchCounts } from './launch-path'
-import { LaunchPath } from './LaunchPath'
+import { LaunchPath, LaunchStagesScope, NextStage } from './LaunchPath'
 import { PassportTab } from './PassportTab'
 import { ProductHeader } from './ProductHeader'
 import { SourcesTab } from './SourcesTab'
@@ -47,17 +47,17 @@ export function ProductDetail({
     return passport.error ? <ErrorNote error={passport.error} /> : <Loading what="Loading product" />
   }
 
+  const stages = launchStages(productId, {
+    hasSources: view.sources.length > 0,
+    passportApproved: view.product.activePassportVersionId !== null,
+    goals: view.product.goals.length,
+    ...counts
+  })
+
   return (
-    <div className="stack" data-testid="product-detail">
-      <ProductHeader view={view} onDeleted={onDeleted} onOpenTab={onTabChange} />
-      <LaunchPath
-        stages={launchStages(productId, {
-          hasSources: view.sources.length > 0,
-          passportApproved: view.product.activePassportVersionId !== null,
-          goals: view.product.goals.length,
-          ...counts
-        })}
-      />
+    <div className="pane" data-testid="product-detail">
+      <ProductHeader view={view} channels={counts.channels} onDeleted={onDeleted} onOpenTab={onTabChange} />
+      <LaunchPath stages={stages} />
       <div className="tabs" role="tablist" aria-label="Product sections">
         {TABS.map((t) => (
           <button key={t.id} role="tab" aria-selected={tab === t.id} className={`tab ${tab === t.id ? 'active' : ''}`} onClick={() => onTabChange(t.id)} data-testid={`product-tab-${t.id}`}>
@@ -65,13 +65,17 @@ export function ProductDetail({
           </button>
         ))}
       </div>
-      <ErrorNote error={passport.error} />
-      {tab === 'sources' && <SourcesTab view={view} />}
-      {tab === 'passport' && <PassportTab view={view} onOpenAnalysis={() => onTabChange('analysis')} />}
-      {tab === 'analysis' && <AnalysisTab view={view} />}
-      {tab === 'goal' && <GoalTab product={view.product} onOpenResults={() => onTabChange('results')} />}
-      {tab === 'channels' && <ChannelsPanel productId={productId} />}
-      {tab === 'results' && <ResultsPanel productId={productId} />}
+      {/* The path decides which tab holds the filled button; every other tab points at the path's next stage (BUG-065). */}
+      <LaunchStagesScope stages={stages}>
+        <NextStage tab={tab} />
+        <ErrorNote error={passport.error} />
+        {tab === 'sources' && <SourcesTab view={view} />}
+        {tab === 'passport' && <PassportTab view={view} onOpenAnalysis={() => onTabChange('analysis')} />}
+        {tab === 'analysis' && <AnalysisTab view={view} />}
+        {tab === 'goal' && <GoalTab product={view.product} onOpenResults={() => onTabChange('results')} />}
+        {tab === 'channels' && <ChannelsPanel productId={productId} />}
+        {tab === 'results' && <ResultsPanel productId={productId} />}
+      </LaunchStagesScope>
     </div>
   )
 }

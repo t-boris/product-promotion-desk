@@ -1,9 +1,12 @@
 import { useState, type FormEvent } from 'react'
 import type { Mailbox } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Button, Card, ErrorNote, Field } from '../../ui'
+import { Button, Card, ConfirmAction, ErrorNote, Field, Hint } from '../../ui'
 
-/** The owner's base mailboxes (DEC-015): an ordinary mailbox from which every account gets an address of its own. */
+/**
+ * The owner's base mailboxes (DEC-015): an ordinary mailbox from which every account gets an address of its own. With none, the sentence
+ * and the add field below it are the whole screen: the field is the next step, and "Add mailbox" is the filled button.
+ */
 export function MailboxesCard({ mailboxes }: { mailboxes: Mailbox[] }) {
   const [address, setAddress] = useState('')
   const [add, adding] = useAction(async () => {
@@ -19,28 +22,36 @@ export function MailboxesCard({ mailboxes }: { mailboxes: Mailbox[] }) {
 
   return (
     <Card title="Base mailbox">
-      <p className="muted small">
+      <p className="muted">
         Your own mailbox (Gmail, iCloud, Fastmail…). From it the app proposes a separate address for each account, for example <strong>you+reddit@gmail.com</strong>: all mail still arrives in your mailbox, and each account has an address of its own. Some platforms refuse addresses with “+”; then type another address for that account. Reading this mail inside the app comes in a later release.
       </p>
       {mailboxes.length > 0 && (
-        <div className="stack" data-testid="mailbox-list">
+        <div className="rows" data-testid="mailbox-list">
           {mailboxes.map((m) => (
-            <div className="list-row" key={m.id} data-testid={`mailbox-${m.id}`}>
-              <strong>{m.address}</strong>
-              <Button variant="danger" onClick={() => void remove(m.id)} disabled={removing.busy} data-testid={`mailbox-remove-${m.id}`}>
-                Remove
-              </Button>
+            <div className="group-row" key={m.id} data-testid={`mailbox-${m.id}`}>
+              <strong className="row-main">{m.address}</strong>
+              <ConfirmAction
+                label="Remove"
+                question="Removes this mailbox from the list. Addresses already given to accounts stay."
+                confirmLabel="Remove mailbox"
+                onConfirm={() => remove(m.id)}
+                testId={`mailbox-remove-${m.id}`}
+                confirmTestId={`mailbox-remove-confirm-${m.id}`}
+              />
             </div>
           ))}
         </div>
       )}
-      <form onSubmit={submit} data-testid="mailbox-form">
+      <form onSubmit={submit} className="add-form" data-testid="mailbox-form">
         <Field label="Add a mailbox" hint="Only the address is stored. No password is asked here.">
           <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="you@gmail.com" autoComplete="off" data-testid="mailbox-address" />
         </Field>
-        <Button variant="primary" type="submit" disabled={adding.busy || address.trim() === ''} data-testid="mailbox-add">
-          {adding.busy ? 'Adding…' : 'Add mailbox'}
-        </Button>
+        <div className="row">
+          <Button variant="primary" type="submit" disabled={adding.busy || address.trim() === ''} data-testid="mailbox-add">
+            {adding.busy ? 'Adding…' : 'Add mailbox'}
+          </Button>
+          {address.trim() === '' && <Hint data-testid="mailbox-add-reason">Type the address of your mailbox.</Hint>}
+        </div>
       </form>
       <ErrorNote error={adding.error ?? removing.error} />
     </Card>

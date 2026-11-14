@@ -2,7 +2,8 @@ import { useState, type FormEvent } from 'react'
 import type { Account, PlatformInfo, Product, Profile } from '../../../../shared/types'
 import { profileLine } from '../../../../shared/profile'
 import { call, useAction } from '../../hooks'
-import { Badge, Button, Card, EmptyState, ErrorNote, Field } from '../../ui'
+import { Badge, Button, Card, EmptyState, ErrorNote, Field, Hint, useOpenForm } from '../../ui'
+import { productLabels } from '../products/product-labels'
 import { ProfileDetail } from './ProfileDetail'
 import { platformLabel } from './model'
 
@@ -32,36 +33,59 @@ export function ProfilesPanel({
   const showForm = adding || profiles.length === 0
 
   return (
-    <div className="accounts-layout" data-testid="profiles-panel">
-      <aside className="stack">
-        <Button variant="primary" onClick={() => setAdding(true)} data-testid="profile-add">
+    <div className="split" data-testid="profiles-panel">
+      <aside className="split-list">
+        <Button icon="plus" onClick={() => setAdding(true)} data-testid="profile-add">
           New profile
         </Button>
-        <div className="stack" data-testid="profile-list">
-          {profiles.map((profile) => {
-            const own = accounts.filter((a) => a.profileId === profile.id)
-            return (
-              <div
-                key={profile.id}
-                className={`list-row selectable ${!showForm && profile.id === selected?.id ? 'active' : ''}`}
-                onClick={() => (setAdding(false), onSelect(profile.id))}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (setAdding(false), onSelect(profile.id))}
-                data-testid={`profile-row-${profile.id}`}
-              >
-                <div className="acct-list-name">
-                  <strong>{profile.label}</strong>
-                  <div className="muted small">{profile.displayName ? profileLine(profile, new Date()) : 'No person yet'}</div>
-                  <div className="muted small">{own.length === 0 ? 'no accounts' : own.map((a) => platformLabel(a.platform, platforms)).join(', ')}</div>
+        {profiles.length > 0 && (
+          <div className="panel" data-testid="profile-list">
+            {profiles.map((profile) => {
+              const own = accounts.filter((a) => a.profileId === profile.id)
+              const active = !showForm && profile.id === selected?.id
+              const proposed = profile.displayName !== '' && profile.status !== 'approved'
+              const choose = (): void => {
+                setAdding(false)
+                onSelect(profile.id)
+              }
+              return (
+                <div
+                  key={profile.id}
+                  className={`panel-row${active ? ' active' : ''}`}
+                  onClick={choose}
+                  role="button"
+                  tabIndex={0}
+                  aria-current={active ? 'true' : undefined}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      choose()
+                    }
+                  }}
+                  data-testid={`profile-row-${profile.id}`}
+                >
+                  <div className="panel-row-top">
+                    <span className="panel-row-title">{profile.label}</span>
+                    {/* Only a proposal waiting for the owner is a tag; a new or an approved profile is a dot and its word. */}
+                    {proposed && <Badge tone="warn">Proposed</Badge>}
+                  </div>
+                  <div className="panel-row-line">{profile.displayName ? profileLine(profile, new Date()) : 'No person yet'}</div>
+                  <div className="panel-row-line">{own.length === 0 ? 'no accounts' : own.map((a) => platformLabel(a.platform, platforms)).join(', ')}</div>
+                  {!proposed && (
+                    <div className="panel-row-line">
+                      <span className="dot-line">
+                        <span className={`dot ${profile.displayName === '' ? '' : 'good'}`} aria-hidden="true" />
+                        {profile.displayName === '' ? 'New' : 'Approved'}
+                      </span>
+                    </div>
+                  )}
                 </div>
-                <Badge tone={profile.displayName === '' ? 'neutral' : profile.status === 'approved' ? 'good' : 'warn'}>{profile.displayName === '' ? 'New' : profile.status === 'approved' ? 'Approved' : 'Proposed'}</Badge>
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        )}
       </aside>
-      <div className="acct-detail-wrap">
+      <div className="split-detail">
         {showForm ? (
           <Card title="New profile">
             <NewProfile
@@ -92,6 +116,8 @@ export function ProfilesPanel({
 
 /** Names a profile and says what it is for; the AI proposes the person afterwards. */
 function NewProfile({ platforms, products, freeAccounts, onCreated, onCancel }: { platforms: PlatformInfo[]; products: Product[]; freeAccounts: Account[]; onCreated: (profile: Profile) => void; onCancel?: () => void }) {
+  // The form is the next step of the Profiles tab: "Make the profile" is its one filled button unless a form opened after it owns it.
+  const submitVariant = useOpenForm()
   const [label, setLabel] = useState('')
   const [purpose, setPurpose] = useState('')
   const [chosen, setChosen] = useState<string[]>([])
@@ -99,6 +125,7 @@ function NewProfile({ platforms, products, freeAccounts, onCreated, onCancel }: 
   const [taken, setTaken] = useState<string[]>([])
   const [create, state] = useAction((args: { label: string; purpose?: string; platforms: string[]; productId: string | null; accountIds: string[] }) => call('profiles.create', args))
   const takenPlatforms = new Set(freeAccounts.filter((a) => taken.includes(a.id)).map((a) => a.platform))
+  const labels = productLabels(products)
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault()
@@ -118,7 +145,7 @@ function NewProfile({ platforms, products, freeAccounts, onCreated, onCancel }: 
             <option value="">No product</option>
             {products.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name}
+                {labels.get(p.id) ?? p.name}
               </option>
             ))}
           </select>
@@ -129,12 +156,12 @@ function NewProfile({ platforms, products, freeAccounts, onCreated, onCancel }: 
       </Field>
       {freeAccounts.length > 0 && (
         <Field label="Accounts it already has (optional)" hint="Logins you already made for this person (an Instagram account, any other). They join the profile, and the AI plans the person to fit them: their names and e-mail addresses. One account per platform.">
-          <div className="row" data-testid="new-profile-accounts">
+          <div className="toggle-group" data-testid="new-profile-accounts">
             {freeAccounts.map((a) => {
               const on = taken.includes(a.id)
               const blocked = !on && takenPlatforms.has(a.platform)
               return (
-                <Button key={a.id} variant={on ? 'primary' : undefined} disabled={blocked} onClick={() => setTaken((t) => (on ? t.filter((x) => x !== a.id) : [...t, a.id]))} aria-pressed={on} data-testid={`new-profile-account-${a.id}`}>
+                <Button key={a.id} disabled={blocked} onClick={() => setTaken((t) => (on ? t.filter((x) => x !== a.id) : [...t, a.id]))} aria-pressed={on} data-testid={`new-profile-account-${a.id}`}>
                   {a.label} · {platformLabel(a.platform, platforms)}
                 </Button>
               )
@@ -143,19 +170,20 @@ function NewProfile({ platforms, products, freeAccounts, onCreated, onCancel }: 
         </Field>
       )}
       <Field label="Platforms (optional)" hint="Where this person will have accounts. You can change it later.">
-        <div className="row">
+        <div className="toggle-group">
           {platforms.map((p) => (
-            <Button key={p.platform} variant={chosen.includes(p.platform) ? 'primary' : undefined} onClick={() => setChosen((c) => (c.includes(p.platform) ? c.filter((x) => x !== p.platform) : [...c, p.platform]))} aria-pressed={chosen.includes(p.platform)} data-testid={`new-profile-platform-${p.platform}`}>
+            <Button key={p.platform} onClick={() => setChosen((c) => (c.includes(p.platform) ? c.filter((x) => x !== p.platform) : [...c, p.platform]))} aria-pressed={chosen.includes(p.platform)} data-testid={`new-profile-platform-${p.platform}`}>
               {p.label}
             </Button>
           ))}
         </div>
       </Field>
       <div className="row">
-        <Button variant="primary" type="submit" disabled={!label.trim() || state.busy} data-testid="profile-create">
+        <Button variant={submitVariant} type="submit" disabled={!label.trim() || state.busy} data-testid="profile-create">
           {state.busy ? 'Making…' : 'Make the profile'}
         </Button>
         {onCancel && <Button onClick={onCancel}>Cancel</Button>}
+        {!label.trim() && <Hint data-testid="profile-create-reason">Name the profile first.</Hint>}
       </div>
       <p className="muted small">After making it, the AI proposes the person, and you decide.</p>
       <ErrorNote error={state.error} />

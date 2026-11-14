@@ -5,6 +5,7 @@ import { Badge, Button, Card, ErrorNote, Hint, More } from '../../ui'
 import { ClaimForm } from './ClaimForm'
 import { ClaimRow } from './ClaimRow'
 import { SECTION_HINTS, SECTION_LABELS } from './labels'
+import { useTabMainVariant } from './LaunchPath'
 import { approvableClaims, approvalBlocker, groupBySection, summarize } from './model'
 import { VersionsCard } from './VersionsCard'
 
@@ -28,7 +29,7 @@ function Section({ section, view }: { section: PassportSection; view: PassportVi
           {SECTION_HINTS[section]}
           {empty ? ' · nothing here yet' : ''}
         </Hint>
-        <div className="stack claim-list">
+        <div className="rows claim-list">
           {claims.map((claim) => (
             <ClaimRow key={claim.id} claim={claim} all={view.claims} productId={view.product.id} />
           ))}
@@ -83,9 +84,12 @@ export function PassportTab({ view, onOpenAnalysis }: { view: PassportView; /** 
   // No statement and no approved passport: the next step is the analysis, not the approval (BUG-019). A draft emptied by
   // deleting every statement of an approved passport keeps the usual layout, with its version and the approved badge.
   const empty = view.claims.length === 0 && view.product.activePassportVersionId === null
+  // "Approve passport" is the main action of a passport with statements while the passport is the path's next stage, unless a statement form is
+  // open (it owns the filled button). Once the passport is approved the next stage owns it and this is a bezel (BUG-065).
+  const mainVariant = useTabMainVariant('passport')
   const approveButton = (
     <Button
-      variant={empty ? 'ghost' : 'primary'}
+      variant={empty ? 'ghost' : mainVariant}
       onClick={() => void approve()}
       disabled={blocker !== null || approving.busy || approvingAll.busy}
       title={blocker ?? 'Make this the passport that drafting and review rely on'}
@@ -104,7 +108,7 @@ export function PassportTab({ view, onOpenAnalysis }: { view: PassportView; /** 
               <strong>No passport yet.</strong> Run the analysis to draft it from your sources, or add the first statement yourself.
             </p>
             <div className="row">
-              <Button variant="primary" onClick={onOpenAnalysis} data-testid="passport-open-analysis">
+              <Button variant={mainVariant} onClick={onOpenAnalysis} data-testid="passport-open-analysis">
                 Open Analysis
               </Button>
               {approveButton}
@@ -164,8 +168,8 @@ export function PassportTab({ view, onOpenAnalysis }: { view: PassportView; /** 
             </span>
           </div>
           {/* The reason the button is off stands next to it, at reading size, not as a small grey line below the banners. */}
-          {blocker && version?.status === 'draft' && (
-            <Hint tone="strong" className="blocker" data-testid="approve-blocker">
+          {blocker && (
+            <Hint tone={version?.status === 'draft' ? 'strong' : undefined} className="blocker" data-testid="approve-blocker">
               {blocker}
             </Hint>
           )}
@@ -179,7 +183,7 @@ export function PassportTab({ view, onOpenAnalysis }: { view: PassportView; /** 
             </div>
           )}
           {summary.unconfirmed > 0 && (
-            <div className="warn-note" data-testid="unconfirmed-banner">
+            <div className="note warn" data-testid="unconfirmed-banner">
               {summary.unconfirmed} statement{summary.unconfirmed === 1 ? '' : 's'} found only in the project code. Confirm that users can really use {summary.unconfirmed === 1 ? 'it' : 'them'} before approving.
             </div>
           )}

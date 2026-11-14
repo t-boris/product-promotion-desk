@@ -1,0 +1,1053 @@
+<!doctype html>
+<!--
+  Static layout mock of the macOS visual system (docs/design/macos/visual-system.md).
+  It is a picture of the target, not product code: the token block below is the one the spec asks styles.css to adopt.
+  Open with ?screen=products|settings|empty. The theme follows the system (prefers-color-scheme). In an Electron
+  window with vibrancy: 'sidebar', html[data-chrome=native] lets the sidebar show the window's vibrancy material.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Product Promotion Desk — macOS mock</title>
+    <style>
+      :root {
+        --surface-0: #f5f5f7;
+        --surface-1: #ffffff;
+        --surface-2: #f0f0f2;
+        --surface-3: #ffffff;
+        --sidebar: #e8e8ed;
+        --field: #ffffff;
+        --field-border: #a8a8ae;
+        --bezel: #ffffff;
+        --line: #e3e3e8;
+        --line-strong: #c7c7cc;
+        --text-1: #1d1d1f;
+        --text-2: #5f5f64;
+        --text-3: #6c6c71;
+        --accent: #5856d6;
+        --on-accent: #ffffff;
+        --accent-tint: rgb(88 86 214 / 12%);
+        --accent-on-tint: #5856d6;
+        --focus: #5856d6;
+        --selection: rgb(0 0 0 / 7%);
+        --hover-fill: rgb(0 0 0 / 4.5%);
+        --press-fill: rgb(0 0 0 / 9%);
+        --segment-track: rgb(0 0 0 / 5.5%);
+        --segment-thumb: #ffffff;
+        --success: #17733f;
+        --success-bg: #e3f5eb;
+        --attention: #8a5c00;
+        --attention-bg: #fdf1d6;
+        --on-attention: #ffffff;
+        --error: #b42318;
+        --error-bg: #fde8e6;
+        --info: #2457c5;
+        --info-bg: #e5edfd;
+        --shadow-control: 0 0.5px 1px rgb(0 0 0 / 12%);
+        --shadow-thumb: 0 1px 2px rgb(0 0 0 / 14%), 0 0 0 0.5px rgb(0 0 0 / 6%);
+        --shadow-pop: 0 0 0 0.5px rgb(0 0 0 / 12%), 0 10px 30px rgb(0 0 0 / 16%), 0 2px 6px rgb(0 0 0 / 8%);
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-3: 12px;
+        --space-4: 16px;
+        --space-5: 24px;
+        --space-6: 32px;
+        --gutter: 20px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-pill: 999px;
+        --control-h: 28px;
+        --control-radius: var(--radius-md);
+        --control-pad-x: 12px;
+        --control-min-w: 72px;
+        --toolbar-h: 52px;
+        --sidebar-w: 224px;
+        --row-h: 28px;
+        --fs-body: 13px;
+        --fs-caption: 13px;
+        --fs-title: 15px;
+        --fs-section: 17px;
+        --fs-page: 22px;
+        --fs-display: 26px;
+        --lh-prose: 1.45;
+        --lh-title: 1.25;
+        --font: -apple-system, BlinkMacSystemFont, system-ui, 'Helvetica Neue', sans-serif;
+        color-scheme: light dark;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --surface-0: #1e1e20;
+          --surface-1: #28282b;
+          --surface-2: #313135;
+          --surface-3: #2c2c2f;
+          --sidebar: #252528;
+          --field: #323236;
+          --field-border: #636369;
+          --bezel: #3a3a3e;
+          --line: #38383c;
+          --line-strong: #4b4b50;
+          --text-1: #f2f2f7;
+          --text-2: #a5a5ab;
+          --text-3: #929298;
+          --accent: #5e5ce6;
+          --accent-tint: rgb(94 92 230 / 26%);
+          --accent-on-tint: #a5a3ff;
+          --focus: #a5a3ff;
+          --selection: rgb(255 255 255 / 10%);
+          --hover-fill: rgb(255 255 255 / 6%);
+          --press-fill: rgb(255 255 255 / 12%);
+          --segment-track: rgb(255 255 255 / 7%);
+          --segment-thumb: #545458;
+          --success: #5fd39a;
+          --success-bg: #173326;
+          --attention: #f2c14e;
+          --attention-bg: #3a2f12;
+          --on-attention: #241a00;
+          --error: #ff8a80;
+          --error-bg: #3d1b19;
+          --info: #8ab0ff;
+          --info-bg: #172544;
+          --shadow-control: 0 0.5px 1px rgb(0 0 0 / 40%), inset 0 0.5px 0 rgb(255 255 255 / 8%);
+          --shadow-thumb: 0 1px 2px rgb(0 0 0 / 40%);
+          --shadow-pop: 0 0 0 0.5px rgb(255 255 255 / 10%), 0 12px 32px rgb(0 0 0 / 50%);
+        }
+      }
+      /* Inside the Electron window the sidebar is the window's vibrancy material; in a browser it is opaque. */
+      html[data-chrome='native'] {
+        --sidebar: transparent;
+      }
+      html[data-chrome='native'] body {
+        background: transparent;
+      }
+      @media (prefers-reduced-transparency: reduce) {
+        html[data-chrome='native'] {
+          --sidebar: #e8e8ed;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+      }
+      body {
+        background: var(--surface-0);
+        color: var(--text-1);
+        font: var(--fs-body) / var(--lh-prose) var(--font);
+        -webkit-font-smoothing: antialiased;
+        cursor: default;
+        user-select: none;
+      }
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+      .icon {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.5;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .shell {
+        display: grid;
+        grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+        height: 100%;
+      }
+      /* Sidebar: material, a 52px band for the window buttons and the toggle, a section header, two groups. */
+      .sidebar {
+        background: var(--sidebar);
+        border-right: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        padding: 0 10px 10px;
+        -webkit-app-region: drag;
+      }
+      .sidebar-band {
+        height: var(--toolbar-h);
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+      }
+      .tb-icon {
+        -webkit-app-region: no-drag;
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 0;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        color: var(--text-2);
+      }
+      .tb-icon:hover {
+        background: var(--hover-fill);
+        color: var(--text-1);
+      }
+      .sidebar-head {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        height: var(--row-h);
+        padding: 0 10px;
+        margin-top: var(--space-1);
+        font-weight: 600;
+        color: var(--text-2);
+      }
+      .brand-mark {
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+        background: var(--accent);
+        display: inline-flex;
+        align-items: flex-end;
+        justify-content: center;
+        gap: 1.5px;
+        padding-bottom: 3.5px;
+      }
+      .brand-mark > i {
+        width: 2px;
+        border-radius: 1px;
+        background: #fff;
+      }
+      .brand-mark > i:nth-child(1) {
+        height: 3.5px;
+      }
+      .brand-mark > i:nth-child(2) {
+        height: 6px;
+      }
+      .brand-mark > i:nth-child(3) {
+        height: 9px;
+      }
+      nav {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        -webkit-app-region: no-drag;
+      }
+      .nav-foot {
+        margin-top: auto;
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        height: var(--row-h);
+        padding: 0 10px;
+        border-radius: var(--radius-sm);
+        color: var(--text-1);
+        text-decoration: none;
+      }
+      .nav-item .icon {
+        color: var(--accent-on-tint);
+      }
+      .nav-item:hover {
+        background: var(--hover-fill);
+      }
+      .nav-item.active {
+        background: var(--selection);
+        font-weight: 500;
+      }
+      .count {
+        margin-left: auto;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 6px;
+        border-radius: var(--radius-pill);
+        background: var(--attention);
+        color: var(--on-attention);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* The content column is opaque: only the sidebar shows the window material. */
+      .main {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 0;
+        background: var(--surface-0);
+      }
+      /* Toolbar: the unified title-bar band. Status on the leading side, automation on the trailing side. No filled button. */
+      .toolbar {
+        height: var(--toolbar-h);
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        padding: 0 var(--gutter);
+        background: var(--surface-0);
+        border-bottom: 1px solid var(--line);
+        -webkit-app-region: drag;
+        white-space: nowrap;
+      }
+      .toolbar a,
+      .toolbar button {
+        -webkit-app-region: no-drag;
+      }
+      .tb-status {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        min-width: 0;
+        color: var(--text-2);
+      }
+      .tb-status .sep {
+        width: 1px;
+        height: 16px;
+        background: var(--line-strong);
+      }
+      .version {
+        font-variant-numeric: tabular-nums;
+        color: var(--text-2);
+        padding: 0 var(--space-2);
+        height: 22px;
+        line-height: 22px;
+        border-radius: var(--radius-pill);
+        background: var(--segment-track);
+      }
+      .status-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .status-item b {
+        font-weight: 500;
+        color: var(--text-1);
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex: none;
+        background: var(--text-3);
+      }
+      .dot.good {
+        background: var(--success);
+      }
+      .dot.warn {
+        background: var(--attention);
+      }
+      .spacer {
+        flex: 1;
+      }
+      /* The toolbar stays one line: first the automation words, then the status labels move into the accessible name
+         and the tooltip (they stay in the page for a screen reader and a test tool). */
+      .main {
+        container-type: inline-size;
+      }
+      @container (max-width: 840px) {
+        .tb-words {
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          overflow: hidden;
+          clip-path: inset(50%);
+        }
+      }
+      @container (max-width: 720px) {
+        .tb-label {
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          overflow: hidden;
+          clip-path: inset(50%);
+        }
+      }
+      .content {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        padding: var(--gutter) var(--gutter) var(--space-5);
+      }
+
+      /* Buttons: one size; the variants change colour only. */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: var(--control-h);
+        min-width: var(--control-min-w);
+        padding: 0 var(--control-pad-x);
+        font: inherit;
+        font-weight: 500;
+        white-space: nowrap;
+        border-radius: var(--control-radius);
+        border: 0.5px solid var(--line-strong);
+        background: var(--bezel);
+        color: var(--text-1);
+        box-shadow: var(--shadow-control);
+      }
+      .btn:hover {
+        background: color-mix(in srgb, var(--bezel), var(--text-1) 5%);
+      }
+      .btn-primary {
+        background: var(--accent);
+        border-color: transparent;
+        color: var(--on-accent);
+      }
+      .btn-primary:hover {
+        background: color-mix(in srgb, var(--accent), #fff 8%);
+      }
+      .btn-secondary {
+        color: var(--accent-on-tint);
+      }
+      .btn-danger {
+        color: var(--error);
+      }
+      .btn-quiet {
+        border-color: transparent;
+        background: transparent;
+        box-shadow: none;
+        color: var(--accent-on-tint);
+        min-width: 0;
+        padding: 0 var(--space-2);
+      }
+      .btn-toolbar {
+        border-radius: var(--radius-pill);
+      }
+      .btn[disabled] {
+        box-shadow: none;
+        background: transparent;
+        border-color: var(--line);
+        color: var(--text-3);
+      }
+      .focus {
+        outline: 2px solid var(--focus);
+        outline-offset: 1px;
+      }
+
+      .page-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: var(--space-4);
+        margin-bottom: var(--space-4);
+      }
+      .page-head h1 {
+        font-size: var(--fs-page);
+        line-height: var(--lh-title);
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      .sub {
+        color: var(--text-2);
+        margin-top: 2px;
+      }
+
+      /* Products: list panel + detail, side by side down to the minimum window. */
+      .split {
+        display: grid;
+        grid-template-columns: clamp(208px, 27%, 300px) minmax(0, 1fr);
+        gap: var(--space-4);
+        align-items: start;
+      }
+      .panel {
+        background: var(--surface-1);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+      }
+      .list {
+        padding: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .row {
+        padding: var(--space-2) 10px;
+        border-radius: var(--radius-md);
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .row:hover {
+        background: var(--hover-fill);
+      }
+      .row.active {
+        background: var(--accent-tint);
+      }
+      .row-top {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+      }
+      .row-title {
+        font-weight: 600;
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .row-line {
+        color: var(--text-2);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .launch-dots {
+        display: inline-flex;
+        gap: 3px;
+        flex: none;
+      }
+      .launch-dots i {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        border: 1.5px solid var(--line-strong);
+      }
+      .launch-dots i.done {
+        background: var(--success);
+        border-color: var(--success);
+      }
+      .launch-dots i.current {
+        border-color: var(--accent-on-tint);
+      }
+
+      .detail {
+        container-type: inline-size;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+      }
+      .obj-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: var(--space-3);
+      }
+      .obj-head h2 {
+        font-size: var(--fs-section);
+        line-height: var(--lh-title);
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      .meta {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        color: var(--text-2);
+        margin-top: 2px;
+        flex-wrap: wrap;
+      }
+      .link {
+        color: var(--accent-on-tint);
+        text-decoration: none;
+      }
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        height: 22px;
+        padding: 0 var(--space-2);
+        border-radius: var(--radius-pill);
+        background: var(--segment-track);
+        color: var(--text-2);
+        white-space: nowrap;
+      }
+      .tag.good {
+        background: var(--success-bg);
+        color: var(--success);
+      }
+      .tag.warn {
+        background: var(--attention-bg);
+        color: var(--attention);
+      }
+      .actions {
+        display: flex;
+        gap: var(--space-2);
+        flex: none;
+      }
+
+      .path {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        row-gap: var(--space-1);
+      }
+      .stage {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--control-h);
+        padding: 0 6px;
+        border-radius: var(--radius-pill);
+        color: var(--text-2);
+      }
+      .stage.done {
+        color: var(--text-1);
+      }
+      .stage.current {
+        color: var(--text-1);
+        font-weight: 600;
+      }
+      .mark {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 1.5px solid var(--line-strong);
+        flex: none;
+      }
+      .stage.done .mark {
+        border: 0;
+        background: var(--success);
+        mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill-rule='evenodd' d='M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zM11.3 4.6l1.05 1.05L7 11 3.65 7.65 4.7 6.6 7 8.9z'/></svg>") center / contain no-repeat;
+      }
+      .stage.current .mark {
+        border-color: var(--accent-on-tint);
+        box-shadow: 0 0 0 3px var(--accent-tint);
+      }
+      .joint {
+        width: 18px;
+        height: 1.5px;
+        background: var(--line-strong);
+      }
+      .joint.done {
+        background: var(--success);
+      }
+      @container (max-width: 560px) {
+        .joint {
+          width: 10px;
+        }
+        .stage {
+          padding: 0 3px;
+          gap: 5px;
+        }
+      }
+      .next {
+        font-weight: 600;
+        color: var(--accent-on-tint);
+        background: var(--accent-tint);
+        border-radius: var(--radius-pill);
+        padding: 0 var(--space-2);
+        height: 20px;
+        line-height: 20px;
+      }
+
+      /* Tabs as a macOS segmented control: neutral track, raised neutral thumb. */
+      .segmented {
+        display: inline-flex;
+        align-self: flex-start;
+        padding: 2px;
+        gap: 2px;
+        border-radius: var(--radius-md);
+        background: var(--segment-track);
+      }
+      .seg {
+        height: 24px;
+        padding: 0 12px;
+        border-radius: var(--radius-sm);
+        display: inline-flex;
+        align-items: center;
+        color: var(--text-2);
+        font-weight: 500;
+      }
+      .seg.on {
+        background: var(--segment-thumb);
+        color: var(--text-1);
+        box-shadow: var(--shadow-thumb);
+      }
+
+      /* A group box: title row, then rows split by inset hairlines. */
+      .group {
+        background: var(--surface-1);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+      }
+      .group-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3);
+        padding: var(--space-3) var(--space-4) 0;
+      }
+      .group-head {
+        flex-wrap: wrap;
+      }
+      .group-head h3 {
+        white-space: nowrap;
+        font-size: var(--fs-title);
+        line-height: var(--lh-title);
+        font-weight: 600;
+      }
+      .group-body {
+        padding: var(--space-2) var(--space-4) var(--space-3);
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+      }
+      .grow {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3);
+        min-height: 44px;
+        padding: var(--space-2) 0;
+      }
+      .grow + .grow {
+        border-top: 1px solid var(--line);
+      }
+      .grow .label {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .muted {
+        color: var(--text-2);
+      }
+      .claim {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: var(--space-3);
+        padding: var(--space-3) 0;
+      }
+      .claim + .claim {
+        border-top: 1px solid var(--line);
+      }
+      .tags {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 4px;
+      }
+      .disc {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--accent-on-tint);
+        height: var(--control-h);
+      }
+      .switch {
+        width: 32px;
+        height: 18px;
+        border-radius: 999px;
+        background: var(--accent);
+        position: relative;
+        flex: none;
+      }
+      .switch::after {
+        content: '';
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 1px 2px rgb(0 0 0 / 25%);
+      }
+      .switch.off {
+        background: var(--line-strong);
+      }
+      .switch.off::after {
+        right: auto;
+        left: 2px;
+      }
+      .field {
+        height: var(--control-h);
+        width: 120px;
+        border-radius: var(--control-radius);
+        border: 1px solid var(--field-border);
+        background: var(--field);
+        padding: 0 10px;
+        display: inline-flex;
+        align-items: center;
+        color: var(--text-1);
+        font-variant-numeric: tabular-nums;
+      }
+      .in-use {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--success);
+        font-weight: 500;
+        height: var(--control-h);
+      }
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 6px;
+        padding: var(--space-6) var(--space-4);
+      }
+      .empty .art {
+        width: 40px;
+        height: 40px;
+        color: var(--text-3);
+        stroke-width: 1.2;
+        margin-bottom: 6px;
+      }
+      .empty strong {
+        font-size: var(--fs-title);
+      }
+      .empty p {
+        color: var(--text-2);
+        max-width: 46ch;
+      }
+      .empty .btn {
+        margin-top: var(--space-3);
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute">
+      <symbol id="i-sidebar" viewBox="0 0 16 16"><rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2" /><path d="M6 2.75v10.5" /></symbol>
+      <symbol id="i-attention" viewBox="0 0 16 16"><path d="M8 2.25c-2.15 0-3.75 1.65-3.75 3.8v2.5L3 10.75h10l-1.25-2.2v-2.5c0-2.15-1.6-3.8-3.75-3.8z" /><path d="M6.6 12.75a1.5 1.5 0 0 0 2.8 0" /></symbol>
+      <symbol id="i-products" viewBox="0 0 16 16"><path d="M8 1.75 13.75 4.6v6.8L8 14.25 2.25 11.4V4.6z" /><path d="M2.25 4.6 8 7.45l5.75-2.85M8 7.45v6.8" /></symbol>
+      <symbol id="i-accounts" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.25" /><circle cx="8" cy="6.6" r="2.1" /><path d="M4.3 12.3c.9-1.45 2.2-2.2 3.7-2.2s2.8.75 3.7 2.2" /></symbol>
+      <symbol id="i-opportunities" viewBox="0 0 16 16"><path d="M3 2.75h10c.7 0 1.25.55 1.25 1.25v5.75c0 .7-.55 1.25-1.25 1.25H7.6l-3.1 2.5V11H3c-.7 0-1.25-.55-1.25-1.25V4c0-.7.55-1.25 1.25-1.25z" /></symbol>
+      <symbol id="i-publications" viewBox="0 0 16 16"><path d="M14.25 1.75 1.75 7.1l5.1 2.05 2.05 5.1z" /><path d="M14.25 1.75 6.85 9.15" /></symbol>
+      <symbol id="i-log" viewBox="0 0 16 16"><path d="M6.25 4h7.5M6.25 8h7.5M6.25 12h7.5" /><circle cx="3" cy="4" r=".6" /><circle cx="3" cy="8" r=".6" /><circle cx="3" cy="12" r=".6" /></symbol>
+      <symbol id="i-settings" viewBox="0 0 16 16"><path d="M12.68 6.24 L14.51 6.92 L14.51 9.08 L12.68 9.76 L12.55 10.06 L13.37 11.84 L11.84 13.37 L10.06 12.55 L9.76 12.68 L9.08 14.51 L6.92 14.51 L6.24 12.68 L5.94 12.55 L4.16 13.37 L2.63 11.84 L3.45 10.06 L3.32 9.76 L1.49 9.08 L1.49 6.92 L3.32 6.24 L3.45 5.94 L2.63 4.16 L4.16 2.63 L5.94 3.45 L6.24 3.32 L6.92 1.49 L9.08 1.49 L9.76 3.32 L10.06 3.45 L11.84 2.63 L13.37 4.16 L12.55 5.94Z" /><circle cx="8" cy="8" r="2.1" /></symbol>
+      <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3.25v9.5M3.25 8h9.5" /></symbol>
+      <symbol id="i-play" viewBox="0 0 16 16"><path d="M5 3.25v9.5L12.5 8z" /></symbol>
+      <symbol id="i-chevron" viewBox="0 0 16 16"><path d="M6 3.75 10.25 8 6 12.25" /></symbol>
+      <symbol id="i-check" viewBox="0 0 16 16"><path d="M3.25 8.5 6.5 11.5l6.25-7" /></symbol>
+      <symbol id="i-more" viewBox="0 0 16 16"><path d="M4.5 6.5 8 10l3.5-3.5" /></symbol>
+      <symbol id="i-empty" viewBox="0 0 40 40"><path d="M20 5 34 12v16l-14 7-14-7V12z" /><path d="M6 12l14 7 14-7M20 19v16" /></symbol>
+    </svg>
+
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="sidebar-band">
+          <button class="tb-icon" aria-label="Hide menu" title="Hide menu"><svg class="icon"><use href="#i-sidebar" /></svg></button>
+        </div>
+        <div class="sidebar-head"><span class="brand-mark"><i></i><i></i><i></i></span>Promotion Desk</div>
+        <nav aria-label="Work areas">
+          <a class="nav-item" data-nav="attention"><svg class="icon"><use href="#i-attention" /></svg>Attention<span class="count">2</span></a>
+          <a class="nav-item" data-nav="products"><svg class="icon"><use href="#i-products" /></svg>Products</a>
+          <a class="nav-item" data-nav="accounts"><svg class="icon"><use href="#i-accounts" /></svg>Accounts</a>
+          <a class="nav-item" data-nav="opportunities"><svg class="icon"><use href="#i-opportunities" /></svg>Opportunities</a>
+          <a class="nav-item" data-nav="publications"><svg class="icon"><use href="#i-publications" /></svg>Publications</a>
+        </nav>
+        <nav class="nav-foot" aria-label="App">
+          <a class="nav-item" data-nav="logs"><svg class="icon"><use href="#i-log" /></svg>Log</a>
+          <a class="nav-item" data-nav="settings"><svg class="icon"><use href="#i-settings" /></svg>Settings</a>
+        </nav>
+      </aside>
+
+      <div class="main">
+        <header class="toolbar">
+          <div class="tb-status">
+            <span class="version">v0.9.0</span>
+            <span class="sep"></span>
+            <span class="status-item"><span class="tb-label">AI engine</span> <span class="dot good"></span><b>Claude Code</b></span>
+            <span class="sep"></span>
+            <span class="status-item"><span class="tb-label">Accounts</span> <span class="dot warn"></span><b>1 · 1 needs sign-in</b></span>
+          </div>
+          <span class="spacer"></span>
+          <span class="status-item muted" title="Automation paused"><span class="dot warn"></span><span class="tb-words">Automation paused</span></span>
+          <button class="btn btn-toolbar"><svg class="icon"><use href="#i-play" /></svg>Resume automation</button>
+        </header>
+
+        <main class="content">
+          <!-- Products / Passport -->
+          <section data-screen="products">
+            <div class="page-head">
+              <div>
+                <h1>Products</h1>
+                <p class="sub">Sources, the verified passport, analysis, goal, channels and results for each product</p>
+              </div>
+              <button class="btn"><svg class="icon"><use href="#i-plus" /></svg>New product</button>
+            </div>
+            <div class="split">
+              <div class="panel list">
+                <div class="row active">
+                  <div class="row-top"><span class="row-title">Northwind Notes</span><span class="launch-dots"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="current"></i></span></div>
+                  <span class="row-line">northwind.example.com</span>
+                  <span class="row-line">Next: approve a draft</span>
+                </div>
+                <div class="row">
+                  <div class="row-top"><span class="row-title">Atlas Habit Coach</span><span class="launch-dots"><i class="done"></i><i class="current"></i><i></i><i></i><i></i></span></div>
+                  <span class="row-line">No website yet</span>
+                  <span class="row-line">Next: build the passport</span>
+                </div>
+                <div class="row">
+                  <div class="row-top"><span class="row-title">Lumen Reader</span><span class="launch-dots"><i class="done"></i><i class="current"></i><i></i><i></i><i></i></span></div>
+                  <span class="row-line">No website yet</span>
+                  <span class="row-line">Next: build the passport</span>
+                </div>
+              </div>
+
+              <div class="detail">
+                <div class="obj-head">
+                  <div style="min-width: 0">
+                    <h2>Northwind Notes</h2>
+                    <div class="meta"><a class="link">northwind.example.com</a><span class="tag good">Passport approved</span><span class="tag warn">Not analyzed</span><a class="link">Open Analysis</a></div>
+                  </div>
+                  <div class="actions"><button class="btn">Edit details</button><button class="btn btn-danger">Delete</button></div>
+                </div>
+                <div class="path">
+                  <span class="stage done"><span class="mark"></span>Product</span><span class="joint done"></span>
+                  <span class="stage done"><span class="mark"></span>Passport</span><span class="joint done"></span>
+                  <span class="stage done"><span class="mark"></span>Goal</span><span class="joint done"></span>
+                  <span class="stage done"><span class="mark"></span>Channel</span><span class="joint"></span>
+                  <span class="stage current"><span class="mark"></span>Publication <span class="next">Next</span></span>
+                </div>
+                <div class="segmented" role="tablist">
+                  <span class="seg">Sources</span><span class="seg on">Passport</span><span class="seg">Analysis</span><span class="seg">Goal</span><span class="seg">Channels</span><span class="seg">Results</span>
+                </div>
+
+                <div class="group">
+                  <div class="group-head">
+                    <h3>Product passport</h3>
+                    <div class="actions"><button class="btn">Approve all 1 proposed</button><button class="btn btn-primary">Approve passport</button></div>
+                  </div>
+                  <div class="group-body">
+                    <div class="meta"><b style="color: var(--text-1); font-weight: 600">Version 1</b><span class="tag good">Approved</span>2 approved · 2 to review</div>
+                    <span class="disc"><svg class="icon" style="width: 12px; height: 12px"><use href="#i-chevron" /></svg>How the passport works</span>
+                  </div>
+                </div>
+
+                <div class="group">
+                  <div class="group-head">
+                    <div>
+                      <h3>Identity</h3>
+                      <p class="muted">Official name, website, one-line description</p>
+                    </div>
+                    <button class="btn btn-quiet"><svg class="icon"><use href="#i-plus" /></svg>Add statement</button>
+                  </div>
+                  <div class="group-body">
+                    <div class="claim">
+                      <div>
+                        <div class="tags"><span class="tag warn">Unknown</span><span class="tag">Proposed</span></div>
+                        <p>Is there a Windows version?</p>
+                        <p class="muted">No source provides this yet.</p>
+                      </div>
+                      <div class="actions"><button class="btn">Edit</button><button class="btn">More<svg class="icon" style="width: 12px; height: 12px"><use href="#i-more" /></svg></button></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="group">
+                  <div class="group-head">
+                    <div>
+                      <h3>Offer</h3>
+                      <p class="muted">What the product does, for whom, and why it matters</p>
+                    </div>
+                    <button class="btn btn-quiet"><svg class="icon"><use href="#i-plus" /></svg>Add statement</button>
+                  </div>
+                  <div class="group-body">
+                    <div class="claim">
+                      <div>
+                        <div class="tags"><span class="tag good">Fact</span><span class="tag good">Approved</span></div>
+                        <p>Turns meeting notes into action lists with owners and dates</p>
+                        <p class="muted">Entered by the user</p>
+                      </div>
+                      <div class="actions"><button class="btn">Edit</button><button class="btn">More<svg class="icon" style="width: 12px; height: 12px"><use href="#i-more" /></svg></button></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Settings: grouped form -->
+          <section data-screen="settings" hidden>
+            <div class="page-head">
+              <div>
+                <h1>Settings</h1>
+                <p class="sub">AI engine, notifications, local web access and version</p>
+              </div>
+            </div>
+            <div class="detail">
+              <div class="group">
+                <div class="group-head">
+                  <h3>AI engine</h3>
+                  <button class="btn">Re-check</button>
+                </div>
+                <div class="group-body">
+                  <p class="muted">Promotion data lives in this application, not in the engine. You can switch engines at any time.</p>
+                  <div class="grow">
+                    <div class="label"><span><b style="font-weight: 600">Claude Code</b> <span class="muted">2.1.325</span> <span class="tag good">Ready</span></span><span class="muted">Writing: tool-free, it can only return text.</span></div>
+                    <span class="in-use"><svg class="icon"><use href="#i-check" /></svg>In use</span>
+                  </div>
+                  <div class="grow">
+                    <div class="label"><span><b style="font-weight: 600">Codex</b> <span class="muted">0.169.0</span> <span class="tag good">Ready</span></span><span style="color: var(--attention)">Writing: not tool-free, so it is not used for automatic replies.</span></div>
+                    <button class="btn">Use this engine</button>
+                  </div>
+                </div>
+              </div>
+              <div class="group">
+                <div class="group-head"><h3>Notifications</h3></div>
+                <div class="group-body">
+                  <div class="grow">
+                    <div class="label"><span>Notify me when something needs a decision</span><span class="muted">A banner from macOS, at most one per item.</span></div>
+                    <span class="switch"></span>
+                  </div>
+                </div>
+              </div>
+              <div class="group">
+                <div class="group-head"><h3>Local web access</h3></div>
+                <div class="group-body">
+                  <div class="grow">
+                    <div class="label"><span>Enable local web access</span><span class="muted">Open the app in a browser on this Mac.</span></div>
+                    <span class="switch off"></span>
+                  </div>
+                  <div class="grow">
+                    <span>Port</span>
+                    <span class="field">47615</span>
+                  </div>
+                </div>
+              </div>
+              <div class="group">
+                <div class="group-head"><h3>About</h3></div>
+                <div class="group-body">
+                  <div class="grow"><span class="muted">Version</span><span>0.9.0</span></div>
+                  <div class="grow"><span class="muted">Platform</span><span>macOS arm64</span></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Empty state -->
+          <section data-screen="empty" hidden>
+            <div class="page-head">
+              <div>
+                <h1>Products</h1>
+                <p class="sub">Sources, the verified passport, analysis, goal, channels and results for each product</p>
+              </div>
+              <button class="btn" disabled><svg class="icon"><use href="#i-plus" /></svg>New product</button>
+            </div>
+            <div class="panel empty">
+              <svg class="icon art"><use href="#i-empty" /></svg>
+              <strong>No products yet</strong>
+              <p>A name plus a website address or a short description is enough to start. The AI reads the sources and proposes the passport.</p>
+              <button class="btn btn-primary">Add your first product</button>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+    <script>
+      const q = new URLSearchParams(location.search)
+      const screen = q.get('screen') ?? 'products'
+      document.documentElement.dataset.chrome = q.get('chrome') ?? 'web'
+      for (const s of document.querySelectorAll('[data-screen]')) s.hidden = s.dataset.screen !== screen
+      const nav = screen === 'settings' ? 'settings' : 'products'
+      for (const a of document.querySelectorAll('[data-nav]')) a.classList.toggle('active', a.dataset.nav === nav)
+    </script>
+  </body>
+</html>

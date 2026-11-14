@@ -3,7 +3,7 @@
 
 import type { PassportVersion, Product } from '../../../../shared/types'
 import type { Tone } from '../../tone'
-import type { LaunchCounts } from './launch-path'
+import { nextStage, type LaunchStage } from './launch-path'
 import { summarize } from './model'
 
 export interface StatusLine {
@@ -24,14 +24,38 @@ export function passportStatus(product: Pick<Product, 'activePassportVersionId'>
   return { tone: 'warn', label: 'No approved passport' }
 }
 
-/** What the owner does next with a product, in the order of its launch path (BUG-012), from the same counts; null once
- *  the path is complete (an approved publication), when the five dots of the card already say so. */
-export function nextProductStep(product: Pick<Product, 'activePassportVersionId' | 'analysisStatus' | 'goals'>, counts: LaunchCounts): string | null {
-  if (product.activePassportVersionId === null) return product.analysisStatus === 'idle' ? 'Next: run the analysis' : 'Next: approve the passport'
-  if (product.goals.length === 0) return 'Next: write a goal'
-  if (counts.channels === 0) return 'Next: connect a channel'
-  if (counts.approvedPublications > 0) return null
-  return counts.draftPublications > 0 ? 'Next: approve a draft' : 'Next: write a publication'
+/**
+ * What the owner does next with a product, as the row of the product list says it: the next stage of its launch path (BUG-012) in the
+ * words of the stage's action, "Next: build the passport". Null once the path is complete, when the five dots of the card already say so.
+ * The row takes the stage from the path and has no rule of its own, so it cannot disagree with the header path, the checklist of Getting
+ * started or the accent of a product tab (BUG-064).
+ */
+export function nextProductStep(stages: LaunchStage[]): string | null {
+  const next = nextStage(stages)
+  return next ? `Next: ${next.action.charAt(0).toLowerCase()}${next.action.slice(1)}` : null
+}
+
+/**
+ * Why a product cannot be deleted yet: a connected channel has to be removed first, on the Channels tab. Asked before the confirm, so the
+ * owner is never asked "This cannot be undone" for a delete that the core then refuses (BUG-046). Null when nothing stands in the way.
+ */
+export function deleteBlocker(channelCount: number): string | null {
+  if (channelCount <= 0) return null
+  const one = channelCount === 1
+  return `This product still has ${channelCount} connected ${one ? 'channel' : 'channels'}. Remove ${one ? 'it' : 'them'} on the Channels tab first.`
+}
+
+/**
+ * The website of a product as a row of the list shows it: the host (and a port), without the scheme, "www." or a path, so it fits
+ * the narrow list; the full address goes in the row's tooltip (BUG-062). Text that is not an address is kept as it is.
+ */
+export function websiteHost(url: string): string {
+  try {
+    const host = new URL(url).host.replace(/^www\./i, '')
+    return host || url
+  } catch {
+    return url
+  }
 }
 
 /** Why a product shows "Not analyzed", in words that say what is missing and where to fix it. */

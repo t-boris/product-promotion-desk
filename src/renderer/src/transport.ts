@@ -7,6 +7,7 @@ import {
   type ApiResult,
   type Transport
 } from '../../shared/api'
+import { createFanOut } from './fan-out'
 
 type Envelope = { ok: true; result: unknown } | { ok: false; error: { code: string; message: string } }
 
@@ -27,9 +28,11 @@ function unwrap<M extends ApiMethod>(envelope: Envelope): ApiResult<M> {
 }
 
 function ipcTransport(bridge: PreloadBridge): Transport {
+  // Every hook of every screen subscribes; the bridge adds one ipcRenderer listener per onEvent call, so they share one (BUG-061).
+  const subscribe = createFanOut<ApiEvent>((emit) => bridge.onEvent(emit))
   return {
     invoke: async (method, args) => unwrap(await bridge.invoke(method, args)),
-    subscribe: (handler) => bridge.onEvent(handler)
+    subscribe
   }
 }
 

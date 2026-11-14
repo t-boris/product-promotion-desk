@@ -350,6 +350,26 @@ describe('standalone publications (REQ-003 criterion 5)', () => {
     expect(card.channelTarget).toBe(world.channel.target)
   })
 
+  it('writes "Draft written for <target>" to the log, with no draft text and nothing for later edits (BUG-066)', async () => {
+    world = makeWorld()
+    const written = () => world.core.log.list(50).filter((e) => /^Draft written for /.test(e.message))
+    const created = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'Launch', text: 'We launched the secret thing' } })
+
+    expect(written()).toHaveLength(1)
+    expect(written()[0]).toMatchObject({ level: 'info', source: 'pipeline', message: `Draft written for ${world.channel.target}`, channelId: world.channel.id })
+    expect(world.core.log.list(50).some((e) => /secret thing|Launch/.test(e.message))).toBe(false)
+
+    // Editing the draft again and again is not a step of the launch path: no entry per edit.
+    await world.core.router.call('opportunities.saveDraft', { id: created.opportunity.id, draft: { text: 'Another version' } })
+    expect(written()).toHaveLength(1)
+  })
+
+  it('writes nothing to the log when the publication is refused (BUG-066)', async () => {
+    world = makeWorld()
+    await expect(world.core.router.call('publications.create', { channelId: world.channel.id, draft: { text: '' } })).rejects.toMatchObject({ code: 'invalid_input' })
+    expect(world.core.log.list(50).some((e) => /^Draft written for /.test(e.message))).toBe(false)
+  })
+
   it('rejects an empty publication but accepts one that is only a link or only an image', async () => {
     world = makeWorld()
     await expect(world.core.router.call('publications.create', { channelId: world.channel.id, draft: { text: '' } })).rejects.toMatchObject({ code: 'invalid_input' })

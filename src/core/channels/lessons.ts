@@ -14,6 +14,7 @@ const MAX_RULE = 200
 const MAX_SOURCE = 300
 /** A mission is given at most this many rules: the most used first, then the newest. */
 const MAX_PER_MISSION = 20
+const DUPLICATE_RULE = 'This rule is already saved.'
 
 type Row = Record<string, unknown>
 
@@ -44,15 +45,18 @@ export class LessonService {
     }, 'The rule')
   }
 
-  /** A rule the owner writes himself. */
+  /** A rule the owner writes himself. The same rule for the same platform is not saved twice (BUG-053). */
   add(args: { rule: string; platform?: string | null }): AgentLesson {
-    return this.insert({ platform: this.knownPlatform(args.platform), rule: this.cleanRule(args.rule), question: '', answer: '' })
+    const platform = this.knownPlatform(args.platform)
+    const rule = this.cleanRule(args.rule)
+    if (this.findSame(platform, rule)) throw new ApiError('duplicate', DUPLICATE_RULE)
+    return this.insert({ platform, rule, question: '', answer: '' })
   }
 
   /** A rule the AI kept from an answer. A rule that is already known (same words, same platform) is not stored twice. */
   remember(args: { platform: string | null; rule: string; question: string; answer: string }): { lesson: AgentLesson; known: boolean } {
     const rule = this.cleanRule(args.rule)
-    const same = this.list().find((l) => l.platform === args.platform && l.rule.toLowerCase() === rule.toLowerCase())
+    const same = this.findSame(args.platform, rule)
     if (same) {
       // The owner said it again: a rule that had been switched off is on again.
       if (!same.enabled) this.core.db.prepare('UPDATE agent_lessons SET enabled = 1 WHERE id = ?').run(same.id)
@@ -67,6 +71,9 @@ export class LessonService {
     const rule = args.rule === undefined ? current.rule : this.cleanRule(args.rule)
     const platform = args.platform === undefined ? current.platform : this.knownPlatform(args.platform)
     const enabled = args.enabled === undefined ? current.enabled : args.enabled === true
+    // Only a change of words or platform can make a copy. A rule that already has a twin from an older build can still be switched off.
+    const moved = platform !== current.platform || rule.toLowerCase() !== current.rule.toLowerCase()
+    if (moved && this.findSame(platform, rule, current.id)) throw new ApiError('duplicate', DUPLICATE_RULE)
     this.core.db.prepare('UPDATE agent_lessons SET rule = ?, platform = ?, enabled = ? WHERE id = ?').run(rule, platform, enabled ? 1 : 0, current.id)
     this.core.events.changed('settings')
     return this.get(current.id)
@@ -94,6 +101,12 @@ export class LessonService {
     const at = this.core.clock.now().toISOString()
     const update = this.core.db.prepare('UPDATE agent_lessons SET uses = uses + 1, last_used_at = ? WHERE id = ?')
     for (const lesson of lessons) update.run(at, lesson.id)
+  }
+
+  /** The saved rule with the same words (in any letter case) for the same platform, switched on or off. */
+  private findSame(platform: string | null, rule: string, exceptId?: string): AgentLesson | undefined {
+    const words = rule.toLowerCase()
+    return this.list().find((l) => l.id !== exceptId && l.platform === platform && l.rule.toLowerCase() === words)
   }
 
   private insert(data: { platform: string | null; rule: string; question: string; answer: string }): AgentLesson {

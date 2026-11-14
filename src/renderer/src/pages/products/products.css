@@ -1,35 +1,44 @@
-/* Styles for the Products page. Colors come from the shared tokens in styles.css. */
+/* Styles for the Products page. Colors, sizes and radii come from the shared tokens in styles.css; the list + detail layout, the
+   panel, the object header and the hairline rows are shared patterns there (visual-system.md §9). */
 
-.products-layout {
-  display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
-  gap: var(--space-4);
-  align-items: start;
+/* The detail pane: header, launch path, tabs and the tab's group boxes, one rhythm. */
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
-.products-list {
-  position: sticky;
-  top: 0;
+/* The group boxes of a tab sit a step further apart than the header, the path and the tabs above them. */
+.pane > .stack {
+  gap: var(--space-3);
 }
-.products-detail {
-  min-width: 0;
+/* The filled button of a tab that does not hold the path's current stage: a link to the next stage and the words that name it (BUG-065). */
+.next-stage {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+/* The object's name, its facts and its actions are one block. */
+.obj {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.obj .kv {
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
 }
 
 textarea.input.short {
   min-height: 56px;
 }
 
-.source-list {
-  gap: var(--space-3);
-}
+/* Sources: rows of one group box, split by hairlines (shared `.rows`). */
 .source-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel);
 }
 .source-main {
   flex: 1;
@@ -45,7 +54,7 @@ textarea.input.short {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
-/* A text source is prose: the interface font at 14px, lines that break between words, three lines and then "Show full text".
+/* A text source is prose: the interface font, lines that break between words, three lines and then "Show full text".
    It used to be set like code (monospace, break anywhere), which cut words in the middle (BUG-010). */
 .source-text {
   margin: 0;
@@ -85,11 +94,11 @@ textarea.input.short {
   gap: var(--space-3);
 }
 
+/* What the AI will see: a well on the group box, not a box in a box. */
 .preview {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel-2);
-  padding: var(--space-3) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  padding: var(--space-3);
   margin: var(--space-2) 0;
 }
 .preview-columns {
@@ -112,26 +121,19 @@ textarea.input.short {
   font-family: var(--font);
 }
 
-.claim {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: var(--space-3) var(--space-3);
-  background: var(--panel);
-}
-.claim-approved {
-  border-left: 3px solid var(--good);
-}
-.claim-prohibited {
-  /* Prohibited by the owner: a neutral mark, the text is struck through. Red is kept for failures. */
-  border-left: 3px solid var(--line-strong);
-}
-.claim-contradiction {
-  /* Sources disagree and the owner decides: amber, like everything that waits for a decision. */
-  border-color: var(--attention);
-  background: var(--attention-bg);
-}
+/* A statement of the passport is a row of its section's group box. Its state is a tag and the text, not a coloured edge. */
 .claim-rejected {
   opacity: 0.7;
+}
+/* Sources disagree and the owner decides: amber, like everything that waits for a decision. */
+.claim-contradiction {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--attention-bg);
+}
+.rows > .claim-contradiction {
+  margin: var(--space-2) 0;
+  border-top: 0;
 }
 .claim-text {
   margin: var(--space-2) 0;
@@ -152,9 +154,8 @@ textarea.input.short {
 .conflict-box {
   margin: var(--space-2) 0;
   padding: var(--space-2) var(--space-3);
-  border-radius: 8px;
-  background: var(--panel);
-  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
 }
 .conflict-box ul {
   margin: var(--space-1) 0 0;
@@ -163,22 +164,10 @@ textarea.input.short {
 .warn-text {
   color: var(--warn);
 }
-.warn-note {
-  background: var(--warn-bg);
-  color: var(--warn);
-  border-radius: 8px;
-  padding: var(--space-2) var(--space-3);
-  margin: var(--space-2) 0;
-}
-.warn-note a {
-  color: inherit;
-  font-weight: 600;
-}
-
 .progress {
   height: 6px;
-  border-radius: 999px;
-  background: var(--panel-2);
+  border-radius: var(--radius-pill);
+  background: var(--segment-track);
   overflow: hidden;
   margin: var(--space-3) 0;
 }
@@ -188,15 +177,19 @@ textarea.input.short {
   transition: width var(--dur-base) var(--ease-out);
 }
 
-@media (max-width: 900px) {
-  .products-layout,
+/* The detail pane is a container: its own columns fold into one when the pane is narrow, whatever the window is. */
+@container (max-width: 560px) {
   .scope-grid,
   .source-fields,
   .preview-columns {
     grid-template-columns: 1fr;
   }
-  .products-list {
-    position: static;
+  .source-row {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+  .source-actions {
+    justify-content: flex-start;
   }
 }
 
@@ -212,7 +205,7 @@ textarea.input.short {
   padding: 0;
 }
 .passport-checklist > li {
-  padding: var(--space-1) 0;
+  padding: var(--space-2) 0;
   border-top: 1px solid var(--line);
 }
 .passport-checklist > li:first-child {
@@ -227,7 +220,7 @@ textarea.input.short {
   flex: none;
   width: 14px;
   height: 14px;
-  border: 2px solid var(--line-strong);
+  border: 1.5px solid var(--line-strong);
   border-radius: 50%;
 }
 .checklist-text {
@@ -248,25 +241,24 @@ textarea.input.short {
   margin-bottom: var(--space-half);
 }
 .claim-list {
-  gap: var(--space-3);
-  margin-top: var(--space-2);
+  margin-top: var(--space-1);
 }
 .blocker {
   font-size: var(--fs-body);
 }
 
 /* An analysis step that has nothing to work on: quieter than a step that will run. */
-.list-row.not-needed {
-  background: transparent;
-  border-style: dashed;
-}
 .list-row.not-needed strong {
-  color: var(--muted);
-  font-weight: 500;
+  color: var(--text-2);
+  font-weight: var(--fw-medium);
+}
+.analysis-steps {
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--line);
 }
 .analysis-points {
   margin: 0;
-  color: var(--muted);
+  color: var(--text-2);
   font-size: var(--fs-caption);
   line-height: var(--lh-prose);
   display: flex;
@@ -282,24 +274,5 @@ textarea.input.short {
 }
 .goal-target {
   font-size: var(--fs-title);
-  font-weight: 600;
-}
-
-/* In a narrow window the two columns left the tabs of the product no room (the sixth ran out of the page, an old fault of the
-   installed build too): the list becomes a row of cards above the product, which gets the full width. */
-@media (max-width: 1040px) {
-  .products-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .products-list {
-    position: static;
-  }
-  .products-list .stack {
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
-  .products-list .stack > * {
-    flex: 1 1 220px;
-    min-width: 0;
-  }
+  font-weight: var(--fw-semibold);
 }

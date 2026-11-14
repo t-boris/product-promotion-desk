@@ -1,5 +1,5 @@
 import type { AttentionItem, Channel, Product } from '../../../shared/types'
-import { ACCOUNTS_HREF, productHref } from '../route'
+import { accountHref, productHref } from '../route'
 
 export interface FixLink {
   href: string
@@ -15,8 +15,8 @@ export interface LinkSources {
 
 /**
  * Where the owner fixes a problem that is not a decision about content. A channel belongs to a product (DEC-009), so its
- * link opens that product's Channels tab. An account belongs to no product (DEC-015): its link opens the Accounts section, and
- * the products that use it are named. The attention item carries only the channel or account id, so everything is looked up here.
+ * link opens that product's Channels tab. An account belongs to no product (DEC-015): its link opens the Accounts section with that
+ * account selected, and the products that use it are named. The attention item carries only the channel or account id, so everything is looked up here.
  */
 export function fixLinkFor(item: AttentionItem, { channels, products }: LinkSources): FixLink | null {
   let productId: string | null = null
@@ -27,7 +27,7 @@ export function fixLinkFor(item: AttentionItem, { channels, products }: LinkSour
     case 'account': {
       const users = [...new Set(channels.filter((c) => c.accountId === item.refId).map((c) => c.productId))]
       const names = users.flatMap((id) => products.find((p) => p.id === id)?.name ?? [])
-      return { href: ACCOUNTS_HREF, label: 'Open Accounts', productName: names.length > 0 ? names.join(', ') : null }
+      return { href: accountHref(item.refId), label: 'Open Accounts', productName: names.length > 0 ? names.join(', ') : null }
     }
     case 'product':
       return { href: productHref(item.refId), label: 'Open product', productName: products.find((p) => p.id === item.refId)?.name ?? null }

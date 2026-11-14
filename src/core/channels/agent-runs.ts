@@ -119,9 +119,10 @@ export class AgentRunService {
 
   /**
    * What a run needs: a known kind, no run going, an engine that can work the browser and is ready, an e-mail and a saved password, and the
-   * profile the owner approved (DEC-019): the AI invents no personal detail, it types the owner's decision.
+   * profile the owner approved (DEC-019): the AI invents no personal detail, it types the owner's decision. Nothing here asks the keychain:
+   * that the password is saved is a lookup in the vault file, and `mission()` reads it, which only `start` calls (BUG-041).
    */
-  private async prerequisites(account: Account, kind: AgentTaskKind): Promise<{ engine: AiEngine; mission: Mission }> {
+  private async prerequisites(account: Account, kind: AgentTaskKind): Promise<{ engine: AiEngine; mission: () => Promise<Mission> }> {
     if (kind !== 'signup' && kind !== 'profile') throw new ApiError('invalid_input', 'This kind of task is not known.')
     if (this.runs.get(account.id)?.run.status === 'running') throw new ApiError('agent_running', `The AI is already working on ${account.label}.`)
 
@@ -132,13 +133,17 @@ export class AgentRunService {
     const status = await engine.check()
     if (!status.installed || !status.ready) throw new ApiError('engine_unavailable', status.detail || `${engine.label} is not available.`)
 
-    return { engine, mission: kind === 'signup' ? this.signUpMission(account) : this.profileMission(account) }
+    if (kind === 'signup') return { engine, mission: this.signUpMission(account) }
+    const mission = this.profileMission(account)
+    return { engine, mission: async () => mission }
   }
 
   /** Starts a mission and returns at once; it goes on in the background and is read with `state`. */
   async start(args: { accountId: string; kind: AgentTaskKind }): Promise<AgentRun> {
     const account = this.accounts.account(args.accountId)
-    const { engine, mission } = await this.prerequisites(account, args.kind)
+    const { engine, mission: buildMission } = await this.prerequisites(account, args.kind)
+    // The one place a password is read from the keychain; a refusal stops the start before anything is recorded.
+    const mission = await buildMission()
     const kind = args.kind
     const live: Live = {
       abort: new AbortController(),
@@ -168,10 +173,14 @@ export class AgentRunService {
     return snapshot(live.run)
   }
 
-  private signUpMission(account: Account): Mission {
+  /**
+   * Checks what a registration needs and gathers everything but the password; the returned function reads the password from the vault (the
+   * keychain is asked there and nowhere else) and completes the mission. That the password is saved is a lookup in the vault file.
+   */
+  private signUpMission(account: Account): () => Promise<Mission> {
     if (!account.email) throw new ApiError('no_email', `${account.label} has no e-mail yet. Add the e-mail address of the account first.`)
-    const password = this.vault.password(account)
-    if (password === null) throw new ApiError('no_password', `No password is saved for ${account.label}. Save the password the account should have first.`)
+    if (!this.vault.has(account)) throw new ApiError('no_password', `No password is saved for ${account.label}. Save the password the account should have first.`)
+    const email = account.email
     const target = this.accounts.signUpTarget(account)
     const platform = presetFor(account.platform)?.label ?? account.platform
 
@@ -180,21 +189,26 @@ export class AgentRunService {
     const facts = this.contextFacts(account, platform)
     facts.push(...profileFacts(profile))
     facts.push('Use the same e-mail address and password everywhere. Do not tick optional boxes about ads, newsletters or contacts; tick only what the site requires to continue.')
+    const files = this.pictureFiles(account, profile)
+    const lessons = this.lessons.forPlatform(account.platform).map((l) => l.rule)
 
-    const values: Mission['values'] = {
-      EMAIL: { value: account.email, describe: 'the e-mail address of the account (use it wherever the site asks for an e-mail address or login)', secret: false },
-      PASSWORD: { value: password, describe: 'the password of the account', secret: true },
-      USERNAME: { value: profile.username, describe: 'the user name the account should have, if the site asks for one', secret: false }
-    }
-
-    return {
-      goal: `Create a new account on ${platform} for the owner, with the profile below: fill in everything the site needs, and make sure the account exists and is signed in.`,
-      facts,
-      startUrl: target.url,
-      hosts: target.hosts,
-      values,
-      files: this.pictureFiles(account, profile),
-      lessons: this.lessons.forPlatform(account.platform).map((l) => l.rule)
+    return async () => {
+      const password = await this.vault.password(account)
+      if (password === null) throw new ApiError('no_password', `No password is saved for ${account.label}. Save the password the account should have first.`)
+      const values: Mission['values'] = {
+        EMAIL: { value: email, describe: 'the e-mail address of the account (use it wherever the site asks for an e-mail address or login)', secret: false },
+        PASSWORD: { value: password, describe: 'the password of the account', secret: true },
+        USERNAME: { value: profile.username, describe: 'the user name the account should have, if the site asks for one', secret: false }
+      }
+      return {
+        goal: `Create a new account on ${platform} for the owner, with the profile below: fill in everything the site needs, and make sure the account exists and is signed in.`,
+        facts,
+        startUrl: target.url,
+        hosts: target.hosts,
+        values,
+        files,
+        lessons
+      }
     }
   }
 

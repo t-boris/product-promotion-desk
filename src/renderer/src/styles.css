@@ -1,29 +1,42 @@
 :root {
-  /* Design tokens (the "brand launch studio" concept, BUG-011). The names in this first group are the vocabulary of the
-     interface; light values here, dark values in the media block below. New and changed CSS uses these names. */
-  /* Surfaces: the window, cards, inputs on cards and hover, and anything that floats above a card (menus, dialogs). */
-  --surface-0: #f6f7f9;
+  /* Design tokens: the macOS visual system (docs/design/macos/visual-system.md §5, DEC-023). This block is the only place with
+     colour values and pixel sizes of text; every other rule uses these names. Light values here, dark values in the media block
+     below. The names of the earlier vocabulary (BUG-011) are kept, with new values, and the oldest names are aliases further down. */
+  /* Surfaces: the window and toolbar, group boxes and list panels, wells (read-only text, previews), and anything that floats. */
+  --surface-0: #f5f5f7;
   --surface-1: #ffffff;
-  --surface-2: #f0f2f5;
+  --surface-2: #f0f0f2;
   --surface-3: #ffffff;
-  /* Lines and text. --text-3 is for disabled labels and stays legible (about 4.6:1 on a card). */
-  --line: #dfe3e8;
-  --line-strong: #c3cad4;
-  --text-1: #1c2026;
-  --text-2: #566074;
-  --text-3: #6b7587;
-  /* The violet accent means action and selection; --accent-tint is the selection fill, --focus the focus ring. */
-  --accent: #4f46e5;
+  /* The opaque sidebar colour. In the Electron window the sidebar shows the window's own material instead (see --sidebar below). */
+  --sidebar-solid: #e8e8ed;
+  --field: #ffffff;
+  --field-border: #a8a8ae;
+  --bezel: #ffffff;
+  /* Lines and text. --text-2 is secondary text and --text-3 disabled labels and placeholders; both stay at 4.5:1 or more on the
+     surface they sit on, stacked fills included (the info tag on a striped table row, the disabled field, the placeholder). */
+  --line: #e3e3e8;
+  --line-strong: #c7c7cc;
+  --text-1: #1d1d1f;
+  --text-2: #5f5f64;
+  --text-3: #6c6c71;
+  /* One accent: the system indigo. It means the one main action, selection, focus, links and the sidebar icons. */
+  --accent: #5856d6;
   --on-accent: #ffffff;
-  --accent-tint: rgb(79 70 229 / 12%);
-  /* Accent text on the tint (a chosen menu item or segment): at least 4.5:1 in both themes. */
-  --accent-on-tint: #4f46e5;
-  --focus: #4f46e5;
-  /* Colour with meaning: green is done or healthy, amber needs your attention or decision, red is an error or a
-     failure only, blue is neutral information. */
-  --success: #1a7f4b;
+  --accent-tint: rgb(88 86 214 / 12%);
+  /* Accent text: links, sidebar icons, quiet buttons and text on the tint, at least 4.5:1 in both themes. */
+  --accent-on-tint: #4e4cc8;
+  --focus: #5856d6;
+  /* Fills that sit over any surface: neutral selection, hover, pressed, the segmented track and its raised thumb. */
+  --selection: rgb(0 0 0 / 7%);
+  --hover-fill: rgb(0 0 0 / 4.5%);
+  --press-fill: rgb(0 0 0 / 9%);
+  --segment-track: rgb(0 0 0 / 5.5%);
+  --segment-thumb: #ffffff;
+  /* Colour with meaning: green is done or healthy, amber needs your attention or decision, red is an error or a failure
+     only, blue is neutral information. */
+  --success: #17733f;
   --success-bg: #e3f5eb;
-  --attention: #9a6700;
+  --attention: #8a5c00;
   --attention-bg: #fdf1d6;
   --on-attention: #ffffff;
   --error: #b42318;
@@ -31,12 +44,20 @@
   --on-error: #ffffff;
   --info: #2457c5;
   --info-bg: #e5edfd;
-  /* Elevation and focus. */
-  --shadow-pop: 0 12px 32px rgb(16 24 40 / 18%);
-  --focus-ring: 0 0 0 2px var(--surface-0), 0 0 0 4px var(--focus);
-  /* The hover of anything on a card or in the sidebar: a lift that can be seen in the dark theme too. */
-  --hover-fill: color-mix(in srgb, var(--text-1) 8%, var(--surface-1));
-  /* A 4px spacing grid: every padding, gap and margin comes from here. --titlebar-h clears the window buttons. */
+  /* Faces of a button in its states, made from the tokens above so a theme changes them with the rest. */
+  --bezel-hover: color-mix(in srgb, var(--bezel), var(--text-1) 5%);
+  --bezel-press: color-mix(in srgb, var(--bezel), var(--text-1) 10%);
+  --accent-hover: color-mix(in srgb, var(--accent), var(--on-accent) 8%);
+  --accent-press: color-mix(in srgb, var(--accent) 92%, rgb(0 0 0));
+  /* Elevation: a bezel button and the raised thumb of a segment or switch are lightly lifted; menus, popovers and sheets float. */
+  --shadow-control: 0 0.5px 1px rgb(0 0 0 / 12%);
+  --shadow-thumb: 0 1px 2px rgb(0 0 0 / 14%), 0 0 0 0.5px rgb(0 0 0 / 6%);
+  --shadow-pop: 0 0 0 0.5px rgb(0 0 0 / 12%), 0 10px 30px rgb(0 0 0 / 16%), 0 2px 6px rgb(0 0 0 / 8%);
+  /* The veil behind a sheet. */
+  --scrim: rgb(0 0 0 / 20%);
+  /* The up/down chevron of a pop-up button (a CSS background cannot take currentColor, so each theme has its own). */
+  --glyph-updown: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%235f5f64' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M5.5 6.25 8 3.75l2.5 2.5M5.5 9.75 8 12.25l2.5-2.5'/></svg>");
+  /* A 4px spacing grid: every padding, gap and margin comes from here; --icon-gap is the one half step, between a glyph and its label. */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -44,29 +65,37 @@
   --space-5: 24px;
   --space-6: 32px;
   --space-7: 48px;
-  --titlebar-h: 44px;
-  /* A hairline step for pills and tight lists, and the room the window buttons take at the left of the top bar. */
   --space-half: 2px;
-  --window-buttons-w: 100px;
+  --icon-gap: 6px;
+  /* The frame of the window: the margin of the content column, the toolbar band (as high as the sidebar's), the sidebar, a row. */
+  --gutter: 20px;
+  --toolbar-h: 52px;
+  --titlebar-h: var(--toolbar-h);
+  --sidebar-w: 224px;
+  --row-h: 28px;
+  /* The room the window buttons take at the left of the toolbar when the menu is hidden. */
+  --window-buttons-w: 84px;
   /* Radius. */
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-pill: 999px;
-  /* Motion: short, only for a change of state (hover, press, open, close, switch). The reduced-motion block sets the
-     durations to 0ms. */
+  /* Motion: short, only for a change of state (hover, press, open, close, switch) and for the busy ring. The reduced-motion
+     block sets the durations to 0ms. */
   --dur-fast: 120ms;
   --dur-base: 180ms;
+  --dur-spin: 900ms;
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
-  /* The type scale. Prose is 1.5 high, titles 1.3. Monospace is for paths, addresses, ids and secrets only. */
+  /* The type scale (macOS sizes: body 13px, nothing smaller). Prose is 1.45 high, titles 1.25. Monospace is for paths,
+     addresses, ids and secrets only. */
   --fs-caption: 13px;
-  --fs-body: 14px;
-  --fs-title: 16px;
-  --fs-section: 19px;
-  --fs-page: 24px;
-  --fs-display: 32px;
-  --lh-prose: 1.5;
-  --lh-title: 1.3;
+  --fs-body: 13px;
+  --fs-title: 15px;
+  --fs-section: 17px;
+  --fs-page: 22px;
+  --fs-display: 26px;
+  --lh-prose: 1.45;
+  --lh-title: 1.25;
   --fw-regular: 400;
   --fw-medium: 500;
   --fw-semibold: 600;
@@ -86,34 +115,45 @@
   --warn-bg: var(--attention-bg);
   --bad: var(--error);
   --bad-bg: var(--error-bg);
-  --radius: 10px;
-  /* One size for every control: buttons, inputs and selects share the height, radius and the font (UI standard). */
-  --control-h: 36px;
-  --control-radius: 8px;
-  --control-pad-x: 14px;
-  --control-min-w: 88px;
-  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  --radius: var(--radius-lg);
+  /* One size for every control: buttons, fields, pop-up buttons and segmented controls share the height, radius and the font. */
+  --control-h: 28px;
+  --control-radius: var(--radius-md);
+  --control-pad-x: 12px;
+  --control-min-w: 72px;
+  --font: -apple-system, BlinkMacSystemFont, system-ui, 'Helvetica Neue', sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  /* The sidebar: opaque by default (the local web access in a browser); transparent in the Electron window, where the window's
+     vibrancy material shows through it (html[data-chrome='native'] below). */
+  --sidebar: var(--sidebar-solid);
   color-scheme: light dark;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    /* Surfaces come in three steps above the window: cards, inputs and hover, and floating surfaces. */
-    --surface-0: #121418;
-    --surface-1: #1b1e24;
-    --surface-2: #23272e;
-    --surface-3: #2c313a;
-    --line: #363c47;
-    --line-strong: #4a5160;
-    --text-1: #e7e9ee;
-    --text-2: #b0b8c6;
-    --text-3: #7d8594;
-    --accent: #7c83ff;
-    --on-accent: #0f1020;
-    --accent-tint: rgb(124 131 255 / 16%);
-    --accent-on-tint: #a5abff;
-    --focus: #a5abff;
+    --surface-0: #1e1e20;
+    --surface-1: #28282b;
+    --surface-2: #313135;
+    --surface-3: #2c2c2f;
+    --sidebar-solid: #252528;
+    --field: #323236;
+    --field-border: #636369;
+    --bezel: #3a3a3e;
+    --line: #38383c;
+    --line-strong: #4b4b50;
+    --text-1: #f2f2f7;
+    --text-2: #b4b4ba;
+    --text-3: #9e9ea4;
+    --accent: #5e5ce6;
+    --on-accent: #ffffff;
+    --accent-tint: rgb(94 92 230 / 26%);
+    --accent-on-tint: #a5a3ff;
+    --focus: #a5a3ff;
+    --selection: rgb(255 255 255 / 10%);
+    --hover-fill: rgb(255 255 255 / 6%);
+    --press-fill: rgb(255 255 255 / 12%);
+    --segment-track: rgb(255 255 255 / 7%);
+    --segment-thumb: #545458;
     --success: #5fd39a;
     --success-bg: #173326;
     --attention: #f2c14e;
@@ -124,7 +164,22 @@
     --on-error: #2b0d0b;
     --info: #8ab0ff;
     --info-bg: #172544;
-    --shadow-pop: 0 12px 32px rgb(0 0 0 / 45%);
+    --shadow-control: 0 0.5px 1px rgb(0 0 0 / 40%), inset 0 0.5px 0 rgb(255 255 255 / 8%);
+    --shadow-thumb: 0 1px 2px rgb(0 0 0 / 40%);
+    --shadow-pop: 0 0 0 0.5px rgb(255 255 255 / 10%), 0 12px 32px rgb(0 0 0 / 50%);
+    --scrim: rgb(0 0 0 / 40%);
+    --glyph-updown: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23b4b4ba' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M5.5 6.25 8 3.75l2.5 2.5M5.5 9.75 8 12.25l2.5-2.5'/></svg>");
+  }
+}
+
+/* Inside the Electron window the sidebar is the window's own material (main.tsx sets data-chrome before the first render). In a
+   browser tab, and while the system asks for less transparency, it is opaque. The content column always paints --surface-0. */
+html[data-chrome='native'] {
+  --sidebar: transparent;
+}
+@media (prefers-reduced-transparency: reduce) {
+  html[data-chrome='native'] {
+    --sidebar: var(--sidebar-solid);
   }
 }
 
@@ -134,6 +189,7 @@
   :root {
     --dur-fast: 0ms;
     --dur-base: 0ms;
+    --dur-spin: 0ms;
   }
 }
 
@@ -154,6 +210,11 @@
   }
   to {
     opacity: 1;
+  }
+}
+@keyframes ppd-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 .modal-backdrop {
@@ -180,14 +241,20 @@ body,
 }
 
 body {
-  background: var(--bg);
-  color: var(--text);
+  background: var(--surface-0);
+  color: var(--text-1);
   font: var(--fs-body) / var(--lh-prose) var(--font);
   -webkit-font-smoothing: antialiased;
+  /* The arrow, as in a macOS application: the pointing hand is only for text links (below). */
+  cursor: default;
+}
+/* In the Electron window nothing is painted behind the sidebar, so its material shows. */
+html[data-chrome='native'] body {
+  background: transparent;
 }
 
-/* Four heading levels that read as different steps: the page title, a section of a page, the title of a card or a
-   dialog, and a sub-title inside a card. Body text is 14px, captions and hints 13px. */
+/* Four heading levels that read as different steps: the page title (22), a section of a page (17), the title of a group box or a
+   sheet (15), and a sub-title inside a group (13, semibold). Body text and captions are 13px; the hierarchy is weight and colour. */
 h1,
 h2,
 h3 {
@@ -201,10 +268,12 @@ h1 {
 }
 h2 {
   font-size: var(--fs-section);
+  letter-spacing: -0.01em;
 }
 .card h2,
 .modal h2 {
   font-size: var(--fs-title);
+  letter-spacing: 0;
 }
 h3 {
   font-size: var(--fs-body);
@@ -219,14 +288,22 @@ p {
 code {
   font-family: var(--mono);
   font-size: var(--fs-caption);
-  background: var(--panel-2);
+  background: var(--surface-2);
   padding: var(--space-half) var(--space-1);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   word-break: break-all;
+}
+/* A link is accent text; components that are links in form only (menu entries, buttons, tabs) set their own colour. */
+a {
+  color: var(--accent-on-tint);
+  text-decoration: none;
+}
+a:any-link {
+  cursor: pointer;
 }
 
 .muted {
-  color: var(--muted);
+  color: var(--text-2);
 }
 .small {
   font-size: var(--fs-caption);
@@ -237,10 +314,6 @@ code {
   gap: var(--space-2);
   flex-wrap: wrap;
 }
-/* A named group for a screen reader that takes no part in the layout: its children stay flex items of the row. */
-.status-group {
-  display: contents;
-}
 .stack {
   display: flex;
   flex-direction: column;
@@ -249,147 +322,254 @@ code {
 .sep {
   margin-left: var(--space-3);
 }
+/* Text for a screen reader and for a test tool that reads the accessibility tree, not for the eye. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+/* A glyph (icons.tsx): 16px, the colour of the text around it. */
+.icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.icon.icon-sm {
+  width: 12px;
+  height: 12px;
+}
+
+/* ───────────── The frame: sidebar, toolbar, content (visual-system.md §4) ───────────── */
 
 .shell {
   /* The shell is exactly as tall as the window. A grid row that is "auto" grows with its content, which made the whole
      window scroll and pushed the sidebar under the window buttons; minmax(0, 1fr) keeps the row at the window height. */
   display: grid;
-  grid-template-columns: 216px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   height: 100%;
   overflow: hidden;
 }
+/* The menu can be hidden (the toggle in the sidebar band / the toolbar): then the page takes the whole width. */
+.shell.menu-closed {
+  grid-template-columns: minmax(0, 1fr);
+}
 
 .sidebar {
-  background: var(--panel);
-  border-right: 1px solid var(--border);
-  padding: var(--titlebar-h) var(--space-3) var(--space-4);
+  background: var(--sidebar);
+  border-right: 1px solid var(--line);
+  padding: 0 10px 10px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
   min-height: 0;
   overflow-y: auto;
+  /* The sidebar drags the window; its controls opt out below. */
   -webkit-app-region: drag;
+  user-select: none;
 }
-.sidebar nav {
+/* The band is as high as the toolbar: macOS draws the window buttons at its left, the toggle sits at its right. */
+.sidebar-band {
+  flex: none;
+  height: var(--toolbar-h);
   display: flex;
-  flex-direction: column;
-  gap: var(--space-half);
-  -webkit-app-region: no-drag;
+  align-items: center;
+  justify-content: flex-end;
 }
 .brand {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  height: var(--row-h);
+  padding: 0 10px;
+  margin-top: var(--space-1);
   font-weight: var(--fw-semibold);
-  font-size: var(--fs-title);
-  padding: 0 var(--space-3);
-  letter-spacing: -0.01em;
+  color: var(--text-2);
 }
 .brand-mark {
   flex: none;
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
-  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #ff7ab8));
+  width: 16px;
+  height: 16px;
+  border-radius: var(--space-1);
+  background: var(--accent);
   /* The launch glyph (BUG-036): three rising bars standing on the tile's lower edge. */
   display: inline-flex;
   align-items: flex-end;
   justify-content: center;
-  gap: 2px;
-  padding-bottom: 5px;
+  gap: 1.5px;
+  padding-bottom: 3.5px;
 }
 .brand-mark > span {
-  width: 3px;
+  width: 2px;
   border-radius: 1px;
   background: var(--on-accent);
 }
 .brand-mark > span:nth-child(1) {
-  height: 5px;
+  height: 3.5px;
 }
 .brand-mark > span:nth-child(2) {
-  height: 8px;
+  height: 6px;
 }
 .brand-mark > span:nth-child(3) {
-  height: 12px;
+  height: 9px;
+}
+.sidebar nav {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--space-2);
+}
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+/* Log and Settings sit at the bottom of the sidebar. */
+.nav-foot {
+  margin-top: auto;
 }
 .nav-item {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: var(--space-2) var(--space-3);
-  border-radius: 8px;
-  color: var(--text);
+  gap: var(--space-2);
+  height: var(--row-h);
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  color: var(--text-1);
   text-decoration: none;
+  cursor: default;
+  -webkit-app-region: no-drag;
+}
+.nav-item .icon {
+  color: var(--accent-on-tint);
 }
 .nav-item:hover {
   background: var(--hover-fill);
 }
+.nav-item:active {
+  background: var(--press-fill);
+}
 .nav-item.active {
-  /* Selection is a tint with accent text; the solid accent fill is kept for the one main action of a screen. */
-  background: var(--accent-tint);
-  color: var(--accent-on-tint);
-  font-weight: 600;
+  /* Selection is neutral; the accent is kept for the one main action of a screen, links and the icons. */
+  background: var(--selection);
+  font-weight: var(--fw-medium);
 }
 .count {
-  /* "Needs you": amber with its own on-colour (7:1 and more); red only while one of the items is a failure. */
+  /* "Needs you": amber with its own on-colour; red only while one of the items is a failure. */
+  margin-left: auto;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
   background: var(--attention);
   color: var(--on-attention);
-  border-radius: var(--radius-pill);
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
-  padding: 0 var(--space-2);
-  min-width: 20px;
-  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 .count.error {
   background: var(--error);
   color: var(--on-error);
 }
 
-/* The menu can be hidden (the Hide menu / Menu buttons): then the page takes the whole width. */
-.shell.menu-closed {
-  grid-template-columns: minmax(0, 1fr);
-}
-/* The window's own buttons sit at the top left of the window; without the menu the top bar starts after them. */
-.shell.menu-closed .topbar {
-  padding-left: var(--window-buttons-w);
-}
-.sidebar-foot {
-  margin-top: auto;
-  -webkit-app-region: no-drag;
-}
-.sidebar-foot .btn {
-  width: 100%;
-}
-
+/* The content column is opaque: only the sidebar shows the window material. It is the container of the narrow-window rules. */
 .main {
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
   height: 100%;
-}
-.topbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-5);
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
-  -webkit-app-region: drag;
-  flex-wrap: wrap;
-}
-.topbar button,
-.topbar a {
-  -webkit-app-region: no-drag;
-}
-/* The top bar stays one line (BUG-023). In a narrow bar the automation state keeps its coloured dot and the button that
-   says what it would do; its words stay in the page for a screen reader or a test tool, and are the dot's tooltip. */
-.topbar {
+  background: var(--surface-0);
   container-type: inline-size;
 }
+
+/* The toolbar: the unified title-bar band. State on the leading side, automation on the trailing side; never a filled button. */
+.topbar {
+  flex: none;
+  height: var(--toolbar-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0 var(--gutter);
+  background: var(--surface-0);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+  -webkit-app-region: drag;
+  user-select: none;
+}
+/* Without the menu the toolbar starts after the window buttons (they sit at the top left of the window). */
+.shell.menu-closed .topbar {
+  padding-left: var(--window-buttons-w);
+}
+.topbar a,
+.topbar button,
+.topbar [title],
+.ai-pill-panel {
+  /* Controls, and items with a tooltip (the version, the automation state: BUG-023 keeps its words in the tooltip): a drag
+     region would swallow the pointer, so neither a click nor a tooltip would arrive. */
+  -webkit-app-region: no-drag;
+}
+.tb-lead,
+.tb-trail {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.tb-lead {
+  min-width: 0;
+}
+.tb-trail {
+  flex: none;
+}
+/* Each label and its value are one named group (role group, see App.tsx); a hairline separates the groups. */
+.status-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--icon-gap);
+  min-width: 0;
+  color: var(--text-2);
+}
+.status-group::before {
+  content: '';
+  flex: none;
+  width: 1px;
+  height: 16px;
+  margin-right: var(--icon-gap);
+  background: var(--line-strong);
+}
+.tb-value {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--icon-gap);
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-1);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+  cursor: default;
+}
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-2);
+  font-weight: var(--fw-medium);
+}
+/* The toolbar stays one line (BUG-023). In a narrow column the automation state keeps its coloured dot and the button that says
+   what it would do; its words stay in the page for a screen reader or a test tool, and are the dot's tooltip. Narrower still, the
+   labels "AI engine" and "Accounts" do the same. */
 @container (max-width: 840px) {
   .status-pill .status-words {
     position: absolute;
@@ -400,36 +580,64 @@ code {
     white-space: nowrap;
   }
 }
-.topbar-label {
-  font-size: var(--fs-caption);
-  color: var(--muted);
-  margin-left: var(--space-2);
-  padding-left: var(--space-3);
-  border-left: 1px solid var(--border);
-}
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--fs-caption);
-  font-weight: 500;
-  color: var(--text);
+@container (max-width: 720px) {
+  .topbar-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 a.badge {
   text-decoration: none;
 }
-a.badge:hover {
-  filter: brightness(1.15);
-  text-decoration: underline;
-}
 a.btn {
   text-decoration: none;
 }
+
+/* A glyph-only button: the sidebar toggle. With a count (the hidden menu's "Menu · N") it grows by the count capsule. */
+.icon-btn {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-width: var(--control-h);
+  height: var(--control-h);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  cursor: default;
+  -webkit-app-region: no-drag;
+}
+.icon-btn.has-count {
+  padding: 0 var(--space-2) 0 6px;
+}
+.icon-btn .count {
+  margin-left: 0;
+}
+.icon-btn:hover:not(:disabled) {
+  background: var(--hover-fill);
+  color: var(--text-1);
+}
+.icon-btn:active:not(:disabled) {
+  background: var(--press-fill);
+}
+.icon-btn:disabled {
+  color: var(--text-3);
+}
+
 .content {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: var(--space-5);
+  padding: var(--gutter) var(--gutter) var(--space-5);
 }
 /* The page fills the window: a fixed width left empty bands on both sides when the window was widened. */
 .page {
@@ -444,19 +652,32 @@ a.btn {
   align-items: flex-start;
   gap: var(--space-4);
 }
+.page-head p {
+  margin: var(--space-half) 0 0;
+}
 
+/* A group box: a title row, then its content. Cards inside a card are avoided; rows are split by hairlines. */
 .card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--space-4);
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
 }
 .card-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
 }
+.card-head h2 {
+  /* A group's title stays on one line. */
+  min-width: 0;
+  white-space: nowrap;
+}
+
+/* ───────────── Controls (visual-system.md §7): one size, variants change colour only ───────────── */
 
 .btn {
   /* The single button standard: same height, padding, font and weight for every button; only colours differ by variant.
@@ -464,82 +685,115 @@ a.btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: var(--icon-gap);
   flex: none;
   height: var(--control-h);
   min-width: var(--control-min-w);
   padding: 0 var(--control-pad-x);
   font: inherit;
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   line-height: 1;
   white-space: nowrap;
-  border: 1px solid var(--border);
-  background: var(--panel);
-  color: var(--text);
+  border: 0.5px solid var(--line-strong);
+  background: var(--bezel);
+  color: var(--text-1);
   border-radius: var(--control-radius);
-  cursor: pointer;
+  box-shadow: var(--shadow-control);
+  cursor: default;
+  user-select: none;
 }
-/* The face changes on hover, the label keeps its own colour: a variant (primary, danger, secondary) sets it and must not lose it here. */
+/* The face changes on hover and press; the label keeps its own colour: a variant (primary, danger, secondary) sets it and must
+   not lose it here. */
 .btn:hover:not(:disabled) {
-  background: var(--hover-fill);
+  background: var(--bezel-hover);
+}
+.btn:active:not(:disabled) {
+  background: var(--bezel-press);
 }
 .btn:disabled {
-  /* Off at a glance and still legible: no face, a dashed border and the --text-3 label (about 4.5:1 on a card), and
-     no hover. Fading the whole button hid why it was off (QA findings 10, 30); the reason sits beside it as a Hint. */
+  /* Off at a glance and still legible: a flat face, no shadow, a hairline edge and the --text-3 label; no hover. Fading the
+     whole button hid why it was off (QA findings 10, 30); the reason sits beside it as a Hint. */
   background: transparent;
-  border-style: dashed;
-  border-color: var(--line-strong);
+  border-color: var(--line);
+  box-shadow: none;
   color: var(--text-3);
-  cursor: not-allowed;
 }
 .btn-primary {
   background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-text);
+  border-color: transparent;
+  color: var(--on-accent);
 }
 .btn-primary:hover:not(:disabled) {
-  background: var(--accent);
-  filter: brightness(1.08);
+  background: var(--accent-hover);
+}
+.btn-primary:active:not(:disabled) {
+  background: var(--accent-press);
 }
 .btn-secondary {
-  /* A helper next to the main action (an AI idea, approving one statement): an accent outline, never a fill. */
-  background: transparent;
-  border-color: var(--accent);
+  /* A helper next to the main action (an AI idea, approving one statement): the bezel with an accent label, never a fill. */
   color: var(--accent-on-tint);
-}
-.btn-secondary:hover:not(:disabled) {
-  background: var(--accent-tint);
-  color: var(--accent-on-tint);
-}
-.btn-primary:disabled {
-  /* The screen's main action, not ready yet: the dashed outline keeps the accent, so it still reads as the main one. */
-  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
 }
 .btn-danger {
-  color: var(--bad);
-  border-color: var(--bad);
+  color: var(--error);
+}
+.btn-toolbar {
+  border-radius: var(--radius-pill);
 }
 
+/* A quiet button: no frame until it is pointed at. For the second and third actions of a row. */
+.btn-quiet {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--text-2);
+  min-width: 0;
+  padding: 0 var(--space-2);
+}
+.btn-quiet:hover:not(:disabled) {
+  background: var(--hover-fill);
+  color: var(--text-1);
+}
+.btn-quiet:active:not(:disabled) {
+  background: var(--press-fill);
+}
+.btn-quiet.accent,
+.btn-quiet.accent:hover:not(:disabled) {
+  color: var(--accent-on-tint);
+}
+.btn-quiet.danger:hover:not(:disabled) {
+  color: var(--error);
+}
+.btn-quiet:disabled {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-3);
+}
+
+/* A tag: a 22px capsule for a status or a kind; neutral unless it carries a meaning. */
 .badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--segment-track);
+  color: var(--text-2);
   font-size: var(--fs-caption);
-  line-height: var(--lh-prose);
-  padding: var(--space-half) var(--space-3);
-  border-radius: 999px;
-  background: var(--panel-2);
-  color: var(--muted);
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .badge-good {
-  background: var(--good-bg);
-  color: var(--good);
+  background: var(--success-bg);
+  color: var(--success);
 }
 .badge-warn {
-  background: var(--warn-bg);
-  color: var(--warn);
+  background: var(--attention-bg);
+  color: var(--attention);
 }
 .badge-bad {
-  background: var(--bad-bg);
-  color: var(--bad);
+  background: var(--error-bg);
+  color: var(--error);
 }
 .badge-info {
   background: var(--info-bg);
@@ -552,30 +806,14 @@ a.btn {
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
 }
 .list-row > :first-child {
   flex: 1;
   min-width: 0;
   overflow-wrap: break-word;
-}
-/* A row in a narrow column (the product list): text on top, badges and actions below, nothing squeezed. */
-.list-row.stacked {
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--space-2);
-}
-.list-row.stacked > :first-child {
-  flex: none;
-}
-.list-row.selectable {
-  cursor: pointer;
-}
-.list-row.selectable:hover,
-.list-row.active {
-  background: var(--panel-2);
 }
 
 .field {
@@ -607,28 +845,50 @@ a.btn {
   align-items: start;
 }
 .field-label {
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   font-size: var(--fs-caption);
 }
 .input,
 select.input,
 textarea.input {
   font: inherit;
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
+  color: var(--text-1);
+  background: var(--field);
+  border: 1px solid var(--field-border);
   border-radius: var(--control-radius);
-  padding: 0 var(--space-3);
+  padding: 0 10px;
   width: 100%;
+  cursor: text;
+}
+.input::placeholder {
+  color: var(--text-3);
 }
 input.input,
 select.input {
   height: var(--control-h);
 }
 textarea.input {
-  padding: var(--space-2) var(--space-3);
-  min-height: 90px;
+  padding: var(--space-1) 10px;
+  min-height: 64px;
   resize: vertical;
+}
+/* A pop-up button: a field without the system arrow, with the up/down chevron 10px from the right. */
+select.input {
+  appearance: none;
+  padding-right: var(--space-6);
+  background-image: var(--glyph-updown);
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 12px 12px;
+  cursor: default;
+}
+.input:disabled {
+  background-color: var(--surface-2);
+  border-color: var(--line);
+  color: var(--text-3);
+  /* Chromium fades a disabled pop-up button to 70 % by itself, which takes its value under 3:1; a disabled field is flat and
+     keeps the full --text-3 (V-16). */
+  opacity: 1;
 }
 .check {
   display: flex;
@@ -637,33 +897,34 @@ textarea.input {
   margin: var(--space-2) 0;
 }
 
+/* An empty page or list: a line drawing of what will be here (BUG-036), what it is, and what to do about it. No frame. */
 .empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
-  padding: var(--space-5) var(--space-4);
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius);
+  padding: var(--space-6) var(--space-4);
 }
-/* One line drawing per empty state, in the accent (BUG-036). It is still: nothing moves, with or without reduced motion. */
 .empty-art {
   display: block;
-  width: 48px;
-  height: 48px;
-  margin: 0 auto var(--space-3);
-  color: var(--accent-on-tint);
+  width: 40px;
+  height: 40px;
+  margin: 0 auto var(--space-2);
+  color: var(--text-3);
+}
+.empty strong {
+  font-size: var(--fs-title);
 }
 .plain-list {
   margin: var(--space-2) 0 0;
   padding-left: var(--space-5);
 }
 
-/* One goal of a product on the Goal tab, and its line on the Results tab. */
+/* One goal of a product on the Goal tab (a row of its group box), and its line on the Results tab. */
 .goal-card {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--control-radius);
 }
 .goal-card textarea.input {
   min-height: 64px;
@@ -671,31 +932,32 @@ textarea.input {
 .goal-line + .goal-line {
   margin-top: var(--space-2);
   padding-top: var(--space-2);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--line);
 }
 
-/* The AI agent's question to the owner (DEC-018): over any screen while the AI waits. */
+/* A sheet: the AI agent's question to the owner (DEC-018), over any screen while the AI waits. */
 .modal-backdrop {
   position: fixed;
   inset: 0;
   z-index: 50;
+  /* Electron draws a drag region over whatever is stacked on it: without this the scrim over the toolbar would drag the window. */
+  -webkit-app-region: no-drag;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: var(--space-4);
-  background: rgb(0 0 0 / 55%);
+  background: var(--scrim);
 }
 .modal {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  width: min(520px, 100%);
+  width: min(480px, 100%);
   max-height: 100%;
   overflow: auto;
-  padding: var(--space-5) var(--space-5);
+  padding: var(--gutter);
   background: var(--surface-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-pop);
 }
 .modal h2 {
@@ -709,28 +971,32 @@ textarea.input {
 .modal-actions {
   justify-content: flex-end;
 }
+.modal-actions .modal-stop {
+  order: -1;
+}
 .row.nowrap {
   flex-wrap: nowrap;
 }
 
-/* A message inside a page: information (default), warning, or a confirmation that something was done. The text is
-   body text on --surface-2; the meaning is a 3px bar and a small icon in its colour, so a note never reads like a link. */
+/* A message inside a page: information (default), warning, or a confirmation that something was done. The text is body text on
+   the tone's own background; the meaning is a 16px glyph in its colour, so a note never reads like a link. */
 .note {
   --note-tone: var(--info);
+  --note-bg: var(--info-bg);
   --note-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill-rule='evenodd' d='M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zM7.25 4h1.5v1.5h-1.5zm0 3h1.5v5h-1.5z'/></svg>");
   position: relative;
-  background: var(--surface-2);
+  background: var(--note-bg);
   color: var(--text-1);
-  border-left: 3px solid var(--note-tone);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-3) + 16px + var(--space-2));
   margin: var(--space-2) 0;
 }
-.note::before {
+.note::before,
+.error-note::before {
   content: '';
   position: absolute;
   left: var(--space-3);
-  top: calc(var(--space-3) + 3px);
+  top: calc(var(--space-3) + 2px);
   width: 16px;
   height: 16px;
   background: var(--note-tone);
@@ -738,10 +1004,12 @@ textarea.input {
 }
 .note.warn {
   --note-tone: var(--attention);
+  --note-bg: var(--attention-bg);
   --note-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill-rule='evenodd' d='M8 1.5 15.25 14.5H.75zM7.25 6h1.5v4h-1.5zm0 5h1.5v1.5h-1.5z'/></svg>");
 }
 .note.good {
   --note-tone: var(--success);
+  --note-bg: var(--success-bg);
   --note-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill-rule='evenodd' d='M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zM11.3 4.6l1.05 1.05L7 11 3.65 7.65 4.7 6.6 7 8.9z'/></svg>");
   display: flex;
   align-items: center;
@@ -750,10 +1018,13 @@ textarea.input {
   flex-wrap: wrap;
 }
 .error-note {
-  background: var(--bad-bg);
-  color: var(--bad);
-  border-radius: 8px;
-  padding: var(--space-2) var(--space-3);
+  --note-tone: var(--error);
+  --note-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill-rule='evenodd' d='M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zM5.4 4.35 8 6.95l2.6-2.6 1.05 1.05L9.05 8l2.6 2.6-1.05 1.05L8 9.05l-2.6 2.6-1.05-1.05L6.95 8 4.35 5.4z'/></svg>");
+  position: relative;
+  background: var(--error-bg);
+  color: var(--text-1);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-3) + 16px + var(--space-2));
   margin: var(--space-2) 0;
 }
 
@@ -764,7 +1035,7 @@ textarea.input {
   margin: 0;
 }
 .kv dt {
-  color: var(--muted);
+  color: var(--text-2);
 }
 .kv dd {
   margin: 0;
@@ -772,6 +1043,7 @@ textarea.input {
   overflow-wrap: anywhere; /* long addresses and paths wrap inside their card instead of running out of it */
 }
 
+/* A table: a header row in secondary semibold, zebra rows, long text wraps (never sideways). */
 table.table {
   width: 100%;
   border-collapse: collapse;
@@ -779,37 +1051,70 @@ table.table {
 .table th,
 .table td {
   text-align: left;
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--border);
+  padding: 6px var(--space-3);
   vertical-align: top;
 }
 .table th {
   font-size: var(--fs-caption);
-  color: var(--muted);
-  font-weight: 600;
+  color: var(--text-2);
+  font-weight: var(--fw-semibold);
+  border-bottom: 1px solid var(--line);
+}
+.table tbody tr:nth-child(even) {
+  background: var(--hover-fill);
 }
 
+/* The segmented control: a neutral track and a raised thumb under the selected segment. It is the one look of the radio choices
+   (.segmented), of the tab rows of Products, Accounts and Log (.tabs), and of the filters. */
+.segmented,
 .tabs {
-  display: flex;
-  gap: var(--space-1);
-  border-bottom: 1px solid var(--border);
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-self: flex-start;
+  gap: var(--space-half);
+  max-width: 100%;
+  padding: var(--space-half);
+  border-radius: var(--radius-md);
+  background: var(--segment-track);
 }
+.segmented-option,
 .tab {
-  padding: var(--space-2) var(--space-3);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  padding: 0 var(--space-3);
   border: 0;
-  background: none;
-  color: var(--muted);
-  cursor: pointer;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-2);
   font: inherit;
-  border-bottom: 2px solid transparent;
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
 }
+.segmented-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.segmented-option:hover,
+.tab:not(.active):hover {
+  background: var(--hover-fill);
+  color: var(--text-1);
+}
+.segmented-option.on,
 .tab.active {
-  color: var(--text);
-  border-bottom-color: var(--accent);
-  font-weight: 600;
+  background: var(--segment-thumb);
+  color: var(--text-1);
+  box-shadow: var(--shadow-thumb);
 }
 
 @media (max-width: 760px) {
+  /* A browser window narrower than the application's own minimum (the local web access): the menu becomes a strip on top. */
   .shell {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
@@ -819,22 +1124,54 @@ table.table {
     grid-template-rows: minmax(0, 1fr);
   }
   .sidebar {
-    padding: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
     border-right: 0;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--line);
+    overflow: visible;
+  }
+  .sidebar-band {
+    height: auto;
+  }
+  .brand,
+  .sidebar nav {
+    margin-top: 0;
   }
   .sidebar nav {
+    flex: 1 1 auto;
     flex-direction: row;
     overflow-x: auto;
+  }
+  .nav-group {
+    flex-direction: row;
+  }
+  .nav-foot {
+    margin-top: 0;
+    margin-left: auto;
   }
   .content {
     padding: var(--space-4);
   }
 }
 
-/* AI progress (the pill in the top bar and the panel where an AI help was started). */
+/* AI progress (the capsule in the toolbar and the panel where an AI help was started). */
 .ai-pill {
   position: relative;
+}
+.ai-pill-btn {
+  /* The capsule is never filled; while a task runs its label is accent text and a small ring turns before it. */
+  min-width: 0;
+}
+.ai-ring {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: ppd-spin var(--dur-spin) linear infinite;
 }
 .ai-pill-panel {
   position: absolute;
@@ -845,11 +1182,10 @@ table.table {
   max-height: 70vh;
   overflow: auto;
   padding: var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background: var(--surface-3);
   box-shadow: var(--shadow-pop);
-  -webkit-app-region: no-drag;
+  white-space: normal;
 }
 .ai-task-head {
   display: flex;
@@ -862,7 +1198,7 @@ table.table {
   margin: var(--space-2) 0 0;
   padding-left: var(--space-5);
   font-size: var(--fs-caption);
-  color: var(--muted);
+  color: var(--text-2);
   overflow-wrap: anywhere;
 }
 
@@ -873,72 +1209,53 @@ table.table {
   margin: 0;
   font-size: var(--fs-caption);
   line-height: var(--lh-prose);
-  color: var(--muted);
+  color: var(--text-2);
 }
 .hint.strong {
-  color: var(--text);
+  color: var(--text-1);
 }
 .hint a,
 .note a,
 .empty a:not(.btn) {
-  color: var(--accent);
+  color: var(--accent-on-tint);
 }
 .hint.warn {
-  color: var(--warn);
+  color: var(--attention);
+}
+/* A refused field: red is for errors, and this is one (the reason sits beside the field it is about). */
+.hint.bad {
+  color: var(--error);
 }
 .mono {
   font-family: var(--mono);
   font-size: var(--fs-caption);
 }
 
-/* A quiet button: no frame until it is pointed at. For the second and third actions of a row. */
-.btn-quiet {
-  background: transparent;
-  border-color: transparent;
-  color: var(--muted);
-  min-width: 0;
-}
-.btn-quiet:hover:not(:disabled) {
-  background: var(--hover-fill);
-  color: var(--text-1);
-}
-.btn-quiet.accent {
-  color: var(--accent);
-}
-.btn-quiet.danger:hover:not(:disabled) {
-  color: var(--bad);
-}
-.btn-quiet:disabled {
-  background: transparent;
-  border-color: transparent;
-  color: var(--text-3);
-}
-.btn-danger:disabled {
-  color: var(--text-3);
-  border-color: var(--line-strong);
-}
-
-/* Checkboxes and radio buttons: a real tap target, the whole row clicks. */
+/* Checkboxes and radio buttons: 16px, and the whole row clicks (at least as tall as a control). */
 input[type='checkbox'],
 input[type='radio'] {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   margin: 0;
   flex: none;
   accent-color: var(--accent);
 }
 .check {
-  min-height: 32px;
-  cursor: pointer;
+  min-height: var(--control-h);
+  cursor: default;
 }
 
-/* An on/off switch (Settings). It is a checkbox with the switch role, so it keeps the keyboard and the screen reader. */
+/* An on/off switch. It is a checkbox with the switch role, so it keeps the keyboard and the screen reader. Label on the left,
+   the switch on the right (the DOM order stays: input, track, text). */
 .switch {
+  position: relative;
   display: flex;
+  flex-direction: row-reverse;
+  justify-content: space-between;
   align-items: center;
   gap: var(--space-3);
-  min-height: 36px;
-  cursor: pointer;
+  min-height: var(--control-h);
+  cursor: default;
 }
 .switch input {
   position: absolute;
@@ -948,32 +1265,33 @@ input[type='radio'] {
 .switch-track {
   position: relative;
   flex: none;
-  width: 40px;
-  height: 22px;
-  border-radius: 999px;
-  background: var(--border-strong);
+  width: 32px;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--line-strong);
   transition: background var(--dur-fast) var(--ease-out);
 }
 .switch-track::after {
   content: '';
   position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 16px;
-  height: 16px;
+  top: var(--space-half);
+  left: var(--space-half);
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  background: var(--panel);
+  background: var(--on-accent);
+  box-shadow: var(--shadow-thumb);
   transition: transform var(--dur-fast) var(--ease-out);
 }
 .switch input:checked + .switch-track {
   background: var(--accent);
 }
 .switch input:checked + .switch-track::after {
-  transform: translateX(18px);
+  transform: translateX(14px);
 }
 .switch input:focus-visible + .switch-track {
   outline: 2px solid var(--focus);
-  outline-offset: 2px;
+  outline-offset: 1px;
 }
 .switch input:disabled + .switch-track {
   opacity: 0.5;
@@ -981,53 +1299,18 @@ input[type='radio'] {
 .switch-text {
   display: flex;
   flex-direction: column;
-}
-
-/* One choice out of a few, as buttons: at least the control height, the whole label clicks (replaces small radio buttons). */
-.segmented {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  padding: var(--space-1);
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: calc(var(--control-radius) + 4px);
-}
-.segmented-option {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 32px;
-  padding: 0 var(--control-pad-x);
-  border-radius: var(--control-radius);
-  color: var(--muted);
-  font-weight: 500;
-  cursor: pointer;
-  user-select: none;
-}
-.segmented-option input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-.segmented-option:hover {
-  color: var(--text);
-}
-.segmented-option.on {
-  background: var(--accent-tint);
-  color: var(--accent-on-tint);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+  min-width: 0;
 }
 .segmented-option:has(input:focus-visible) {
   outline: 2px solid var(--focus);
-  outline-offset: 2px;
+  outline-offset: 1px;
 }
 
 /* A folded block: the summary is always readable, the long text opens on demand. */
 .disclosure {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
 }
 .disclosure > summary {
   display: flex;
@@ -1035,9 +1318,9 @@ input[type='radio'] {
   gap: var(--space-2);
   padding: var(--space-2) var(--space-4);
   min-height: 44px;
-  cursor: pointer;
+  cursor: default;
   list-style: none;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 .disclosure > summary::-webkit-details-marker {
   display: none;
@@ -1047,8 +1330,8 @@ input[type='radio'] {
   flex: none;
   width: 7px;
   height: 7px;
-  border-right: 2px solid var(--muted);
-  border-bottom: 2px solid var(--muted);
+  border-right: 1.5px solid var(--text-2);
+  border-bottom: 1.5px solid var(--text-2);
   transform: rotate(-45deg);
   transition: transform var(--dur-base) var(--ease-out);
 }
@@ -1057,8 +1340,8 @@ input[type='radio'] {
 }
 .disclosure-aside {
   margin-left: auto;
-  font-weight: 400;
-  color: var(--muted);
+  font-weight: var(--fw-regular);
+  color: var(--text-2);
   font-size: var(--fs-caption);
 }
 .disclosure-body {
@@ -1069,15 +1352,15 @@ input[type='radio'] {
 }
 /* The same, as an inline "More about this" under a short line. */
 .more > summary {
-  /* A real target: at least 28px tall, with the same chevron as a folded block (Disclosure). */
+  /* A real target: at least as tall as a row, with the same chevron as a folded block (Disclosure). */
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: 28px;
+  min-height: var(--row-h);
   padding: var(--space-1) var(--space-2) var(--space-1) 0;
-  cursor: pointer;
+  cursor: default;
   list-style: none;
-  color: var(--accent);
+  color: var(--accent-on-tint);
   font-size: var(--fs-caption);
   width: fit-content;
   border-radius: var(--radius-sm);
@@ -1091,8 +1374,8 @@ input[type='radio'] {
   width: 6px;
   height: 6px;
   margin-left: var(--space-1);
-  border-right: 2px solid currentColor;
-  border-bottom: 2px solid currentColor;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
   transform: rotate(-45deg);
   transition: transform var(--dur-base) var(--ease-out);
 }
@@ -1105,7 +1388,7 @@ input[type='radio'] {
 
 /* An empty state that offers its one next action. */
 .empty .empty-action {
-  margin-top: var(--space-4);
+  margin-top: var(--space-3);
   display: flex;
   justify-content: center;
   gap: var(--space-2);
@@ -1113,17 +1396,14 @@ input[type='radio'] {
 }
 .empty p {
   margin: var(--space-1) auto 0;
-  max-width: 60ch;
+  max-width: 46ch;
 }
 .empty.fill {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   justify-content: center;
   min-height: 280px;
 }
 
-/* A small menu that opens under its button (Reject / Prohibit / Delete of a statement). */
+/* A menu that opens under its button (Reject / Prohibit / Delete of a statement). The chosen entry is the accent, as in macOS. */
 .menu {
   position: relative;
 }
@@ -1133,66 +1413,71 @@ input[type='radio'] {
   top: calc(100% + var(--space-1));
   z-index: 15;
   min-width: 260px;
-  padding: var(--space-1);
+  padding: 6px;
   display: flex;
   flex-direction: column;
   gap: var(--space-half);
   background: var(--surface-3);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-pop);
+  white-space: normal;
 }
 .menu-item {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  justify-content: center;
   gap: var(--space-half);
   width: 100%;
-  padding: var(--space-2) var(--space-3);
+  min-height: var(--row-h);
+  padding: var(--space-1) 10px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: none;
-  color: var(--text);
+  color: var(--text-1);
   font: inherit;
   text-align: left;
-  cursor: pointer;
+  cursor: default;
 }
-.menu-item:hover:not(:disabled) {
-  /* A menu floats on --surface-3, so its hover lifts from that colour instead of dropping to --surface-2. */
-  background: color-mix(in srgb, var(--text-1) 8%, var(--surface-3));
+.menu-item:hover:not(:disabled),
+.menu-item.danger:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--on-accent);
 }
 .menu-item:disabled {
-  color: var(--muted);
-  cursor: not-allowed;
+  color: var(--text-3);
 }
 .menu-item .menu-note {
   font-size: var(--fs-caption);
-  color: var(--muted);
-  font-weight: 400;
+  color: var(--text-2);
+  font-weight: var(--fw-regular);
+}
+.menu-item:hover:not(:disabled) .menu-note {
+  color: inherit;
 }
 .menu-item.danger {
-  color: var(--bad);
+  color: var(--error);
 }
 
 /* A status with a coloured dot: the state reads at a glance and is not only grey text. */
 .dot {
   display: inline-block;
   flex: none;
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: var(--muted);
+  background: var(--text-3);
 }
 .dot.good {
-  background: var(--good);
+  background: var(--success);
 }
 .dot.warn {
-  background: var(--warn);
+  background: var(--attention);
 }
 .dot.bad {
-  background: var(--bad);
+  background: var(--error);
 }
-/* A sentence with a coloured dot, where a badge would be too long (a badge is for one to three words). */
+/* A sentence with a coloured dot, where a tag would be too long (a tag is for one to three words). */
 .dot-line {
   display: inline-flex;
   align-items: baseline;
@@ -1202,114 +1487,204 @@ input[type='radio'] {
   align-self: center;
 }
 
-/* "Getting started" on an empty Attention page. */
-.start-steps {
-  list-style: none;
-  margin: var(--space-2) 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-.start-steps li {
-  display: flex;
-  align-items: center;
+/* ───────────── Page patterns (visual-system.md §9) ───────────── */
+
+/* List + detail: a panel of rows beside the object a row opens, side by side down to the minimum window. The detail is a
+   container, so its own narrow rules (the launch path) follow its width and not the window's. */
+.split {
+  display: grid;
+  grid-template-columns: clamp(208px, 27%, 300px) minmax(0, 1fr);
   gap: var(--space-4);
-  padding: var(--space-3) 0;
-  border-top: 1px solid var(--border);
+  align-items: start;
 }
-.start-steps li:first-child {
-  border-top: 0;
-}
-.start-mark {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: 2px solid var(--border-strong);
-  border-radius: 50%;
-  font-size: var(--fs-caption);
-  font-weight: var(--fw-semibold);
-}
-.start-steps li.done .start-mark {
-  background: var(--good);
-  border-color: var(--good);
-  color: var(--panel);
-}
-.start-steps li.done .start-text {
-  opacity: 0.7;
-}
-.start-text {
-  flex: 1;
+.split-list {
+  position: sticky;
+  top: 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
+  gap: var(--space-2);
+}
+.split-detail {
+  min-width: 0;
+  container-type: inline-size;
 }
 
-/* Getting started leads an empty Attention page while a step is open (BUG-024): a display headline, the launch path, one
-   filled button for the next step and the list of steps. */
-.start-hero {
+/* A list panel: rows on one surface, the selected one tinted. No card per row. */
+.panel {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  padding: var(--space-6);
+  gap: var(--space-half);
+  padding: 6px;
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
 }
-.start-eyebrow {
-  margin: 0 0 calc(var(--space-3) * -1);
-  font-size: var(--fs-caption);
+.panel-row {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+  min-width: 0;
+  padding: var(--space-2) 10px;
+  border-radius: var(--radius-md);
+  text-align: left;
+}
+.panel-row:hover {
+  background: var(--hover-fill);
+}
+.panel-row:active {
+  background: var(--press-fill);
+}
+.panel-row.active {
+  background: var(--accent-tint);
+}
+.panel-row-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.panel-row-title {
+  flex: 1;
+  min-width: 0;
   font-weight: var(--fw-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.panel-row-line {
+  min-width: 0;
   color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.card .start-headline {
-  font-size: var(--fs-display);
-  line-height: var(--lh-title);
+.panel-row-line.wrap {
+  white-space: normal;
 }
-.start-steps li.next .start-mark {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-tint);
-}
-/* "Nothing needs you right now" is one line while Getting started leads. */
-.nothing-line {
-  margin: 0;
-  color: var(--text-2);
-}
-.nothing-line strong {
-  color: var(--text-1);
+/* A name that other products share ends in the time it was created (BUG-054): that is the part that tells the rows apart, so it wraps instead of being cut. */
+.panel-row-title.wrap {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
-/* A product card in the list: it says it can be opened, and which one is open. */
-.product-card {
-  position: relative;
-  padding-right: var(--space-6);
+/* The header of an object (a product, an account, a channel): its name, a meta line, its actions. No box around it. */
+.obj-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  flex-wrap: wrap;
 }
-.product-card::after {
-  content: '';
-  position: absolute;
-  right: var(--space-4);
-  top: 50%;
-  width: 8px;
-  height: 8px;
-  border-right: 2px solid var(--muted);
-  border-top: 2px solid var(--muted);
-  transform: translateY(-50%) rotate(45deg);
+.obj-head > :first-child {
+  flex: 1 1 240px;
+  min-width: 0;
 }
-.product-card:hover {
-  border-color: var(--border-strong);
-  background: var(--panel-2);
+.obj-head h2 {
+  font-size: var(--fs-section);
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
 }
-.product-card.active {
-  border-color: var(--accent);
-  background: var(--panel-2);
-  box-shadow: inset 3px 0 0 var(--accent);
+.obj-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-half) var(--space-3);
+  margin-top: var(--space-half);
+  color: var(--text-2);
 }
-.product-card.active::after {
-  border-color: var(--accent);
+.obj-meta .dot-line {
+  color: var(--text-1);
 }
-.product-card:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
+.obj-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+
+/* A removal asks in the place of its button (BUG-059, `ConfirmAction`): the question, the confirming button and Cancel. The wrapper
+   draws no box, so the question and the pair of buttons are items of the row the button was in; the sentence takes the free width and
+   wraps, the buttons keep their size and stay together. A row that cannot wrap by itself (the header actions, a mailbox or a rule row)
+   is allowed to, and the header's actions take the whole line, to the right, while a question is open. */
+.confirm {
+  display: contents;
+}
+.confirm-ask {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.confirm-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+.obj-actions:has(.confirm-ask) {
+  flex: 1 1 100%;
+  justify-content: flex-end;
+}
+.obj-actions:has(.confirm-ask),
+.group-row:has(.confirm-ask) {
+  flex-wrap: wrap;
+}
+
+/* Rows inside a group box are split by hairlines; a row is never a bordered box inside the box. */
+.rows {
+  display: flex;
+  flex-direction: column;
+}
+.rows > * {
+  padding: var(--space-3) 0;
+}
+.rows > :first-child {
+  padding-top: var(--space-1);
+}
+.rows > :last-child {
+  padding-bottom: var(--space-1);
+}
+.rows > * + * {
+  border-top: 1px solid var(--line);
+}
+.card .stack:has(> .list-row) {
+  gap: 0;
+}
+.card .list-row {
+  padding: var(--space-3) 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.card .list-row + .list-row {
+  border-top: 1px solid var(--line);
+}
+.card .list-row:first-child {
+  padding-top: var(--space-1);
+}
+.card .list-row:last-child {
+  padding-bottom: var(--space-1);
+}
+
+/* A row of a group with its label on the left and its control on the right (macOS form row). */
+.group-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 44px;
+}
+.group-row > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The status line under a title: dot + words, and a link to the next step. */
+.status-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
 }
 
 /* ───────────── Launch path (BUG-012) ─────────────
@@ -1319,7 +1694,7 @@ input[type='radio'] {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  row-gap: var(--space-2);
+  row-gap: var(--space-1);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1331,9 +1706,8 @@ input[type='radio'] {
 .launch-stage + .launch-stage::before {
   /* The line that joins two stages: green only between two stages that are both done. */
   content: '';
-  width: var(--space-5);
-  height: 2px;
-  margin: 0 var(--space-1);
+  width: 18px;
+  height: 1.5px;
   border-radius: 1px;
   background: var(--line-strong);
 }
@@ -1343,9 +1717,9 @@ input[type='radio'] {
 .launch-stage a {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  min-height: 28px;
-  padding: var(--space-1) var(--space-2);
+  gap: var(--icon-gap);
+  height: 24px;
+  padding: 0 var(--icon-gap);
   border-radius: var(--radius-pill);
   color: var(--text-2);
   text-decoration: none;
@@ -1356,10 +1730,10 @@ input[type='radio'] {
 }
 .launch-mark {
   flex: none;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  border: 2px solid var(--line-strong);
+  border: 1.5px solid var(--line-strong);
 }
 .launch-stage.done a {
   color: var(--text-1);
@@ -1374,18 +1748,30 @@ input[type='radio'] {
   font-weight: var(--fw-semibold);
 }
 .launch-stage.current .launch-mark {
-  border-color: var(--accent);
+  border-color: var(--accent-on-tint);
   background: var(--accent-tint);
   box-shadow: 0 0 0 3px var(--accent-tint);
   animation: ppd-ring var(--dur-base) var(--ease-out);
 }
 .launch-next {
+  height: 20px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--accent-tint);
+  color: var(--accent-on-tint);
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
-  color: var(--accent-on-tint);
-  background: var(--accent-tint);
-  border-radius: var(--radius-pill);
-  padding: 0 var(--space-2);
+  line-height: 20px;
+}
+/* Inside a narrow detail pane the joints and the stage padding give way, so the path stays one row. */
+@container (max-width: 560px) {
+  .launch-stage + .launch-stage::before {
+    width: 10px;
+  }
+  .launch-stage a {
+    padding: 0 3px;
+    gap: 5px;
+  }
 }
 @keyframes ppd-ring {
   from {
@@ -1393,32 +1779,25 @@ input[type='radio'] {
     box-shadow: 0 0 0 0 var(--accent-tint);
   }
 }
-/* The same path as five dots on a product card. */
-.product-card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
+/* The same path as five dots on a product row. */
 .launch-dots {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: var(--space-1);
+  gap: 3px;
 }
 .launch-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  border: 2px solid var(--line-strong);
+  border: 1.5px solid var(--line-strong);
 }
 .launch-dot.done {
   background: var(--success);
   border-color: var(--success);
 }
 .launch-dot.current {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-tint);
+  border-color: var(--accent-on-tint);
 }
 
 /* A button that reads as a link: for the next step beside a status. */
@@ -1426,9 +1805,10 @@ input[type='radio'] {
   border: 0;
   padding: 0;
   background: none;
-  color: var(--accent);
+  color: var(--accent-on-tint);
   font: inherit;
   font-size: var(--fs-caption);
+  /* A text link in form of a button: the pointing hand is for text links. */
   cursor: pointer;
 }
 .link-btn:hover {
@@ -1436,42 +1816,6 @@ input[type='radio'] {
 }
 .stack > .link-btn {
   align-self: flex-start;
-}
-
-/* Settings: an engine row reads as lines (name, version, path, then what it can do), and the selected one says "In use". */
-.engine-row {
-  align-items: flex-start;
-}
-.engine-main {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-.engine-path {
-  color: var(--muted);
-  overflow-wrap: anywhere;
-}
-.in-use {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  height: var(--control-h);
-  padding: 0 var(--control-pad-x);
-  color: var(--good);
-  font-weight: 600;
-  white-space: nowrap;
-}
-/* A list under its own heading, apart from the form above it. */
-.list-title {
-  margin: var(--space-5) 0 0;
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--border);
-}
-.rule-row {
-  padding: var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel);
 }
 
 /* Spacing after a folded "More" line inside a card, so the next block does not touch it. */
@@ -1488,67 +1832,47 @@ input[type='radio'] {
   white-space: normal;
 }
 
-/* A comment in a thread: replies step in by one space unit per level (up to four). */
-.list-row.thread-comment {
-  display: block;
-  margin-left: calc(var(--space-4) * var(--depth, 0));
-}
-.list-row.thread-comment.highlight {
-  border-color: var(--accent);
-}
-.thread-comment-body {
-  margin-top: var(--space-1);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
 /* ───────────── Focus and hover (BUG-021) ───────────── */
 
-/* One focus ring for every interactive element, for keyboard focus: a 2px gap and 2px of --focus. The hidden inputs of
-   switches and segmented controls ring their visible part instead (above). */
+/* One focus ring for every interactive element, for keyboard focus: 2px of --focus, 1px off the edge, following the radius. The
+   hidden inputs of switches and segmented controls ring their visible part instead (above). */
 :where(a[href], button, summary, select, textarea, input, [tabindex]):focus-visible {
   outline: 2px solid var(--focus);
-  outline-offset: 2px;
+  outline-offset: 1px;
 }
 
 /* Everything clickable reacts to the pointer. */
-.tab:not(.active):hover {
-  color: var(--text-1);
-  background: var(--hover-fill);
-}
-.tab {
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-}
 .disclosure > summary {
-  border-radius: calc(var(--radius) - 1px);
+  border-radius: calc(var(--radius-lg) - 1px);
 }
-.disclosure > summary:hover {
+.disclosure > summary:hover,
+.more > summary:hover {
   background: var(--hover-fill);
 }
-.more > summary:hover,
-a:not(.btn):not(.badge):not(.nav-item):hover,
+/* Text links are underlined under the pointer; links that are controls in form (items, tags, toolbar values) are not. */
+a:not(.btn):not(.badge):not(.nav-item):not(.tb-value):hover,
 .link-btn:hover {
   text-decoration: underline;
-  text-decoration-color: var(--accent);
+  text-decoration-color: var(--accent-on-tint);
   text-underline-offset: 2px;
 }
 .input:hover:not(:disabled):not(:focus) {
-  border-color: var(--line-strong);
+  border-color: var(--text-3);
 }
 
 /* Changes of state are short, and stop under Reduce motion (the tokens are 0ms there). */
 .btn,
+.icon-btn,
 .nav-item,
 .tab,
 .disclosure > summary,
+.more > summary,
 .menu-item,
-.list-row.selectable,
-.product-card,
+.panel-row,
 .input,
 .segmented-option {
   transition:
     background-color var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out),
-    filter var(--dur-fast) var(--ease-out);
+    color var(--dur-fast) var(--ease-out);
 }

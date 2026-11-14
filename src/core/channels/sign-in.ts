@@ -38,9 +38,12 @@ export class SignInService {
     return this.run(this.accounts.account(accountId))
   }
 
-  /** An account was found signed out: try the saved password, but only if the hour is up and nobody is using the browser. */
+  /**
+   * An account was found signed out: try the saved password, but only if the hour is up and nobody is using the browser. With no saved
+   * password (a lookup in the vault file) nothing here asks the keychain; a keychain that already refused the app is not asked again.
+   */
   async maybeAutomatic(account: Account): Promise<void> {
-    if (!account.loginName || !this.vault.has(account)) return
+    if (!account.loginName || !this.vault.has(account) || this.core.secrets.blocked() !== null) return
     const last = this.store.lastLoginAttempt(account.id)
     if (last !== null && this.core.clock.now().getTime() - Date.parse(last) < AUTOMATIC_INTERVAL_MS) return
     try {
@@ -54,7 +57,7 @@ export class SignInService {
 
   private async run(account: Account): Promise<SignInResult> {
     const username = account.loginName
-    const password = this.vault.password(account)
+    const password = await this.vault.password(account)
     if (!username || password === null) throw new ApiError('no_password', `No password is saved for ${account.label}. Save one first.`)
     if (this.running.has(account.id)) throw new ApiError('sign_in_running', `${account.label} is being signed in already.`)
     const target = this.accounts.signInTarget(account)

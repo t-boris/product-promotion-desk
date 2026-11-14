@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react'
 import type { AttentionKind, Id, Product } from '../../../shared/types'
 import { useAutomation, useQuery } from '../hooks'
-import { Badge, Button, EmptyState, ErrorNote, Loading, Page } from '../ui'
+import { Icon } from '../icons'
+import { Badge, Button, Card, EmptyState, ErrorNote, Loading, Page } from '../ui'
 import { fixLinkFor } from './attention-links'
 import { KIND_TONE } from './attention-tone'
-import { startSteps } from './attention-start'
-import { launchStages } from './products/launch-path'
+import { startHeadline, startSteps } from './attention-start'
+import { launchStages, nextStage } from './products/launch-path'
 import { LaunchPath, useLaunchCounts } from './products/LaunchPath'
+import { productLabels } from './products/product-labels'
+import { useMainActionOwner } from './review/main-action'
 import { useProductDirectory, type ProductDirectory } from './review/products'
 import { ReviewCard } from './review/ReviewCard'
+import './attention.css'
 
 const KIND_LABEL: Record<AttentionKind, string> = {
   approval: 'Approval',
@@ -26,38 +30,70 @@ const KIND_LABEL: Record<AttentionKind, string> = {
  * stays on the page after an action (for example approved and waiting for Send, or sent with its link) until
  * the owner dismisses it, instead of vanishing from the list the moment it is no longer "waiting".
  */
-function DecisionCard({ id, stillWaiting, onDismiss, directory }: { id: Id; stillWaiting: boolean; onDismiss: () => void; directory: ProductDirectory }) {
+function DecisionCard({
+  id,
+  stillWaiting,
+  onDismiss,
+  directory,
+  primaryAction,
+  onMainAction
+}: {
+  id: Id
+  stillWaiting: boolean
+  onDismiss: () => void
+  directory: ProductDirectory
+  /** The first card that shows a main action owns the screen's filled button. */
+  primaryAction: boolean
+  onMainAction: (id: Id, offering: boolean) => void
+}) {
   const card = useQuery('opportunities.get', { id }, ['opportunities'])
   if (card.error && !card.data) return <ErrorNote error={card.error} />
   if (!card.data) return <Loading what="Loading" />
   return (
-    <div className="stack">
-      <ReviewCard card={card.data} productName={directory.productNameOfChannel(card.data.opportunity.channelId)} />
-      {!stillWaiting && (
-        <div className="row">
-          <span className="muted small">This item no longer needs a decision.</span>
-          <Button onClick={onDismiss} data-testid="dismiss-card">
-            Dismiss
-          </Button>
-        </div>
-      )}
-    </div>
+    <ReviewCard
+      card={card.data}
+      productName={directory.productNameOfChannel(card.data.opportunity.channelId)}
+      primaryAction={primaryAction}
+      onMainAction={onMainAction}
+      footer={
+        !stillWaiting && (
+          <>
+            <span className="review-foot-note">This item no longer needs a decision.</span>
+            <Button onClick={onDismiss} data-testid="dismiss-card">
+              Dismiss
+            </Button>
+          </>
+        )
+      }
+    />
   )
 }
 
 /**
  * Nothing needs the owner: say so, and say what to do next (QA findings 1, 5, 6). While a start step is open, Getting started
- * leads the page (BUG-024): a headline, the launch path of the newest product and one filled button for the next step, so
- * "Add a product" appears once; "Nothing needs you right now" is one line below it. Once every step is done, the empty
- * state is the page, with the way to Opportunities.
+ * leads the page (BUG-024): a headline naming the newest product, its launch path and one filled button for the next step, so
+ * "Add a product" appears once; "Nothing needs you right now" is one line below it. The newest product's next stage of the
+ * path is the first open step, so the path's "Next" tag, the filled button and the checklist agree (BUG-058). Once every step is
+ * done, the empty state is the page, with the way to Opportunities.
  */
 function NothingNeedsYou({ products, accounts, paused, onResume }: { products: Product[]; accounts: number; paused: boolean | undefined; onResume: () => void }) {
-  const steps = startSteps({ products: products.length, accounts, paused })
+  const { countsOf, loaded } = useLaunchCounts()
+  // Until the channels and publications have answered every product looks like one with none, so the path would send a launched product to "Connect a channel".
+  if (!loaded) return <Loading what="Loading" />
+  // The newest product; with none yet, the path starts at "Product" and its links lead to the product page.
+  const latest = products.reduce<Product | undefined>((newest, p) => (!newest || p.createdAt > newest.createdAt ? p : newest), undefined)
+  const stages = launchStages(latest?.id ?? '', {
+    hasSources: latest !== undefined,
+    passportApproved: latest?.activePassportVersionId != null,
+    goals: latest?.goals.length ?? 0,
+    ...(latest ? countsOf(latest.id) : { channels: 0, approvedPublications: 0 })
+  })
+  // The path's next stage leads the checklist, so the path, the filled button and the checklist name one step (BUG-058).
+  const steps = startSteps({ products: products.length, accounts, paused, stage: latest ? nextStage(stages) : null })
   const next = steps.find((step) => !step.done)
-  const countsOf = useLaunchCounts()
   if (!next) {
     return (
-      <div className="stack" data-testid="attention-empty">
+      <div className="gs" data-testid="attention-empty">
         <EmptyState
           fill
           art="inbox"
@@ -73,19 +109,12 @@ function NothingNeedsYou({ products, accounts, paused, onResume }: { products: P
       </div>
     )
   }
-  // The newest product; with none yet, the path starts at "Product" and its links lead to the product page.
-  const latest = products.reduce<Product | undefined>((newest, p) => (!newest || p.createdAt > newest.createdAt ? p : newest), undefined)
-  const stages = launchStages(latest?.id ?? '', {
-    hasSources: latest !== undefined,
-    passportApproved: latest?.activePassportVersionId != null,
-    goals: latest?.goals.length ?? 0,
-    ...(latest ? countsOf(latest.id) : { channels: 0, approvedPublications: 0 })
-  })
+  const label = latest ? (productLabels(products).get(latest.id) ?? latest.name) : null
   return (
-    <div className="stack" data-testid="attention-empty">
-      <section className="card start-hero" aria-label="Getting started" data-testid="attention-start">
-        <p className="start-eyebrow">Getting started</p>
-        <h2 className="start-headline">Launch your first product</h2>
+    <div className="gs" data-testid="attention-empty">
+      <section className="card gs-hero" aria-label="Getting started" data-testid="attention-start">
+        <p className="gs-eyebrow">Getting started</p>
+        <h2 className="gs-headline">{startHeadline(label)}</h2>
         <LaunchPath stages={stages} testId="attention-launch-path" />
         <div className="row">
           {next.id === 'resume' ? (
@@ -98,13 +127,13 @@ function NothingNeedsYou({ products, accounts, paused, onResume }: { products: P
             </a>
           )}
         </div>
-        <ol className="start-steps">
+        <ol className="gs-steps">
           {steps.map((step) => (
             <li key={step.id} className={`${step.done ? 'done' : ''}${step === next ? ' next' : ''}`}>
-              <span className="start-mark" aria-hidden="true">
-                {step.done ? '✓' : ''}
+              <span className="gs-mark" aria-hidden="true">
+                {step.done && <Icon name="check" small />}
               </span>
-              <span className="start-text">
+              <span className="gs-text">
                 <strong>{step.title}</strong>
                 <span className="hint">{step.hint}</span>
               </span>
@@ -118,7 +147,7 @@ function NothingNeedsYou({ products, accounts, paused, onResume }: { products: P
           ))}
         </ol>
       </section>
-      <p className="nothing-line" data-testid="attention-nothing">
+      <p className="gs-nothing" data-testid="attention-nothing">
         <strong>Nothing needs you right now</strong> · New comments, drafts to approve and connection problems appear here.
       </p>
     </div>
@@ -149,6 +178,8 @@ export function AttentionPage() {
   const waiting = new Set(decisionIds)
   // Stable order: a card must not jump to the bottom when the owner approves it.
   const ordered = [...shown, ...decisionIds.filter((id) => !shown.includes(id))]
+  // The first card that shows a main action (Approve, Send now) has the screen's one filled button.
+  const mainAction = useMainActionOwner(ordered)
 
   return (
     <Page title="Attention" subtitle="Comments, drafts, questions and connection problems that need you">
@@ -159,35 +190,51 @@ export function AttentionPage() {
       )}
 
       {problems.length > 0 && (
-        <div className="stack" data-testid="problem-list">
-          <h2>Connections and accounts</h2>
-          {problems.map((item) => {
-            const fix = fixLinkFor(item, links)
-            return (
-              <div key={item.id} className="list-row" data-testid={`attention-${item.kind}`}>
-                <div>
-                  <Badge tone={KIND_TONE[item.kind]}>{KIND_LABEL[item.kind]}</Badge> <strong>{item.title}</strong>
-                  <div className="muted small">{item.detail}</div>
-                  {fix?.productName && <div className="muted small">Product: {fix.productName}</div>}
-                </div>
-                {fix && (
-                  <a className="btn" href={fix.href} data-testid={`attention-link-${item.kind}`}>
-                    {fix.label}
-                  </a>
-                )}
-              </div>
-            )
-          })}
+        <div data-testid="problem-list">
+          <Card title="Connections and accounts">
+            <div className="rows">
+              {problems.map((item) => {
+                const fix = fixLinkFor(item, links)
+                return (
+                  <div key={item.id} className="problem-row" data-testid={`attention-${item.kind}`}>
+                    <div className="problem-main">
+                      <div className="problem-title">
+                        <Badge tone={KIND_TONE[item.kind]}>{KIND_LABEL[item.kind]}</Badge>
+                        <strong>{item.title}</strong>
+                      </div>
+                      <div className="problem-line">{item.detail}</div>
+                      {fix?.productName && <div className="problem-line">Product: {fix.productName}</div>}
+                    </div>
+                    {fix && (
+                      <a className="btn" href={fix.href} data-testid={`attention-link-${item.kind}`}>
+                        {fix.label}
+                      </a>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </Card>
         </div>
       )}
 
       {ordered.length > 0 && (
-        <div className="stack" data-testid="decision-list">
+        <section className="review-section" data-testid="decision-list">
           <h2>Needs your decision</h2>
-          {ordered.map((id) => (
-            <DecisionCard key={id} id={id} stillWaiting={waiting.has(id)} onDismiss={() => setShown((prev) => prev.filter((x) => x !== id))} directory={directory} />
-          ))}
-        </div>
+          <div className="review-list">
+            {ordered.map((id) => (
+              <DecisionCard
+                key={id}
+                id={id}
+                stillWaiting={waiting.has(id)}
+                onDismiss={() => setShown((prev) => prev.filter((x) => x !== id))}
+                directory={directory}
+                primaryAction={mainAction.isOwner(id)}
+                onMainAction={mainAction.offer}
+              />
+            ))}
+          </div>
+        </section>
       )}
     </Page>
   )

@@ -35,6 +35,7 @@ Requires macOS, Node.js and npm. Install dependencies with `npm install`, then:
 | `npm test` | Runs the Vitest suite (`npm run test:watch` for watch mode). |
 | `npm run build` | Builds the main, preload and renderer bundles with electron-vite. |
 | `npm run dist` | Builds and packages the macOS application (Apple Silicon, unpacked app directory). |
+| `npm run deploy:local` | Builds, installs the app into `/Applications` and signs it. The signature is ad hoc and changes with every build, so macOS asks again for the keychain item that holds the saved passwords after each install. Set `PPD_SIGN_IDENTITY` to the name of a code-signing identity (see `security find-identity -v -p codesigning`) to sign with it instead; macOS then asks once for that identity (choose Always Allow) and not again after an update. |
 | `npm run dev` | Starts the application with hot reload. |
 
 `better-sqlite3` is a native module and must be compiled for the runtime that loads it. The tests run in plain Node, so `npm test` first runs `npm rebuild better-sqlite3` for Node. `npm run dev`, `npm start` and `npm run dist` run in Electron, which has a different ABI, so they first run `electron-builder install-app-deps` to rebuild it for Electron. Switching between the two is therefore automatic, but each switch takes a moment, and running a test and the application at the same time is not possible.

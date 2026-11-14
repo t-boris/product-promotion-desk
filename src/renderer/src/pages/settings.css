@@ -1,0 +1,156 @@
+/* Settings (visual-system.md §10.7): group boxes with label-left rows and switches; one hairline row per engine and per saved rule.
+   No filled button on this screen except "Use this engine" of the recommended engine while none is in use. Colours, sizes and
+   radii come from the shared tokens in styles.css.
+   The page stylesheets are bundled before styles.css (main.tsx imports it last), so a rule here that sets what a shared rule of
+   styles.css also sets (`.rows` and its children, `.group-row`) is written one step more specific. */
+
+/* A label-left row of a group box: the words on the left, the control on the right, 44px tall, a hairline between rows. */
+.card .rows > .group-row {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* ───────────── AI engine: one hairline row per engine ───────────── */
+
+.card .rows > .engine {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.engine-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+}
+/* The name line is as tall as the button beside it, so the two share a middle. */
+.engine-name {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  min-height: var(--control-h);
+}
+.engine-name strong {
+  overflow-wrap: anywhere;
+}
+.engine-location {
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+/* The engine in use: a green check and the words, as tall as the button it replaces. */
+.engine-in-use {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: var(--control-h);
+  color: var(--success);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+
+/* ───────────── What the AI learned ───────────── */
+
+/* The add row: the rule, the platform and the button share one line; the labels are on top and the button sits level with the
+   fields (it is pushed down by the height of a label and its gap). */
+.lesson-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 240px) auto;
+  gap: 0 var(--space-3);
+  align-items: start;
+}
+.lesson-add .field {
+  margin: 0;
+}
+.lesson-add-action {
+  padding-top: calc(1lh + var(--space-1));
+}
+.card h3.lessons-title {
+  margin: var(--space-4) 0 var(--space-1);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+.card .lessons-empty {
+  margin: 0;
+}
+
+/* A saved rule: the words and the platform, then its state and what can be done with it. */
+.card .rows > .rule {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.rule-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 240px);
+  gap: var(--space-2) var(--space-3);
+}
+.rule-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+}
+.rule-state {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.rule-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.rule-actions:has(.confirm-ask) {
+  flex-wrap: wrap;
+}
+@container (max-width: 640px) {
+  .lesson-add {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lesson-add-action {
+    padding-top: var(--space-2);
+  }
+  .rule-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ───────────── Local web access and About: label-left rows ───────────── */
+
+.group-row .port-input {
+  flex: none;
+  width: 120px;
+}
+/* The label of the Port row, with the reason a typed port was refused under it. */
+.group-row .port-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+}
+.card .rows > .web-link {
+  margin: 0;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.card dl.about {
+  margin: 0;
+}
+.card .about dt {
+  flex: none;
+  width: 120px;
+  color: var(--text-2);
+}
+.card .about dd {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}

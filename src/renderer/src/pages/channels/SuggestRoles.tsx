@@ -36,9 +36,9 @@ export function SuggestRoles({ productId, blocked, engineLabel, onUse }: { produ
       <ErrorNote error={state.error} />
       {ideas && ideas.length === 0 && <p className="muted">The AI had no new role to suggest this time.</p>}
       {ideas && ideas.length > 0 && (
-        <div className="stack" data-testid="role-suggestions">
+        <div className="rows" data-testid="role-suggestions">
           {ideas.map((idea, index) => (
-            <div className="list-row suggestion" key={`${idea.name}:${index}`} data-testid="role-suggestion">
+            <div className="suggestion-row" key={`${idea.name}:${index}`} data-testid="role-suggestion">
               <div>
                 <strong>{idea.name}</strong>
                 <div className="small">{idea.voice}</div>

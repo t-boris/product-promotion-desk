@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import type { Product } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Button, Card, ErrorNote, Field } from '../../ui'
+import { Button, Card, ErrorNote, Field, useOpenForm } from '../../ui'
 
 /** A product starts from a name plus a website address and/or a description; everything else is added later. */
 export function CreateProduct({ onCreated, onCancel }: { onCreated: (product: Product) => void; onCancel: () => void }) {
+  const submitVariant = useOpenForm()
   const [name, setName] = useState('')
   const [websiteUrl, setWebsiteUrl] = useState('')
   const [description, setDescription] = useState('')
@@ -39,7 +40,7 @@ export function CreateProduct({ onCreated, onCancel }: { onCreated: (product: Pr
         )}
         <ErrorNote error={state.error} />
         <div className="row">
-          <Button variant="primary" type="submit" disabled={!canSubmit} data-testid="create-product-submit">
+          <Button variant={submitVariant} type="submit" disabled={!canSubmit} data-testid="create-product-submit">
             {state.busy ? 'Creating…' : 'Create product'}
           </Button>
           <Button type="button" onClick={onCancel} data-testid="create-product-cancel">

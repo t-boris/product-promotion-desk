@@ -1,6 +1,6 @@
 import type { ResultsView } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Badge, Button, Card, ErrorNote, formatTime } from '../../ui'
+import { Badge, Button, Card, ErrorNote, formatTime, Hint } from '../../ui'
 import { metricDisplay } from './format'
 
 type ChannelResults = ResultsView['channels'][number]
@@ -15,6 +15,7 @@ export function MetricsCard({ entry }: { entry: ChannelResults }) {
   return (
     <Card
       title={`${channel.target} (${channel.platform})`}
+      className="metrics-card"
       actions={
         <Button onClick={() => void refresh()} disabled={state.busy} data-testid={`refresh-${channel.id}`}>
           {state.busy ? 'Refreshing…' : 'Refresh'}
@@ -23,13 +24,13 @@ export function MetricsCard({ entry }: { entry: ChannelResults }) {
     >
       <ErrorNote error={state.error} />
       {capability && capability.status !== 'verified' && (
-        <p className="muted small">
+        <Hint>
           Metrics for this channel: {capability.status.replace('_', ' ')}
           {capability.detail ? `. ${capability.detail}` : ''}
-        </p>
+        </Hint>
       )}
       {metrics.length === 0 ? (
-        <p className="muted" data-testid={`no-metrics-${channel.id}`}>No metrics captured yet. Press Refresh to read them from the platform.</p>
+        <p className="muted metrics-empty" data-testid={`no-metrics-${channel.id}`}>No metrics captured yet. Press Refresh to read them from the platform.</p>
       ) : (
         <>
           <table className="table" data-testid={`metrics-${channel.id}`}>
@@ -59,7 +60,7 @@ export function MetricsCard({ entry }: { entry: ChannelResults }) {
               })}
             </tbody>
           </table>
-          <p className="muted small">As of {formatTime(capturedAt)}</p>
+          <Hint>As of {formatTime(capturedAt)}</Hint>
         </>
       )}
     </Card>

@@ -12,7 +12,8 @@ import type {
   Id,
   IsoTime,
   MetricReading,
-  PageReport
+  PageReport,
+  VaultUnavailable
 } from '../shared/types'
 import type { McpLaunch } from './mcp/protocol'
 
@@ -154,13 +155,33 @@ export interface PageStepResult {
 
 /** Where passwords are kept (DEC-014): encrypted by the operating system, never in the database. The core never sees how. */
 export interface SecretStore {
-  /** False when the system cannot encrypt: nothing can then be stored. */
-  available(): boolean
+  /**
+   * Whether the system can encrypt now. This asks the keychain, and macOS may show a prompt for it, so only a save, a reveal or a
+   * sign-in calls it. It is asynchronous so that an open prompt does not stop the application.
+   */
+  available(): Promise<boolean>
+  /** Why the vault is known not to work, from the last real attempt; null while it worked or nobody has tried. Never asks the keychain. */
+  blocked(): VaultUnavailable | null
+  /** Whether a value is stored under the key. Reads the vault file only, never the keychain, so it never prompts. */
   has(key: string): boolean
-  get(key: string): string | null
+  /** The value, or null when none is stored. Throws `SecretOpenError` when one is stored and cannot be opened. */
+  get(key: string): Promise<string | null>
   /** Throws if the vault is unavailable; nothing is ever stored in plain text. */
-  set(key: string, value: string): void
+  set(key: string, value: string): Promise<void>
   delete(key: string): void
+}
+
+/**
+ * A value is stored but cannot be opened. `blocked` says why when the whole vault is unusable (macOS refused the app its keychain item, or
+ * there is no keychain); it is null when the keychain answered and only this value cannot be read (it was made with another key).
+ */
+export class SecretOpenError extends Error {
+  readonly blocked: VaultUnavailable | null
+  constructor(blocked: VaultUnavailable | null) {
+    super('A stored value cannot be opened.')
+    this.name = 'SecretOpenError'
+    this.blocked = blocked
+  }
 }
 
 /** Puts a secret on the clipboard for a limited time. Supplied by the main process. */

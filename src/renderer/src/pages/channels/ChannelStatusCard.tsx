@@ -1,12 +1,16 @@
 import { useState } from 'react'
 import type { Channel, Product } from '../../../../shared/types'
 import { call, useAction, useQuery } from '../../hooks'
-import { Badge, Button, Card, ErrorNote, formatTime } from '../../ui'
-import { CHANNEL_STATUS_LABEL, CHANNEL_STATUS_TONE, neverAssessed, nextCheckText } from './model'
+import { Badge, Button, Card, ConfirmAction, ErrorNote, formatTime, Hint, useMainVariant } from '../../ui'
+import { CHANNEL_STATUS_LABEL, CHANNEL_STATUS_TONE, nextCheckText } from './model'
+import { activateBlocker, canActivate, canPause } from './setup-stage'
 
-/** Status, last run and next check, plus Activate / Pause and removal. */
-export function ChannelStatusCard({ channel, product, accountLabel, onRemoved }: { channel: Channel; product: Product | undefined; accountLabel: string; onRemoved: () => void }) {
-  const [confirmRemove, setConfirmRemove] = useState(false)
+/**
+ * Status, last run and next check, plus Activate / Pause and removal. "Activate" is the tab's filled button only at its stage (`filled`:
+ * the channel was assessed and is still to be started); "Pause", "Resume" and "Pause this channel instead" are never filled.
+ */
+export function ChannelStatusCard({ channel, product, accountLabel, filled, onRemoved }: { channel: Channel; product: Product | undefined; accountLabel: string; filled: boolean; onRemoved: () => void }) {
+  const main = useMainVariant()
   const runs = useQuery('runs.list', { channelId: channel.id, limit: 1 }, ['logs', 'channels'])
   const lastRun = runs.data?.[0]
   // A channel with send history cannot be removed (that history prevents sending the same thing twice); the reason is
@@ -22,18 +26,19 @@ export function ChannelStatusCard({ channel, product, accountLabel, onRemoved }:
       await call('channels.remove', { id: channel.id })
     } catch (e) {
       setRefusal(e instanceof Error ? e.message : String(e))
-      setConfirmRemove(false)
       return
     }
     onRemoved()
   })
   const error = activating.error ?? pausing.error ?? removing.error ?? refusal
 
-  const canActivate = channel.status === 'setup' || ((channel.status === 'needs_user' || channel.status === 'error') && channel.baselineDoneAt === null)
-  const canPause = channel.status === 'active' || channel.status === 'error' || (channel.status === 'needs_user' && channel.baselineDoneAt !== null)
+  const activatable = canActivate(channel)
+  // The reason Activate is off: shown beside the button, and the same result disables it.
+  const blocker = activateBlocker(channel)
+  const pausable = canPause(channel)
 
   return (
-    <Card title={channel.target}>
+    <Card title={channel.target} className="wraps-title">
       <dl className="kv">
         <dt>Product</dt>
         <dd>{product?.name ?? 'Unknown product'}</dd>
@@ -61,45 +66,44 @@ export function ChannelStatusCard({ channel, product, accountLabel, onRemoved }:
         <dt>Next check</dt>
         <dd data-testid="channel-next-check">{nextCheckText(channel, formatTime)}</dd>
       </dl>
-      {neverAssessed(channel) && channel.status === 'setup' && <p className="muted small">Assess the channel first to see what this account can do here. Then check the settings and activate it.</p>}
       <ErrorNote error={error} />
-      {refusal && canPause && (
+      {refusal && pausable && (
         <div className="row actions-row">
-          <Button variant="primary" onClick={() => void setPaused(true)} disabled={pausing.busy} data-testid="channel-pause-instead">
+          <Button onClick={() => void setPaused(true)} disabled={pausing.busy} data-testid="channel-pause-instead">
             Pause this channel instead
           </Button>
         </div>
       )}
       <div className="row actions-row">
-        {canActivate && (
-          <Button variant="primary" onClick={() => void activate()} disabled={activating.busy} data-testid="channel-activate" title="Reads the existing discussions once as a baseline, then starts watching for new activity">
+        {activatable && (
+          <Button variant={filled ? main : 'ghost'} onClick={() => void activate()} disabled={activating.busy || blocker !== null} data-testid="channel-activate" title="Reads the existing discussions once as a baseline, then starts watching for new activity">
             {activating.busy ? 'Activating…' : 'Activate'}
           </Button>
         )}
-        {canPause && (
+        {blocker && (
+          <Hint className="row-note" data-testid="channel-activate-reason">
+            {blocker}
+          </Hint>
+        )}
+        {pausable && (
           <Button onClick={() => void setPaused(true)} disabled={pausing.busy} data-testid="channel-pause">
             Pause
           </Button>
         )}
         {channel.status === 'paused' && (
-          <Button variant="primary" onClick={() => void setPaused(false)} disabled={pausing.busy} data-testid="channel-resume">
+          <Button onClick={() => void setPaused(false)} disabled={pausing.busy} data-testid="channel-resume">
             Resume
           </Button>
         )}
         <span className="sep" />
-        {confirmRemove ? (
-          <>
-            <span className="muted small">Deletes this channel with its discussions and drafts. The account stays. A channel that has already sent something cannot be removed, only paused.</span>
-            <Button variant="danger" onClick={() => void remove()} disabled={removing.busy} data-testid="channel-remove-confirm">
-              Remove channel
-            </Button>
-            <Button onClick={() => setConfirmRemove(false)}>Cancel</Button>
-          </>
-        ) : (
-          <Button variant="danger" onClick={() => setConfirmRemove(true)} data-testid="channel-remove">
-            Remove
-          </Button>
-        )}
+        <ConfirmAction
+          label="Remove"
+          question="Deletes this channel with its discussions and drafts. The account stays. A channel that has already sent something cannot be removed, only paused."
+          confirmLabel="Remove channel"
+          onConfirm={() => remove()}
+          testId="channel-remove"
+          confirmTestId="channel-remove-confirm"
+        />
       </div>
     </Card>
   )

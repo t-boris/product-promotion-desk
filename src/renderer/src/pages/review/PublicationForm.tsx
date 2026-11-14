@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import type { Id } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Button, Card, ErrorNote } from '../../ui'
+import { Button, Card, ErrorNote, useOpenForm } from '../../ui'
 import { DraftEditor, toInput, type DraftForm } from './DraftEditor'
 
 const EMPTY: DraftForm = { title: '', text: '', link: '', attachments: [] }
 
 /** Write a standalone publication by hand. It is saved as a draft: nothing is published until it is approved. */
 export function PublicationForm({ channelId, onCreated, onCancel }: { channelId: Id; onCreated: () => void; onCancel: () => void }) {
+  // The form is open on demand, so "Save as draft" is the screen's filled button while it is the form opened last.
+  const saveVariant = useOpenForm()
   const [form, setForm] = useState<DraftForm>(EMPTY)
   const [create, creating] = useAction(async () => {
     await call('publications.create', { channelId, draft: toInput(form, true) })
@@ -19,15 +21,22 @@ export function PublicationForm({ channelId, onCreated, onCancel }: { channelId:
 
   return (
     <Card title="New publication">
-      <DraftEditor form={form} onChange={setForm} withTitle disabled={creating.busy} draft={null} />
-      <ErrorNote error={creating.error} />
-      <div className="row">
-        <Button variant="primary" onClick={() => void create()} disabled={creating.busy || empty} data-testid="create-publication">
-          Save as draft
-        </Button>
-        <Button onClick={onCancel} disabled={creating.busy}>
-          Cancel
-        </Button>
+      <div className="review-body">
+        <DraftEditor form={form} onChange={setForm} withTitle disabled={creating.busy} draft={null} autoFocus />
+        <ErrorNote error={creating.error} />
+        <div className="form-actions">
+          {empty && (
+            <span className="muted small" data-testid="create-publication-reason">
+              Write a title, a text or a link first.
+            </span>
+          )}
+          <Button onClick={onCancel} disabled={creating.busy}>
+            Cancel
+          </Button>
+          <Button variant={saveVariant} onClick={() => void create()} disabled={creating.busy || empty} data-testid="create-publication">
+            Save as draft
+          </Button>
+        </div>
       </div>
     </Card>
   )

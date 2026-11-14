@@ -11,7 +11,7 @@ export function ActionSummary({ card }: { card: OpportunityCard }) {
   if (!approval && !action) return null
 
   return (
-    <div className="stack" data-testid="action-summary">
+    <div className="review-summary" data-testid="action-summary">
       {approval && !action?.completedAt && (
         <dl className="kv" data-testid="approval-summary">
           <dt>Approved</dt>

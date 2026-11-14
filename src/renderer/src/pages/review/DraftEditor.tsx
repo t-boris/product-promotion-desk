@@ -47,10 +47,12 @@ interface Props {
   disabled: boolean
   /** Who wrote the saved draft and what it was based on, shown above the text. */
   draft: Draft | null
+  /** Put the cursor in the first field when the editor appears (a form opened on demand: the button that opened it is gone). */
+  autoFocus?: boolean
 }
 
 /** Editor for a reply or a publication. Editing never changes what was approved: saving creates a new draft. */
-export function DraftEditor({ form, onChange, withTitle, disabled, draft }: Props) {
+export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFocus = false }: Props) {
   const [path, setPath] = useState('')
   const set = (patch: Partial<DraftForm>): void => onChange({ ...form, ...patch })
   const addAttachment = (): void => {
@@ -61,45 +63,51 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft }: Prop
   }
 
   return (
-    <div data-testid="draft-editor">
+    <div className="draft-form" data-testid="draft-editor">
       {draft && (
-        <div className="row small muted">
-          <Badge tone={draft.author === 'ai' ? 'info' : 'neutral'}>{draft.author === 'ai' ? 'Prepared by the AI' : 'Written by you'}</Badge>
+        <div className="draft-meta">
+          <Badge>{draft.author === 'ai' ? 'Prepared by the AI' : 'Written by you'}</Badge>
           {draft.rationale && <span data-testid="draft-rationale">Why: {draft.rationale}</span>}
         </div>
       )}
       {withTitle && (
         <Field label="Title">
-          <input className="input" value={form.title} disabled={disabled} onChange={(e) => set({ title: e.target.value })} data-testid="draft-title" />
+          <input className="input" value={form.title} disabled={disabled} onChange={(e) => set({ title: e.target.value })} autoFocus={autoFocus} data-testid="draft-title" />
         </Field>
       )}
       <Field label={withTitle ? 'Text' : 'Reply'}>
-        <textarea className="input" value={form.text} disabled={disabled} onChange={(e) => set({ text: e.target.value })} data-testid="draft-text" rows={withTitle ? 8 : 5} />
+        <textarea className="input draft-text" value={form.text} disabled={disabled} onChange={(e) => set({ text: e.target.value })} autoFocus={autoFocus && !withTitle} data-testid="draft-text" rows={4} />
       </Field>
-      <Field label="Link (optional)" hint="Links are checked against the product's own website.">
-        <input className="input" value={form.link} disabled={disabled} onChange={(e) => set({ link: e.target.value })} placeholder="https://" data-testid="draft-link" />
-      </Field>
+      <div className="form-row">
+        <Field label="Link (optional)" hint="Links are checked against the product's own website.">
+          <input className="input" value={form.link} disabled={disabled} onChange={(e) => set({ link: e.target.value })} placeholder="https://" data-testid="draft-link" />
+        </Field>
+        {!disabled && (
+          <Field label="Add an image" hint="Full path of a PNG, JPEG, GIF or WebP file on this Mac (up to 10 MB). The file is checked when you save, and re-checked before sending.">
+            <div className="draft-image-row">
+              <input className="input" value={path} onChange={(e) => setPath(e.target.value)} placeholder="/Users/you/Pictures/screenshot.png" data-testid="attachment-path" />
+              <Button onClick={addAttachment} disabled={!path.trim()} data-testid="attachment-add">
+                Add
+              </Button>
+            </div>
+          </Field>
+        )}
+      </div>
       {form.attachments.length > 0 && (
-        <div className="stack" data-testid="draft-attachments">
+        <div className="rows draft-attachments" data-testid="draft-attachments">
           {form.attachments.map((a) => (
-            <div key={a.path} className="row small">
+            <div key={a.path} className="draft-attachment">
               <Badge>{a.mime || 'image'}</Badge>
               <code>{a.name}</code>
-              <span className="muted">{a.path}</span>
-              {!disabled && <Button onClick={() => set({ attachments: form.attachments.filter((x) => x.path !== a.path) })}>Remove</Button>}
+              <span className="draft-attachment-path">{a.path}</span>
+              {!disabled && (
+                <Button variant="quiet" className="danger" onClick={() => set({ attachments: form.attachments.filter((x) => x.path !== a.path) })}>
+                  Remove
+                </Button>
+              )}
             </div>
           ))}
         </div>
-      )}
-      {!disabled && (
-        <Field label="Add an image" hint="Full path of a PNG, JPEG, GIF or WebP file on this Mac (up to 10 MB). The file is checked when you save, and re-checked before sending.">
-          <div className="row">
-            <input className="input" style={{ flex: 1 }} value={path} onChange={(e) => setPath(e.target.value)} placeholder="/Users/you/Pictures/screenshot.png" data-testid="attachment-path" />
-            <Button onClick={addAttachment} disabled={!path.trim()} data-testid="attachment-add">
-              Add
-            </Button>
-          </div>
-        </Field>
       )}
     </div>
   )

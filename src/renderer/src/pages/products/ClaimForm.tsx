@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import type { Claim, ClaimKind, Id, PassportSection } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Button, ErrorNote, Field } from '../../ui'
+import { Button, ErrorNote, Field, useOpenForm } from '../../ui'
 import { KIND_HELP, KIND_LABELS } from './labels'
 
 type EditableKind = Exclude<ClaimKind, 'contradiction'>
@@ -12,6 +12,7 @@ const KINDS: EditableKind[] = ['fact', 'assumption', 'unknown']
  * "entered by the user" with today's date. Assumptions and unknowns never carry sources.
  */
 export function ClaimForm({ productId, section, claim, onDone }: { productId: Id; section: PassportSection; claim?: Claim; onDone: () => void }) {
+  const submitVariant = useOpenForm()
   const [text, setText] = useState(claim?.text ?? '')
   // Editing a contradiction means settling it, so the result is a fact the user vouches for.
   const [kind, setKind] = useState<EditableKind>(claim && claim.kind !== 'contradiction' ? claim.kind : 'fact')
@@ -50,7 +51,7 @@ export function ClaimForm({ productId, section, claim, onDone }: { productId: Id
       </div>
       <ErrorNote error={state.error} />
       <div className="row">
-        <Button variant="primary" type="submit" disabled={state.busy || text.trim() === ''} data-testid={`claim-save-${id}`}>
+        <Button variant={submitVariant} type="submit" disabled={state.busy || text.trim() === ''} data-testid={`claim-save-${id}`}>
           {state.busy ? 'Saving…' : claim ? 'Save' : 'Add'}
         </Button>
         <Button type="button" onClick={onDone} data-testid={`claim-cancel-${id}`}>

@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from 'react'
 import type { Account, AccountRole, Mailbox, PlatformInfo, Profile } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
-import { Button, ErrorNote, Field } from '../../ui'
+import { Button, ErrorNote, Field, Hint, useOpenForm } from '../../ui'
+import { afterCreateNote } from './next-step'
 import { ROLE_NAME_LIMIT, ROLE_VOICE_LIMIT } from './RoleEditor'
 
 /**
  * Adds an account to the library (DEC-015): a platform, a name for the owner, and optionally an e-mail address and a role.
- * The account belongs to no product. Nothing is registered anywhere: the account gets its own empty browser.
+ * The account belongs to no product (opened from a product's Channels tab it only records that product, DEC-015). Nothing is registered
+ * anywhere: the account gets its own empty browser.
  */
 export function CreateAccount({
   platforms,
@@ -14,6 +16,7 @@ export function CreateAccount({
   profiles,
   accounts,
   role,
+  product,
   onCreated,
   onCancel
 }: {
@@ -25,10 +28,14 @@ export function CreateAccount({
   accounts: Account[]
   /** A role to start from ("Use this role" on the product page). */
   role: AccountRole | null
+  /** The product whose Channels tab opened the form: the account is made for it (`name` is absent until the products have loaded). */
+  product: { id: string; name: string | undefined } | null
   onCreated: (account: Account) => void
-  /** Absent while there is no account yet: the form is then the only thing to do. */
+  /** Absent while there is no account yet and no product to go back to: the form is then the only thing to do. */
   onCancel?: () => void
 }) {
+  // The form is the next step of the screen and owns its one filled button unless a form opened after it does; the account behind it keeps bezels meanwhile.
+  const submitVariant = useOpenForm()
   const [chosen, setChosen] = useState('')
   const [profileId, setProfileId] = useState('')
   const [label, setLabel] = useState(role ? `${role.name} account` : '')
@@ -37,7 +44,7 @@ export function CreateAccount({
   const [email, setEmail] = useState('')
   const [chosenMailbox, setChosenMailbox] = useState('')
   const [fromMailbox, setFromMailbox] = useState<string | null>(null)
-  const [create, state] = useAction((args: { platform: string; label: string; role?: AccountRole; email?: string; mailboxId?: string; profileId?: string }) => call('accounts.create', args))
+  const [create, state] = useAction((args: { productId?: string; platform: string; label: string; role?: AccountRole; email?: string; mailboxId?: string; profileId?: string }) => call('accounts.create', args))
   const mailboxId = mailboxes.some((m) => m.id === chosenMailbox) ? chosenMailbox : (mailboxes[0]?.id ?? '')
   const [propose, proposing] = useAction(async (platformKey: string) => {
     const result = await call('accounts.proposeEmail', { mailboxId, platform: platformKey })
@@ -50,12 +57,15 @@ export function CreateAccount({
   const freeProfiles = profiles.filter((p) => !accounts.some((a) => a.profileId === p.id && a.platform === platform))
   const profile = freeProfiles.find((p) => p.id === profileId)
   const roleIncomplete = !profile && roleName.trim() === '' && roleVoice.trim() !== ''
+  // Why "Add account" cannot be pressed yet, beside the button (the field that is missing first).
+  const createBlocker = !platform ? 'Choose a platform.' : !label.trim() ? 'Name the account.' : roleIncomplete ? 'Give the role a name, or clear the voice.' : null
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault()
     if (!label.trim() || !platform || roleIncomplete) return
     const wanted = !profile && roleName.trim() ? { name: roleName.trim(), voice: roleVoice.trim() } : undefined
     const account = await create({
+      ...(product ? { productId: product.id } : {}),
       platform,
       label: label.trim(),
       ...(wanted ? { role: wanted } : {}),
@@ -105,7 +115,7 @@ export function CreateAccount({
                   </option>
                 ))}
               </select>
-              <Button onClick={() => void propose(platform)} disabled={proposing.busy || platform === ''} data-testid="account-propose-email">
+              <Button variant="secondary" onClick={() => void propose(platform)} disabled={proposing.busy || platform === ''} data-testid="account-propose-email">
                 Propose
               </Button>
             </div>
@@ -125,24 +135,25 @@ export function CreateAccount({
         </Field>
       )}
       {!profile && (
-      <div className="form-row">
-        <Field label="Role (optional)" hint="For example astrologer or developer.">
-          <input className="input" value={roleName} maxLength={ROLE_NAME_LIMIT} onChange={(e) => setRoleName(e.target.value)} data-testid="account-role-name" />
-        </Field>
-        <Field label="Voice (optional)" hint={`How this account writes and what it may talk about. Up to ${ROLE_VOICE_LIMIT} characters.`}>
-          <textarea className="input short" value={roleVoice} maxLength={ROLE_VOICE_LIMIT} onChange={(e) => setRoleVoice(e.target.value)} data-testid="account-role-voice" />
-        </Field>
-      </div>
+        <div className="form-row">
+          <Field label="Role (optional)" hint="For example astrologer or developer.">
+            <input className="input" value={roleName} maxLength={ROLE_NAME_LIMIT} onChange={(e) => setRoleName(e.target.value)} data-testid="account-role-name" />
+          </Field>
+          <Field label="Voice (optional)" hint={`How this account writes and what it may talk about. Up to ${ROLE_VOICE_LIMIT} characters.`}>
+            <textarea className="input short" value={roleVoice} maxLength={ROLE_VOICE_LIMIT} onChange={(e) => setRoleVoice(e.target.value)} data-testid="account-role-voice" />
+          </Field>
+        </div>
       )}
       {roleIncomplete && <p className="muted small">Give the role a name, or clear the voice.</p>}
       <div className="row">
-        <Button variant="primary" type="submit" disabled={!label.trim() || !platform || roleIncomplete || state.busy} data-testid="account-create">
+        <Button variant={submitVariant} type="submit" disabled={!label.trim() || !platform || roleIncomplete || state.busy} data-testid="account-create">
           {state.busy ? 'Adding…' : 'Add account'}
         </Button>
         {onCancel && <Button onClick={onCancel}>Cancel</Button>}
+        {createBlocker && <Hint data-testid="account-create-reason">{createBlocker}</Hint>}
       </div>
       <p className="muted small" data-testid="account-create-note">
-        After adding it you are told what to do next: set the address and the password, then create the account on the platform or sign in.
+        {afterCreateNote(product)}
       </p>
       <ErrorNote error={state.error ?? proposing.error} />
     </form>

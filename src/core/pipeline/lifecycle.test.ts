@@ -26,7 +26,10 @@ describe('Startup sequence after a manual launch (DEC-003, REQ-005)', () => {
     expect(automation.recovery).toMatchObject({ uncleanShutdown: true, interruptedRuns: 1 })
     const stale = h.core.runs.list({ limit: 20 }).find((r) => r.id === 'stale')
     expect(stale).toMatchObject({ status: 'failed', summary: 'Interrupted by application stop' })
-    expect(h.core.log.list(50, 'warn').some((l) => l.message.includes('did not shut down cleanly'))).toBe(true)
+    // BUG-060: the message carries no time. It was the previous launch's ISO timestamp in UTC, next to a Time column in local time.
+    const warning = h.core.log.list(50, 'warn').find((l) => l.message.includes('did not shut down cleanly'))
+    expect(warning?.message).toBe('The previous session did not shut down cleanly; recovering interrupted work')
+    expect(warning?.message).not.toMatch(/\d{4}-\d{2}-\d{2}T/)
     // While running, the marker says "not shut down yet", so a crash is detectable next time.
     expect(marker(h)).toMatchObject({ clean: false })
   })
@@ -244,17 +247,24 @@ describe('Menu-bar status (REQ-005: status and pause stay reachable with every w
   const base: AutomationState = { paused: false, running: true, activeRuns: 0, lastTickAt: null, nextDueAt: null, background: true }
 
   it('shows running, active runs, paused and attention items', () => {
-    expect(describeTray(base, 0)).toMatchObject({ statusLine: 'Automation running', pauseLabel: 'Pause automation', attentionLine: null, title: 'PPD' })
+    expect(describeTray(base, 0)).toMatchObject({ statusLine: 'Automation running', pauseLabel: 'Pause automation', attentionLine: null, title: 'Product Promotion Desk' })
     expect(describeTray({ ...base, activeRuns: 2 }, 0).statusLine).toBe('Automation running (2 active)')
-    expect(describeTray({ ...base, paused: true }, 0)).toMatchObject({ statusLine: 'Automation paused', pauseLabel: 'Resume automation', title: 'PPD (paused)' })
-    expect(describeTray(base, 1)).toMatchObject({ attentionLine: '1 item needs attention', title: 'PPD · 1' })
+    expect(describeTray({ ...base, paused: true }, 0)).toMatchObject({ statusLine: 'Automation paused', pauseLabel: 'Resume automation', title: 'Product Promotion Desk (paused)' })
+    expect(describeTray(base, 1)).toMatchObject({ attentionLine: '1 item needs attention', title: 'Product Promotion Desk · 1' })
     expect(describeTray(base, 3).attentionLine).toBe('3 items need attention')
   })
 
   it('always offers opening the app and an explicit Quit', () => {
     const model = describeTray({ ...base, running: false }, 0)
-    expect(model.openLabel).toBe('Open Promotion Desk')
-    expect(model.quitLabel).toBe('Quit Promotion Desk')
+    expect(model.openLabel).toBe('Open Product Promotion Desk')
+    expect(model.quitLabel).toBe('Quit Product Promotion Desk')
     expect(model.statusLine).toBe('Automation starting')
+  })
+
+  it('names the application by its one full name in the title, the items and the tooltip, never an abbreviation (BUG-051)', () => {
+    const model = describeTray({ ...base, paused: true }, 2)
+    expect(model.title).toBe('Product Promotion Desk (paused) · 2')
+    expect(model.tooltip).toBe('Product Promotion Desk - Automation paused - 2 items need attention')
+    for (const text of [model.title, model.openLabel, model.quitLabel, model.tooltip]) expect(text).not.toMatch(/PPD/)
   })
 })

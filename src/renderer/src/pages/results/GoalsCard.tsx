@@ -10,9 +10,9 @@ export function GoalsCard({ goals }: { goals: ResultsView['goals'] }) {
   return (
     <Card title="Promotion goals" actions={<a href={productHref(only?.productId, 'goal')} data-testid="goals-edit-link">Edit on the Goal tab</a>}>
       {goals.length === 0 && <EmptyState title="Product not found">This product has no goals to show.</EmptyState>}
-      <div className="stack">
+      <div className="rows">
         {goals.map(({ productId, productName, goals: productGoals }) => (
-          <div key={productId} className="list-row stacked" data-testid={`goal-${productId}`}>
+          <div key={productId} className="results-goal" data-testid={`goal-${productId}`}>
             {showName && <strong>{productName}</strong>}
             {productGoals.length === 0 ? (
               <div className="muted">No promotion goals set. <a href={productHref(productId, 'goal')}>Add one on the Goal tab.</a></div>
