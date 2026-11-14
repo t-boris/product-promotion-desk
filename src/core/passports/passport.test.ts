@@ -568,7 +568,14 @@ describe('products with history and persistence', () => {
     h.core.db
       .prepare("INSERT INTO channels (id, product_id, account_id, platform, connector_id, target, url, settings_json, created_at) VALUES (?, ?, ?, 'reddit', 'reddit', 'r/x', 'u', '{}', ?)")
       .run(channelId, productId, accountId, now)
-    await expect(h.call('products.delete', { id: productId })).rejects.toMatchObject({ code: 'conflict' })
+    await expect(h.call('products.delete', { id: productId })).rejects.toMatchObject({ code: 'conflict', message: expect.stringContaining('still has 1 connected channel. Remove it first.') })
+    // A second channel is counted and the sentence is plural, never "channel(s)" (BUG-046).
+    h.core.db
+      .prepare("INSERT INTO channels (id, product_id, account_id, platform, connector_id, target, url, settings_json, created_at) VALUES (?, ?, ?, 'reddit', 'reddit', 'r/y', 'u2', '{}', ?)")
+      .run(newId(), productId, accountId, now)
+    const refusal = await h.call('products.delete', { id: productId }).catch((e: Error) => e.message)
+    expect(refusal).toContain('still has 2 connected channels. Remove them first.')
+    expect(refusal).not.toContain('(s)')
     expect(await h.call('products.list', undefined)).toHaveLength(1)
   })
 

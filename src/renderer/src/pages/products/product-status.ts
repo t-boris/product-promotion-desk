@@ -35,6 +35,16 @@ export function nextProductStep(product: Pick<Product, 'activePassportVersionId'
 }
 
 /**
+ * Why a product cannot be deleted yet: a connected channel has to be removed first, on the Channels tab. Asked before the confirm, so the
+ * owner is never asked "This cannot be undone" for a delete that the core then refuses (BUG-046). Null when nothing stands in the way.
+ */
+export function deleteBlocker(channelCount: number): string | null {
+  if (channelCount <= 0) return null
+  const one = channelCount === 1
+  return `This product still has ${channelCount} connected ${one ? 'channel' : 'channels'}. Remove ${one ? 'it' : 'them'} on the Channels tab first.`
+}
+
+/**
  * The website of a product as a row of the list shows it: the host (and a port), without the scheme, "www." or a path, so it fits
  * the narrow list; the full address goes in the row's tooltip (BUG-062). Text that is not an address is kept as it is.
  */

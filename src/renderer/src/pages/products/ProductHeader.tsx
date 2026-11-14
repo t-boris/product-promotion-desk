@@ -5,7 +5,7 @@ import { call, useAction } from '../../hooks'
 import { Badge, Button, Card, ErrorNote, Field, ObjectHeader, useOpenForm } from '../../ui'
 import { ClampedText } from './ClampedText'
 import { ANALYSIS_LABELS, ANALYSIS_TONES } from './labels'
-import { NOT_ANALYZED_HINT, passportStatus } from './product-status'
+import { deleteBlocker, NOT_ANALYZED_HINT, passportStatus } from './product-status'
 
 function EditDetails({ product, onDone }: { product: Product; onDone: () => void }) {
   const saveVariant = useOpenForm()
@@ -47,11 +47,20 @@ function EditDetails({ product, onDone }: { product: Product; onDone: () => void
   )
 }
 
-export function ProductHeader({ view, onDeleted, onOpenTab }: { view: PassportView; onDeleted: () => void; onOpenTab: (tab: ProductTab) => void }) {
+export function ProductHeader({ view, channels, onDeleted, onOpenTab }: { view: PassportView; channels: number; onDeleted: () => void; onOpenTab: (tab: ProductTab) => void }) {
   const { product } = view
   const passport = passportStatus(product, view.version, view.claims)
   const [editing, setEditing] = useState(false)
+  // A connected channel stands in the way of a delete (BUG-046). Pressing Delete says so before any question; the note is worked out from the
+  // channel count on every render, so it goes with the last channel and is never left on screen after its cause is gone.
+  const [asked, setAsked] = useState(false)
+  if (asked && channels === 0) setAsked(false)
+  const blocker = asked ? deleteBlocker(channels) : null
   const [remove, removing] = useAction(async () => {
+    if (deleteBlocker(channels)) {
+      setAsked(true)
+      return false
+    }
     const message = `Delete "${product.name}" with its sources, passport and version history? This cannot be undone.`
     if (!window.confirm(message)) return false
     await call('products.delete', { id: product.id })
@@ -122,6 +131,14 @@ export function ProductHeader({ view, onDeleted, onOpenTab }: { view: PassportVi
             )}
           </dd>
         </dl>
+      )}
+      {blocker && (
+        <div className="note" role="status" data-testid="delete-product-blocked">
+          {blocker}{' '}
+          <a href={productHref(product.id, 'channels')} data-testid="delete-product-open-channels">
+            Open the Channels tab
+          </a>
+        </div>
       )}
       <ErrorNote error={removing.error} />
     </div>

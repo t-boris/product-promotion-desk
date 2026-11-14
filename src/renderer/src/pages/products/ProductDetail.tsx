@@ -49,7 +49,7 @@ export function ProductDetail({
 
   return (
     <div className="pane" data-testid="product-detail">
-      <ProductHeader view={view} onDeleted={onDeleted} onOpenTab={onTabChange} />
+      <ProductHeader view={view} channels={counts.channels} onDeleted={onDeleted} onOpenTab={onTabChange} />
       <LaunchPath
         stages={launchStages(productId, {
           hasSources: view.sources.length > 0,

@@ -15,7 +15,7 @@ import { describeSources, planStages, progressOf } from '../renderer/src/pages/p
 import { launchCounts, launchProgress, launchStages } from '../renderer/src/pages/products/launch-path'
 import { approvableClaims } from '../renderer/src/pages/products/model'
 import { productLabels } from '../renderer/src/pages/products/product-labels'
-import { nextProductStep, passportStatus, websiteHost } from '../renderer/src/pages/products/product-status'
+import { deleteBlocker, nextProductStep, passportStatus, websiteHost } from '../renderer/src/pages/products/product-status'
 import { resolveSelected } from '../renderer/src/pages/products/product-selection'
 import { isMirroredSource } from '../renderer/src/pages/products/source-view'
 import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block'
@@ -820,5 +820,21 @@ describe('the on-demand form that owns the filled button (BUG-040)', () => {
   it('a form that was closed and opens again is the newest', () => {
     expect(mainForm(openForm(closeForm(open('a', 'b'), 'a'), 'a'))).toBe('a')
     expect(open('a', 'b').length).toBe(2)
+  })
+})
+
+describe('why a product cannot be deleted yet (BUG-046)', () => {
+  it('says nothing while the product has no channel, so the confirm may be asked', () => {
+    expect(deleteBlocker(0)).toBeNull()
+  })
+
+  it('names the one channel in the singular and says where to remove it', () => {
+    expect(deleteBlocker(1)).toBe('This product still has 1 connected channel. Remove it on the Channels tab first.')
+  })
+
+  it('writes the plural properly, never "channel(s)"', () => {
+    expect(deleteBlocker(2)).toBe('This product still has 2 connected channels. Remove them on the Channels tab first.')
+    expect(deleteBlocker(12)).toBe('This product still has 12 connected channels. Remove them on the Channels tab first.')
+    expect(deleteBlocker(2)).not.toMatch(/\(s\)/)
   })
 })

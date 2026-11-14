@@ -124,7 +124,8 @@ export function registerHandlers(core: Core, mod: PassportModule): void {
         throw new ApiError('conflict', `"${product.name}" has publication history, which must be kept. Products with publications cannot be deleted.`)
       }
       if (dependents.channels > 0) {
-        throw new ApiError('conflict', `"${product.name}" still has ${dependents.channels} connected channel(s). Remove them first.`)
+        const one = dependents.channels === 1
+        throw new ApiError('conflict', `"${product.name}" still has ${dependents.channels} connected ${one ? 'channel. Remove it' : 'channels. Remove them'} first.`)
       }
       await analysis.stop(id)
       store.remove(id)
