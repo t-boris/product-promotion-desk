@@ -660,7 +660,9 @@ channel's style, topics and search queries. The first ready engine is selected o
 decide what goes out (interval, limits, automatic replies) stay the owner's choice. Rewriting a draft of a reply or a post comes with the disclosure check, in a later release.
 
 Two layout facts that come with the AI controls. The AI capsule in the toolbar is bounded (its label is at most 260 px and ends in an ellipsis, the full text is its
-tooltip), because every field can now start an AI run and a long title must not push the engine and the accounts out of the one-line toolbar (V-05). In the channel
+tooltip), and in a toolbar under 840 px it keeps only the ring (working) or a coloured dot (done, failed, stopped), as the automation state does: measured at 980×640
+with the menu shown, even "AI finished" (109 px) cut the engine and the accounts, and the bare words "AI" (57 px) still cut the accounts by 2 px. Every field can now
+start an AI run, so the capsule appears often and must not push the engine and the accounts out of the one-line toolbar (V-05). In the channel
 settings, topics and search queries sit on a row of their own, two columns, so the AI's note and Undo have room under each field.
 
 Rules that every AI help keeps (`core/assist/kit.ts`): untrusted text (a website, the owner's own words, the AI's answer) sits in a fenced data block that cannot close
@@ -671,4 +673,4 @@ or a promise of results); the log says that a text was written, never what it sa
 |---|---|---|---|
 | V-25 | An AI control on a field or form is a secondary or quiet button, 28 px tall, on the label row; no screen shows two filled buttons because of it | tour on Products (Goal, Edit details, New product) and Channels (settings) at both sizes and themes | 0 filled AI buttons; V-06, V-09 hold |
 | V-26 | The AI's text lands in the field, never in storage; Undo restores what was there; typing over the AI's text hides Undo | packaged probe: write, undo, type | as described |
-| V-27 | With the AI capsule showing, no toolbar value (engine, accounts) is cut and the capsule is at most 330 px wide | packaged probe at 1320×880 and 980×640, both themes | true |
+| V-27 | With the AI capsule showing (working or finished), no toolbar value (engine, accounts) is cut and the capsule is at most 330 px wide; under 840 px it is the ring or a dot | packaged probe at 1320×880 and 980×640, both themes | true |

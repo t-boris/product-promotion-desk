@@ -98,6 +98,8 @@ export function AiPill() {
       {/* A toolbar capsule, never filled (a toolbar has no filled button): the accent label and a progress ring say it is working. */}
       <Button variant={lead ? 'secondary' : 'ghost'} className="btn-toolbar ai-pill-btn" onClick={() => setOpen(!open)} aria-expanded={open} title={label} data-testid="ai-pill-button">
         {lead && <span className="ai-ring" aria-hidden="true" />}
+        {/* In a narrow toolbar the words give way to the ring (working) or a coloured dot (finished, failed, stopped), as the automation state does. */}
+        {!lead && <span className={`dot ai-pill-dot ${tasks[0].status === 'done' ? 'good' : tasks[0].status === 'failed' ? 'bad' : 'warn'}`} aria-hidden="true" />}
         <span className="ai-pill-label">{label}</span>
       </Button>
       {open && (
