@@ -40,7 +40,7 @@ export function ClaimRow({ claim, all, productId }: { claim: Claim; all: Claim[]
           )}
         </div>
       </div>
-      <p className={`claim-text${claim.status === 'rejected' ? ' struck' : ''}`}>{claim.text}</p>
+      <p className={`claim-text${claim.status === 'rejected' || claim.status === 'prohibited' ? ' struck' : ''}`}>{claim.text}</p>
 
       {isContradiction && others.length > 0 && (
         <div className="conflict-box" data-testid={`conflict-${claim.id}`}>

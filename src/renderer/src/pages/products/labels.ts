@@ -34,7 +34,8 @@ export const KIND_TONES: Record<ClaimKind, Tone> = {
   fact: 'info',
   assumption: 'neutral',
   unknown: 'warn',
-  contradiction: 'bad'
+  // Sources disagree and the owner decides: amber, like everything that waits for a decision. Red is for failures.
+  contradiction: 'warn'
 }
 
 export const KIND_HELP: Record<ClaimKind, string> = {
@@ -55,7 +56,8 @@ export const STATUS_TONES: Record<ClaimStatus, Tone> = {
   proposed: 'neutral',
   approved: 'good',
   rejected: 'neutral',
-  prohibited: 'bad'
+  // A deliberate choice of the owner, not a failure: neutral, and the statement is struck through.
+  prohibited: 'neutral'
 }
 
 export const SOURCE_LABELS: Record<SourceKind, string> = {

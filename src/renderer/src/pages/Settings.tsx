@@ -51,8 +51,9 @@ export function SettingsPage() {
                     <strong>{engine.label}</strong>
                     {selected && <Badge tone="info">Selected</Badge>}
                     {recommended && !selected && <Badge tone="info">Recommended</Badge>}
-                    {engine.installed ? <Badge tone={engine.ready ? 'good' : 'warn'}>{engine.ready ? 'Ready' : 'Installed'}</Badge> : <Badge tone="bad">Not installed</Badge>}
+                    {engine.installed ? <Badge tone={engine.ready ? 'good' : 'warn'}>{engine.ready ? 'Ready' : 'Installed'}</Badge> : <Badge>Not installed</Badge>}
                   </div>
+                  {!engine.installed && <div className="hint">Install {engine.label} on this Mac, then press Re-check.</div>}
                   {engine.version && <div className="hint">Version {engine.version}</div>}
                   {engine.path && <div className="mono engine-path">{engine.path}</div>}
                   {detail.summary && <div className="hint">{detail.summary}</div>}

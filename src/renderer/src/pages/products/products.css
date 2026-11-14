@@ -122,11 +122,13 @@ textarea.input.short {
   border-left: 3px solid var(--good);
 }
 .claim-prohibited {
-  border-left: 3px solid var(--bad);
+  /* Prohibited by the owner: a neutral mark, the text is struck through. Red is kept for failures. */
+  border-left: 3px solid var(--line-strong);
 }
 .claim-contradiction {
-  border-color: var(--bad);
-  background: var(--bad-bg);
+  /* Sources disagree and the owner decides: amber, like everything that waits for a decision. */
+  border-color: var(--attention);
+  background: var(--attention-bg);
 }
 .claim-rejected {
   opacity: 0.7;

@@ -115,8 +115,9 @@ export const CAPABILITY_STATUS_TONE: Record<CapabilityStatus, Tone> = {
   verified: 'good',
   needs_check: 'info',
   needs_user: 'warn',
-  unavailable: 'bad',
-  restricted: 'bad'
+  // The platform does not offer it: a plain fact. Restricted by the community's rules: amber, the owner may decide.
+  unavailable: 'neutral',
+  restricted: 'warn'
 }
 
 export const CAPABILITY_STATUS_HELP: Record<CapabilityStatus, string> = {
