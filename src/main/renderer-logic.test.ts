@@ -14,6 +14,7 @@ import { approvableClaims } from '../renderer/src/pages/products/model'
 import { nextProductStep, passportStatus } from '../renderer/src/pages/products/product-status'
 import { isMirroredSource } from '../renderer/src/pages/products/source-view'
 import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block'
+import { canActivate, canPause, neverAssessed, setupStage } from '../renderer/src/pages/channels/setup-stage'
 import { nextStep } from '../renderer/src/pages/channels/next-step'
 import { platformMismatch } from '../renderer/src/pages/channels/platform-hint'
 import { MOVED_PAGES, accountsNewHref, parseAccountsHash, parseHash, productHref, publicationsHref, publicationsProductOf } from '../renderer/src/route'
@@ -399,5 +400,49 @@ describe('QA clarity batch: what the screens say', () => {
     // Nothing is blocked on a guess while the settings are still loading.
     expect(suggestionBlock({ ...base, engineId: undefined, ready: false })).toBeNull()
     expect(suggestionBlock({ ...base, approved: null })).toBeNull()
+  })
+})
+
+describe('Channels tab: one step at a time (DEC-023)', () => {
+  const channel = (over: Partial<Channel>): Channel =>
+    ({ status: 'setup', baselineDoneAt: null, capabilities: [{ key: 'read_posts', status: 'unknown', detail: '', checkedAt: null }], ...over }) as Channel
+  const assessed = [{ key: 'read_posts', status: 'verified', detail: '', checkedAt: '2026-11-14T00:00:00.000Z' }] as Channel['capabilities']
+
+  it('the Channels tab asks for one step at a time, in order', () => {
+    expect(setupStage({ hasAccount: false, channelCount: 0, selected: undefined })).toBe('account')
+    // An account is asked for first, even when channels exist.
+    expect(setupStage({ hasAccount: false, channelCount: 2, selected: channel({}) })).toBe('account')
+    expect(setupStage({ hasAccount: true, channelCount: 0, selected: undefined })).toBe('connect')
+    // Several channels and none picked: the owner chooses, nothing is filled.
+    expect(setupStage({ hasAccount: true, channelCount: 2, selected: undefined })).toBe('choose')
+    expect(setupStage({ hasAccount: true, channelCount: 1, selected: channel({}) })).toBe('assess')
+    expect(setupStage({ hasAccount: true, channelCount: 1, selected: channel({ capabilities: assessed }) })).toBe('activate')
+    expect(setupStage({ hasAccount: true, channelCount: 1, selected: channel({ capabilities: assessed, status: 'active' }) })).toBe('running')
+    // Nothing is left to start: a paused channel, and one that needed the owner after its baseline was read.
+    expect(setupStage({ hasAccount: true, channelCount: 1, selected: channel({ capabilities: assessed, status: 'paused' }) })).toBe('running')
+    expect(
+      setupStage({ hasAccount: true, channelCount: 1, selected: channel({ capabilities: assessed, status: 'needs_user', baselineDoneAt: '2026-11-14T00:00:00.000Z' }) })
+    ).toBe('running')
+  })
+
+  it('a channel counts as assessed once any of its abilities was checked', () => {
+    expect(neverAssessed(channel({}))).toBe(true)
+    expect(neverAssessed(channel({ capabilities: [] }))).toBe(true)
+    expect(neverAssessed(channel({ capabilities: assessed }))).toBe(false)
+  })
+
+  it('a channel that needed the owner before its first baseline can be started, one that had a baseline can be paused', () => {
+    expect(canActivate(channel({ status: 'setup' }))).toBe(true)
+    expect(canActivate(channel({ status: 'needs_user' }))).toBe(true)
+    expect(canActivate(channel({ status: 'error' }))).toBe(true)
+    expect(canActivate(channel({ status: 'needs_user', baselineDoneAt: '2026-11-14T00:00:00.000Z' }))).toBe(false)
+    expect(canActivate(channel({ status: 'active' }))).toBe(false)
+    expect(canActivate(channel({ status: 'paused' }))).toBe(false)
+    expect(canPause(channel({ status: 'active' }))).toBe(true)
+    expect(canPause(channel({ status: 'error' }))).toBe(true)
+    expect(canPause(channel({ status: 'needs_user', baselineDoneAt: '2026-11-14T00:00:00.000Z' }))).toBe(true)
+    expect(canPause(channel({ status: 'needs_user' }))).toBe(false)
+    expect(canPause(channel({ status: 'setup' }))).toBe(false)
+    expect(canPause(channel({ status: 'paused' }))).toBe(false)
   })
 })

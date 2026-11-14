@@ -936,6 +936,8 @@ select.input {
   position: fixed;
   inset: 0;
   z-index: 50;
+  /* Electron draws a drag region over whatever is stacked on it: without this the scrim over the toolbar would drag the window. */
+  -webkit-app-region: no-drag;
   display: flex;
   align-items: center;
   justify-content: center;
