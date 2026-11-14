@@ -3,6 +3,7 @@ import type { Account, PlatformInfo, Product, Profile } from '../../../../shared
 import { profileLine } from '../../../../shared/profile'
 import { call, useAction } from '../../hooks'
 import { Badge, Button, Card, EmptyState, ErrorNote, Field, Hint, useOpenForm } from '../../ui'
+import { productLabels } from '../products/product-labels'
 import { ProfileDetail } from './ProfileDetail'
 import { platformLabel } from './model'
 
@@ -124,6 +125,7 @@ function NewProfile({ platforms, products, freeAccounts, onCreated, onCancel }: 
   const [taken, setTaken] = useState<string[]>([])
   const [create, state] = useAction((args: { label: string; purpose?: string; platforms: string[]; productId: string | null; accountIds: string[] }) => call('profiles.create', args))
   const takenPlatforms = new Set(freeAccounts.filter((a) => taken.includes(a.id)).map((a) => a.platform))
+  const labels = productLabels(products)
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault()
@@ -143,7 +145,7 @@ function NewProfile({ platforms, products, freeAccounts, onCreated, onCancel }: 
             <option value="">No product</option>
             {products.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name}
+                {labels.get(p.id) ?? p.name}
               </option>
             ))}
           </select>

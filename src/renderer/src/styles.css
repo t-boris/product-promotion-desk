@@ -1560,6 +1560,11 @@ input[type='radio'] {
 .panel-row-line.wrap {
   white-space: normal;
 }
+/* A name that other products share ends in the time it was created (BUG-054): that is the part that tells the rows apart, so it wraps instead of being cut. */
+.panel-row-title.wrap {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 
 /* The header of an object (a product, an account, a channel): its name, a meta line, its actions. No box around it. */
 .obj-head {

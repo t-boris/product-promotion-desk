@@ -13,6 +13,7 @@ import { engineChoiceVariant, recommendedEngineId, splitEngineDetail } from '../
 import { describeSources, planStages, progressOf } from '../renderer/src/pages/products/analysis-plan'
 import { launchCounts, launchProgress, launchStages } from '../renderer/src/pages/products/launch-path'
 import { approvableClaims } from '../renderer/src/pages/products/model'
+import { productLabels } from '../renderer/src/pages/products/product-labels'
 import { nextProductStep, passportStatus, websiteHost } from '../renderer/src/pages/products/product-status'
 import { resolveSelected } from '../renderer/src/pages/products/product-selection'
 import { isMirroredSource } from '../renderer/src/pages/products/source-view'
@@ -714,5 +715,63 @@ describe('the website a product row shows (BUG-062)', () => {
     expect(websiteHost('northwind.example.com')).toBe('northwind.example.com')
     expect(websiteHost('not a url')).toBe('not a url')
     expect(websiteHost('')).toBe('')
+  })
+})
+
+describe('the labels that tell products of one name apart (BUG-054)', () => {
+  // Local time on purpose: the label shows the owner's clock, so a fixture built in local time reads the same in any time zone.
+  const at = (hour: number, minute: number, second = 0): string => new Date(2026, 10, 14, hour, minute, second).toISOString()
+  const product = (id: string, name: string, createdAt: string) => ({ id, name, createdAt })
+
+  it('leaves a name that only one product has exactly as it is', () => {
+    const labels = productLabels([product('p1', 'Northwind Notes', at(13, 46)), product('p2', 'Lumen Reader', at(14, 2))])
+    expect(labels.get('p1')).toBe('Northwind Notes')
+    expect(labels.get('p2')).toBe('Lumen Reader')
+  })
+
+  it('gives every product of a shared name its creation time, and leaves the others alone', () => {
+    const labels = productLabels([product('p1', 'Natal charts', at(13, 46)), product('p2', 'Natal charts', at(15, 5)), product('p3', 'Lumen Reader', at(14, 2))])
+    expect(labels.get('p1')).toBe('Natal charts · 14 Nov 13:46')
+    expect(labels.get('p2')).toBe('Natal charts · 14 Nov 15:05')
+    expect(labels.get('p3')).toBe('Lumen Reader')
+  })
+
+  it('compares names without case and without the spaces around them, and keeps each product\'s own spelling', () => {
+    const labels = productLabels([product('p1', 'Natal Charts', at(9, 0)), product('p2', '  natal charts ', at(10, 0))])
+    expect(labels.get('p1')).toBe('Natal Charts · 14 Nov 09:00')
+    expect(labels.get('p2')).toBe('natal charts · 14 Nov 10:00')
+  })
+
+  it('gives the same labels whatever the order of the list', () => {
+    const list = [product('p1', 'Twin', at(8, 0)), product('p2', 'Solo', at(8, 1)), product('p3', 'Twin', at(8, 2)), product('p4', 'Twin', at(8, 2, 30))]
+    const forward = productLabels(list)
+    const backward = productLabels([...list].reverse())
+    for (const p of list) expect(backward.get(p.id)).toBe(forward.get(p.id))
+  })
+
+  it('adds a short id when two products of one name were created in the same minute', () => {
+    const labels = productLabels([product('aaaa1111', 'Twin', at(8, 2)), product('bbbb2222', 'Twin', at(8, 2, 40)), product('cccc3333', 'Twin', at(9, 0))])
+    expect(labels.get('aaaa1111')).toBe('Twin · 14 Nov 08:02 · #aaaa')
+    expect(labels.get('bbbb2222')).toBe('Twin · 14 Nov 08:02 · #bbbb')
+    expect(labels.get('cccc3333')).toBe('Twin · 14 Nov 09:00')
+  })
+
+  it('tells products apart by id when createdAt is the same too, and lengthens the id until it differs', () => {
+    const same = at(8, 2)
+    const labels = productLabels([product('abcd0001', 'Twin', same), product('abcd0002', 'Twin', same)])
+    expect(labels.get('abcd0001')).toBe('Twin · 14 Nov 08:02 · #abcd0001')
+    expect(labels.get('abcd0002')).toBe('Twin · 14 Nov 08:02 · #abcd0002')
+  })
+
+  it('never gives two products of the list one label', () => {
+    const list = [
+      product('a1', 'Same', at(7, 0)),
+      product('a2', 'same', at(7, 0)),
+      product('a3', 'SAME ', at(7, 0, 59)),
+      product('b1', 'Other', at(7, 0)),
+      product('b2', 'Other', 'not a date')
+    ]
+    const labels = [...productLabels(list).values()]
+    expect(new Set(labels).size).toBe(list.length)
   })
 })

@@ -3,13 +3,16 @@ import { Badge, EmptyState } from '../../ui'
 import { ANALYSIS_LABELS, ANALYSIS_TONES } from './labels'
 import { launchStages, type LaunchCounts } from './launch-path'
 import { LaunchDots } from './LaunchPath'
+import { productLabels } from './product-labels'
 import { nextProductStep, websiteHost } from './product-status'
 
 export function ProductList({ products, selectedId, countsOf, onSelect }: { products: Product[]; selectedId: string | null; countsOf: (productId: Id) => LaunchCounts; onSelect: (id: string) => void }) {
   if (products.length === 0) return <EmptyState art="product" title="No products yet">Add the first one with the button above.</EmptyState>
+  const labels = productLabels(products)
   return (
     <div className="panel" data-testid="product-list">
       {products.map((product) => {
+        const label = labels.get(product.id) ?? product.name
         const counts = countsOf(product.id)
         const next = nextProductStep(product, counts)
         // The list has no sources to count; a product is created with one (see LaunchFacts.hasSources).
@@ -31,7 +34,7 @@ export function ProductList({ products, selectedId, countsOf, onSelect }: { prod
             data-testid={`product-${product.id}`}
           >
             <div className="panel-row-top">
-              <span className="panel-row-title" title={product.name}>{product.name}</span>
+              <span className={`panel-row-title${label === product.name ? '' : ' wrap'}`} title={label}>{label}</span>
               <LaunchDots stages={stages} testId={`launch-dots-${product.id}`} />
             </div>
             <div className="panel-row-line" title={product.websiteUrl ?? undefined}>

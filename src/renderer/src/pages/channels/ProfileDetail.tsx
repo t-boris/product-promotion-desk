@@ -4,6 +4,7 @@ import { fieldsOf, profileLine, sameFields } from '../../../../shared/profile'
 import { AiProgressPanel } from '../../AiProgress'
 import { call, useAction } from '../../hooks'
 import { Badge, Button, Card, ErrorNote, Field, ObjectHeader } from '../../ui'
+import { productLabels } from '../products/product-labels'
 import { ProfileAccounts } from './ProfileAccounts'
 import { ROLE_NAME_LIMIT, ROLE_VOICE_LIMIT } from './RoleEditor'
 import { platformLabel } from './model'
@@ -59,6 +60,7 @@ export function ProfileDetail({
   const [picking, setPicking] = useState(false)
   const [path, setPath] = useState('')
   const [picture, setPicture] = useState<string | null>(null)
+  const labels = productLabels(products)
 
   // What the screen holds follows what is stored whenever that changes (a proposal, a save, a new picture); only a new stored version resets what the owner is typing.
   const version = `${profile.id}:${profile.updatedAt}`
@@ -195,7 +197,7 @@ export function ProfileDetail({
                   <option value="">No product</option>
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name}
+                      {labels.get(p.id) ?? p.name}
                     </option>
                   ))}
                 </select>
