@@ -1,4 +1,5 @@
 import type { Core } from '../core'
+import { DraftCheck } from './draft-check'
 import { DraftHelp } from './draft-help'
 import { DraftingFlow } from './drafting'
 import { registerFlowApi } from './flow-api'
@@ -36,4 +37,6 @@ export function registerFlow(core: Core): void {
   registerFlowApi({ core, store, review, monitor, drafting, sending, publications })
   const draftHelp = new DraftHelp(core, store)
   core.router.register({ 'drafts.refine': (args) => draftHelp.refine(args) })
+  const draftCheck = new DraftCheck(core, store)
+  core.router.register({ 'drafts.check': (args) => draftCheck.check(args) })
 }

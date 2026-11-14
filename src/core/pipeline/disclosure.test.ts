@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { disclosureProblem, mentionsProductIn, statesConnection } from './disclosure'
+import { disclosureProblem, disclosureVerdict, mentionsProductIn, statesConnection } from './disclosure'
 
 const NATAL = { name: 'Natal Mystic', websiteUrl: 'https://natalmystic.com' }
 const text = (body: string, extra: { title?: string; link?: string } = {}) => ({ text: body, ...extra })
@@ -589,5 +589,20 @@ describe('honest disclosures that the review feared would be refused', () => {
   it('a denial of advertising alone is still refused, and is said as a denial', () => {
     expect(disclosureProblem(text('This is not an ad.'), NATAL)).toContain('not connected')
     expect(disclosureProblem(text('Honest review of Natal Mystic. It is not an ad.'), NATAL)).toContain('not connected')
+  })
+})
+
+describe('the verdict says which problem it is', () => {
+  it('tells a denial from a connection that is not said, and is null for the rest', () => {
+    expect(disclosureVerdict(text('Not affiliated with Natal Mystic, just a user.'), NATAL)?.kind).toBe('denies')
+    expect(disclosureVerdict(text('Natal Mystic builds a chart from a birth date.'), NATAL)?.kind).toBe('unsaid')
+    expect(disclosureVerdict(text('Disclosure: I work on Natal Mystic.'), NATAL)).toBeNull()
+    expect(disclosureVerdict(text('A natal chart needs the birth time.'), NATAL)).toBeNull()
+  })
+
+  it('has the words disclosureProblem has, so the screen and the approval say the same thing', () => {
+    for (const body of ['Not affiliated with Natal Mystic.', 'Natal Mystic is great.', 'Disclosure: I work on Natal Mystic.', 'Plain text.']) {
+      expect(disclosureProblem(text(body), NATAL)).toBe(disclosureVerdict(text(body), NATAL)?.message ?? null)
+    }
   })
 })

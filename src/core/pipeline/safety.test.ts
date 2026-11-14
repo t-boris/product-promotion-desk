@@ -109,3 +109,46 @@ describe('hosts the product allows', () => {
     expect(check('See natalmystic.com', { allowedHosts: allowedHostsFor(null, []) })).toHaveLength(1)
   })
 })
+
+describe('findings: the same problems, shaped for a screen', () => {
+  const run = (text: string, extra: Partial<Parameters<typeof checkDraftSafety>[0]> = {}) =>
+    checkDraftSafety({ text, title: null, link: null, usedClaimIds: [], approved: [], prohibited: [], allowedHosts: OWN, ...extra })
+
+  it('are one for each violation, in the same order, for an AI draft', () => {
+    const report = run('It is free. A price: $9. Use the coupon. See bit.ly/x. A guaranteed result.', {
+      prohibited: ['A guaranteed result'],
+      usedClaimIds: ['nope'],
+      approved: [claim('c9', 'Something else')]
+    })
+    expect(report.findings.map((f) => f.rule)).toEqual(['unknown_claim', 'prohibited', 'price', 'discount', 'free', 'link'])
+    expect(report.findings).toHaveLength(report.violations.length)
+  })
+
+  it('quote the sentence a price, a discount or a free offer sits in, and cut a long one', () => {
+    expect(run('Hello there. It is $9 a month. Bye.').findings[0].quote).toBe('It is $9 a month')
+    expect(run('First line\nUse the coupon today!\nThird').findings[0].quote).toBe('Use the coupon today')
+    expect(run('First line\nUse the coupon today\nSecond line, no full stop').findings[0].quote).toBe('Use the coupon today')
+    const long = run(`${'word '.repeat(40)}is free now`).findings[0].quote ?? ''
+    expect(long.length).toBeLessThanOrEqual(90)
+    expect(long.endsWith('…')).toBe(true)
+  })
+
+  it('say which addresses may be linked, or that there are none', () => {
+    expect(run('See evil.com').findings[0].why).toBe('Only natalmystic.com may be linked.')
+    expect(run('See evil.com', { allowedHosts: [] }).findings[0].why).toBe('The product has no website, and no approved fact names an address.')
+    expect(run('See evil.com', { allowedHosts: ['a.com', 'b.com', 'c.com', 'd.com'] }).findings[0].why).toBe('Only a.com, b.com, c.com may be linked.')
+  })
+
+  it("for the owner's own text skip the rules about citing, and count any approved fact as the backing", () => {
+    const approved = [claim('c1', 'It costs $9 a month.'), { ...claim('c2', 'A Windows build.'), unconfirmedAvailability: true }]
+    // It cites an unconfirmed fact and an unknown id, as an AI draft would: for the owner's text that is nothing to report.
+    const owner = run('It is $9 a month, on Windows.', { mode: 'owner', approved, usedClaimIds: ['c1', 'c2', 'nope'] })
+    expect(owner.violations).toEqual([])
+    expect(owner.findings).toEqual([])
+    expect(owner.usedClaims).toEqual([])
+    // The same text as an AI draft that cites nothing is refused: nothing backs the price.
+    expect(run('It is $9 a month, on Windows.', { approved }).findings.map((f) => f.rule)).toEqual(['price'])
+    // A price no approved fact names is found in the owner's text too.
+    expect(run('It is $12 a month.', { mode: 'owner', approved }).findings.map((f) => f.rule)).toEqual(['price'])
+  })
+})

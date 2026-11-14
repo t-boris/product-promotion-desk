@@ -610,20 +610,38 @@ export function statesConnection(content: DisclosureContent, product: Disclosure
   return false
 }
 
+/** What is wrong with the connection: the text says there is none, or it names the product and says nothing about one. */
+export interface DisclosureVerdict {
+  kind: 'denies' | 'unsaid'
+  /** In words for the owner. */
+  message: string
+}
+
 /**
- * Why this content must not be approved or sent, in words for the owner, or null. Null for every text that does not mention the
- * product and does not deny a connection, and for every text that mentions it and says the author is connected with it.
+ * Why this content must not be approved or sent, in words for the owner, and which of the two problems it is; null for every text that does
+ * not mention the product and does not deny a connection, and for every text that mentions it and says the author is connected with it.
  */
-export function disclosureProblem(content: DisclosureContent, product: DisclosureProduct): string | null {
+export function disclosureVerdict(content: DisclosureContent, product: DisclosureProduct): DisclosureVerdict | null {
   const p = productOf(product)
   const mentions = mentionsProductIn(content, product)
   const denial = denialIn(content, p)
   const states = statesConnection(content, product)
   const denies = denial === 'bare' || (denial === 'weak' && !states)
   if (denies) {
-    return `This text says that you are not connected with "${p.name}" ("not affiliated", "no connection", "just a user" and the like). A login that speaks for the product is connected with it, so the text must not say otherwise. Take the denial out${mentions ? ' and add a short statement of the connection (for example "Disclosure: I\'m the developer of ' + p.name + '")' : ''}, then approve it again.`
+    return {
+      kind: 'denies',
+      message: `This text says that you are not connected with "${p.name}" ("not affiliated", "no connection", "just a user" and the like). A login that speaks for the product is connected with it, so the text must not say otherwise. Take the denial out${mentions ? ' and add a short statement of the connection (for example "Disclosure: I\'m the developer of ' + p.name + '")' : ''}, then approve it again.`
+    }
   }
   if (!mentions) return null
   if (states) return null
-  return `This text mentions "${p.name}" but does not say that you are connected with it. Add a short statement (for example "Disclosure: I'm the developer of ${p.name}" or "I work on it"), or take the mention out, then approve it again.`
+  return {
+    kind: 'unsaid',
+    message: `This text mentions "${p.name}" but does not say that you are connected with it. Add a short statement (for example "Disclosure: I'm the developer of ${p.name}" or "I work on it"), or take the mention out, then approve it again.`
+  }
+}
+
+/** The same verdict as plain text: why this content must not be approved or sent, or null. */
+export function disclosureProblem(content: DisclosureContent, product: DisclosureProduct): string | null {
+  return disclosureVerdict(content, product)?.message ?? null
 }

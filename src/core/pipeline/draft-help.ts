@@ -183,7 +183,7 @@ const knowledgeKey = (k: ReturnType<typeof loadKnowledge>, product: { name: stri
  * look-alike forms folded (NFKC), so "fr\u200Bee", "$\u200B9" or "evil\u200B.com" are what they say. The draft itself is not changed:
  * a text that only passes with its invisible characters in is blocked, not cleaned.
  */
-function forChecks(text: string): string {
+export function forChecks(text: string): string {
   // Format characters (zero-width, soft hyphen, bidi marks, tags), variation selectors, the combining grapheme joiner and the line separators.
   return text.normalize('NFKC').replace(/\p{Cf}|\p{Variation_Selector}|\u034f|[\u2028\u2029]/gu, '')
 }

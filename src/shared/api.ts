@@ -28,6 +28,7 @@ import type {
   ChannelSuggestion,
   GoalIdea,
   AssistField,
+  DraftCheckResult,
   DraftHelpField,
   DraftHelpResult,
   Claim,
@@ -279,6 +280,8 @@ export interface ApiMethods {
    * a malformed call or a draft too long to be read whole (never cut). If the product knowledge changes while the AI writes, the text is refused
    * (suggest_failed). Like the AI drafts, it works with any ready engine.
    */
+  // The rules an AI draft passes, read against the owner's own text before it is approved. Local: no engine, nothing stored.
+  'drafts.check': [{ opportunityId: Id; form?: { title: string; text: string; link: string } }, DraftCheckResult]
   'drafts.refine': [{ field: DraftHelpField; opportunityId?: Id; channelId?: Id; form: { title: string; text: string }; instruction?: string; about?: string }, DraftHelpResult]
   'publications.suggest': [{ channelId: Id }, OpportunityCard]
   'publications.create': [{ channelId: Id; draft: DraftInput }, OpportunityCard]
