@@ -4,7 +4,9 @@
 // The AI of a post mission has no way to put text into a form and none to press Enter: `browser_submit` is the only tool that does both,
 // and the application runs it. It asks for a ticket (`PostAuthority.lease`), types the approved content, reads every field back, looks at
 // the page again and only then presses the control. So the page holds none of the approved content before the application holds a ticket
-// for it, and a click the AI makes on its own has nothing to publish. The authority itself (a gate renewal, the binding of the ticket to
+// for it, and a click the AI makes on its own has nothing to publish: the toolbox refuses every click and every choice of the AI's own
+// while any form on the page holds text, read from the page at the moment (not from a flag: an address, a draft the site restored or a
+// navigation that keeps the document can all leave text in a form). The authority itself (a gate renewal, the binding of the ticket to
 // this content, account and destination, the single use) lives where the gate lives: src/core/pipeline/mission-publisher.ts.
 
 import type { SendTicket } from '../ports'
@@ -116,6 +118,58 @@ export function fieldValueScript(ref: string): string {
   if (el.isContentEditable) return String(el.innerText);
   return null;
 })()`
+}
+
+/** A text-entry element of the page that holds text, as the page reports it. `ref` is its label when the AI could have been shown it. */
+export interface HeldText {
+  ref: string | null
+  text: string
+}
+
+const MAX_HELD = 20
+const MAX_HELD_TEXT = 20_000
+
+/**
+ * Reads every place on the whole page (shadow roots included, hidden elements too) where a person could have put text: text-like
+ * inputs, textareas, editable elements. Answers the ones that hold something other than blanks, with what they hold. Read-only.
+ * The page is the one fact the application trusts about "is there text in a form": a flag kept by the application cannot know what a
+ * same-document navigation, a draft the site restored or an address that prefilled the form left in it.
+ */
+export function formTextScript(): string {
+  return `(() => {
+  /* ppd-form-text */
+  const TYPES = ['', 'text', 'search', 'url', 'email', 'tel'];
+  const blank = (text) => text.replace(/[\\s\\u200b-\\u200d\\u2060\\ufeff]/g, '') === '';
+  const found = [];
+  const walk = (root) => {
+    for (const el of root.querySelectorAll('input,textarea,[contenteditable],[role=textbox]')) {
+      const tag = el.tagName.toLowerCase();
+      let text = '';
+      if (tag === 'textarea') text = String(el.value);
+      else if (tag === 'input') { if (!TYPES.includes((el.getAttribute('type') || '').toLowerCase())) continue; text = String(el.value); }
+      else if (el.isContentEditable) text = String(el.innerText || el.textContent || '');
+      else continue;
+      if (blank(text)) continue;
+      found.push({ ref: el.getAttribute('data-ppd-ref'), text: text.slice(0, ${MAX_HELD_TEXT}) });
+    }
+    for (const el of root.querySelectorAll('*')) if (el.shadowRoot) walk(el.shadowRoot);
+  };
+  walk(document);
+  return found.slice(0, ${MAX_HELD});
+})()`
+}
+
+/** Checks the shape of what the page answered to `formTextScript`; null when it is not an answer (the caller then treats the page as unreadable). */
+export function parseHeldText(raw: unknown): HeldText[] | null {
+  if (!Array.isArray(raw)) return null
+  const held: HeldText[] = []
+  for (const entry of raw.slice(0, MAX_HELD)) {
+    if (typeof entry !== 'object' || entry === null) return null
+    const e = entry as Record<string, unknown>
+    if (typeof e.text !== 'string') return null
+    held.push({ ref: typeof e.ref === 'string' && REF.test(e.ref) ? e.ref : null, text: e.text })
+  }
+  return held
 }
 
 /** Text as a person compares it: no difference in spacing, line breaks, non-breaking spaces or zero-width characters. */

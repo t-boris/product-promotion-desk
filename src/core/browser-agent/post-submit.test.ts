@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { destinationMatches, fieldValueScript, normalizeText, platformWarning, sameContent } from './post-submit'
+import { destinationMatches, fieldValueScript, formTextScript, normalizeText, parseHeldText, platformWarning, sameContent } from './post-submit'
 
 const HOSTS = ['reddit.com']
 const COMMENT = 'https://www.reddit.com/r/astrology/comments/abc123/my_chart/def456/'
@@ -85,5 +85,96 @@ describe('what the site says that makes publishing unwise', () => {
 
   it('is null for no messages', () => {
     expect(platformWarning([])).toBeNull()
+  })
+})
+
+describe('reading what the form holds', () => {
+  /** A page as far as the script looks at it: elements that answer `querySelectorAll`, and shadow roots that have their own. */
+  interface Node {
+    tag: string
+    type?: string
+    value?: string
+    editable?: boolean
+    text?: string
+    ref?: string
+    role?: string
+    shadow?: Node[]
+  }
+  const pageOf = (nodes: Node[]) => {
+    const toElement = (n: Node): unknown => ({
+      tagName: n.tag.toUpperCase(),
+      value: n.value,
+      isContentEditable: n.editable === true,
+      innerText: n.text,
+      textContent: n.text,
+      getAttribute: (name: string) => (name === 'type' ? (n.type ?? null) : name === 'data-ppd-ref' ? (n.ref ?? null) : null),
+      shadowRoot: n.shadow ? rootOf(n.shadow) : null
+    })
+    const matches = (n: Node): boolean => ['input', 'textarea'].includes(n.tag) || n.editable === true || n.role === 'textbox'
+    const rootOf = (list: Node[]): unknown => ({
+      querySelectorAll: (selector: string) => (selector === '*' ? list.map(toElement) : list.filter(matches).map(toElement))
+    })
+    return rootOf(nodes)
+  }
+  const read = (nodes: Node[]) => parseHeldText(new Function('document', `return ${formTextScript()}`)(pageOf(nodes)))
+
+  it('is a read-only script', () => {
+    const script = formTextScript()
+    expect(script).toContain('ppd-form-text')
+    expect(script).not.toMatch(/\.value\s*=[^=]|innerText\s*=[^=]|click\(|submit\(|dispatchEvent/)
+  })
+
+  it('answers the text-entry places that hold text, with their label when the AI could have been shown them, and none that are empty', () => {
+    expect(read([{ tag: 'textarea', value: '', ref: 'e1' }, { tag: 'input', type: 'text', value: '   ' }])).toEqual([])
+    expect(
+      read([
+        { tag: 'textarea', value: 'A comment', ref: 'e1' },
+        { tag: 'input', type: 'text', value: 'A title', ref: 'e2' },
+        { tag: 'input', value: 'no type attribute is a text input' },
+        { tag: 'input', type: 'url', value: 'https://example.org/' },
+        { tag: 'div', editable: true, text: 'typed in an editor', ref: 'e7' },
+        { tag: 'div', role: 'textbox', editable: true, text: 'a textbox' }
+      ])
+    ).toEqual([
+      { ref: 'e1', text: 'A comment' },
+      { ref: 'e2', text: 'A title' },
+      { ref: null, text: 'no type attribute is a text input' },
+      { ref: null, text: 'https://example.org/' },
+      { ref: 'e7', text: 'typed in an editor' },
+      { ref: null, text: 'a textbox' }
+    ])
+  })
+
+  it('does not count what is not text a person typed: blanks, zero-width characters, passwords, check boxes, hidden inputs, buttons, an element that is not editable', () => {
+    expect(
+      read([
+        { tag: 'textarea', value: ' \n\t ' },
+        { tag: 'textarea', value: '\u200b\u200c\u200d\u2060\ufeff' },
+        { tag: 'input', type: 'password', value: 'secret' },
+        { tag: 'input', type: 'checkbox', value: 'on' },
+        { tag: 'input', type: 'hidden', value: 'token' },
+        { tag: 'input', type: 'submit', value: 'Post' },
+        { tag: 'input', type: 'file', value: 'C:\\fakepath\\x.png' },
+        { tag: 'div', editable: false, role: 'textbox', text: 'not editable' }
+      ])
+    ).toEqual([])
+  })
+
+  it('looks into shadow roots, where a site keeps its editors', () => {
+    expect(read([{ tag: 'comment-composer', shadow: [{ tag: 'textarea', value: 'inside', ref: 'e3' }] }])).toEqual([{ ref: 'e3', text: 'inside' }])
+  })
+
+  it('keeps what it reads in bounds', () => {
+    const many = Array.from({ length: 50 }, (_, i) => ({ tag: 'textarea', value: `text ${i}` }))
+    expect(read(many)).toHaveLength(20)
+    expect(read([{ tag: 'textarea', value: 'x'.repeat(50_000) }])?.[0]?.text).toHaveLength(20_000)
+  })
+
+  it('treats an answer that is not a list of entries as unreadable, and a label that is not one as none', () => {
+    expect(parseHeldText(undefined)).toBeNull()
+    expect(parseHeldText('text')).toBeNull()
+    expect(parseHeldText([{ ref: 'e1' }])).toBeNull()
+    expect(parseHeldText([null])).toBeNull()
+    expect(parseHeldText([{ ref: 'e1; drop', text: 'a' }])).toEqual([{ ref: null, text: 'a' }])
   })
 })

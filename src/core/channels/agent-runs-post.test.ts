@@ -27,7 +27,9 @@ async function ready(): Promise<{ w: World; authority: TestAuthority; request: P
   const page = w.t.browser.page(w.account.id)
   page.responses = [
     { match: 'agent-snapshot', value: thread },
-    { match: 'ppd-field e1', value: REPLY.text }
+    { match: 'ppd-field e1', value: REPLY.text },
+    // The form is empty, as the page the AI opened.
+    { match: 'ppd-form-text', value: [] }
   ]
   const authority = new TestAuthority(w.core.tickets, REPLY, w.account.id)
   const request: PostMissionRequest = {

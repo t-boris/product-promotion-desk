@@ -10,7 +10,7 @@
 
 import { TakeoverError, type BrowserPage, type PageStep } from '../ports'
 import type { McpTool, McpToolHost, McpToolResult } from '../mcp/protocol'
-import { destinationMatches, fieldValueScript, platformWarning, sameContent, type PostSetup, type SubmitLease } from './post-submit'
+import { destinationMatches, fieldValueScript, formTextScript, parseHeldText, platformWarning, sameContent, type HeldText, type PostSetup, type SubmitLease } from './post-submit'
 import { parseSnapshot, renderElements, snapshotScript, type PageSnapshot } from './snapshot'
 
 export interface TaskValue {
@@ -170,7 +170,17 @@ const postTools = (): McpTool[] => [
 
 const SUBMITTED =
   'The approved content was submitted: the control was pressed, and nothing more may be clicked, chosen or opened in this mission. Look at the page once (browser_snapshot or browser_wait_for), then call report_result. The application checks by itself that the text is on the site.'
+const STOPPED = 'The owner stopped this task. Stop now and do not call any tool.'
+const FORM_HOLDS_TEXT =
+  'A field on this page holds text, and nothing is clicked or chosen while a form holds text: a press of yours could publish it, and only browser_submit publishes. Open the page again with browser_navigate to start with an empty form. If the text comes back (the site keeps a draft, or the address fills the form in), call report_result with needs_owner and say so.'
+const FIELDS_UNREADABLE = 'The fields of the page could not be read, so nothing is clicked or chosen: it is not known that the form is empty. Look again with browser_snapshot, or call report_result with needs_owner.'
 const FIELD_ROLE_REFUSED = /^(?:button|link|checkbox|radio|select|combobox|option|input:(?:password|file|submit|button|checkbox|radio|image|reset|hidden))$/
+
+interface Part {
+  name: 'title' | 'text' | 'link'
+  value: string
+  ref: string
+}
 
 const fail = (text: string): McpToolResult => ({ text, isError: true })
 const ok = (text: string): McpToolResult => ({ text })
@@ -193,9 +203,8 @@ export class BrowserToolbox implements McpToolHost {
   readonly instructions: string
   readonly tools: McpTool[]
   private calls = 0
-  /** Post missions: when the last action on the page ended (for the pause between actions), and whether the form holds the approved text unsent. */
+  /** Post missions: when the last action on the page ended (for the pause between actions). */
   private lastActionAt: number | null = null
-  private composed = false
   private humanCheckSeen: string | null = null
   private warningSeen: string | null = null
   private last: PageSnapshot | null = null
@@ -215,7 +224,7 @@ export class BrowserToolbox implements McpToolHost {
   }
 
   async call(name: string, args: Record<string, unknown>): Promise<McpToolResult> {
-    if (this.deps.signal?.aborted) return fail('The owner stopped this task. Stop now and do not call any tool.')
+    if (this.deps.signal?.aborted) return fail(STOPPED)
     this.calls += 1
     if (this.calls > this.maxCalls) return fail(`This mission used all ${this.maxCalls} tool calls. Call report_result now.`)
     // A post mission has a smaller set of tools, and the set is kept here as well as in the list the AI is shown.
@@ -311,20 +320,33 @@ export class BrowserToolbox implements McpToolHost {
 
   private async navigate(url: string): Promise<McpToolResult> {
     if (!/^https?:\/\//i.test(url) || !hostAllowed(url, this.deps.hosts)) return fail(`Only addresses on ${this.deps.hosts.join(', ')} can be opened in this task.`)
-    if (this.deps.post?.authority.committed) return fail(SUBMITTED)
-    await this.pace()
-    const result = await this.deps.withPage(async (page) => {
+    return this.acting(async (page) => {
       await page.goto(url)
       this.deps.say(`Opened ${displayAddress(url)}`)
-      return this.afterStep(page, `Opened ${displayAddress(url)}.`)
+      const result = await this.afterStep(page, `Opened ${displayAddress(url)}.`)
+      this.touched()
+      return result
     })
-    // The page the form was on is gone, and so is the text typed into it.
-    this.composed = false
-    this.touched()
-    return result
   }
 
   // ───────────────────────── the pause between actions, and the post's phases ─────────────────────────
+
+  /**
+   * One action on the page, in the page's own queue. What may be done is decided here, inside the stretch of control and at the moment
+   * it would be done, never before the call has waited for its turn: the AI may send several calls at once, and what the first one does
+   * (a press, a typed text that failed its read-back) decides what the second may do. The pause between actions of a post mission is
+   * taken here too, for the same reason: two calls that waited side by side would act side by side.
+   */
+  private async acting(work: (page: BrowserPage) => Promise<McpToolResult>): Promise<McpToolResult> {
+    return this.deps.withPage(async (page) => {
+      const before = this.refusalNow()
+      if (before) return fail(before)
+      await this.pace()
+      const after = this.refusalNow()
+      if (after) return fail(after)
+      return work(page)
+    })
+  }
 
   /** Waits so that two actions on the page are at least `minGapMs` apart (post missions only). */
   private async pace(): Promise<void> {
@@ -338,14 +360,37 @@ export class BrowserToolbox implements McpToolHost {
     if (this.deps.post) this.lastActionAt = (this.deps.post.now ?? Date.now)()
   }
 
-  /** What a post mission refuses to click or choose now, in words for the AI, or null. */
-  private phaseRefusal(): string | null {
-    const post = this.deps.post
-    if (!post) return null
-    if (post.authority.committed) return SUBMITTED
-    if (this.composed) {
-      return 'The form holds the approved text from your last browser_submit, and it was not sent. Nothing else is clicked on this page: call browser_submit again with the right labels, or open the page again with browser_navigate to start over.'
+  /** What a post mission refuses to do on the page now, in words for the AI, or null. */
+  private refusalNow(): string | null {
+    if (this.deps.signal?.aborted) return STOPPED
+    if (this.deps.post?.authority.committed) return SUBMITTED
+    return null
+  }
+
+  /**
+   * The text-entry places of the page that hold text now, read from the page itself; null when the page could not be read (the caller
+   * then refuses: what cannot be seen is not known to be empty).
+   */
+  private async heldText(page: BrowserPage): Promise<HeldText[] | null> {
+    try {
+      return parseHeldText(await page.read<unknown>(formTextScript()))
+    } catch (error) {
+      if (error instanceof TakeoverError) throw error
+      return null
     }
+  }
+
+  /**
+   * A click or a choice of the AI's own in a post mission is allowed only while no form on the page holds text. So whatever it presses,
+   * nothing can be published by it: the text of a publication is typed by `browser_submit` under a ticket and by nothing else, and text
+   * that got into a form another way (an address that prefilled it, a draft the site restored, what the owner left there, what a
+   * failed read-back left typed) is not published by a press nobody holds a ticket for. Null when the click may go on.
+   */
+  private async handsOff(page: BrowserPage): Promise<McpToolResult | null> {
+    if (!this.deps.post) return null
+    const held = await this.heldText(page)
+    if (held === null) return fail(FIELDS_UNREADABLE)
+    if (held.length > 0) return fail(FORM_HOLDS_TEXT)
     return null
   }
 
@@ -370,32 +415,36 @@ export class BrowserToolbox implements McpToolHost {
     return this.last?.elements.find((e) => e.ref === reference)?.role ?? ''
   }
 
-  /** Carries out one step and reports what the page looks like afterwards. `verb` is the line for the owner. */
+  /** Carries out one step on the page the caller already holds and reports what the page looks like afterwards. `verb` is the line for the owner. */
+  private async stepOn(page: BrowserPage, step: PageStep, verb: string, afterwards: boolean): Promise<McpToolResult> {
+    const outcome = await page.pageStep(step, this.deps.hosts)
+    if (outcome.status === 'wrong_host') return fail('The page is not on the platform, so nothing was done. Use browser_navigate to go back to it.')
+    this.deps.say(outcome.status === 'done' ? verb : `${verb} (${outcome.detail})`)
+    if (outcome.status !== 'done') return fail(`Nothing happened: ${outcome.detail}. The page may have changed; look again with browser_snapshot.`)
+    return afterwards ? this.afterStep(page, `${verb}.`) : ok(`${verb}.`)
+  }
+
+  /** The same, in a stretch of control of its own (the missions that type, press keys and upload: they have no phases to guard). */
   private async carryOut(step: PageStep, verb: string, afterwards: boolean): Promise<McpToolResult> {
-    return this.deps.withPage(async (page) => {
-      const outcome = await page.pageStep(step, this.deps.hosts)
-      if (outcome.status === 'wrong_host') return fail('The page is not on the platform, so nothing was done. Use browser_navigate to go back to it.')
-      this.deps.say(outcome.status === 'done' ? verb : `${verb} (${outcome.detail})`)
-      if (outcome.status !== 'done') return fail(`Nothing happened: ${outcome.detail}. The page may have changed; look again with browser_snapshot.`)
-      return afterwards ? this.afterStep(page, `${verb}.`) : ok(`${verb}.`)
-    })
+    return this.deps.withPage((page) => this.stepOn(page, step, verb, afterwards))
   }
 
   private async click(reference: string): Promise<McpToolResult> {
     if (!REF.test(reference)) return fail('ref must be a label from browser_snapshot, like e12.')
-    const refusal = this.phaseRefusal()
-    if (refusal) return fail(refusal)
-    await this.pace()
-    const label = this.labelOf(reference)
-    const role = this.roleOf(reference)
-    const result = await this.carryOut({ do: 'click', ref: reference }, `Clicked "${label}"`, true)
-    this.touched()
-    if (!result.isError) {
-      // A drop-down opened by a click and an option clicked next: what was chosen belongs to the drop-down that was opened.
-      if (role === 'combobox') this.opened = label
-      else if (role === 'option' && this.opened) this.deps.note(this.opened, label)
-    }
-    return result
+    return this.acting(async (page) => {
+      const hands = await this.handsOff(page)
+      if (hands) return hands
+      const label = this.labelOf(reference)
+      const role = this.roleOf(reference)
+      const result = await this.stepOn(page, { do: 'click', ref: reference }, `Clicked "${label}"`, true)
+      this.touched()
+      if (!result.isError) {
+        // A drop-down opened by a click and an option clicked next: what was chosen belongs to the drop-down that was opened.
+        if (role === 'combobox') this.opened = label
+        else if (role === 'option' && this.opened) this.deps.note(this.opened, label)
+      }
+      return result
+    })
   }
 
   private async type(reference: string, value: string, submit: boolean): Promise<McpToolResult> {
@@ -430,13 +479,15 @@ export class BrowserToolbox implements McpToolHost {
   private async select(reference: string, option: string): Promise<McpToolResult> {
     if (!REF.test(reference)) return fail('ref must be a label from browser_snapshot, like e12.')
     if (!option || HAS_PLACEHOLDER.test(option)) return fail('option must be the visible text of an option.')
-    const refusal = this.phaseRefusal()
-    if (refusal) return fail(refusal)
-    await this.pace()
-    const result = await this.carryOut({ do: 'select', ref: reference, text: option }, `Chose "${oneLine(option, 60)}" in "${this.labelOf(reference)}"`, false)
-    this.touched()
-    if (!result.isError) this.deps.note(this.labelOf(reference), option)
-    return result
+    // A choice in a list may be a click on anything that is not a list (the application opens it and picks): it is a click, and guarded as one.
+    return this.acting(async (page) => {
+      const hands = await this.handsOff(page)
+      if (hands) return hands
+      const result = await this.stepOn(page, { do: 'select', ref: reference, text: option }, `Chose "${oneLine(option, 60)}" in "${this.labelOf(reference)}"`, false)
+      this.touched()
+      if (!result.isError) this.deps.note(this.labelOf(reference), option)
+      return result
+    })
   }
 
   private async upload(reference: string, name: string, shrinkToKb: number): Promise<McpToolResult> {
@@ -511,16 +562,14 @@ export class BrowserToolbox implements McpToolHost {
    */
   private async submit(args: Record<string, unknown>): Promise<McpToolResult> {
     const post = this.deps.post as PostSetup
-    const authority = post.authority
-    if (authority.committed) return fail(SUBMITTED)
-    const content = authority.content
+    const content = post.authority.content
     const submitRef = str(args.submit_ref)
     const wanted: { name: 'title' | 'text' | 'link'; value: string | null; ref: string }[] = [
       { name: 'title', value: content.title, ref: str(args.title_ref) },
       { name: 'text', value: content.text, ref: str(args.text_ref) },
       { name: 'link', value: content.link, ref: str(args.link_ref) }
     ]
-    const parts: { name: 'title' | 'text' | 'link'; value: string; ref: string }[] = []
+    const parts: Part[] = []
     for (const part of wanted) {
       if (part.value && part.value.trim() !== '') {
         if (!part.ref) {
@@ -535,17 +584,18 @@ export class BrowserToolbox implements McpToolHost {
     const refs = [...parts.map((p) => p.ref), submitRef]
     if (refs.some((r) => !REF.test(r))) return fail('Every label must be one from browser_snapshot, like e12 (submit_ref and the field labels).')
     if (new Set(refs).size !== refs.length) return fail('The fields and the control must be different elements.')
-    const seen = this.last
-    for (const r of refs) {
-      if (!seen?.elements.some((e) => e.ref === r)) return fail(`Look at the page first (browser_snapshot): ${r} is not on the page you have seen.`)
-    }
-    for (const part of parts) {
-      const role = this.roleOf(part.ref)
-      if (FIELD_ROLE_REFUSED.test(role)) return fail(`${part.ref} is a ${role}, not a field the ${part.name} can be typed into.`)
-    }
 
-    await this.pace()
-    return this.deps.withPage(async (page) => {
+    // Everything that depends on the state of the mission or of the page is decided in the page's own queue, in turn (see `acting`).
+    return this.acting(async (page) => {
+      const seen = this.last
+      for (const r of refs) {
+        if (!seen?.elements.some((e) => e.ref === r)) return fail(`Look at the page first (browser_snapshot): ${r} is not on the page you have seen.`)
+      }
+      for (const part of parts) {
+        const role = this.roleOf(part.ref)
+        if (FIELD_ROLE_REFUSED.test(role)) return fail(`${part.ref} is a ${role}, not a field the ${part.name} can be typed into.`)
+      }
+
       const before = await this.observe(page)
       if (!before) return fail('The page shows nothing usable yet. Wait a moment and look again.')
       const wrong = this.pageProblem(before)
@@ -553,6 +603,8 @@ export class BrowserToolbox implements McpToolHost {
       const control = before.elements.find((e) => e.ref === submitRef)
       for (const r of refs) if (!before.elements.some((e) => e.ref === r)) return fail(`Nothing was submitted: ${r} is not on the page any more. Look again with browser_snapshot.`)
       if (control?.disabled) return fail(`Nothing was submitted: "${control.name}" is disabled. Look at the page for what it waits for.`)
+      const foreign = await this.foreignText(page, parts)
+      if (foreign) return fail(`Nothing was submitted: ${foreign}`)
 
       const label = control?.name || submitRef
       const leased = await post.authority.lease((lease) => this.typeAndPress(page, parts, submitRef, label, lease))
@@ -563,12 +615,24 @@ export class BrowserToolbox implements McpToolHost {
     })
   }
 
+  /**
+   * Why the form is not the approved content alone, or null: text in a field the approved content does not use (an address that
+   * prefilled a title or a link, a draft the site restored), found anywhere on the page. A field the application types into, and a
+   * mirror of the approved text that an editor keeps (a hidden textarea), are not foreign.
+   */
+  private async foreignText(page: BrowserPage, parts: Part[]): Promise<string | null> {
+    const held = await this.heldText(page)
+    if (held === null) return FIELDS_UNREADABLE
+    const foreign = held.filter((h) => !(h.ref !== null && parts.some((p) => p.ref === h.ref)) && !parts.some((p) => sameContent(h.text, p.value)))
+    if (foreign.length === 0) return null
+    return 'a field of the form holds text that is not part of the approved content (the address, the site or someone else filled it in). Nothing was typed or pressed. Open the page again with browser_navigate to start with an empty form; if the text comes back, call report_result with needs_owner.'
+  }
+
   /** The part of a submission that holds the ticket: type, read back, look again, press. Returns why it stopped before the press, or nothing. */
-  private async typeAndPress(page: BrowserPage, parts: { name: 'title' | 'text' | 'link'; value: string; ref: string }[], submitRef: string, label: string, lease: SubmitLease): Promise<{ refused?: string }> {
+  private async typeAndPress(page: BrowserPage, parts: Part[], submitRef: string, label: string, lease: SubmitLease): Promise<{ refused?: string }> {
     const hosts = this.deps.hosts
     for (const part of parts) {
       await this.pace()
-      this.composed = true
       const typed = await page.publishStep({ do: 'type', ref: part.ref, text: part.value }, hosts, lease.ticket)
       this.touched()
       if (typed.status !== 'done') return { refused: `the ${part.name} could not be typed (${typed.detail}). The form may hold part of it; do not click anything: look again, or open the page again with browser_navigate.` }
@@ -580,6 +644,8 @@ export class BrowserToolbox implements McpToolHost {
         return { refused: `the ${part.name} field does not hold exactly the approved text (the site may change what is typed into it). Do not fix it by hand: report needs_owner and say what the field does.` }
       }
     }
+    const foreign = await this.foreignText(page, parts)
+    if (foreign) return { refused: foreign }
     const now = await this.observe(page)
     if (!now) return { refused: 'the page showed nothing usable just before the control was pressed.' }
     const wrong = this.pageProblem(now)
@@ -593,11 +659,10 @@ export class BrowserToolbox implements McpToolHost {
     const pressed = await page.publishStep({ do: 'click', ref: submitRef }, hosts, lease.ticket)
     this.touched()
     if (pressed.status !== 'done') {
-      // The page did not receive the press: the point of no return is taken back, and the text stays typed (see phaseRefusal).
+      // The page did not receive the press: the point of no return is taken back, and the text stays typed (the page itself tells the next click).
       lease.release()
       return { refused: `the control could not be pressed (${pressed.detail}).` }
     }
-    this.composed = false
     this.deps.say(`Pressed "${label}"`)
     return {}
   }

@@ -41,15 +41,44 @@ class FormPage extends FakePage {
   alter: ((ref: string, value: string) => string) | null = null
   /** Runs before a step is carried out (a test takes the browser here). */
   beforeStep: ((step: PageStep) => void) | null = null
+  /** Runs before a script is read (a test stops the mission, or changes the page, at a moment of its choice). */
+  beforeRead: ((script: string) => void) | null = null
+  /** An address that carries its content: `?title=` and `?text=` fill the title and the text of the form when the page loads. */
+  prefillFromAddress = false
+  /** Text the site puts back into fields every time a page loads (a restored draft), by label. */
+  restore: Record<string, string> = {}
+  /** Text in places the snapshot does not list (a hidden field, a field beyond the first 160 elements). */
+  hidden: string[] = []
+  /** A page whose fields cannot be read. */
+  fieldsUnreadable = false
   private stepNumber = 0
 
+  /** Loads a page like a browser does: a new document starts empty, except what the address or the site fills in; a change of the fragment only keeps the document and what its fields hold. */
   override async goto(url: string): Promise<void> {
+    const previous = this.currentUrl
     await super.goto(url)
     this.currentUrl = url
+    if (url.includes('#') && url.split('#')[0] === previous.split('#')[0]) return
     this.fields.clear()
+    this.hidden = []
+    if (this.prefillFromAddress) {
+      const query = new URL(url).searchParams
+      const title = query.get('title')
+      const text = query.get('text')
+      if (title) this.fields.set('e2', title)
+      if (text) this.fields.set('e1', text)
+    }
+    for (const [ref, text] of Object.entries(this.restore)) this.fields.set(ref, text)
   }
   override async read<T>(script: string): Promise<T> {
     this.log.push(`read ${script.slice(0, 40)}`)
+    this.beforeRead?.(script)
+    if (script.includes('ppd-form-text')) {
+      if (this.fieldsUnreadable) return 'not an answer' as T
+      const blank = (text: string): boolean => text.replace(/[\s\u200b-\u200d\u2060\ufeff]/g, '') === ''
+      const typed = [...this.fields].filter(([, text]) => !blank(text)).map(([ref, text]) => ({ ref, text }))
+      return [...typed, ...this.hidden.map((text) => ({ ref: null, text }))] as T
+    }
     if (script.includes('agent-snapshot')) {
       return {
         url: this.currentUrl,
@@ -82,7 +111,11 @@ class FormPage extends FakePage {
       if (this.crashOnClick) throw new Error('the page crashed')
       if (item.disabled) return { status: 'refused', detail: 'disabled' }
       this.clicked.push(step.ref)
-      if (step.ref === 'e4') this.posted.push(Object.fromEntries(this.fields))
+      if (step.ref === 'e4') {
+        this.posted.push(Object.fromEntries(this.fields))
+        // A site empties its form once the comment is posted.
+        this.fields.clear()
+      }
       return { status: 'done', detail: 'clicked' }
     }
     return { status: 'done', detail: 'ok' }
@@ -176,7 +209,7 @@ describe('the tools of a post mission', () => {
   })
 })
 
-describe('a click of the AI\'s own publishes nothing, because the form is empty until the application types', () => {
+describe('a click of the AI\'s own publishes nothing: the form is empty until the application types', () => {
   it('leaves every field empty and posts nothing when the AI presses the control itself', async () => {
     const t = setup()
     await look(t)
@@ -187,6 +220,134 @@ describe('a click of the AI\'s own publishes nothing, because the form is empty 
     expect(t.page.fields.size).toBe(0)
     expect(t.authority.leases).toBe(0)
     expect(t.authority.committed).toBe(false)
+  })
+
+  const HOLDS_TEXT = { isError: true, text: expect.stringContaining('holds text') }
+  /** Both ways the AI has to click: a click, and a choice in a list, which is a click on anything that is not a list. */
+  const handsOff = async (t: Setup, leases = 0) => {
+    expect(await t.toolbox.call('browser_click', { ref: 'e4' })).toMatchObject(HOLDS_TEXT)
+    expect(await t.toolbox.call('browser_select', { ref: 'e4', option: 'anything' })).toMatchObject(HOLDS_TEXT)
+    expect(t.page.clicked).toEqual([])
+    expect(t.page.posted).toEqual([])
+    expect(t.authority.leases).toBe(leases)
+    expect(t.authority.committed).toBe(false)
+  }
+
+  it('is refused while an address has prefilled the form: opening a compose page with the text in its query, then pressing Post', async () => {
+    const t = setup(POST)
+    t.page.prefillFromAddress = true
+    await look(t)
+    expect((await t.toolbox.call('browser_navigate', { url: 'https://fake.test/r/test/submit?title=Buy+now&text=Text+nobody+approved' })).isError).toBeUndefined()
+    expect(t.page.fields.get('e1')).toBe('Text nobody approved')
+    await look(t)
+    await handsOff(t)
+  })
+
+  it('is refused while a failed read-back has left the approved text in the form, also after a navigation that keeps the document (the same address with a fragment)', async () => {
+    const t = setup()
+    t.page.alter = (_ref, value) => value.replace('Natal Mystic', '***')
+    await look(t)
+    expect(await submitReply(t)).toMatchObject({ isError: true, text: expect.stringContaining('does not hold exactly the approved text') })
+    expect(t.page.fields.get('e1')).toContain('***')
+
+    expect((await t.toolbox.call('browser_navigate', { url: 'https://fake.test/r/test/comments/abc/slug/#' })).isError).toBeUndefined()
+    expect(t.page.fields.get('e1')).toContain('***') // the document is the same, so is what its field holds
+    await handsOff(t, 1)
+
+    // Only a new document is an empty form: the address as it was, loaded again.
+    t.page.alter = null
+    await t.toolbox.call('browser_navigate', { url: 'https://fake.test/r/test/comments/abc/slug/' })
+    expect(t.page.fields.size).toBe(0)
+    await look(t)
+    expect((await t.toolbox.call('browser_click', { ref: 'e5' })).isError).toBeUndefined()
+  })
+
+  it('is refused for a draft the site restores, for text the owner left there, and for text in a field the snapshot does not list', async () => {
+    const restored = setup()
+    restored.page.restore = { e1: 'A draft of an earlier visit' }
+    await look(restored)
+    await restored.toolbox.call('browser_navigate', { url: 'https://fake.test/r/test/comments/abc/slug/' })
+    await handsOff(restored)
+
+    const owner = setup()
+    await look(owner)
+    owner.page.fields.set('e1', 'Typed by the owner in the window')
+    await handsOff(owner)
+
+    const hidden = setup()
+    await look(hidden)
+    hidden.page.hidden = ['text in a hidden field']
+    await handsOff(hidden)
+  })
+
+  it('is refused when the fields of the page cannot be read: what is not seen is not known to be empty', async () => {
+    const t = setup()
+    await look(t)
+    t.page.fieldsUnreadable = true
+    expect(await t.toolbox.call('browser_click', { ref: 'e4' })).toMatchObject({ isError: true, text: expect.stringContaining('could not be read') })
+    expect(await t.toolbox.call('browser_select', { ref: 'e4', option: 'x' })).toMatchObject({ isError: true, text: expect.stringContaining('could not be read') })
+    expect(t.page.clicked).toEqual([])
+  })
+
+  it('does not take a field of the form for text the AI typed: blanks and zero-width characters are an empty form', async () => {
+    const t = setup()
+    await look(t)
+    t.page.fields.set('e1', '  \u200b ')
+    expect((await t.toolbox.call('browser_click', { ref: 'e5' })).isError).toBeUndefined()
+  })
+})
+
+describe('calls that arrive together are taken in turn, and each one is decided when its turn comes', () => {
+  it('a click sent together with browser_submit is refused after the press, and presses nothing a second time', async () => {
+    const t = setup()
+    await look(t)
+    const [submitted, clicked] = await Promise.all([submitReply(t), t.toolbox.call('browser_click', { ref: 'e4' })])
+    expect(submitted.isError).toBeUndefined()
+    expect(clicked).toMatchObject({ isError: true, text: expect.stringContaining('nothing more may be clicked') })
+    expect(t.page.clicked).toEqual(['e4']) // the application's own press, once
+    expect(t.page.posted).toEqual([{ e1: REPLY.text }])
+    expect(t.authority.leases).toBe(1)
+  })
+
+  it('a click sent together with a browser_submit that failed its read-back finds the text in the form and presses nothing', async () => {
+    const t = setup()
+    t.page.alter = (_ref, value) => value.replace('Natal Mystic', '***')
+    await look(t)
+    const [submitted, clicked] = await Promise.all([submitReply(t), t.toolbox.call('browser_click', { ref: 'e4' })])
+    expect(submitted).toMatchObject({ isError: true, text: expect.stringContaining('does not hold exactly the approved text') })
+    expect(clicked).toMatchObject({ isError: true, text: expect.stringContaining('holds text') })
+    expect(t.page.clicked).toEqual([])
+    expect(t.page.posted).toEqual([])
+  })
+
+  it('a choice sent together with browser_submit, and a second browser_submit, are refused after the press', async () => {
+    const t = setup()
+    await look(t)
+    const [first, chosen, second] = await Promise.all([submitReply(t), t.toolbox.call('browser_select', { ref: 'e4', option: 'x' }), submitReply(t)])
+    expect(first.isError).toBeUndefined()
+    expect(chosen).toMatchObject({ isError: true })
+    expect(second).toMatchObject({ isError: true, text: expect.stringContaining('submitted') })
+    expect(t.page.clicked).toEqual(['e4'])
+    expect(t.authority.leases).toBe(1)
+  })
+
+  it('a navigation sent together with browser_submit waits for it and is then refused: the page it would replace has been published', async () => {
+    const t = setup()
+    await look(t)
+    const [submitted, opened] = await Promise.all([submitReply(t), t.toolbox.call('browser_navigate', { url: 'https://fake.test/r/test' })])
+    expect(submitted.isError).toBeUndefined()
+    expect(opened).toMatchObject({ isError: true, text: expect.stringContaining('submitted') })
+    expect(t.page.log.filter((l) => l.startsWith('goto'))).toEqual([])
+  })
+
+  it('keeps the pause between actions for calls that arrive together: they are spaced as if they came one after the other', async () => {
+    const t = setup()
+    await look(t)
+    await t.toolbox.call('browser_navigate', { url: 'https://fake.test/r/test/comments/abc/slug/' })
+    const before = t.sleeps.length
+    await Promise.all([t.toolbox.call('browser_click', { ref: 'e5' }), t.toolbox.call('browser_click', { ref: 'e5' })])
+    // Each of the two clicks waits out the gap after the one before it (the 1000 is the page settling after each).
+    expect(t.sleeps.slice(before).filter((ms) => ms !== 1000)).toEqual([2000, 2000])
   })
 })
 
@@ -334,7 +495,7 @@ describe('browser_submit stops without pressing when the form is not as approved
     expect(t.page.posted).toEqual([])
     expect(t.authority.committed).toBe(false)
     // The text sits in the form unsent: a click of the AI's own could publish it, so none is allowed until the page is opened again.
-    expect(await t.toolbox.call('browser_click', { ref: 'e4' })).toMatchObject({ isError: true, text: expect.stringContaining('was not sent') })
+    expect(await t.toolbox.call('browser_click', { ref: 'e4' })).toMatchObject({ isError: true, text: expect.stringContaining('holds text') })
     expect(await t.toolbox.call('browser_select', { ref: 'e1', option: 'x' })).toMatchObject({ isError: true })
     expect(t.page.clicked).toEqual([])
     // The ticket of that attempt is gone.
@@ -356,6 +517,35 @@ describe('browser_submit stops without pressing when the form is not as approved
     expect(await submitReply(t)).toMatchObject({ isError: true, text: expect.stringContaining('does not hold exactly the approved text') })
     expect(t.page.clicked).toEqual([])
     expect(t.authority.committed).toBe(false)
+  })
+
+  it('does not type or press when a field the approved content does not use already holds text: a link an address put into the form', async () => {
+    const t = setup()
+    await look(t)
+    t.page.fields.set('e3', 'https://evil.example/buy')
+    expect(await submitReply(t)).toMatchObject({ isError: true, text: expect.stringContaining('not part of the approved content') })
+    expect(t.page.steps).toEqual([])
+    expect(t.page.posted).toEqual([])
+    expect(t.authority.leases).toBe(0)
+  })
+
+  it('does not press when a field the approved content does not use got text while the application typed (a site that fills in a field itself)', async () => {
+    const t = setup()
+    await look(t)
+    t.page.beforeStep = (step) => {
+      if (step.do === 'type') t.page.fields.set('e3', 'https://evil.example/buy')
+    }
+    expect(await submitReply(t)).toMatchObject({ isError: true, text: expect.stringContaining('not part of the approved content') })
+    expect(t.page.clicked).toEqual([])
+    expect(t.authority.committed).toBe(false)
+  })
+
+  it('does not take a hidden mirror of the approved text, kept by an editor, for foreign text', async () => {
+    const t = setup()
+    await look(t)
+    t.page.hidden = [REPLY.text]
+    expect((await submitReply(t)).isError).toBeUndefined()
+    expect(t.authority.committed).toBe(true)
   })
 
   it('does not press when a human check or a warning appeared after the typing', async () => {
