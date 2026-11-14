@@ -71,10 +71,17 @@ export function publicationsProductOf(hash: string): string | null {
   return page === 'publications' && productId ? safeDecode(productId) : null
 }
 
-/** What the Accounts section was asked to show: the new-account form, possibly with a role already filled in. */
+/** What the Accounts section was asked to show: the new-account form, possibly with a role already filled in, or one account. */
 export interface AccountsRoute {
   adding: boolean
+  /** `#/accounts/<accountId>`: the account to select. Null for the bare list and for the new-account form. */
+  accountId: string | null
   role: { name: string; voice: string } | null
+}
+
+/** Link to one account of the Accounts section (the account an Attention item is about). */
+export function accountHref(accountId: string): string {
+  return `${ACCOUNTS_HREF}/${encodeURIComponent(accountId)}`
 }
 
 /** Link to the new-account form of the Accounts section; "Use this role" on the product page passes the role along. */
@@ -83,15 +90,20 @@ export function accountsNewHref(role?: { name: string; voice: string }): string 
   return `#/accounts/new?${new URLSearchParams({ name: role.name, voice: role.voice }).toString()}`
 }
 
-/** Reads `#/accounts` and `#/accounts/new?name=…&voice=…`. */
+/** Reads `#/accounts`, `#/accounts/<accountId>` and `#/accounts/new?name=…&voice=…`. */
 export function parseAccountsHash(hash: string): AccountsRoute {
   const body = hash.replace(/^#\/?/, '')
   const at = body.indexOf('?')
   const segments = (at < 0 ? body : body.slice(0, at)).split('/').filter((segment) => segment !== '')
-  const adding = segments[0] === 'accounts' && segments[1] === 'new'
+  const onAccounts = segments[0] === 'accounts'
+  const adding = onAccounts && segments[1] === 'new'
   const params = new URLSearchParams(at < 0 ? '' : body.slice(at + 1))
   const name = params.get('name')?.trim() ?? ''
-  return { adding, role: adding && name ? { name, voice: params.get('voice')?.trim() ?? '' } : null }
+  return {
+    adding,
+    accountId: onAccounts && !adding && segments[1] ? safeDecode(segments[1]) : null,
+    role: adding && name ? { name, voice: params.get('voice')?.trim() ?? '' } : null
+  }
 }
 
 /** The hash a `navigate` event from the main process asks the window to show (the "Settings…" menu item), or null for any other event or a malformed hash. */

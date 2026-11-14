@@ -21,7 +21,7 @@ import { activateBlocker, canActivate, canPause, neverAssessed, setupStage } fro
 import { nextStep } from '../renderer/src/pages/channels/next-step'
 import { channelLabel } from '../renderer/src/pages/review/channel-label'
 import { platformMismatch } from '../renderer/src/pages/channels/platform-hint'
-import { MOVED_PAGES, accountsNewHref, navigateHashOf, parseAccountsHash, parseHash, productHref, publicationsHref, publicationsProductOf } from '../renderer/src/route'
+import { MOVED_PAGES, accountHref, accountsNewHref, navigateHashOf, parseAccountsHash, parseHash, productHref, publicationsHref, publicationsProductOf } from '../renderer/src/route'
 import { accountText, accountsGroupName, accountsSummary, automationText, engineGroupName } from '../renderer/src/status-labels'
 
 describe('hash routes (DEC-009)', () => {
@@ -193,15 +193,15 @@ describe('attention links to the product page (DEC-009)', () => {
     expect(fixLinkFor(item('channel', 'c2'), sources)).toEqual({ href: '#/products/p2/channels', label: 'Open Other channels', productName: 'Other' })
   })
 
-  it('sends a sign-in problem to the Accounts section and names the products that use the account (DEC-015)', () => {
-    expect(fixLinkFor(item('account', 'a1'), sources)).toEqual({ href: '#/accounts', label: 'Open Accounts', productName: 'Natal Mystic' })
-    expect(fixLinkFor(item('account', 'legacy'), sources)).toEqual({ href: '#/accounts', label: 'Open Accounts', productName: 'Other' })
+  it('sends a sign-in problem to the account it names in the Accounts section, and names the products that use it (DEC-015, BUG-043)', () => {
+    expect(fixLinkFor(item('account', 'a1'), sources)).toEqual({ href: '#/accounts/a1', label: 'Open Accounts', productName: 'Natal Mystic' })
+    expect(fixLinkFor(item('account', 'legacy'), sources)).toEqual({ href: '#/accounts/legacy', label: 'Open Accounts', productName: 'Other' })
   })
 
   it('names every product that uses a shared account, and none for an account nothing uses', () => {
     const shared = { ...sources, channels: [...sources.channels, { id: 'c4', productId: 'p1', accountId: 'legacy' } as Channel] }
     expect(fixLinkFor(item('account', 'legacy'), shared)).toMatchObject({ productName: 'Other, Natal Mystic' })
-    expect(fixLinkFor(item('account', 'unused'), sources)).toEqual({ href: '#/accounts', label: 'Open Accounts', productName: null })
+    expect(fixLinkFor(item('account', 'unused'), sources)).toEqual({ href: '#/accounts/unused', label: 'Open Accounts', productName: null })
   })
 
   it('falls back to the product list when the product cannot be resolved, and has no link for decisions', () => {
@@ -249,16 +249,30 @@ describe('the main menu can be hidden and the choice is remembered', () => {
 describe('the new-account form of the Accounts section', () => {
   it('is reached by a link, with or without a role', () => {
     expect(accountsNewHref()).toBe('#/accounts/new')
-    expect(parseAccountsHash('#/accounts')).toEqual({ adding: false, role: null })
-    expect(parseAccountsHash('#/accounts/new')).toEqual({ adding: true, role: null })
-    expect(parseAccountsHash('#/products/p1/channels')).toEqual({ adding: false, role: null })
+    expect(parseAccountsHash('#/accounts')).toEqual({ adding: false, accountId: null, role: null })
+    expect(parseAccountsHash('#/accounts/new')).toEqual({ adding: true, accountId: null, role: null })
+    expect(parseAccountsHash('#/products/p1/channels')).toEqual({ adding: false, accountId: null, role: null })
+  })
+
+  it('names an account by #/accounts/<id>, whatever characters the id holds, and "new" stays the form (BUG-043)', () => {
+    expect(accountHref('a1')).toBe('#/accounts/a1')
+    expect(parseAccountsHash('#/accounts/a1')).toEqual({ adding: false, accountId: 'a1', role: null })
+    expect(accountHref('a b/c')).toBe('#/accounts/a%20b%2Fc')
+    expect(parseAccountsHash(accountHref('a b/c'))).toEqual({ adding: false, accountId: 'a b/c', role: null })
+    // An id that is not valid percent-encoding is taken as written instead of throwing.
+    expect(parseAccountsHash('#/accounts/100%')).toEqual({ adding: false, accountId: '100%', role: null })
+    // Only the Accounts page reads an account id; the form is never an account.
+    expect(parseAccountsHash('#/products/a1')).toEqual({ adding: false, accountId: null, role: null })
+    expect(parseAccountsHash('#/accounts/new').accountId).toBeNull()
+    // The page is still Accounts for the shell.
+    expect(parseHash(accountHref('a1')).page).toBe('accounts')
   })
 
   it('carries a role through the address, whatever characters it holds', () => {
     const role = { name: 'Astro & Co', voice: 'Calm, "plain" words: no jargon / no ?marks=1' }
-    expect(parseAccountsHash(accountsNewHref(role))).toEqual({ adding: true, role })
-    expect(parseAccountsHash('#/accounts/new?name=%20&voice=x')).toEqual({ adding: true, role: null })
-    expect(parseAccountsHash('#/accounts?name=Dev')).toEqual({ adding: false, role: null })
+    expect(parseAccountsHash(accountsNewHref(role))).toEqual({ adding: true, accountId: null, role })
+    expect(parseAccountsHash('#/accounts/new?name=%20&voice=x')).toEqual({ adding: true, accountId: null, role: null })
+    expect(parseAccountsHash('#/accounts?name=Dev')).toEqual({ adding: false, accountId: null, role: null })
   })
 })
 

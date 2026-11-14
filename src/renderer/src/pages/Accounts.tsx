@@ -51,6 +51,13 @@ function AccountsScreen() {
   useEffect(() => {
     if (route.adding) setTab('accounts')
   }, [route.adding])
+  // `#/accounts/<id>` (an Attention item) selects that account; an id that is not in the library falls back to the first one.
+  useEffect(() => {
+    if (route.accountId) {
+      setSelectedId(route.accountId)
+      setTab('accounts')
+    }
+  }, [route.accountId])
 
   const goNew = (): void => {
     setTab('accounts')
