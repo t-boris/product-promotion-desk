@@ -5,6 +5,7 @@ import { useAutomation, useQuery } from './hooks'
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from './menu-state'
 import { PAGES } from './pages'
 import { MOVED_PAGES, parseHash } from './route'
+import { NO_ACCOUNTS, NO_ENGINE, accountText, accountsGroupName, automationText, engineGroupName } from './status-labels'
 import { Badge, Button } from './ui'
 
 /**
@@ -68,6 +69,7 @@ export function App() {
                 key={page.id}
                 href={`#/${page.id}`}
                 className={`nav-item ${page.id === route ? 'active' : ''}`}
+                aria-current={page.id === route ? 'page' : undefined}
                 onClick={(e) => {
                   // Already here: keep the open product and tab instead of resetting the hash to the bare page.
                   if (page.id === route) e.preventDefault()
@@ -97,25 +99,31 @@ export function App() {
             <span title="Version of this application" data-testid="app-version-header">
               <Badge tone="info">{info.data ? `v${info.data.version}` : 'v…'}</Badge>
             </span>
-            <span className="muted small">AI engine</span>
-            {engine ? <Badge tone={engine.ready ? 'good' : 'warn'}>{engine.label}</Badge> : <Badge tone="warn">None selected</Badge>}
-            <span className="muted small sep">Accounts</span>
-            {accounts.data && accounts.data.length > 0 ? (
-              accounts.data.map((a) => (
-                <Badge key={a.id} tone={a.status === 'ready' ? 'good' : 'warn'}>
-                  {a.label}
-                  {a.identity ? ` · ${a.identity}` : ''}
-                </Badge>
-              ))
-            ) : (
-              <Badge>None connected</Badge>
-            )}
+            {/* Each label and its value are one named group, so a screen reader or a test tool reads "AI engine: Codex" and
+                "Accounts: None connected", not two loose texts. The groups add no box of their own (display: contents). */}
+            <span className="status-group" role="group" aria-label={engineGroupName(engine)}>
+              <span className="muted small">AI engine</span>
+              {engine ? <Badge tone={engine.ready ? 'good' : 'warn'}>{engine.label}</Badge> : <Badge tone="warn">{NO_ENGINE}</Badge>}
+            </span>
+            <span className="status-group" role="group" aria-label={accountsGroupName(accounts.data)}>
+              <span className="muted small sep">Accounts</span>
+              {accounts.data && accounts.data.length > 0 ? (
+                accounts.data.map((a) => (
+                  <Badge key={a.id} tone={a.status === 'ready' ? 'good' : 'warn'}>
+                    {accountText(a)}
+                  </Badge>
+                ))
+              ) : (
+                <Badge>{NO_ACCOUNTS}</Badge>
+              )}
+            </span>
           </div>
           <div className="row">
             <AiPill />
             {state?.background && <Badge tone="info">Background</Badge>}
+            {/* One text, not "Automation " and "running" as two nodes: the state reads as one statement in the accessibility tree. */}
             <span className="muted small" data-testid="automation-state">
-              Automation {state ? (state.paused ? 'paused' : 'running') : '…'}
+              {automationText(state)}
             </span>
             <Button variant={state?.paused ? 'primary' : 'ghost'} onClick={() => void setPaused(!state?.paused)} disabled={!state} data-testid="pause-toggle">
               {state?.paused ? 'Resume automation' : 'Pause automation'}

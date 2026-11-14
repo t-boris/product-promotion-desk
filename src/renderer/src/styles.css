@@ -105,6 +105,10 @@ code {
   gap: 8px;
   flex-wrap: wrap;
 }
+/* A named group for a screen reader that takes no part in the layout: its children stay flex items of the row. */
+.status-group {
+  display: contents;
+}
 .stack {
   display: flex;
   flex-direction: column;

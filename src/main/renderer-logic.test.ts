@@ -8,6 +8,7 @@ import { fixLinkFor } from '../renderer/src/pages/attention-links'
 import { nextStep } from '../renderer/src/pages/channels/next-step'
 import { platformMismatch } from '../renderer/src/pages/channels/platform-hint'
 import { MOVED_PAGES, accountsNewHref, parseAccountsHash, parseHash, productHref } from '../renderer/src/route'
+import { accountText, accountsGroupName, automationText, engineGroupName } from '../renderer/src/status-labels'
 
 describe('hash routes (DEC-009)', () => {
   it('reads plain pages and ignores the leading characters', () => {
@@ -169,5 +170,29 @@ describe('platformMismatch: an account whose name says one platform while it is 
     expect(platformMismatch('Facebooking account', 'reddit', platforms)).toBeNull()
     expect(platformMismatch('Natal Mystic X', 'reddit', platforms)).toBeNull()
     expect(platformMismatch('Natal Mystic @ Facebook', 'unknown', platforms)).toContain('on unknown')
+  })
+})
+
+describe('status row words (BUG-003)', () => {
+  // The top bar names its state in the accessibility tree with these strings, and a UI test tool reads them from there.
+  it('names the AI engine as one statement, with or without an engine', () => {
+    expect(engineGroupName({ label: 'Codex' })).toBe('AI engine: Codex')
+    expect(engineGroupName(undefined)).toBe('AI engine: None selected')
+  })
+
+  it('names the accounts as one statement, with the login name after the account name', () => {
+    expect(accountsGroupName(undefined)).toBe('Accounts: None connected')
+    expect(accountsGroupName([])).toBe('Accounts: None connected')
+    expect(accountsGroupName([{ label: 'Brand', identity: 'brand_user' }, { label: 'Second', identity: null }])).toBe(
+      'Accounts: Brand · brand_user, Second'
+    )
+    expect(accountText({ label: 'Brand' })).toBe('Brand')
+  })
+
+  it('reads the automation state as one sentence, and shows an ellipsis until the state has arrived', () => {
+    expect(automationText({ paused: false })).toBe('Automation running')
+    expect(automationText({ paused: true })).toBe('Automation paused')
+    expect(automationText(null)).toBe('Automation …')
+    expect(automationText(undefined)).toBe('Automation …')
   })
 })
