@@ -104,7 +104,8 @@ async function start(): Promise<void> {
       titleBarStyle: 'hiddenInset',
       // The window buttons get air from the edge and line up with the sidebar's brand (QA finding 2).
       trafficLightPosition: { x: 20, y: 18 },
-      backgroundColor: '#14161a',
+      // The dark window colour, the same as --surface-0 in the renderer, so nothing flashes before the stylesheet loads.
+      backgroundColor: '#121418',
       webPreferences: {
         preload: join(import.meta.dirname, '../preload/index.cjs'),
         sandbox: true,
