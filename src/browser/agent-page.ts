@@ -2,19 +2,15 @@
 // ControlledSession (src/core/browser-session.ts); this class only performs the page operations.
 
 import type { WebContents } from 'electron'
-import type { RawPage } from '../core/browser-session'
-import type { PageStep, PageStepResult, SignInForm, SignInStatus } from '../core/ports'
-import { pollUntil, withTimeout } from './poll'
-import { clickScript, describeFailure, existsScript, fileInputScript, fillScript, signInScript, type ActionResult } from './page-scripts'
+import type { PageStep, PageStepResult } from '../core/ports'
+import { withTimeout } from './poll'
+import { fileInputScript } from './page-scripts'
+import { ScriptedPage } from './script-page'
 import { putFile, runPageStep, type StepDriver } from './step-runner'
 import { isAbortedNavigation, normalizeBrowserUrl } from './targets'
 
 const DEFAULT_LOAD_TIMEOUT_MS = 30_000
 const READ_TIMEOUT_MS = 45_000
-const POLL_INTERVAL_MS = 250
-/** A sign-in page may draw its form after it has "loaded" (Reddit builds it from web components, a few seconds in). */
-const SIGN_IN_FORM_WAIT_MS = 15_000
-const SIGN_IN_FORM_POLL_MS = 500
 
 /** The agent's page and whatever hosts it; `dispose` releases both. */
 export interface AgentSurface {
@@ -27,11 +23,13 @@ export interface AgentSurface {
   isRevealed?(): boolean
 }
 
-export class ElectronRawPage implements RawPage {
+export class ElectronRawPage extends ScriptedPage {
   private surface: AgentSurface | null = null
 
   /** `create` builds the hidden page; it is called again if the previous one was destroyed or crashed. */
-  constructor(private readonly create: () => AgentSurface) {}
+  constructor(private readonly create: () => AgentSurface) {
+    super()
+  }
 
   private live(): WebContents {
     if (!this.surface || this.surface.contents.isDestroyed()) {
@@ -94,31 +92,6 @@ export class ElectronRawPage implements RawPage {
     return withTimeout(this.live().executeJavaScript(script, false) as Promise<T>, READ_TIMEOUT_MS, 'The page did not answer in time')
   }
 
-  async waitForSelector(selector: string, timeoutMs = 10_000): Promise<boolean> {
-    return pollUntil(
-      async () => {
-        try {
-          return (await this.read<boolean>(existsScript(selector))) === true
-        } catch (error) {
-          // The page may be navigating; an invalid selector is a bug and must surface.
-          if (error instanceof Error && /not a valid selector|SyntaxError/i.test(error.message)) throw error
-          return false
-        }
-      },
-      { timeoutMs, intervalMs: POLL_INTERVAL_MS }
-    )
-  }
-
-  async fill(selector: string, text: string): Promise<void> {
-    const result = await this.read<ActionResult | null>(fillScript(selector, text))
-    if (!result?.ok) throw describeFailure('fill', selector, result)
-  }
-
-  async click(selector: string): Promise<void> {
-    const result = await this.read<ActionResult | null>(clickScript(selector))
-    if (!result?.ok) throw describeFailure('click', selector, result)
-  }
-
   /**
    * One step of the browser agent (DEC-017): the logic is in step-runner.ts, shared with every other back end; this page only says how
    * a mouse press, a key, text and a file reach a WebContents.
@@ -146,36 +119,6 @@ export class ElectronRawPage implements RawPage {
       insertText: (text) => contents.insertText(text).then(() => undefined),
       attachFile: (expression, path, what) => this.attach(contents, expression, path, what)
     }
-  }
-
-  /**
-   * Fills the sign-in form (DEC-014). The script carries the password, so an error is never passed on with the script's own
-   * text: whatever goes wrong is reported in words that cannot contain the credentials.
-   */
-  async signIn(form: SignInForm): Promise<{ status: SignInStatus }> {
-    let status: SignInStatus = 'no_form'
-    // Only "no form yet" is asked again: nothing was sent then. Any other answer, and any failure of the read, ends it at
-    // once, so a password is never sent twice (a second wrong attempt could lock the account).
-    await pollUntil(
-      async () => {
-        status = await this.signInOnce(form)
-        return status !== 'no_form'
-      },
-      { timeoutMs: SIGN_IN_FORM_WAIT_MS, intervalMs: SIGN_IN_FORM_POLL_MS }
-    )
-    return { status }
-  }
-
-  private async signInOnce(form: SignInForm): Promise<SignInStatus> {
-    let result: { status?: SignInStatus } | null
-    try {
-      result = await this.read<{ status?: SignInStatus } | null>(signInScript(form))
-    } catch {
-      throw new Error('The sign-in page did not answer.')
-    }
-    const status = result?.status
-    if (status !== 'submitted' && status !== 'next_step' && status !== 'no_form' && status !== 'captcha' && status !== 'wrong_host') throw new Error('The sign-in page gave no usable answer.')
-    return status
   }
 
   /** Sets the files of an <input type=file> through the DevTools protocol (a script cannot do this). */
