@@ -128,12 +128,35 @@ describe('what this application can send of a post', () => {
     expect(sent({ title: 'T', text: '', link: 'https://example.org', attachments: [picture('a')] }, 'reddit').join(' ')).toMatch(/without text/)
   })
 
-  it('sends no picture to any other platform yet, and says how to publish by hand', () => {
+  it('sends no picture to any other platform by the connector, and says how to send it: the AI browser, or by hand', () => {
     for (const platform of ['facebook', 'instagram', 'threads', 'x', 'linkedin']) {
-      expect(sent({ text: 'x', attachments: [picture('a')] }, platform).join(' ')).toMatch(/cannot be sent to .* from this application yet\. Use .Copy post. and publish/)
+      expect(sent({ text: 'x', attachments: [picture('a')] }, platform).join(' ')).toMatch(/Pictures go to .* only through the AI browser, and only when you press Send yourself.*Copy post/)
     }
   })
 
+  it('says why a send the AI browser never carries is refused, when the AI browser is chosen: the owner presses Send', () => {
+    const away = { aiBrowser: false, unattended: true }
+    const via = (content: Partial<PostContent>, platform: string) => sendProblems(platform, renderForPlatform(post(content), platform), away).join(' ')
+    expect(via({ text: 'words', attachments: [picture('a')] }, 'instagram')).toMatch(/scheduled or automatic send.*press Send on it/)
+    expect(via({ title: 'T', text: 'words', attachments: [picture('a')] }, 'reddit')).toMatch(/scheduled or automatic send/)
+    // what the connector carries is not refused, and nothing is said when there are no pictures
+    expect(via({ title: 'T', text: '', attachments: [picture('a')] }, 'reddit')).toBe('')
+    expect(via({ text: 'words' }, 'facebook')).toBe('')
+  })
+
+  it('lets the AI browser carry pictures to any platform that takes them, within what the platform takes', () => {
+    const ai = { aiBrowser: true }
+    const via = (content: Partial<PostContent>, platform: string) => sendProblems(platform, renderForPlatform(post(content), platform), ai)
+    for (const platform of ['facebook', 'instagram', 'threads', 'x', 'linkedin']) expect(via({ text: 'words', attachments: [picture('a')] }, platform)).toEqual([])
+    // Reddit: text and pictures together, and more than one, which the connector refuses.
+    expect(via({ title: 'T', text: 'words', attachments: [picture('a'), picture('b')] }, 'reddit')).toEqual([])
+    // What the platform itself takes still holds: a picture is required on Instagram, none on YouTube, at most 4 on X.
+    expect(via({ text: 'words' }, 'instagram').join(' ')).toMatch(/needs a picture/)
+    expect(via({ text: 'words', attachments: [picture('a')] }, 'tiktok').join(' ')).toMatch(/takes no pictures/)
+    expect(via({ text: 'words', attachments: ['a', 'b', 'c', 'd', 'e'].map(picture) }, 'x').join(' ')).toMatch(/at most 4/)
+    // And what Reddit's publisher asks of any post: a title, a link or a text.
+    expect(via({ title: null, text: 'words', attachments: [picture('a')] }, 'reddit').join(' ')).toMatch(/needs a title/)
+  })
   it('says what the Reddit publisher refuses before it is approved: no title, a link with text, a link that is not a web address', () => {
     expect(sent({ title: null, text: 'words' }, 'reddit').join(' ')).toMatch(/needs a title/)
     expect(sent({ title: 'T', text: 'words', link: 'https://example.org' }, 'reddit').join(' ')).toMatch(/a link or a text, not both/)

@@ -11,6 +11,7 @@ import { newId } from '../db/database'
 import { TakeoverError, type Connector, type ConnectorContext, type PublishRequest, type RemoteDiscussion, type SendTicket } from '../ports'
 import { attachmentProblem } from './attachments'
 import { renderForPlatform, sendProblems } from '../../shared/post-format'
+import { sendWays } from './send-ways'
 import { commentBodyHash, contentHash, hashedIdentity } from './hash'
 import { autoCategoryOf, autoRuleId } from './modes'
 import { buildPublishRequest, publishCapability } from './request'
@@ -107,7 +108,8 @@ export class SendGate {
     // in code, and the code may have changed since the approval (a rule of the platform, a way of publishing the application no longer has).
     if (draft.markup === 'markdown') {
       const platform = first.channel.platform
-      const unfit = sendProblems(platform, renderForPlatform(draft, platform))
+      const approvedBy = this.core.repos.activeApproval(draft.id)?.approvedBy ?? 'user'
+      const unfit = sendProblems(platform, renderForPlatform(draft, platform), sendWays(this.core, { automatic: req.automatic ?? false, approvedBy }))
       if (unfit.length > 0) return block('review', 'post_does_not_fit', ...unfit)
     }
     if (first.opp.kind === 'reply') {

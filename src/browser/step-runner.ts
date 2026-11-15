@@ -27,8 +27,8 @@ export interface StepDriver {
   insertText(text: string): Promise<void>
   /** Brings the page's window to a state that takes input (focus); called before a click or typing. */
   focus(): Promise<void>
-  /** Sets the files of the <input type=file> that `expression` evaluates to (a script cannot do this). */
-  attachFile(expression: string, path: string, what: string): Promise<void>
+  /** Sets the files of the <input type=file> that `expression` evaluates to, all of them at once (a script cannot do this). */
+  attachFile(expression: string, paths: string[], what: string): Promise<void>
 }
 
 /** The pause after a step, so that the page has reacted before it is looked at again. */
@@ -42,9 +42,10 @@ export async function checkUploadable(path: string): Promise<void> {
   if (info.size > MAX_UPLOAD_BYTES) throw new Error('The file is too large to upload')
 }
 
-export async function putFile(driver: StepDriver, expression: string, path: string, what: string): Promise<void> {
-  await checkUploadable(path)
-  await driver.attachFile(expression, path, what)
+export async function putFile(driver: StepDriver, expression: string, path: string | string[], what: string): Promise<void> {
+  const paths = Array.isArray(path) ? path : [path]
+  for (const each of paths) await checkUploadable(each)
+  await driver.attachFile(expression, paths, what)
 }
 
 function wrongHost(host: string): PageStepResult {
@@ -69,7 +70,7 @@ export async function runPageStep(driver: StepDriver, step: PageStep, hosts: str
 
   if (step.do === 'upload') {
     try {
-      await putFile(driver, fileInputByRefScript(step.ref), step.path, step.ref)
+      await putFile(driver, fileInputByRefScript(step.ref), [step.path, ...(step.also ?? [])], step.ref)
     } catch (error) {
       return { status: 'refused', detail: `${step.ref} did not take the file (${error instanceof Error ? error.message : String(error)}).` }
     }

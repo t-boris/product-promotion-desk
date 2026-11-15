@@ -38,8 +38,8 @@ function fake(url = 'https://www.facebook.com/r.php'): Fake {
     mouseClick: async (x, y) => void state.calls.push(`mouse:${x},${y}`),
     insertText: async (text) => void state.calls.push(`insert:${text}`),
     focus: async () => void state.calls.push('focus'),
-    attachFile: async (_expression, path, what) => {
-      state.calls.push(`attach:${what}:${path}`)
+    attachFile: async (_expression, paths, what) => {
+      state.calls.push(`attach:${what}:${paths.join('|')}`)
       if (state.attachError) throw state.attachError
     }
   }
@@ -289,6 +289,21 @@ describe('an upload', () => {
     await expect(checkUploadable(path)).rejects.toThrow('too large')
     await writeFile(path, Buffer.alloc(50 * 1024 * 1024))
     await expect(checkUploadable(path)).resolves.toBeUndefined()
+  })
+
+  it('puts several files into one input in one step, each checked first', async () => {
+    const f = fake()
+    const a = join(dir, 'one.png')
+    const b = join(dir, 'two.png')
+    await writeFile(a, 'x')
+    await writeFile(b, 'y')
+    await run(f, { do: 'upload', ref: 'e3', path: a, also: [b] })
+    expect(f.calls.filter((c) => c.startsWith('attach:'))).toEqual([`attach:e3:${a}|${b}`])
+    // one that cannot be uploaded stops the whole step, and nothing is put in
+    const g = fake()
+    const result = await run(g, { do: 'upload', ref: 'e3', path: a, also: [join(dir, 'missing.png')] })
+    expect(result.status).toBe('refused')
+    expect(g.calls.filter((c) => c.startsWith('attach:'))).toEqual([])
   })
 
   it('looks the input up by its ref', async () => {

@@ -28,6 +28,7 @@ export function SettingsPage() {
   const recommendedId = recommendedEngineId(engines.data ?? [])
   const anySelected = engines.data?.some((engine) => engine.id === current?.engineId) ?? false
   const webEnabled = current?.webMode.enabled ?? false
+  const publishWithAi = current?.publishWith === 'ai_browser'
   const portInUse = usablePort(current?.webMode.port)
   // The field shows the port in use as soon as it changes, applied here or elsewhere, so it never shows another one.
   useEffect(() => {
@@ -58,7 +59,7 @@ export function SettingsPage() {
   }
 
   return (
-    <Page title="Settings" subtitle="AI engine, notifications, local web access and version">
+    <Page title="Settings" subtitle="AI engine, notifications, publishing, local web access and version">
       <Card
         title="AI engine"
         actions={
@@ -134,6 +135,30 @@ export function SettingsPage() {
             testId="notifications-switch"
           />
         </div>
+      </Card>
+
+      <Card title="Publishing">
+        <Hint>
+          Posts go out through each platform's connector. Where a connector cannot carry a post (pictures, or a platform without one: Instagram, Facebook, Threads), the AI can publish it in the account's own
+          browser instead, on your press of Send.
+        </Hint>
+        <ErrorNote error={updating.error} />
+        <div className="group-row">
+          <Switch
+            checked={publishWithAi}
+            disabled={!current || updating.busy}
+            onChange={(next) => void update({ publishWith: next ? 'ai_browser' : 'connector' })}
+            label="Let the AI publish in the account's browser"
+            testId="publish-with-switch"
+          />
+        </div>
+        <More label="What the AI may and may not do">
+          <Hint>
+            It types only the post you approved, puts in only the pictures you approved, and presses only the button that publishes, and only when you press Send; you watch it in the account's browser window and can stop it.
+            A scheduled send never uses it. It needs Claude Code as the engine: Codex cannot be confined to this.
+          </Hint>
+        </More>
+        {publishWithAi && current?.engineId !== 'claude' && <div className="hint warn">Claude Code is not the selected engine, so the AI cannot publish yet: select Claude Code above, or a send will stop and tell you.</div>}
       </Card>
 
       <Card title="Local web access">

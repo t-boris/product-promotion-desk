@@ -151,12 +151,12 @@ export class ChromeRawPage extends ScriptedPage {
         await page.mouse.up()
       },
       insertText: (text) => page.keyboard.sendCharacter(text),
-      attachFile: async (expression, path, what) => {
+      attachFile: async (expression, paths, what) => {
         const found = await page.evaluateHandle(expression)
         try {
           const element = found.asElement()
           if (!element) throw new Error(`Could not upload: no file input matches "${what}".`)
-          await (element as unknown as { uploadFile(...paths: string[]): Promise<void> }).uploadFile(path)
+          await (element as unknown as { uploadFile(...paths: string[]): Promise<void> }).uploadFile(...paths)
         } finally {
           await found.dispose().catch(() => undefined)
         }

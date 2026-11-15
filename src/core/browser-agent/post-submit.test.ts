@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { composePageOf, destinationMatches, fieldValueScript, formTextScript, isPublishingControl, looksLikeSubmit, neverClicked, normalizeText, onComposePage, parseHeldText, platformWarning, replyTarget, sameContent } from './post-submit'
+import { composePageOf, destinationMatches, fieldValueScript, formTextScript, isAttachControl, isPublishingControl, opensFileChooser, usesComposerDialog, looksLikeProgress, looksLikeSubmit, neverClicked, normalizeText, onComposePage, parseHeldText, platformWarning, replyTarget, sameContent } from './post-submit'
 
 const HOSTS = ['reddit.com']
 const COMMENT = 'https://www.reddit.com/r/astrology/comments/abc123/my_chart/def456/'
@@ -233,11 +233,11 @@ describe('reading what the form holds', () => {
 })
 
 describe('which control is named like one that publishes', () => {
-  it.each(['Post', 'Reply', 'Comment', 'Submit', 'Publish', 'Save', 'Send', 'post', 'COMMENT', 'Add comment', 'Add a comment', 'Post comment', 'Post reply', 'Submit post', 'Publish post', 'Save comment', 'Comment ›', 'Post the new comment', 'Опубликовать', 'Отправить', 'Ответить', 'Добавить комментарий', 'Оставить комментарий'])('is: %s', (name) => {
+  it.each(['Share', 'Share post', 'Поделиться', 'Post', 'Reply', 'Comment', 'Submit', 'Publish', 'Save', 'Send', 'post', 'COMMENT', 'Add comment', 'Add a comment', 'Post comment', 'Post reply', 'Submit post', 'Publish post', 'Save comment', 'Comment ›', 'Post the new comment', 'Опубликовать', 'Отправить', 'Ответить', 'Добавить комментарий', 'Оставить комментарий'])('is: %s', (name) => {
     expect(looksLikeSubmit(name)).toBe(true)
   })
 
-  it.each(['', '  ', 'Delete', 'Delete comment', 'Report', 'Report comment', 'Cancel', 'Edit', 'Share', 'Award', 'Comment as u/someone', 'Reply to everyone and notify all of them now', 'Log in', 'Sign up to post', 'Posts', 'Удалить', 'Пожаловаться', 'Отмена', 'Post (disabled)', 'Save to bookmarks and share it', 'Post the your new comment'])('is not: "%s"', (name) => {
+  it.each(['', '  ', 'Delete', 'Delete comment', 'Report', 'Report comment', 'Cancel', 'Edit', 'Award', 'Comment as u/someone', 'Reply to everyone and notify all of them now', 'Log in', 'Sign up to post', 'Posts', 'Удалить', 'Пожаловаться', 'Отмена', 'Post (disabled)', 'Save to bookmarks and share it', 'Post the your new comment'])('is not: "%s"', (name) => {
     expect(looksLikeSubmit(name)).toBe(false)
   })
 })
@@ -298,5 +298,84 @@ describe('the compose page of a community, and what a reply answers', () => {
     expect(replyTarget('https://www.reddit.com/r/astrology')).toBeNull()
     expect(replyTarget('https://news.ycombinator.com/item?id=4242')).toBeNull()
     expect(replyTarget('not an address')).toBeNull()
+  })
+})
+
+describe('which control only goes on to the next step of a form', () => {
+  it.each(['Next', 'next', 'Continue', 'Next step', 'Next ›', 'Далее', 'Продолжить', 'Дальше'])('%s is one', (name) => {
+    expect(looksLikeProgress(name)).toBe(true)
+  })
+
+  it.each(['', 'Next post', 'Continue reading', 'Next page of comments', 'Share', 'Post', 'Done', 'Skip', 'Back', 'Select from computer', 'Next and publish', 'Next step step', 'Create', 'OK'])('%s is not', (name) => {
+    expect(looksLikeProgress(name)).toBe(false)
+  })
+
+  it('is never a control that publishes', () => {
+    for (const name of ['Next', 'Continue', 'Далее']) expect(looksLikeSubmit(name)).toBe(false)
+    for (const name of ['Share', 'Post', 'Publish']) expect(looksLikeProgress(name)).toBe(false)
+  })
+})
+
+describe('which element takes a file', () => {
+  it('is a file input that is not disabled, and never a button that opens a chooser', () => {
+    expect(isAttachControl({ role: 'input:file' })).toBe(true)
+    expect(isAttachControl({ role: 'input:file', disabled: true })).toBe(false)
+    expect(isAttachControl({ role: 'button', })).toBe(false)
+    expect(isAttachControl({ role: 'link' })).toBe(false)
+    expect(isAttachControl({ role: 'input:text' })).toBe(false)
+  })
+})
+
+describe('where a post of a platform with a dialog for new posts may be worked on', () => {
+  const INSTAGRAM = 'https://www.instagram.com/brand/'
+  const HOSTS_I = ['instagram.com']
+
+  it('is the profile and the front page of the site, and no other page of it', () => {
+    expect(destinationMatches('https://www.instagram.com/brand/', INSTAGRAM, 'post', HOSTS_I)).toBe(true)
+    expect(destinationMatches('https://www.instagram.com/', INSTAGRAM, 'post', HOSTS_I)).toBe(true)
+    expect(destinationMatches('https://www.instagram.com/accounts/logout/', INSTAGRAM, 'post', HOSTS_I)).toBe(false)
+    expect(destinationMatches('https://www.instagram.com/other/', INSTAGRAM, 'post', HOSTS_I)).toBe(false)
+    expect(destinationMatches('https://evil.example/', INSTAGRAM, 'post', HOSTS_I)).toBe(false)
+  })
+
+  it('is a closed list of the platforms with a recipe, not everything that is not Reddit', () => {
+    for (const url of ['https://www.instagram.com/brand/', 'https://www.facebook.com/groups/x', 'https://fb.com/x', 'https://www.threads.net/@brand', 'https://threads.com/@brand']) expect(usesComposerDialog(url)).toBe(true)
+    for (const url of ['https://www.reddit.com/r/astrology', 'https://www.reddit.com/user/brand', 'https://x.com/brand', 'https://example.org/', 'https://evilinstagram.com/', 'https://instagram.com.evil.example/', 'not an address']) expect(usesComposerDialog(url)).toBe(false)
+    // a Reddit destination of another shape does not open the front page
+    expect(destinationMatches('https://www.reddit.com/', 'https://www.reddit.com/user/brand', 'post', ['reddit.com'])).toBe(false)
+    expect(destinationMatches('https://www.example.org/', 'https://www.example.org/brand/', 'post', ['example.org'])).toBe(false)
+  })
+
+  it('treats a destination with no path as the root and nothing under it: the host alone is not a place', () => {
+    const root = 'https://www.instagram.com/'
+    expect(destinationMatches('https://www.instagram.com/', root, 'post', HOSTS_I)).toBe(true)
+    for (const path of ['accounts/edit/', 'direct/inbox/', 'accounts/logout/', 'brand/']) expect(destinationMatches(`https://www.instagram.com/${path}`, root, 'post', HOSTS_I)).toBe(false)
+    expect(destinationMatches('https://www.example.org/anything', 'https://www.example.org/', 'post', ['example.org'])).toBe(false)
+  })
+
+  it('is not so for Reddit, whose community pages are the place, nor for a reply', () => {
+    expect(destinationMatches('https://www.reddit.com/', 'https://www.reddit.com/r/astrology', 'post', ['reddit.com'])).toBe(false)
+    expect(destinationMatches('https://www.instagram.com/', 'https://www.instagram.com/p/abc/', 'reply', HOSTS_I)).toBe(false)
+  })
+})
+
+describe('which control opens the system\'s file chooser', () => {
+  it.each(['Select from computer', 'Select From Computer', 'select from your computer', 'Select files', 'Choose file', 'Choose files', 'Choose a photo', 'Browse files', 'Upload file', 'Upload files', 'Upload a photo', 'Upload photos', 'Add photo', 'Add a picture', 'Select photos from your device', 'Select photos and videos from your device', 'Add media', 'Upload', 'Browse', 'Upload from computer', 'Upload from your device', 'Выбрать файл', 'Выбрать файлы', 'Выбрать с компьютера', 'Загрузить фото', 'Добавить изображение'])('the button %s does', (name) => {
+    expect(opensFileChooser({ role: 'button', name })).toBe(true)
+    expect(opensFileChooser({ role: 'link', name })).toBe(true)
+  })
+
+  it('does so for a file input of any name', () => {
+    expect(opensFileChooser({ role: 'input:file', name: '' })).toBe(true)
+    expect(opensFileChooser({ role: 'input:file', name: 'Next' })).toBe(true)
+  })
+
+  it.each(['', 'Next', 'Select', 'Choose', 'Pick', 'Browse communities', 'Upload date', 'Select a community', 'Choose a community', 'Choose flair', 'Upload date', 'Photo/video', 'Photos', 'Create', 'Add comment', 'Add a tag', 'Select all', 'Browse communities', 'Files of the month', 'Share', 'Continue'])('the button %s does not', (name) => {
+    expect(opensFileChooser({ role: 'button', name })).toBe(false)
+  })
+
+  it('is about controls: a text box named like one is not one', () => {
+    expect(opensFileChooser({ role: 'input:text', name: 'Select from computer' })).toBe(false)
+    expect(opensFileChooser({ role: 'textarea', name: 'Choose file' })).toBe(false)
   })
 })

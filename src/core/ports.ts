@@ -155,7 +155,8 @@ export type PageStep =
   | { do: 'type'; ref: string; text: string }
   | { do: 'select'; ref: string; text: string }
   /** Puts a file (an absolute path, one the application chose) into a file input: a script cannot do this, the browser's own protocol does. */
-  | { do: 'upload'; ref: string; path: string }
+  /** `path` goes into the input; `also` goes in with it, in one step (a file input holds the files of its last step, so several pictures go in together). */
+  | { do: 'upload'; ref: string; path: string; also?: string[] }
   | { do: 'click'; ref: string }
   | { do: 'key'; key: 'Enter' | 'Tab' | 'Escape' }
 

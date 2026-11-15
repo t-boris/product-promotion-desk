@@ -599,12 +599,21 @@ export function renderForPlatform(content: PostContent, platform: string, option
   return { title, text, link: content.link, attachments: content.attachments, format: form.format, notes, problems }
 }
 
+/** How this application can publish, as far as it decides what a post may hold: the AI browser carries pictures to any platform, and only on a send the owner presses (DEC-031). */
+export interface SendWays {
+  aiBrowser: boolean
+  /** The AI browser is chosen, and this send is one it never carries: a scheduled one, or one on an automatic approval. */
+  unattended?: boolean
+}
+
 /**
  * Why a markdown post cannot be sent from this application as it is, in words: what the platform cannot take (`problems` of the render) and
- * what the way the application publishes cannot carry. Today a picture goes out only as a Reddit post by itself, and no other platform takes
- * one; the owner can copy the post and publish it by hand. Older drafts are not judged here: their connectors check them when they send.
+ * what the way the application publishes cannot carry. Through the connector a picture goes out only as a Reddit post by itself; through the
+ * AI browser (`ways.aiBrowser`: chosen in the settings, the engine drives the account's own browser, and the owner presses Send) a picture
+ * goes to any platform that takes one, and is limited by what the platform takes. The owner can always copy the post and publish it by hand.
+ * Older drafts are not judged here: their connectors check them when they send.
  */
-export function sendProblems(platform: string, rendered: RenderedPost): string[] {
+export function sendProblems(platform: string, rendered: RenderedPost, ways: SendWays = { aiBrowser: false }): string[] {
   const problems = [...rendered.problems]
   const label = platformLabel(platform)
   // What the Reddit publisher refuses, said before the owner approves rather than after the send fails.
@@ -613,12 +622,17 @@ export function sendProblems(platform: string, rendered: RenderedPost): string[]
     if (rendered.link && rendered.text.trim()) problems.push('A Reddit post is a link or a text, not both: leave the link out, or the words (put the link in the words).')
     if (rendered.link && !/^https?:\/\//i.test(rendered.link)) problems.push('The link must start with http:// or https://.')
   }
-  if (rendered.attachments.length > 0) {
-    if (platform === 'reddit') {
-      if (rendered.attachments.length > 1) problems.push(`From this application Reddit takes one picture as a post by itself; this post has ${rendered.attachments.length}.`)
-      else if (rendered.text.trim() || rendered.link) problems.push('From this application Reddit takes a picture only as a post by itself, without text or a link. Use “Copy post” and publish it by hand, or post the words without the picture.')
+  if (rendered.attachments.length > 0 && !ways.aiBrowser) {
+    // What the connector cannot carry: more than one picture, or a picture with words, on Reddit; any picture elsewhere.
+    const connectorCannot = platform === 'reddit' ? rendered.attachments.length > 1 || rendered.text.trim() !== '' || rendered.link !== null : true
+    if (connectorCannot && ways.unattended) {
+      // The AI browser is chosen, but this send is one it never carries: the owner presses Send, or publishes by hand.
+      problems.push('This is a scheduled or automatic send, and the AI browser carries only a send you press yourself: press Send on it, or use “Copy post” and publish it by hand. Nothing was sent.')
+    } else if (platform === 'reddit') {
+      if (rendered.attachments.length > 1) problems.push(`From this application Reddit takes one picture as a post by itself; this post has ${rendered.attachments.length}. The AI browser can send more: choose it in the settings and press Send yourself.`)
+      else if (rendered.text.trim() || rendered.link) problems.push('From this application Reddit takes a picture only as a post by itself, without text or a link. Choose the AI browser in the settings and press Send yourself, or use “Copy post” and publish it by hand, or post the words without the picture.')
     } else {
-      problems.push(`Pictures cannot be sent to ${label} from this application yet. Use “Copy post” and publish it by hand.`)
+      problems.push(`Pictures go to ${label} only through the AI browser, and only when you press Send yourself: choose it in the settings and send this by hand, or use “Copy post” and publish it by hand.`)
     }
   }
   return problems

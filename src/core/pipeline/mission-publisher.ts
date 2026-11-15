@@ -14,11 +14,13 @@
 //    application cannot find is `unknown`, which blocks a resend exactly as for a connector.
 //  - A mission that ends without a press is a definite failure: nothing was submitted, whatever the AI says.
 
-import { renderForPlatform } from '../../shared/post-format'
+import { renderForPlatform, sendProblems } from '../../shared/post-format'
 import type { Comment } from '../../shared/types'
 import type { Core } from '../core'
 import { TakeoverError, type Connector, type ConnectorContext, type PublishedRef, type PublishRequest } from '../ports'
-import type { ApprovedContent, LeaseResult, PostAuthority, PostMissionOutcome, PostMissionRequest, SubmitLease } from '../browser-agent/post-submit'
+import { EXTENSION_BY_MIME } from './attachments'
+import { sendWays } from './send-ways'
+import type { ApprovedContent, ApprovedFile, LeaseResult, PostAuthority, PostMissionOutcome, PostMissionRequest, SubmitLease } from '../browser-agent/post-submit'
 import type { GateGrant, SendGate } from './gate'
 import { contentHash } from './hash'
 import type { FlowStore } from './store'
@@ -152,6 +154,15 @@ export class MissionAuthority implements PostAuthority {
   }
 }
 
+/**
+ * The pictures of the approved post as the mission is given them: each by a name the application chose ("picture-1.png", in the order of the
+ * post), never the owner's own file name (that is text of someone else's making, and it would be shown to the AI), with the path the AI never
+ * sees and the hash the approval was bound to.
+ */
+export function approvedFilesOf(attachments: PublishRequest['attachments']): ApprovedFile[] {
+  return attachments.map((a, index) => ({ name: `picture-${index + 1}${EXTENSION_BY_MIME[a.mime] ?? ''}`, path: a.path, sha256: a.sha256 }))
+}
+
 export class MissionPublisher {
   constructor(
     private readonly core: Core,
@@ -161,15 +172,19 @@ export class MissionPublisher {
 
   /**
    * Who carries out this send. The AI browser only when the owner chose it, for an approval the owner gave themselves, on a click of
-   * theirs, and for content the AI browser carries (no attachments yet). Everything else goes through the connector as before.
+   * theirs (`sendWays`). With pictures it carries only what the connector cannot: a post the connector can send (Reddit's picture by itself)
+   * keeps going through it, the way that is known to work. Everything else goes through the connector as before.
    */
   executorFor(grant: GateGrant, automatic: boolean): Executor {
-    if (this.core.settings.app().publishWith !== 'ai_browser') return 'connector'
-    if (automatic || grant.approval.approvedBy !== 'user') return 'connector'
-    if (!this.core.services.postMissions) return 'connector'
+    if (!sendWays(this.core, { automatic, approvedBy: grant.approval.approvedBy }).aiBrowser) return 'connector'
     if (grant.draft.attachments.length > 0) {
-      this.core.log.info('send', 'The AI browser does not carry attachments yet: this one is sent through the connector.', grant.channel.id)
-      return 'connector'
+      const platform = grant.channel.platform
+      const rendered = renderForPlatform(grant.draft, platform)
+      // Legacy drafts are judged by their connector, as before: it refuses what it cannot carry.
+      if (grant.draft.markup !== 'markdown' || sendProblems(platform, rendered, { aiBrowser: false }).length === 0) {
+        this.core.log.info('send', 'This one is sent through the connector, which can carry it.', grant.channel.id)
+        return 'connector'
+      }
     }
     return 'ai_browser'
   }
@@ -197,7 +212,7 @@ export class MissionPublisher {
     }
 
     const request = grant.request
-    const content: ApprovedContent = { kind: request.kind, title: request.title, text: request.text, link: request.link, destination: request.destination }
+    const content: ApprovedContent = { kind: request.kind, title: request.title, text: request.text, link: request.link, destination: request.destination, attachments: approvedFilesOf(request.attachments) }
     let authority: MissionAuthority
     try {
       authority = new MissionAuthority(this.core, this.gate, grant, content, { attachments: request.attachments }, automatic)

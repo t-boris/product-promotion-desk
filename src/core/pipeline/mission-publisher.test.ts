@@ -4,14 +4,14 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../shared/api'
-import type { Opportunity } from '../../shared/types'
+import type { MediaItem, Opportunity } from '../../shared/types'
 import type { PostMissionOutcome, PostMissionRequest, PostMissionService } from '../browser-agent/post-submit'
 import { TicketError, type SendTicket } from '../ports'
 import type { PublishedItem } from '../testing/fake-connector'
 import { SendBlockedError, SendGate, type GateGrant } from './gate'
 import { renderForPlatform } from '../../shared/post-format'
 import { contentHash } from './hash'
-import { AI_BROWSER_BASIS, MissionPublisher, missionHosts } from './mission-publisher'
+import { AI_BROWSER_BASIS, MissionPublisher, approvedFilesOf, missionHosts } from './mission-publisher'
 import type { SendingFlow } from './sending'
 import { closeWorld, makeWorld, type World } from './test-fixture'
 
@@ -383,6 +383,96 @@ describe('a post written in the post editor goes through the AI browser as the p
     const result = await publisher.publish({ connector: world.connector as never, ctx: {} as never }, grant, new Date().toISOString(), false)
     expect(result).toMatchObject({ status: 'not_started' })
     expect((result as { error: string }).error).toMatch(/not what was approved/)
+  })
+})
+
+describe('a post with pictures goes through the AI browser when the connector cannot carry it (DEC-031)', () => {
+  const call = (method: string, args: unknown) => (world.core.router.call as (m: string, a: unknown) => Promise<never>)(method, args)
+  async function picture(tag: string): Promise<MediaItem> {
+    const header = Buffer.alloc(24)
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(header)
+    return (await call('media.add', { productId: world.product.id, name: `${tag}.png`, base64: Buffer.concat([header, Buffer.from(tag)]).toString('base64'), origin: 'pasted' })) as MediaItem
+  }
+  const withPictures = async (tags: string[], text = 'A caption for the pictures.') => {
+    const items = await Promise.all(tags.map(picture))
+    const created = (await call('publications.create', {
+      channelId: world.channel.id,
+      draft: { markup: 'markdown', title: 'A title', text, attachments: items.map((m) => ({ name: m.name, path: m.path, mime: '', sha256: '', mediaId: m.id })) }
+    })) as { opportunity: Opportunity }
+    return created.opportunity
+  }
+  const approve = async (opp: Opportunity) => call('opportunities.approve', { id: opp.id })
+
+  it('is approved only once the AI browser is chosen, and then carries the approved files under names of its own', async () => {
+    world = makeWorld()
+    const opp = await withPictures(['first', 'second'])
+    await expect(approve(opp)).rejects.toMatchObject({ code: 'post_does_not_fit' })
+    let seen: PostMissionRequest | null = null
+    useMissions(async (request) => {
+      seen = request
+      await press(request)
+      return { reported: { status: 'done', reason: 'It shows.' } }
+    })
+    await approve(opp)
+
+    const action = await sending().send(opp.id)
+
+    expect(action.state).toBe('confirmed')
+    expect(publishCalls()).toBe(0)
+    const draft = world.core.repos.latestDraft(opp.id)!
+    const files = (seen as PostMissionRequest | null)?.authority.content.attachments
+    expect(files).toEqual([
+      { name: 'picture-1.png', path: draft.attachments[0]!.path, sha256: draft.attachments[0]!.sha256 },
+      { name: 'picture-2.png', path: draft.attachments[1]!.path, sha256: draft.attachments[1]!.sha256 }
+    ])
+    // The AI never sees the owner's own file names.
+    expect(JSON.stringify(files)).not.toMatch(/first\.png|second\.png/)
+    expect(actionRow(action.id).basis).toContain(AI_BROWSER_BASIS)
+  })
+
+  it('is not sent by a scheduled send, which never drives a browser: the gate says why, and nothing is sent', async () => {
+    world = makeWorld()
+    const opp = await withPictures(['one'])
+    const missions = useMissions(async () => undefined)
+    await approve(opp)
+    const error = await sending().send(opp.id, { automatic: true }).then(() => null, (e: unknown) => e)
+    expect(error).toBeInstanceOf(SendBlockedError)
+    expect((error as SendBlockedError).block.code).toBe('post_does_not_fit')
+    expect((error as SendBlockedError).message).toMatch(/scheduled or automatic send.*press Send on it/)
+    expect(missions.requests).toEqual([])
+    expect(publishCalls()).toBe(0)
+  })
+
+  it('keeps going through the connector when the connector can carry it (one picture, as a Reddit post by itself)', async () => {
+    world = makeWorld()
+    world.core.db.prepare('UPDATE channels SET platform = ? WHERE id = ?').run('reddit', world.channel.id)
+    const items = [await picture('alone')]
+    const created = (await call('publications.create', { channelId: world.channel.id, draft: { markup: 'markdown', title: 'T', text: '', attachments: items.map((m) => ({ name: m.name, path: m.path, mime: '', sha256: '', mediaId: m.id })) } })) as { opportunity: Opportunity }
+    await approve(created.opportunity)
+    useMissions(async () => undefined)
+    const publisher = new MissionPublisher(world.core, new SendGate(world.core, world.store), world.store)
+    const grant = (await new SendGate(world.core, world.store).authorize({ opportunityId: created.opportunity.id, automatic: false })) as GateGrant
+    expect(publisher.executorFor(grant, false)).toBe('connector')
+  })
+
+  it('is the connector for an automatic send and for a rule-approved one, with pictures too (executorFor)', async () => {
+    world = makeWorld()
+    const opp = await withPictures(['pic'])
+    useMissions(async () => undefined)
+    await approve(opp)
+    const publisher = new MissionPublisher(world.core, new SendGate(world.core, world.store), world.store)
+    const grant = (await new SendGate(world.core, world.store).authorize({ opportunityId: opp.id, automatic: false })) as GateGrant
+    expect(publisher.executorFor(grant, false)).toBe('ai_browser')
+    expect(publisher.executorFor(grant, true)).toBe('connector')
+    expect(publisher.executorFor({ ...grant, approval: { ...grant.approval, approvedBy: 'auto_rule' } }, false)).toBe('connector')
+    world.core.settings.updateApp({ publishWith: 'connector' })
+    expect(publisher.executorFor(grant, false)).toBe('connector')
+  })
+
+  it('names the pictures by their place in the post and their type, never by the owner\'s file name', () => {
+    const file = (name: string, mime: string) => ({ name, path: `/media/${name}`, mime, sha256: name })
+    expect(approvedFilesOf([file('holiday photo of me.JPG', 'image/jpeg'), file('x.png', 'image/png'), file('y', 'image/webp'), file('z', 'application/x-unknown')]).map((f) => f.name)).toEqual(['picture-1.jpg', 'picture-2.png', 'picture-3.webp', 'picture-4'])
+    expect(approvedFilesOf([])).toEqual([])
   })
 })
 

@@ -8,9 +8,10 @@
 // call runs in its own short stretch of control, so the person can take the browser between two calls (a CAPTCHA, a code); a bounded
 // number of calls. Full access of the engine is the owner's decision (DEC-018): these checks keep the work sane, they are not a wall.
 
+import { stat } from 'node:fs/promises'
 import { TakeoverError, type BrowserPage, type PageStep } from '../ports'
 import type { McpTool, McpToolHost, McpToolResult } from '../mcp/protocol'
-import { changesPostSettings, communitiesShown, communityOf, destinationMatches, fieldValueScript, formTextScript, isPublishingControl, looksLikeSubmit, neverClicked, onComposePage, composePageOf, parseHeldText, replyTarget, platformWarning, sameContent, type HeldText, type PostSetup, type SubmitLease } from './post-submit'
+import { DOCUMENT_TOKEN_SCRIPT, approvedFileProblem, changesPostSettings, communitiesShown, communityOf, destinationMatches, fieldValueScript, filesHeldScript, formTextScript, isAttachControl, isPublishingControl, looksLikeProgress, looksLikeSubmit, neverClicked, opensFileChooser, onComposePage, composePageOf, parseHeldFiles, parseHeldText, replyTarget, platformWarning, sameContent, usesComposerDialog, type HeldText, type PostSetup, type SubmitLease } from './post-submit'
 import { isJoinControl, joinNamesCommunity, JOIN_AMBIGUOUS, JOIN_CHANGED, JOIN_CLICK_ONLY, JOIN_INSTRUCTIONS, JOIN_PRESSED, JOIN_WRONG_PAGE, type JoinSetup } from './join'
 import { parseSnapshot, renderElements, snapshotScript, type PageSnapshot, type SnapshotElement } from './snapshot'
 
@@ -158,15 +159,28 @@ const POST_INSTRUCTIONS = [
   'When only a person can help (a CAPTCHA, a code sent to a phone or an e-mail, an identity check), call ask_owner and wait. When you have finished, or cannot go on, call report_result.'
 ].join(' ')
 
-const postTools = (): McpTool[] => [
+const attachTool = (names: string[]): McpTool =>
+  tool(
+    'browser_attach',
+    `Put ALL the pictures the owner approved (${names.join(', ')}) into one file input of the page, in one step: an element listed as input:file, which a site often hides behind a button (use the input itself and never click a button that opens a file chooser). They go in once, together, before browser_submit; an input without the "multiple" attribute takes one picture, and with several approved the step is refused: then call report_result with needs_owner. Once the pictures are in the form, only the controls named Next or Continue are clicked.`,
+    { ref },
+    ['ref']
+  )
+
+const SHARES_THE_PAGE = /^\s*(?:share|поделиться)\b/i
+const POST_PICTURES =
+  'The owner approved pictures too. Put them into the form with browser_attach (one call, all of them, into a file input listed as input:file), before browser_submit: browser_submit refuses until they are in. After that only controls named Next or Continue are clicked, and the control that publishes (Share, Post) is pressed by browser_submit alone.'
+
+const postTools = (pictures: string[]): McpTool[] => [
   TOOLS[0] as McpTool,
   TOOLS[1] as McpTool,
   tool('browser_click', 'Click an element, like a person with the mouse, to get to the form (open the thread, the comment box, the reply field). Not for the control that publishes: that is browser_submit. Waits for the page to react.', { ref }, ['ref']),
   TOOLS.find((t) => t.name === 'browser_select') as McpTool,
+  ...(pictures.length > 0 ? [attachTool(pictures)] : []),
   TOOLS.find((t) => t.name === 'browser_wait_for') as McpTool,
   tool(
     'browser_submit',
-    'Publish the approved content: the application itself types it into the fields you name (you never give it any text), reads every field back, looks at the page once more and then presses the control you name. Call it once, when the form is open and empty and you can see its fields and its button in browser_snapshot. text_ref is the field for the text (a text box: the comment box, the body); title_ref and link_ref only when the approved content has a title or a link, and the form has fields for them; submit_ref is the button of the form, named like Post, Reply, Comment, Submit, Publish or Save. The labels must be the ones of your last browser_snapshot: look again after the page changed. If the answer says nothing was submitted, you may look again and call it again; if it says the control was pressed, do not call it again.',
+    'Publish the approved content: the application itself types it into the fields you name (you never give it any text), reads every field back, looks at the page once more and then presses the control you name. Call it once, when the form is open and empty (with the approved pictures in it, when there are any) and you can see its fields and its button in browser_snapshot. text_ref is the field for the text (a text box: the comment box, the body); title_ref and link_ref only when the approved content has a title or a link, and the form has fields for them; submit_ref is the button of the form, named like Post, Reply, Comment, Submit, Publish or Save. The labels must be the ones of your last browser_snapshot: look again after the page changed. If the answer says nothing was submitted, you may look again and call it again; if it says the control was pressed, do not call it again.',
     {
       text_ref: { type: 'string', description: 'The label of the field the text goes into, like e12' },
       title_ref: { type: 'string', description: 'The label of the title field, only when the approved content has a title' },
@@ -205,6 +219,11 @@ const ENDED = 'This mission is over. Stop now and do not call any tool.'
 const FORM_HOLDS_TEXT =
   'A field on this page holds text, and nothing is clicked or chosen while a form holds text: a press of yours could publish it, and only browser_submit publishes. Open the page again with browser_navigate to start with an empty form. If the text comes back (the site keeps a draft, or the address fills the form in), call report_result with needs_owner and say so.'
 const FIELDS_UNREADABLE = 'The fields of the page could not be read, so nothing is clicked or chosen: it is not known that the form is empty. Look again with browser_snapshot, or call report_result with needs_owner.'
+const FILE_CHOOSER =
+  'That control opens the system\'s file chooser, a window nobody answers: it is not clicked. The approved pictures go into the page\'s file input (an element listed as input:file, even when the site hides it behind that button) with browser_attach.'
+const PICTURE_IN_FORM =
+  'An approved picture is in the form, and from here only a control named Next or Continue is clicked: anything else could be the control that publishes under a name nobody listed, and only browser_submit presses that one. If the page needs something else to go on (a choice, a crop, a setting), call report_result with needs_owner and say what it asks.'
+const PICTURE_IN_FORM_CHOICE = 'An approved picture is in the form, and nothing is chosen in a list any more: the form is published as the owner approved it. If the page needs a choice to go on, call report_result with needs_owner and say what it asks.'
 const NOT_PUBLISHED_HERE =
   'This control joins, follows, votes, blocks, deletes, reports, signs out or grants access, and nothing of the kind is done in this mission: only the approved content is published, and only by browser_submit. If the page insists on it, call report_result with needs_owner and say what it asks.'
 const POST_SETTING_CONTROL =
@@ -255,6 +274,12 @@ export class BrowserToolbox implements McpToolHost {
   private lastActionAt: number | null = null
   /** Join missions: the Join button was pressed. Nothing more is clicked or opened after it. */
   private joined = false
+  /**
+   * Post missions: the approved pictures were put into the form of this document (`token`: see DOCUMENT_TOKEN_SCRIPT), and the form the file input was
+   * in, when the page marks forms. It is true only while the document is the same: a page that was loaded again has an empty form. While it is true, the
+   * AI's own clicks are those that go on to a next step, and no others.
+   */
+  private attached: { token: string; form: number | undefined } | null = null
   private humanCheckSeen: string | null = null
   private warningSeen: string | null = null
   private last: PageSnapshot | null = null
@@ -270,8 +295,8 @@ export class BrowserToolbox implements McpToolHost {
     const names = Object.keys(deps.files ?? {})
     const withUpload = names.length > 0 ? [...TOOLS.slice(0, 4), uploadTool(names), ...TOOLS.slice(4)] : TOOLS
     if (deps.post && deps.join) throw new Error('A mission is a post or a join, never both.')
-    this.tools = deps.join ? joinTools(deps.join) : deps.post ? postTools() : deps.remember ? withUpload : withUpload.filter((t) => t.name !== 'remember_lesson')
-    this.instructions = deps.join ? JOIN_INSTRUCTIONS : deps.post ? POST_INSTRUCTIONS : INSTRUCTIONS
+    this.tools = deps.join ? joinTools(deps.join) : deps.post ? postTools((deps.post.authority.content.attachments ?? []).map((f) => f.name)) : deps.remember ? withUpload : withUpload.filter((t) => t.name !== 'remember_lesson')
+    this.instructions = deps.join ? JOIN_INSTRUCTIONS : deps.post ? ((deps.post.authority.content.attachments ?? []).length > 0 ? `${POST_INSTRUCTIONS} ${POST_PICTURES}` : POST_INSTRUCTIONS) : INSTRUCTIONS
     this.maxCalls = deps.maxCalls ?? DEFAULT_MAX_CALLS
     this.askWaitMs = deps.askWaitMs ?? DEFAULT_ASK_WAIT_MS
   }
@@ -297,6 +322,8 @@ export class BrowserToolbox implements McpToolHost {
           return await this.select(str(args.ref), str(args.option))
         case 'browser_submit':
           return await this.submit(args)
+        case 'browser_attach':
+          return await this.attach(str(args.ref))
         case 'browser_upload':
           return await this.upload(str(args.ref), str(args.file), typeof args.shrink_to_kb === 'number' ? args.shrink_to_kb : 0)
         case 'browser_press_key':
@@ -484,8 +511,14 @@ export class BrowserToolbox implements McpToolHost {
     // option with that text, so the option is a click too and is judged by what it says, as a button is (an item of a menu is one).
     const clicked = option === undefined ? named : [...named, { role: 'button', name: option, submits: false }]
     if (clicked.some((e) => isPublishingControl(e))) return fail(PUBLISHING_CONTROL)
+    if (clicked.some((e) => opensFileChooser(e))) return fail(FILE_CHOOSER)
     if (clicked.some((e) => neverClicked(e.name))) return fail(NOT_PUBLISHED_HERE)
     if (clicked.some((e) => changesPostSettings(e))) return fail(POST_SETTING_CONTROL)
+    // A picture in the form is content that no check of "does a form hold text" can see, so from here only a step forward is recognised.
+    if (await this.picturesInForm(page)) {
+      if (option !== undefined) return fail(PICTURE_IN_FORM_CHOICE)
+      if (!named.every((e) => looksLikeProgress(e.name))) return fail(PICTURE_IN_FORM)
+    }
     return null
   }
 
@@ -679,6 +712,70 @@ export class BrowserToolbox implements McpToolHost {
     return this.carryOut({ do: 'upload', ref: reference, path }, `Uploaded ${file.describe}${note} into "${this.labelOf(reference)}"`, true)
   }
 
+  /** The text that names this document, or 'unknown' when the page cannot say (it is then the same as itself, so nothing is lifted on a guess). */
+  private async documentToken(page: BrowserPage): Promise<string> {
+    try {
+      return String(await page.read<unknown>(DOCUMENT_TOKEN_SCRIPT))
+    } catch (error) {
+      if (error instanceof TakeoverError) throw error
+      return 'unknown'
+    }
+  }
+
+  /** Whether the approved pictures are in the form of the page as it is now: they were put in, and it is the same document (not one loaded since). */
+  private async picturesInForm(page: BrowserPage): Promise<boolean> {
+    return this.attached !== null && this.attached.token === (await this.documentToken(page))
+  }
+
+  /**
+   * Puts ALL the approved pictures into a file input of the page, in one step (post missions): a file input holds the files of its last step,
+   * so pictures put in one by one would replace one another. The AI names the element by a label and never gives a path. Refused unless the
+   * page is the approved destination (the compose page, for a community), the element is a file input that was shown to the AI and is what
+   * it was, no form holds text, every file on disk is still the approved one, and the pictures are not in the form already. What the
+   * input holds afterwards is read back; an input that was emptied by the site (it has read the files) is taken at its word. Nothing here
+   * presses anything that publishes: browser_submit does, and only while the pictures are in the form.
+   */
+  private async attach(reference: string): Promise<McpToolResult> {
+    if (!REF.test(reference)) return fail('ref must be a label from browser_snapshot, like e12.')
+    const files = (this.deps.post as PostSetup).authority.content.attachments ?? []
+    const [first, ...rest] = files
+    if (!first) return fail('There are no approved pictures.')
+    return this.acting(async (page) => {
+      if (await this.picturesInForm(page)) return fail('The approved pictures are in the form already: they go in once, all together.')
+      const now = await this.observe(page)
+      if (!now) return fail('The page shows nothing usable yet. Wait a moment and look again.')
+      const wrong = this.pageProblem(now, true)
+      if (wrong) return fail(`Nothing was attached: ${wrong}`)
+      const fresh = now.elements.find((e) => e.ref === reference)
+      if (!fresh) return fail(`${reference} is not on the page now: the page changed since it was shown. Look at the page again (browser_snapshot) and use a ref from it.`)
+      const seen = this.shown?.elements.find((e) => e.ref === reference)
+      if (!seen) return fail(`${reference} was not shown to you by browser_snapshot. Look at the page (browser_snapshot) and use a ref from it.`)
+      if (!isAttachControl(fresh) || !isAttachControl(seen)) return fail(`${reference} is not a file input (it is ${fresh.role}). The pictures go into an element listed as input:file; a button that opens a file chooser is never clicked.`)
+      if (fresh.name !== seen.name || fresh.role !== seen.role) return fail(`${reference} is not what it was when you looked (the page changed since your browser_snapshot). Look again with browser_snapshot.`)
+      const hands = await this.handsOff(page)
+      if (hands) return hands
+      for (const file of files) {
+        const problem = await approvedFileProblem(file)
+        if (problem) return fail(`Nothing was attached: ${problem}`)
+      }
+      const many = files.length === 1 ? 'the approved picture' : `the ${files.length} approved pictures`
+      const result = await this.stepOn(page, { do: 'upload', ref: reference, path: first.path, ...(rest.length > 0 ? { also: rest.map((f) => f.path) } : {}) }, `Put ${many} into "${this.labelOf(reference)}"`, true)
+      this.touched()
+      if (result.isError) return result
+      // What the input holds now. Empty: the site has read the files and cleared it, which is what a wizard does. Anything else must be the approved files.
+      const held = parseHeldFiles(await page.read<unknown>(filesHeldScript(reference)).catch(() => null))
+      if (held !== null && held.length > 0) {
+        const sizes = (list: { size: number }[]): string => list.map((f) => f.size).sort((a, b) => a - b).join(',')
+        const approved = await approvedSizes(files)
+        if (approved === null || sizes(held) !== sizes(approved.map((size) => ({ size })))) {
+          return fail(`The file input holds ${held.length} file${held.length === 1 ? '' : 's'} now, not the ${files.length} approved. Nothing is counted as attached: call report_result with needs_owner and say what the input does.`)
+        }
+      }
+      this.attached = { token: await this.documentToken(page), form: fresh.form }
+      return result
+    })
+  }
+
   private async pressKey(key: string): Promise<McpToolResult> {
     if (key !== 'Enter' && key !== 'Tab' && key !== 'Escape') return fail('key must be Enter, Tab or Escape.')
     return this.carryOut({ do: 'key', key }, `Pressed ${key}`, true)
@@ -751,13 +848,23 @@ export class BrowserToolbox implements McpToolHost {
         return fail(`The approved content has no ${part.name}: leave ${part.name}_ref out.`)
       }
     }
-    if (parts.length === 0) return fail('There is nothing to publish.')
+    const pictures = content.attachments ?? []
+    if (parts.length === 0 && pictures.length === 0) return fail('There is nothing to publish.')
     const refs = [...parts.map((p) => p.ref), submitRef]
     if (refs.some((r) => !REF.test(r))) return fail('Every label must be one from browser_snapshot, like e12 (submit_ref and the field labels).')
     if (new Set(refs).size !== refs.length) return fail('The fields and the control must be different elements.')
 
     // Everything that depends on the state of the mission or of the page is decided in the page's own queue, in turn (see `acting`).
     return this.acting(async (page) => {
+      // The approved pictures are in the form of this document first: the control is not pressed for a post that would go out without them, nor on
+      // a page that was loaded again since they were put in (its form is empty). They are read from disk once more: what goes in is what was approved.
+      if (pictures.length > 0) {
+        if (!(await this.picturesInForm(page))) return fail('Nothing was submitted: the approved pictures are not in the form of this page yet (they were not put in, or the page was loaded again since). Put them in with browser_attach first.')
+        for (const file of pictures) {
+          const problem = await approvedFileProblem(file)
+          if (problem) return fail(`Nothing was submitted: ${problem}`)
+        }
+      }
       for (const r of refs) {
         if (!this.shown?.elements.some((e) => e.ref === r)) return fail(`Look at the page first (browser_snapshot): ${r} is not on the page you have seen.`)
       }
@@ -808,6 +915,11 @@ export class BrowserToolbox implements McpToolHost {
     if (!SUBMIT_ROLE.test(control.role) || !looksLikeSubmit(control.name)) {
       return `"${control.name || submitRef}" (${control.role}) is not a control that publishes: submit_ref is the button of the form, named like Post, Reply, Comment, Submit, Publish or Save. When the form has none, call report_result with needs_owner and say so.`
     }
+    // "Share" publishes a new post on the platforms that have a composer dialog (Instagram, Facebook, Threads); anywhere else, and under a comment, it is the button that shares the page.
+    const approved = (this.deps.post as PostSetup).authority.content
+    if (SHARES_THE_PAGE.test(control.name) && !(approved.kind === 'post' && usesComposerDialog(approved.destination))) {
+      return `"${control.name}" shares the page: here a post is published by a control named Post, Submit, Reply, Comment or Save. When the form has none, call report_result with needs_owner and say so.`
+    }
     return this.placeProblem(snapshot, parts, control)
   }
 
@@ -823,6 +935,11 @@ export class BrowserToolbox implements McpToolHost {
     const forms = [...fields.map((f) => f.is.form), control.form]
     if (forms.some((form) => form !== undefined) && new Set(forms).size > 1) {
       return `The fields and "${control.name}" are not in one form: the control belongs to another form of the page than the fields it should publish. Look at the page and name the button of the form the fields are in.`
+    }
+    // The pictures went into a form the page marks, and the fields and the control are in another one that it marks: not the same post.
+    const pictureForm = this.attached?.form
+    if (pictureForm !== undefined && forms[0] !== undefined && pictureForm !== forms[0]) {
+      return 'The approved pictures were put into another form of the page than the one the fields and the control are in. Nothing was typed. Call report_result with needs_owner and say so.'
     }
     if (content.kind !== 'reply') return null
     const box = fields.find((f) => f.part.name === 'text')?.is
@@ -965,6 +1082,15 @@ export class BrowserToolbox implements McpToolHost {
     if (status !== 'done' && status !== 'needs_owner' && status !== 'failed') return fail('status must be done, needs_owner or failed.')
     this.deps.report({ status, reason: oneLine(reason, 300) })
     return ok('Recorded. The mission is over: write one short sentence for the owner and stop.')
+  }
+}
+
+/** The sizes in bytes of the approved files as they are on disk now, or null when one cannot be read. */
+async function approvedSizes(files: { path: string }[]): Promise<number[] | null> {
+  try {
+    return await Promise.all(files.map(async (f) => (await stat(f.path)).size))
+  } catch {
+    return null
   }
 }
 

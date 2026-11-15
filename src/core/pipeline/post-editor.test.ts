@@ -54,7 +54,7 @@ describe('approval of a post written in the post editor', () => {
     const item = await picture()
     setPlatform('facebook')
     const facebook = await create({ text: 'with a picture', attachments: [attach(item)] })
-    expect((await approve(facebook.id))?.message).toMatch(/cannot be sent to Facebook from this application yet\. Use .Copy post. and publish/)
+    expect((await approve(facebook.id))?.message).toMatch(/Pictures go to Facebook only through the AI browser.*Copy post/)
     setPlatform('reddit')
     const textAndPicture = await create({ title: 'T', text: 'words', attachments: [attach(item)] })
     expect((await approve(textAndPicture.id))?.message).toMatch(/only as a post by itself, without text or a link/)
