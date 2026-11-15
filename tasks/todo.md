@@ -838,7 +838,14 @@ Owner's words, recorded in memory `ppd-monitoring-browser-walk-requirements`: ev
 - [x] A3 triage core: `findings` store, `triage.ts` (batch titles -> relevance, then read -> label + relation, goals in the prompt), `Ingestor` method for a triaged post (comments stored as baseline), look-back once per channel, monitor hook that never fails the cycle, `findings.*` handlers
 - [x] A4 Feed: fourth list Noted, First look marker, "Judged not relevant: N · Show", counts
 - [x] Review fixes (two independent reviews): a shorter interval reschedules; migration 308 guards invalid JSON; negative first look refused; first look disabled once done; failing line says it once; counts follow the channel; the clock ticks; locked/archived carried by the Reddit mapping; a separate listing cursor (a failed listing loses nothing); listing ceiling 1000; unreadable posts rotate and settle; unsafe AI note replaced, not fatal; dead-engine cost bounded; pass time budget
-- [ ] Verify: unit + mutants (triage never approves or sends; auto never answers a new post; reply keeps identity / one-voice rules), own-instance probe with a fake clock and the screens probe/tour, `npm run verify`, independent review, PR, CI, merge, 0.22.0, release, `deploy:local`, MarkView walkthrough
+- [x] Verify: unit + mutants (triage never approves or sends; auto never answers a new post; reply keeps identity / one-voice rules), own-instance probe with a fake clock and the screens probe/tour, `npm run verify`, independent review, PR, CI, merge, 0.22.0, release, `deploy:local`, MarkView walkthrough
+
+#### Review of slice A (0.22.0, released 2026-11-15, PR #43)
+- Delivered by four engineers in parallel on a shared contract commit (core schedule, Reddit listing, triage core, Feed UI) and integrated by me; two independent reviews of the diff found one high and eight medium issues, all fixed and tested (listing cursor, ceiling, unreadable posts, unsafe notes, dead-engine cost, pass budget, locked/archived flags, reschedule on a shorter interval, migration guard, the failing line, counts per channel).
+- Evidence: `npm run verify` 156 files / 4792 tests; mutants on every new rule (survivors are equivalent and listed in the engineers' reports); own-instance probe 102 checks (light and dark, 1320 and 980, measured); installed 0.22.0 started on an own data folder: version, migration 308, Noted list and Settings present.
+- Deviations: the Feed state switch is a radio segmented control, not ARIA tabs; the Feed no longer shows the Check now summary line (the channel page keeps it); `skip` findings are pruned after 60 days.
+- Unproven live (issue #8 has the checklist): Reddit `after` paging up to 1000 posts and rate limits; AI cost and quality on real titles; Claude Code on the batch prompt. Every existing channel gets its first look once after the upgrade.
+- Next: slice B (probe first), then slice C.
 
 ### Slice B — 0.23.0 (DEC-041): a tab per task (probe first; design confirmed with the owner after it)
 ### Slice C — 0.24.0 (DEC-042): the read-only browser watcher for channels with no connector
