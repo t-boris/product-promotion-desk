@@ -1,5 +1,5 @@
 // What a list that mixes products calls each of them (BUG-054). A product name is not unique, so two products of one name looked
-// identical in the Products list and in the Product pop-ups of Profiles, Opportunities and Publications. Pure, so the rule is tested
+// identical in the product switcher and in the Product pop-ups of the screens that list more than one product. Pure, so the rule is tested
 // without the interface.
 
 import type { Id, Product } from '../../../../shared/types'

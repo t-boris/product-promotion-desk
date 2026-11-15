@@ -40,12 +40,12 @@ function nextStepThrough(account: Account, through: SignsInThrough): NextStep {
 
 /**
  * What the note under "Add account" says comes next. From the library the owner is led through the account's own steps; from a
- * product's Channels tab the app returns there, and the address, the password and the sign-in wait (the sign-in is needed before the
+ * product's Channels screen the app returns there, and the address, the password and the sign-in wait (the sign-in is needed before the
  * channel is activated, not to connect it or to write a draft by hand).
  */
 export function afterCreateNote(product: { name: string | undefined } | null, linked = false): string {
   // A login that signs in through another account has no address and no password to set.
-  if (linked) return product ? `After adding it you go back to the Channels tab of ${product.name ?? 'this product'} to connect a channel with this account. Its sign-in comes later, in the Accounts section: the AI signs in through the account you chose.` : 'After adding it you are told what to do next: let the AI sign in through the account you chose.'
+  if (linked) return product ? `After adding it you go back to the Channels screen of ${product.name ?? 'this product'} to connect a channel with this account. Its sign-in comes later, in the Accounts section: the AI signs in through the account you chose.` : 'After adding it you are told what to do next: let the AI sign in through the account you chose.'
   if (!product) return 'After adding it you are told what to do next: set the address and the password, then create the account on the platform or sign in.'
-  return `After adding it you go back to the Channels tab of ${product.name ?? 'this product'} to connect a channel with this account. Its address, password and sign-in come later, in the Accounts section, and are needed before the channel is activated.`
+  return `After adding it you go back to the Channels screen of ${product.name ?? 'this product'} to connect a channel with this account. Its address, password and sign-in come later, in the Accounts section, and are needed before the channel is activated.`
 }

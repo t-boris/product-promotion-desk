@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { ControlledSession } from './browser-session'
-import { TakeoverError, TicketError } from './ports'
+import { SessionChangedError, TakeoverError, TicketError } from './ports'
 import { FakeClock, FakePage } from './testing/fakes'
-import type { PageStep, PageStepResult } from './ports'
+import type { BrowserPage, PageStep, PageStepResult, SendTicket } from './ports'
 import { TicketAuthority } from './tickets'
 
 function setup() {
@@ -33,6 +33,34 @@ describe('ControlledSession', () => {
     await expect(session.withAgentControl('x', async () => 1)).rejects.toBeInstanceOf(TakeoverError)
     session.releaseControl()
     await expect(session.withAgentControl('x', async () => 1)).resolves.toBe(1)
+  })
+
+  it('refuses at once when the user holds control, without waiting for the run in progress', async () => {
+    const { session } = setup()
+    let finish!: () => void
+    const running = session.withAgentControl('a', () => new Promise<void>((resolve) => (finish = resolve)))
+    await new Promise((r) => setTimeout(r, 5))
+    session.takeControl()
+    // Asked for while another run holds the queue: the answer is immediate, not after that run.
+    const refused = await Promise.race([session.withAgentControl('b', async () => 'ran').then(() => 'ran', (error: unknown) => (error instanceof TakeoverError ? 'refused at once' : 'other')), new Promise<string>((resolve) => setTimeout(() => resolve('waited'), 50))])
+    expect(refused).toBe('refused at once')
+    finish()
+    await running.catch(() => undefined)
+  })
+
+  it('refuses a run that waited in the queue when the user took control meanwhile, and touches nothing', async () => {
+    const { session, page } = setup()
+    let finish!: () => void
+    const first = session.withAgentControl('a', () => new Promise<void>((resolve) => (finish = resolve)))
+    const queued = session.withAgentControl('b', async () => {
+      page.log.push('b ran')
+    })
+    await new Promise((r) => setTimeout(r, 5))
+    session.takeControl()
+    finish()
+    await first.catch(() => undefined)
+    await expect(queued).rejects.toBeInstanceOf(TakeoverError)
+    expect(page.log).toEqual([])
   })
 
   it('stops an in-flight agent run the moment the user takes over', async () => {
@@ -132,5 +160,70 @@ describe('ControlledSession', () => {
       await expect(run).rejects.toBeInstanceOf(TakeoverError)
       expect(page.steps.map((s) => s.step)).toEqual([typeStep])
     })
+  })
+})
+
+describe('the owner\'s windows share the session with the AI\'s page (DEC-038)', () => {
+  const step = { do: 'click', ref: 'e1' } as PageStep
+
+  it('start at zero, count what the owner did, and never take the browser from the AI', async () => {
+    const { session } = setup()
+    expect(session.identityEpoch()).toBe(0)
+    session.noteIdentityActivity()
+    session.noteIdentityActivity()
+    expect(session.identityEpoch()).toBe(2)
+    expect(session.control()).toEqual({ holder: 'none', owner: null })
+    await expect(session.withAgentControl('x', async () => 1)).resolves.toBe(1)
+  })
+
+  it('does not interrupt a turn in progress: reading, steps and navigation go on after the owner used a sign-in page', async () => {
+    const { session, page } = setup()
+    const run = session.withAgentControl('x', async (p) => {
+      await p.goto('https://a')
+      session.noteIdentityActivity()
+      await p.goto('https://b')
+      await p.read('1')
+      await p.pageStep(step, ['site.test'])
+      return 'finished'
+    })
+    await expect(run).resolves.toBe('finished')
+    expect(page.log).toEqual(expect.arrayContaining(['goto https://a', 'goto https://b']))
+  })
+
+  it.each([
+    ['fill', (p: BrowserPage, t: SendTicket) => p.fill('#x', 'text', t)],
+    ['click', (p: BrowserPage, t: SendTicket) => p.click('#x', t)],
+    ['uploadFile', (p: BrowserPage, t: SendTicket) => p.uploadFile('#x', '/a.png', t)],
+    ['publishStep', (p: BrowserPage, t: SendTicket) => p.publishStep(step, ['site.test'], t)]
+  ])('refuses %s with a valid ticket once the owner used a sign-in or sign-out page during the turn, before anything reaches the page', async (_name, write) => {
+    const { session, page, ticket } = setup()
+    const run = session.withAgentControl('x', async (p) => {
+      session.noteIdentityActivity()
+      await write(p, ticket)
+    })
+    await expect(run).rejects.toBeInstanceOf(SessionChangedError)
+    expect(page.log).toEqual([])
+    expect(page.steps).toEqual([])
+  })
+
+  it('refuses only the turn that was in progress: a later turn sees the session as it is (the mission\'s own authority covers the gap between turns)', async () => {
+    const { session, page, ticket } = setup()
+    session.noteIdentityActivity()
+    await expect(session.withAgentControl('x', (p) => p.click('#x', ticket))).resolves.toBeUndefined()
+    expect(page.log).toContain('click #x')
+  })
+
+  it('an explicit take-over still stops the AI at once, and giving control back lets it work again', async () => {
+    const { session, page } = setup()
+    const run = session.withAgentControl('x', async (p) => {
+      await p.goto('https://a')
+      session.takeControl()
+      await p.goto('https://b')
+    })
+    await expect(run).rejects.toBeInstanceOf(TakeoverError)
+    expect(page.log).toEqual(['goto https://a'])
+    await expect(session.withAgentControl('y', async () => 1)).rejects.toBeInstanceOf(TakeoverError)
+    session.releaseControl()
+    await expect(session.withAgentControl('y', async () => 1)).resolves.toBe(1)
   })
 })

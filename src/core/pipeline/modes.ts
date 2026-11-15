@@ -9,10 +9,11 @@
 // language-independent checks in auto-guard.ts look at the texts themselves (links, numbers, length, support by
 // the cited claims), and the engine must be one that cannot use tools.
 
-import type { AutoCategory, Channel, CommentCategory, OpportunityDecision } from '../../shared/types'
+import type { AutoCategory, Channel, CommentCategory, OpportunityDecision, OpportunitySource } from '../../shared/types'
 import { autoReplyProblem, DISCLOSURE_REASON, mentionsProduct } from './auto-guard'
 import type { ClaimView } from './context'
 import { disclosureProblem } from './disclosure'
+import { NEW_POST_NEVER_AUTO_REASON } from './reply-target'
 
 export const TOOL_FREE_REQUIRED_REASON = 'Automatic replies need a tool-free AI engine; the selected engine can use tools, so this reply waits for you'
 
@@ -39,6 +40,8 @@ export interface EligibilityInput {
   channel: Channel
   category: CommentCategory
   decision: OpportunityDecision
+  /** What made the opportunity. A reply to a new post is never automatic (DEC-039); omitted means a comment. */
+  source?: OpportunitySource
   commentBody: string
   reply: string
   usedClaimIds: string[]
@@ -58,6 +61,8 @@ export function autoEligibility(input: EligibilityInput): Eligibility {
   const no = (why: string): Eligibility => ({ eligible: false, why })
   const { channel } = input
   if (channel.mode !== 'auto') return no('the channel is not in automatic mode')
+  // Nobody wrote to the account: joining a conversation uninvited is the owner's call, in every mode (DEC-039).
+  if (input.source === 'new_post') return no(NEW_POST_NEVER_AUTO_REASON)
   if (input.decision !== 'reply') return no('the AI did not propose a reply')
   // Comment text is untrusted input: an engine with tools could be steered into using them.
   if (!input.engineToolFree) return no(TOOL_FREE_REQUIRED_REASON)

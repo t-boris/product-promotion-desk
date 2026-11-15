@@ -2,8 +2,9 @@
 // parent chain, the account's earlier replies, the approved product knowledge and the channel rules.
 
 import { linkRuleOf } from '../../shared/post-format'
-import type { Account, Channel, Claim, Id, Opportunity } from '../../shared/types'
+import type { Account, Channel, Claim, Id, Opportunity, OpportunitySource } from '../../shared/types'
 import type { Core } from '../core'
+import { isPostTarget, postHash, postText } from './reply-target'
 import type { FlowStore } from './store'
 
 export interface ContextComment {
@@ -57,7 +58,10 @@ export interface ReplyContext {
   product: ProductView
   /** The role of the channel's login; null when it has none (the channel style alone applies). */
   role: RoleView | null
+  /** What made the item (DEC-039). For `new_post` nobody wrote to the account: `comment` below is the post itself, and the reply is a top-level comment on it. */
+  source: OpportunitySource
   discussion: { title: string; author: string; body: string; url: string }
+  /** The thing to answer. For a new post: the post's author, its title and text as one text, and the hash of them (`id` is the stored post's). */
   comment: { id: Id; externalId: string; author: string; body: string; url: string; contentHash: string }
   /** Oldest first, ending with the comment's direct parent. */
   ancestors: ContextComment[]
@@ -128,7 +132,21 @@ export function roleView(account: Account): RoleView | null {
   return account.role && account.role.name.trim() ? { name: account.role.name.trim(), voice: account.role.voice.trim() } : null
 }
 
+/**
+ * Whether what `ctx` was built from is still what is stored: the comment's text, or, for a new post, its title and text. A draft made from something that
+ * changed while the AI worked is never saved.
+ */
+export function contextIsCurrent(store: FlowStore, ctx: ReplyContext): boolean {
+  if (ctx.source === 'new_post') {
+    const post = store.discussion(ctx.comment.id)
+    return post !== null && postHash(post) === ctx.comment.contentHash
+  }
+  const current = store.comment(ctx.comment.id)
+  return current !== null && current.contentHash === ctx.comment.contentHash
+}
+
 export function buildReplyContext(core: Core, store: FlowStore, opp: Opportunity): ReplyContext {
+  if (isPostTarget(opp)) return buildPostContext(core, store, opp)
   if (!opp.commentId) throw new ContextError('The opportunity has no comment to reply to')
   const comment = store.comment(opp.commentId)
   if (!comment) throw new ContextError('The comment is no longer stored')
@@ -160,9 +178,36 @@ export function buildReplyContext(core: Core, store: FlowStore, opp: Opportunity
     channel: channelView(channel),
     product: { name: product.name, website: product.websiteUrl, description: product.description },
     role: roleView(account),
+    source: opp.source,
     discussion: { title: discussion.title, author: discussion.author, body: clip(discussion.body), url: discussion.url },
     comment: { id: comment.id, externalId: comment.externalId, author: comment.author, body: clip(comment.body), url: comment.url, contentHash: comment.contentHash },
     ancestors,
+    ownReplies,
+    knowledge: loadKnowledge(core, opp.productId)
+  }
+}
+
+/** The context of a reply to a new post (DEC-039): the post is the thing to judge and to answer; there is no comment and no parent chain. */
+function buildPostContext(core: Core, store: FlowStore, opp: Opportunity): ReplyContext {
+  const post = store.postOf(opp)
+  if (!post) throw new ContextError('The post is no longer stored')
+  const channel = store.requireChannel(opp.channelId)
+  const product = core.repos.product(opp.productId)
+  const account = core.repos.account(channel.accountId)
+  const ownRows = core.db
+    .prepare('SELECT * FROM comments WHERE discussion_id = ? AND is_own = 1 ORDER BY COALESCE(posted_at, first_seen_at) DESC LIMIT ?')
+    .all(post.id, MAX_OWN_REPLIES) as Record<string, unknown>[]
+  const ownReplies: ContextComment[] = ownRows
+    .map((r) => ({ author: r.author as string, body: clip(r.body as string), own: true, postedAt: (r.posted_at as string | null) ?? null }))
+    .reverse()
+  return {
+    channel: channelView(channel),
+    product: { name: product.name, website: product.websiteUrl, description: product.description },
+    role: roleView(account),
+    source: 'new_post',
+    discussion: { title: post.title, author: post.author, body: clip(post.body), url: post.url },
+    comment: { id: post.id, externalId: post.externalId, author: post.author, body: clip(postText(post)), url: post.url, contentHash: postHash(post) },
+    ancestors: [],
     ownReplies,
     knowledge: loadKnowledge(core, opp.productId)
   }

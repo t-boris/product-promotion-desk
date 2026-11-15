@@ -1,5 +1,5 @@
 import type { AnalysisStageName, AnalysisStageStatus, AnalysisStatus, ClaimKind, ClaimStatus, PassportSection, SourceKind } from '../../../../shared/types'
-import type { Tone } from '../../ui'
+import type { Tone } from '../../tone'
 
 export const SECTION_LABELS: Record<PassportSection, string> = {
   identity: 'Identity',

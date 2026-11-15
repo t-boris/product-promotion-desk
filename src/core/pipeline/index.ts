@@ -1,6 +1,7 @@
 import type { Core } from '../core'
 import { getAutomation } from './lifecycle'
-import { buildResultsView } from './results'
+import { buildOverview } from './overview'
+import { buildResultsHistory, buildResultsView } from './results'
 import { listHistory } from './history'
 import { MetricsServiceImpl, refreshTracked } from './metrics'
 import { registerFlow } from './register-flow'
@@ -26,6 +27,8 @@ export function register(core: Core): void {
     'runs.list': (args) => core.runs.list({ limit: args?.limit, channelId: args?.channelId }),
     'history.list': (args) => listHistory(core, args?.limit),
     'results.get': (args) => buildResultsView(core, args?.productId),
+    'results.history': (args) => buildResultsHistory(core, args),
+    'overview.get': (args) => buildOverview(core, args),
     'results.refresh': async ({ channelId }) => {
       try {
         core.repos.channel(channelId)

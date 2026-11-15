@@ -11,7 +11,7 @@ const COUNTED_STATES = [...APPROVED_PUBLICATION_STATES, ...DRAFT_PUBLICATION_STA
 const STATE_WORD: Record<LaunchStage['state'], string> = { done: 'done', current: 'next', todo: 'not yet' }
 
 /**
- * The channel and approved-publication counts of every product, from the same lists Channels and Publications load. Until both lists have
+ * The channel and approved-publication counts of every product, from the same lists the Channels and Posts screens load. Until both lists have
  * answered (or failed) every count is zero and `loaded` is false: a screen that names the next stage waits for it, or a launched product
  * would be told to connect a channel for a moment.
  */

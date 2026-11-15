@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Account, EngineId, EngineStatus, PageReport, VaultUnavailable } from '../../shared/types'
 import { ControlledSession, type RawPage } from '../browser-session'
+import { isSessionAddress, type AddressUse } from '../session-address'
 import { Core, type CoreDeps } from '../core'
 import type { AgentBridge, McpLaunch, McpToolHost } from '../mcp/protocol'
 import {
@@ -13,7 +14,6 @@ import {
   type AiRunOptions,
   type AiTask,
   type BrowserService,
-  type BrowserSession,
   type Clock,
   type Connector,
   type OwnerPage,
@@ -228,7 +228,7 @@ export class FakeBrowserService implements BrowserService {
     return page
   }
 
-  session(account: Account): BrowserSession {
+  session(account: Account): ControlledSession {
     let session = this.sessions.get(account.id)
     if (!session) {
       if (!this.core) throw new Error('FakeBrowserService.attach(core) must be called first')
@@ -248,8 +248,8 @@ export class FakeBrowserService implements BrowserService {
     this.released.push(account.id)
   }
 
-  /** Accounts whose window for the person is open, and how many times each was brought to the front. */
-  readonly windows = new Set<string>()
+  /** The addresses of the owner's open windows of each account (DEC-038: any number), and how many times a window was brought to the front. */
+  readonly windows = new Map<string, string[]>()
   readonly shown: string[] = []
   onUserWindowChange?: (accountId: string, change: 'opened' | 'closed') => void
   onPageNote?: (accountId: string, note: string) => void
@@ -273,29 +273,51 @@ export class FakeBrowserService implements BrowserService {
     if (focus) this.agentFocused.push(account.id)
   }
 
+  /**
+   * Like the real services (DEC-038): one more window of the account's session, nothing waits and nobody takes control. A window that already
+   * shows this address is brought to the front instead. The core is told when the first window opens.
+   */
   async openForUser(account: Account, url?: string): Promise<{ tabId: string }> {
     this.opened.push({ accountId: account.id, url })
-    this.session(account).takeControl()
-    this.windows.add(account.id)
-    this.onUserWindowChange?.(account.id, 'opened')
+    const open = this.windows.get(account.id) ?? []
+    const address = url ?? ''
+    if (open.includes(address)) {
+      this.shown.push(account.id)
+      return { tabId: `tab-${account.id}` }
+    }
+    this.windows.set(account.id, [...open, address])
+    this.ownerNavigated(account, address)
+    if (open.length === 0) this.onUserWindowChange?.(account.id, 'opened')
     return { tabId: `tab-${account.id}` }
   }
 
+  /**
+   * The owner's window went to an address (a test says so). Like the real services, an address that signs in, signs out or switches account
+   * moves the session's identity epoch, which is what a mission in progress is checked against.
+   */
+  ownerNavigated(account: Account, url: string, kind: AddressUse = 'page'): void {
+    if (isSessionAddress(url, kind)) this.session(account).noteIdentityActivity()
+  }
+
   hasUserWindow(account: Account): boolean {
-    return this.windows.has(account.id)
+    return (this.windows.get(account.id)?.length ?? 0) > 0
   }
 
   showUserWindow(account: Account): boolean {
-    if (!this.windows.has(account.id)) return false
+    if (!this.hasUserWindow(account)) return false
     this.shown.push(account.id)
     return true
   }
 
-  /** What closing the real window does: the browser goes back to the app, and the core is told. */
-  closeUserWindow(account: Account): void {
-    if (!this.windows.delete(account.id)) return
-    this.session(account).releaseControl()
-    this.onUserWindowChange?.(account.id, 'closed')
+  /** The owner closes the window on `url`, or every window of the account without one: the core is told when the last one is gone. */
+  closeUserWindow(account: Account, url?: string): void {
+    const open = this.windows.get(account.id)
+    if (!open || open.length === 0) return
+    const left = url === undefined ? [] : open.filter((address) => address !== url)
+    if (left.length === open.length) return
+    if (left.length === 0) this.windows.delete(account.id)
+    else this.windows.set(account.id, left)
+    if (left.length === 0) this.onUserWindowChange?.(account.id, 'closed')
   }
 }
 

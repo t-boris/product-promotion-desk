@@ -19,6 +19,7 @@ import type {
   PublishedRef,
   RemoteComment,
   RemoteDiscussion,
+  RemoteInboxItem,
   SendTicket
 } from '../ports'
 
@@ -48,7 +49,7 @@ export interface FakeConnectorOptions {
   identity?: string
 }
 
-const ALL_CAPABILITIES: CapabilityKey[] = ['read_posts', 'read_comments', 'detect_changes', 'publish_post', 'publish_reply', 'verify_send', 'metrics', 'rules', 'membership']
+const ALL_CAPABILITIES: CapabilityKey[] = ['read_posts', 'read_comments', 'detect_changes', 'publish_post', 'publish_reply', 'verify_send', 'metrics', 'rules', 'membership', 'read_inbox']
 
 export class FakeConnector implements Connector {
   readonly id: string
@@ -72,6 +73,9 @@ export class FakeConnector implements Connector {
   /** Errors thrown by the corresponding method; set to null to heal. */
   fetchActivityError: Error | null = null
   fetchThreadError: Error | null = null
+  /** What the account's inbox holds (DEC-039), newest first, and the error `readInbox` throws; set `readInbox` to undefined for a platform with no inbox. */
+  inbox: RemoteInboxItem[] = []
+  inboxError: Error | null = null
   findPublishedError: Error | null = null
   checkLoginError: Error | null = null
   /** Runs while a thread is being read, to change the world "during" the read (races between the gate's checks). */
@@ -216,6 +220,14 @@ export class FakeConnector implements Connector {
     })
   }
 
+  readInbox: Connector['readInbox'] = async (ctx, options) => {
+    this.calls.push('readInbox')
+    return this.withBrowser(ctx, 'fake-inbox', () => {
+      if (this.inboxError) throw this.inboxError
+      return structuredClone(this.inbox.slice(0, options?.limit ?? this.inbox.length))
+    })
+  }
+
   async fetchMetrics(): Promise<MetricReading[]> {
     this.calls.push('fetchMetrics')
     return this.metrics
@@ -254,7 +266,8 @@ export class FakeConnector implements Connector {
 
   private showAsOwnComment(request: PublishRequest, ref: PublishedRef): void {
     if (request.kind !== 'reply' || !request.parentExternalId) return
-    const discussion = this.discussions.find((d) => d.comments.some((c) => c.externalId === request.parentExternalId))
+    // A reply to a comment, or a top-level comment on a post (the parent is then the discussion itself).
+    const discussion = this.discussions.find((d) => d.externalId === request.parentExternalId || d.comments.some((c) => c.externalId === request.parentExternalId))
     if (!discussion) return
     discussion.comments.push({
       externalId: ref.externalId,

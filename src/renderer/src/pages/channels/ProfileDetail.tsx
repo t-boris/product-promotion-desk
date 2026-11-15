@@ -45,15 +45,13 @@ export function ProfileDetail({
   accounts,
   platforms,
   products,
-  onOpenAccount,
-  onRemoved
+  onOpenAccount
 }: {
   profile: Profile
   accounts: Account[]
   platforms: PlatformInfo[]
   products: Product[]
   onOpenAccount: (accountId: string) => void
-  onRemoved: () => void
 }) {
   const [draft, setDraft] = useState<Draft>(() => draftOf(profile))
   const [editing, setEditing] = useState(false)
@@ -117,8 +115,8 @@ export function ProfileDetail({
     setPath('')
   })
   const [remove, removing] = useAction(async () => {
+    // The list drops the profile on its next answer and the screen shows the row that took its place.
     await call('profiles.remove', { id: profile.id })
-    onRemoved()
   })
 
   const busy = proposing.busy || saving.busy || approving.busy || making.busy || usingFile.busy

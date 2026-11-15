@@ -13,11 +13,14 @@
 //  - `confirmed` is the application's own reading of the site (`Connector.findPublished`), never the AI's report. A press whose result the
 //    application cannot find is `unknown`, which blocks a resend exactly as for a connector.
 //  - A mission that ends without a press is a definite failure: nothing was submitted, whatever the AI says.
+//  - The owner's windows share the account's session with the AI's page (DEC-038). The sign-in is checked before the mission starts; when the owner
+//    then used a sign-in or sign-out page of the session (`identityEpoch` moved) the check is out of date: the mission is refused every step that
+//    writes, and when it ends without a press the application reads the sign-in again and says what is true. Nothing is submitted.
 
 import { renderForPlatform } from '../../shared/post-format'
-import type { Comment } from '../../shared/types'
+import type { Comment, Discussion } from '../../shared/types'
 import type { Core } from '../core'
-import { TakeoverError, type Connector, type ConnectorContext, type PublishedRef, type PublishRequest } from '../ports'
+import { TakeoverError, type Connector, type ConnectorContext, type LoginState, type PublishedRef, type PublishRequest } from '../ports'
 import { EXTENSION_BY_MIME } from './attachments'
 import { chooseExecutor, sendWays, type Executor } from './send-ways'
 import type { ApprovedContent, ApprovedFile, LeaseResult, PostAuthority, PostMissionOutcome, PostMissionRequest, SubmitLease } from '../browser-agent/post-submit'
@@ -52,6 +55,14 @@ export type MissionResult =
   | { status: 'failed'; error: string; note?: string; auth?: 'login' | 'captcha' }
   | { status: 'unknown'; error: string; note?: string }
   | { status: 'not_started'; error: string }
+
+/** What the authority says when the owner used a sign-in or sign-out page of the session after the sign-in was checked. */
+const SESSION_DOUBT = 'A sign-in or sign-out page was used in the account\'s browser after the sign-in was checked, so it is not known who is signed in.'
+
+/** Whether the owner did something in the account's session since the sign-in was checked (a number that moved: `BrowserSession.identityEpoch`). */
+export interface SessionWatch {
+  moved(): boolean
+}
 
 /** The longest piece of free text (the AI's reason, a site's warning) that goes next to an error. */
 const NOTE_MAX = 300
@@ -91,6 +102,7 @@ export class MissionAuthority implements PostAuthority {
   sealed = false
   readonly content: ApprovedContent
   private readonly typedHash: string
+  private readonly watch: SessionWatch
 
   /**
    * `typed` is what the mission will put into the form. Two things bind it. The ticket the gate gives is bound to the hash of the APPROVED
@@ -105,8 +117,10 @@ export class MissionAuthority implements PostAuthority {
     private readonly grant: GateGrant,
     content: ApprovedContent,
     typed: { attachments: PublishRequest['attachments'] },
-    private readonly automatic: boolean
+    private readonly automatic: boolean,
+    watch: SessionWatch = { moved: () => false }
   ) {
+    this.watch = watch
     const shown = renderForPlatform(grant.draft, grant.channel.platform)
     const same = shown.title === content.title && shown.text === content.text && shown.link === content.link && JSON.stringify(shown.attachments) === JSON.stringify(typed.attachments)
     if (!same) throw new MissionContentError('What the mission would type is not what was approved for this platform. Nothing was submitted.')
@@ -119,9 +133,18 @@ export class MissionAuthority implements PostAuthority {
     this.sealed = true
   }
 
+  /** The owner used a sign-in or sign-out page of the session since the sign-in was checked. Once seen, it stays seen: the check does not become current again. */
+  get sessionMoved(): boolean {
+    if (!this.moved && this.watch.moved()) this.moved = true
+    return this.moved
+  }
+
+  private moved = false
+
   async lease<T>(use: (lease: SubmitLease) => Promise<T>): Promise<LeaseResult<T>> {
     if (this.sealed) return { ok: false, reason: 'The mission is over; nothing is submitted any more.' }
     if (this.committed) return { ok: false, reason: 'The control was already pressed; nothing more is submitted in this mission.' }
+    if (this.sessionMoved) return { ok: false, reason: SESSION_DOUBT }
     // A fresh ticket for the attempt that is running, after the gate has looked at everything that can change meanwhile.
     const renewal = this.gate.renewTicket(this.grant, this.automatic)
     if (!renewal.allowed) return { ok: false, reason: renewal.reasons.join(' ') }
@@ -139,6 +162,7 @@ export class MissionAuthority implements PostAuthority {
         // The last word before a press: a mission that was ended meanwhile (Stop, the engine, the time) presses nothing, however far this step got.
         if (this.sealed) throw new Error('The mission is over; nothing is pressed.')
         if (this.committed) throw new Error('The control was already pressed.')
+        if (this.sessionMoved) throw new Error(SESSION_DOUBT)
         this.committed = true
       },
       release: () => {
@@ -188,16 +212,13 @@ export class MissionPublisher {
     if (!missions) return { status: 'not_started', error: 'The AI browser is not available in this build.' }
     const { connector, ctx } = pair
 
-    // The session first: a signed-out account or a CAPTCHA is a definite failure that suspends the account, as for a connector.
+    // The session first: a signed-out account or a CAPTCHA is a definite failure that suspends the account, as for a connector. What the owner does
+    // in the session from here on is counted from before this check, so a sign-out during it is not missed.
+    const session = ctx.session
+    const checkedAt = session.identityEpoch()
     try {
-      const state = await connector.checkLogin(ctx)
-      if (state.captcha) return { status: 'failed', auth: 'captcha', error: 'CAPTCHA required: the site asks for a human check before the account can publish.' }
-      if (!state.loggedIn) return { status: 'failed', auth: 'login', error: 'Sign-in required: the account is signed out on the site.' }
-      const signedInAs = normalizeIdentity(state.identity)
-      const approvedFor = normalizeIdentity(grant.account.identity)
-      if (signedInAs !== '' && approvedFor !== '' && signedInAs !== approvedFor) {
-        return { status: 'failed', error: `The browser is signed in as "${state.identity}", not as the account the owner approved this for ("${grant.account.identity}"). Nothing was submitted.` }
-      }
+      const refusal = this.signInProblem(await connector.checkLogin(ctx), grant)
+      if (refusal) return refusal
     } catch (error) {
       if (error instanceof TakeoverError) return { status: 'not_started', error: 'The account browser is under your control. Hand it back so the application can send.' }
       // The check itself failed (the site did not answer): the mission looks at the page anyway and the gate re-checks at the submit.
@@ -208,7 +229,7 @@ export class MissionPublisher {
     const content: ApprovedContent = { kind: request.kind, title: request.title, text: request.text, link: request.link, destination: request.destination, attachments: approvedFilesOf(request.attachments) }
     let authority: MissionAuthority
     try {
-      authority = new MissionAuthority(this.core, this.gate, grant, content, { attachments: request.attachments }, automatic)
+      authority = new MissionAuthority(this.core, this.gate, grant, content, { attachments: request.attachments }, automatic, { moved: () => session.identityEpoch() !== checkedAt })
     } catch (error) {
       if (error instanceof MissionContentError) return { status: 'not_started', error: error.message }
       throw error
@@ -225,8 +246,41 @@ export class MissionPublisher {
     }
 
     // The authority's word decides whether the control was pressed. The AI's report is a note and is only ever shown.
-    if (!authority.committed) return this.notSubmitted(outcome, crash)
+    if (!authority.committed) return authority.sessionMoved ? this.afterSessionChange(pair, grant) : this.notSubmitted(outcome, crash)
     return this.readBack(pair, grant, attemptedAt, outcome, crash)
+  }
+
+  /**
+   * Why the account may not publish now, from the site's own answer about the session (the one the mission starts with, and the one after the
+   * owner used a sign-in page); null when it may. `after` is added to the owner's sentence when the answer comes after such a page was used.
+   */
+  private signInProblem(state: LoginState, grant: GateGrant, after = ''): MissionResult | null {
+    const tail = after ? ` ${after}` : ''
+    if (state.captcha) return { status: 'failed', auth: 'captcha', error: `CAPTCHA required: the site asks for a human check before the account can publish.${tail}` }
+    if (!state.loggedIn) return { status: 'failed', auth: 'login', error: `Sign-in required: the account is signed out on the site.${tail}` }
+    const signedInAs = normalizeIdentity(state.identity)
+    const approvedFor = normalizeIdentity(grant.account.identity)
+    if (signedInAs !== '' && approvedFor !== '' && signedInAs !== approvedFor) {
+      return { status: 'failed', error: `The browser is signed in as "${state.identity}", not as the account the owner approved this for ("${grant.account.identity}").${tail || ' Nothing was submitted.'}` }
+    }
+    return null
+  }
+
+  /**
+   * The owner used a sign-in or sign-out page of the account's session while the mission worked, and nothing was pressed. Who is signed in is read
+   * again now (the mission has ended, so the page is free): a signed-out account, a human check or another identity ends as for a connector (the
+   * account is suspended, or the owner is told whose account it is), and the same account ends as "not started", with the approval kept: press
+   * Send again.
+   */
+  private async afterSessionChange(pair: { connector: Connector; ctx: ConnectorContext }, grant: GateGrant): Promise<MissionResult> {
+    const why = "A sign-in or sign-out page was used in the account's browser while the AI worked. Nothing was submitted."
+    try {
+      const refusal = this.signInProblem(await pair.connector.checkLogin(pair.ctx), grant, why)
+      if (refusal) return refusal
+    } catch (error) {
+      return { status: 'not_started', error: `${why} The application could not check who is signed in now (${errorMessage(error)}).` }
+    }
+    return { status: 'not_started', error: `${why} The account is still signed in as it was, so the approval is kept: press Send to try again.` }
   }
 
   private missionRequest(grant: GateGrant, authority: MissionAuthority): PostMissionRequest {
@@ -234,6 +288,8 @@ export class MissionPublisher {
     const facts = [`This is the owner's own approved ${authority.content.kind} for the product "${this.core.repos.product(opportunity.productId).name}".`]
     if (account.role) facts.push(`The account speaks as "${account.role.name}".`)
     const comment = opportunity.commentId ? this.store.comment(opportunity.commentId) : null
+    // A reply to a new post (DEC-039) answers the post: the brief quotes it the way it quotes a comment.
+    const post = comment ? null : this.store.postOf(opportunity)
     return {
       accountId: account.id,
       accountLabel: account.label,
@@ -241,7 +297,7 @@ export class MissionPublisher {
       hosts: missionHosts(authority.content.destination, channel.url),
       platform: channel.platform,
       facts,
-      quoted: comment ? quote(comment) : undefined
+      quoted: comment ? quote(comment) : post ? quotePost(post) : undefined
     }
   }
 
@@ -297,6 +353,12 @@ export class MissionPublisher {
       note: outcome?.reported ? `The AI says: ${bounded(outcome.reported.reason)}` : undefined
     }
   }
+}
+
+/** The new post a reply answers, for the brief: who wrote it, its title and how its text begins. Data from the site, fenced as such. */
+function quotePost(post: Discussion): string {
+  const body = `${post.title} ${post.body}`.replace(/\s+/g, ' ').trim()
+  return `${post.author} posted: ${body.length > 600 ? `${body.slice(0, 599)}…` : body}`
 }
 
 /** What a reply answers, for the brief: who wrote it and how it begins. It is data from the site and is fenced as such. */

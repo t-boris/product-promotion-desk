@@ -7,6 +7,7 @@ import { ApiError } from '../../shared/api'
 import type { MediaItem, Opportunity } from '../../shared/types'
 import type { PostMissionOutcome, PostMissionRequest, PostMissionService } from '../browser-agent/post-submit'
 import { TicketError, type SendTicket } from '../ports'
+import type { FakeBrowserService } from '../testing/fakes'
 import type { PublishedItem } from '../testing/fake-connector'
 import { SendBlockedError, SendGate, type GateGrant } from './gate'
 import { renderForPlatform } from '../../shared/post-format'
@@ -397,7 +398,7 @@ describe('a post written in the post editor goes through the AI browser as the p
     const publisher = new MissionPublisher(world.core, world.sending as never, {} as never)
     const draft = world.core.repos.latestDraft(opp.id)!
     const grant = { draft, channel: world.channel, account: world.account, request: { kind: 'post', destination: 'https://fake.test/r/x/', title: null, text: draft.text, link: null, attachments: [] } } as unknown as GateGrant
-    const result = await publisher.publish({ connector: world.connector as never, ctx: {} as never }, grant, new Date().toISOString(), false)
+    const result = await publisher.publish({ connector: world.connector as never, ctx: { session: world.core.browser.session(world.account) } as never }, grant, new Date().toISOString(), false)
     expect(result).toMatchObject({ status: 'not_started' })
     expect((result as { error: string }).error).toMatch(/not what was approved/)
   })
@@ -773,5 +774,224 @@ describe('the hosts a mission may work on', () => {
     expect(missionHosts('https://news.ycombinator.com/item?id=1', 'https://news.ycombinator.com/')).toEqual(['news.ycombinator.com'])
     expect(missionHosts('not an address', 'https://fake.test/r/a')).toEqual(['fake.test'])
     expect(missionHosts()).toEqual([])
+  })
+})
+
+// DEC-038: the owner's windows and the AI's page are two pages of ONE session (cookies, storage). What the owner does in a window can change
+// who the AI's page is signed in as, behind the mission's back. Every case below ends safe: nothing is submitted, and the owner is told.
+describe('the owner\'s windows share the account\'s session with a mission (DEC-038)', () => {
+  const owner = () => world.core.browser as FakeBrowserService
+
+  it('a window the owner opens on some other page changes nothing: the mission goes on, presses, and the application reads the post back', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    useMissions(async (request) => {
+      await owner().openForUser(world.account, 'https://fake.test/r/other')
+      owner().ownerNavigated(world.account, 'https://fake.test/r/other/hot')
+      expect((await press(request)).ok).toBe(true)
+      return { reported: { status: 'done', reason: 'Posted.' } }
+    })
+    const action = await sending().send(opp.id)
+    expect(action.state).toBe('confirmed')
+    expect(owner().windows.get(world.account.id)).toEqual(['https://fake.test/r/other'])
+  })
+
+  it('the owner signs out in their window while the AI works: nothing is pressed, the sign-in is read again, the account is suspended and the approval is kept', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    useMissions(async (request) => {
+      owner().ownerNavigated(world.account, 'https://fake.test/logout')
+      world.connector.login = { loggedIn: false, identity: null, captcha: false } // what the site says now
+      const result = await press(request)
+      expect(result.ok).toBe(false) // no ticket, no press
+    })
+    const action = await sending().send(opp.id)
+    expect(action.state).toBe('failed')
+    expect(actionRow(action.id).error).toMatch(/signed out/)
+    expect(actionRow(action.id).error).toMatch(/sign-in or sign-out page was used in the account's browser/)
+    expect(world.connector.published).toEqual([])
+    expect(world.core.repos.account(world.account.id).status).toBe('login_required')
+    expect(world.core.repos.activeApproval(world.core.repos.latestDraft(opp.id)!.id)).not.toBeNull()
+    expect(publishCalls()).toBe(0)
+  })
+
+  it('the owner signs in as somebody else in their window (a switch of account): nothing is pressed, and the owner is told which accounts these are', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    useMissions(async (request) => {
+      owner().ownerNavigated(world.account, 'https://fake.test/login')
+      world.connector.login = { loggedIn: true, identity: 'somebody_else', captcha: false }
+      expect((await press(request)).ok).toBe(false)
+    })
+    const action = await sending().send(opp.id)
+    expect(action.state).toBe('failed')
+    expect(actionRow(action.id).error).toContain('somebody_else')
+    expect(actionRow(action.id).error).toContain('brand_account')
+    expect(world.connector.published).toEqual([])
+  })
+
+  it('a sign-in page of the owner\'s that leaves the same account signed in: nothing is pressed, the approval is kept, and pressing Send again publishes', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    let owned = false
+    const missions = useMissions(async (request) => {
+      if (!owned) {
+        owned = true
+        owner().ownerNavigated(world.account, 'https://fake.test/account/switch')
+        expect((await press(request)).ok).toBe(false)
+        return
+      }
+      expect((await press(request)).ok).toBe(true)
+    })
+    const first = await sending().send(opp.id)
+    expect(first.state).toBe('failed')
+    expect(actionRow(first.id).error).toMatch(/press Send to try again|approval is kept/)
+    expect(world.opportunity(opp.id).state).toBe('ready')
+    expect(world.core.repos.activeApproval(world.core.repos.latestDraft(opp.id)!.id)).not.toBeNull()
+    expect(world.connector.published).toEqual([])
+    expect(world.core.repos.account(world.account.id).status).not.toBe('login_required')
+
+    const second = await sending().send(opp.id)
+    expect(second.state).toBe('confirmed')
+    expect(missions.requests).toHaveLength(2)
+  })
+
+  it('the owner\'s sign-out page used BEFORE the AI\'s sign-in check is caught by that check (the epoch starts at the check, not before)', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    owner().ownerNavigated(world.account, 'https://fake.test/logout')
+    world.connector.login = { loggedIn: false, identity: null, captcha: false }
+    const missions = useMissions(async () => undefined)
+    const action = await sending().send(opp.id)
+    expect(action.state).toBe('failed')
+    expect(actionRow(action.id).error).toMatch(/^Sign-in required: /)
+    expect(missions.requests).toEqual([])
+  })
+
+  it('a sign-out in the owner\'s window AFTER the control was pressed does not take the press back: the application\'s own read-back decides', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    useMissions(async (request) => {
+      expect((await press(request)).ok).toBe(true)
+      owner().ownerNavigated(world.account, 'https://fake.test/logout')
+      return { reported: { status: 'done', reason: 'Posted.' } }
+    })
+    const action = await sending().send(opp.id)
+    expect(action.state).toBe('confirmed')
+    expect(world.connector.calls).toContain('findPublished')
+  })
+
+  it('a session change that leaves no sign-in address behind (the site signs the account out of other tabs by itself) is not seen: if the press goes through and the text is not on the site, the result is unknown and blocks a resend', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    useMissions(async (request) => {
+      // No window of the owner's, no sign-in page: nothing for the application to see. The AI's page is signed out by the site, the press is refused by the site.
+      expect((await press(request, { show: false })).ok).toBe(true)
+      return { reported: { status: 'done', reason: 'Pressed.' } }
+    })
+    const action = await sending().send(opp.id)
+    expect(action.state).toBe('unknown')
+    expect(world.connector.published).toEqual([])
+    await expect(sending().send(opp.id)).rejects.toBeInstanceOf(SendBlockedError)
+  })
+
+  it('does not start a mission when the sign-in check shows a human check, and presses nothing', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    world.connector.login = { loggedIn: true, identity: 'brand_account', captcha: true }
+    const missions = useMissions(async () => undefined)
+    const action = await sending().send(opp.id)
+    expect(action.state).toBe('failed')
+    expect(actionRow(action.id).error).toMatch(/^CAPTCHA required: the site asks for a human check/)
+    expect(world.core.repos.account(world.account.id).status).toBe('captcha')
+    expect(missions.requests).toEqual([])
+    expect(world.connector.published).toEqual([])
+  })
+
+  it('a human check the site shows after the owner used a sign-in page ends the mission as for a connector: the account is held, nothing is pressed, the approval is kept', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    useMissions(async (request) => {
+      owner().ownerNavigated(world.account, 'https://fake.test/login')
+      world.connector.login = { loggedIn: true, identity: 'brand_account', captcha: true }
+      expect((await press(request)).ok).toBe(false)
+    })
+    const action = await sending().send(opp.id)
+    expect(action.state).toBe('failed')
+    expect(actionRow(action.id).error).toMatch(/^CAPTCHA required: /)
+    expect(actionRow(action.id).error).toMatch(/sign-in or sign-out page was used in the account's browser/)
+    expect(world.core.repos.account(world.account.id).status).toBe('captcha')
+    expect(world.connector.published).toEqual([])
+    expect(world.core.repos.activeApproval(world.core.repos.latestDraft(opp.id)!.id)).not.toBeNull()
+  })
+
+  it('gives no lease and runs nothing once the owner used a sign-in page after the check', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    let used = false
+    let answer: { ok: boolean; reason?: string } | null = null
+    useMissions(async (request) => {
+      owner().ownerNavigated(world.account, 'https://fake.test/logout')
+      answer = await request.authority.lease(async () => {
+        used = true
+      })
+    })
+    await sending().send(opp.id)
+    expect(used).toBe(false)
+    expect(answer).toMatchObject({ ok: false, reason: expect.stringContaining('sign-in or sign-out page was used') })
+    expect(publishCalls()).toBe(0)
+  })
+
+  it('lets no press happen with a lease that was given before the owner used a sign-in page: the commit is refused and nothing is marked as pressed', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    let refused = ''
+    let committed = true
+    useMissions(async (request) => {
+      await request.authority.lease(async (lease) => {
+        owner().ownerNavigated(world.account, 'https://fake.test/account/switch')
+        try {
+          lease.commit()
+        } catch (error) {
+          refused = error instanceof Error ? error.message : String(error)
+        }
+        committed = request.authority.committed
+      })
+    })
+    const action = await sending().send(opp.id)
+    expect(refused).toMatch(/sign-in or sign-out page was used/)
+    expect(committed).toBe(false)
+    expect(action.state).toBe('failed')
+    expect(world.connector.published).toEqual([])
+  })
+
+  it('once the owner used a sign-in page the sign-in stays doubted for the rest of the mission, whatever the count reads later', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    const epoch = vi.spyOn(world.core.browser.session(world.account), 'identityEpoch')
+    // The count is read once before the check, then it has moved, then it reads as before again (it cannot really go back: this is the check that the doubt does not depend on it).
+    epoch.mockReturnValueOnce(0).mockReturnValueOnce(1).mockReturnValue(0)
+    const answers: boolean[] = []
+    useMissions(async (request) => {
+      answers.push((await request.authority.lease(async () => undefined)).ok)
+      answers.push((await request.authority.lease(async () => undefined)).ok)
+    })
+    await sending().send(opp.id)
+    expect(answers).toEqual([false, false])
+  })
+
+  it('cannot read the sign-in again after the owner used a sign-in page: nothing was pressed, the owner is told, and the approval is kept', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    useMissions(async (request) => {
+      owner().ownerNavigated(world.account, 'https://fake.test/logout')
+      world.connector.checkLoginError = new Error('the site did not answer')
+      expect((await press(request)).ok).toBe(false)
+    })
+    const action = await sending().send(opp.id)
+    expect(action.state).toBe('failed')
+    expect(actionRow(action.id).error).toMatch(/could not check who is signed in now/)
+    expect(world.connector.published).toEqual([])
+    expect(world.core.repos.activeApproval(world.core.repos.latestDraft(opp.id)!.id)).not.toBeNull()
   })
 })

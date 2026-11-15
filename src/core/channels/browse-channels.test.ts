@@ -69,11 +69,11 @@ describe('the browse pages of the platforms', () => {
 })
 
 describe('accounts.browseChannels', () => {
-  it('opens the platform\'s page for finding channels when no address is typed, and gives the owner control', async () => {
+  it('opens the platform\'s page for finding channels when no address is typed, in a window of its own that takes nothing from the AI (DEC-038)', async () => {
     const w = await makeReadyWorld({ fake: new Guided() })
     await w.call('accounts.browseChannels', { accountId: w.account.id })
     expect(w.t.browser.opened).toEqual([{ accountId: w.account.id, url: GUIDE.browseUrl }])
-    expect(w.t.browser.session(w.account).control().holder).toBe('user')
+    expect(w.t.browser.session(w.account).control().holder).toBe('none')
   })
 
   it('opens the typed address when the connector reads it as a channel', async () => {
@@ -196,7 +196,7 @@ describe('accounts.currentPage ("Use the page I\'m on")', () => {
   it('says nothing again once the window is closed', async () => {
     const w = await owner()
     w.t.browser.ownerPages.set(w.account.id, { url: 'https://fake.test/r/a', title: 'A' })
-    await w.call('accounts.releaseControl', { accountId: w.account.id })
+    w.t.browser.closeUserWindow(w.account)
     expect(await w.call('accounts.currentPage', { accountId: w.account.id })).toBeNull()
   })
 

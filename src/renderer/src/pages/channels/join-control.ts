@@ -5,7 +5,8 @@
 import type { AgentReadiness, AgentRun, CapabilityStatus } from '../../../../shared/types'
 
 export const JOIN_NOTE = 'Opens this community in the account’s browser and presses Join, nothing else. You can stop it any time. The app never joins on its own.'
-export const JOIN_OWNER_HOLDS = 'Close the browser window first (Done) so the AI can work in it.'
+/** Only an explicit "Take control" keeps the AI out of the account's browser now; an open window of the owner's does not (DEC-038). */
+export const JOIN_OWNER_HOLDS = 'You took control of this account’s browser. Give control back (Accounts, More) so the AI can work in it.'
 export const JOIN_OTHER_RUN = 'The AI is working on this account. Join when it is done.'
 
 /** The button's words: the channel's own name ("r/astrology"), as the channel card shows it. */

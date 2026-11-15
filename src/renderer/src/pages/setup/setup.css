@@ -1,0 +1,194 @@
+/* Setup (visual-system.md §10.2): the launch path as a vertical stepper, and the passport as a two-column summary with an editor in
+   place. Colours, sizes and radii come from the shared tokens in styles.css. The page stylesheets are bundled before styles.css
+   (main.tsx imports it last), so a rule here that sets what a shared rule of styles.css also sets is written one step more specific. */
+
+/* ───────────── The stepper ───────────── */
+
+.setup-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.setup-step {
+  position: relative;
+}
+/* The rail between two marks: grey, and green only between two steps that are both done (as the launch path does). */
+.setup-step:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--space-2) + 6.25px);
+  top: calc(var(--control-h) / 2 + 10px);
+  bottom: calc(var(--control-h) / -2 + 6px);
+  width: 1.5px;
+  border-radius: 1px;
+  background: var(--line-strong);
+}
+.setup-step.done:has(+ .setup-step.done)::before {
+  background: var(--success);
+}
+/* A step's row is one control as tall as the others; the whole row opens the step. */
+.setup-step .setup-step-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--control-h);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--text-1);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+.setup-step .setup-step-head:hover {
+  background: var(--hover-fill);
+}
+.setup-step .setup-step-head:active {
+  background: var(--press-fill);
+}
+.setup-step-mark {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 50%;
+}
+.setup-step.done .setup-step-mark {
+  border: 0;
+  background: var(--success);
+  mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill-rule='evenodd' d='M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zM11.3 4.6l1.05 1.05L7 11 3.65 7.65 4.7 6.6 7 8.9z'/></svg>") center / contain no-repeat;
+}
+.setup-step.current .setup-step-mark {
+  border-color: var(--accent-on-tint);
+  background: var(--accent-tint);
+  box-shadow: 0 0 0 3px var(--accent-tint);
+}
+.setup-step-title {
+  flex: none;
+  font-size: var(--fs-title);
+  font-weight: var(--fw-semibold);
+}
+.setup-step-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-2);
+}
+.setup-step-summary.warn {
+  color: var(--warn);
+}
+.setup-step-summary.bad {
+  color: var(--bad);
+}
+.setup-step-head .launch-next {
+  flex: none;
+}
+/* What a step holds starts under its title, not under its mark. The body is a container: its own columns fold when it is narrow. */
+.setup-step-body {
+  min-width: 0;
+  margin: var(--space-2) 0 var(--space-3) calc(var(--space-2) + 14px + var(--space-3));
+  container-type: inline-size;
+}
+.setup-step-body > .stack {
+  gap: var(--space-3);
+}
+
+/* ───────────── The passport: eight sections in two columns ───────────── */
+
+/* Reading order, two to a row. A section that is being edited takes both columns, and the ones after it start a new row. */
+.passport-sections {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  align-items: start;
+}
+.passport-tile {
+  /* A group box (`.card`): the summary of a section, or its editor. */
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.passport-tile.open {
+  grid-column: 1 / -1;
+}
+.passport-tile-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.passport-tile-head h3 {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-title);
+}
+.passport-tile-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+}
+.passport-tile-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  min-width: 0;
+  color: var(--text-2);
+}
+.passport-tile-line > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The first statements: two lines each, then the rest is a count. */
+.passport-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.passport-preview li {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.passport-preview li.passport-more {
+  display: block;
+  color: var(--text-2);
+}
+.passport-mark {
+  margin-right: var(--space-1);
+  color: var(--text-2);
+  font-weight: var(--fw-semibold);
+}
+.passport-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* In a narrow step the sections are one column. */
+@container (max-width: 560px) {
+  .passport-sections {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

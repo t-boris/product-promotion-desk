@@ -418,3 +418,24 @@ describe('where a join mission goes', () => {
     expect(t.reports).toEqual([{ status: 'done', reason: 'Joined.' }])
   })
 })
+
+describe('the owner\'s windows share the session with a join mission (DEC-038)', () => {
+  it('presses nothing once the owner used a sign-in or sign-out page: the account that joins is the one that was signed in when the mission began', async () => {
+    let moved = false
+    const t = setup({ join: { community: 'test', destination: 'https://fake.test/r/test/', minGapMs: 2000, sessionMoved: () => moved } })
+    await look(t)
+    moved = true
+    const result = await press(t, 'e1')
+    expect(result.isError).toBe(true)
+    expect(result.text).toMatch(/sign-in or sign-out page was used/)
+    expect(t.page.clicked).toEqual([])
+    expect(t.toolbox.joinPressed).toBe(false)
+  })
+
+  it('presses as before while the owner has only opened windows on other pages', async () => {
+    const t = setup({ join: { community: 'test', destination: 'https://fake.test/r/test/', minGapMs: 2000, sessionMoved: () => false } })
+    await look(t)
+    expect((await press(t, 'e1')).isError).toBeUndefined()
+    expect(t.page.clicked).toEqual(['e1'])
+  })
+})

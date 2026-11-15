@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parseSnapshot, snapshotScript, type PageSnapshot } from '../core/browser-agent/snapshot'
-import { TakeoverError, type BrowserPage } from '../core/ports'
+import { SessionChangedError, TakeoverError, type BrowserPage, type SendTicket } from '../core/ports'
 import type { Account } from '../shared/types'
 import { ChromeBrowserService } from './chrome-browser-service'
 import { findChrome, profileDirFor } from './chrome-launcher'
@@ -47,6 +47,31 @@ const FORM = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>
   })
   document.getElementById('facts').textContent = 'webdriver=' + navigator.webdriver + ' ua=' + navigator.userAgent
 </script></body></html>`
+
+/**
+ * The page the owner has in their own window. It does by itself what the owner does by hand, a moment after it loads: `?go=/logout` goes to a sign-out
+ * address, `?fetch=/api/logout` asks for one in the background (a sign-out that is a fetch). Their effect on the browser is the same as the owner's click.
+ */
+const OWNER_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Owner window</title></head><body>
+<h1>The owner's page</h1>
+<input id="own" aria-label="Owner field" autocomplete="off">
+<script>
+  const q = new URLSearchParams(location.search)
+  if (q.get('go')) setTimeout(() => { location.href = q.get('go') }, 600)
+  if (q.get('fetch')) setTimeout(() => { fetch(q.get('fetch'), { method: 'POST' }).catch(() => undefined) }, 600)
+</script></body></html>`
+
+const SIGNED_OUT_PAGE = '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Signed out</title></head><body><h1>You are signed out</h1></body></html>'
+
+const pause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
+async function until(condition: () => boolean | Promise<boolean>, what: string, ms = 10_000): Promise<void> {
+  for (let waited = 0; waited < ms; waited += 100) {
+    if (await condition()) return
+    await pause(100)
+  }
+  throw new Error(`Timed out waiting for: ${what}`)
+}
 
 describe.skipIf(!REAL)('the Chrome back end on the real installed Chrome', () => {
   let dataDir: string
@@ -84,6 +109,10 @@ describe.skipIf(!REAL)('the Chrome back end on the real installed Chrome', () =>
         })
         return
       }
+      const path = new URL(request.url ?? '/', 'http://127.0.0.1').pathname
+      if (path === '/owner') return void response.writeHead(200, { 'content-type': 'text/html' }).end(OWNER_PAGE)
+      if (path === '/logout') return void response.writeHead(200, { 'content-type': 'text/html' }).end(SIGNED_OUT_PAGE)
+      if (path.startsWith('/api/')) return void response.writeHead(200, { 'content-type': 'application/json' }).end('{}')
       response.writeHead(200, { 'content-type': 'text/html' }).end(FORM)
     })
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -185,23 +214,155 @@ describe.skipIf(!REAL)('the Chrome back end on the real installed Chrome', () =>
     expect(JSON.stringify(report)).not.toContain('probe@example.com')
   }, 60_000)
 
-  it('stops the AI when the owner takes the browser, and lets it work again when it is given back', async () => {
-    const opened = await service.openForUser(account, `${base}/form`)
-    expect(opened.tabId).toBe('account-acct-probe')
-    expect(events).toContain('acct-probe:opened')
-    expect(service.hasUserWindow(account)).toBe(true)
-    expect(service.session(account).control().holder).toBe('user')
-    await expect(service.session(account).withAgentControl('probe', async () => 'ran')).rejects.toBeInstanceOf(TakeoverError)
-    expect(service.showUserWindow(account)).toBe(true)
-    const report = await service.pageReport(account)
-    expect(report?.where).toBe('owner_window')
+  const aiTitle = (): Promise<string> => service.session(account).withAgentControl('probe', async (page) => page.read<string>('document.title'))
+  const ownerTitle = async (): Promise<string | undefined> => (await service.ownerPage(account))?.title
+  const ticket = {} as SendTicket
 
+  it('keeps the AI\'s page and the owner\'s window side by side on one session: a window for the owner takes nothing from the AI (DEC-038)', async () => {
+    const before = events.length
+    const opened = await service.openForUser(account, `${base}/owner`)
+    expect(opened.tabId).toBe('account-acct-probe')
+    expect(events.slice(before)).toEqual(['acct-probe:opened'])
+    expect(service.hasUserWindow(account)).toBe(true)
+    expect(service.session(account).control()).toEqual({ holder: 'none', owner: null })
+    await until(async () => (await ownerTitle()) === 'Owner window', 'the owner window shows its page')
+
+    // The AI's page is its own: it still shows the form, and the owner's window is another page.
+    expect(await aiTitle()).toBe('Get started')
+    expect(await service.ownerPage(account)).toEqual({ url: `${base}/owner`, title: 'Owner window' })
+    // What the diagnostic page report reads is the owner's window while one is open, and the AI's page otherwise.
+    expect((await service.pageReport(account))?.where).toBe('owner_window')
+
+    // The AI works in its own page, behind the owner's window: it types with real input and clicks with a real mouse click, and it never touches the owner's page.
+    const submitsBefore = submits.length
+    await service.session(account).withAgentControl('probe', async (page) => {
+      await page.goto(`${base}/form`)
+      const snapshot = await look(page)
+      const step = (input: Parameters<BrowserPage['pageStep']>[0]) => page.pageStep(input, hosts)
+      expect(await step({ do: 'type', ref: ref(snapshot, /input/, /First name/), text: 'Beside the owner' })).toMatchObject({ status: 'done' })
+      const clicked = await step({ do: 'click', ref: ref(snapshot, /button/, /Submit/) })
+      expect(clicked.status).toBe('done')
+      expect(clicked.detail).toContain('with a mouse click')
+      for (let i = 0; i < 30 && !(await resultText(page)).startsWith('Submit'); i++) await pause(150)
+      expect(await resultText(page)).toBe('Submit answered 200')
+    })
+    expect(submits.length).toBe(submitsBefore + 1)
+    expect(submits.at(-1)).toMatchObject({ first: 'Beside the owner', trusted: true })
+    expect(await ownerTitle()).toBe('Owner window')
+    expect((await service.pageReport(account))?.text).toContain("The owner's page")
+
+    // Opening the same address again brings the window to the front instead of opening another one.
+    await service.openForUser(account, `${base}/owner`)
+    expect(events.slice(before)).toEqual(['acct-probe:opened'])
+    expect(service.showUserWindow(account)).toBe(true)
+  }, 120_000)
+
+  it('does not interrupt a turn in progress when the owner opens a window and moves around in it', async () => {
     service.closeUserWindow(account)
-    expect(events).toContain('acct-probe:closed')
-    expect(service.hasUserWindow(account)).toBe(false)
+    await until(() => !service.hasUserWindow(account), 'the owner windows are closed')
+    const results = await service.session(account).withAgentControl('probe', async (page) => {
+      await page.goto(`${base}/form`)
+      const seen: string[] = []
+      seen.push(await page.read<string>('document.title'))
+      await service.openForUser(account, `${base}/owner`)
+      seen.push(await page.read<string>('document.title'))
+      await service.openForUser(account, `${base}/owner?second=1`)
+      seen.push(await page.read<string>('document.title'))
+      seen.push(await page.url())
+      return seen
+    })
+    expect(results).toEqual(['Get started', 'Get started', 'Get started', `${base}/form`])
     expect(service.session(account).control().holder).toBe('none')
-    await expect(service.session(account).withAgentControl('probe', async (page) => page.read<string>('document.title'))).resolves.toBe('Get started')
+    expect(service.hasUserWindow(account)).toBe(true)
+  }, 120_000)
+
+  it('reads the page the owner is on: one window gives its page, several give the one that shows, and a doubt says how many there are', async () => {
+    // Two windows of the owner's are open now (the previous test opened them). Chrome tells which one shows and has the focus; when it cannot, the core is told "several".
+    const page = await service.ownerPage(account)
+    console.log('with two owner windows the page of the owner is:', JSON.stringify(page))
+    expect(page).not.toBeNull()
+    if (page && page.url) expect([`${base}/owner`, `${base}/owner?second=1`]).toContain(page.url)
+    else expect(page).toMatchObject({ url: '', title: '', tabs: 2 })
+    service.closeUserWindow(account)
+    await until(() => !service.hasUserWindow(account), 'the owner windows are closed')
+    await service.openForUser(account, `${base}/owner`)
+    await until(async () => (await ownerTitle()) === 'Owner window', 'one owner window shows its page')
+    expect(await service.ownerPage(account)).toEqual({ url: `${base}/owner`, title: 'Owner window' })
+  }, 120_000)
+
+  it('notices when the owner\'s window goes to a sign-out address, by a page change or by a request, and not what the AI itself does', async () => {
+    const session = service.session(account)
+    const quiet = session.identityEpoch()
+    // The AI's own page may go anywhere, a sign-out address among them: that is its mission, not the owner's doing.
+    await session.withAgentControl('probe', async (page) => {
+      await page.goto(`${base}/logout`)
+      await page.goto(`${base}/form`)
+    })
+    expect(session.identityEpoch()).toBe(quiet)
+
+    // The owner's window goes to a sign-out page by itself a moment after it loads (the same events as the owner's click).
+    service.closeUserWindow(account)
+    await until(() => !service.hasUserWindow(account), 'the owner windows are closed')
+    const before = session.identityEpoch()
+    await service.openForUser(account, `${base}/owner?go=/logout`)
+    await until(() => session.identityEpoch() > before, 'the sign-out page was noticed', 15_000)
+    await until(async () => (await ownerTitle()) === 'Signed out', 'the owner window shows the sign-out page')
+
+    // A sign-out that is a request in the background.
+    service.closeUserWindow(account)
+    await until(() => !service.hasUserWindow(account), 'the owner windows are closed')
+    const beforeFetch = session.identityEpoch()
+    await service.openForUser(account, `${base}/owner?fetch=/api/accounts/logout/`)
+    await until(() => session.identityEpoch() > beforeFetch, 'the background sign-out was noticed', 15_000)
+  }, 120_000)
+
+  it('refuses a write of a turn that began before the owner\'s window used a sign-out page, before anything reaches the AI\'s page', async () => {
+    const session = service.session(account)
+    service.closeUserWindow(account)
+    await until(() => !service.hasUserWindow(account), 'the owner windows are closed')
+    const submitsBefore = submits.length
+    const turn = session.withAgentControl('probe', async (page) => {
+      await page.goto(`${base}/form`)
+      await service.openForUser(account, `${base}/owner?go=/logout`)
+      const epoch = session.identityEpoch()
+      await until(() => session.identityEpoch() > epoch, 'the sign-out page was noticed', 15_000)
+      // The page is read as before; a write is refused.
+      expect(await page.read<string>('document.title')).toBe('Get started')
+      await page.fill('#first', 'must not be typed', ticket)
+    })
+    await expect(turn).rejects.toBeInstanceOf(SessionChangedError)
+    expect(submits.length).toBe(submitsBefore)
+    await session.withAgentControl('probe', async (page) => expect(await page.read<string>("document.getElementById('first').value")).not.toBe('must not be typed'))
+    // The next turn is a new one and can write again (the mission itself decides, from the sign-in it reads, whether it may).
+    await session.withAgentControl('probe', async (page) => {
+      await page.fill('#first', 'typed in a new turn', ticket)
+      expect(await page.read<string>("document.getElementById('first').value")).toBe('typed in a new turn')
+    })
+  }, 120_000)
+
+  it('keeps the explicit take-over for the AI\'s own page: it stops the AI at once, brings the AI\'s page to the front, and the AI works again when it is given back', async () => {
+    service.closeUserWindow(account)
+    await until(() => !service.hasUserWindow(account), 'the owner windows are closed')
+    const session = service.session(account)
+    session.takeControl()
+    await expect(session.withAgentControl('probe', async () => 'ran')).rejects.toBeInstanceOf(TakeoverError)
+    service.showAgentBrowser(account, true)
+    await pause(500)
+    expect((await service.pageReport(account))?.where).toBe('app_page')
+    session.releaseControl()
+    expect(session.control().holder).toBe('none')
+    await expect(aiTitle()).resolves.toBe('Get started')
+  }, 90_000)
+
+  it('closes only the owner\'s window when the app closes it, says so once, and leaves the AI\'s page working', async () => {
+    const before = events.length
+    await service.openForUser(account, `${base}/owner`)
+    expect(events.slice(before)).toEqual(['acct-probe:opened'])
+    service.closeUserWindow(account)
+    await until(() => events.slice(before).includes('acct-probe:closed'), 'the closed event')
+    expect(service.hasUserWindow(account)).toBe(false)
     expect(service.showUserWindow(account)).toBe(false)
+    await expect(aiTitle()).resolves.toBe('Get started')
   }, 90_000)
 
   it('starts a new Chrome when the owner quit the old one, and keeps the same profile', async () => {

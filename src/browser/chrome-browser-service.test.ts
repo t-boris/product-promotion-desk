@@ -3,10 +3,9 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { TakeoverError } from '../core/ports'
 import type { Account } from '../shared/types'
-import { ChromeBrowserService, consoleLevel, requestKind } from './chrome-browser-service'
-import { fakeBrowser, fakePage, loseBrowser, type FakeBrowser, type FakePage } from './chrome-fakes'
+import { ChromeBrowserService, chooseOwnerPage, consoleLevel, OWNER_TAB_PROBE, requestKind } from './chrome-browser-service'
+import { fakeBrowser, fakePage, loseBrowser, navigate, pageAppears, request, type FakeBrowser, type FakePage } from './chrome-fakes'
 import { profileDirFor } from './chrome-launcher'
 import type { Browser, Page } from 'puppeteer-core'
 
@@ -111,68 +110,129 @@ describe('ChromeBrowserService', () => {
     expect(pageOf().fronted).toBe(1)
   })
 
-  describe('the owner takes the browser', () => {
-    it('stops the AI at once, says so once, and shows the window in front', async () => {
+  describe('the owner\'s windows (DEC-038)', () => {
+    it('opens a window of its own for the owner, in front, without stopping the AI or taking anything from it, and says so once', async () => {
       const { service, events } = make()
       const fb = account('a')
+      await service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/'))
+      const agentPage = pageOf()
       const opened = await service.openForUser(fb, 'https://www.facebook.com/r.php')
       expect(opened).toEqual({ tabId: 'account-a' })
       expect(events).toEqual(['a:opened'])
       expect(service.hasUserWindow(fb)).toBe(true)
-      expect(service.session(fb).control().holder).toBe('user')
-      expect(pageOf().fronted).toBeGreaterThan(0)
-      await expect(service.session(fb).withAgentControl('t', async () => 'ran')).rejects.toBeInstanceOf(TakeoverError)
-      await service.openForUser(fb)
-      expect(events).toEqual(['a:opened'])
+      expect(service.session(fb).control()).toEqual({ holder: 'none', owner: null })
+      const [ownerPage] = launches[0].browser.pageList.filter((page) => page !== agentPage)
+      expect(ownerPage.address).toBe('https://www.facebook.com/r.php')
+      expect(ownerPage.fronted).toBeGreaterThan(0)
+      expect(launches[0].browser.newPageOptions).toEqual([{ type: 'window' }])
+      // The AI keeps working in its own page, which was not touched.
+      expect(agentPage.address).toBe('https://www.facebook.com/')
+      await expect(service.session(fb).withAgentControl('t', async (page) => page.url())).resolves.toBe('https://www.facebook.com/')
     })
 
-    it('opens the page asked for, and keeps the one that is open when none is asked for', async () => {
+    it('does not interrupt a turn of the AI in progress when the owner opens a window, and the AI page is never the owner\'s', async () => {
       const { service } = make()
       const fb = account('a')
-      await service.openForUser(fb, 'https://www.facebook.com/r.php')
-      expect(pageOf().address).toBe('https://www.facebook.com/r.php')
-      await service.openForUser(fb)
-      expect(pageOf().gotos).toHaveLength(1)
+      const turn = service.session(fb).withAgentControl('mission', async (page) => {
+        await page.goto('https://www.facebook.com/groups/1/')
+        await service.openForUser(fb, 'https://www.facebook.com/groups/discover/')
+        await page.goto('https://www.facebook.com/groups/1/about')
+        return page.url()
+      })
+      await expect(turn).resolves.toBe('https://www.facebook.com/groups/1/about')
+      const owners = launches[0].browser.pageList.filter((page) => page.address === 'https://www.facebook.com/groups/discover/')
+      expect(owners).toHaveLength(1)
+      expect(owners[0].gotos.map((goto) => goto.url)).toEqual(['https://www.facebook.com/groups/discover/'])
     })
 
-    it('returns control when the owner is done, once, and lets the AI work again', async () => {
+    it('gives the AI a window of its own, behind the owner\'s, when the owner opened the first page; it never takes the owner\'s', async () => {
       const { service, events } = make()
       const fb = account('a')
-      await service.openForUser(fb, 'https://www.facebook.com/')
-      service.closeUserWindow(fb)
-      service.closeUserWindow(fb)
+      await service.openForUser(fb, 'https://www.facebook.com/r.php')
+      expect(events).toEqual(['a:opened'])
+      const ownerPage = pageOf()
+      expect(ownerPage.address).toBe('https://www.facebook.com/r.php') // Chrome\'s first page is the owner\'s: nothing blank is left behind
+      await service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/groups/1/'))
+      expect(launches[0].browser.newPageOptions).toEqual([{ type: 'window', background: true }])
+      expect(ownerPage.address).toBe('https://www.facebook.com/r.php')
+      expect(ownerPage.gotos).toHaveLength(1)
+    })
+
+    it('brings a window that already shows the address to the front instead of opening another, and opens one more for another address', async () => {
+      const { service, events } = make()
+      const fb = account('a')
+      await service.openForUser(fb, 'https://www.facebook.com/r.php')
+      const first = pageOf()
+      first.fronted = 0
+      await service.openForUser(fb, 'https://www.facebook.com/r.php')
+      expect(first.fronted).toBe(1)
+      expect(launches[0].browser.pageList).toHaveLength(1)
+      await service.openForUser(fb, 'https://www.facebook.com/groups/discover/')
+      expect(launches[0].browser.pageList).toHaveLength(2)
+      expect(events).toEqual(['a:opened']) // the second window is not a second "opened"
+    })
+
+    it('says "closed" when the last window of the owner\'s is gone, however it went, and not before', async () => {
+      const { service, events } = make()
+      const fb = account('a')
+      await service.openForUser(fb, 'https://www.facebook.com/r.php')
+      await service.openForUser(fb, 'https://www.facebook.com/groups/discover/')
+      const [one, two] = launches[0].browser.pageList
+      await one.close()
+      expect(events).toEqual(['a:opened'])
+      expect(service.hasUserWindow(fb)).toBe(true)
+      await two.close()
       expect(events).toEqual(['a:opened', 'a:closed'])
       expect(service.hasUserWindow(fb)).toBe(false)
-      expect(service.session(fb).control().holder).toBe('none')
-      await expect(service.session(fb).withAgentControl('t', async (page) => page.url())).resolves.toBe('https://www.facebook.com/')
       expect(service.showUserWindow(fb)).toBe(false)
     })
 
-    it('treats closing the window as being done', async () => {
+    it('closes every window of the owner\'s for the app, once, and leaves the AI\'s page alone', async () => {
       const { service, events } = make()
       const fb = account('a')
-      await service.openForUser(fb, 'https://www.facebook.com/')
-      await pageOf().close()
+      await service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/'))
+      const agentPage = pageOf()
+      await service.openForUser(fb, 'https://www.facebook.com/a')
+      await service.openForUser(fb, 'https://www.facebook.com/b')
+      service.closeUserWindow(fb)
+      service.closeUserWindow(fb)
+      await new Promise((resolve) => setTimeout(resolve, 5))
       expect(events).toEqual(['a:opened', 'a:closed'])
-      expect(service.session(fb).control().holder).toBe('none')
+      expect(agentPage.closed).toBe(false)
+      await expect(service.session(fb).withAgentControl('t', async (page) => page.url())).resolves.toBe('https://www.facebook.com/')
     })
 
-    it('treats the owner quitting Chrome as being done, and starts a new Chrome for the next use', async () => {
+    it('treats the owner closing the AI\'s own window as nothing for them: the AI opens a new page, the owner\'s windows stay, and nothing is announced', async () => {
+      const { service, events } = make()
+      const fb = account('a')
+      await service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/'))
+      await service.openForUser(fb, 'https://www.facebook.com/r.php')
+      const agentPage = launches[0].browser.pageList.find((page) => page.address === 'https://www.facebook.com/') as FakePage & Page
+      await agentPage.close()
+      expect(events).toEqual(['a:opened'])
+      expect(service.hasUserWindow(fb)).toBe(true)
+      await service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/again'))
+      expect(launches[0].browser.newPageOptions.at(-1)).toEqual({ type: 'window', background: true })
+    })
+
+    it('treats the owner quitting Chrome as their windows being gone, and starts a new Chrome for the next use', async () => {
       const { service, events } = make()
       const fb = account('a')
       await service.openForUser(fb, 'https://www.facebook.com/')
       loseBrowser(launches[0].browser)
       expect(events).toEqual(['a:opened', 'a:closed'])
+      expect(service.hasUserWindow(fb)).toBe(false)
       await service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/'))
       expect(launches).toHaveLength(2)
       expect(launches[1].args).toEqual(launches[0].args)
     })
 
-    it('hands control back, and says why, when the window cannot be shown', async () => {
+    it('says why, and announces nothing, when no window can be opened', async () => {
       const { service, events } = make()
       chrome = null
       await expect(service.openForUser(account('a'), 'https://www.facebook.com/')).rejects.toThrow('Google Chrome was not found')
       expect(service.session(account('a')).control().holder).toBe('none')
+      expect(service.hasUserWindow(account('a'))).toBe(false)
       expect(events).toEqual([])
     })
 
@@ -180,14 +240,157 @@ describe('ChromeBrowserService', () => {
       const { service, notes } = make()
       const fb = account('a')
       await service.session(fb).withAgentControl('t', async (page) => page.url())
-      pageOf().gotoError = new Error('Navigation timeout of 30000 ms exceeded')
       await expect(service.openForUser(fb, 'https://www.facebook.com/')).resolves.toEqual({ tabId: 'account-a' })
+      expect(notes).toEqual([])
+      launches[0].browser.nextGotoError = new Error('Navigation timeout of 30000 ms exceeded')
+      await expect(service.openForUser(fb, 'https://www.facebook.com/slow')).resolves.toEqual({ tabId: 'account-a' })
       expect(notes.some((note) => note.includes('could not load the page'))).toBe(true)
+    })
+
+    it('starts Chrome once when the AI and the owner need it together', async () => {
+      let open!: () => void
+      const launchGate = new Promise<void>((resolve) => (open = resolve))
+      const { service } = make({ launchGate })
+      const fb = account('a')
+      const turn = service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/'))
+      const opening = service.openForUser(fb, 'https://www.facebook.com/r.php')
+      for (let waited = 0; launches.length === 0 && waited < 100; waited += 1) await new Promise((resolve) => setTimeout(resolve, 2))
+      open()
+      await Promise.all([turn, opening])
+      expect(launches).toHaveLength(1)
+      // Chrome\'s first page went to one of them, and the other has a window of its own.
+      expect(launches[0].browser.pageList).toHaveLength(2)
     })
   })
 
-  describe('the page of the owner (DEC-028)', () => {
-    it('is known only while the owner holds the browser: its address and the title Chrome records, no script run in the page', async () => {
+  describe('whose page is whose (DEC-038)', () => {
+    it('adopts a tab the owner opened themselves as theirs, and a pop-up of the AI\'s page as the AI\'s', async () => {
+      const { service, events } = make()
+      const fb = account('a')
+      await service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/'))
+      const agentPage = pageOf()
+      expect(service.hasUserWindow(fb)).toBe(false)
+      const popup = pageAppears(launches[0].browser, agentPage, 'https://www.facebook.com/dialog/oauth')
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      expect(service.hasUserWindow(fb)).toBe(false) // the AI\'s own pop-up is not the owner\'s
+      // The browser may announce the new page before the page says it was a pop-up: its opener tells whose it is.
+      const late = pageAppears(launches[0].browser, agentPage, 'https://www.facebook.com/dialog/oauth/late', { announced: false })
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      expect(service.hasUserWindow(fb)).toBe(false)
+      navigate(late, 'https://www.facebook.com/logout')
+      expect(service.session(fb).identityEpoch()).toBe(0) // and what the AI\'s pop-up does is not the owner\'s doing
+      pageAppears(launches[0].browser, null, 'https://news.example/')
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      expect(service.hasUserWindow(fb)).toBe(true)
+      expect(events).not.toContain('a:opened') // a tab the owner opened by hand is theirs; "opened" is for the window the app opened for them
+      popup.address = 'https://www.facebook.com/dialog/oauth2'
+    })
+
+    it('never drives a page it did not create: the AI\'s turn reads its own page, whatever the owner has open', async () => {
+      const { service } = make()
+      const fb = account('a')
+      await service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/groups/1/'))
+      await service.openForUser(fb, 'https://www.facebook.com/')
+      pageAppears(launches[0].browser, null, 'https://news.example/')
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      await expect(service.session(fb).withAgentControl('t', async (page) => page.url())).resolves.toBe('https://www.facebook.com/groups/1/')
+      const owners = launches[0].browser.pageList.filter((page) => page.address !== 'https://www.facebook.com/groups/1/')
+      for (const owner of owners) expect(owner.input).toEqual([])
+      expect(owners.every((owner) => owner.scripts.length === 0)).toBe(true)
+    })
+  })
+
+  describe('a sign-in or sign-out page used in an owner\'s window moves the session (DEC-038)', () => {
+    async function withOwnerWindow() {
+      const made = make()
+      const fb = account('a')
+      await made.service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/'))
+      await made.service.openForUser(fb, 'https://www.facebook.com/groups/discover/')
+      const agentPage = pageOf()
+      const ownerPage = launches[0].browser.pageList.find((page) => page !== agentPage) as FakePage & Page
+      return { ...made, fb, agentPage, ownerPage, session: made.service.session(fb) }
+    }
+
+    it('counts a navigation of an owner page to a sign-out, sign-in or account-switch address', async () => {
+      const { session, ownerPage } = await withOwnerWindow()
+      const before = session.identityEpoch()
+      navigate(ownerPage, 'https://www.facebook.com/groups/1/')
+      expect(session.identityEpoch()).toBe(before)
+      navigate(ownerPage, 'https://www.facebook.com/logout.php?h=1')
+      expect(session.identityEpoch()).toBe(before + 1)
+      navigate(ownerPage, 'https://www.facebook.com/login/')
+      expect(session.identityEpoch()).toBe(before + 2)
+    })
+
+    it('counts a background request of an owner page to such an address (a sign-out that is a fetch), and not an image or a script', async () => {
+      const { session, ownerPage } = await withOwnerWindow()
+      const before = session.identityEpoch()
+      request(ownerPage, 'https://www.facebook.com/logout', 'image') // an <img> whose address is a sign-out page is not a sign-out
+      request(ownerPage, 'https://www.facebook.com/logout', 'script')
+      request(ownerPage, 'https://www.facebook.com/api/feed', 'fetch')
+      expect(session.identityEpoch()).toBe(before)
+      request(ownerPage, 'https://www.facebook.com/api/accounts/logout/', 'fetch')
+      expect(session.identityEpoch()).toBe(before + 1)
+    })
+
+    it('counts the address the owner asked for the moment the window is asked to open on it, before the page has loaded', async () => {
+      const { service, session, fb } = await withOwnerWindow()
+      const before = session.identityEpoch()
+      await service.openForUser(fb, 'https://www.facebook.com/login/')
+      expect(session.identityEpoch()).toBe(before + 1)
+    })
+
+    it('counts a page that was already on such an address when it was adopted', async () => {
+      const { session, service, fb } = await withOwnerWindow()
+      const before = session.identityEpoch()
+      pageAppears(launches[0].browser, null, 'https://www.facebook.com/logout')
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      expect(service.hasUserWindow(fb)).toBe(true)
+      expect(session.identityEpoch()).toBe(before + 1)
+    })
+
+    it('does not count what the AI\'s own page does: it may sign in and out as its missions say', async () => {
+      const { service, fb, session, agentPage } = await withOwnerWindow()
+      const before = session.identityEpoch()
+      await service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/login/'))
+      navigate(agentPage, 'https://www.facebook.com/logout')
+      request(agentPage, 'https://www.facebook.com/api/accounts/logout/')
+      expect(session.identityEpoch()).toBe(before)
+    })
+
+    it('counts a pop-up of an owner page, and a tab the owner opened by hand, the same way', async () => {
+      const { session, ownerPage } = await withOwnerWindow()
+      const before = session.identityEpoch()
+      const popup = pageAppears(launches[0].browser, ownerPage, 'https://www.facebook.com/')
+      navigate(popup, 'https://accounts.google.com/o/oauth2/v2/auth')
+      expect(session.identityEpoch()).toBe(before + 1)
+      const tab = pageAppears(launches[0].browser, null, 'https://www.facebook.com/')
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      navigate(tab, 'https://www.facebook.com/logout')
+      expect(session.identityEpoch()).toBe(before + 2)
+    })
+
+    it('a mission that checked the sign-in before the owner\'s window used a sign-out page sees that its check is out of date', async () => {
+      const { session, ownerPage } = await withOwnerWindow()
+      const checkedAt = session.identityEpoch()
+      navigate(ownerPage, 'https://www.facebook.com/logout')
+      expect(session.identityEpoch()).not.toBe(checkedAt)
+    })
+
+    it('a write of the AI\'s turn in progress is refused once the owner\'s window used such a page, and nothing reaches the AI\'s page', async () => {
+      const { service, fb, ownerPage, agentPage } = await withOwnerWindow()
+      const ticket = { actionId: 'a', contentHash: 'h', accountId: 'a', destination: 'd', signature: 's', expiresAt: 0 } as never
+      const turn = service.session(fb).withAgentControl('mission', async (page) => {
+        navigate(ownerPage, 'https://www.facebook.com/logout')
+        await page.click('#post', ticket)
+      })
+      await expect(turn).rejects.toMatchObject({ name: 'SessionChangedError' })
+      expect(agentPage.input).toEqual([])
+    })
+  })
+
+  describe('the page of the owner (DEC-028, DEC-038)', () => {
+    it('is known only while the owner has a window open: its address and the title Chrome records, no script run in the page', async () => {
       const { service } = make()
       const fb = account('a')
       expect(await service.ownerPage(fb)).toBeNull()
@@ -195,25 +398,81 @@ describe('ChromeBrowserService', () => {
       await service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/groups/discover/'))
       expect(await service.ownerPage(fb)).toBeNull() // the page of the app is not the owner's
       await service.openForUser(fb, 'https://www.facebook.com/groups/discover/')
-      const page = pageOf()
+      const page = launches[0].browser.pageList[1]
       page.tabTitle = 'Discover groups'
       page.address = 'https://www.facebook.com/groups/yourgroup/?ref=x'
       const scriptsBefore = page.scripts.length
-      expect(await service.ownerPage(fb)).toEqual({ url: 'https://www.facebook.com/groups/yourgroup/?ref=x', title: 'Discover groups', tabs: 1 })
+      expect(await service.ownerPage(fb)).toEqual({ url: 'https://www.facebook.com/groups/yourgroup/?ref=x', title: 'Discover groups' })
       expect(page.scripts.length).toBe(scriptsBefore)
+      expect(page.sessionsClosed).toBe(page.sessionsOpened) // the DevTools session used for the title is closed again
       service.closeUserWindow(fb)
+      await new Promise((resolve) => setTimeout(resolve, 5))
       expect(await service.ownerPage(fb)).toBeNull()
+    })
+
+    it('with several pages open asks each, once, whether it is showing and has the focus, and answers with the one that is', async () => {
+      const { service } = make()
+      const fb = account('a')
+      await service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/'))
+      await service.openForUser(fb, 'https://www.facebook.com/groups/one/')
+      await service.openForUser(fb, 'https://www.facebook.com/groups/two/')
+      const [, one, two] = launches[0].browser.pageList
+      one.answers.push(['document.visibilityState', { visible: false, focused: false }])
+      two.answers.push(['document.visibilityState', { visible: true, focused: false }])
+      one.tabTitle = 'One'
+      two.tabTitle = 'Two'
+      expect(await service.ownerPage(fb)).toEqual({ url: 'https://www.facebook.com/groups/two/', title: 'Two' })
+      expect(one.scripts).toEqual([OWNER_TAB_PROBE])
+      expect(two.scripts).toEqual([OWNER_TAB_PROBE])
+    })
+
+    it('says how many pages there are, and gives no address, when the browser cannot tell which one the owner is on', async () => {
+      const { service } = make()
+      const fb = account('a')
+      await service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/'))
+      await service.openForUser(fb, 'https://www.facebook.com/groups/one/')
+      await service.openForUser(fb, 'https://www.facebook.com/groups/two/')
+      const [, one, two] = launches[0].browser.pageList
+      one.answers.push(['document.visibilityState', { visible: true, focused: false }])
+      two.answers.push(['document.visibilityState', { visible: true, focused: false }])
+      expect(await service.ownerPage(fb)).toEqual({ url: '', title: '', tabs: 2 })
+    })
+
+    it('says how many pages there are when a page cannot be asked', async () => {
+      const { service } = make()
+      const fb = account('a')
+      await service.openForUser(fb, 'https://www.facebook.com/groups/one/')
+      await service.openForUser(fb, 'https://www.facebook.com/groups/two/')
+      const [one, two] = launches[0].browser.pageList
+      one.answers.push(['document.visibilityState', new Error('gone')])
+      two.answers.push(['document.visibilityState', { visible: true, focused: true }])
+      expect(await service.ownerPage(fb)).toMatchObject({ url: 'https://www.facebook.com/groups/two/' })
+      two.answers.length = 0
+      two.answers.push(['document.visibilityState', new Error('gone')])
+      expect(await service.ownerPage(fb)).toEqual({ url: '', title: '', tabs: 2 })
+    })
+
+    it('finds a tab the owner opened by hand, even when it appeared while the app was creating a page of its own', async () => {
+      const { service } = make()
+      const fb = account('a')
+      await service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/'))
+      launches[0].browser.pageList.push(fakePage('https://news.example/')) // appeared without a "target created" the service could use
+      expect((await service.ownerPage(fb))?.url).toBe('https://news.example/')
     })
   })
 
-  describe('the page of the owner with several tabs (DEC-028)', () => {
-    it('says how many pages the window holds, so the core can refuse to guess which one the owner is on', async () => {
-      const { service } = make()
-      const fb = account('a')
-      await service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/groups/discover/'))
-      await service.openForUser(fb, 'https://www.facebook.com/groups/discover/')
-      await launches[0].browser.newPage() // a link the owner opened in a new tab
-      expect((await service.ownerPage(fb))?.tabs).toBe(2)
+  describe('which page of several is the owner\'s (pure)', () => {
+    const seen = (...answers: Array<[boolean, boolean]>) => answers.map(([visible, focused], index) => ({ page: `p${index}`, visible, focused }))
+    it('is the one that is showing, when only one is', () => {
+      expect(chooseOwnerPage(seen([false, false], [true, false], [false, false]))).toBe('p1')
+    })
+    it('is the one that has the keyboard focus, when several are showing', () => {
+      expect(chooseOwnerPage(seen([true, false], [true, true]))).toBe('p1')
+    })
+    it('is nobody when several are showing and none or several have the focus, or none is showing', () => {
+      expect(chooseOwnerPage(seen([true, false], [true, false]))).toBeNull()
+      expect(chooseOwnerPage(seen([true, true], [true, true]))).toBeNull()
+      expect(chooseOwnerPage(seen([false, false], [false, false]))).toBeNull()
     })
   })
 
@@ -222,7 +481,7 @@ describe('ChromeBrowserService', () => {
       const { service, notes } = make()
       const fb = account('a')
       await service.session(fb).withAgentControl('t', async (page) => page.url())
-      pageOf().gotoError = new Error('net::ERR_NAME_NOT_RESOLVED at https://www.facebook.com/groups/yours?token=SECRET#frag')
+      launches[0].browser.nextGotoError = new Error('net::ERR_NAME_NOT_RESOLVED at https://www.facebook.com/groups/yours?token=SECRET#frag')
       await service.openForUser(fb, 'https://www.facebook.com/groups/yours?token=SECRET')
       const note = notes.find((line) => line.includes('could not load the page')) ?? ''
       expect(note).toContain('www.facebook.com/groups/yours')
@@ -256,8 +515,10 @@ describe('ChromeBrowserService', () => {
       expect(report?.savedAs).not.toBeNull()
       expect(page.shots.length).toBeGreaterThan(0)
 
-      await service.openForUser(fb)
-      expect((await service.pageReport(fb))?.where).toBe('owner_window')
+      await service.openForUser(fb, 'https://www.facebook.com/groups/discover/')
+      const owner = launches[0].browser.pageList[1]
+      owner.answers.push(['page-reading', { title: 'Discover', text: 'Groups', alerts: [] }])
+      expect(await service.pageReport(fb)).toMatchObject({ where: 'owner_window', title: 'Discover' })
     })
 
     it('keeps the report when the picture cannot be taken', async () => {
@@ -375,7 +636,7 @@ describe('ChromeBrowserService', () => {
     })
   })
 
-  it('makes a page when only the page was closed, in the Chrome that is running', async () => {
+  it('makes a page of its own, in a window behind the owner\'s, when only the page was closed, in the Chrome that is running', async () => {
     const { service } = make()
     const fb = account('a')
     await service.session(fb).withAgentControl('t', async (page) => page.url())
@@ -383,6 +644,7 @@ describe('ChromeBrowserService', () => {
     await service.session(fb).withAgentControl('t', async (page) => page.url())
     expect(launches).toHaveLength(1)
     expect(launches[0].browser.newPages).toBe(1)
+    expect(launches[0].browser.newPageOptions).toEqual([{ type: 'window', background: true }])
   })
 
   it('uses the first page Chrome opened, instead of leaving an empty tab behind', async () => {

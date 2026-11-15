@@ -2,43 +2,12 @@ import { useState } from 'react'
 import { PASSPORT_SECTIONS, type PassportSection, type PassportView } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
 import { Badge, Button, Card, ErrorNote, Hint, More } from '../../ui'
+import { PassportSections } from '../setup/PassportSections'
 import { ClaimForm } from './ClaimForm'
-import { ClaimRow } from './ClaimRow'
 import { SECTION_HINTS, SECTION_LABELS } from './labels'
 import { useTabMainVariant } from './LaunchPath'
-import { approvableClaims, approvalBlocker, groupBySection, summarize } from './model'
+import { approvableClaims, approvalBlocker, summarize } from './model'
 import { VersionsCard } from './VersionsCard'
-
-function Section({ section, view }: { section: PassportSection; view: PassportView }) {
-  const [adding, setAdding] = useState(false)
-  const claims = groupBySection(view.claims)[section]
-  const empty = claims.length === 0 && !adding
-  return (
-    <Card
-      title={SECTION_LABELS[section]}
-      actions={
-        <Button variant="quiet" className="accent" onClick={() => setAdding(true)} disabled={adding} aria-label={`Add statement to ${SECTION_LABELS[section]}`} data-testid={`add-claim-${section}`}>
-          + Add statement
-        </Button>
-      }
-      className={`passport-section${empty ? ' compact' : ''}`}
-    >
-      <div data-testid={`section-${section}`}>
-        {/* An empty section is one line: what belongs here, and that nothing is here yet. */}
-        <Hint>
-          {SECTION_HINTS[section]}
-          {empty ? ' · nothing here yet' : ''}
-        </Hint>
-        <div className="rows claim-list">
-          {claims.map((claim) => (
-            <ClaimRow key={claim.id} claim={claim} all={view.claims} productId={view.product.id} />
-          ))}
-        </div>
-        {adding && <ClaimForm productId={view.product.id} section={section} onDone={() => setAdding(false)} />}
-      </div>
-    </Card>
-  )
-}
 
 /** One line of the empty passport's checklist (BUG-019): the section, what belongs there, and "+ Add statement". */
 function SectionRow({ section, view }: { section: PassportSection; view: PassportView }) {
@@ -191,9 +160,7 @@ export function PassportTab({ view, onOpenAnalysis }: { view: PassportView; /** 
         </div>
       </Card>
 
-      {PASSPORT_SECTIONS.map((section) => (
-        <Section key={section} section={section} view={view} />
-      ))}
+      <PassportSections view={view} />
       <VersionsCard productId={view.product.id} />
     </div>
   )

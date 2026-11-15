@@ -4,7 +4,6 @@ import { call, useAction, useQuery } from '../../hooks'
 import { Badge, Button, Card, ConfirmAction, ErrorNote, formatTime, Hint, useMainVariant } from '../../ui'
 import { JoinChannel } from './JoinChannel'
 import { CHANNEL_STATUS_LABEL, CHANNEL_STATUS_TONE, capabilityOf, membershipWord, nextCheckText } from './model'
-import { OpenAccountBrowser } from './OpenAccountBrowser'
 import { OWN_POSTS_READING, activateHint } from './own-posts'
 import { activateBlocker, canActivate, canPause } from './setup-stage'
 
@@ -41,7 +40,7 @@ export function ChannelStatusCard({ channel, product, account, platform, account
   const pausable = canPause(channel)
 
   return (
-    <Card title={channel.target} className="wraps-title">
+    <Card title="Status" className="wraps-title">
       <dl className="kv">
         <dt>Product</dt>
         <dd>{product?.name ?? 'Unknown product'}</dd>
@@ -115,8 +114,6 @@ export function ChannelStatusCard({ channel, product, account, platform, account
             Resume
           </Button>
         )}
-        {/* The channel's own page in the browser of its account, to look around signed in as it (DEC-028). */}
-        {account && <OpenAccountBrowser key={account.id} account={account} open={() => call('accounts.openBrowser', { accountId: account.id, url: channel.url })} testId="channel-browse" />}
         {/* Joins the community with the account, on the owner's press and nothing else (DEC-029); only where the platform can tell it worked. */}
         {account && <JoinChannel key={`${account.id}:${channel.id}`} channel={channel} account={account} canJoin={platform?.canJoin === true} />}
         <span className="sep" />

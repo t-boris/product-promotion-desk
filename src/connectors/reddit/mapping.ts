@@ -1,7 +1,7 @@
 // Pure mapping from Reddit's documented listing/comment JSON to the connector contract.
 // Everything is defensive: a malformed node is skipped instead of failing the whole read.
 
-import type { Membership, RemoteComment, RemoteDiscussion } from '../../core/ports'
+import type { Membership, RemoteComment, RemoteDiscussion, RemoteInboxItem } from '../../core/ports'
 import { asRecord, isoFromEpochSeconds, num, str } from '../text'
 
 export const REDDIT_ORIGIN = 'https://www.reddit.com'
@@ -273,4 +273,69 @@ export function mapOwnComments(json: unknown): OwnComment[] | null {
       }
     ]
   })
+}
+
+// ───────────── the account's inbox (DEC-039) ─────────────
+//
+// `/message/inbox.json` and `/message/mentions.json` answer with a Listing whose children are t1 (a comment that replied to the account, or named
+// it) and t4 (a private message). Reddit documents the t1 fields used here (`name`, `author`, `body`, `parent_id`, `link_id`, `link_title`,
+// `subreddit`, `context`, `created_utc`, `type`); whether a live account's answer carries them all is not proven (the Feed's inbox is built on
+// the documented shape and local fixtures), so a missing field is made up from the ones that are there, or the item is skipped.
+
+export interface RedditInboxEntry {
+  /** The community the item belongs to, as Reddit names it; the connector keeps only the channel's own. */
+  subreddit: string
+  item: RemoteInboxItem
+}
+
+const COMMENT_FULLNAME = /^t1_[a-z0-9]{1,12}$/i
+const POST_FULLNAME = /^t3_[a-z0-9]{1,12}$/i
+const THREAD_PATH = /^\/r\/([^/]+)\/comments\/([a-z0-9]{1,12})(?:\/([^/?#]*))?/i
+
+/** A mention is what Reddit calls `username_mention`, or anything read from the mentions list. */
+const isMentionType = (type: string, subject: string): boolean => /mention/i.test(type) || /username mention/i.test(subject)
+
+/**
+ * The items of an inbox or mentions listing, newest first as Reddit lists them. Private messages (t4), deleted authors and removed or deleted bodies
+ * are left out; so is a comment that cannot be placed in a post. Null when the answer is not a listing at all.
+ */
+export function mapInbox(json: unknown, fromMentions: boolean): RedditInboxEntry[] | null {
+  const root = asRecord(json)
+  if (!root || root.kind !== 'Listing') return null
+  const entries: RedditInboxEntry[] = []
+  const seen = new Set<string>()
+  for (const child of childrenOf(root)) {
+    const thing = asRecord(child)
+    const data = asRecord(thing?.data)
+    if (!thing || !data || thing.kind !== 't1') continue
+    const externalId = str(data.name) || (str(data.id) ? `t1_${str(data.id)}` : '')
+    const author = str(data.author)
+    const body = str(data.body)
+    if (!COMMENT_FULLNAME.test(externalId) || seen.has(externalId)) continue
+    if (author === '' || DELETED_NAMES.has(author) || DELETED_BODIES.has(body.trim()) || body.trim() === '') continue
+
+    // Where it lives: the `context` path of the item says the community, the post and the comment.
+    const context = str(data.context)
+    const contextPath = context.split(/[?#]/)[0]
+    const thread = THREAD_PATH.exec(contextPath)
+    const linkId = str(data.link_id) || (thread ? `t3_${thread[2]}` : '')
+    if (!POST_FULLNAME.test(linkId)) continue
+    const subreddit = str(data.subreddit) || (thread ? thread[1] : '')
+    if (subreddit === '') continue
+    const discussionUrl = absoluteUrl(str(data.link_permalink) || (thread ? `/r/${thread[1]}/comments/${thread[2]}/${thread[3] ? `${thread[3]}/` : ''}` : `/comments/${linkId.slice(3)}/`))
+    const commentUrl = contextPath !== '' ? absoluteUrl(contextPath) : `${discussionUrl.replace(/\/$/, '')}/${externalId.slice(3)}/`
+
+    seen.add(externalId)
+    entries.push({
+      subreddit,
+      item: {
+        kind: fromMentions || isMentionType(str(data.type), str(data.subject)) ? 'mention' : 'reply_to_me',
+        discussionExternalId: linkId,
+        discussionUrl,
+        discussionTitle: str(data.link_title),
+        comment: { externalId, parentExternalId: str(data.parent_id) || null, author, body, url: commentUrl, postedAt: isoFromEpochSeconds(data.created_utc) }
+      }
+    })
+  }
+  return entries
 }

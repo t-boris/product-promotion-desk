@@ -32,7 +32,7 @@ describe('Reddit assessment (REQ-002)', () => {
     expect(caps.publish_post.status).toBe('needs_check')
     expect(caps.publish_reply.status).toBe('needs_check')
     expect(caps.publish_post.detail).toMatch(/first authorized send/)
-    expect(Object.keys(caps)).toHaveLength(9)
+    expect(Object.keys(caps)).toHaveLength(10)
   })
 
   it('never types, clicks or uploads anything: no test publication (REQ-002)', async () => {
@@ -54,7 +54,7 @@ describe('Reddit assessment (REQ-002)', () => {
     const { ctx, page } = setup()
     page.route('/api/me.json', {}, 200)
     const caps = await connector.assess(ctx)
-    expect(caps).toHaveLength(9)
+    expect(caps).toHaveLength(10)
     expect(caps.every((c) => c.status === 'needs_user')).toBe(true)
     expect(caps[0].detail).toMatch(/sign in/i)
   })

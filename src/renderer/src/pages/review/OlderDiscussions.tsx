@@ -11,8 +11,8 @@ const MAX_SHOWN = 100
  * on their own; the owner can pick the ones worth working on, which turns their existing comments into items to
  * review (SRC-001 section 3). Nothing is posted without the usual approval.
  */
-export function OlderDiscussions({ channel }: { channel: Channel }) {
-  const [open, setOpen] = useState(false)
+export function OlderDiscussions({ channel, defaultOpen = false }: { channel: Channel; /** The list is open when the card appears (the Feed shows it on a page of its own). */ defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen)
   const [search, setSearch] = useState('')
   const list = useQuery('channels.discussions', { channelId: channel.id }, ['opportunities', 'channels'])
   const [select, selecting] = useAction((id: Id, selected: boolean) => call('channels.selectOlder', { channelId: channel.id, discussionIds: [id], selected }))

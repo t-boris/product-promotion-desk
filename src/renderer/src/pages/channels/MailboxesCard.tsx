@@ -4,8 +4,8 @@ import { call, useAction } from '../../hooks'
 import { Button, Card, ConfirmAction, ErrorNote, Field, Hint } from '../../ui'
 
 /**
- * The owner's base mailboxes (DEC-015): an ordinary mailbox from which every account gets an address of its own. With none, the sentence
- * and the add field below it are the whole screen: the field is the next step, and "Add mailbox" is the filled button.
+ * The owner's base mailboxes (DEC-015): an ordinary mailbox from which every account gets an address of its own. It is a card of Settings
+ * (DEC-037, phase C5): the screen's filled button is the engine's, so "Add mailbox" is a bezel here.
  */
 export function MailboxesCard({ mailboxes }: { mailboxes: Mailbox[] }) {
   const [address, setAddress] = useState('')
@@ -47,7 +47,7 @@ export function MailboxesCard({ mailboxes }: { mailboxes: Mailbox[] }) {
           <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="you@gmail.com" autoComplete="off" data-testid="mailbox-address" />
         </Field>
         <div className="row">
-          <Button variant="primary" type="submit" disabled={adding.busy || address.trim() === ''} data-testid="mailbox-add">
+          <Button type="submit" disabled={adding.busy || address.trim() === ''} data-testid="mailbox-add">
             {adding.busy ? 'Adding…' : 'Add mailbox'}
           </Button>
           {address.trim() === '' && <Hint data-testid="mailbox-add-reason">Type the address of your mailbox.</Hint>}

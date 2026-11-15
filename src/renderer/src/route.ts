@@ -1,31 +1,51 @@
-// Hash routes shared by the shell, the product page and the attention list. Kept apart from the components so the
-// rules (which hashes exist, where old links go) live in one place.
+// Hash routes shared by the shell and the screens. Kept apart from the components so the rules (which hashes exist, where an old link
+// goes, which product a link names) live in one place and are tested without the interface (DEC-037).
 
 import type { ApiEvent } from '../../shared/api'
 
-/** Tabs of the product page in display order (DEC-009: Channels and Results live here, not in the main menu). */
-export const PRODUCT_TABS = ['sources', 'passport', 'analysis', 'goal', 'channels', 'results'] as const
+/** The screens of the main menu in the order of the sidebar; Log and Settings are pinned to its bottom. */
+export const PAGE_IDS = ['overview', 'inbox', 'feed', 'posts', 'channels', 'accounts', 'setup', 'logs', 'settings'] as const
+export type PageId = (typeof PAGE_IDS)[number]
+
+export function isPageId(value: string | undefined): value is PageId {
+  return PAGE_IDS.some((id) => id === value)
+}
+
+/** The tabs of Setup in display order: what is configured once for a product. */
+export const SETUP_TABS = ['sources', 'passport', 'analysis', 'goal'] as const
+export type SetupTab = (typeof SETUP_TABS)[number]
+
+export const DEFAULT_SETUP_TAB: SetupTab = 'sources'
+
+export function isSetupTab(value: string | undefined): value is SetupTab {
+  return SETUP_TABS.some((tab) => tab === value)
+}
+
+/**
+ * The places of a product that the launch path points at. The first four are the tabs of Setup, `channels` is the Channels screen and
+ * `results` the Overview; the launch path (`TAB_STAGE`, `tabAccent`) keys on these names.
+ */
+export const PRODUCT_TABS = [...SETUP_TABS, 'channels', 'results'] as const
 export type ProductTab = (typeof PRODUCT_TABS)[number]
-
-export const DEFAULT_PRODUCT_TAB: ProductTab = 'sources'
-
-/** The account library (DEC-015). */
-export const ACCOUNTS_HREF = '#/accounts'
-
-/** Menu entries that moved into the product page. Old links and bookmarks still land somewhere useful. */
-export const MOVED_PAGES: Record<string, string> = { channels: 'products', results: 'products' }
 
 export function isProductTab(value: string | undefined): value is ProductTab {
   return PRODUCT_TABS.some((tab) => tab === value)
 }
 
-export interface ParsedHash {
-  /** First path segment, e.g. "products". Empty when there is no hash. */
-  page: string
-  /** `#/products/<productId>/…` only. */
-  productId: string | null
-  /** A known tab, or null when the hash names none (or an unknown one). */
-  tab: ProductTab | null
+/** The account library (DEC-015). */
+export const ACCOUNTS_HREF = '#/accounts'
+/** What waits for the owner. */
+export const INBOX_HREF = '#/inbox'
+/** What happens in the channels. */
+export const FEED_HREF = '#/feed'
+/** How the current product is doing: goals and the metrics of its channels. */
+export const OVERVIEW_HREF = '#/overview'
+/** The form that makes a product: Setup with the new-product form open. */
+export const NEW_PRODUCT_HREF = '#/setup/new'
+
+/** Link to Setup, or to one of its tabs, for the current product. */
+export function setupHref(tab?: SetupTab): string {
+  return tab ? `#/setup/${tab}` : '#/setup'
 }
 
 const safeDecode = (value: string): string => {
@@ -36,53 +56,163 @@ const safeDecode = (value: string): string => {
   }
 }
 
-/** The path segments of a hash, and the query after them. */
+/** The path segments of a hash (as written), and the query after them. */
 function splitHash(hash: string): { segments: string[]; query: URLSearchParams } {
   const body = hash.replace(/^#\/?/, '')
   const at = body.indexOf('?')
   return { segments: (at < 0 ? body : body.slice(0, at)).split('/').filter((segment) => segment !== ''), query: new URLSearchParams(at < 0 ? '' : body.slice(at + 1)) }
 }
 
-/** Reads `#/page`, `#/products/<productId>` and `#/products/<productId>/<tab>`; a query after the path is not part of it. */
-export function parseHash(hash: string): ParsedHash {
-  const [page = '', productId, tab] = splitHash(hash).segments
-  const onProductPage = page === 'products' && !!productId
-  return {
-    page,
-    productId: onProductPage ? safeDecode(productId) : null,
-    tab: onProductPage && isProductTab(tab) ? tab : null
-  }
+/** A product id given as a path segment (still percent-encoded): decoded and trimmed, and null when nothing is left. */
+const idOf = (segment: string | undefined): string | null => (segment === undefined ? null : safeDecode(segment).trim() || null)
+
+export interface ResolvedRoute {
+  /** The screen, or null for a hash that names none: the shell shows the first screen then. */
+  page: PageId | null
+  /** The same address in its current form: an old address is rewritten to the new one and the product it names is taken out of it. */
+  hash: string
+  /** The product the address names (an old address, or `?product=`), or null: the current product stays as it is. */
+  productId: string | null
+  /** `hash` differs from what was asked, so the shell replaces the address (no history entry). */
+  moved: boolean
 }
 
 /**
- * Link to a product (and optionally one of its tabs); without a product, the product list. On the Channels tab, `accountId` is the account
- * "Connect a channel" chooses first: the one just added from that tab (BUG-063).
+ * What a hash asks for. The menu changed (DEC-037), and every address of the old menu still lands on the right new screen, setting the
+ * current product where the old address carried one:
+ *
+ * | Old | New |
+ * |---|---|
+ * | `#/attention` | `#/inbox` |
+ * | `#/opportunities` | `#/feed` |
+ * | `#/publications[/<productId>]` | `#/posts` |
+ * | `#/products[/<productId>]` | `#/setup` |
+ * | `#/products/<productId>/{sources,passport,analysis,goal}` | `#/setup/<tab>` |
+ * | `#/products/<productId>/channels[?account=<accountId>]` | `#/channels[?account=<accountId>]` |
+ * | `#/products/<productId>/results`, `#/results` | `#/overview` |
+ *
+ * A new address may carry `?product=<productId>`: "open this screen for that product". The Accounts screen keeps its own addresses, and its
+ * `?product=` (the product the new-account form was opened from) is not this one, so it is never touched.
+ */
+export function resolveRoute(hash: string): ResolvedRoute {
+  const { segments, query } = splitHash(hash)
+  const [first = '', second, third] = segments
+  if (first === 'accounts') return { page: 'accounts', hash, productId: null, moved: false }
+
+  let page: string = first
+  let rest = segments.slice(1)
+  let legacyProduct: string | null = null
+  let keepQuery: URLSearchParams | null = null
+  switch (first) {
+    case 'attention':
+      page = 'inbox'
+      rest = []
+      break
+    case 'opportunities':
+      page = 'feed'
+      rest = []
+      break
+    case 'results':
+      page = 'overview'
+      rest = []
+      break
+    case 'publications':
+      page = 'posts'
+      legacyProduct = idOf(second)
+      rest = []
+      break
+    case 'products':
+      legacyProduct = idOf(second)
+      if (third === 'channels') {
+        const account = query.get('account')?.trim()
+        page = 'channels'
+        rest = []
+        keepQuery = new URLSearchParams(account ? { account } : {})
+      } else if (third === 'results') {
+        page = 'overview'
+        rest = []
+      } else {
+        page = 'setup'
+        rest = isSetupTab(third) ? [third] : []
+      }
+      break
+    default:
+  }
+  if (!isPageId(page)) return { page: null, hash, productId: null, moved: false }
+
+  const rewritten = keepQuery ?? new URLSearchParams(query)
+  const asked = rewritten.get('product')?.trim() || null
+  rewritten.delete('product')
+  const text = rewritten.toString()
+  const canonical = `#/${[page, ...rest].join('/')}${text ? `?${text}` : ''}`
+  return { page, hash: canonical, productId: asked ?? legacyProduct, moved: canonical !== hash }
+}
+
+/**
+ * Link to a place of a product: a tab of Setup, the Channels screen (`accountId` is the account "Connect a channel" chooses first: the one
+ * just added from there, BUG-063) or the Overview. Without a tab it is Setup. Without a product it is that place for the current product.
  */
 export function productHref(productId: string | null | undefined, tab?: ProductTab, accountId?: string): string {
-  if (!productId) return '#/products'
-  const base = `#/products/${encodeURIComponent(productId)}`
-  if (!tab) return base
-  return tab === 'channels' && accountId ? `${base}/${tab}?${new URLSearchParams({ account: accountId }).toString()}` : `${base}/${tab}`
+  const place = tab === 'channels' ? '#/channels' : tab === 'results' ? OVERVIEW_HREF : setupHref(tab)
+  const query = new URLSearchParams()
+  if (productId) query.set('product', productId)
+  if (tab === 'channels' && accountId) query.set('account', accountId)
+  const text = query.toString()
+  return `${place}${text ? `?${text}` : ''}`
 }
 
-/** The account a `#/products/<productId>/channels?account=<accountId>` link asks "Connect a channel" to choose first, or null. */
+/** Link to Posts for one product (the last stage of a product's launch path), or for the current one. */
+export function postsHref(productId?: string | null): string {
+  return productId ? `#/posts?${new URLSearchParams({ product: productId }).toString()}` : '#/posts'
+}
+
+/** The account a link to the Channels screen asks "Connect a channel" to choose first, or null. */
 export function channelsAccountOf(hash: string): string | null {
-  const { segments: [page, productId, tab], query } = splitHash(hash)
-  return page === 'products' && productId && tab === 'channels' ? query.get('account')?.trim() || null : null
+  const route = resolveRoute(hash)
+  return route.page === 'channels' ? splitHash(route.hash).query.get('account')?.trim() || null : null
 }
 
-/** Link to Publications, filtered by one product when one is given (the last stage of a product's launch path). */
-export function publicationsHref(productId?: string | null): string {
-  return productId ? `#/publications/${encodeURIComponent(productId)}` : '#/publications'
+/** The pages of one channel (DEC-037): where it stands, what the AI plans for it, how often it prepares own posts, and how it is run. */
+export const CHANNEL_TABS = ['status', 'plan', 'mix', 'settings'] as const
+export type ChannelTab = (typeof CHANNEL_TABS)[number]
+
+export const DEFAULT_CHANNEL_TAB: ChannelTab = 'status'
+
+export function isChannelTab(value: string | undefined): value is ChannelTab {
+  return CHANNEL_TABS.some((tab) => tab === value)
 }
 
-/** The product a `#/publications/<productId>` link asks Publications to show, or null. */
-export function publicationsProductOf(hash: string): string | null {
-  const [page, productId] = hash
-    .replace(/^#\/?/, '')
-    .split('/')
-    .filter((segment) => segment !== '')
-  return page === 'publications' && productId ? safeDecode(productId) : null
+/** Link to one channel's page, on one of its tabs (the first one without a tab). */
+export function channelHref(channelId: string, tab?: ChannelTab): string {
+  return `#/channels/${encodeURIComponent(channelId)}${tab && tab !== DEFAULT_CHANNEL_TAB ? `/${tab}` : ''}`
+}
+
+export interface ChannelRoute {
+  /** The channel whose page is asked for, or null for the list of channels. */
+  channelId: string | null
+  tab: ChannelTab
+}
+
+/** What the Channels screen was asked to show: the list, or one channel on one of its tabs (an unknown tab is the first one). */
+export function parseChannelHash(hash: string): ChannelRoute {
+  const route = resolveRoute(hash)
+  if (route.page !== 'channels') return { channelId: null, tab: DEFAULT_CHANNEL_TAB }
+  const [, id, tab] = splitHash(route.hash).segments
+  return { channelId: idOf(id), tab: isChannelTab(tab) ? tab : DEFAULT_CHANNEL_TAB }
+}
+
+/** What Setup was asked to show: one of its tabs, or the new-product form. */
+export interface SetupRoute {
+  tab: SetupTab
+  /** `#/setup/new`: the form that makes a product is open. */
+  creating: boolean
+}
+
+export function parseSetupHash(hash: string): SetupRoute {
+  const route = resolveRoute(hash)
+  if (route.page !== 'setup') return { tab: DEFAULT_SETUP_TAB, creating: false }
+  const [, second] = splitHash(route.hash).segments
+  return { tab: isSetupTab(second) ? second : DEFAULT_SETUP_TAB, creating: second === 'new' }
 }
 
 /** What the Accounts section was asked to show: the new-account form (possibly with a role already filled in, or the product it was opened from), or one account. */
@@ -95,14 +225,14 @@ export interface AccountsRoute {
   role: { name: string; voice: string } | null
 }
 
-/** Link to one account of the Accounts section (the account an Attention item is about). */
+/** Link to one account of the Accounts section (the account an Inbox item is about). */
 export function accountHref(accountId: string): string {
   return `${ACCOUNTS_HREF}/${encodeURIComponent(accountId)}`
 }
 
 /**
- * Link to the new-account form of the Accounts section. "Use this role" on the product page passes the role along; a product's Channels tab
- * passes the product, so that the new account is made for it and the app returns to that tab afterwards.
+ * Link to the new-account form of the Accounts section. "Use this role" on the Channels screen passes the role along; the Channels screen
+ * passes the product, so that the new account is made for it and the app returns to that screen afterwards.
  */
 export function accountsNewHref(role?: { name: string; voice: string }, productId?: string): string {
   const params = new URLSearchParams()

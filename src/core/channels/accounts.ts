@@ -35,13 +35,12 @@ interface SessionForgetting {
 const canForget = (service: BrowserService): service is BrowserService & SessionForgetting =>
   typeof (service as Partial<SessionForgetting>).forgetAccount === 'function'
 
-/** Implemented by the Electron browser service: the person's window for an account (the one "Open browser" shows). */
+/** Implemented by both browser services: the owner's windows of an account (the ones "Open browser" opens; there can be several, DEC-038). */
 interface UserWindowAware {
+  /** Whether the owner has at least one window of the account open. */
   hasUserWindow(account: Account): boolean
-  /** Brings the window to the front; false when it is not open. */
+  /** Brings the owner's window used last to the front; false when none is open. */
   showUserWindow(account: Account): boolean
-  /** Closes the window without a prompt; closing it also gives the browser back. */
-  closeUserWindow(account: Account): void
 }
 
 const hasOpenUserWindow = (service: BrowserService, account: Account): boolean => {
@@ -55,11 +54,6 @@ const showUserWindow = (service: BrowserService, account: Account): boolean => {
 }
 
 const observe = (service: BrowserService): Partial<PageObserver> => service as Partial<PageObserver>
-
-const closeUserWindow = (service: BrowserService, account: Account): void => {
-  const aware = service as Partial<UserWindowAware>
-  if (typeof aware.closeUserWindow === 'function') aware.closeUserWindow(account)
-}
 
 export class AccountsService {
   /** Called when a check finds an account signed out, so a saved password can sign it in again (DEC-014). */
@@ -152,7 +146,8 @@ export class AccountsService {
   /**
    * Chooses the browser an account works in (DEC-026). The session of the account stays in the browser it was made in, so the account is
    * signed out here until it signs in again in the new one; the old browser's page and window are let go (Chrome is closed, its profile
-   * kept). Not while the AI works on the account or someone holds its browser, and not for Chrome when Chrome is not installed.
+   * kept). Not while the AI works on the account, while the owner took control of it, or while a window of the owner's is open (the switch would
+   * close it), and not for Chrome when Chrome is not installed.
    */
   async setBrowser(args: { accountId: string; browser: BrowserChoice }): Promise<Account> {
     const account = this.account(args.accountId)
@@ -162,8 +157,12 @@ export class AccountsService {
       throw new ApiError('chrome_missing', 'Google Chrome was not found on this Mac. Install it, or keep the internal browser.')
     }
     if (this.core.services.agent?.working(account.id)) throw new ApiError('agent_running', `The AI is working on ${account.label}. Change its browser when it is done.`)
-    if (this.core.browser.session(account).control().holder !== 'none' || hasOpenUserWindow(this.core.browser, account)) {
+    if (this.core.browser.session(account).control().holder === 'user') {
       throw new ApiError('browser_busy', `${BROWSER_BUSY} The browser of an account is changed when nobody uses it.`)
+    }
+    // Switching lets go of the old browser, windows included: closing a window of the owner's behind their back is not done.
+    if (hasOpenUserWindow(this.core.browser, account)) {
+      throw new ApiError('browser_busy', 'A browser window of this account is open. Close it, then change the browser: the change would close it.')
     }
     // The new setting is stored first: from here every call routes to the new browser, so nothing can start a page in the one that is being let go of.
     this.store.setAccountBrowser(account.id, args.browser)
@@ -310,7 +309,7 @@ export class AccountsService {
     const url = args.url !== undefined && args.url.trim() ? parseBrowserUrl(args.url) : parseBrowserUrl(this.defaultUrl(account))
     try {
       const result = await this.core.browser.openForUser(account, url)
-      this.core.log.info('accounts', `Browser opened for ${account.label} on ${new URL(url).host}. The app does not click or type while you have control.`)
+      this.core.log.info('accounts', `A browser window of ${account.label} was opened on ${new URL(url).host}. It is one more window of the account's session: the AI keeps its own page, and the app never clicks or types in your window.`)
       this.core.events.changed('accounts')
       return result
     } catch (error) {
@@ -350,8 +349,9 @@ export class AccountsService {
   }
 
   /**
-   * The address of the page in the owner's window of the account, for "Use the page I'm on" (DEC-028). Only while the owner holds the window,
-   * and only the address (no query, no fragment) and the title: the page itself is not read, and nothing is stored. Null when no window is open.
+   * The address of the page the owner was last on in their windows of the account, for "Use the page I'm on" (DEC-028, DEC-038). Only while
+   * the owner has a window open, and only the address (no query, no fragment) and the title: the page itself is not read, and nothing is stored.
+   * Null when no window is open; refused when the browser cannot tell which of several pages the owner is on.
    */
   async currentPage(accountId: unknown): Promise<{ url: string; title: string; trimmed: boolean } | null> {
     const account = this.account(accountId)
@@ -371,27 +371,27 @@ export class AccountsService {
     return { url, title: page.title.slice(0, 200), trimmed: new URL(page.url).href !== url }
   }
 
+  /**
+   * The owner takes the AI's OWN page to finish something in it (a CAPTCHA, a question of the AI): the AI stops using it until control is given
+   * back, and the page is shown in front. This is the only thing that stops the AI; opening a window of the owner's does not (DEC-038).
+   */
   takeControl(accountId: unknown): void {
     const account = this.account(accountId)
     this.core.browser.session(account).takeControl()
-    this.core.log.info('accounts', `You took control of the browser of ${account.label}; automation stopped using it.`)
+    this.core.browser.showAgentBrowser?.(account, true)
+    this.core.log.info('accounts', `You took control of the AI's page of ${account.label}; the AI stopped using it.`)
     this.core.events.changed('accounts')
   }
 
-  /**
-   * Gives the browser back to the app. The person's window and its toolbar still say that the person is in control, and
-   * the app must not act on a page the person is looking at, so an open window is closed first: closing it is what hands
-   * the browser back, exactly as the window's own button does.
-   */
+  /** Gives the AI's page back to the app. Windows the owner opened are theirs and stay open. */
   releaseControl(accountId: unknown): void {
     const account = this.account(accountId)
-    closeUserWindow(this.core.browser, account)
     this.core.browser.session(account).releaseControl()
-    this.core.log.info('accounts', `Control of the browser of ${account.label} returned to the app.`)
+    this.core.log.info('accounts', `Control of the AI's page of ${account.label} returned to the app.`)
     this.core.events.changed('accounts')
   }
 
-  /** Who holds the account's browser and whether the person's window is open. */
+  /** Whether the owner took control of the AI's page (`holder` is "user" then), and whether a window of the owner's is open. */
   browserState(accountId: unknown): BrowserState {
     const account = this.account(accountId)
     return { holder: this.core.browser.session(account).control().holder, windowOpen: hasOpenUserWindow(this.core.browser, account), chromeFound: this.core.browser.chromeFound?.() ?? false }
@@ -427,21 +427,24 @@ export class AccountsService {
     return { shown: showUserWindow(this.core.browser, this.account(accountId)) }
   }
 
-  /** The person's window opened or closed: the screen follows, and a closed window means the person is done on the site. */
+  /** The owner's first window opened or their last one closed: the screen follows, and a closed last window means the owner is done on the site. */
   private userWindowChanged(accountId: string, change: 'opened' | 'closed'): void {
     this.core.events.changed('accounts')
     if (change === 'closed') void this.checkAfterWindow(accountId)
   }
 
   /**
-   * The person closed the account's window: the sign-in is checked once, so nobody has to press "Check sign-in". Only a
-   * look: a saved password is not tried here, the person may just have closed the window on purpose.
+   * The owner closed their last window of the account: the sign-in is checked once, so nobody has to press "Check sign-in". Only a look: a saved
+   * password is not tried here, the owner may just have closed the window on purpose. Not while the AI works on the account: the check goes
+   * through the AI's own page and would take it away from the form the AI is filling in (DEC-038); a mission that is refused after the owner
+   * used a sign-in page reads the sign-in itself when it ends.
    */
   private async checkAfterWindow(accountId: string): Promise<void> {
     try {
       const account = this.account(accountId)
       const connector = this.connectorFor(account)
       if (!connector) return
+      if (this.core.services.agent?.working(account.id)) return
       this.applyLogin(account, await connector.checkLogin(this.probeContext(account, connector)), { signInAgain: false })
     } catch (error) {
       // The account may have been removed with its window open, or the app may be busy with it: nothing to report.

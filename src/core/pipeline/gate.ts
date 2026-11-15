@@ -5,7 +5,7 @@
 // attempt - and only then issues a ticket. Connectors and the browser service refuse write actions without a
 // ticket, so neither an AI instruction nor a buggy caller can publish around this gate.
 
-import type { Account, Approval, Channel, Comment, Draft, Id, Opportunity } from '../../shared/types'
+import type { Account, Approval, Channel, Comment, Discussion, Draft, Id, Opportunity } from '../../shared/types'
 import type { Core } from '../core'
 import { newId } from '../db/database'
 import { TakeoverError, type Connector, type ConnectorContext, type PublishRequest, type RemoteDiscussion, type SendTicket } from '../ports'
@@ -13,6 +13,7 @@ import { attachmentProblem } from './attachments'
 import { noConnectorProblem, renderForPlatform, sendProblems } from '../../shared/post-format'
 import { sendWays } from './send-ways'
 import { commentBodyHash, contentHash, hashedIdentity } from './hash'
+import { isPostTarget, NEW_POST_NEVER_AUTO_REASON, parentOf, postHash } from './reply-target'
 import { autoCategoryOf, autoRuleId } from './modes'
 import { buildPublishRequest, publishCapability } from './request'
 import { OTHER_LOGIN_SPEAKS_REASON, type FlowStore } from './store'
@@ -72,6 +73,8 @@ interface Snapshot {
   account: Account
   draft: Draft | null
   comment: Comment | null
+  /** The post a reply to a new post answers (DEC-039); null for any other opportunity. */
+  post: Discussion | null
 }
 
 const HOUR_MS = 60 * 60 * 1000
@@ -131,7 +134,7 @@ export class SendGate {
     const late = this.checkApproval(now, req) ?? this.checkSingleLogin(now) ?? this.checkAvailability(now, req, ctx) ?? this.checkLimits(now) ?? this.checkOpenAction(now)
     if (late) return late
 
-    const { opp, channel, account, comment } = now
+    const { opp, channel, account } = now
     const draftNow = now.draft as Draft
     const approval = this.core.repos.activeApproval(draftNow.id) as Approval
     const destination = this.store.resolveDestination(opp, channel)
@@ -147,7 +150,7 @@ export class SendGate {
       account,
       draft: draftNow,
       approval,
-      request: buildPublishRequest(opp, draftNow, comment, destination, channel.platform),
+      request: buildPublishRequest(opp, draftNow, parentOf(now), destination, channel.platform),
       contentHash: hash,
       authorizationBasis: approval.approvedBy === 'user' ? `user approval ${approval.id}` : `auto rule ${approval.ruleId}`
     }
@@ -199,7 +202,8 @@ export class SendGate {
       channel,
       account: this.core.repos.account(channel.accountId),
       draft: this.core.repos.latestDraft(opp.id),
-      comment: opp.commentId ? this.store.comment(opp.commentId) : null
+      comment: opp.commentId ? this.store.comment(opp.commentId) : null,
+      post: this.store.postOf(opp)
     }
   }
 
@@ -212,7 +216,9 @@ export class SendGate {
       return block('hold', 'not_ready', `This item is "${opp.state.replace('_', ' ')}" and cannot be sent. Only approved items can be sent.`)
     }
     if (!draft) return block('hold', 'no_draft', 'There is no draft to send.')
-    if (opp.kind === 'reply' && !s.comment) return block('cancel', 'comment_gone', 'The comment this reply answers is no longer stored.')
+    if (isPostTarget(opp)) {
+      if (!s.post) return block('cancel', 'post_gone', 'The post this reply answers is no longer stored.')
+    } else if (opp.kind === 'reply' && !s.comment) return block('cancel', 'comment_gone', 'The comment this reply answers is no longer stored.')
 
     const approval = this.core.repos.activeApproval(draft.id)
     if (!approval) {
@@ -237,6 +243,8 @@ export class SendGate {
     if (undisclosed) return block('review', 'disclosure_missing', undisclosed)
 
     if (approval.approvedBy === 'auto_rule') {
+      // Whatever approved it, a reply to a new post is the owner's to send (DEC-039): an automatic approval of one is never honoured.
+      if (opp.source === 'new_post') return block('review', 'auto_rule_refused', NEW_POST_NEVER_AUTO_REASON)
       if (opp.kind === 'standalone') return block('review', 'auto_rule_refused', 'Standalone publications always need your own approval; automatic approval is not allowed.')
       if (channel.mode !== 'auto') return block('review', 'auto_rule_refused', 'This channel is not in automatic mode, so an automatic approval is not valid.')
       const auto = autoCategoryOf(opp.category)
@@ -291,8 +299,11 @@ export class SendGate {
   // ───────────── (c) the live thread ─────────────
 
   private async checkThread(s: Snapshot, ctx: ConnectorContext, connector: Connector): Promise<GateBlock | null> {
-    const comment = s.comment as Comment
-    const discussion = this.core.repos.discussion(comment.discussionId)
+    // A reply to a new post answers the post itself: its parent is the post, and it is the post (not a comment) whose change matters.
+    const post = isPostTarget(s.opp) ? s.post : null
+    const comment = post ? null : (s.comment as Comment)
+    const discussion = post ?? this.core.repos.discussion((comment as Comment).discussionId)
+    const parentExternalId = post ? post.externalId : (comment as Comment).externalId
 
     let remote: RemoteDiscussion | null
     try {
@@ -307,23 +318,30 @@ export class SendGate {
       return block('cancel', 'thread_locked', `The discussion is ${remote.locked ? 'locked' : 'archived'}; new replies are not possible.`)
     }
 
-    const target = remote.comments.find((c) => c.externalId === comment.externalId)
+    const target = comment ? remote.comments.find((c) => c.externalId === comment.externalId) : null
 
     // A reply by this account under the comment - including one the owner typed by hand - means the job is done.
     // Evidence of a reply is conclusive even in a partial snapshot; only the ABSENCE of one is not.
     const identity = normalizeIdentity(s.account.identity)
-    const remoteReply = identity !== '' && remote.comments.some((c) => c.parentExternalId === comment.externalId && normalizeIdentity(c.author) === identity)
-    if (remoteReply || this.store.ownReplyUnder(s.channel.id, comment.externalId)) {
-      return block('cancel', 'already_replied', 'You already replied to this comment (found under it on the platform), so the application did not send another reply.')
+    const remoteReply = identity !== '' && remote.comments.some((c) => c.parentExternalId === parentExternalId && normalizeIdentity(c.author) === identity)
+    if (remoteReply || this.store.ownReplyUnder(s.channel.id, parentExternalId)) {
+      return block('cancel', 'already_replied', `You already replied to this ${post ? 'post' : 'comment'} (found under it on the platform), so the application did not send another reply.`)
     }
 
     // The connector could not read the whole thread (collapsed "load more" parts): "no reply found" proves nothing.
     if (remote.incomplete === true) {
       return block('hold', 'thread_incomplete', 'The thread is too large to check for an existing reply, so the reply was not sent. Check the thread yourself and send it manually if no reply exists.')
     }
+    if (post) {
+      // The post as it is now, against the post the draft was prepared from.
+      if (postHash(remote) !== postHash(post)) {
+        return { ...block('review', 'post_changed', 'The post changed after the draft was prepared. Review the reply against the new text.'), thread: remote }
+      }
+      return null
+    }
     if (!target) return block('cancel', 'comment_gone', 'The comment you are replying to was removed from the discussion.')
 
-    if (commentBodyHash(target.body) !== comment.contentHash) {
+    if (commentBodyHash(target.body) !== (comment as Comment).contentHash) {
       return { ...block('review', 'comment_changed', 'The comment changed after the draft was prepared. Review the reply against the new text.'), thread: remote }
     }
     return null

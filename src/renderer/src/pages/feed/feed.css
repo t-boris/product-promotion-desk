@@ -1,0 +1,75 @@
+/* Feed (visual-system.md §10.4): the chips and the list segments, the list under its days with the selected item beside it, and the notes
+   about what is not read. Colours, sizes and radii come from the shared tokens in styles.css. The list, its rows and group titles and the
+   item's pane and action bar are the Inbox's (inbox.css), so the two screens read as one; what is here is only what the Feed adds.
+   The page stylesheets are bundled before styles.css (main.tsx imports it last), so a rule here that sets what a shared rule of
+   styles.css also sets is written one step more specific. */
+
+/* The page is as tall as the window (`Page fill`): the controls and the notes keep their height, the panes below share what is left. */
+.feed-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ───────────── Controls: the source chips, the list segments and the channel, in one wrapping row ───────────── */
+
+.feed-controls {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+/* A segmented control sits at the top of a row by default; here the row is one line of 28 px controls, so they share its middle. */
+.feed-controls .segmented {
+  align-self: center;
+}
+/* The channel pop-up: as wide as its longest address up to a limit, not the full row. */
+.feed-controls .input.feed-channel {
+  width: auto;
+  min-width: 160px;
+  max-width: 260px;
+}
+
+/* ───────────── Notes: why a source may be empty ───────────── */
+
+.feed-notes {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.feed-notes .note {
+  margin: 0;
+}
+.feed-notes .hint {
+  margin: 0;
+}
+
+/* ───────────── List and the item beside it ───────────── */
+
+.feed-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: clamp(232px, 34%, 340px) minmax(0, 1fr);
+  gap: var(--space-3);
+}
+.feed-split > * {
+  min-width: 0;
+  min-height: 0;
+}
+/* The third line of a row: where the item came from and what the AI proposes. */
+.feed-row .feed-row-ai {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+}
+
+/* An item that answers a post: the post is what the owner answers, so it reads as the main text, not as the quiet context of a comment. */
+.feed-detail[data-source='new_post'] .thread-post-body {
+  color: var(--text-1);
+}

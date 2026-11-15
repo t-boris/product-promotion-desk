@@ -536,6 +536,8 @@ export type CapabilityKey =
   | 'rules'
   /** Whether the account has joined the community (DEC-029). Informational: it gates nothing. */
   | 'membership'
+  /** Whether the account's inbox can be read, so that replies to the account and mentions of it are found (DEC-039). Informational: it gates nothing else. */
+  | 'read_inbox'
 
 /** needs_check: discovered, not yet confirmed. needs_user: a person must act. restricted: forbidden by rules. */
 export type CapabilityStatus = 'verified' | 'needs_check' | 'needs_user' | 'unavailable' | 'restricted'
@@ -671,6 +673,13 @@ export type CommentCategory =
 
 export type OpportunityKind = 'reply' | 'standalone'
 
+/**
+ * Where an opportunity came from (DEC-039). `comment`: a new comment in a discussion the channel reads. `new_post`: a new post by someone else that matches the
+ * channel's topics (its reply is a top-level comment on the post, so it has no comment). `reply_to_me`, `mention`: found in the account's inbox. A standalone
+ * publication is of no source in this sense and keeps the default, `comment`.
+ */
+export type OpportunitySource = 'comment' | 'new_post' | 'reply_to_me' | 'mention'
+
 export type OpportunityState =
   | 'discovered'
   | 'analyzing'
@@ -693,6 +702,8 @@ export interface Opportunity {
   channelId: Id
   productId: Id
   kind: OpportunityKind
+  /** What made this opportunity (DEC-039). Rows from before the Feed are `comment`. */
+  source: OpportunitySource
   state: OpportunityState
   commentId: Id | null
   discussionId: Id | null
@@ -1062,6 +1073,75 @@ export interface ResultsView {
   channels: { channel: Channel; metrics: MetricSnapshot[] }[]
   /** Version 1 never measures business conversions; the UI must say so (REQ-006, DEC-002). */
   businessConversions: 'not_measured'
+}
+
+/** One reading of one metric. `value` is null where the platform gave none: a missing reading is never drawn as zero. */
+export interface MetricPoint {
+  capturedAt: IsoTime
+  value: number | null
+}
+
+/** The readings of one metric of one channel over a period, oldest first (UI-redesign phase C, DEC-037). */
+export interface MetricSeries {
+  channelId: Id
+  key: string
+  label: string
+  points: MetricPoint[]
+}
+
+/** What `results.history` returns: every kept reading of the product's channels inside the period. */
+export interface ResultsHistory {
+  productId: Id
+  days: number
+  from: IsoTime
+  to: IsoTime
+  series: MetricSeries[]
+}
+
+/** The path of the product's opportunities that were created in the period: how many reached each step (never rises from one step to the next). */
+export interface OverviewFunnel {
+  found: number
+  drafted: number
+  approved: number
+  sent: number
+}
+
+/** One channel of the product at a glance. */
+export interface OverviewChannel {
+  channelId: Id
+  platform: string
+  target: string
+  status: ChannelStatus
+  /** Opportunities of this channel that wait for the owner (draft, awaiting approval, approved but not sent, needs the owner). */
+  waiting: number
+  /** Confirmed sends of this channel inside the period. */
+  sent: number
+  lastSuccessAt: IsoTime | null
+  nextCheckAt: IsoTime | null
+  /** When the last confirmed send of this channel happened, whenever that was; null if nothing was ever sent. */
+  lastSentAt: IsoTime | null
+}
+
+/** Confirmed sends of one local day: replies and own posts apart. */
+export interface OverviewDay {
+  /** The local day, `YYYY-MM-DD`, as the caller's UTC offset puts it. */
+  day: string
+  posts: number
+  replies: number
+}
+
+/** What the product's Overview screen shows (UI-redesign phase C, DEC-037). Counts only; nothing here is a prediction. */
+export interface OverviewView {
+  productId: Id
+  days: number
+  from: IsoTime
+  to: IsoTime
+  funnel: OverviewFunnel
+  channels: OverviewChannel[]
+  /** The product's own attention items, plus the account items that belong to no product. */
+  attention: AttentionItem[]
+  /** One entry for every day of the period, oldest first (days with nothing sent are zeros: a count of sends is a count, not a reading). */
+  activity: OverviewDay[]
 }
 
 /** One run of an AI engine for the person to watch (progress of every AI help and mission): what it does, for how long, the latest lines. */

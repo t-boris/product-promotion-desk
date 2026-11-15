@@ -21,7 +21,7 @@ describe('channels.assess: what the channel can do, without publishing anything 
     const { w, channel } = await setup()
     w.fake.setCapability('rules', 'verified', 'Read 6 rules; none about automation.')
     const assessed = await w.call('channels.assess', { channelId: channel.id })
-    expect(assessed.capabilities).toHaveLength(9)
+    expect(assessed.capabilities).toHaveLength(10)
     expect(assessed.capabilities.every((c) => c.checkedAt === w.t.clock.now().toISOString())).toBe(true)
     expect(cap(assessed, 'read_posts').status).toBe('verified')
     expect(cap(assessed, 'rules')).toMatchObject({ status: 'verified', detail: 'Read 6 rules; none about automation.' })
@@ -30,7 +30,7 @@ describe('channels.assess: what the channel can do, without publishing anything 
 
     const [run] = w.core.runs.list({ channelId: channel.id })
     expect(run).toMatchObject({ kind: 'assess', channelId: channel.id, status: 'ok' })
-    expect(run.summary).toMatch(/Assessed r\/astrology: 6 verified, 3 need checking/)
+    expect(run.summary).toMatch(/Assessed r\/astrology: 7 verified, 3 need checking/)
   })
 
   it('never publishes: no publish call, no page write, and the sending abilities stay unverified', async () => {
@@ -77,7 +77,7 @@ describe('channels.assess: what the channel can do, without publishing anything 
     const { w, channel } = await setup()
     w.fake.capabilities = [{ key: 'read_posts', status: 'verified', detail: 'Read 10 posts.', checkedAt: null }]
     const assessed = await w.call('channels.assess', { channelId: channel.id })
-    expect(assessed.capabilities).toHaveLength(9)
+    expect(assessed.capabilities).toHaveLength(10)
     expect(cap(assessed, 'read_comments').status).toBe('needs_check')
   })
 })

@@ -1,0 +1,1572 @@
+{
+ "dark-1320-01-attention": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "Approve"
+  ],
+  "fontSizes": {
+   "13px": 25,
+   "14px": 21,
+   "16px": 1,
+   "19px": 2,
+   "24px": 1
+  },
+  "controls": 14,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-1320-02-products": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Add source"
+  ],
+  "fontSizes": {
+   "13px": 35,
+   "14px": 41,
+   "16px": 4,
+   "24px": 1
+  },
+  "controls": 23,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-1320-03-product-sources": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Add source"
+  ],
+  "fontSizes": {
+   "13px": 35,
+   "14px": 41,
+   "16px": 4,
+   "24px": 1
+  },
+  "controls": 23,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-1320-03-product-passport": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Approve passport"
+  ],
+  "fontSizes": {
+   "13px": 47,
+   "14px": 61,
+   "16px": 12,
+   "24px": 1
+  },
+  "controls": 33,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-1320-03-product-analysis": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Start analysis"
+  ],
+  "fontSizes": {
+   "13px": 32,
+   "14px": 38,
+   "16px": 3,
+   "24px": 1
+  },
+  "controls": 13,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-1320-03-product-goal": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product"
+  ],
+  "fontSizes": {
+   "13px": 26,
+   "14px": 36,
+   "16px": 4,
+   "24px": 1
+  },
+  "controls": 15,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-1320-03-product-channels": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Connect channel",
+   "Activate",
+   "Assess channel",
+   "Save settings"
+  ],
+  "fontSizes": {
+   "13px": 103,
+   "14px": 74,
+   "16px": 9,
+   "24px": 1
+  },
+  "controls": 39,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-1320-03-product-results": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product"
+  ],
+  "fontSizes": {
+   "13px": 25,
+   "14px": 38,
+   "16px": 4,
+   "24px": 1
+  },
+  "controls": 14,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-1320-03-product-empty-sources": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Add source"
+  ],
+  "fontSizes": {
+   "13px": 30,
+   "14px": 35,
+   "16px": 4,
+   "24px": 1
+  },
+  "controls": 22,
+  "controlsUnder28px": 2,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-1320-03-product-empty-passport": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Open Analysis"
+  ],
+  "fontSizes": {
+   "13px": 34,
+   "14px": 50,
+   "16px": 6,
+   "24px": 1
+  },
+  "controls": 23,
+  "controlsUnder28px": 2,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-1320-03-product-new": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Create product",
+   "Add source"
+  ],
+  "fontSizes": {
+   "13px": 35,
+   "14px": 37,
+   "16px": 5,
+   "24px": 1
+  },
+  "controls": 27,
+  "controlsUnder28px": 2,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-1320-04-accounts": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "Add account",
+   "Open browser to sign in"
+  ],
+  "fontSizes": {
+   "13px": 24,
+   "14px": 39,
+   "16px": 1,
+   "19px": 1,
+   "24px": 1
+  },
+  "controls": 19,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-1320-04-accounts-new": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "Add account",
+   "Add account",
+   "Open browser to sign in"
+  ],
+  "fontSizes": {
+   "13px": 39,
+   "14px": 42,
+   "16px": 2,
+   "19px": 1,
+   "24px": 1
+  },
+  "controls": 29,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-1320-04-accounts-profiles": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "Add account",
+   "New profile",
+   "Reddit",
+   "Propose a profile"
+  ],
+  "fontSizes": {
+   "13px": 28,
+   "14px": 35,
+   "16px": 3,
+   "24px": 1
+  },
+  "controls": 28,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-1320-04-accounts-mailboxes": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "Add account",
+   "Add mailbox"
+  ],
+  "fontSizes": {
+   "13px": 10,
+   "14px": 17,
+   "16px": 2,
+   "24px": 1
+  },
+  "controls": 9,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-1320-05-opportunities": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "In progress"
+  ],
+  "fontSizes": {
+   "13px": 9,
+   "14px": 16,
+   "16px": 1,
+   "24px": 1
+  },
+  "controls": 8,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-1320-06-publications": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "Suggest with AI",
+   "Approve"
+  ],
+  "fontSizes": {
+   "13px": 25,
+   "14px": 22,
+   "16px": 1,
+   "19px": 1,
+   "24px": 1
+  },
+  "controls": 18,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-1320-07-log-runs": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [],
+  "fontSizes": {
+   "13px": 14,
+   "14px": 16,
+   "16px": 1,
+   "24px": 1
+  },
+  "controls": 5,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-1320-07-log-action-history": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [],
+  "fontSizes": {
+   "13px": 7,
+   "14px": 15,
+   "16px": 1,
+   "24px": 1
+  },
+  "controls": 5,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-1320-07-log-events": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [],
+  "fontSizes": {
+   "13px": 27,
+   "14px": 58,
+   "16px": 1,
+   "24px": 1
+  },
+  "controls": 6,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-1320-08-settings": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [],
+  "fontSizes": {
+   "13px": 38,
+   "14px": 27,
+   "16px": 6,
+   "24px": 1
+  },
+  "controls": 15,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-1320-09-menu-hidden": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Add source"
+  ],
+  "fontSizes": {
+   "13px": 34,
+   "14px": 34,
+   "16px": 3,
+   "24px": 1
+  },
+  "controls": 23,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 0,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": null
+ },
+ "dark-980-01-attention": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "Approve"
+  ],
+  "fontSizes": {
+   "13px": 25,
+   "14px": 21,
+   "16px": 1,
+   "19px": 2,
+   "24px": 1
+  },
+  "controls": 14,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-980-02-products": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Add source"
+  ],
+  "fontSizes": {
+   "13px": 35,
+   "14px": 41,
+   "16px": 4,
+   "24px": 1
+  },
+  "controls": 23,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-980-03-product-sources": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Add source"
+  ],
+  "fontSizes": {
+   "13px": 35,
+   "14px": 41,
+   "16px": 4,
+   "24px": 1
+  },
+  "controls": 23,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-980-03-product-passport": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Approve passport"
+  ],
+  "fontSizes": {
+   "13px": 47,
+   "14px": 61,
+   "16px": 12,
+   "24px": 1
+  },
+  "controls": 33,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-980-03-product-analysis": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Start analysis"
+  ],
+  "fontSizes": {
+   "13px": 32,
+   "14px": 38,
+   "16px": 3,
+   "24px": 1
+  },
+  "controls": 13,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-980-03-product-goal": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product"
+  ],
+  "fontSizes": {
+   "13px": 26,
+   "14px": 36,
+   "16px": 4,
+   "24px": 1
+  },
+  "controls": 15,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-980-03-product-channels": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Connect channel",
+   "Activate",
+   "Assess channel",
+   "Save settings"
+  ],
+  "fontSizes": {
+   "13px": 103,
+   "14px": 74,
+   "16px": 9,
+   "24px": 1
+  },
+  "controls": 39,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-980-03-product-results": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product"
+  ],
+  "fontSizes": {
+   "13px": 25,
+   "14px": 38,
+   "16px": 4,
+   "24px": 1
+  },
+  "controls": 14,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-980-04-accounts": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "Add account",
+   "Open browser to sign in"
+  ],
+  "fontSizes": {
+   "13px": 24,
+   "14px": 39,
+   "16px": 1,
+   "19px": 1,
+   "24px": 1
+  },
+  "controls": 19,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-980-04-accounts-new": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "Add account",
+   "Add account",
+   "Open browser to sign in"
+  ],
+  "fontSizes": {
+   "13px": 39,
+   "14px": 42,
+   "16px": 2,
+   "19px": 1,
+   "24px": 1
+  },
+  "controls": 29,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-980-05-opportunities": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "In progress"
+  ],
+  "fontSizes": {
+   "13px": 9,
+   "14px": 16,
+   "16px": 1,
+   "24px": 1
+  },
+  "controls": 8,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-980-06-publications": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "Suggest with AI",
+   "Approve"
+  ],
+  "fontSizes": {
+   "13px": 25,
+   "14px": 22,
+   "16px": 1,
+   "19px": 1,
+   "24px": 1
+  },
+  "controls": 18,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-980-07-log-runs": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [],
+  "fontSizes": {
+   "13px": 14,
+   "14px": 16,
+   "16px": 1,
+   "24px": 1
+  },
+  "controls": 5,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "dark-980-08-settings": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [],
+  "fontSizes": {
+   "13px": 38,
+   "14px": 27,
+   "16px": 6,
+   "24px": 1
+  },
+  "controls": 15,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(18, 20, 24)",
+  "sidebarBg": "rgb(27, 30, 36)"
+ },
+ "light-1320-01-attention": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "Approve"
+  ],
+  "fontSizes": {
+   "13px": 25,
+   "14px": 21,
+   "16px": 1,
+   "19px": 2,
+   "24px": 1
+  },
+  "controls": 14,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-1320-02-products": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Add source"
+  ],
+  "fontSizes": {
+   "13px": 35,
+   "14px": 41,
+   "16px": 4,
+   "24px": 1
+  },
+  "controls": 23,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-1320-03-product-sources": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Add source"
+  ],
+  "fontSizes": {
+   "13px": 35,
+   "14px": 41,
+   "16px": 4,
+   "24px": 1
+  },
+  "controls": 23,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-1320-03-product-passport": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Approve passport"
+  ],
+  "fontSizes": {
+   "13px": 47,
+   "14px": 61,
+   "16px": 12,
+   "24px": 1
+  },
+  "controls": 33,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-1320-03-product-analysis": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Start analysis"
+  ],
+  "fontSizes": {
+   "13px": 32,
+   "14px": 38,
+   "16px": 3,
+   "24px": 1
+  },
+  "controls": 13,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-1320-03-product-goal": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product"
+  ],
+  "fontSizes": {
+   "13px": 26,
+   "14px": 36,
+   "16px": 4,
+   "24px": 1
+  },
+  "controls": 15,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-1320-03-product-channels": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Connect channel",
+   "Activate",
+   "Assess channel",
+   "Save settings"
+  ],
+  "fontSizes": {
+   "13px": 103,
+   "14px": 74,
+   "16px": 9,
+   "24px": 1
+  },
+  "controls": 39,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-1320-03-product-results": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product"
+  ],
+  "fontSizes": {
+   "13px": 25,
+   "14px": 38,
+   "16px": 4,
+   "24px": 1
+  },
+  "controls": 14,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-1320-03-product-empty-sources": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Add source"
+  ],
+  "fontSizes": {
+   "13px": 30,
+   "14px": 35,
+   "16px": 4,
+   "24px": 1
+  },
+  "controls": 22,
+  "controlsUnder28px": 2,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-1320-03-product-empty-passport": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Open Analysis"
+  ],
+  "fontSizes": {
+   "13px": 34,
+   "14px": 50,
+   "16px": 6,
+   "24px": 1
+  },
+  "controls": 23,
+  "controlsUnder28px": 2,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-1320-03-product-new": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Create product",
+   "Add source"
+  ],
+  "fontSizes": {
+   "13px": 35,
+   "14px": 37,
+   "16px": 5,
+   "24px": 1
+  },
+  "controls": 27,
+  "controlsUnder28px": 2,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-1320-04-accounts": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "Add account",
+   "Open browser to sign in"
+  ],
+  "fontSizes": {
+   "13px": 24,
+   "14px": 39,
+   "16px": 1,
+   "19px": 1,
+   "24px": 1
+  },
+  "controls": 19,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-1320-04-accounts-new": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "Add account",
+   "Add account",
+   "Open browser to sign in"
+  ],
+  "fontSizes": {
+   "13px": 39,
+   "14px": 42,
+   "16px": 2,
+   "19px": 1,
+   "24px": 1
+  },
+  "controls": 29,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-1320-04-accounts-profiles": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "Add account",
+   "New profile",
+   "Reddit",
+   "Propose a profile"
+  ],
+  "fontSizes": {
+   "13px": 28,
+   "14px": 35,
+   "16px": 3,
+   "24px": 1
+  },
+  "controls": 28,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-1320-04-accounts-mailboxes": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "Add account",
+   "Add mailbox"
+  ],
+  "fontSizes": {
+   "13px": 10,
+   "14px": 17,
+   "16px": 2,
+   "24px": 1
+  },
+  "controls": 9,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-1320-05-opportunities": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "In progress"
+  ],
+  "fontSizes": {
+   "13px": 9,
+   "14px": 16,
+   "16px": 1,
+   "24px": 1
+  },
+  "controls": 8,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-1320-06-publications": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "Suggest with AI",
+   "Approve"
+  ],
+  "fontSizes": {
+   "13px": 25,
+   "14px": 22,
+   "16px": 1,
+   "19px": 1,
+   "24px": 1
+  },
+  "controls": 18,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-1320-07-log-runs": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [],
+  "fontSizes": {
+   "13px": 14,
+   "14px": 16,
+   "16px": 1,
+   "24px": 1
+  },
+  "controls": 5,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-1320-07-log-action-history": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [],
+  "fontSizes": {
+   "13px": 7,
+   "14px": 15,
+   "16px": 1,
+   "24px": 1
+  },
+  "controls": 5,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-1320-07-log-events": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [],
+  "fontSizes": {
+   "13px": 27,
+   "14px": 58,
+   "16px": 1,
+   "24px": 1
+  },
+  "controls": 6,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-1320-08-settings": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [],
+  "fontSizes": {
+   "13px": 38,
+   "14px": 27,
+   "16px": 6,
+   "24px": 1
+  },
+  "controls": 15,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-1320-09-menu-hidden": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Add source"
+  ],
+  "fontSizes": {
+   "13px": 34,
+   "14px": 34,
+   "16px": 3,
+   "24px": 1
+  },
+  "controls": 23,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 0,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": null
+ },
+ "light-980-01-attention": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "Approve"
+  ],
+  "fontSizes": {
+   "13px": 25,
+   "14px": 21,
+   "16px": 1,
+   "19px": 2,
+   "24px": 1
+  },
+  "controls": 14,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-980-02-products": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Add source"
+  ],
+  "fontSizes": {
+   "13px": 35,
+   "14px": 41,
+   "16px": 4,
+   "24px": 1
+  },
+  "controls": 23,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-980-03-product-sources": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Add source"
+  ],
+  "fontSizes": {
+   "13px": 35,
+   "14px": 41,
+   "16px": 4,
+   "24px": 1
+  },
+  "controls": 23,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-980-03-product-passport": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Approve passport"
+  ],
+  "fontSizes": {
+   "13px": 47,
+   "14px": 61,
+   "16px": 12,
+   "24px": 1
+  },
+  "controls": 33,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-980-03-product-analysis": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Start analysis"
+  ],
+  "fontSizes": {
+   "13px": 32,
+   "14px": 38,
+   "16px": 3,
+   "24px": 1
+  },
+  "controls": 13,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-980-03-product-goal": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product"
+  ],
+  "fontSizes": {
+   "13px": 26,
+   "14px": 36,
+   "16px": 4,
+   "24px": 1
+  },
+  "controls": 15,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-980-03-product-channels": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product",
+   "Connect channel",
+   "Activate",
+   "Assess channel",
+   "Save settings"
+  ],
+  "fontSizes": {
+   "13px": 103,
+   "14px": 74,
+   "16px": 9,
+   "24px": 1
+  },
+  "controls": 39,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-980-03-product-results": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "New product"
+  ],
+  "fontSizes": {
+   "13px": 25,
+   "14px": 38,
+   "16px": 4,
+   "24px": 1
+  },
+  "controls": 14,
+  "controlsUnder28px": 1,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-980-04-accounts": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "Add account",
+   "Open browser to sign in"
+  ],
+  "fontSizes": {
+   "13px": 24,
+   "14px": 39,
+   "16px": 1,
+   "19px": 1,
+   "24px": 1
+  },
+  "controls": 19,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-980-04-accounts-new": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "Add account",
+   "Add account",
+   "Open browser to sign in"
+  ],
+  "fontSizes": {
+   "13px": 39,
+   "14px": 42,
+   "16px": 2,
+   "19px": 1,
+   "24px": 1
+  },
+  "controls": 29,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-980-05-opportunities": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "In progress"
+  ],
+  "fontSizes": {
+   "13px": 9,
+   "14px": 16,
+   "16px": 1,
+   "24px": 1
+  },
+  "controls": 8,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-980-06-publications": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [
+   "Suggest with AI",
+   "Approve"
+  ],
+  "fontSizes": {
+   "13px": 25,
+   "14px": 22,
+   "16px": 1,
+   "19px": 1,
+   "24px": 1
+  },
+  "controls": 18,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-980-07-log-runs": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [],
+  "fontSizes": {
+   "13px": 14,
+   "14px": 16,
+   "16px": 1,
+   "24px": 1
+  },
+  "controls": 5,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ },
+ "light-980-08-settings": {
+  "hOverflow": false,
+  "contentScrollW": 0,
+  "filledButtons": [],
+  "fontSizes": {
+   "13px": 38,
+   "14px": 27,
+   "16px": 6,
+   "24px": 1
+  },
+  "controls": 15,
+  "controlsUnder28px": 0,
+  "cutButtons": [],
+  "underWindowButtons": [],
+  "sidebarW": 216,
+  "topbarH": 53,
+  "bodyBg": "rgb(246, 247, 249)",
+  "sidebarBg": "rgb(255, 255, 255)"
+ }
+}

@@ -1,5 +1,6 @@
 import type { Db } from '../../core/db/database'
 import {
+  SessionChangedError,
   TakeoverError,
   type ActivityBatch,
   type BrowserPage,
@@ -528,6 +529,8 @@ export class UniversalConnector implements Connector {
           }
           return await this.verifyResult(page, flow, values)
         } catch (error) {
+          // The session refused a write before it reached the page: the owner used a sign-in or sign-out page of the account meanwhile (DEC-038). Nothing was pressed by this write, so nothing was submitted, even when it was the submit click.
+          if (error instanceof SessionChangedError) return failed(error.message)
           // After the submit click an exception proves nothing about whether the site accepted the content.
           if (submitted) return { status: 'unknown', error: `The submission was made but its result could not be confirmed: ${errorMessage(error)}` } as const
           return failed(error instanceof TakeoverError ? 'The user took control of the browser before anything was submitted.' : errorMessage(error))

@@ -9,6 +9,7 @@ import type { Core } from '../core'
 import { TakeoverError, type Connector, type ConnectorContext } from '../ports'
 import type { MonitorOutcome, MonitorService } from '../services'
 import type { Ingestor } from './ingest'
+import { collectInbox } from './inbox'
 import type { LoginWatch } from './login-watch'
 import type { FlowStore } from './store'
 import { errorMessage, minutesFrom } from './util'
@@ -89,7 +90,9 @@ export class MonitorFlow implements MonitorService {
     try {
       const baseline = channel.baselineDoneAt === null
       const result = this.ingestor.ingest(channel, account, discussions)
-      return this.succeed(channel, baseline, result.discussions, result.newComments, result.newOpportunities, result.identityUnknown)
+      // The account's inbox after the discussion read (DEC-039); it never throws and never fails the cycle.
+      const inbox = await collectInbox(this.core, this.store, this.ingestor, channel, account, connector, ctx)
+      return this.succeed(channel, baseline, result.discussions, result.newComments, result.newOpportunities + inbox.newOpportunities, result.identityUnknown, inbox.note)
     } catch (error) {
       return this.fail(channel, `Could not store the collected data: ${errorMessage(error)}`)
     }
@@ -97,7 +100,7 @@ export class MonitorFlow implements MonitorService {
 
   // ───────────── outcomes ─────────────
 
-  private succeed(channel: Channel, baseline: boolean, discussions: number, newComments: number, newOpportunities: number, identityUnknown: boolean): MonitorOutcome {
+  private succeed(channel: Channel, baseline: boolean, discussions: number, newComments: number, newOpportunities: number, identityUnknown: boolean, inboxNote = ''): MonitorOutcome {
     const now = this.core.clock.now()
     const wasTroubled = channel.status === 'needs_user' || channel.status === 'error'
     this.store.updateChannel(channel.id, {
@@ -113,7 +116,7 @@ export class MonitorFlow implements MonitorService {
         ? `${discussions} discussion(s) read, ${newComments} new comment(s) stored; nothing queued because the account identity is unknown`
         : `${discussions} discussion(s) read, ${newComments} new comment(s), ${newOpportunities} new opportunity(ies)`
     this.core.events.changed('channels', 'attention')
-    return { status: 'ok', summary, newOpportunities }
+    return { status: 'ok', summary: inboxNote ? `${summary}; ${inboxNote}` : summary, newOpportunities }
   }
 
   private fail(channel: Channel, detail: string): MonitorOutcome {

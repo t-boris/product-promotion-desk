@@ -8,7 +8,7 @@ import { UNIVERSAL_CONNECTOR_ID } from '../connector-registry'
 import type { Connector, ConnectorContext, NormalizedTarget } from '../ports'
 import type { RunResult } from '../runs'
 import type { AccountsService } from './accounts'
-import { blankCapabilities, blockedCapabilities, find, normalizeAssessment, summarize, withVerified } from './capabilities'
+import { blankCapabilities, blockedCapabilities, find, normalizeAssessment, summarize, withInboxVerdict, withVerified } from './capabilities'
 import { browserError, found, requireText } from './errors'
 import { assertModeAllowed, modeAfterAssessment } from './mode-rules'
 import { addressOnPlatform, expandHandle, handleOf, presetFor } from './presets'
@@ -147,7 +147,7 @@ export class ChannelService {
     const { channel } = ctx
     const at = this.core.clock.now().toISOString()
     const assessed = await connector.assess(ctx)
-    const capabilities = normalizeAssessment(channel.capabilities, assessed, at)
+    const capabilities = withInboxVerdict(normalizeAssessment(channel.capabilities, assessed, at), typeof connector.readInbox === 'function', at)
     const reading = find(capabilities, 'read_posts')
 
     // Without the ability to even read, the cause is the account (not signed in, a check to solve).

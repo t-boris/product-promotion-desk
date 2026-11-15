@@ -5,18 +5,19 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ApiEvent } from '../shared/api'
 import type { Account, AgentRun, AnalysisStage, AttentionItem, Channel, ChannelPlan, Claim, GroupChannelOption, MixCard, MixKindCard, MixSetting, OpportunityCard, OpportunityState, PlatformInfo, PostGroup, PostGroupResult, PostVersion, Product, ProductUpdate } from '../shared/types'
 import { createFanOut } from '../renderer/src/fan-out'
+import { createProductChoiceStore, newestProduct, readLastProduct, resolveCurrentProduct, saveLastProduct, type ProductStorage } from '../renderer/src/current-product'
 import { closeForm, mainForm, openForm, type OpenFormIds } from '../renderer/src/open-forms'
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from '../renderer/src/menu-state'
 import { connectChannelHref, fixLinkFor } from '../renderer/src/pages/attention-links'
 import { KIND_TONE, attentionCountTone } from '../renderer/src/pages/attention-tone'
 import { startHeadline, startSteps } from '../renderer/src/pages/attention-start'
+import { INBOX_GROUPS, ROW_EXCERPT, displayOrder, effectiveSelection, fixItemsFor, groupOf, inboxSections, moveSelection, needsDecision, newestFirst, rememberSeen, relativeTime, rowExcerpt, rowSummary, selectionAfterAction, selectionAfterDismiss, waitingElsewhere } from '../renderer/src/pages/inbox/inbox-groups'
 import { engineChoiceVariant, recommendedEngineId, splitEngineDetail } from '../renderer/src/pages/engine-detail'
 import { describeSources, planStages, progressOf } from '../renderer/src/pages/products/analysis-plan'
 import { TAB_STAGE, launchCounts, launchProgress, launchStages, nextStage, tabAccent, type LaunchFacts } from '../renderer/src/pages/products/launch-path'
 import { approvableClaims } from '../renderer/src/pages/products/model'
 import { productLabels } from '../renderer/src/pages/products/product-labels'
 import { deleteBlocker, nextProductStep, passportStatus, websiteHost } from '../renderer/src/pages/products/product-status'
-import { resolveSelected } from '../renderer/src/pages/products/product-selection'
 import { isMirroredSource } from '../renderer/src/pages/products/source-view'
 import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block'
 import { OWN_POSTS_NO_CHECK, OWN_POSTS_NO_METRICS, OWN_POSTS_READING, OWN_POSTS_WHAT_IT_DOES, activateHint } from '../renderer/src/pages/channels/own-posts'
@@ -56,22 +57,15 @@ import {
   whereRows
 } from '../renderer/src/pages/review/post-group'
 import { mainOwner } from '../renderer/src/pages/review/main-action'
-import { channelLabel } from '../renderer/src/pages/review/channel-label'
 import { platformMismatch } from '../renderer/src/pages/channels/platform-hint'
 import {
-  AI_WORKING,
   NO_BROWSE_PAGE,
   NO_PAGE_OPEN,
-  OPEN_ALREADY,
   TYPE_ADDRESS_FIRST,
   accountForIdea,
   browseAddress,
   browseBlocker,
   browseHint,
-  holdingNote,
-  openBlocker,
-  blockHolder,
-  openMode,
   pageResult,
   ADDRESS_SHORTENED,
   rowBlocker
@@ -115,71 +109,163 @@ import {
   unusedLabel,
   withRow
 } from '../renderer/src/pages/channels/mix-card'
-import { MOVED_PAGES, PRODUCT_TABS, accountHref, accountsNewHref, channelsAccountOf, navigateHashOf, parseAccountsHash, parseHash, productHref, publicationsHref, publicationsProductOf } from '../renderer/src/route'
+import { PAGE_IDS, PRODUCT_TABS, accountHref, accountsNewHref, channelsAccountOf, navigateHashOf, parseAccountsHash, parseSetupHash, postsHref, productHref, resolveRoute, setupHref } from '../renderer/src/route'
 import { accountText, accountsGroupName, accountsSummary, automationText, engineGroupName } from '../renderer/src/status-labels'
 
-describe('hash routes (DEC-009)', () => {
-  it('reads plain pages and ignores the leading characters', () => {
-    expect(parseHash('')).toEqual({ page: '', productId: null, tab: null })
-    expect(parseHash('#/attention')).toEqual({ page: 'attention', productId: null, tab: null })
-    expect(parseHash('#products')).toEqual({ page: 'products', productId: null, tab: null })
+describe('hash routes (DEC-037)', () => {
+  /** What an address resolves to, without the parts a test does not care about. */
+  const to = (hash: string) => {
+    const route = resolveRoute(hash)
+    return { page: route.page, hash: route.hash, productId: route.productId, moved: route.moved }
+  }
+
+  it('lists the screens in the order of the sidebar, Log and Settings last', () => {
+    expect([...PAGE_IDS]).toEqual(['overview', 'inbox', 'feed', 'posts', 'channels', 'accounts', 'setup', 'logs', 'settings'])
   })
 
-  it('reads a product and its tab from #/products/<productId>/<tab>', () => {
-    expect(parseHash('#/products/p1')).toEqual({ page: 'products', productId: 'p1', tab: null })
-    for (const tab of ['sources', 'passport', 'analysis', 'goal', 'channels', 'results'] as const) {
-      expect(parseHash(`#/products/p1/${tab}`)).toEqual({ page: 'products', productId: 'p1', tab })
+  it('reads a current address as it is, with no move', () => {
+    for (const id of PAGE_IDS) expect(to(`#/${id}`)).toEqual({ page: id, hash: `#/${id}`, productId: null, moved: false })
+    expect(to('#/setup/passport')).toEqual({ page: 'setup', hash: '#/setup/passport', productId: null, moved: false })
+    expect(to('#/setup/new')).toEqual({ page: 'setup', hash: '#/setup/new', productId: null, moved: false })
+    // The channel pages of a later phase hang off #/channels.
+    expect(to('#/channels/c1/plan')).toEqual({ page: 'channels', hash: '#/channels/c1/plan', productId: null, moved: false })
+  })
+
+  it('shows the first screen for an address that names none, and does not move it', () => {
+    for (const hash of ['', '#', '#/', '#/nothing', '#/products-x']) expect(to(hash)).toEqual({ page: null, hash, productId: null, moved: false })
+  })
+
+  it('takes the product out of ?product= and sets it as the current one', () => {
+    expect(to('#/inbox?product=p1')).toEqual({ page: 'inbox', hash: '#/inbox', productId: 'p1', moved: true })
+    expect(to('#/setup/goal?product=p1')).toEqual({ page: 'setup', hash: '#/setup/goal', productId: 'p1', moved: true })
+    expect(to('#/channels?product=p1&account=a1')).toEqual({ page: 'channels', hash: '#/channels?account=a1', productId: 'p1', moved: true })
+    expect(to('#/overview?product=a%20b%2Fc')).toMatchObject({ productId: 'a b/c' })
+    // A blank product names none, and the address is still cleaned.
+    expect(to('#/inbox?product=%20')).toEqual({ page: 'inbox', hash: '#/inbox', productId: null, moved: true })
+  })
+
+  it('leaves the ?product= of the Accounts screen alone: it names the product the new-account form was opened from', () => {
+    expect(to('#/accounts/new?product=p1')).toEqual({ page: 'accounts', hash: '#/accounts/new?product=p1', productId: null, moved: false })
+    expect(to('#/accounts/a1')).toMatchObject({ page: 'accounts', moved: false })
+  })
+
+  describe('every address of the old menu lands on the right new screen (DEC-037)', () => {
+    it('#/attention goes to the Inbox, #/opportunities to the Feed, #/results to the Overview', () => {
+      expect(to('#/attention')).toEqual({ page: 'inbox', hash: '#/inbox', productId: null, moved: true })
+      expect(to('#/opportunities')).toEqual({ page: 'feed', hash: '#/feed', productId: null, moved: true })
+      expect(to('#/results')).toEqual({ page: 'overview', hash: '#/overview', productId: null, moved: true })
+    })
+
+    it('#/publications[/<productId>] goes to Posts and sets the product it names', () => {
+      expect(to('#/publications')).toEqual({ page: 'posts', hash: '#/posts', productId: null, moved: true })
+      expect(to('#/publications/p1')).toEqual({ page: 'posts', hash: '#/posts', productId: 'p1', moved: true })
+      expect(to('#/publications/p%201')).toMatchObject({ page: 'posts', productId: 'p 1' })
+    })
+
+    it('#/products[/<productId>] goes to Setup and sets the product it names', () => {
+      expect(to('#/products')).toEqual({ page: 'setup', hash: '#/setup', productId: null, moved: true })
+      expect(to('#/products/p1')).toEqual({ page: 'setup', hash: '#/setup', productId: 'p1', moved: true })
+    })
+
+    it('#/products/<productId>/<tab> keeps the four tabs of Setup', () => {
+      for (const tab of ['sources', 'passport', 'analysis', 'goal'] as const) {
+        expect(to(`#/products/p1/${tab}`)).toEqual({ page: 'setup', hash: `#/setup/${tab}`, productId: 'p1', moved: true })
+      }
+      // An unknown tab is no tab.
+      expect(to('#/products/p1/billing')).toEqual({ page: 'setup', hash: '#/setup', productId: 'p1', moved: true })
+    })
+
+    it('#/products/<productId>/channels goes to Channels and keeps the account the Channels screen should choose', () => {
+      expect(to('#/products/p1/channels')).toEqual({ page: 'channels', hash: '#/channels', productId: 'p1', moved: true })
+      expect(to('#/products/p1/channels?account=a1')).toEqual({ page: 'channels', hash: '#/channels?account=a1', productId: 'p1', moved: true })
+      expect(to('#/products/p1/channels?account=%20')).toEqual({ page: 'channels', hash: '#/channels', productId: 'p1', moved: true })
+      expect(to('#/products/p1/channels?other=1')).toMatchObject({ hash: '#/channels' })
+    })
+
+    it('#/products/<productId>/results goes to the Overview', () => {
+      expect(to('#/products/p1/results')).toEqual({ page: 'overview', hash: '#/overview', productId: 'p1', moved: true })
+    })
+
+    it('ignores the leading characters of the hash, as before', () => {
+      expect(to('#products')).toEqual({ page: 'setup', hash: '#/setup', productId: null, moved: true })
+      expect(to('#attention')).toMatchObject({ page: 'inbox', hash: '#/inbox' })
+    })
+
+    it('reads a page and the product after the page name only on the old product pages', () => {
+      // `#/opportunities/p1/channels` never named a product: only the old product pages did.
+      expect(to('#/opportunities/p1/channels')).toEqual({ page: 'feed', hash: '#/feed', productId: null, moved: true })
+    })
+  })
+
+  it('builds links to a place of a product, with ?product= naming the product', () => {
+    expect(productHref('p1', 'channels')).toBe('#/channels?product=p1')
+    expect(productHref('p1')).toBe('#/setup?product=p1')
+    expect(productHref('p1', 'passport')).toBe('#/setup/passport?product=p1')
+    expect(productHref('p1', 'results')).toBe('#/overview?product=p1')
+    // No product: the same place for the current product.
+    expect(productHref(null, 'channels')).toBe('#/channels')
+    expect(productHref(undefined)).toBe('#/setup')
+    expect(productHref(null, 'goal')).toBe('#/setup/goal')
+    expect(postsHref('p1')).toBe('#/posts?product=p1')
+    expect(postsHref(null)).toBe('#/posts')
+    expect(postsHref()).toBe('#/posts')
+    expect(setupHref()).toBe('#/setup')
+    expect(setupHref('analysis')).toBe('#/setup/analysis')
+  })
+
+  it('round-trips a link: the screen and the product come back, and ids that need escaping survive', () => {
+    for (const tab of PRODUCT_TABS) {
+      const route = resolveRoute(productHref('a b/c&d=1', tab))
+      expect(route.productId).toBe('a b/c&d=1')
+      expect(route.page).toBe(tab === 'channels' ? 'channels' : tab === 'results' ? 'overview' : 'setup')
+      expect(route.hash).not.toContain('product')
     }
+    expect(resolveRoute(postsHref('a b/c')).productId).toBe('a b/c')
   })
 
-  it('treats an unknown tab as no tab, and a product id only as meaningful on the product page', () => {
-    expect(parseHash('#/products/p1/billing').tab).toBeNull()
-    expect(parseHash('#/opportunities/p1/channels')).toEqual({ page: 'opportunities', productId: null, tab: null })
-  })
-
-  it('round-trips ids that need escaping', () => {
-    const href = productHref('a b/c', 'channels')
-    expect(parseHash(href)).toEqual({ page: 'products', productId: 'a b/c', tab: 'channels' })
-  })
-
-  it('builds links, falling back to the product list', () => {
-    expect(productHref('p1', 'channels')).toBe('#/products/p1/channels')
-    expect(productHref('p1')).toBe('#/products/p1')
-    expect(productHref(null, 'channels')).toBe('#/products')
-    expect(productHref(undefined)).toBe('#/products')
-  })
-
-  it('carries the account a Channels tab should choose in "Connect a channel" (BUG-063)', () => {
-    expect(productHref('p1', 'channels', 'a1')).toBe('#/products/p1/channels?account=a1')
-    // The query is not part of the path: the product and the tab are read as before.
-    expect(parseHash('#/products/p1/channels?account=a1')).toEqual({ page: 'products', productId: 'p1', tab: 'channels' })
+  it('carries the account a Channels screen should choose in "Connect a channel" (BUG-063)', () => {
+    expect(productHref('p1', 'channels', 'a1')).toBe('#/channels?product=p1&account=a1')
+    expect(productHref(null, 'channels', 'a1')).toBe('#/channels?account=a1')
     expect(channelsAccountOf(productHref('p1', 'channels', 'a1'))).toBe('a1')
+    // The settled address (the product taken out) still names the account, and so does an old link.
+    expect(channelsAccountOf(resolveRoute(productHref('p1', 'channels', 'a1')).hash)).toBe('a1')
+    expect(channelsAccountOf('#/products/p1/channels?account=a1')).toBe('a1')
     // Ids that need escaping round-trip, in the product and in the account.
     const href = productHref('a b/c', 'channels', 'x y/z&w=1')
-    expect(parseHash(href)).toEqual({ page: 'products', productId: 'a b/c', tab: 'channels' })
+    expect(resolveRoute(href).productId).toBe('a b/c')
     expect(channelsAccountOf(href)).toBe('x y/z&w=1')
-    // No account, a blank one or another tab: the old link and no choice.
-    expect(productHref('p1', 'channels', '')).toBe('#/products/p1/channels')
-    expect(productHref('p1', 'goal', 'a1')).toBe('#/products/p1/goal')
-    expect(productHref(null, 'channels', 'a1')).toBe('#/products')
-    expect(channelsAccountOf('#/products/p1/channels')).toBeNull()
-    expect(channelsAccountOf('#/products/p1/channels?account=%20')).toBeNull()
-    expect(channelsAccountOf('#/products/p1/channels?other=1')).toBeNull()
-    expect(channelsAccountOf('#/products/p1/goal?account=a1')).toBeNull()
+    // No account, a blank one or another place: the link and no choice.
+    expect(productHref('p1', 'channels', '')).toBe('#/channels?product=p1')
+    expect(productHref('p1', 'goal', 'a1')).toBe('#/setup/goal?product=p1')
+    expect(channelsAccountOf('#/channels')).toBeNull()
+    expect(channelsAccountOf('#/channels?account=%20')).toBeNull()
+    expect(channelsAccountOf('#/channels?other=1')).toBeNull()
+    expect(channelsAccountOf('#/setup/goal?account=a1')).toBeNull()
     expect(channelsAccountOf('#/products/p1?account=a1')).toBeNull()
     expect(channelsAccountOf('#/accounts/p1/channels?account=a1')).toBeNull()
     expect(channelsAccountOf('')).toBeNull()
   })
 
-  it('sends the old Channels and Results routes to the product list', () => {
-    expect(MOVED_PAGES).toEqual({ channels: 'products', results: 'products' })
+  it('reads the tab of Setup and the new-product form from the settled address', () => {
+    expect(parseSetupHash('#/setup')).toEqual({ tab: 'sources', creating: false })
+    expect(parseSetupHash('#/setup/goal')).toEqual({ tab: 'goal', creating: false })
+    expect(parseSetupHash('#/setup/goal?product=p1')).toEqual({ tab: 'goal', creating: false })
+    expect(parseSetupHash('#/setup/new')).toEqual({ tab: 'sources', creating: true })
+    expect(parseSetupHash('#/setup/nothing')).toEqual({ tab: 'sources', creating: false })
+    // An old address is read as the screen it became.
+    expect(parseSetupHash('#/products/p1/analysis')).toEqual({ tab: 'analysis', creating: false })
+    // Other screens have no tab and no form.
+    expect(parseSetupHash('#/inbox')).toEqual({ tab: 'sources', creating: false })
+    expect(parseSetupHash('')).toEqual({ tab: 'sources', creating: false })
   })
 })
 
 describe('the navigate event of the native menu (BUG-048)', () => {
   it('asks for a page only through a navigate event with a hash route', () => {
     expect(navigateHashOf({ type: 'navigate', hash: '#/settings' })).toBe('#/settings')
+    // An address of the old menu is still a route: the shell redirects it.
     expect(navigateHashOf({ type: 'navigate', hash: '#/products/p1/channels' })).toBe('#/products/p1/channels')
+    expect(navigateHashOf({ type: 'navigate', hash: '#/inbox' })).toBe('#/inbox')
   })
 
   it('ignores every other event and a hash that is not a route', () => {
@@ -190,7 +276,7 @@ describe('the navigate event of the native menu (BUG-048)', () => {
   })
 
   it('names a page that the shell knows', () => {
-    expect(parseHash(navigateHashOf({ type: 'navigate', hash: '#/settings' }) ?? '').page).toBe('settings')
+    expect(resolveRoute(navigateHashOf({ type: 'navigate', hash: '#/settings' }) ?? '').page).toBe('settings')
   })
 })
 
@@ -296,7 +382,7 @@ describe('one bridge subscription for every screen (BUG-061)', () => {
   })
 })
 
-describe('attention links to the product page (DEC-009)', () => {
+describe('inbox links to where a problem is fixed (DEC-009, DEC-037)', () => {
   const products = [{ id: 'p1', name: 'Natal Mystic' }, { id: 'p2', name: 'Other' }] as Product[]
   const channels = [
     { id: 'c1', productId: 'p1', accountId: 'a1' },
@@ -305,8 +391,8 @@ describe('attention links to the product page (DEC-009)', () => {
   const sources = { channels: [...channels, { id: 'c3', productId: 'p2', accountId: 'legacy' } as Channel], products }
   const item = (refType: AttentionItem['refType'], refId: string): AttentionItem => ({ id: `x:${refId}`, kind: 'login', title: '', detail: '', refType, refId, createdAt: '2026-11-08T00:00:00.000Z' })
 
-  it('sends a channel problem to that product\'s Channels tab', () => {
-    expect(fixLinkFor(item('channel', 'c2'), sources)).toEqual({ href: '#/products/p2/channels', label: 'Open Other channels', productName: 'Other' })
+  it('sends a channel problem to that product\'s Channels screen', () => {
+    expect(fixLinkFor(item('channel', 'c2'), sources)).toEqual({ href: '#/channels?product=p2', label: 'Open Other channels', productName: 'Other' })
   })
 
   it('sends a sign-in problem to the account it names in the Accounts section, and names the products that use it (DEC-015, BUG-043)', () => {
@@ -320,14 +406,14 @@ describe('attention links to the product page (DEC-009)', () => {
     expect(fixLinkFor(item('account', 'unused'), sources)).toEqual({ href: '#/accounts/unused', label: 'Open Accounts', productName: null })
   })
 
-  it('falls back to the product list when the product cannot be resolved, and has no link for decisions', () => {
-    expect(fixLinkFor(item('channel', 'gone'), sources)).toEqual({ href: '#/products', label: 'Open Products', productName: null })
+  it('falls back to Setup when the product cannot be resolved, and has no link for decisions', () => {
+    expect(fixLinkFor(item('channel', 'gone'), sources)).toEqual({ href: '#/setup', label: 'Open Setup', productName: null })
     expect(fixLinkFor(item('opportunity', 'o1'), sources)).toBeNull()
     expect(fixLinkFor(item('action', 'x1'), sources)).toBeNull()
   })
 
-  it('opens the product itself for product items', () => {
-    expect(fixLinkFor(item('product', 'p1'), sources)).toEqual({ href: '#/products/p1', label: 'Open product', productName: 'Natal Mystic' })
+  it('opens Setup of the product itself for product items', () => {
+    expect(fixLinkFor(item('product', 'p1'), sources)).toEqual({ href: '#/setup?product=p1', label: 'Open Setup', productName: 'Natal Mystic' })
   })
 })
 
@@ -381,7 +467,7 @@ describe('the new-account form of the Accounts section', () => {
     expect(parseAccountsHash('#/products/a1')).toEqual({ adding: false, accountId: null, productId: null, role: null })
     expect(parseAccountsHash('#/accounts/new').accountId).toBeNull()
     // The page is still Accounts for the shell.
-    expect(parseHash(accountHref('a1')).page).toBe('accounts')
+    expect(resolveRoute(accountHref('a1')).page).toBe('accounts')
   })
 
   it('carries the product it was opened from, alone or together with a role (BUG-063)', () => {
@@ -427,13 +513,13 @@ describe('the next step of an account', () => {
   it('the note under "Add account" tells where the owner goes next, and from a product that is back to its channels, not into sign-in setup (BUG-063)', () => {
     expect(afterCreateNote(null)).toMatch(/^After adding it you are told what to do next: set the address and the password/)
     const fromProduct = afterCreateNote({ name: 'Natal Mystic' })
-    expect(fromProduct).toContain('Channels tab of Natal Mystic')
+    expect(fromProduct).toContain('Channels screen of Natal Mystic')
     expect(fromProduct).toMatch(/connect a channel/i)
     // The address, the password and the sign-in are named as later work, not as the next step.
     expect(fromProduct).not.toMatch(/you are told what to do next/)
     expect(fromProduct).toMatch(/later/i)
     // A product whose name has not arrived yet is still a product.
-    expect(afterCreateNote({ name: undefined })).toContain('Channels tab of this product')
+    expect(afterCreateNote({ name: undefined })).toContain('Channels screen of this product')
   })
 })
 
@@ -484,7 +570,7 @@ describe('an account that signs in through another account (DEC-027)', () => {
     it('has a note after "Add account" that promises no address and no password', () => {
       expect(afterCreateNote(null, true)).toMatch(/sign in through the account you chose/)
       expect(afterCreateNote(null, true)).not.toMatch(/set the address/)
-      expect(afterCreateNote({ name: 'Natal Mystic' }, true)).toContain('Channels tab of Natal Mystic')
+      expect(afterCreateNote({ name: 'Natal Mystic' }, true)).toContain('Channels screen of Natal Mystic')
       expect(afterCreateNote(null, false)).toBe(afterCreateNote(null))
     })
   })
@@ -646,9 +732,9 @@ describe('QA clarity batch: what the screens say', () => {
     const passport = startSteps({ products: 3, accounts: 0, paused: true, stage: stageOf({}) })
     expect(passport.map((x) => x.id)).toEqual(['product', 'launch', 'account', 'resume'])
     expect(passport.map((x) => x.done)).toEqual([true, false, false, false])
-    expect(passport.find((x) => !x.done)).toMatchObject({ id: 'launch', title: 'Build the passport', action: 'Build the passport', hint: 'Build and approve the passport.', href: '#/products/p1/passport' })
-    expect(startSteps({ products: 3, accounts: 0, paused: true, stage: stageOf({ passportApproved: true }) }).find((x) => !x.done)).toMatchObject({ id: 'launch', action: 'Write a goal', href: '#/products/p1/goal' })
-    expect(startSteps({ products: 3, accounts: 0, paused: true, stage: stageOf({ passportApproved: true, goals: 1 }) }).find((x) => !x.done)).toMatchObject({ id: 'launch', action: 'Connect a channel', href: '#/products/p1/channels' })
+    expect(passport.find((x) => !x.done)).toMatchObject({ id: 'launch', title: 'Build the passport', action: 'Build the passport', hint: 'Build and approve the passport.', href: '#/setup/passport?product=p1' })
+    expect(startSteps({ products: 3, accounts: 0, paused: true, stage: stageOf({ passportApproved: true }) }).find((x) => !x.done)).toMatchObject({ id: 'launch', action: 'Write a goal', href: '#/setup/goal?product=p1' })
+    expect(startSteps({ products: 3, accounts: 0, paused: true, stage: stageOf({ passportApproved: true, goals: 1 }) }).find((x) => !x.done)).toMatchObject({ id: 'launch', action: 'Connect a channel', href: '#/channels?product=p1' })
     // An account and a running automation do not move the path's stage out of the first place.
     expect(startSteps({ products: 1, accounts: 1, paused: false, stage: stageOf({}) }).find((x) => !x.done)?.id).toBe('launch')
     // With every setup stage done (the Publication stage is the work, not the setup) or no stage, the three steps stay as they were.
@@ -777,7 +863,7 @@ describe('QA clarity batch: what the screens say', () => {
     const stages = launchStages('p1', facts)
     expect(stages.map((s) => s.id)).toEqual(['product', 'passport', 'goal', 'channel', 'publication'])
     expect(stages.map((s) => s.state)).toEqual(['done', 'done', 'current', 'todo', 'todo'])
-    expect(stages.map((s) => s.href)).toEqual(['#/products/p1/sources', '#/products/p1/passport', '#/products/p1/goal', '#/products/p1/channels', '#/publications/p1'])
+    expect(stages.map((s) => s.href)).toEqual(['#/setup/sources?product=p1', '#/setup/passport?product=p1', '#/setup/goal?product=p1', '#/channels?product=p1', '#/posts?product=p1'])
     expect(launchProgress(stages)).toBe('2 of 5 done')
     // A stage is done by its own fact: a channel connected before the goal was written is done, the goal is still next.
     expect(launchStages('p1', { ...facts, channels: 1 }).map((s) => s.state)).toEqual(['done', 'done', 'current', 'done', 'todo'])
@@ -802,11 +888,11 @@ describe('QA clarity batch: what the screens say', () => {
     expect(nextStage(launchStages('p1', { ...facts, hasSources: true, passportApproved: true }))?.id).toBe('goal')
     expect(nextStage(launchStages('p1', { ...facts, hasSources: true, passportApproved: true, goals: 1 }))?.id).toBe('channel')
     const publication = nextStage(launchStages('p1', { ...facts, hasSources: true, passportApproved: true, goals: 1, channels: 1 }))
-    expect(publication).toMatchObject({ id: 'publication', href: '#/publications/p1', action: 'Write a publication' })
+    expect(publication).toMatchObject({ id: 'publication', href: '#/posts?product=p1', action: 'Write a publication' })
     expect(nextStage(launchStages('p1', { hasSources: true, passportApproved: true, goals: 1, channels: 1, approvedPublications: 1 }))).toBeNull()
     // A done stage in the middle does not move the next step: the first stage that is not done keeps it.
     const middle = nextStage(launchStages('p1', { ...facts, hasSources: true, passportApproved: true, channels: 1 }))
-    expect(middle).toMatchObject({ id: 'goal', state: 'current', href: '#/products/p1/goal', action: 'Write a goal' })
+    expect(middle).toMatchObject({ id: 'goal', state: 'current', href: '#/setup/goal?product=p1', action: 'Write a goal' })
     expect(nextStage(launchStages('p1', { ...facts, hasSources: true, goals: 1, channels: 1 }))?.id).toBe('passport')
     expect(nextStage([])).toBeNull()
   })
@@ -831,7 +917,7 @@ describe('QA clarity batch: what the screens say', () => {
     expect(accents({ passportApproved: true, channels: 1 })).toMatchObject({ goal: 'own', channels: 'goal' })
     // The path is complete: nothing is next, so no tab holds a filled button.
     expect(accents({ passportApproved: true, goals: 1, channels: 1, approvedPublications: 1 })).toEqual({ sources: 'none', passport: 'none', analysis: 'none', goal: 'none', channels: 'none', results: 'none' })
-    expect(tabAccent(launchStages('p1', facts), 'goal').next).toMatchObject({ id: 'passport', href: '#/products/p1/passport', action: 'Build the passport' })
+    expect(tabAccent(launchStages('p1', facts), 'goal').next).toMatchObject({ id: 'passport', href: '#/setup/passport?product=p1', action: 'Build the passport' })
   })
 
   it('Product tabs (BUG-065): whatever the facts, each tab either holds the filled action or points at the path\'s next stage, never both and never neither while a stage is left', () => {
@@ -863,31 +949,21 @@ describe('QA clarity batch: what the screens say', () => {
     expect(counts.get('c')).toBeUndefined()
   })
 
-  it('Launch path (BUG-012): the Publication stage opens Publications filtered by the product', () => {
-    expect(publicationsHref('p 1')).toBe('#/publications/p%201')
-    expect(publicationsHref(null)).toBe('#/publications')
-    expect(publicationsProductOf('#/publications/p%201')).toBe('p 1')
-    expect(publicationsProductOf('#/publications')).toBeNull()
-    expect(publicationsProductOf('#/products/p1')).toBeNull()
-    // The shell still routes the link to the Publications page.
-    expect(parseHash('#/publications/p1').page).toBe('publications')
+  it('Launch path (BUG-012): the Publication stage opens Posts for the product', () => {
+    expect(postsHref('p 1')).toBe('#/posts?product=p+1')
+    expect(postsHref(null)).toBe('#/posts')
+    // The shell routes the link to Posts and takes the product out of it.
+    expect(resolveRoute(postsHref('p 1'))).toMatchObject({ page: 'posts', productId: 'p 1', hash: '#/posts' })
   })
 
-  it('Publications and Opportunities (BUG-017, BUG-018): "Connect a channel" opens the chosen product\'s Channels tab, or Products', () => {
-    expect(connectChannelHref('p 1')).toBe('#/products/p%201/channels')
-    expect(connectChannelHref('')).toBe('#/products')
-    expect(connectChannelHref(null)).toBe('#/products')
+  it('Feed and Posts (BUG-017, BUG-018): "Connect a channel" opens the product\'s Channels screen, or Setup when there is no product', () => {
+    expect(connectChannelHref('p 1')).toBe('#/channels?product=p+1')
+    expect(connectChannelHref('')).toBe('#/setup')
+    expect(connectChannelHref(null)).toBe('#/setup')
+    expect(resolveRoute(connectChannelHref('p 1'))).toMatchObject({ page: 'channels', productId: 'p 1' })
   })
 
-  it('Publications and Opportunities (BUG-067): the Channel pop-up names the product only while no product is chosen', () => {
-    expect(channelLabel('Northwind Notes', 'r/test_sandbox', false)).toBe('Northwind Notes · r/test_sandbox')
-    expect(channelLabel('Northwind Notes', 'r/test_sandbox', true)).toBe('r/test_sandbox')
-    // A channel whose product is not known yet is named by its target in both cases.
-    expect(channelLabel(undefined, 'r/test_sandbox', false)).toBe('r/test_sandbox')
-    expect(channelLabel('', 'r/test_sandbox', false)).toBe('r/test_sandbox')
-  })
-
-  it('Menu (BUG-016): the Attention count is amber, and red only while one of the items is a failure', () => {
+  it('Menu (BUG-016): the Inbox count is amber, and red only while one of the items is a failure', () => {
     expect(attentionCountTone([])).toBeNull()
     expect(attentionCountTone(['draft', 'approval', 'question', 'login', 'captcha', 'connection'])).toBe('attention')
     expect(attentionCountTone(['draft', 'error'])).toBe('error')
@@ -914,7 +990,7 @@ describe('QA clarity batch: what the screens say', () => {
     const engines = [{ id: 'codex', ready: true, detail: '', label: 'Codex' }, { id: 'claude', ready: false, detail: 'Claude Code was not found.', label: 'Claude Code' }]
     const base = { productId: 'p1', approved: true, engineId: 'codex', engines, ready: true }
     expect(suggestionBlock(base)).toBeNull()
-    expect(suggestionBlock({ ...base, approved: false })).toMatchObject({ text: 'Approve the product passport first so the suggestions fit it.', fix: { href: '#/products/p1/passport' } })
+    expect(suggestionBlock({ ...base, approved: false })).toMatchObject({ text: 'Approve the product passport first so the suggestions fit it.', fix: { href: '#/setup/passport?product=p1' } })
     expect(suggestionBlock({ ...base, engineId: null })).toMatchObject({ text: 'Choose an AI engine in Settings first.', fix: { href: '#/settings' } })
     expect(suggestionBlock({ ...base, engineId: 'claude' })).toMatchObject({ text: 'Claude Code was not found.', fix: { href: '#/settings' } })
     // Nothing is blocked on a guess while the settings are still loading.
@@ -931,7 +1007,7 @@ describe('a channel the app does not read (DEC-034)', () => {
       expect(words).not.toMatch(/\b(baseline|Next check|Last run)\b/)
     }
     expect(OWN_POSTS_WHAT_IT_DOES).toMatch(/press Send/)
-    expect(OWN_POSTS_NO_CHECK).toMatch(/Publications/)
+    expect(OWN_POSTS_NO_CHECK).toMatch(/Posts/)
     expect(OWN_POSTS_WHAT_IT_DOES).toMatch(/tell it whether the post is up/) // the app cannot read the page back, so the owner confirms
     expect(OWN_POSTS_NO_METRICS).toMatch(/no metrics/)
   })
@@ -1014,34 +1090,304 @@ describe('Channels tab: one step at a time (DEC-023)', () => {
   })
 })
 
-describe('the product that is open on the Products page (BUG-042)', () => {
-  const ids = ['p1', 'p2']
+describe('the current product (DEC-037; BUG-042, BUG-068, BUG-069)', () => {
+  const product = (id: string, createdAt: string) => ({ id, createdAt })
+  const products = [product('p1', '2026-11-01T00:00:00.000Z'), product('p2', '2026-11-05T00:00:00.000Z'), product('p3', '2026-11-03T00:00:00.000Z')]
+  const choice = (wanted: string | null, pending: string | null = null) => ({ wanted, pending })
+  const memory = (initial?: Record<string, string>): ProductStorage & { data: Map<string, string> } => {
+    const data = new Map(Object.entries(initial ?? {}))
+    return { data, getItem: (key) => data.get(key) ?? null, setItem: (key, value) => void data.set(key, value) }
+  }
 
-  it('a product in the list is the selected one', () => {
-    expect(resolveSelected(ids, 'p2', null)).toBe('p2')
-    expect(resolveSelected(ids, 'p1', 'p3')).toBe('p1')
+  it('is the chosen product while the list holds it', () => {
+    expect(resolveCurrentProduct(products, choice('p3'))).toBe('p3')
+    expect(resolveCurrentProduct(products, choice('p1', 'p9'))).toBe('p1')
   })
 
-  it('a product that was just created stays selected before the list has loaded it', () => {
-    // After "Create product" the route names the new product while `products.list` still holds the old rows.
-    expect(resolveSelected(ids, 'p3', 'p3')).toBe('p3')
-    expect(resolveSelected([], 'p3', 'p3')).toBe('p3')
+  it('falls back to the newest product: nothing chosen, a product that was deleted, a link to one that does not exist', () => {
+    expect(resolveCurrentProduct(products, choice(null))).toBe('p2')
+    expect(resolveCurrentProduct(products, choice('gone'))).toBe('p2')
+    expect(resolveCurrentProduct(products, choice('gone', 'also-gone'))).toBe('p2')
   })
 
-  it('an id that is neither in the list nor the one just created selects nothing', () => {
-    expect(resolveSelected(ids, 'gone', null)).toBeNull()
-    expect(resolveSelected(ids, 'gone', 'p3')).toBeNull()
-    expect(resolveSelected(ids, null, 'p3')).toBeNull()
-    expect(resolveSelected(ids, null, null)).toBeNull()
+  it('is none when there is no product at all', () => {
+    expect(resolveCurrentProduct([], choice(null))).toBeNull()
+    expect(resolveCurrentProduct([], choice('p1'))).toBeNull()
   })
 
-  it('the "always open" effect does not fire for a created product: it acts only on a null selection', () => {
-    // Products.tsx re-selects the last or first product only when this is null. A created product must not be null, or
-    // the effect replaces the route with an old product (the defect behind BUG-042, BUG-068 and BUG-069).
-    expect(resolveSelected(ids, 'p3', 'p3')).not.toBeNull()
-    // Once the list holds it, the normal rule applies and the created id no longer matters.
-    expect(resolveSelected(['p1', 'p2', 'p3'], 'p3', 'p3')).toBe('p3')
-    expect(resolveSelected(ids, 'p3', null)).toBeNull()
+  it('a product that was just created is current before the list has loaded it, and only until the list holds it', () => {
+    // After "Create product" the choice names the new product while `products.list` still holds the old rows: the screen must not jump back to an older one.
+    expect(resolveCurrentProduct(products, choice('p4', 'p4'))).toBe('p4')
+    expect(resolveCurrentProduct([], choice('p4', 'p4'))).toBe('p4')
+    // Once it is settled the ordinary rule applies, so a later deletion elsewhere falls back to the newest again.
+    expect(resolveCurrentProduct(products, choice('p4'))).toBe('p2')
+    expect(resolveCurrentProduct([...products, product('p4', '2026-11-10T00:00:00.000Z')], choice('p4'))).toBe('p4')
+  })
+
+  it('the newest product is the last one made; the last of equal times wins', () => {
+    expect(newestProduct(products)?.id).toBe('p2')
+    expect(newestProduct([product('a', 'T'), product('b', 'T')])?.id).toBe('b')
+    expect(newestProduct([])).toBeNull()
+  })
+
+  it('remembers the choice under ppd.lastProduct and reads what the old Products page stored', () => {
+    const storage = memory({ 'ppd.lastProduct': 'p3' })
+    expect(readLastProduct(storage)).toBe('p3')
+    saveLastProduct(storage, 'p1')
+    expect(storage.data.get('ppd.lastProduct')).toBe('p1')
+    expect(createProductChoiceStore(storage).snapshot()).toEqual({ wanted: 'p1', pending: null })
+  })
+
+  it('works without storage: unreadable, unwritable or missing', () => {
+    const broken: ProductStorage = {
+      getItem: () => {
+        throw new Error('blocked')
+      },
+      setItem: () => {
+        throw new Error('full')
+      }
+    }
+    for (const storage of [undefined, broken]) {
+      expect(readLastProduct(storage)).toBeNull()
+      expect(() => saveLastProduct(storage, 'p1')).not.toThrow()
+      const store = createProductChoiceStore(storage)
+      expect(store.snapshot()).toEqual({ wanted: null, pending: null })
+      // The choice lasts as long as the window does.
+      store.choose('p2')
+      expect(store.snapshot()).toEqual({ wanted: 'p2', pending: null })
+    }
+    expect(readLastProduct(memory({ 'ppd.lastProduct': '' }))).toBeNull()
+  })
+
+  it('tells its subscribers about a real change only, with the same snapshot until then', () => {
+    const storage = memory()
+    const store = createProductChoiceStore(storage)
+    const heard = vi.fn()
+    const stop = store.subscribe(heard)
+    const first = store.snapshot()
+    store.choose('p1')
+    expect(heard).toHaveBeenCalledTimes(1)
+    expect(store.snapshot()).not.toBe(first)
+    const second = store.snapshot()
+    store.choose('p1')
+    expect(heard).toHaveBeenCalledTimes(1)
+    expect(store.snapshot()).toBe(second)
+    stop()
+    store.choose('p2')
+    expect(heard).toHaveBeenCalledTimes(1)
+    expect(storage.data.get('ppd.lastProduct')).toBe('p2')
+  })
+
+  it('a created product is chosen and pending until the list holds it, then settles', () => {
+    const storage = memory({ 'ppd.lastProduct': 'p1' })
+    const store = createProductChoiceStore(storage)
+    store.chooseCreated('p4')
+    expect(store.snapshot()).toEqual({ wanted: 'p4', pending: 'p4' })
+    expect(storage.data.get('ppd.lastProduct')).toBe('p4')
+    store.settle()
+    expect(store.snapshot()).toEqual({ wanted: 'p4', pending: null })
+    // A choice made while a product was pending keeps the pending one until it settles.
+    store.chooseCreated('p5')
+    store.choose('p1')
+    expect(store.snapshot()).toEqual({ wanted: 'p1', pending: 'p5' })
+  })
+})
+
+describe('the Decide list of the Inbox (DEC-037)', () => {
+  const card = (id: string, state: OpportunityState, kind: 'reply' | 'standalone' = 'reply', extra: Record<string, unknown> = {}) =>
+    ({
+      opportunity: { id, state, kind, productId: 'p1', updatedAt: '2026-11-15T10:00:00.000Z', reason: '', ...extra },
+      channelTarget: 'r/test',
+      comment: kind === 'reply' ? { author: 'u/anna', body: 'How  does it\nsync across devices?' } : null,
+      discussion: null,
+      draft: kind === 'standalone' ? { title: 'Release notes', text: 'What is new in version two of the app.' } : null
+    }) as unknown as OpportunityCard
+
+  it('groups an item by what it is: a reply, a post, a question the AI asked, a result to confirm', () => {
+    expect(groupOf(card('a', 'awaiting_approval'))).toBe('replies')
+    expect(groupOf(card('b', 'draft', 'standalone'))).toBe('posts')
+    expect(groupOf(card('c', 'needs_user'))).toBe('questions')
+    expect(groupOf(card('d', 'needs_user', 'standalone'))).toBe('questions')
+    expect(groupOf(card('e', 'unknown_result', 'standalone'))).toBe('results')
+    expect(groupOf(card('f', 'ready'))).toBe('replies')
+    expect(INBOX_GROUPS.map((g) => g.label)).toEqual(['Replies', 'Posts', 'Questions from the AI', 'Results to confirm'])
+  })
+
+  it('an item needs a decision in the states the attention list is made of', () => {
+    const waiting: OpportunityState[] = ['awaiting_approval', 'ready', 'draft', 'needs_user', 'unknown_result']
+    for (const state of ['discovered', 'analyzing', 'awaiting_approval', 'ready', 'sending', 'confirmed', 'draft', 'needs_user', 'no_reply', 'deferred', 'cancelled', 'error', 'unknown_result'] as OpportunityState[]) {
+      expect(needsDecision(state)).toBe(waiting.includes(state))
+    }
+  })
+
+  it('lists the newest first, once each', () => {
+    const items = [
+      { refId: 'old', createdAt: '2026-11-15T08:00:00.000Z' },
+      { refId: 'new', createdAt: '2026-11-15T12:00:00.000Z' },
+      { refId: 'new', createdAt: '2026-11-15T11:00:00.000Z' },
+      { refId: 'tie-b', createdAt: '2026-11-15T09:00:00.000Z' },
+      { refId: 'tie-a', createdAt: '2026-11-15T09:00:00.000Z' }
+    ]
+    expect(newestFirst(items)).toEqual(['new', 'tie-a', 'tie-b', 'old'])
+    expect(newestFirst([])).toEqual([])
+  })
+
+  it('freezes the order while the owner works: what appeared stays where it first appeared, new things come after', () => {
+    const first = rememberSeen([], [{ id: 'b', group: 'replies' }, { id: 'a', group: 'posts' }])
+    expect(first.map((row) => row.id)).toEqual(['b', 'a'])
+    // Something newer arrives, and the ones seen change their group and their rank: nothing moves.
+    const later = rememberSeen(first, [{ id: 'n', group: 'replies' }, { id: 'a', group: 'replies' }, { id: 'b', group: 'questions' }])
+    expect(later).toEqual([{ id: 'b', group: 'replies' }, { id: 'a', group: 'posts' }, { id: 'n', group: 'replies' }])
+    // Nothing new: the same rows, as a copy.
+    expect(rememberSeen(later, [{ id: 'a', group: 'posts' }])).toEqual(later)
+    // A dismissed row that waits again comes back after the others.
+    expect(rememberSeen(later.filter((row) => row.id !== 'b'), [{ id: 'b', group: 'replies' }]).map((row) => row.id)).toEqual(['a', 'n', 'b'])
+  })
+
+  it('shows the groups in a fixed order with their rows in the frozen order, and leaves empty groups out', () => {
+    const rows = [
+      { id: 'r1', group: 'replies' as const },
+      { id: 'q1', group: 'questions' as const },
+      { id: 'p1', group: 'posts' as const },
+      { id: 'r2', group: 'replies' as const }
+    ]
+    const sections = inboxSections(rows)
+    expect(sections.map((s) => [s.id, s.ids])).toEqual([
+      ['replies', ['r1', 'r2']],
+      ['posts', ['p1']],
+      ['questions', ['q1']]
+    ])
+    expect(displayOrder(sections)).toEqual(['r1', 'r2', 'p1', 'q1'])
+    expect(inboxSections([])).toEqual([])
+    expect(displayOrder([])).toEqual([])
+  })
+
+  it('the arrow keys move one row and stop at the ends; with nothing selected the first row is the start', () => {
+    const order = ['a', 'b', 'c']
+    expect(moveSelection(order, 'a', 1)).toBe('b')
+    expect(moveSelection(order, 'b', -1)).toBe('a')
+    expect(moveSelection(order, 'a', -1)).toBe('a')
+    expect(moveSelection(order, 'c', 1)).toBe('c')
+    expect(moveSelection(order, null, 1)).toBe('a')
+    expect(moveSelection(order, 'gone', -1)).toBe('a')
+    expect(moveSelection([], 'a', 1)).toBeNull()
+  })
+
+  it('after an action the next row that still waits is shown; failing that the one above; failing that the acted one stays', () => {
+    const order = ['a', 'b', 'c', 'd']
+    expect(selectionAfterAction(order, 'b', new Set(['a', 'c', 'd']))).toBe('c')
+    // The next row is already settled: the one after it that waits.
+    expect(selectionAfterAction(order, 'b', new Set(['a', 'd']))).toBe('d')
+    // Nothing waits below: the nearest one above.
+    expect(selectionAfterAction(order, 'd', new Set(['a', 'b', 'c']))).toBe('c')
+    expect(selectionAfterAction(order, 'c', new Set(['a', 'b']))).toBe('b')
+    // Nothing else waits: its own result stays on screen until it is dismissed.
+    expect(selectionAfterAction(order, 'b', new Set())).toBe('b')
+    expect(selectionAfterAction(order, 'b', new Set(['b']))).toBe('b')
+    // An acted row that is not listed stays as it is.
+    expect(selectionAfterAction(order, 'zzz', new Set(['a']))).toBe('zzz')
+  })
+
+  it('after a dismiss the row that took its place is shown, else the one above, else none', () => {
+    const order = ['a', 'b', 'c']
+    expect(selectionAfterDismiss(order, 'a')).toBe('b')
+    expect(selectionAfterDismiss(order, 'b')).toBe('c')
+    expect(selectionAfterDismiss(order, 'c')).toBe('b')
+    expect(selectionAfterDismiss(['a'], 'a')).toBeNull()
+    expect(selectionAfterDismiss([], 'a')).toBeNull()
+    expect(selectionAfterDismiss(order, 'gone')).toBe('a')
+  })
+
+  it('the selection is the chosen row while it is listed, else the first row', () => {
+    expect(effectiveSelection(['a', 'b'], 'b')).toBe('b')
+    expect(effectiveSelection(['a', 'b'], 'gone')).toBe('a')
+    expect(effectiveSelection(['a', 'b'], null)).toBe('a')
+    expect(effectiveSelection([], 'a')).toBeNull()
+  })
+
+  it('a row is the channel, who it is about, 60 characters of the words, how long ago, and a dot', () => {
+    expect(rowSummary(card('a', 'awaiting_approval'))).toEqual({ channel: 'r/test', who: 'u/anna', excerpt: 'How does it sync across devices?', at: '2026-11-15T10:00:00.000Z', tone: 'warn' })
+    // A post is named by its title and shows its text; with no title it is "New post".
+    expect(rowSummary(card('b', 'draft', 'standalone'))).toMatchObject({ who: 'Release notes', excerpt: 'What is new in version two of the app.', tone: '' })
+    expect(rowSummary({ ...card('c', 'draft', 'standalone'), draft: { title: null, text: 'x' } } as unknown as OpportunityCard).who).toBe('New post')
+    // A question of the AI shows what it asks.
+    expect(rowSummary(card('d', 'needs_user', 'reply', { reason: 'Which plan should I name?' }))).toMatchObject({ excerpt: 'Which plan should I name?', tone: 'warn' })
+    expect(rowSummary(card('e', 'unknown_result', 'standalone')).tone).toBe('bad')
+    expect(rowSummary(card('f', 'ready')).tone).toBe('good')
+  })
+
+  it('cuts an excerpt at 60 characters on one line, with an ellipsis, and leaves a short one alone', () => {
+    expect(ROW_EXCERPT).toBe(60)
+    expect(rowExcerpt('short')).toBe('short')
+    expect(rowExcerpt('a'.repeat(60))).toBe('a'.repeat(60))
+    const cut = rowExcerpt(`${'word '.repeat(30)}`)
+    expect(cut.length).toBeLessThanOrEqual(60)
+    expect(cut.endsWith('…')).toBe(true)
+    expect(rowExcerpt('  two\n\nlines   here  ')).toBe('two lines here')
+    expect(rowExcerpt('')).toBe('')
+  })
+
+  it('says how long ago in the fewest words', () => {
+    const now = new Date('2026-11-15T12:00:00.000Z')
+    const ago = (ms: number) => new Date(now.getTime() - ms).toISOString()
+    expect(relativeTime(ago(20_000), now)).toBe('just now')
+    expect(relativeTime(ago(5 * 60_000), now)).toBe('5 min ago')
+    expect(relativeTime(ago(3 * 3_600_000), now)).toBe('3 h ago')
+    expect(relativeTime(ago(2 * 86_400_000), now)).toBe('2 d ago')
+    expect(relativeTime(ago(40 * 86_400_000), now)).toBe('2026-10-06')
+    expect(relativeTime(ago(-60_000), now)).toBe('just now')
+    expect(relativeTime('not a time', now)).toBe('just now')
+  })
+
+  it('says which other products have items waiting', () => {
+    const waiting = [card('a', 'draft'), { opportunity: { productId: 'p2' } }, { opportunity: { productId: 'p2' } }, { opportunity: { productId: 'p3' } }] as OpportunityCard[]
+    expect(waitingElsewhere(waiting, 'p1')).toEqual([{ productId: 'p2', count: 2 }, { productId: 'p3', count: 1 }])
+    expect(waitingElsewhere(waiting, 'p2')).toEqual([{ productId: 'p1', count: 1 }, { productId: 'p3', count: 1 }])
+    expect(waitingElsewhere([], 'p1')).toEqual([])
+  })
+})
+
+describe('the Fix list of the Inbox is the current product\'s (DEC-037, DEC-015)', () => {
+  const channels = [
+    { id: 'c1', productId: 'p1', accountId: 'a1' },
+    { id: 'c2', productId: 'p2', accountId: 'a2' },
+    { id: 'c3', productId: 'p2', accountId: 'a1' }
+  ]
+  const accounts = [
+    { id: 'a1', productId: 'p1' },
+    { id: 'a2', productId: 'p2' },
+    { id: 'shared', productId: null }
+  ]
+  const item = (refType: AttentionItem['refType'], refId: string): AttentionItem => ({ id: `x:${refType}:${refId}`, kind: 'connection', title: '', detail: '', refType, refId, createdAt: '2026-11-15T00:00:00.000Z' })
+  const ids = (items: AttentionItem[], productId: string) => fixItemsFor(items, productId, { channels, accounts }).map((i) => i.id)
+
+  it('keeps the channels of the product and drops the other products\'', () => {
+    const items = [item('channel', 'c1'), item('channel', 'c2')]
+    expect(ids(items, 'p1')).toEqual(['x:channel:c1'])
+    expect(ids(items, 'p2')).toEqual(['x:channel:c2'])
+  })
+
+  it('keeps a problem about a channel that is gone: hiding it would hide a real item', () => {
+    expect(ids([item('channel', 'gone')], 'p1')).toEqual(['x:channel:gone'])
+  })
+
+  it('keeps the product item of the product only', () => {
+    expect(ids([item('product', 'p1'), item('product', 'p2')], 'p1')).toEqual(['x:product:p1'])
+  })
+
+  it('keeps accounts that belong to no product, and accounts made for the product', () => {
+    expect(ids([item('account', 'shared'), item('account', 'a1'), item('account', 'unknown')], 'p1')).toEqual(['x:account:shared', 'x:account:a1', 'x:account:unknown'])
+  })
+
+  it('keeps an account made for another product while a channel of this product uses it, and drops it otherwise', () => {
+    // a1 was made for p1, but p2's channel c3 uses it.
+    expect(ids([item('account', 'a1')], 'p2')).toEqual(['x:account:a1'])
+    // a2 was made for p2 and no channel of p1 uses it.
+    expect(ids([item('account', 'a2')], 'p1')).toEqual([])
+  })
+
+  it('never lists a decision, and keeps what has no product to be scoped by', () => {
+    expect(ids([item('opportunity', 'o1'), item('action', 'x1')], 'p1')).toEqual(['x:action:x1'])
   })
 })
 
@@ -1173,12 +1519,12 @@ describe('why a product cannot be deleted yet (BUG-046)', () => {
   })
 
   it('names the one channel in the singular and says where to remove it', () => {
-    expect(deleteBlocker(1)).toBe('This product still has 1 connected channel. Remove it on the Channels tab first.')
+    expect(deleteBlocker(1)).toBe('This product still has 1 connected channel. Remove it on the Channels screen first.')
   })
 
   it('writes the plural properly, never "channel(s)"', () => {
-    expect(deleteBlocker(2)).toBe('This product still has 2 connected channels. Remove them on the Channels tab first.')
-    expect(deleteBlocker(12)).toBe('This product still has 12 connected channels. Remove them on the Channels tab first.')
+    expect(deleteBlocker(2)).toBe('This product still has 2 connected channels. Remove them on the Channels screen first.')
+    expect(deleteBlocker(12)).toBe('This product still has 12 connected channels. Remove them on the Channels screen first.')
     expect(deleteBlocker(2)).not.toMatch(/\(s\)/)
   })
 })
@@ -1191,52 +1537,6 @@ describe('"Open browser" where channels are chosen or shown (DEC-028)', () => {
   const platforms = [reddit, facebook, site]
   const account = (id: string, platform: string): Account =>
     ({ id, platform, label: id, identity: null, partition: 'p', status: 'ready', createdAt: '', productId: null, role: null, loginName: null, email: null, mailboxId: null, browser: 'internal', signsInVia: null, profileId: null }) as Account
-
-  describe('what a control shows', () => {
-    it('is the button unless the owner holds the account\'s browser', () => {
-      expect(openMode(undefined, false)).toBe('closed')
-      expect(openMode('none', true)).toBe('closed')
-      expect(openMode('agent', true)).toBe('closed')
-    })
-
-    it('is the block in the control that shows it while the owner holds the browser, and the button switched off in the others', () => {
-      expect(openMode('user', true)).toBe('open')
-      expect(openMode('user', false)).toBe('elsewhere')
-    })
-
-    it('shows the block once for an account: in the pressed control, or in the first one when the pressed one is not on the screen', () => {
-      expect(blockHolder('b', ['a', 'b', 'c'])).toBe('b')
-      expect(blockHolder(null, ['a', 'b'])).toBe('a')
-      expect(blockHolder('gone', ['a', 'b'])).toBe('a')
-      expect(blockHolder('a', [])).toBeNull()
-      expect(blockHolder(null, [])).toBeNull()
-    })
-  })
-
-  describe('why the button is off', () => {
-    it('is on when nothing speaks against it', () => {
-      expect(openBlocker({ aiWorking: false, mode: 'closed' })).toBeNull()
-      expect(openBlocker({ aiWorking: false, mode: 'closed', hostReason: null })).toBeNull()
-    })
-
-    it('says the AI works on the account, because its browser cannot be taken from under it', () => {
-      expect(openBlocker({ aiWorking: true, mode: 'closed' })).toBe(AI_WORKING)
-      expect(AI_WORKING).toContain('AI is working on this account')
-    })
-
-    it('says the browser is open already when another control of the screen opened it', () => {
-      expect(openBlocker({ aiWorking: false, mode: 'elsewhere' })).toBe(OPEN_ALREADY)
-    })
-
-    it('says the screen\'s own reason when there is no other', () => {
-      expect(openBlocker({ aiWorking: false, mode: 'closed', hostReason: TYPE_ADDRESS_FIRST })).toBe(TYPE_ADDRESS_FIRST)
-    })
-
-    it('puts the account\'s own state before the screen\'s reason', () => {
-      expect(openBlocker({ aiWorking: true, mode: 'closed', hostReason: TYPE_ADDRESS_FIRST })).toBe(AI_WORKING)
-      expect(openBlocker({ aiWorking: true, mode: 'elsewhere', hostReason: TYPE_ADDRESS_FIRST })).toBe(OPEN_ALREADY)
-    })
-  })
 
   describe('the Connect form', () => {
     it('opens a platform that has a browse page with nothing typed', () => {
@@ -1323,18 +1623,6 @@ describe('"Open browser" where channels are chosen or shown (DEC-028)', () => {
       expect(accountForIdea(idea('some-unknown-key', 'https://forum.example.com/'), platforms, [account('r', 'reddit')])).toBeUndefined()
     })
   })
-
-  describe('while the owner works in the window', () => {
-    it('says the app waits, and what ends it', () => {
-      expect(holdingNote(true)).toContain('so the app waits')
-      expect(holdingNote(true)).toContain('Done, close the window')
-    })
-
-    it('says the browser was taken over when there is no window to show', () => {
-      expect(holdingNote(false)).toContain('took over')
-      expect(holdingNote(false)).not.toContain('Done, close the window')
-    })
-  })
 })
 
 describe('the Membership row of "What this account can do here" (DEC-029)', () => {
@@ -1344,7 +1632,14 @@ describe('the Membership row of "What this account can do here" (DEC-029)', () =
     expect(CAPABILITY_ORDER[0]).toBe('membership')
     expect(CAPABILITY_LABEL.membership).toBe('Membership')
     expect(new Set(CAPABILITY_ORDER).size).toBe(CAPABILITY_ORDER.length)
-    expect(CAPABILITY_ORDER).toHaveLength(9)
+    expect(CAPABILITY_ORDER).toHaveLength(10)
+  })
+
+  it('has a row and a label for every capability the core knows, and reading the inbox sits among the reading rows (the Feed, DEC-038)', () => {
+    expect([...CAPABILITY_ORDER].sort()).toEqual(Object.keys(CAPABILITY_LABEL).sort())
+    expect(CAPABILITY_LABEL.read_inbox).toBe('Read replies to you and mentions')
+    expect(CAPABILITY_ORDER.indexOf('read_inbox')).toBeGreaterThan(CAPABILITY_ORDER.indexOf('read_comments'))
+    expect(CAPABILITY_ORDER.indexOf('read_inbox')).toBeLessThan(CAPABILITY_ORDER.indexOf('publish_post'))
   })
 
   it('says Member, Not joined, Needs you, Unavailable and Banned for its states, and nothing else changes its words', () => {
@@ -1435,9 +1730,10 @@ describe('"Let the AI join" on the channel card (DEC-029)', () => {
     expect(joinButton({ ...base, readiness: { ready: false, reason: 'No AI engine is selected.' } }).reason).toBe('No AI engine is selected.')
   })
 
-  it('is off while the owner holds the browser of the account, and says to close the window first', () => {
+  it('is off while the owner has taken control of the account’s browser, and says to give it back (an open window alone does not stop the AI, DEC-038)', () => {
     expect(joinButton({ ...base, ownerHolds: true })).toEqual({ show: true, enabled: false, reason: JOIN_OWNER_HOLDS, runPanel: false })
-    expect(JOIN_OWNER_HOLDS).toContain('Done')
+    expect(JOIN_OWNER_HOLDS).toContain('Give control back')
+    expect(JOIN_OWNER_HOLDS).not.toContain('Done')
   })
 
   it('is off while another run works on the account, with that as the reason', () => {

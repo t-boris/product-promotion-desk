@@ -123,8 +123,8 @@ export async function refreshTracked(core: Core, channelId: Id, options: { rethr
         captured = await service.refresh(channelId)
         return { status: 'ok', summary: summarizeSnapshots(captured) }
       } catch (error) {
-        // The user holds the browser: not a failure, the next scheduled refresh simply tries again.
-        if (error instanceof TakeoverError) return { status: 'skipped', summary: 'Skipped: you are using the browser for this account' }
+        // The owner took control of the account's browser: not a failure, the next scheduled refresh simply tries again.
+        if (error instanceof TakeoverError) return { status: 'skipped', summary: 'Skipped: you took control of the browser for this account' }
         throw error
       }
     },

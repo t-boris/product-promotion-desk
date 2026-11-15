@@ -3,7 +3,7 @@ import { OpenAccountBrowser } from './OpenAccountBrowser'
 import { OPEN_BROWSER } from './open-browser'
 
 /**
- * "Open browser" for a channel the screen knows only by id (Opportunities, Publications, a thread): the account the channel is served
+ * "Open browser" for a channel the screen knows only by id (Feed, Posts, a thread): the account the channel is served
  * by is looked up, and its browser opens on the channel's address, or on `url` (a post or a comment of that channel). Nothing is offered
  * while the channel or its account is not known.
  */

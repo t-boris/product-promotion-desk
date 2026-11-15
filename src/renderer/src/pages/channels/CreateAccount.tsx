@@ -8,7 +8,7 @@ import { ROLE_NAME_LIMIT, ROLE_VOICE_LIMIT } from './RoleEditor'
 
 /**
  * Adds an account to the library (DEC-015): a platform, a name for the owner, and optionally an e-mail address and a role.
- * The account belongs to no product (opened from a product's Channels tab it only records that product, DEC-015). Nothing is registered
+ * The account belongs to no product (opened from a product's Channels screen it only records that product, DEC-015). Nothing is registered
  * anywhere: the account gets its own empty browser.
  */
 export function CreateAccount({
@@ -27,9 +27,9 @@ export function CreateAccount({
   profiles: Profile[]
   /** Every account, to leave out the profiles that already have a login on the chosen platform. */
   accounts: Account[]
-  /** A role to start from ("Use this role" on the product page). */
+  /** A role to start from ("Use this role" on Setup). */
   role: AccountRole | null
-  /** The product whose Channels tab opened the form: the account is made for it (`name` is absent until the products have loaded). */
+  /** The product whose Channels screen opened the form: the account is made for it (`name` is absent until the products have loaded). */
   product: { id: string; name: string | undefined } | null
   onCreated: (account: Account) => void
   /** Absent while there is no account yet and no product to go back to: the form is then the only thing to do. */
@@ -121,7 +121,7 @@ export function CreateAccount({
       )}
       {!signsInWith && (
         <div className="form-row">
-          <Field label="E-mail address (optional)" hint={mailboxes.length > 0 ? 'What the account signs up with. You can also set it later.' : 'What the account signs up with. To get proposed addresses, add your own mailbox on the “Mailboxes” tab.'}>
+          <Field label="E-mail address (optional)" hint={mailboxes.length > 0 ? 'What the account signs up with. You can also set it later.' : 'What the account signs up with. To get proposed addresses, add your own mailbox in Settings.'}>
             <input
               className="input"
               value={email}

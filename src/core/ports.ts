@@ -130,10 +130,22 @@ export class TicketError extends Error {
 
 // ───────────────────────────── Browser ─────────────────────────────
 
+/** The owner explicitly took control of the account's browser (DEC-038): the AI stops using it until control is given back. Opening a window does not do this. */
 export class TakeoverError extends Error {
   constructor(message = 'The user has taken control of the browser; automation stopped interacting.') {
     super(message)
     this.name = 'TakeoverError'
+  }
+}
+
+/**
+ * The owner did something in the account's session that can change who is signed in (DEC-038): a sign-in or sign-out page was used in one of their
+ * windows. A write that needs a ticket is refused with this before it reaches the page, so nothing is submitted; the next sign-in check decides what is true.
+ */
+export class SessionChangedError extends Error {
+  constructor(message = 'The account\'s sign-in may have changed while the app worked (a sign-in or sign-out page was used in the account\'s browser). Nothing was submitted.') {
+    super(message)
+    this.name = 'SessionChangedError'
   }
 }
 
@@ -246,25 +258,34 @@ export interface BrowserPage {
   uploadFile(selector: string, path: string, ticket: SendTicket): Promise<void>
 }
 
-/** One persistent browser identity (cookies, storage) per account. Control is held by exactly one party. */
+/**
+ * One persistent browser identity (cookies, storage) per account (DEC-038). The AI works in its own page of that session; the owner may have any
+ * number of windows on the same session at the same time, and neither takes the browser from the other. Only an explicit `takeControl` (the owner
+ * wants to finish something in the AI's own page) makes the AI wait.
+ */
 export interface BrowserSession {
   readonly accountId: Id
   control(): { holder: 'agent' | 'user' | 'none'; owner: string | null }
   /**
-   * Runs `work` with exclusive agent control. Runs for the same account are serialized; rejects with
-   * TakeoverError when the user holds control, and in-flight page calls reject once the user takes over.
+   * Runs `work` as the AI's turn on its page. Runs for the same account are serialized (one at a time); rejects with TakeoverError when the owner
+   * explicitly took control, and in-flight page calls reject once they do. An owner window does not do either.
    */
   withAgentControl<T>(owner: string, work: (page: BrowserPage) => Promise<T>): Promise<T>
-  /** The user takes the browser: the agent stops interacting with the tab. */
+  /** The owner explicitly takes the AI's own page: the AI stops interacting with it until `releaseControl`. */
   takeControl(): void
   releaseControl(): void
+  /**
+   * How many times the owner did something in the session that can change who is signed in (DEC-038). A caller that checked the sign-in
+   * remembers the number, and asks again before it submits: a different number means the check is out of date.
+   */
+  identityEpoch(): number
 }
 
-/** The page in the owner's window as the browser reports it (DEC-028). */
+/** The page the owner is on, as the browser reports it (DEC-028, DEC-038). */
 export interface OwnerPage {
   url: string
   title: string
-  /** How many pages the window holds, when there can be more than one. */
+  /** How many pages the owner has in view when nobody can tell which one they are on (more than one); absent when the page is known. */
   tabs?: number
 }
 
@@ -290,7 +311,10 @@ export interface Membership {
 
 export interface BrowserService {
   session(account: Account): BrowserSession
-  /** Shows the account's browser to the user at `url` (login handoff) and gives them control. */
+  /**
+   * Opens a window of the account's own session for the owner at `url` (DEC-038). It is an additional window: the AI keeps working in its own page,
+   * nothing waits and nobody takes control. A window that already shows that address is brought to the front instead of being opened again.
+   */
   openForUser(account: Account, url?: string): Promise<{ tabId: string }>
   /**
    * Optional (DEC-018): shows the account's own browser, the one the AI works in, in a window of its own without taking control or focus,
@@ -298,8 +322,8 @@ export interface BrowserService {
    */
   showAgentBrowser?(account: Account, focus?: boolean): void
   /**
-   * Set by the core: called when the person's window for an account has opened or closed, so the screen shows who holds the
-   * browser and the account is looked at once when the person is done.
+   * Set by the core: called when the owner's first window of an account has opened or its last one has closed, so the screen follows and the
+   * account's sign-in is looked at once when the owner is done.
    */
   onUserWindowChange?: (accountId: Id, change: 'opened' | 'closed') => void
   /**
@@ -312,9 +336,10 @@ export interface BrowserService {
   /** Optional (DEC-026): lets go of the page and the window kept for an account, without erasing its session; called when the account moves to the other browser. */
   releaseAccount?(account: Account): Promise<void>
   /**
-   * Optional (DEC-028): the address and title of the page open in the OWNER's window of the account, as the browser reports them; null when the owner
-   * does not hold it. Nothing is read from the page itself (no script, no text, no picture). The core strips the address down to what may be shown.
-   * `tabs` is how many pages the window holds when there can be more than one (Chrome): with several, nobody can tell which one the owner is on.
+   * Optional (DEC-028, DEC-038): the address and title of the page the owner was last on in their windows of the account, as the browser reports
+   * them; null when the owner has no window. Nothing is read from the page itself (no text, no picture; the only script is a fixed one that asks
+   * whether a tab is showing, run in Chrome when the owner has more than one tab). The core strips the address down to what may be shown.
+   * `tabs` is set when more than one page is showing and the browser cannot tell which one the owner is on: the core then refuses to guess.
    */
   ownerPage?(account: Account): Promise<OwnerPage | null>
 }
@@ -364,6 +389,19 @@ export interface RemoteDiscussion {
 export interface ActivityBatch {
   discussions: RemoteDiscussion[]
   fetchedAt: IsoTime
+}
+
+/**
+ * One thing the platform put in the account's inbox (DEC-039): somebody replied to the account (`reply_to_me`) or named it (`mention`). The comment is the
+ * one that was written to or about the account; the discussion is the thread it is in, as far as the inbox says (its post and its other comments are read
+ * with `fetchThread`). `discussionExternalId` is the id `fetchThread` takes.
+ */
+export interface RemoteInboxItem {
+  kind: 'reply_to_me' | 'mention'
+  discussionExternalId: string
+  discussionUrl: string
+  discussionTitle: string
+  comment: RemoteComment
 }
 
 export interface PublishRequest {
@@ -457,6 +495,12 @@ export interface Connector {
   /** Recent discussions with their comments, newest first. */
   fetchActivity(ctx: ConnectorContext, options: { limit: number }): Promise<ActivityBatch>
   fetchThread(ctx: ConnectorContext, discussionExternalId: string): Promise<RemoteDiscussion | null>
+  /**
+   * Optional (DEC-039): what is in the account's inbox that belongs to the channel (replies to the account's comments and posts, mentions of it),
+   * newest first, at most `limit`. Read-only, through the account's signed-in session; it changes nothing on the platform (nothing is marked as read).
+   * Absent means the platform has no inbox the app can read: the channel's `read_inbox` capability says so, and no reply or mention is collected.
+   */
+  readInbox?(ctx: ConnectorContext, options?: { limit: number }): Promise<RemoteInboxItem[]>
   fetchMetrics(ctx: ConnectorContext): Promise<MetricReading[]>
   /** Performs one publication attempt. Requires a valid ticket for exactly this request. */
   publish(ctx: ConnectorContext, ticket: SendTicket, request: PublishRequest): Promise<PublishOutcome>

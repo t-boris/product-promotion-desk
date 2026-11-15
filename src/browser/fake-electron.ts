@@ -14,9 +14,15 @@ export class FakeSession {
   private readonly emitter = new EventEmitter()
   private completedListener: ((details: Record<string, unknown>) => void) | null = null
   private errorListener: ((details: Record<string, unknown>) => void) | null = null
+  private sendListener: ((details: Record<string, unknown>) => void) | null = null
   webRequest = {
     onCompleted: (listener: (details: Record<string, unknown>) => void): void => void (this.completedListener = listener),
-    onErrorOccurred: (listener: (details: Record<string, unknown>) => void): void => void (this.errorListener = listener)
+    onErrorOccurred: (listener: (details: Record<string, unknown>) => void): void => void (this.errorListener = listener),
+    onSendHeaders: (listener: (details: Record<string, unknown>) => void): void => void (this.sendListener = listener)
+  }
+  /** Tests: a page (`webContentsId`) is about to send a request. */
+  emitSendHeaders(details: { url: string; webContentsId: number; method?: string; resourceType?: string }): void {
+    this.sendListener?.({ method: 'GET', resourceType: 'xhr', ...details })
   }
   /** Tests: the network layer finished a request / failed one. */
   emitRequest(details: { method?: string; resourceType?: string; url: string; statusCode?: number }): void {
@@ -51,7 +57,10 @@ export class FakeSession {
   }
 }
 
+let nextContentsId = 1
+
 export class FakeWebContents extends EventEmitter {
+  readonly id = nextContentsId++
   url = ''
   destroyed = false
   loading = false
@@ -75,6 +84,15 @@ export class FakeWebContents extends EventEmitter {
     this.loaded.push(url)
     this.url = url
     return this.loadResult ?? Promise.resolve()
+  }
+  /** Tests: the page navigates (a link, a redirect, the address bar): the address changes and the events a real page sends are emitted. */
+  navigateTo(url: string, options: { isMainFrame?: boolean; redirect?: boolean } = {}): void {
+    const isMainFrame = options.isMainFrame ?? true
+    this.emit(options.redirect ? 'did-redirect-navigation' : 'did-start-navigation', { url, isMainFrame })
+    if (isMainFrame) {
+      this.url = url
+      this.emit('did-navigate', {}, url)
+    }
   }
   getURL(): string {
     return this.url

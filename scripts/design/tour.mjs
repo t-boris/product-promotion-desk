@@ -62,48 +62,55 @@ try {
   const prods = await p.api('products.list')
   const fullId = prods.find((x) => x.name === 'Northwind Notes').id
   const emptyId = prods.find((x) => x.name === 'Lumen Reader').id
-  const tabs = ['sources', 'passport', 'analysis', 'goal', 'channels', 'results']
+  // Setup has four tabs; Overview and Channels are screens of their own (DEC-037). The product is the context: `?product=` sets it.
+  const tabs = ['sources', 'passport', 'analysis', 'goal']
 
   for (const t of ['dark', 'light']) {
     await theme(t)
     await p.size(1320, 880)
     const L = `${t}-1320`
-    await p.go('#/attention', 900); await snap(`${L}-01-attention`)
-    await p.go('#/products', 900); await snap(`${L}-02-products`)
-    for (const tab of tabs) { await p.go(`#/products/${fullId}/${tab}`, 1000); await snap(`${L}-03-product-${tab}`) }
-    await p.go(`#/products/${emptyId}/sources`, 1000); await snap(`${L}-03-product-empty-sources`)
-    await p.go(`#/products/${emptyId}/passport`, 1000); await snap(`${L}-03-product-empty-passport`)
-    await p.go('#/products', 600); if (await p.clickText('New product', 800)) await snap(`${L}-03-product-new`)
+    await p.go(`#/inbox?product=${fullId}`, 900); await snap(`${L}-01-inbox`)
+    await p.go(`#/setup?product=${fullId}`, 900); await snap(`${L}-02-setup`)
+    for (const tab of tabs) { await p.go(`#/setup/${tab}`, 1000); await snap(`${L}-03-setup-${tab}`) }
+    await p.go(`#/setup/sources?product=${emptyId}`, 1000); await snap(`${L}-03-setup-empty-sources`)
+    await p.go('#/setup/passport', 1000); await snap(`${L}-03-setup-empty-passport`)
+    await p.go(`#/overview?product=${fullId}`, 1000)
+    await p.go('#/setup/new', 800); await snap(`${L}-03-setup-new`)
     await p.go('#/accounts', 900); await snap(`${L}-04-accounts`)
     await p.go('#/accounts/new', 900); await snap(`${L}-04-accounts-new`)
     await p.go('#/accounts', 700)
     for (const tab of ['Profiles', 'Mailboxes']) { await p.clickText(tab, 700); await snap(`${L}-04-accounts-${tab.toLowerCase()}`) }
-    await p.go('#/opportunities', 900); await snap(`${L}-05-opportunities`)
-    await p.go('#/publications', 900); await snap(`${L}-06-publications`)
+    await p.go('#/overview', 900); await snap(`${L}-05-overview`)
+    await p.go('#/channels', 900); await snap(`${L}-05-channels`)
+    if (channel) { await p.go(`#/channels/${channel.id}`, 900); await snap(`${L}-05-channel-status`); await p.go(`#/channels/${channel.id}/plan`, 900); await snap(`${L}-05-channel-plan`) }
+    await p.go('#/feed', 900); await snap(`${L}-05-feed`)
+    await p.go('#/posts', 900); await snap(`${L}-06-posts`)
     await p.go('#/logs', 900); await snap(`${L}-07-log-runs`)
     for (const tab of ['Action history', 'Events']) { await p.clickText(tab, 700); await snap(`${L}-07-log-${tab.toLowerCase().replace(' ', '-')}`) }
     await p.go('#/settings', 900); await snap(`${L}-08-settings`)
     // the menu hidden
-    await p.go(`#/products/${fullId}/sources`, 800); await p.clickText('Hide menu', 600); await snap(`${L}-09-menu-hidden`); await p.clickText('Menu', 600)
+    await p.go('#/setup/sources', 800); await p.ev(`document.querySelector('[data-testid="menu-hide"]')?.click()`); await p.sleep(600); await snap(`${L}-09-menu-hidden`); await p.ev(`[...document.querySelectorAll('button')].find((b) => b.title === 'Show the menu')?.click()`); await p.sleep(600)
 
     await p.size(980, 640)
     const S = `${t}-980`
-    await p.go('#/attention', 900); await snap(`${S}-01-attention`)
-    await p.go('#/products', 900); await snap(`${S}-02-products`)
-    for (const tab of tabs) { await p.go(`#/products/${fullId}/${tab}`, 1000); await snap(`${S}-03-product-${tab}`) }
+    await p.go(`#/inbox?product=${fullId}`, 900); await snap(`${S}-01-inbox`)
+    await p.go(`#/setup?product=${fullId}`, 900); await snap(`${S}-02-setup`)
+    for (const tab of tabs) { await p.go(`#/setup/${tab}`, 1000); await snap(`${S}-03-setup-${tab}`) }
     await p.go('#/accounts', 900); await snap(`${S}-04-accounts`)
     await p.go('#/accounts/new', 900); await snap(`${S}-04-accounts-new`)
     await p.go('#/accounts', 700)
     for (const tab of ['Profiles', 'Mailboxes']) { await p.clickText(tab, 700); await snap(`${S}-04-accounts-${tab.toLowerCase()}`) }
-    await p.go('#/opportunities', 900); await snap(`${S}-05-opportunities`)
-    await p.go('#/publications', 900); await snap(`${S}-06-publications`)
+    await p.go('#/overview', 900); await snap(`${S}-05-overview`)
+    await p.go('#/channels', 900); await snap(`${S}-05-channels`)
+    await p.go('#/feed', 900); await snap(`${S}-05-feed`)
+    await p.go('#/posts', 900); await snap(`${S}-06-posts`)
     await p.go('#/logs', 900); await snap(`${S}-07-log-runs`)
     await p.go('#/settings', 900); await snap(`${S}-08-settings`)
   }
 
   // Full-length captures of the long screens (dark, 1320 wide) so every block of the page is on record.
   await theme('dark'); await p.size(1320, 880)
-  for (const tab of tabs) { await p.go(`#/products/${fullId}/${tab}`, 1000); await p.fullShot(`${OUT}/full-dark-product-${tab}.png`) }
+  for (const tab of tabs) { await p.go(`#/setup/${tab}`, 1000); await p.fullShot(`${OUT}/full-dark-setup-${tab}.png`) }
   await p.go('#/settings', 900); await p.fullShot(`${OUT}/full-dark-settings.png`)
   await p.go('#/accounts', 900); await p.fullShot(`${OUT}/full-dark-accounts.png`)
 

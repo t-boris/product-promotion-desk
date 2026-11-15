@@ -1,0 +1,234 @@
+/* The Overview charts (DEC-037, phase C). Series colours are validated against the app's surfaces in both modes (skill dataviz,
+   scripts/validate_palette.js): light on #ffffff, dark on #28282b. In light mode slots 3 and 4 sit under 3:1, so a chart that uses
+   them always has its legend and its table view. */
+:root {
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --chart-h: 180px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+  }
+}
+
+.chart {
+  position: relative;
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.chart-surface {
+  position: relative;
+  min-width: 0;
+}
+
+.chart svg {
+  display: block;
+  max-width: 100%;
+  overflow: visible;
+}
+
+.chart svg:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.chart-grid line {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.chart-axis text {
+  fill: var(--text-3);
+  font-size: var(--fs-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-cursor {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.chart-band {
+  fill: var(--hover-fill);
+}
+
+.chart-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chart-dot {
+  stroke: var(--surface-1);
+  stroke-width: 2;
+}
+
+.chart-seg {
+  stroke: none;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+}
+
+.chart-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--icon-gap);
+}
+
+.chart-key {
+  flex: none;
+  display: inline-block;
+}
+
+.chart-key-rect {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.chart-key-line {
+  width: 14px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.chart-tip {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  min-width: 128px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-3);
+  box-shadow: var(--shadow-pop);
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-title);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.chart-tip-head {
+  margin-bottom: var(--space-1);
+  color: var(--text-3);
+}
+
+.chart-tip-row {
+  display: flex;
+  align-items: center;
+  gap: var(--icon-gap);
+}
+
+.chart-tip-row strong {
+  margin-left: auto;
+  padding-left: var(--space-3);
+  color: var(--text-1);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-empty {
+  color: var(--text-3);
+  font-size: var(--fs-caption);
+}
+
+.spark-line {
+  fill: none;
+  stroke: var(--text-3);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.spark-dot {
+  fill: var(--series-1);
+  stroke: var(--surface-1);
+  stroke-width: 2;
+}
+
+.funnel {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.funnel li {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--row-h);
+}
+
+.funnel-label {
+  color: var(--text-2);
+}
+
+.funnel-track {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.funnel-bar {
+  height: 12px;
+  min-width: 2px;
+  border-radius: 0 4px 4px 0;
+  background: var(--series-1);
+}
+
+.funnel-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  color: var(--text-1);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.funnel-share {
+  color: var(--text-3);
+  font-weight: var(--fw-regular);
+}
+
+.chart-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-table th,
+.chart-table td {
+  padding: var(--space-1) var(--space-3) var(--space-1) 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  font-weight: var(--fw-regular);
+  color: var(--text-2);
+}
+
+.chart-table th {
+  color: var(--text-3);
+}

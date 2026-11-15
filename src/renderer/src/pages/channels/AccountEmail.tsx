@@ -105,7 +105,7 @@ export function AccountEmail({ account, mailboxes, next }: { account: Account; m
               </Button>
             </div>
           ) : (
-            <p className="muted small">To get proposed addresses, add your own mailbox on the “Mailboxes” tab.</p>
+            <p className="muted small">To get proposed addresses, add your own mailbox in Settings.</p>
           )}
           <div className="row">
             <Button variant={saveVariant} type="submit" disabled={saving.busy || address.trim() === ''} data-testid={`email-save-${account.id}`}>

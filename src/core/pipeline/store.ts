@@ -7,23 +7,29 @@ import type {
   Account,
   Approval,
   Attachment,
+  Capability,
+  CapabilityKey,
+  CapabilityStatus,
   Channel,
   ChannelStatus,
   Comment,
   CommentCategory,
+  Discussion,
   Draft,
   Id,
   Opportunity,
   OpportunityDecision,
   OpportunityKind,
+  OpportunitySource,
   OpportunityState,
   PostMarkup,
   SendAction
 } from '../../shared/types'
 import type { Core } from '../core'
 import { newId, toJson, type Db } from '../db/database'
-import { mapAccount, mapAction, mapApproval, mapComment, mapOpportunity } from '../repos'
+import { mapAccount, mapAction, mapApproval, mapComment, mapDiscussion, mapOpportunity } from '../repos'
 import { disclosureProblem } from './disclosure'
+import { isPostTarget, parentOf } from './reply-target'
 
 type Row = Record<string, unknown>
 type Bindable = string | number | null
@@ -51,6 +57,7 @@ export interface OpportunityPatch {
   destination?: string
   scheduledAt?: string | null
   groupId?: Id | null
+  source?: OpportunitySource
 }
 
 export interface ChannelPatch {
@@ -81,7 +88,9 @@ export interface DraftMeta {
 
 export interface OpportunityFilter {
   channelId?: Id
+  productId?: Id
   kind?: OpportunityKind
+  source?: OpportunitySource
   states?: OpportunityState[]
   limit?: number
 }
@@ -121,6 +130,33 @@ export class FlowStore {
   opportunityForComment(commentId: Id): Opportunity | null {
     const row = this.db.prepare('SELECT * FROM opportunities WHERE comment_id = ?').get(commentId) as Row | undefined
     return row ? mapOpportunity(row) : null
+  }
+
+  /** The one opportunity a new post has (the database keeps it to one), or null. */
+  opportunityForPost(discussionId: Id): Opportunity | null {
+    const row = this.db.prepare("SELECT * FROM opportunities WHERE discussion_id = ? AND source = 'new_post'").get(discussionId) as Row | undefined
+    return row ? mapOpportunity(row) : null
+  }
+
+  discussion(id: Id): Discussion | null {
+    const row = this.db.prepare('SELECT * FROM discussions WHERE id = ?').get(id) as Row | undefined
+    return row ? mapDiscussion(row) : null
+  }
+
+  discussionByExternalId(channelId: Id, externalId: string): Discussion | null {
+    const row = this.db.prepare('SELECT * FROM discussions WHERE channel_id = ? AND external_id = ?').get(channelId, externalId) as Row | undefined
+    return row ? mapDiscussion(row) : null
+  }
+
+  /** The post a reply to a new post answers (it has no comment), or null for any other opportunity or a post that is no longer stored. */
+  postOf(opp: Opportunity): Discussion | null {
+    if (!isPostTarget(opp) || !opp.discussionId) return null
+    return this.discussion(opp.discussionId)
+  }
+
+  /** The platform id the reply of `opp` is sent under: its comment's, or its post's own (a top-level comment); null when there is nothing to answer. */
+  replyParentOf(opp: Opportunity): { externalId: string } | null {
+    return parentOf({ comment: opp.commentId ? this.comment(opp.commentId) : null, post: this.postOf(opp) })
   }
 
   commentByExternalId(channelId: Id, externalId: string): Comment | null {
@@ -210,13 +246,14 @@ export class FlowStore {
     })
   }
 
-  /** Where the content of `opp` is published: the comment's current address for replies, the channel for posts. */
+  /** Where the content of `opp` is published: the comment's current address for replies, the post's for a reply to a new post, the channel for posts. */
   resolveDestination(opp: Opportunity, channel: Channel): string {
     if (opp.kind === 'reply' && opp.commentId) {
       const comment = this.comment(opp.commentId)
       if (comment?.url) return comment.url
       return opp.destination
     }
+    if (isPostTarget(opp)) return this.postOf(opp)?.url || opp.destination
     return channel.url
   }
 
@@ -238,6 +275,14 @@ export class FlowStore {
       where.push('channel_id = ?')
       params.push(filter.channelId)
     }
+    if (filter.productId) {
+      where.push('product_id = ?')
+      params.push(filter.productId)
+    }
+    if (filter.source) {
+      where.push('source = ?')
+      params.push(filter.source)
+    }
     if (filter.kind) {
       where.push('kind = ?')
       params.push(filter.kind)
@@ -257,21 +302,48 @@ export class FlowStore {
    * (DEC-010). In that case the opportunity is recorded as cancelled with the reason, so the owner can see why the
    * comment was not worked on and the comment is never picked up again; the log says it too.
    */
-  openReplyOpportunity(channel: Channel, comment: Comment): { opportunity: Opportunity; blocked: boolean } {
+  openReplyOpportunity(channel: Channel, comment: Comment, source: OpportunitySource = 'comment'): { opportunity: Opportunity; blocked: boolean } {
     const discussion = this.db.prepare('SELECT external_id FROM discussions WHERE id = ?').get(comment.discussionId) as { external_id: string } | undefined
     const other = discussion
       ? this.otherLoginSpeaking({ productId: channel.productId, platform: channel.platform, discussionExternalId: discussion.external_id, accountId: channel.accountId })
       : null
-    if (!other) return { opportunity: this.createReplyOpportunity(channel, comment), blocked: false }
+    if (!other) return { opportunity: this.createReplyOpportunity(channel, comment, 'discovered', '', source), blocked: false }
     this.core.log.info('guard', `${OTHER_LOGIN_SPEAKS_REASON}; no reply opportunity for comment ${comment.externalId} on ${channel.target}`, channel.id)
-    return { opportunity: this.createReplyOpportunity(channel, comment, 'cancelled', OTHER_LOGIN_SPEAKS_REASON), blocked: true }
+    return { opportunity: this.createReplyOpportunity(channel, comment, 'cancelled', OTHER_LOGIN_SPEAKS_REASON, source), blocked: true }
   }
 
-  createReplyOpportunity(channel: Channel, comment: Comment, state: OpportunityState = 'discovered', reason = ''): Opportunity {
+  /**
+   * Opens the reply opportunity of a new post (source `new_post`), under the same rule as a comment's (DEC-010): when another login of the product already speaks
+   * in the discussion, it is recorded as cancelled with the reason, and the post is never picked up again. `why` says what made the post worth a look.
+   */
+  openPostOpportunity(channel: Channel, post: Discussion, why: string): { opportunity: Opportunity; blocked: boolean } {
+    const other = this.otherLoginSpeaking({ productId: channel.productId, platform: channel.platform, discussionExternalId: post.externalId, accountId: channel.accountId })
+    if (!other) return { opportunity: this.createPostOpportunity(channel, post, 'discovered', why), blocked: false }
+    this.core.log.info('guard', `${OTHER_LOGIN_SPEAKS_REASON}; no reply opportunity for the new post ${post.externalId} on ${channel.target}`, channel.id)
+    return { opportunity: this.createPostOpportunity(channel, post, 'cancelled', OTHER_LOGIN_SPEAKS_REASON), blocked: true }
+  }
+
+  private createPostOpportunity(channel: Channel, post: Discussion, state: OpportunityState, reason: string): Opportunity {
     return this.insertOpportunity({
       channelId: channel.id,
       productId: channel.productId,
       kind: 'reply',
+      source: 'new_post',
+      state,
+      commentId: null,
+      discussionId: post.id,
+      destination: post.url,
+      reason,
+      scheduledAt: null
+    })
+  }
+
+  createReplyOpportunity(channel: Channel, comment: Comment, state: OpportunityState = 'discovered', reason = '', source: OpportunitySource = 'comment'): Opportunity {
+    return this.insertOpportunity({
+      channelId: channel.id,
+      productId: channel.productId,
+      kind: 'reply',
+      source,
       state,
       commentId: comment.id,
       discussionId: comment.discussionId,
@@ -301,6 +373,7 @@ export class FlowStore {
     channelId: Id
     productId: Id
     kind: OpportunityKind
+    source?: OpportunitySource
     state: OpportunityState
     commentId: Id | null
     discussionId: Id | null
@@ -313,10 +386,10 @@ export class FlowStore {
     const now = this.now()
     this.db
       .prepare(
-        `INSERT INTO opportunities (id, channel_id, product_id, kind, state, comment_id, discussion_id, category, decision, destination, reason, scheduled_at, group_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO opportunities (id, channel_id, product_id, kind, source, state, comment_id, discussion_id, category, decision, destination, reason, scheduled_at, group_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?)`
       )
-      .run(id, p.channelId, p.productId, p.kind, p.state, p.commentId, p.discussionId, p.destination, p.reason, p.scheduledAt, p.groupId ?? null, now, now)
+      .run(id, p.channelId, p.productId, p.kind, p.source ?? 'comment', p.state, p.commentId, p.discussionId, p.destination, p.reason, p.scheduledAt, p.groupId ?? null, now, now)
     return this.requireOpportunity(id)
   }
 
@@ -334,6 +407,7 @@ export class FlowStore {
     if (patch.destination !== undefined) add('destination', patch.destination)
     if (patch.scheduledAt !== undefined) add('scheduled_at', patch.scheduledAt)
     if (patch.groupId !== undefined) add('group_id', patch.groupId)
+    if (patch.source !== undefined) add('source', patch.source)
     this.db.prepare(`UPDATE opportunities SET ${sets.join(', ')} WHERE id = ?`).run(...values, id)
   }
 
@@ -370,6 +444,40 @@ export class FlowStore {
     if (patch.reads !== undefined) add('reads', patch.reads ? 1 : 0)
     if (sets.length === 0) return
     this.db.prepare(`UPDATE channels SET ${sets.join(', ')} WHERE id = ?`).run(...values, id)
+    this.core.events.changed('channels')
+  }
+
+  // ───────────── the account inbox (DEC-039) ─────────────
+
+  /** Whether the account's inbox was read for this channel before: the first read is the baseline and queues nothing. */
+  inboxBaselineDone(channelId: Id): boolean {
+    const row = this.db.prepare('SELECT inbox_baseline_done_at AS at FROM channels WHERE id = ?').get(channelId) as { at: string | null } | undefined
+    return row?.at != null
+  }
+
+  markInboxBaselineDone(channelId: Id): void {
+    this.db.prepare('UPDATE channels SET inbox_baseline_done_at = ? WHERE id = ? AND inbox_baseline_done_at IS NULL').run(this.now(), channelId)
+  }
+
+  /**
+   * Records what the last read of the inbox found out about it in the capability row of the channel, so the Status tab says why replies and mentions are
+   * (not) collected. Written only when the answer changed, so a quiet channel does not stir the screen on every check.
+   */
+  noteCapability(channelId: Id, key: CapabilityKey, status: CapabilityStatus, detail: string): void {
+    const row = this.db.prepare('SELECT capabilities_json AS json FROM channels WHERE id = ?').get(channelId) as { json: string } | undefined
+    if (!row) return
+    let current: Capability[] = []
+    try {
+      const parsed: unknown = JSON.parse(row.json)
+      if (Array.isArray(parsed)) current = parsed as Capability[]
+    } catch {
+      current = []
+    }
+    const had = current.find((c) => c.key === key)
+    if (had && had.status === status && had.detail === detail) return
+    const next: Capability = { key, status, detail, checkedAt: this.now() }
+    const rows = had ? current.map((c) => (c.key === key ? next : c)) : [...current, next]
+    this.db.prepare('UPDATE channels SET capabilities_json = ? WHERE id = ?').run(toJson(rows), channelId)
     this.core.events.changed('channels')
   }
 

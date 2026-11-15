@@ -1,12 +1,13 @@
-import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type ReactNode, type RefObject } from 'react'
 import { EmptyArtwork, type EmptyArt } from './empty-art'
 import { Icon, type IconName } from './icons'
 import { closeForm, mainForm, openForm, type OpenFormIds } from './open-forms'
 import type { Tone } from './tone'
 
-export function Page({ title, subtitle, actions, children }: { title: string; subtitle?: string; actions?: ReactNode; children: ReactNode }) {
+/** `fill` makes the page exactly as tall as the window, so a screen made of panes (the Inbox) scrolls each pane and not the page. */
+export function Page({ title, subtitle, actions, fill = false, children }: { title: string; subtitle?: string; actions?: ReactNode; fill?: boolean; children: ReactNode }) {
   return (
-    <section className="page">
+    <section className={`page${fill ? ' page-fill' : ''}`}>
       <header className="page-head">
         <div>
           <h1>{title}</h1>
@@ -241,8 +242,11 @@ export function Switch({ checked, onChange, disabled, label, note, testId }: { c
   )
 }
 
-/** A button that opens a small menu under it; it closes on a click elsewhere, on Escape, and after a choice. */
-export function RowMenu({ label, children, testId, variant = 'ghost' }: { label: string; children: (close: () => void) => ReactNode; testId?: string; variant?: 'ghost' | 'quiet' }) {
+/**
+ * The open state of a pop-over (a menu, the product switcher): it closes on a press outside the returned `box` and on Escape. The caller
+ * puts `box` on the element that holds the trigger and the pop-over, so a press on either is not "outside".
+ */
+export function usePopover(): { open: boolean; setOpen: (open: boolean) => void; box: RefObject<HTMLDivElement | null> } {
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -260,9 +264,15 @@ export function RowMenu({ label, children, testId, variant = 'ghost' }: { label:
       document.removeEventListener('keydown', onKey)
     }
   }, [open])
+  return { open, setOpen, box }
+}
+
+/** A button that opens a small menu under it; it closes on a click elsewhere, on Escape, and after a choice. */
+export function RowMenu({ label, children, testId, variant = 'ghost' }: { label: string; children: (close: () => void) => ReactNode; testId?: string; variant?: 'ghost' | 'quiet' }) {
+  const { open, setOpen, box } = usePopover()
   return (
     <div className="menu" ref={box}>
-      <Button variant={variant} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)} data-testid={testId}>
+      <Button variant={variant} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} data-testid={testId}>
         {label}
         <Icon name="chevronDown" small />
       </Button>

@@ -15,9 +15,9 @@ export function found<T>(lookup: () => T, what: string): T {
   }
 }
 
-export const BROWSER_BUSY = 'The account\'s browser is in your hands: its window is open, or you took control. Close the window (or give control back) on the Accounts screen, then try again.'
+export const BROWSER_BUSY = 'The account\'s browser is in your hands: you took control of it. Give control back on the Accounts screen, then try again.'
 
-/** The user holding the browser is an expected state, not a failure of the operation itself. */
+/** The owner having taken control of the AI's page (DEC-038) is an expected state, not a failure of the operation itself. An open window is not this state. */
 export function browserError(error: unknown, fallback: { code: string; message: (reason: string) => string }): ApiError {
   if (error instanceof ApiError) return error
   if (error instanceof TakeoverError) return new ApiError('browser_busy', BROWSER_BUSY)

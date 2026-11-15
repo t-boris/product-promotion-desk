@@ -4,7 +4,7 @@
 import type { Channel } from '../../../../shared/types'
 
 /**
- * The one step the Channels tab asks for next (visual-system.md §10.2). The filled button of the tab is the button of this step;
+ * The one step the Channels screen asks for next (visual-system.md §10.2). The filled button of the screen is the button of this step;
  * every other button is a bezel. `choose` and `running` have no filled button: the owner picks a channel, or nothing is waiting.
  */
 export type SetupStage = 'account' | 'connect' | 'choose' | 'assess' | 'activate' | 'running'

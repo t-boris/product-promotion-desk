@@ -8,7 +8,7 @@ import { FakeClock, FakePage } from '../testing/fakes'
 import { TicketAuthority } from '../tickets'
 import { TestAuthority } from './post-test-helpers'
 import type { ApprovedContent } from './post-submit'
-import { BrowserToolbox, OWNER_HAS_BROWSER, type ToolboxDeps } from './toolbox'
+import { BrowserToolbox, OWNER_HAS_BROWSER, SESSION_MOVED, type ToolboxDeps } from './toolbox'
 
 interface Item {
   ref: string
@@ -1909,5 +1909,103 @@ describe('limits of the mission', () => {
     expect(await submitReply(t)).toMatchObject({ isError: true, text: OWNER_HAS_BROWSER })
     expect(t.authority.leases).toBe(0)
     expect(t.page.steps).toEqual([])
+  })
+})
+
+describe('the owner\'s windows share the session with the mission (DEC-038)', () => {
+  /** The authority asks the real session, the way the send flow's does: moved when the epoch is not the one at the sign-in check. */
+  const watchSession = (t: Setup): void => {
+    const checkedAt = t.session.identityEpoch()
+    Object.defineProperty(t.authority, 'sessionMoved', { get: () => t.session.identityEpoch() !== checkedAt })
+  }
+
+  it('an owner window that opens a page that is not a sign-in page changes nothing: the mission presses as before', async () => {
+    const t = setup()
+    watchSession(t)
+    await look(t)
+    // The owner opens a window on their own business: the service sees an address that signs nothing in or out and says nothing to the session.
+    expect((await submitReply(t)).isError).toBeUndefined()
+    expect(t.page.posted).toEqual([{ e1: REPLY.text }])
+    expect(t.authority.committed).toBe(true)
+  })
+
+  it('refuses every action that changes the page once the owner used a sign-in or sign-out page (looking is still allowed), and presses nothing', async () => {
+    const t = setup()
+    watchSession(t)
+    await look(t)
+    t.session.noteIdentityActivity()
+    for (const [name, args] of [
+      ['browser_click', { ref: 'e5' }],
+      ['browser_navigate', { url: REPLY.destination }],
+      ['browser_select', { ref: 'e5', option: 'x' }],
+      ['browser_submit', { text_ref: 'e1', submit_ref: 'e4' }]
+    ] as const) {
+      expect(await t.toolbox.call(name, { ...args })).toMatchObject({ isError: true, text: expect.stringContaining(SESSION_MOVED) })
+    }
+    expect((await look(t)).isError).toBeUndefined()
+    expect(t.page.steps).toEqual([])
+    expect(t.page.posted).toEqual([])
+    expect(t.authority.leases).toBe(0)
+    expect(t.authority.committed).toBe(false)
+  })
+
+  it('still lets the AI call report_result and ask the owner after that: the mission ends in words, not in silence', async () => {
+    const t = setup()
+    watchSession(t)
+    t.session.noteIdentityActivity()
+    expect((await t.toolbox.call('report_result', { status: 'needs_owner', reason: 'The account may have changed.' })).isError).toBeUndefined()
+    expect(t.reports).toEqual([{ status: 'needs_owner', reason: 'The account may have changed.' }])
+  })
+
+  it('the owner signing out between the typing and the press stops the press itself: the point of no return is taken back and nothing is posted', async () => {
+    const t = setup()
+    await look(t)
+    // The owner's window goes to a sign-out page while this very turn is typing: the authority has not heard yet, the session has.
+    t.page.beforeStep = (step) => {
+      if (step.do === 'type') t.session.noteIdentityActivity()
+    }
+    const result = await submitReply(t)
+    expect(result).toMatchObject({ isError: true, text: expect.stringContaining(SESSION_MOVED) })
+    expect(t.page.posted).toEqual([])
+    expect(t.page.clicked).toEqual([])
+    expect(t.authority.committed).toBe(false) // never pressed, so the mission may still be told what to do, and no send is counted
+  })
+
+  it('the owner signing out while the approved text is being typed stops the typing itself: the session refuses the write before it reaches the page, and the mission is told', async () => {
+    const t = setup()
+    await look(t)
+    // The look inside the submit comes first: the owner's window goes to a sign-out page then. The authority has not heard (it is not watching here).
+    t.page.beforeRead = () => t.session.noteIdentityActivity()
+    const result = await submitReply(t)
+    t.page.beforeRead = null
+    expect(result).toMatchObject({ isError: true, text: expect.stringContaining(SESSION_MOVED) })
+    expect(t.page.steps.filter((s) => s.step.do === 'type')).toEqual([])
+    expect(t.page.posted).toEqual([])
+    expect(t.authority.committed).toBe(false)
+  })
+
+  it('a mission whose authority has heard of a sign-out page right before the press does not press: the point of no return is not taken', async () => {
+    const t = setup()
+    let moved = false
+    Object.defineProperty(t.authority, 'sessionMoved', { get: () => moved })
+    await look(t)
+    // While the text is typed, before the control is pressed.
+    t.page.beforeStep = (step) => {
+      if (step.do === 'type') moved = true
+    }
+    const result = await submitReply(t)
+    expect(result).toMatchObject({ isError: true, text: expect.stringContaining(SESSION_MOVED) })
+    expect(t.page.posted).toEqual([])
+    expect(t.page.clicked).toEqual([])
+    expect(t.authority.committed).toBe(false)
+  })
+
+  it('a press that the application could not stop (the page answered) is still a press: nothing is taken back', async () => {
+    const t = setup()
+    await look(t)
+    expect((await submitReply(t)).isError).toBeUndefined()
+    expect(t.authority.committed).toBe(true)
+    t.session.noteIdentityActivity()
+    expect(t.authority.committed).toBe(true)
   })
 })

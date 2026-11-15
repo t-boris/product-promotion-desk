@@ -10,7 +10,8 @@ const KEYS: Record<CapabilityKey, null> = {
   verify_send: null,
   metrics: null,
   rules: null,
-  membership: null
+  membership: null,
+  read_inbox: null
 }
 
 export const CAPABILITY_KEYS = Object.keys(KEYS) as CapabilityKey[]

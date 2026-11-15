@@ -24,7 +24,7 @@ const sameFields = (a: GoalFields, b: GoalFields): boolean => a.targetAction ===
 
 /**
  * The promotion goals (REQ-006, DEC-012): what a person should do after meeting the product, and how the owner judges it. A product
- * can have several. They are kept with the product and shown on the Results tab, and the AI sees them when it plans a channel; they do
+ * can have several. They are kept with the product and shown on the Overview, and the AI sees them when it plans a channel; they do
  * not change the replies and posts it drafts and do not measure conversions. The AI proposes one goal at a time and can write or
  * improve each field; the owner always saves the goal.
  */
@@ -50,7 +50,7 @@ export function GoalTab({ product, onOpenResults }: { product: Product; onOpenRe
   return (
     <Card title="Promotion goals">
       <div className="stack">
-        <Hint tone="strong">What should a person do after they meet {product.name}? Each goal is a note kept with the product and shown on the Results tab next to the platforms’ numbers.</Hint>
+        <Hint tone="strong">What should a person do after they meet {product.name}? Each goal is a note kept with the product and shown on the Overview next to the platforms’ numbers.</Hint>
         <More label="What a goal does and does not do">
           <Hint>A goal is the one thing you want people to do, and how you will judge it.</Hint>
           <Hint>The AI sees your goals when it plans a channel; they do not change the replies and posts it drafts, and they do not count sign-ups or purchases: the app has no access to your own site’s data.</Hint>
@@ -205,9 +205,9 @@ function GoalCard({
         {goal.notes && <Hint>{goal.notes}</Hint>}
         {saved && (
           <div className="note good" role="status" data-testid={`goal-saved-${id}`}>
-            <span>Goal saved. It now appears on the Results tab.</span>{' '}
+            <span>Goal saved. It now appears on the Overview.</span>{' '}
             <Button onClick={onOpenResults} data-testid={`goal-open-results-${id}`}>
-              Show on Results
+              Show on Overview
             </Button>
           </div>
         )}

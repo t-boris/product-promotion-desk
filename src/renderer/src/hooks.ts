@@ -32,16 +32,25 @@ export function useQuery<M extends ApiMethod>(method: M, args: ApiArgs<M>, scope
   const key = JSON.stringify(args ?? null)
   const argsRef = useRef(args)
   argsRef.current = args
+  // Only the newest question counts: an answer to an earlier one (other arguments, or a change that came while it was on its way) that
+  // arrives late must not overwrite the answer to the newer one.
+  const newest = useRef(0)
 
   const load = useCallback(() => {
+    const mine = ++newest.current
     setLoading(true)
     call(method, argsRef.current)
       .then((result) => {
+        if (mine !== newest.current) return
         setData(result)
         setError(null)
       })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setLoading(false))
+      .catch((e: unknown) => {
+        if (mine === newest.current) setError(e instanceof Error ? e.message : String(e))
+      })
+      .finally(() => {
+        if (mine === newest.current) setLoading(false)
+      })
   }, [method])
 
   useEffect(() => {

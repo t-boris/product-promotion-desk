@@ -1,7 +1,7 @@
-/* Styles for the Accounts section and the Channels tab of a product. Colours, sizes and radii come from the shared tokens in
-   styles.css; the list + detail layout, the list panel, the object header, the hairline rows and the group box are shared patterns
-   there (visual-system.md §9). Container queries follow the width of the detail pane (`.split-detail`), not the window's: at the
-   minimum window the product's Channels tab is about 490px wide and stays one column. */
+/* Styles for the account's steps and the Channels screen. Colours, sizes and radii come from the shared tokens in
+   styles.css; the object header, the hairline rows and the group box are shared patterns there (visual-system.md §9). Container
+   queries follow the width of the detail pane (`.accounts-detail-pane`), not the window's: at the minimum window
+   the Channels screen is about 700px wide and stays one column. */
 
 /* A note or an error directly in a detail pane is spaced by the pane's own gap (a note carries a margin for use inside a group box). */
 .pane > .note,
@@ -251,7 +251,7 @@ textarea.input.short {
   max-width: 240px;
 }
 
-/* ───────────── The Channels tab of a product ───────────── */
+/* ───────────── The Channels screen ───────────── */
 
 /* The title of a channel is its address: it wraps in the group box instead of running out of it. */
 .card.wraps-title .card-head h2 {
@@ -471,33 +471,11 @@ textarea.input.short {
   overflow-wrap: anywhere;
 }
 
-/* "Open browser" (DEC-028): while the owner works in the account's window the control is a block of a line of its own (the note, then the
-   window's buttons); a sentence or an error of the closed control also takes the whole line under its button. */
-.open-browser-panel {
-  flex: 1 1 100%;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
+/* "Open browser" (DEC-028, DEC-038): a sentence or an error of the control takes the whole line under its button. */
 .open-browser-line,
 .join-line {
   flex: 1 1 100%;
   min-width: 0;
-}
-
-/* An account row: the name has the whole first line (it ellipsizes there), the platform and the state tag share the second. */
-.account-row-meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-2);
-}
-.account-row-platform {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 

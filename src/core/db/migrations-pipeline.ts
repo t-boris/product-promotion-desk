@@ -118,5 +118,20 @@ CREATE TABLE mix_state (
 -- Decided from the connector when the channel is connected, assessed or activated; an older channel starts as 1 until then.
 ALTER TABLE channels ADD COLUMN reads INTEGER NOT NULL DEFAULT 1;
 `
+  },
+  {
+    id: 307,
+    name: 'pipeline: the source of an opportunity, and the baseline of the account inbox (DEC-039)',
+    sql: `
+-- What made the opportunity: 'comment' (a new comment in a discussion the channel reads), 'new_post' (a new post by someone else that matches the
+-- channel's topics), 'reply_to_me' or 'mention' (found in the account's inbox). Every row from before the Feed is a comment.
+ALTER TABLE opportunities ADD COLUMN source TEXT NOT NULL DEFAULT 'comment';
+-- A new post has no comment, so the comment index cannot keep it from being queued twice: one opportunity per post, whatever reads it again.
+CREATE UNIQUE INDEX idx_opp_one_new_post ON opportunities(discussion_id) WHERE source = 'new_post' AND discussion_id IS NOT NULL;
+-- The Feed lists one product's opportunities by source.
+CREATE INDEX idx_opp_product_source ON opportunities(product_id, source, updated_at);
+-- When the account's inbox was first read for this channel: that first read only stores what is there (the baseline rule), it queues nothing.
+ALTER TABLE channels ADD COLUMN inbox_baseline_done_at TEXT;
+`
   }
 ]

@@ -1,1572 +1,2468 @@
 {
- "dark-1320-01-attention": {
+ "dark-1320-01-inbox": {
+  "scrollW": 1320,
+  "innerW": 1320,
   "hOverflow": false,
+  "controls": 30,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 1,
+  "tallButtons": [
+   "r/productivityjust nowHow we"
+  ],
+  "route": "#/inbox",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
   "contentScrollW": 0,
-  "filledButtons": [
+  "contentScrollH": 0,
+  "primaries": [
    "Approve"
   ],
+  "tabsBottom": null,
+  "pathRows": null,
   "fontSizes": {
-   "13px": 25,
-   "14px": 21,
-   "16px": 1,
-   "19px": 2,
-   "24px": 1
+   "11.05px": 1,
+   "13px": 66,
+   "14.3px": 1,
+   "22px": 1
   },
-  "controls": 14,
-  "controlsUnder28px": 0,
   "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
+  "underLights": []
  },
- "dark-1320-02-products": {
+ "dark-1320-02-setup": {
+  "scrollW": 1320,
+  "innerW": 1320,
   "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Add source"
-  ],
-  "fontSizes": {
-   "13px": 35,
-   "14px": 41,
-   "16px": 4,
-   "24px": 1
-  },
-  "controls": 23,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-1320-03-product-sources": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Add source"
-  ],
-  "fontSizes": {
-   "13px": 35,
-   "14px": 41,
-   "16px": 4,
-   "24px": 1
-  },
-  "controls": 23,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-1320-03-product-passport": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Approve passport"
-  ],
-  "fontSizes": {
-   "13px": 47,
-   "14px": 61,
-   "16px": 12,
-   "24px": 1
-  },
-  "controls": 33,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-1320-03-product-analysis": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Start analysis"
-  ],
-  "fontSizes": {
-   "13px": 32,
-   "14px": 38,
-   "16px": 3,
-   "24px": 1
-  },
-  "controls": 13,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-1320-03-product-goal": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product"
-  ],
-  "fontSizes": {
-   "13px": 26,
-   "14px": 36,
-   "16px": 4,
-   "24px": 1
-  },
-  "controls": 15,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-1320-03-product-channels": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Connect channel",
-   "Activate",
-   "Assess channel",
-   "Save settings"
-  ],
-  "fontSizes": {
-   "13px": 103,
-   "14px": 74,
-   "16px": 9,
-   "24px": 1
-  },
-  "controls": 39,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-1320-03-product-results": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product"
-  ],
-  "fontSizes": {
-   "13px": 25,
-   "14px": 38,
-   "16px": 4,
-   "24px": 1
-  },
-  "controls": 14,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-1320-03-product-empty-sources": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Add source"
-  ],
-  "fontSizes": {
-   "13px": 30,
-   "14px": 35,
-   "16px": 4,
-   "24px": 1
-  },
   "controls": 22,
-  "controlsUnder28px": 2,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-1320-03-product-empty-passport": {
-  "hOverflow": false,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
   "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
+  "contentScrollH": 207,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 58,
+   "15px": 6,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-1320-03-setup-sources": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 22,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/sources",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 207,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 58,
+   "15px": 6,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-1320-03-setup-passport": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 21,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/passport",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 292,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 70,
+   "15px": 14,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-1320-03-setup-analysis": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 12,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/analysis",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 77,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 53,
+   "15px": 5,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-1320-03-setup-goal": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 16,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/goal",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 48,
+   "15px": 6,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-1320-03-setup-empty-sources": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 21,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/sources",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 6,
+  "primaries": [
+   "Build the passport"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 48,
+   "15px": 6,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-1320-03-setup-empty-passport": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 21,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/passport",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 225,
+  "primaries": [
    "Open Analysis"
   ],
+  "tabsBottom": null,
+  "pathRows": null,
   "fontSizes": {
-   "13px": 34,
-   "14px": 50,
-   "16px": 6,
-   "24px": 1
+   "13px": 65,
+   "15px": 8,
+   "17px": 1,
+   "22px": 1
   },
-  "controls": 23,
-  "controlsUnder28px": 2,
   "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
+  "underLights": []
  },
- "dark-1320-03-product-new": {
+ "dark-1320-03-setup-new": {
+  "scrollW": 1320,
+  "innerW": 1320,
   "hOverflow": false,
+  "controls": 28,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/new",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
   "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Create product",
-   "Add source"
+  "contentScrollH": 594,
+  "primaries": [
+   "Create product"
   ],
+  "tabsBottom": null,
+  "pathRows": null,
   "fontSizes": {
-   "13px": 35,
-   "14px": 37,
-   "16px": 5,
-   "24px": 1
+   "13px": 67,
+   "15px": 7,
+   "17px": 1,
+   "22px": 1
   },
-  "controls": 27,
-  "controlsUnder28px": 2,
   "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
+  "underLights": []
  },
  "dark-1320-04-accounts": {
+  "scrollW": 1320,
+  "innerW": 1320,
   "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "Add account",
-   "Open browser to sign in"
+  "controls": 28,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [
+   "Dana ReyesNo person yet1 acc",
+   "dana_notesReddit · Sign-in n"
   ],
+  "route": "#/accounts",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [
+   "Propose a profile"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
   "fontSizes": {
-   "13px": 24,
-   "14px": 39,
-   "16px": 1,
-   "19px": 1,
-   "24px": 1
+   "13px": 57,
+   "15px": 1,
+   "17px": 1,
+   "22px": 1
   },
-  "controls": 19,
-  "controlsUnder28px": 0,
   "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
+  "underLights": []
  },
  "dark-1320-04-accounts-new": {
+  "scrollW": 1320,
+  "innerW": 1320,
   "hOverflow": false,
+  "controls": 15,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/accounts/new",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
   "contentScrollW": 0,
-  "filledButtons": [
-   "Add account",
-   "Add account",
-   "Open browser to sign in"
+  "contentScrollH": 0,
+  "primaries": [
+   "Add account"
   ],
+  "tabsBottom": null,
+  "pathRows": null,
   "fontSizes": {
-   "13px": 39,
-   "14px": 42,
-   "16px": 2,
-   "19px": 1,
-   "24px": 1
+   "13px": 38,
+   "15px": 1,
+   "22px": 1
   },
-  "controls": 29,
-  "controlsUnder28px": 0,
   "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
+  "underLights": []
  },
  "dark-1320-04-accounts-profiles": {
+  "scrollW": 1320,
+  "innerW": 1320,
   "hOverflow": false,
+  "controls": 28,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [
+   "Dana ReyesNo person yet1 acc",
+   "dana_notesReddit · Sign-in n"
+  ],
+  "route": "#/accounts",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
   "contentScrollW": 0,
-  "filledButtons": [
-   "Add account",
-   "New profile",
-   "Reddit",
+  "contentScrollH": 0,
+  "primaries": [
    "Propose a profile"
   ],
+  "tabsBottom": null,
+  "pathRows": null,
   "fontSizes": {
-   "13px": 28,
-   "14px": 35,
-   "16px": 3,
-   "24px": 1
+   "13px": 57,
+   "15px": 1,
+   "17px": 1,
+   "22px": 1
   },
-  "controls": 28,
-  "controlsUnder28px": 0,
   "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
+  "underLights": []
  },
  "dark-1320-04-accounts-mailboxes": {
+  "scrollW": 1320,
+  "innerW": 1320,
   "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "Add account",
-   "Add mailbox"
+  "controls": 28,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [
+   "Dana ReyesNo person yet1 acc",
+   "dana_notesReddit · Sign-in n"
   ],
-  "fontSizes": {
-   "13px": 10,
-   "14px": 17,
-   "16px": 2,
-   "24px": 1
-  },
-  "controls": 9,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-1320-05-opportunities": {
-  "hOverflow": false,
+  "route": "#/accounts",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
   "contentScrollW": 0,
-  "filledButtons": [
-   "In progress"
-  ],
-  "fontSizes": {
-   "13px": 9,
-   "14px": 16,
-   "16px": 1,
-   "24px": 1
-  },
-  "controls": 8,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-1320-06-publications": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "Suggest with AI",
-   "Approve"
-  ],
-  "fontSizes": {
-   "13px": 25,
-   "14px": 22,
-   "16px": 1,
-   "19px": 1,
-   "24px": 1
-  },
-  "controls": 18,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-1320-07-log-runs": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [],
-  "fontSizes": {
-   "13px": 14,
-   "14px": 16,
-   "16px": 1,
-   "24px": 1
-  },
-  "controls": 5,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-1320-07-log-action-history": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [],
-  "fontSizes": {
-   "13px": 7,
-   "14px": 15,
-   "16px": 1,
-   "24px": 1
-  },
-  "controls": 5,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-1320-07-log-events": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [],
-  "fontSizes": {
-   "13px": 27,
-   "14px": 58,
-   "16px": 1,
-   "24px": 1
-  },
-  "controls": 6,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-1320-08-settings": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [],
-  "fontSizes": {
-   "13px": 38,
-   "14px": 27,
-   "16px": 6,
-   "24px": 1
-  },
-  "controls": 15,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-1320-09-menu-hidden": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Add source"
-  ],
-  "fontSizes": {
-   "13px": 34,
-   "14px": 34,
-   "16px": 3,
-   "24px": 1
-  },
-  "controls": 23,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 0,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": null
- },
- "dark-980-01-attention": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "Approve"
-  ],
-  "fontSizes": {
-   "13px": 25,
-   "14px": 21,
-   "16px": 1,
-   "19px": 2,
-   "24px": 1
-  },
-  "controls": 14,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-980-02-products": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Add source"
-  ],
-  "fontSizes": {
-   "13px": 35,
-   "14px": 41,
-   "16px": 4,
-   "24px": 1
-  },
-  "controls": 23,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-980-03-product-sources": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Add source"
-  ],
-  "fontSizes": {
-   "13px": 35,
-   "14px": 41,
-   "16px": 4,
-   "24px": 1
-  },
-  "controls": 23,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-980-03-product-passport": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Approve passport"
-  ],
-  "fontSizes": {
-   "13px": 47,
-   "14px": 61,
-   "16px": 12,
-   "24px": 1
-  },
-  "controls": 33,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-980-03-product-analysis": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Start analysis"
-  ],
-  "fontSizes": {
-   "13px": 32,
-   "14px": 38,
-   "16px": 3,
-   "24px": 1
-  },
-  "controls": 13,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-980-03-product-goal": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product"
-  ],
-  "fontSizes": {
-   "13px": 26,
-   "14px": 36,
-   "16px": 4,
-   "24px": 1
-  },
-  "controls": 15,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-980-03-product-channels": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Connect channel",
-   "Activate",
-   "Assess channel",
-   "Save settings"
-  ],
-  "fontSizes": {
-   "13px": 103,
-   "14px": 74,
-   "16px": 9,
-   "24px": 1
-  },
-  "controls": 39,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-980-03-product-results": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product"
-  ],
-  "fontSizes": {
-   "13px": 25,
-   "14px": 38,
-   "16px": 4,
-   "24px": 1
-  },
-  "controls": 14,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-980-04-accounts": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "Add account",
-   "Open browser to sign in"
-  ],
-  "fontSizes": {
-   "13px": 24,
-   "14px": 39,
-   "16px": 1,
-   "19px": 1,
-   "24px": 1
-  },
-  "controls": 19,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-980-04-accounts-new": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "Add account",
-   "Add account",
-   "Open browser to sign in"
-  ],
-  "fontSizes": {
-   "13px": 39,
-   "14px": 42,
-   "16px": 2,
-   "19px": 1,
-   "24px": 1
-  },
-  "controls": 29,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-980-05-opportunities": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "In progress"
-  ],
-  "fontSizes": {
-   "13px": 9,
-   "14px": 16,
-   "16px": 1,
-   "24px": 1
-  },
-  "controls": 8,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-980-06-publications": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "Suggest with AI",
-   "Approve"
-  ],
-  "fontSizes": {
-   "13px": 25,
-   "14px": 22,
-   "16px": 1,
-   "19px": 1,
-   "24px": 1
-  },
-  "controls": 18,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-980-07-log-runs": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [],
-  "fontSizes": {
-   "13px": 14,
-   "14px": 16,
-   "16px": 1,
-   "24px": 1
-  },
-  "controls": 5,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "dark-980-08-settings": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [],
-  "fontSizes": {
-   "13px": 38,
-   "14px": 27,
-   "16px": 6,
-   "24px": 1
-  },
-  "controls": 15,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(18, 20, 24)",
-  "sidebarBg": "rgb(27, 30, 36)"
- },
- "light-1320-01-attention": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "Approve"
-  ],
-  "fontSizes": {
-   "13px": 25,
-   "14px": 21,
-   "16px": 1,
-   "19px": 2,
-   "24px": 1
-  },
-  "controls": 14,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-1320-02-products": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Add source"
-  ],
-  "fontSizes": {
-   "13px": 35,
-   "14px": 41,
-   "16px": 4,
-   "24px": 1
-  },
-  "controls": 23,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-1320-03-product-sources": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Add source"
-  ],
-  "fontSizes": {
-   "13px": 35,
-   "14px": 41,
-   "16px": 4,
-   "24px": 1
-  },
-  "controls": 23,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-1320-03-product-passport": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Approve passport"
-  ],
-  "fontSizes": {
-   "13px": 47,
-   "14px": 61,
-   "16px": 12,
-   "24px": 1
-  },
-  "controls": 33,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-1320-03-product-analysis": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Start analysis"
-  ],
-  "fontSizes": {
-   "13px": 32,
-   "14px": 38,
-   "16px": 3,
-   "24px": 1
-  },
-  "controls": 13,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-1320-03-product-goal": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product"
-  ],
-  "fontSizes": {
-   "13px": 26,
-   "14px": 36,
-   "16px": 4,
-   "24px": 1
-  },
-  "controls": 15,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-1320-03-product-channels": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Connect channel",
-   "Activate",
-   "Assess channel",
-   "Save settings"
-  ],
-  "fontSizes": {
-   "13px": 103,
-   "14px": 74,
-   "16px": 9,
-   "24px": 1
-  },
-  "controls": 39,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-1320-03-product-results": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product"
-  ],
-  "fontSizes": {
-   "13px": 25,
-   "14px": 38,
-   "16px": 4,
-   "24px": 1
-  },
-  "controls": 14,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-1320-03-product-empty-sources": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Add source"
-  ],
-  "fontSizes": {
-   "13px": 30,
-   "14px": 35,
-   "16px": 4,
-   "24px": 1
-  },
-  "controls": 22,
-  "controlsUnder28px": 2,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-1320-03-product-empty-passport": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Open Analysis"
-  ],
-  "fontSizes": {
-   "13px": 34,
-   "14px": 50,
-   "16px": 6,
-   "24px": 1
-  },
-  "controls": 23,
-  "controlsUnder28px": 2,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-1320-03-product-new": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Create product",
-   "Add source"
-  ],
-  "fontSizes": {
-   "13px": 35,
-   "14px": 37,
-   "16px": 5,
-   "24px": 1
-  },
-  "controls": 27,
-  "controlsUnder28px": 2,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-1320-04-accounts": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "Add account",
-   "Open browser to sign in"
-  ],
-  "fontSizes": {
-   "13px": 24,
-   "14px": 39,
-   "16px": 1,
-   "19px": 1,
-   "24px": 1
-  },
-  "controls": 19,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-1320-04-accounts-new": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "Add account",
-   "Add account",
-   "Open browser to sign in"
-  ],
-  "fontSizes": {
-   "13px": 39,
-   "14px": 42,
-   "16px": 2,
-   "19px": 1,
-   "24px": 1
-  },
-  "controls": 29,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-1320-04-accounts-profiles": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "Add account",
-   "New profile",
-   "Reddit",
+  "contentScrollH": 0,
+  "primaries": [
    "Propose a profile"
   ],
+  "tabsBottom": null,
+  "pathRows": null,
   "fontSizes": {
-   "13px": 28,
-   "14px": 35,
-   "16px": 3,
-   "24px": 1
+   "13px": 57,
+   "15px": 1,
+   "17px": 1,
+   "22px": 1
   },
-  "controls": 28,
-  "controlsUnder28px": 0,
   "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
+  "underLights": []
  },
- "light-1320-04-accounts-mailboxes": {
+ "dark-1320-05-overview": {
+  "scrollW": 1320,
+  "innerW": 1320,
   "hOverflow": false,
+  "controls": 10,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/overview",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
   "contentScrollW": 0,
-  "filledButtons": [
-   "Add account",
-   "Add mailbox"
+  "contentScrollH": 306,
+  "primaries": [
+   "Approve a draft"
   ],
+  "tabsBottom": null,
+  "pathRows": null,
   "fontSizes": {
-   "13px": 10,
-   "14px": 17,
-   "16px": 2,
-   "24px": 1
+   "13px": 55,
+   "15px": 8,
+   "22px": 1
   },
-  "controls": 9,
-  "controlsUnder28px": 0,
   "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
+  "underLights": []
  },
- "light-1320-05-opportunities": {
+ "dark-1320-05-channels": {
+  "scrollW": 1320,
+  "innerW": 1320,
   "hOverflow": false,
+  "controls": 12,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/channels",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
   "contentScrollW": 0,
-  "filledButtons": [
-   "In progress"
+  "contentScrollH": 0,
+  "primaries": [
+   "Approve a draft"
   ],
+  "tabsBottom": null,
+  "pathRows": null,
   "fontSizes": {
-   "13px": 9,
-   "14px": 16,
-   "16px": 1,
-   "24px": 1
+   "13px": 54,
+   "15px": 2,
+   "22px": 1
   },
-  "controls": 8,
-  "controlsUnder28px": 0,
   "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
+  "underLights": []
  },
- "light-1320-06-publications": {
+ "dark-1320-05-channel-status": {
+  "scrollW": 1320,
+  "innerW": 1320,
   "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "Suggest with AI",
-   "Approve"
-  ],
-  "fontSizes": {
-   "13px": 25,
-   "14px": 22,
-   "16px": 1,
-   "19px": 1,
-   "24px": 1
-  },
-  "controls": 18,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-1320-07-log-runs": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [],
-  "fontSizes": {
-   "13px": 14,
-   "14px": 16,
-   "16px": 1,
-   "24px": 1
-  },
-  "controls": 5,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-1320-07-log-action-history": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [],
-  "fontSizes": {
-   "13px": 7,
-   "14px": 15,
-   "16px": 1,
-   "24px": 1
-  },
-  "controls": 5,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-1320-07-log-events": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [],
-  "fontSizes": {
-   "13px": 27,
-   "14px": 58,
-   "16px": 1,
-   "24px": 1
-  },
-  "controls": 6,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-1320-08-settings": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [],
-  "fontSizes": {
-   "13px": 38,
-   "14px": 27,
-   "16px": 6,
-   "24px": 1
-  },
-  "controls": 15,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-1320-09-menu-hidden": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Add source"
-  ],
-  "fontSizes": {
-   "13px": 34,
-   "14px": 34,
-   "16px": 3,
-   "24px": 1
-  },
-  "controls": 23,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 0,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": null
- },
- "light-980-01-attention": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "Approve"
-  ],
-  "fontSizes": {
-   "13px": 25,
-   "14px": 21,
-   "16px": 1,
-   "19px": 2,
-   "24px": 1
-  },
   "controls": 14,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-980-02-products": {
-  "hOverflow": false,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/channels/76c5c0e0-d506-40f9-a849-78747af6b825",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
   "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Add source"
+  "contentScrollH": 467,
+  "primaries": [
+   "Approve a draft"
   ],
+  "tabsBottom": 285,
+  "pathRows": null,
   "fontSizes": {
-   "13px": 35,
-   "14px": 41,
-   "16px": 4,
-   "24px": 1
+   "13px": 95,
+   "15px": 2,
+   "17px": 1,
+   "22px": 1
   },
-  "controls": 23,
-  "controlsUnder28px": 1,
   "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
+  "underLights": []
  },
- "light-980-03-product-sources": {
+ "dark-1320-05-channel-plan": {
+  "scrollW": 1320,
+  "innerW": 1320,
   "hOverflow": false,
+  "controls": 11,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/channels/76c5c0e0-d506-40f9-a849-78747af6b825/plan",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
   "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Add source"
+  "contentScrollH": 0,
+  "primaries": [
+   "Approve a draft"
   ],
-  "fontSizes": {
-   "13px": 35,
-   "14px": 41,
-   "16px": 4,
-   "24px": 1
-  },
-  "controls": 23,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-980-03-product-passport": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Approve passport"
-  ],
-  "fontSizes": {
-   "13px": 47,
-   "14px": 61,
-   "16px": 12,
-   "24px": 1
-  },
-  "controls": 33,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-980-03-product-analysis": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Start analysis"
-  ],
+  "tabsBottom": 285,
+  "pathRows": null,
   "fontSizes": {
    "13px": 32,
-   "14px": 38,
-   "16px": 3,
-   "24px": 1
+   "15px": 1,
+   "17px": 1,
+   "22px": 1
   },
-  "controls": 13,
-  "controlsUnder28px": 1,
   "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
+  "underLights": []
  },
- "light-980-03-product-goal": {
+ "dark-1320-05-feed": {
+  "scrollW": 1320,
+  "innerW": 1320,
   "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product"
-  ],
-  "fontSizes": {
-   "13px": 26,
-   "14px": 36,
-   "16px": 4,
-   "24px": 1
-  },
-  "controls": 15,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-980-03-product-channels": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product",
-   "Connect channel",
-   "Activate",
-   "Assess channel",
-   "Save settings"
-  ],
-  "fontSizes": {
-   "13px": 103,
-   "14px": 74,
-   "16px": 9,
-   "24px": 1
-  },
-  "controls": 39,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-980-03-product-results": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "New product"
-  ],
-  "fontSizes": {
-   "13px": 25,
-   "14px": 38,
-   "16px": 4,
-   "24px": 1
-  },
   "controls": 14,
-  "controlsUnder28px": 1,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-980-04-accounts": {
-  "hOverflow": false,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/feed",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
   "contentScrollW": 0,
-  "filledButtons": [
-   "Add account",
-   "Open browser to sign in"
-  ],
+  "contentScrollH": 0,
+  "primaries": [],
+  "tabsBottom": null,
+  "pathRows": null,
   "fontSizes": {
-   "13px": 24,
-   "14px": 39,
-   "16px": 1,
-   "19px": 1,
-   "24px": 1
+   "13px": 21,
+   "15px": 1,
+   "22px": 1
   },
-  "controls": 19,
-  "controlsUnder28px": 0,
   "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
+  "underLights": []
  },
- "light-980-04-accounts-new": {
+ "dark-1320-06-posts": {
+  "scrollW": 1320,
+  "innerW": 1320,
   "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "Add account",
-   "Add account",
-   "Open browser to sign in"
+  "controls": 41,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 1,
+  "tallButtons": [
+   "How we cut our weekly meetin"
   ],
-  "fontSizes": {
-   "13px": 39,
-   "14px": 42,
-   "16px": 2,
-   "19px": 1,
-   "24px": 1
-  },
-  "controls": 29,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-980-05-opportunities": {
-  "hOverflow": false,
+  "route": "#/posts",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
   "contentScrollW": 0,
-  "filledButtons": [
-   "In progress"
-  ],
-  "fontSizes": {
-   "13px": 9,
-   "14px": 16,
-   "16px": 1,
-   "24px": 1
-  },
-  "controls": 8,
-  "controlsUnder28px": 0,
-  "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
- },
- "light-980-06-publications": {
-  "hOverflow": false,
-  "contentScrollW": 0,
-  "filledButtons": [
-   "Suggest with AI",
+  "contentScrollH": 0,
+  "primaries": [
    "Approve"
   ],
+  "tabsBottom": null,
+  "pathRows": null,
   "fontSizes": {
-   "13px": 25,
-   "14px": 22,
-   "16px": 1,
-   "19px": 1,
-   "24px": 1
+   "11.05px": 1,
+   "13px": 70,
+   "14.3px": 1,
+   "22px": 1
   },
-  "controls": 18,
-  "controlsUnder28px": 0,
   "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
+  "underLights": []
  },
- "light-980-07-log-runs": {
+ "dark-1320-07-log-runs": {
+  "scrollW": 1320,
+  "innerW": 1320,
   "hOverflow": false,
+  "controls": 6,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/logs",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
   "contentScrollW": 0,
-  "filledButtons": [],
+  "contentScrollH": 0,
+  "primaries": [],
+  "tabsBottom": 164,
+  "pathRows": null,
   "fontSizes": {
-   "13px": 14,
-   "14px": 16,
-   "16px": 1,
-   "24px": 1
+   "13px": 31,
+   "22px": 1
   },
-  "controls": 5,
-  "controlsUnder28px": 0,
   "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
+  "underLights": []
  },
- "light-980-08-settings": {
+ "dark-1320-07-log-action-history": {
+  "scrollW": 1320,
+  "innerW": 1320,
   "hOverflow": false,
+  "controls": 6,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/logs",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
   "contentScrollW": 0,
-  "filledButtons": [],
+  "contentScrollH": 0,
+  "primaries": [],
+  "tabsBottom": 164,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 22,
+   "15px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-1320-07-log-events": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 7,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/logs",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [],
+  "tabsBottom": 164,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 90,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-1320-08-settings": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 21,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/settings",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 1002,
+  "primaries": [],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 72,
+   "15px": 7,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-1320-09-menu-hidden": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 21,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/sources",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": null,
+  "sidebarW": 0,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 207,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 47,
+   "15px": 6,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-980-01-inbox": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 30,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 1,
+  "tallButtons": [
+   "r/productivityjust nowHow we"
+  ],
+  "route": "#/inbox",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [
+   "Approve"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "11.05px": 1,
+   "13px": 66,
+   "14.3px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-980-02-setup": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 22,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 466,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 58,
+   "15px": 6,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-980-03-setup-sources": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 22,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/sources",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 466,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 58,
+   "15px": 6,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-980-03-setup-passport": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 21,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/passport",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 551,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 70,
+   "15px": 14,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-980-03-setup-analysis": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 12,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/analysis",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 373,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 53,
+   "15px": 5,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-980-03-setup-goal": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 16,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/goal",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 267,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 48,
+   "15px": 6,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-980-04-accounts": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 28,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [
+   "Dana ReyesNo person yet1 acc",
+   "dana_notesReddit · Sign-in n"
+  ],
+  "route": "#/accounts",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [
+   "Propose a profile"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 57,
+   "15px": 1,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-980-04-accounts-new": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 15,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/accounts/new",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [
+   "Add account"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
   "fontSizes": {
    "13px": 38,
-   "14px": 27,
-   "16px": 6,
-   "24px": 1
+   "15px": 1,
+   "22px": 1
   },
-  "controls": 15,
-  "controlsUnder28px": 0,
   "cutButtons": [],
-  "underWindowButtons": [],
-  "sidebarW": 216,
-  "topbarH": 53,
-  "bodyBg": "rgb(246, 247, 249)",
-  "sidebarBg": "rgb(255, 255, 255)"
+  "underLights": []
+ },
+ "dark-980-04-accounts-profiles": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 28,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [
+   "Dana ReyesNo person yet1 acc",
+   "dana_notesReddit · Sign-in n"
+  ],
+  "route": "#/accounts",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [
+   "Propose a profile"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 57,
+   "15px": 1,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-980-04-accounts-mailboxes": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 28,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [
+   "Dana ReyesNo person yet1 acc",
+   "dana_notesReddit · Sign-in n"
+  ],
+  "route": "#/accounts",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [
+   "Propose a profile"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 57,
+   "15px": 1,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-980-05-overview": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 10,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/overview",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 584,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 55,
+   "15px": 8,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-980-05-channels": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 12,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/channels",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 242,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 54,
+   "15px": 2,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-980-05-feed": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 14,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/feed",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 21,
+   "15px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-980-06-posts": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 41,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 1,
+  "tallButtons": [
+   "How we cut our weekly meetin"
+  ],
+  "route": "#/posts",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [
+   "Approve"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "11.05px": 1,
+   "13px": 70,
+   "14.3px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-980-07-log-runs": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 6,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/logs",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [],
+  "tabsBottom": 164,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 31,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "dark-980-08-settings": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 21,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/settings",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 1355,
+  "primaries": [],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 72,
+   "15px": 7,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-01-inbox": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 30,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 1,
+  "tallButtons": [
+   "r/productivityjust nowHow we"
+  ],
+  "route": "#/inbox",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [
+   "Approve"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "11.05px": 1,
+   "13px": 66,
+   "14.3px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-02-setup": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 22,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 207,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 58,
+   "15px": 6,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-03-setup-sources": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 22,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/sources",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 207,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 58,
+   "15px": 6,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-03-setup-passport": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 21,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/passport",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 292,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 70,
+   "15px": 14,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-03-setup-analysis": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 12,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/analysis",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 77,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 53,
+   "15px": 5,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-03-setup-goal": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 16,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/goal",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 48,
+   "15px": 6,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-03-setup-empty-sources": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 21,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/sources",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 6,
+  "primaries": [
+   "Build the passport"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 48,
+   "15px": 6,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-03-setup-empty-passport": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 21,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/passport",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 225,
+  "primaries": [
+   "Open Analysis"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 65,
+   "15px": 8,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-03-setup-new": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 28,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/new",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 594,
+  "primaries": [
+   "Create product"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 67,
+   "15px": 7,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-04-accounts": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 28,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [
+   "Dana ReyesNo person yet1 acc",
+   "dana_notesReddit · Sign-in n"
+  ],
+  "route": "#/accounts",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [
+   "Propose a profile"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 57,
+   "15px": 1,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-04-accounts-new": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 15,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/accounts/new",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [
+   "Add account"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 38,
+   "15px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-04-accounts-profiles": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 28,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [
+   "Dana ReyesNo person yet1 acc",
+   "dana_notesReddit · Sign-in n"
+  ],
+  "route": "#/accounts",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [
+   "Propose a profile"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 57,
+   "15px": 1,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-04-accounts-mailboxes": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 28,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [
+   "Dana ReyesNo person yet1 acc",
+   "dana_notesReddit · Sign-in n"
+  ],
+  "route": "#/accounts",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [
+   "Propose a profile"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 57,
+   "15px": 1,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-05-overview": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 10,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/overview",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 306,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 55,
+   "15px": 8,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-05-channels": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 12,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/channels",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 54,
+   "15px": 2,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-05-channel-status": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 14,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/channels/76c5c0e0-d506-40f9-a849-78747af6b825",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 467,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": 285,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 95,
+   "15px": 2,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-05-channel-plan": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 11,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/channels/76c5c0e0-d506-40f9-a849-78747af6b825/plan",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": 285,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 32,
+   "15px": 1,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-05-feed": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 14,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/feed",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 21,
+   "15px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-06-posts": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 41,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 1,
+  "tallButtons": [
+   "How we cut our weekly meetin"
+  ],
+  "route": "#/posts",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [
+   "Approve"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "11.05px": 1,
+   "13px": 70,
+   "14.3px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-07-log-runs": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 6,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/logs",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [],
+  "tabsBottom": 164,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 31,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-07-log-action-history": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 6,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/logs",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [],
+  "tabsBottom": 164,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 22,
+   "15px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-07-log-events": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 7,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/logs",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [],
+  "tabsBottom": 164,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 90,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-08-settings": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 21,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/settings",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 1002,
+  "primaries": [],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 72,
+   "15px": 7,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-1320-09-menu-hidden": {
+  "scrollW": 1320,
+  "innerW": 1320,
+  "hOverflow": false,
+  "controls": 21,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/sources",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": null,
+  "sidebarW": 0,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 207,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 47,
+   "15px": 6,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-980-01-inbox": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 30,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 1,
+  "tallButtons": [
+   "r/productivity1 min agoHow w"
+  ],
+  "route": "#/inbox",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [
+   "Approve"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "11.05px": 1,
+   "13px": 66,
+   "14.3px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-980-02-setup": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 22,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 466,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 58,
+   "15px": 6,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-980-03-setup-sources": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 22,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/sources",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 466,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 58,
+   "15px": 6,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-980-03-setup-passport": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 21,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/passport",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 551,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 70,
+   "15px": 14,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-980-03-setup-analysis": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 12,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/analysis",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 373,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 53,
+   "15px": 5,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-980-03-setup-goal": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 16,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/setup/goal",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 267,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 48,
+   "15px": 6,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-980-04-accounts": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 28,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [
+   "Dana ReyesNo person yet1 acc",
+   "dana_notesReddit · Sign-in n"
+  ],
+  "route": "#/accounts",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [
+   "Propose a profile"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 57,
+   "15px": 1,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-980-04-accounts-new": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 15,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/accounts/new",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [
+   "Add account"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 38,
+   "15px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-980-04-accounts-profiles": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 28,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [
+   "Dana ReyesNo person yet1 acc",
+   "dana_notesReddit · Sign-in n"
+  ],
+  "route": "#/accounts",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [
+   "Propose a profile"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 57,
+   "15px": 1,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-980-04-accounts-mailboxes": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 28,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [
+   "Dana ReyesNo person yet1 acc",
+   "dana_notesReddit · Sign-in n"
+  ],
+  "route": "#/accounts",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [
+   "Propose a profile"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 57,
+   "15px": 1,
+   "17px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-980-05-overview": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 10,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/overview",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 584,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 55,
+   "15px": 8,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-980-05-channels": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 12,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/channels",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 242,
+  "primaries": [
+   "Approve a draft"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 54,
+   "15px": 2,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-980-05-feed": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 14,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/feed",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 21,
+   "15px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-980-06-posts": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 41,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 1,
+  "tallButtons": [
+   "How we cut our weekly meetin"
+  ],
+  "route": "#/posts",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [
+   "Approve"
+  ],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "11.05px": 1,
+   "13px": 70,
+   "14.3px": 1,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-980-07-log-runs": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 6,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/logs",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 0,
+  "primaries": [],
+  "tabsBottom": 164,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 31,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
+ },
+ "light-980-08-settings": {
+  "scrollW": 980,
+  "innerW": 980,
+  "hOverflow": false,
+  "controls": 21,
+  "smallControls": 0,
+  "smallList": [],
+  "tinyTextNodes": 0,
+  "tallButtons": [],
+  "route": "#/settings",
+  "font": "-apple-system, \"system-ui\", system-ui, \"Helvetica Neue\", san",
+  "bodyBg": "rgba(0, 0, 0, 0)",
+  "sidebarBg": "rgba(0, 0, 0, 0)",
+  "sidebarW": 224,
+  "topbarH": 52,
+  "contentScrollW": 0,
+  "contentScrollH": 1355,
+  "primaries": [],
+  "tabsBottom": null,
+  "pathRows": null,
+  "fontSizes": {
+   "13px": 72,
+   "15px": 7,
+   "22px": 1
+  },
+  "cutButtons": [],
+  "underLights": []
  }
 }
