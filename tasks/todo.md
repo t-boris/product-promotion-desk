@@ -702,11 +702,16 @@ Plan:
 - [x] Renderer: `JoinChannel` on the channel card, canStart reasons, run panel for the channel's own run, pure rules with tests.
 - [x] Tests, mutation checks on the safety rules, probe on an own instance (local community page through the real toolbox in both browsers; card measured light and dark).
 - [x] Independent review of the click policy and of what reaches logs and prompts; DEC-029, spec, lessons, memory.
-- [ ] Full gate, PR, CI, merge, tag v0.15.0, release, `deploy:local`.
+- [x] Full gate, PR #31, CI, merge, tag v0.15.0, release, `deploy:local` (installed 0.15.0).
 
 ### Review (0.15.0)
 
 - Checked: unit tests for every new rule; 61 mutants on the safety rules (join control, one press, community fence, fresh and shown look, ambiguity, engine confinement, "done only when the app reads membership", diagnostics scrubbing), all killed (one equivalent one removed); the real toolbox on a local community page in real Chrome (`PPD_REAL_CHROME=1 npx vitest run src/browser/join-real.test.ts`, a real mouse click, every decoy refused, only the Join reaches the site) and in the internal browser (34/34, script click fallback reported); the channel card measured light and dark (53/53).
 - Independent review (given the code, not the conclusion) found: a bare "Join" is not bound to a community (fixed: several candidates press none unless exactly one is named after the community; the control must be the one that was shown); a stored "needs you" is not always a private community (fixed: the refusal says what it can be); the AI's words reached the log (fixed: fixed phrase + status; the owner sees them as "The AI says: ..."); a pressed join followed by needs_owner skipped the app's own read (fixed: read when pressed); the timeout text said half an hour for ten minutes and skipped the read (fixed); `plainWords` kept a bare e-mail local part (fixed, comment made honest).
 - Known, left on purpose: the press is aimed at the centre of the located element (`hit` checks nothing covers it at that moment); a layout shift in the few milliseconds between locating and pressing is shared code of every mission and is not closed here. The probe of the real Reddit Join control and the real 403 are for the owner to try.
+
+### Next (after 0.15.0, owner's hands)
+
+- Press **Assess again** on r/astrology: Read posts now shows what Reddit answered (status and its own words). Then decide with the owner whether the way the listing is read changes.
+- Try **Let the AI join** on a community the account has not joined (Claude Code engine). What it shows: the name and role of Reddit's real Join control in the page; if not recognised the AI reports needs_owner and nothing is pressed. Record the result in issue #8 (live Reddit acceptance).
 
