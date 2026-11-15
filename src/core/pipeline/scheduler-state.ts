@@ -93,10 +93,13 @@ export class ScheduleStore {
     this.db.prepare("UPDATE channels SET status = 'needs_user', status_detail = ?, next_check_at = NULL WHERE id = ?").run(detail.slice(0, 500), channelId)
   }
 
-  /** The reason for the suspension is gone: put the channel back into the schedule. */
-  restore(channelId: Id, nextCheckAt: string): void {
+  /**
+   * The reason for the suspension is gone: put the channel back into the schedule. A channel the app does not read is never scheduled (DEC-034):
+   * it has no next check, and it says again what it is for.
+   */
+  restore(channelId: Id, nextCheckAt: string | null, detail = ''): void {
     this.put(EMPTY(channelId))
-    this.db.prepare("UPDATE channels SET status = 'active', status_detail = '', next_check_at = ? WHERE id = ?").run(nextCheckAt, channelId)
+    this.db.prepare("UPDATE channels SET status = 'active', status_detail = ?, next_check_at = ? WHERE id = ?").run(detail, nextCheckAt, channelId)
   }
 
   setNextCheck(channelId: Id, nextCheckAt: string): void {

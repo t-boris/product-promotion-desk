@@ -64,7 +64,8 @@ export function retryAtMs(lastAttemptAt: IsoTime | null, failures: number, now: 
 
 /** Why the mix cannot work on this channel at all, or null. An observe-only channel stays as the owner set it. */
 export function mixBlocker(channel: Channel): string | null {
-  if (channel.mode === 'observe') return 'This channel only watches. Let it prepare drafts (change its mode) before the AI prepares posts here.'
+  // Observing is about replies: a channel the app does not read has none, so the mode says nothing about its posts (DEC-034).
+  if (channel.mode === 'observe' && channel.reads) return 'This channel only watches. Let it prepare drafts (change its mode) before the AI prepares posts here.'
   if (channel.status === 'paused') return 'The channel is paused.'
   if (channel.status === 'setup') return 'The channel is not set up yet.'
   const publish = channel.capabilities.find((c) => c.key === 'publish_post')

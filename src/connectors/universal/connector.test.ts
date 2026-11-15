@@ -4,7 +4,7 @@ import { TicketError, type PublishRequest } from '../../core/ports'
 import { authIssueOf, CaptchaRequiredError, LoginRequiredError } from '../errors'
 import type { Capability, CapabilityKey } from '../../shared/types'
 import { seedChannel } from '../test-helpers'
-import { UniversalConnector } from './connector'
+import { UniversalConnector, addressOf } from './connector'
 import { armForum, item, SiteFakePage, validProfileDefinition } from './test-helpers'
 
 const CHANNEL = 'https://forum.example.com/c/news'
@@ -38,21 +38,42 @@ describe('universal connector: addresses', () => {
 })
 
 describe('universal connector: unknown site without a valid profile', () => {
-  it('reports every capability as needs_check with guidance, never verified', async () => {
+  it('says plainly that nothing is read here, keeps posting at needs_check, and never claims verified (DEC-034)', async () => {
     const { connector, ctx, page } = setup({ profile: null })
     const caps = await connector.assess(ctx)
     expect(caps).toHaveLength(9)
-    expect(caps.every((c) => c.status === 'needs_check')).toBe(true)
-    expect(caps[0].detail).toMatch(/no site profile for forum\.example\.com/i)
-    expect(caps[0].detail).toMatch(/Add a validated site profile/)
+    const status = Object.fromEntries(caps.map((c) => [c.key, c.status]))
+    // Posting is the one ability that stays: the AI makes the post in the account's browser, and the owner confirms it afterwards.
+    expect(status.publish_post).toBe('needs_check')
+    expect(status.verify_send).toBe('needs_check')
+    for (const key of ['read_posts', 'read_comments', 'detect_changes', 'publish_reply', 'metrics', 'rules', 'membership']) expect(status[key]).toBe('unavailable')
+    expect(caps.some((c) => c.status === 'verified')).toBe(false)
+    expect(caps.find((c) => c.key === 'read_posts')?.detail).toMatch(/no site profile for forum\.example\.com/i)
+    expect(caps.find((c) => c.key === 'read_posts')?.detail).toMatch(/does not read this site/)
+    // The reason is told once; every other row that is unavailable says only that the app does not read the site.
+    for (const key of ['read_comments', 'detect_changes', 'publish_reply', 'metrics', 'rules', 'membership']) expect(caps.find((c) => c.key === key)?.detail).toMatch(/does not read this site\.$/)
+    // The app cannot read the page back, so it never confirms a post itself and never promises to: the owner does (DEC-034).
+    expect(caps.find((c) => c.key === 'publish_post')?.detail).toMatch(/you confirm yourself that it is up/)
+    expect(caps.find((c) => c.key === 'publish_post')?.detail).not.toMatch(/first real post/)
+    expect(caps.find((c) => c.key === 'verify_send')?.detail).toMatch(/cannot confirm a post by itself: you confirm it/)
     expect(page.log).toEqual([]) // nothing was loaded or touched
   })
 
   it('does not trust an invalid profile and says why', async () => {
     const { connector, ctx } = setup({ profile: { ...validProfileDefinition(), script: 'alert(1)' } })
     const caps = await connector.assess(ctx)
-    expect(caps.every((c) => c.status === 'needs_check')).toBe(true)
-    expect(caps[0].detail).toMatch(/invalid/)
+    expect(caps.some((c) => c.status === 'verified')).toBe(false)
+    expect(caps.find((c) => c.key === 'read_comments')?.status).toBe('unavailable')
+    expect(caps.find((c) => c.key === 'read_posts')?.detail).toMatch(/invalid/)
+  })
+
+  it('reads a site only when a valid site profile exists for it (DEC-034)', () => {
+    const readable = setup()
+    expect(readable.connector.readsChannel(readable.ctx.channel)).toBe(true)
+    const none = setup({ profile: null })
+    expect(none.connector.readsChannel(none.ctx.channel)).toBe(false)
+    const invalid = setup({ profile: { ...validProfileDefinition(), script: 'alert(1)' } })
+    expect(invalid.connector.readsChannel(invalid.ctx.channel)).toBe(false)
   })
 
   it('refuses to read or publish without a valid profile', async () => {
@@ -125,12 +146,18 @@ describe('universal connector: assessment with a valid profile', () => {
     expect(caps.every((c) => c.status === 'needs_user' && /CAPTCHA/.test(c.detail))).toBe(true)
   })
 
-  it('does not trust a profile for a channel address outside its patterns', async () => {
+  it('does not read a channel address outside the channel pages of its profile: it is for own posts, and nothing is loaded (DEC-034)', async () => {
     const t = setup()
     const other = seedChannel(t, { target: 'forum.example.com/other', url: 'https://forum.example.com/other', connectorId: 'universal', platform: 'web', page: new SiteFakePage() })
+    // The profile covers /c/* of this host: the channel it was written for is read, a page of the same host it does not describe is not.
+    expect(t.connector.readsChannel(t.ctx.channel)).toBe(true)
+    expect(t.connector.readsChannel(other.ctx.channel)).toBe(false)
     const caps = await t.connector.assess(other.ctx)
-    expect(caps.every((c) => c.status === 'needs_check')).toBe(true)
-    expect(caps[0].detail).toMatch(/does not match any channel pattern/)
+    const status = Object.fromEntries(caps.map((c) => [c.key, c.status]))
+    expect(status).toMatchObject({ read_posts: 'unavailable', read_comments: 'unavailable', publish_reply: 'unavailable', publish_post: 'needs_check', verify_send: 'needs_check' })
+    expect(caps.find((c) => c.key === 'read_posts')?.detail).toMatch(/does not match any channel pattern/)
+    expect(caps.find((c) => c.key === 'read_posts')?.detail).toMatch(/does not read this page/)
+    expect(caps.find((c) => c.key === 'read_comments')?.detail).toBe('The app does not read this page.')
     expect(other.page.log).toEqual([])
   })
 
@@ -503,5 +530,50 @@ describe('universal connector: resolving unknown outcomes', () => {
     h.page.site.get(OWN)!.selectors.delete('div.mine')
     h.page.login = { loggedIn: false, identity: '', captcha: false }
     await expect(h.connector.findPublished(h.ctx, request)).rejects.toBeInstanceOf(LoginRequiredError)
+  })
+})
+
+describe('universal connector: the address of a channel (DEC-034)', () => {
+  it('is the host and the path with no closing slash, and normalizeTarget stores exactly that', () => {
+    expect(addressOf('https://forum.example.com/c/news/')).toBe('forum.example.com/c/news')
+    expect(addressOf('https://www.instagram.com/brand/?hl=en#top')).toBe('www.instagram.com/brand')
+    expect(new UniversalConnector().normalizeTarget('https://forum.example.com/c/news/#top').target).toBe(addressOf('https://forum.example.com/c/news/'))
+  })
+
+  it('is what {{target}} stands for even when the channel is called by a handle', async () => {
+    const def = validProfileDefinition()
+    ;(def.ownContent as { url: string }).url = 'https://forum.example.com/u/{{identity}}/posts?c={{target}}'
+    const h = setup({ profile: def })
+    h.core.db.prepare("UPDATE channels SET target = '@brand' WHERE id = ?").run(h.ctx.channel.id)
+    const renamed = { ...h.ctx, channel: h.core.repos.channel(h.ctx.channel.id) }
+    expect(renamed.channel.target).toBe('@brand')
+    await h.connector.findPublished(renamed, { kind: 'post', destination: CHANNEL, parentExternalId: null, title: 'T', text: 'x', link: null, attachments: [], attemptedAt: '2026-11-08T11:55:00Z' }).catch(() => undefined)
+    expect(h.page.log).toContain('goto https://forum.example.com/u/natal/posts?c=forum.example.com%2Fc%2Fnews')
+  })
+
+  it('is what {{target}} stands for when a channel is assessed or published to, whatever it is called', async () => {
+    const def = validProfileDefinition()
+    ;(def.publish as { post: { steps: Record<string, unknown>[] } }).post.steps[0] = { type: 'goto', url: 'https://forum.example.com/c/news?from={{target}}' }
+    const expected = 'goto https://forum.example.com/c/news?from=forum.example.com%2Fc%2Fnews'
+    const renamed = (h: ReturnType<typeof setup>) => {
+      h.core.db.prepare("UPDATE channels SET target = '@brand' WHERE id = ?").run(h.ctx.channel.id)
+      return { ...h.ctx, channel: h.core.repos.channel(h.ctx.channel.id) }
+    }
+    const assessing = setup({ profile: def })
+    await assessing.connector.assess(renamed(assessing)).catch(() => undefined)
+    expect(assessing.page.log).toContain(expected)
+    const publishing = setup({ profile: def })
+    const request: PublishRequest = { kind: 'post', destination: CHANNEL, parentExternalId: null, title: 'T', text: 'x', link: null, attachments: [] }
+    await publishing.connector.publish(renamed(publishing), publishing.ticketFor(CHANNEL), request).catch(() => undefined)
+    expect(publishing.page.log).toContain(expected)
+  })
+
+  it('an assessment tells a channel again that it is read now: it awaits its first read, it is not simply set going (DEC-034)', async () => {
+    const h = setup()
+    // As it was stored while the site had no profile: not read, suspended by a lost sign-in, never read.
+    h.core.db.prepare("UPDATE channels SET reads = 0, status = 'needs_user', status_detail = 'Account needs you', baseline_done_at = NULL WHERE id = ?").run(h.ctx.channel.id)
+    const assessed = await h.core.router.call('channels.assess', { channelId: h.ctx.channel.id })
+    expect(assessed).toMatchObject({ reads: true, status: 'setup', baselineDoneAt: null })
+    expect(assessed.statusDetail).not.toBe('Your own posts only.')
   })
 })

@@ -16,7 +16,7 @@ import {
   type RemoteDiscussion,
   type SendTicket
 } from '../../core/ports'
-import type { Capability, MetricReading } from '../../shared/types'
+import type { Capability, Channel, MetricReading } from '../../shared/types'
 import { CapabilityBuilder } from '../capabilities'
 import { CaptchaRequiredError, LoginRequiredError } from '../errors'
 import { gateProbeScript, sessionProbeScript, type GateProbe, type SessionProbe } from '../page-scripts'
@@ -30,6 +30,18 @@ import { elementTextScript, extractItemsScript, loginProbeScript, pageTextScript
 import { ProfileStore, type ProfileProvider, type StoredProfile } from './store'
 import { renderTemplate, type PlaceholderValues } from './templates'
 import { validateProfile } from './validate'
+
+/** The app cannot read the page back on a site it does not read, so a post is confirmed by the owner, never by the app (DEC-034). */
+/**
+ * The channel address as this connector stores it: the host and the path, with no closing slash. It is what a site profile's {{target}} stands for.
+ * The channel's name may be a handle ("@yourbrand") instead (DEC-034), so the placeholder is taken from the address, never from the name.
+ */
+export function addressOf(url: string): string {
+  const page = new URL(url)
+  return `${page.hostname}${page.pathname.replace(/\/+$/, '')}`
+}
+
+const OWN_POST_CONFIRMED_BY_OWNER = 'The app cannot read the page back, so after each post you confirm yourself that it is up.'
 
 export const UNIVERSAL_VERSION = '1'
 
@@ -135,13 +147,25 @@ export class UniversalConnector implements Connector {
     if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error('Only http and https addresses are supported')
     if (url.username || url.password) throw new Error('Addresses with embedded credentials are not accepted')
     url.hash = ''
-    const path = url.pathname.replace(/\/+$/, '')
-    return { target: `${url.hostname}${path}`, url: url.href }
+    return { target: addressOf(url.href), url: url.href }
   }
 
   /** The login page depends on the site's profile; the channels module falls back to the channel address. */
   loginUrl(): string {
     return ''
+  }
+
+  /**
+   * It reads a channel its site profile describes: a valid profile for the host whose channel pages include the channel's address. Any other
+   * channel is for the owner's own posts (DEC-034): a profile written for the groups of a site says nothing about a page of the same site.
+   */
+  readsChannel(channel: Channel): boolean {
+    try {
+      const profile = this.profiles?.forHost(new URL(channel.url).hostname).valid?.profile
+      return profile != null && matchesAnyGlob(profile.channelUrls, channel.url)
+    } catch {
+      return false
+    }
   }
 
   // ───────────────────────────── Profile lookup ─────────────────────────────
@@ -206,21 +230,25 @@ export class UniversalConnector implements Connector {
     const b = new CapabilityBuilder(ctx.clock.now())
     const { valid, latest } = this.lookup(ctx)
     const host = new URL(ctx.channel.url).hostname
-    if (!valid?.profile) {
-      const why =
-        latest && !latest.valid
+    const profile = valid?.profile
+    if (!profile || !this.readsChannel(ctx.channel)) {
+      const why = !profile
+        ? latest && !latest.valid
           ? `The newest stored profile for ${host} (v${latest.version}) is invalid: ${latest.errors.slice(0, 2).join('; ')}.`
           : `There is no site profile for ${host}.`
+        : `The channel address does not match any channel pattern of the "${profile.name}" profile (v${valid?.version}).`
+      // The app cannot read this channel, so it is a channel for the owner's own posts (DEC-034): nothing is observed and no reply is possible. A post
+      // is made by the AI in the account's browser on the owner's press. The app cannot read the page back, so the owner confirms it afterwards.
+      const what = profile ? 'page' : 'site'
+      const unread = `${why} The app does not read this ${what}, so nothing is observed and no reply is prepared here. A validated site profile (addresses, selectors, navigation steps) would let it read.`
+      // The reason is told once, on the first row; the others say only that it is so.
       return b
-        .fillRemaining(
-          'needs_check',
-          `${why} A prepared connector does not exist for this site, so nothing is read or sent automatically. Add a validated site profile (addresses, selectors, navigation steps), then assess again. You can still open the site in the account's browser.`
-        )
+        .set('read_posts', 'unavailable', unread)
+        .set('publish_reply', 'unavailable', `No reply is prepared here: the app does not read this ${what}.`)
+        .set('publish_post', 'needs_check', `Your own posts: the AI makes them in the account's browser when you press Send. ${OWN_POST_CONFIRMED_BY_OWNER}`)
+        .set('verify_send', 'needs_check', `The app does not read this ${what}, so it cannot confirm a post by itself: you confirm it.`)
+        .fillRemaining('unavailable', `The app does not read this ${what}.`)
         .build()
-    }
-    const profile = valid.profile
-    if (!matchesAnyGlob(profile.channelUrls, ctx.channel.url)) {
-      return b.fillRemaining('needs_check', `The channel address does not match any channel pattern of the "${profile.name}" profile (v${valid.version}).`).build()
     }
 
     return ctx.session.withAgentControl(`assess:${ctx.channel.id}`, async (page) => {
@@ -296,7 +324,7 @@ export class UniversalConnector implements Connector {
       // Sending abilities are never verified here (no ticket exists during an assessment).
       const sample: PlaceholderValues = {
         channelUrl: ctx.channel.url,
-        target: ctx.channel.target,
+        target: addressOf(ctx.channel.url),
         destination: withLink?.permalink || ctx.channel.url,
         parentId: comments[0]?.id ?? discussions[0]?.id ?? 'x',
         identity: login.identity || ctx.account.identity || 'x'
@@ -482,7 +510,7 @@ export class UniversalConnector implements Connector {
       parentId: request.parentExternalId ?? '',
       destination: request.destination,
       channelUrl: ctx.channel.url,
-      target: ctx.channel.target,
+      target: addressOf(ctx.channel.url),
       identity: ctx.account.identity ?? ''
     }
     try {
@@ -581,7 +609,7 @@ export class UniversalConnector implements Connector {
     if (request.kind === 'post' && request.title && !own.reader.title) throw new Error('The profile’s own-content reader has no title field, so a post cannot be recognized; check the site manually.')
 
     return ctx.session.withAgentControl(`find:${ctx.channel.id}`, async (page) => {
-      const url = this.renderUrl(profile, own.url, { identity: ctx.account.identity ?? '', channelUrl: ctx.channel.url, target: ctx.channel.target })
+      const url = this.renderUrl(profile, own.url, { identity: ctx.account.identity ?? '', channelUrl: ctx.channel.url, target: addressOf(ctx.channel.url) })
       const items = await this.readItems(page, profile, own.reader, url, 50)
       const hits = items
         .filter((i) => i.id && createdMs(i.time) >= floor)

@@ -6,7 +6,7 @@ import type { Core } from '../core'
 import { sendDueDigests } from './attention-digest'
 import type { NotificationSink } from './attention-notify'
 import { lastCapturedAt, refreshTracked } from './metrics'
-import { schedulableChannels } from './scheduler-eligibility'
+import { readableChannels } from './scheduler-eligibility'
 import { MINUTE_MS } from './scheduler-timing'
 import type { SendingService } from '../services'
 
@@ -185,7 +185,7 @@ export class PeriodicTasks {
   }
 
   private async refreshDueMetrics(nowMs: number): Promise<void> {
-    for (const channel of schedulableChannels(this.core)) {
+    for (const channel of readableChannels(this.core)) {
       if (this.halted) return
       const capability = channel.capabilities.find((c) => c.key === 'metrics')
       if (capability && (capability.status === 'unavailable' || capability.status === 'restricted')) continue

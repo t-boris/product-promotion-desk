@@ -195,6 +195,23 @@ describe('a mission that goes right', () => {
     expect(world.opportunity(opp.id).state).toBe('unknown_result')
   })
 
+  it('is unknown, and says why, when the channel is one the app does not read: nothing is read back, the owner looks (DEC-034)', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    world.core.db.prepare('UPDATE channels SET reads = 0 WHERE id = ?').run(world.channel.id)
+    useMissions(async (request) => {
+      await press(request, { show: true })
+      return { reported: { status: 'done', reason: 'Posted. I can see it.' } }
+    })
+    const action = await sending().send(opp.id)
+    expect(action.state).toBe('unknown')
+    expect(actionRow(action.id).error).toContain('does not read this channel')
+    expect(actionRow(action.id).error).toContain('tell the app whether it was published')
+    expect(actionRow(action.id).error).toContain('Posted. I can see it.') // the AI's report is shown as what it says, never as the finding
+    expect(world.connector.calls).not.toContain('findPublished')
+    expect(world.opportunity(opp.id).state).toBe('unknown_result')
+  })
+
   it('does not take a match that belongs to another confirmed send of the account for this one', async () => {
     world = makeWorld()
     const first = await world.readyReply({ text: 'First reply, about charts.' })

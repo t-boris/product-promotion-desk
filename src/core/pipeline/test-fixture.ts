@@ -61,6 +61,8 @@ export interface ChannelOptions {
   capabilities?: Capability[]
   baselineDone?: boolean
   connectorId?: string
+  /** false: a channel the app does not read (DEC-034). */
+  reads?: boolean
 }
 
 export interface World extends TestCore {
@@ -167,8 +169,8 @@ export function makeWorld(options: WorldOptions = {}): World {
     const target = opts.target ?? `r/test${sequence}`
     core.db
       .prepare(
-        `INSERT INTO channels (id, product_id, account_id, platform, connector_id, target, url, mode, settings_json, capabilities_json, status, status_detail, baseline_done_at, last_run_at, last_success_at, next_check_at, created_at)
-         VALUES (?, ?, ?, 'fake', ?, ?, ?, ?, ?, ?, ?, '', ?, NULL, NULL, NULL, ?)`
+        `INSERT INTO channels (id, product_id, account_id, platform, connector_id, target, url, mode, settings_json, capabilities_json, status, status_detail, baseline_done_at, last_run_at, last_success_at, next_check_at, reads, created_at)
+         VALUES (?, ?, ?, 'fake', ?, ?, ?, ?, ?, ?, ?, '', ?, NULL, NULL, NULL, ?, ?)`
       )
       .run(
         id,
@@ -182,6 +184,7 @@ export function makeWorld(options: WorldOptions = {}): World {
         toJson(opts.capabilities ?? options.capabilities ?? verifiedCapabilities()),
         opts.status ?? (baselineDone ? 'active' : 'setup'),
         baselineDone ? now : null,
+        opts.reads === false ? 0 : 1,
         now
       )
     return core.repos.channel(id)

@@ -2,7 +2,7 @@
 // from the interface. The mix is the AI preparing DRAFTS of the persona's own posts from time to time; replies are what the monitor does and are
 // not a setting of it.
 
-import type { ChannelMode, ChannelPlan, MixCard, MixKind, MixKindCard, MixSetting, ProductUpdate } from '../../../../shared/types'
+import type { Channel, ChannelMode, ChannelPlan, MixCard, MixKind, MixKindCard, MixSetting, ProductUpdate } from '../../../../shared/types'
 
 /** The three kinds, in the order the card shows them (the core returns them in this order, too). */
 export const MIX_KINDS: readonly MixKind[] = ['product_post', 'own_update', 'showcase']
@@ -35,7 +35,9 @@ export const REPLIES_WORDS: Record<ChannelMode, string> = {
   auto: 'it sends only the simple automatic replies you allowed, the rest waits for you'
 }
 
-export const repliesLine = (mode: ChannelMode): string => `Not part of the mix: the monitor handles them when someone writes to you. On this channel: ${REPLIES_WORDS[mode]}.`
+/** The replies line of the mix: what the monitor does on this channel, or that there is nothing to reply to (DEC-034). */
+export const repliesLine = (channel: Pick<Channel, 'mode' | 'reads'>): string =>
+  channel.reads ? `Not part of the mix: the monitor handles them when someone writes to you. On this channel: ${REPLIES_WORDS[channel.mode]}.` : 'Not on this platform: the app does not read it, so there is nothing to reply to. The mix is only for your own posts.'
 
 // ───────────── the form ─────────────
 

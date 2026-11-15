@@ -15,7 +15,8 @@ import './results.css'
 export function ResultsPanel({ productId }: { productId: string }) {
   const results = useQuery('results.get', { productId }, ['results', 'products', 'channels'])
   const [refreshAll, all] = useAction(async () => {
-    for (const entry of results.data?.channels ?? []) await call('results.refresh', { channelId: entry.channel.id })
+    // A channel the app does not read has nothing to refresh, and one that cannot be refreshed must not stop the others (DEC-034).
+    for (const entry of results.data?.channels ?? []) if (entry.channel.reads) await call('results.refresh', { channelId: entry.channel.id })
   })
 
   const channels = results.data?.channels ?? []

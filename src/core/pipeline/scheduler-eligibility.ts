@@ -1,6 +1,7 @@
 // Which channels may be worked on right now (REQ-005: permissions are re-checked, nothing is retried blindly).
 
 import type { Account, CapabilityKey, Channel, Id } from '../../shared/types'
+import { OWN_POSTS_DETAIL } from '../channels/reads'
 import type { Core } from '../core'
 import type { ScheduleStore } from './scheduler-state'
 
@@ -54,7 +55,7 @@ export function reviewChannels(core: Core, store: ScheduleStore, nowMs: number):
       core.log.warn('scheduler', `Channel ${channel.target} suspended: ${problem}`, channel.id)
       result.suspended.push(channel.id)
     } else if (channel.status === 'needs_user' && !problem && store.get(channel.id).autoResume) {
-      store.restore(channel.id, new Date(nowMs).toISOString())
+      store.restore(channel.id, channel.reads ? new Date(nowMs).toISOString() : null, channel.reads ? '' : OWN_POSTS_DETAIL)
       core.log.info('scheduler', `Channel ${channel.target} resumed: the problem that suspended it is gone`, channel.id)
       result.restored.push(channel.id)
     }
@@ -69,12 +70,17 @@ export function schedulableChannels(core: Core): Channel[] {
   return core.repos.listChannels().filter((c) => RUNNABLE.includes(c.status) && permissionProblem(c, accounts.get(c.accountId)) === null)
 }
 
+/** The channels the scheduler may observe: the schedulable ones the app can read. A channel for own posts is only ever worked on for its posts. */
+export function readableChannels(core: Core): Channel[] {
+  return schedulableChannels(core).filter((c) => c.reads)
+}
+
 /**
- * Accounts that currently have at least one runnable channel which can send ('approval' or 'auto'). Only these
- * need a live sign-in check at startup: observing and drafting never act on the account's behalf, and an account
- * without any such channel has nothing a lapsed login could break.
+ * Accounts that currently have at least one runnable channel which can send ('approval' or 'auto', or a channel for own posts, which sends
+ * whatever its mode). Only these need a live sign-in check at startup: observing and drafting never act on the account's behalf, and an
+ * account without any such channel has nothing a lapsed login could break.
  */
 export function sendingAccounts(core: Core): Account[] {
-  const sending = new Set(core.repos.listChannels().filter((c) => RUNNABLE.includes(c.status) && (c.mode === 'approval' || c.mode === 'auto')).map((c) => c.accountId))
+  const sending = new Set(core.repos.listChannels().filter((c) => RUNNABLE.includes(c.status) && (c.mode === 'approval' || c.mode === 'auto' || !c.reads)).map((c) => c.accountId))
   return core.repos.listAccounts().filter((a) => sending.has(a.id))
 }

@@ -49,6 +49,8 @@ export interface ChannelSeed {
   connectorId?: string
   statusDetail?: string
   createdAt?: string
+  /** false: a channel the app does not read (DEC-034). */
+  reads?: boolean
 }
 
 export function seedChannel(core: Core, seed: ChannelSeed): Channel {
@@ -57,8 +59,8 @@ export function seedChannel(core: Core, seed: ChannelSeed): Channel {
   core.db
     .prepare(
       `INSERT INTO channels (id, product_id, account_id, platform, connector_id, target, url, mode, settings_json,
-         capabilities_json, status, status_detail, next_check_at, created_at)
-       VALUES (?, ?, ?, 'reddit', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         capabilities_json, status, status_detail, next_check_at, reads, created_at)
+       VALUES (?, ?, ?, 'reddit', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       id,
@@ -73,6 +75,7 @@ export function seedChannel(core: Core, seed: ChannelSeed): Channel {
       seed.status ?? 'active',
       seed.statusDetail ?? '',
       seed.nextCheckAt === undefined ? null : seed.nextCheckAt,
+      seed.reads === false ? 0 : 1,
       seed.createdAt ?? iso(core)
     )
   return core.repos.channel(id)

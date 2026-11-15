@@ -441,6 +441,11 @@ export interface Connector {
   channelGuide?(): ChannelGuide
   /** Optional (DEC-029): reads, without changing anything, whether the account has joined the channel. Absent when the platform has no such thing. */
   membership?(ctx: ConnectorContext): Promise<Membership>
+  /**
+   * Optional (DEC-034): whether this connector can read the channel at all. Absent means it can. The universal connector reads only a site it
+   * has a valid site profile for; for any other channel it can neither read nor reply, and the channel is only for the owner's own posts.
+   */
+  readsChannel?(channel: Channel): boolean
   checkLogin(ctx: ConnectorContext): Promise<LoginState>
   /** Inspects the channel without publishing anything. Only actually verified capabilities may be 'verified'. */
   assess(ctx: ConnectorContext): Promise<Capability[]>
