@@ -254,6 +254,24 @@ export interface BrowserSession {
   releaseControl(): void
 }
 
+/** The page in the owner's window as the browser reports it (DEC-028). */
+export interface OwnerPage {
+  url: string
+  title: string
+  /** How many pages the window holds, when there can be more than one. */
+  tabs?: number
+}
+
+/** What a prepared connector says about finding and naming its channels (DEC-028). */
+export interface ChannelGuide {
+  /** A page of the platform where channels are listed or searched; opened in the account's own browser. */
+  browseUrl: string
+  /** A typical channel address, shown as the placeholder of the address field. */
+  example: string
+  /** One sentence: what to give as the channel address and what is refused. */
+  hint: string
+}
+
 export interface BrowserService {
   session(account: Account): BrowserSession
   /** Shows the account's browser to the user at `url` (login handoff) and gives them control. */
@@ -277,6 +295,12 @@ export interface BrowserService {
   chromeFound?(): boolean
   /** Optional (DEC-026): lets go of the page and the window kept for an account, without erasing its session; called when the account moves to the other browser. */
   releaseAccount?(account: Account): Promise<void>
+  /**
+   * Optional (DEC-028): the address and title of the page open in the OWNER's window of the account, as the browser reports them; null when the owner
+   * does not hold it. Nothing is read from the page itself (no script, no text, no picture). The core strips the address down to what may be shown.
+   * `tabs` is how many pages the window holds when there can be more than one (Chrome): with several, nobody can tell which one the owner is on.
+   */
+  ownerPage?(account: Account): Promise<OwnerPage | null>
 }
 
 /** Optional capability of a browser service (DEC-016): what an account's page shows and did, when the owner asks. */
@@ -402,6 +426,8 @@ export interface Connector {
   loginUrl(): string
   /** Platform page where a new account is registered (DEC-015). Absent when the connector does not know one. */
   signupUrl?(): string
+  /** Optional (DEC-028): where channels of the platform are found, and what an address of one looks like. Absent when the connector knows none. */
+  channelGuide?(): ChannelGuide
   checkLogin(ctx: ConnectorContext): Promise<LoginState>
   /** Inspects the channel without publishing anything. Only actually verified capabilities may be 'verified'. */
   assess(ctx: ConnectorContext): Promise<Capability[]>

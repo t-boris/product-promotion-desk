@@ -462,6 +462,8 @@ export interface PlatformInfo {
   signupUrl?: string
   /** Said instead of the registration steps when the platform has no registration page on the web. */
   signupNote?: string
+  /** Where channels of the platform are found and chosen (a list or a search of communities, groups, accounts), opened in the account's own browser (DEC-028); empty when the platform has none. */
+  browseUrl?: string
   /** The platform whose account this one signs in through (DEC-027): Threads signs in with Instagram. Such an account has no credentials of its own. */
   signsInWith?: string
   /** Named platform served by the universal connector (DEC-013): what address to give, what a post holds, what to know. */

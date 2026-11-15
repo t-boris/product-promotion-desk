@@ -3,6 +3,7 @@ import type { Id, OpportunityState } from '../../../shared/types'
 import { call, useAction, useQuery } from '../hooks'
 import { Button, EmptyState, ErrorNote, Field, Hint, Loading, Page } from '../ui'
 import { connectChannelHref } from './attention-links'
+import { OpenChannelBrowser } from './channels/OpenChannelBrowser'
 import { useMainActionOwner } from './review/main-action'
 import { OlderDiscussions } from './review/OlderDiscussions'
 import { ProductFilter, useProductDirectory, useProductFilter } from './review/products'
@@ -77,6 +78,8 @@ export function OpportunitiesPage() {
               {checking.busy ? 'Checking…' : 'Check now'}
             </Button>
           )}
+          {/* The chosen channel's page in the browser of its account, to look around signed in as it (DEC-028). */}
+          {selected && <OpenChannelBrowser channelId={selected.id} testId="opportunities-browse" />}
         </div>
         <ErrorNote error={directory.error ?? checking.error} />
         {lastRun && (

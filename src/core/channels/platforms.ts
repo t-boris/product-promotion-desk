@@ -8,6 +8,12 @@ import { PLATFORM_PRESETS, presetFor } from './presets'
 
 const capitalize = (text: string): string => (text ? text[0].toUpperCase() + text.slice(1) : text)
 
+/** What a prepared connector says about its channels (DEC-028): where they are found, a typical address, what to give. */
+function guideFields(connector: Connector): Pick<PlatformInfo, 'browseUrl' | 'example' | 'hint'> | Record<string, never> {
+  const guide = connector.channelGuide?.()
+  return guide ? { browseUrl: guide.browseUrl, example: guide.example, hint: guide.hint } : {}
+}
+
 export function platformInfo(connector: Connector): PlatformInfo {
   return {
     connectorId: connector.id,
@@ -15,7 +21,8 @@ export function platformInfo(connector: Connector): PlatformInfo {
     label: connector.label?.trim() || capitalize(connector.platform),
     prepared: connector.id !== UNIVERSAL_CONNECTOR_ID,
     loginUrl: connector.loginUrl(),
-    ...(connector.signupUrl ? { signupUrl: connector.signupUrl() } : {})
+    ...(connector.signupUrl ? { signupUrl: connector.signupUrl() } : {}),
+    ...guideFields(connector)
   }
 }
 
@@ -32,6 +39,7 @@ export function listPlatforms(connectors: ConnectorRegistry): PlatformInfo[] {
         label: p.label,
         prepared: false,
         loginUrl: p.loginUrl,
+        browseUrl: p.browseUrl,
         ...(p.signupUrl ? { signupUrl: p.signupUrl } : {}),
         ...(p.signupNote ? { signupNote: p.signupNote } : {}),
         ...(p.signsInWith ? { signsInWith: p.signsInWith } : {}),

@@ -4,6 +4,7 @@ import { call, useAction, useQuery } from '../hooks'
 import { publicationsProductOf } from '../route'
 import { Button, EmptyState, ErrorNote, Field, Hint, Loading, OpenFormsScope, Page } from '../ui'
 import { connectChannelHref } from './attention-links'
+import { OpenChannelBrowser } from './channels/OpenChannelBrowser'
 import { useMainActionOwner } from './review/main-action'
 import { PublicationForm } from './review/PublicationForm'
 import { ProductFilter, useProductDirectory, useProductFilter } from './review/products'
@@ -88,6 +89,8 @@ function PublicationsScreen() {
               Write one myself
             </Button>
           )}
+          {/* The chosen channel's page in the browser of its account, to look around signed in as it (DEC-028). */}
+          {channelId && <OpenChannelBrowser channelId={channelId} testId="publications-browse" />}
           {/* Why the two buttons are off, beside them, with the way to fix it. */}
           {directory.ready && !channelId && (
             <Hint className="toolbar-hint" data-testid="publication-needs-channel">

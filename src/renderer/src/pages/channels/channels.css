@@ -450,16 +450,35 @@ textarea.input.short {
     text-align: right;
   }
 }
-.suggestion-row {
+/* An item and its buttons: the words take the free width, the buttons sit at the end, and the "Open browser" block of the item (below)
+   takes a line of its own. */
+.suggestion-row,
+.account-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: var(--space-2) var(--space-3);
 }
-.suggestion-row > :first-child {
-  flex: 1;
+.suggestion-row > :first-child,
+.account-item > :first-child {
+  flex: 1 1 240px;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+/* "Open browser" (DEC-028): while the owner works in the account's window the control is a block of a line of its own (the note, then the
+   window's buttons); a sentence or an error of the closed control also takes the whole line under its button. */
+.open-browser-panel {
+  flex: 1 1 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.open-browser-line {
+  flex: 1 1 100%;
+  min-width: 0;
 }
 
 /* An account row: the name has the whole first line (it ellipsizes there), the platform and the state tag share the second. */

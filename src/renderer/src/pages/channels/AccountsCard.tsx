@@ -1,9 +1,12 @@
 import type { Account, Channel, PlatformInfo } from '../../../../shared/types'
+import { call } from '../../hooks'
 import { accountsNewHref } from '../../route'
 import { Button, Card, Hint, More, useMainVariant } from '../../ui'
 import { contactLine } from './account-link'
 import { AccountStatusLine } from './AccountStatus'
 import { platformLabel } from './model'
+import { rowBlocker } from './open-browser'
+import { OpenAccountBrowser } from './OpenAccountBrowser'
 
 /**
  * The accounts this product works with (DEC-015): those its channels use and those that were made for it. Accounts are one
@@ -59,15 +62,20 @@ export function AccountsCard({
       <div className="rows">
         {accounts.map((account) => {
           const used = channels.filter((c) => c.accountId === account.id).length
+          const info = platforms.find((p) => p.platform === account.platform)
           return (
-            <div key={account.id} data-testid={`product-account-${account.id}`}>
-              <div className="account-line">
-                <strong>{account.label}</strong> <span className="muted">{platformLabel(account.platform, platforms)}</span> <AccountStatusLine status={account.status} />
+            <div key={account.id} className="account-item" data-testid={`product-account-${account.id}`}>
+              <div>
+                <div className="account-line">
+                  <strong>{account.label}</strong> <span className="muted">{platformLabel(account.platform, platforms)}</span> <AccountStatusLine status={account.status} />
+                </div>
+                <div className="hint">
+                  {account.role ? `Role: ${account.role.name} · ` : ''}
+                  {contactLine(account, info?.signsInWith !== undefined)} · {used} channel{used === 1 ? '' : 's'} of this product
+                </div>
               </div>
-              <div className="hint">
-                {account.role ? `Role: ${account.role.name} · ` : ''}
-                {contactLine(account, platforms.find((p) => p.platform === account.platform)?.signsInWith !== undefined)} · {used} channel{used === 1 ? '' : 's'} of this product
-              </div>
+              {/* Look for channels on the platform, signed in as this account (DEC-028). */}
+              <OpenAccountBrowser account={account} open={() => call('accounts.browseChannels', { accountId: account.id })} blockedReason={rowBlocker(info)} testId={`account-browse-${account.id}`} />
             </div>
           )
         })}

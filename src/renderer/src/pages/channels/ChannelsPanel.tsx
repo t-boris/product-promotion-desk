@@ -114,7 +114,7 @@ export function ChannelsPanel({ productId }: { productId: string }) {
         }
       >
         <SuggestRoles productId={productId} blocked={blocked} engineLabel={engineLabel} onUse={(suggestion: RoleSuggestion) => (window.location.hash = accountsNewHref({ name: suggestion.name, voice: suggestion.voice }, productId))} />
-        <SuggestChannels productId={productId} platforms={platformList} blocked={blocked} engineLabel={engineLabel} onUse={(suggestion: ChannelSuggestion) => setPrefill({ suggestion })} />
+        <SuggestChannels productId={productId} accounts={[...productAccounts, ...accountList.filter((a) => !productAccounts.includes(a))]} platforms={platformList} blocked={blocked} engineLabel={engineLabel} onUse={(suggestion: ChannelSuggestion) => setPrefill({ suggestion })} />
       </Disclosure>
     </div>
   )

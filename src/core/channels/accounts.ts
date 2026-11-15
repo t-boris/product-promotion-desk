@@ -10,12 +10,12 @@ import { BROWSER_BUSY, browserError, found, requireText } from './errors'
 import { parseEmail } from './mailboxes'
 import { loginOutcome } from './login'
 import { connectorForPlatform, listPlatforms } from './platforms'
-import { hostMatches, presetFor } from './presets'
+import { addressOnPlatform, expandHandle, hostMatches, presetFor } from './presets'
 import { parseRole, sameRoleName } from './roles'
 import { blankCapabilities } from './capabilities'
 import { passwordKey } from '../vault'
 import type { ChannelsStore } from './store'
-import { parseBrowserUrl } from './urls'
+import { parseBrowserUrl, publicAddress } from './urls'
 
 const MAX_LABEL = 80
 const ACCOUNT_CHANGED_DETAIL = 'The signed-in account changed; review before sending'
@@ -316,6 +316,59 @@ export class AccountsService {
     } catch (error) {
       throw browserError(error, { code: 'open_failed', message: (reason) => `Could not open the browser: ${reason}` })
     }
+  }
+
+  /**
+   * "Open browser" from a place where a channel is chosen or shown (DEC-028): the typed address when it reads as a channel of the account's
+   * platform, else the page of the platform where channels are found. The owner looks around there, signed in as the account.
+   */
+  async browseChannels(args: { accountId: string; address?: string }): Promise<{ tabId: string }> {
+    const account = this.account(args.accountId)
+    return this.openBrowser({ accountId: account.id, url: this.browseTarget(account, args.address) })
+  }
+
+  private browseTarget(account: Account, address: string | undefined): string {
+    const typed = address?.trim() ?? ''
+    const preset = presetFor(account.platform)
+    const connector = this.connectorFor(account)
+    if (typed && connector) {
+      try {
+        const normalized = connector.normalizeTarget(preset ? expandHandle(preset, typed) : typed)
+        if (normalized.url && (!preset || addressOnPlatform(preset, normalized.url))) return normalized.url
+      } catch {
+        // Not an address of this platform: the page where channels are found is opened instead.
+      }
+    }
+    const browse = preset?.browseUrl || connector?.channelGuide?.().browseUrl || ''
+    if (browse) return browse
+    throw new ApiError(
+      'no_browse_url',
+      typed
+        ? `"${typed}" is not an address of a page. Type the full address of the site, for example https://forum.example.com/c/general.`
+        : 'Type the address of the site first: this kind of account has no page of its own where channels are found.'
+    )
+  }
+
+  /**
+   * The address of the page in the owner's window of the account, for "Use the page I'm on" (DEC-028). Only while the owner holds the window,
+   * and only the address (no query, no fragment) and the title: the page itself is not read, and nothing is stored. Null when no window is open.
+   */
+  async currentPage(accountId: unknown): Promise<{ url: string; title: string; trimmed: boolean } | null> {
+    const account = this.account(accountId)
+    if (!hasOpenUserWindow(this.core.browser, account) || typeof this.core.browser.ownerPage !== 'function') return null
+    const page = await this.core.browser.ownerPage(account).catch((error: unknown) => {
+      // The reason may carry an address: only that it failed is written down.
+      this.core.log.warn('accounts', `The address of the page open in the browser of ${account.label} could not be read (${error instanceof Error ? error.name : 'error'}).`)
+      throw new ApiError('read_failed', 'The address of the page could not be read. Try again in a moment.')
+    })
+    if (!page) return null
+    if ((page.tabs ?? 1) > 1) {
+      throw new ApiError('several_tabs', 'Several tabs are open in this browser and the app cannot tell which one you are on. Close the others, keep the page you want, and try again.')
+    }
+    const url = publicAddress(page.url)
+    if (!url) throw new ApiError('not_a_page', 'The page open now is not a web page (a web address starts with http or https). Open the page of the channel and try again.')
+    this.core.log.info('accounts', `The address of the page open in the browser of ${account.label} was taken (${new URL(url).host}) because you asked for it.`)
+    return { url, title: page.title.slice(0, 200), trimmed: new URL(page.url).href !== url }
   }
 
   takeControl(accountId: unknown): void {

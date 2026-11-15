@@ -1,20 +1,28 @@
 import { useState } from 'react'
-import type { ChannelSuggestion, PlatformInfo } from '../../../../shared/types'
+import type { Account, ChannelSuggestion, PlatformInfo } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
 import { Badge, Button, ErrorNote, Hint, More } from '../../ui'
 import { AiIdeaHead } from './AiIdeaHead'
 import { platformLabel } from './model'
+import { accountForIdea } from './open-browser'
+import { OpenAccountBrowser } from './OpenAccountBrowser'
 import type { Blocked } from './suggestion-block'
 
-/** Ideas from the AI for where this product's audience talks. Nothing is connected: "Use this" only fills the form above. */
+/**
+ * Ideas from the AI for where this product's audience talks. Nothing is connected: "Use this" only fills the form above, and "Open browser"
+ * only looks at the idea in the browser of the account that "Use this" would choose (DEC-028); with no account on that platform it is not offered.
+ */
 export function SuggestChannels({
   productId,
+  accounts,
   platforms,
   blocked,
   engineLabel,
   onUse
 }: {
   productId: string
+  /** Every account of the library, the accounts of this product first: the first one on an idea's platform looks at it. */
+  accounts: Account[]
   platforms: PlatformInfo[]
   blocked: Blocked | null
   engineLabel: string | undefined
@@ -49,17 +57,21 @@ export function SuggestChannels({
       {ideas && ideas.length === 0 && <p className="muted">The AI had no safe suggestion this time.</p>}
       {ideas && ideas.length > 0 && (
         <div className="rows" data-testid="suggestions">
-          {ideas.map((idea, index) => (
-            <div className="suggestion-row" key={`${idea.platform}:${idea.target}:${index}`} data-testid="suggestion">
-              <div>
-                <strong>{idea.target}</strong> <span className="muted">{platformLabel(idea.platform, platforms)}</span> <Badge tone="warn">Unverified</Badge>
-                <div className="hint">{idea.reason}</div>
+          {ideas.map((idea, index) => {
+            const looker = accountForIdea(idea, platforms, accounts)
+            return (
+              <div className="suggestion-row" key={`${idea.platform}:${idea.target}:${index}`} data-testid="suggestion">
+                <div>
+                  <strong>{idea.target}</strong> <span className="muted">{platformLabel(idea.platform, platforms)}</span> <Badge tone="warn">Unverified</Badge>
+                  <div className="hint">{idea.reason}</div>
+                </div>
+                {looker && <OpenAccountBrowser key={looker.id} account={looker} open={() => call('accounts.browseChannels', { accountId: looker.id, address: idea.target })} testId="suggestion-browse" />}
+                <Button onClick={() => onUse(idea)} data-testid="suggestion-use">
+                  Use this
+                </Button>
               </div>
-              <Button onClick={() => onUse(idea)} data-testid="suggestion-use">
-                Use this
-              </Button>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </section>

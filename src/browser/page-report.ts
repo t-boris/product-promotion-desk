@@ -18,6 +18,11 @@ export function addressOf(url: string): string {
   }
 }
 
+/** A message with every web address in it cut down to host and path: an error of Chrome quotes the whole address, query and all. */
+export function withoutQueries(message: string): string {
+  return message.replace(/https?:\/\/[^\s'")>\]]+/gi, (address) => addressOf(address) || '(address)')
+}
+
 /**
  * Writes `<dir>/<account>/<time>.json` (the report without the picture) and `<time>.png`, then removes the older ones. Returns the
  * path of the picture, or null when nothing could be written: a report is still useful without a copy on disk.

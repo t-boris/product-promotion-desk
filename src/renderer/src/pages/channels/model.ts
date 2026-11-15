@@ -1,7 +1,10 @@
 // Wording and small pure rules for the Channels screen. Kept apart from the components so they stay easy to read.
 
-import type { Account, AccountStatus, Capability, CapabilityKey, CapabilityStatus, Channel, ChannelMode, ChannelStatus, ChannelSuggestion, PlanFormat, PlatformInfo } from '../../../../shared/types'
+import type { Account, AccountStatus, Capability, CapabilityKey, CapabilityStatus, Channel, ChannelMode, ChannelStatus, PlanFormat, PlatformInfo } from '../../../../shared/types'
 import type { Tone } from '../../ui'
+
+// The two rules about an address that "Open browser" needs too live in a module without components, so they are tested on their own.
+export { platformOfSuggestion, typedAddress } from './address'
 
 /** The name of a platform for people: the connector's own label, from platforms.list. */
 export function platformLabel(platform: string, platforms: PlatformInfo[]): string {
@@ -16,11 +19,6 @@ export function addressExample(info: PlatformInfo | undefined): string {
   return info && !info.prepared ? 'https://forum.example.com/c/general' : 'Community name or web address'
 }
 
-/** What the owner typed, with a handle ("@brand") on a named platform turned into the address it stands for. */
-export function typedAddress(info: PlatformInfo | undefined, text: string): string {
-  const handle = /^@([A-Za-z0-9_.]{1,60})$/.exec(text.trim())?.[1]
-  return handle && info?.handleUrl ? info.handleUrl.replace('{handle}', handle) : text.trim()
-}
 
 /** An address written the way people write it, reduced so that "r/Astrology", "reddit.com/r/astrology/" and the full link compare equal. */
 function plainAddress(text: string): string {
@@ -49,10 +47,6 @@ export function isWebAddress(text: string): boolean {
   return /^https?:\/\/\S+$/i.test(text.trim())
 }
 
-/** The platform a suggestion is meant for: "other" (or an unknown key) means a site the app has no prepared connector for. */
-export function platformOfSuggestion(suggestion: ChannelSuggestion, platforms: PlatformInfo[]): PlatformInfo | undefined {
-  return platforms.find((p) => p.platform === suggestion.platform) ?? platforms.find((p) => p.platform === 'web')
-}
 
 /** What a step of a channel plan is made of, in plain words. */
 export const PLAN_FORMAT_LABEL: Record<PlanFormat, string> = { text: 'Text', image: 'Photo', video: 'Video', link: 'Link', other: 'Other' }

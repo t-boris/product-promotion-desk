@@ -16,6 +16,7 @@ import {
   type BrowserSession,
   type Clock,
   type Connector,
+  type OwnerPage,
   type SecretClipboard,
   SecretOpenError,
   type SecretStore,
@@ -257,6 +258,12 @@ export class FakeBrowserService implements BrowserService {
 
   async pageReport(account: Account): Promise<PageReport | null> {
     return this.pageReports.get(account.id) ?? null
+  }
+
+  /** What the page of the owner's window reports (tests set it, keyed by account id); the real services answer only while the owner holds the window. */
+  readonly ownerPages = new Map<string, OwnerPage>()
+  async ownerPage(account: Account): Promise<OwnerPage | null> {
+    return this.ownerPages.get(account.id) ?? null
   }
 
   /** Accounts whose browser was brought to the front for the owner to act in it. */
