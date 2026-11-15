@@ -11,7 +11,8 @@
 // when it was written); the screen asks only for a text the owner wrote or changed.
 
 import { ApiError } from '../../shared/api'
-import type { DraftCheckResult, DraftFinding, Id } from '../../shared/types'
+import { renderForPlatform } from '../../shared/post-format'
+import type { DraftCheckResult, DraftFinding, Id, PostMarkup } from '../../shared/types'
 import { holdsCredential, isRecord } from '../assist/kit'
 import { requireText } from '../channels/errors'
 import type { Core } from '../core'
@@ -31,7 +32,7 @@ const MAX_LINK = MAX_TEXT_LENGTH
 export interface DraftCheckArgs {
   opportunityId: Id
   /** The editor as it stands (the owner changed something and has not saved); without it the saved draft is read. */
-  form?: { title: string; text: string; link: string }
+  form?: { title: string; text: string; link: string; markup?: PostMarkup }
 }
 
 /** The safety rules that can be broken by a text that cites nothing; the two that are about citing never are, in the owner's mode. */
@@ -45,8 +46,12 @@ export class DraftCheck {
 
   check(args: DraftCheckArgs): DraftCheckResult {
     const opp = this.store.requireOpportunity(requireText(args.opportunityId, 'The item'))
-    const content = this.contentOf(opp.id, args.form)
     const channel = this.store.requireChannel(opp.channelId)
+    // What is read is what the platform will show, as at the approval: the marks of a post written in the post editor are not words, and a title
+    // a platform has no place for is not read at all (DEC-030). A text that is not markdown is read as it is.
+    const written = this.contentOf(opp.id, args.form)
+    const shown = renderForPlatform({ title: written.title || null, text: written.text, link: written.link || null, attachments: [], markup: written.markup }, channel.platform)
+    const content = { title: shown.title ?? '', text: shown.text, link: shown.link ?? '' }
     const product = this.core.repos.product(channel.productId)
     const knowledge = loadKnowledge(this.core, channel.productId)
 
@@ -93,7 +98,7 @@ export class DraftCheck {
   }
 
   /** The text the owner is about to approve: the editor's, when it was sent, else the draft saved for this item. */
-  private contentOf(opportunityId: Id, form: DraftCheckArgs['form']): { title: string; text: string; link: string } {
+  private contentOf(opportunityId: Id, form: DraftCheckArgs['form']): { title: string; text: string; link: string; markup: PostMarkup } {
     if (form !== undefined) {
       const raw = form as unknown
       if (!isRecord(raw) || typeof raw.title !== 'string' || typeof raw.text !== 'string' || typeof raw.link !== 'string') {
@@ -102,10 +107,10 @@ export class DraftCheck {
       if (raw.text.length > MAX_TEXT) throw new ApiError('invalid_input', `The text is longer than ${MAX_TEXT} characters and cannot be checked whole.`)
       if (raw.title.length > MAX_TITLE) throw new ApiError('invalid_input', `The title is longer than ${MAX_TITLE} characters and cannot be checked whole.`)
       if (raw.link.length > MAX_LINK) throw new ApiError('invalid_input', `The link is longer than ${MAX_LINK} characters and cannot be checked whole.`)
-      return { title: raw.title, text: raw.text, link: raw.link }
+      return { title: raw.title, text: raw.text, link: raw.link, markup: raw.markup === 'markdown' ? 'markdown' : 'legacy' }
     }
     const draft = this.core.repos.latestDraft(opportunityId)
     if (!draft) throw new ApiError('no_draft', 'There is no draft to check. Write one first.')
-    return { title: draft.title ?? '', text: draft.text, link: draft.link ?? '' }
+    return { title: draft.title ?? '', text: draft.text, link: draft.link ?? '', markup: draft.markup }
   }
 }

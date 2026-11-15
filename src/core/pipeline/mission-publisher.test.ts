@@ -9,6 +9,7 @@ import type { PostMissionOutcome, PostMissionRequest, PostMissionService } from 
 import { TicketError, type SendTicket } from '../ports'
 import type { PublishedItem } from '../testing/fake-connector'
 import { SendBlockedError, SendGate, type GateGrant } from './gate'
+import { renderForPlatform } from '../../shared/post-format'
 import { contentHash } from './hash'
 import { AI_BROWSER_BASIS, MissionPublisher, missionHosts } from './mission-publisher'
 import type { SendingFlow } from './sending'
@@ -335,6 +336,53 @@ describe('the ticket of a submit is bound to exactly this content, account and d
     })
     await sending().send(opp.id)
     expect(second).toMatchObject({ ok: false })
+  })
+})
+
+describe('a post written in the post editor goes through the AI browser as the platform shows it', () => {
+  const markdownPost = async (text: string) => {
+    const created = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { markup: 'markdown', title: 'A title', text } })
+    await world.core.router.call('opportunities.approve', { id: created.opportunity.id })
+    return created.opportunity
+  }
+
+  it.each([
+    ['text the platform shows unchanged', 'plain words only'],
+    ['text with marks the platform flattens', 'some **bold** words and a [link](https://example.org/a)']
+  ])('gets a ticket for the approved draft and types the rendered words: %s', async (_name, text) => {
+    world = makeWorld()
+    const opp = await markdownPost(text)
+    const draft = world.core.repos.latestDraft(opp.id)!
+    const shown = renderForPlatform(draft, 'fake')
+    let typed = ''
+    useMissions(async (request) => {
+      const result = await press(request, {
+        during: (ticket) => {
+          world.core.tickets.assertValid(ticket, { accountId: world.account.id, destination: request.authority.content.destination, contentHash: contentHash(draft, world.account, request.authority.content.destination) })
+        }
+      })
+      expect(result).toMatchObject({ ok: true })
+      typed = request.authority.content.text
+      return { reported: { status: 'done', reason: 'It shows.' } }
+    })
+
+    const action = await sending().send(opp.id)
+
+    expect(typed).toBe(shown.text)
+    expect(action.state).toBe('confirmed')
+    expect(publishCalls()).toBe(0)
+  })
+
+  it('refuses a mission that was handed anything but the approved draft as the platform shows it, before it can press', async () => {
+    world = makeWorld()
+    const opp = await markdownPost('some **bold** words')
+    useMissions(async () => undefined)
+    const publisher = new MissionPublisher(world.core, world.sending as never, {} as never)
+    const draft = world.core.repos.latestDraft(opp.id)!
+    const grant = { draft, channel: world.channel, account: world.account, request: { kind: 'post', destination: 'https://fake.test/r/x/', title: null, text: draft.text, link: null, attachments: [] } } as unknown as GateGrant
+    const result = await publisher.publish({ connector: world.connector as never, ctx: {} as never }, grant, new Date().toISOString(), false)
+    expect(result).toMatchObject({ status: 'not_started' })
+    expect((result as { error: string }).error).toMatch(/not what was approved/)
   })
 })
 

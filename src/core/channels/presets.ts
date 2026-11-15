@@ -40,7 +40,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     example: '@yourbrand',
     accepts: ['image', 'video'],
     hint: 'The address of the profile, e.g. https://www.instagram.com/yourbrand/ or @yourbrand.',
-    note: 'A post needs a photo or a video: the application does not create media, you bring the files. The platform restricts automation, so expect checks and limits.'
+    note: 'A post needs a photo or a video. A picture can be brought by the owner or made by the AI from a description (when Codex is ready); the application does not make video. The platform restricts automation, so expect checks and limits.'
   },
   {
     platform: 'facebook',
@@ -66,7 +66,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     example: '@yourbrand',
     accepts: ['video'],
     hint: 'The address of the profile, e.g. https://www.tiktok.com/@yourbrand or @yourbrand.',
-    note: 'A post is a video that you make: the application does not create media. The platform restricts automation.'
+    note: 'A post is a video that you make: the application does not make video. The platform restricts automation.'
   },
   {
     platform: 'x',

@@ -1,0 +1,625 @@
+// How a post written in the post editor (DEC-030) looks on each platform. One pure module serves the preview on the screen, the request the
+// application sends and the check before approval, so what the owner saw is what is sent.
+//
+// A post is written in a small Markdown subset: emphasis, headings, lists, quotes, code, links and pictures placed in the text as
+// `![alt](media:<id>)`. Platforms have no typefaces; Reddit shows Markdown, the others show plain text. A draft that is not `markdown` (every
+// older draft, every reply, every text the AI wrote) is sent exactly as it is written.
+
+import type { Attachment, PostMarkup } from './types'
+
+/**
+ * The version of what a markdown post becomes on a platform. It is part of the approval hash of a markdown post: change a rule of the
+ * renderer or a limit of a platform in a way that changes what is sent, and raise this number, so that every approval given under the old
+ * rule stops matching and the owner approves what the new rule sends. (A draft that is not markdown is never rendered and never affected.)
+ */
+export const RENDER_VERSION = 1
+
+/** One measure of length for the limits, the counter on the screen and the approval: characters, so an emoji is one. */
+export const characterCount = (text: string): number => [...text].length
+
+// ───────────────────────────── the parsed text ─────────────────────────────
+
+export type Inline =
+  | { t: 'text'; v: string }
+  | { t: 'strong'; c: Inline[] }
+  | { t: 'em'; c: Inline[] }
+  | { t: 'code'; v: string }
+  | { t: 'link'; href: string; c: Inline[] }
+  | { t: 'image'; alt: string; id: string }
+  /** A line break inside a paragraph. `hard`: the line ended with two spaces or a backslash; Reddit joins the lines of a soft break. */
+  | { t: 'br'; hard: boolean }
+
+export type Block =
+  | { t: 'p'; c: Inline[] }
+  | { t: 'h'; level: 1 | 2 | 3 | 4 | 5 | 6; c: Inline[] }
+  /** `depths`: how deep each item is (0 is the top level). */
+  | { t: 'ul'; items: Inline[][]; depths: number[] }
+  /** `start`: the number the owner gave the first item. */
+  | { t: 'ol'; items: Inline[][]; depths: number[]; start: number }
+  | { t: 'quote'; c: Inline[][] }
+  | { t: 'pre'; v: string }
+  | { t: 'hr' }
+
+/**
+ * A picture placed in the text: `![alt](media:<id>)`. The alt text and the id are bounded, so no text can make a search for one slow, and
+ * every reader of a text (the parser, the preview, the check, the editor) agrees on what is one.
+ */
+const MEDIA_IMAGE = /^!\[([^\]\n]{0,200})\]\(media:([A-Za-z0-9-]{1,64})\)/
+const PICTURE_IN_TEXT = /!\[[^\]\n]{0,200}\]\(media:([A-Za-z0-9-]{1,64})\)/g
+
+/** The ids of the pictures placed in a text, in the order they first appear. */
+export function pictureIdsIn(text: string): string[] {
+  const ids: string[] = []
+  for (const match of text.matchAll(PICTURE_IN_TEXT)) if (!ids.includes(match[1])) ids.push(match[1])
+  return ids
+}
+
+const LINK = /^\[([^\]\n]+)\]\((https?:\/\/[^\s()]+)\)/i
+const BARE_URL = /^https?:\/\/[^\s<>]+/i
+const ESCAPABLE = /[\\`*_{}[\]()#+\-.!>~|]/
+const WORD = /[\p{L}\p{N}]/u
+
+/**
+ * One parse scans at most this many characters looking for closing marks; what is not closed within it is plain text. It also bounds how
+ * deep marks can nest (a level costs the scan to its closing mark, so a few hundred levels use it up) and how long a text of unclosed
+ * marks can take: nothing a person pastes makes this slow or overflow the stack.
+ */
+const SCAN_BUDGET = 200_000
+
+/**
+ * The end of a bare web address that starts at `from` (and is not part of a word), or -1. An address is taken whole: the marks inside it
+ * (`_next/static/_build_/x.js`, a segment written between asterisks) are part of it, and the punctuation that closes a sentence or a mark is not.
+ */
+function urlEnd(source: string, from: number): number {
+  if (from > 0 && WORD.test(source[from - 1])) return -1
+  const match = BARE_URL.exec(source.slice(from, from + 2048))
+  if (!match) return -1
+  return from + match[0].replace(/[.,;:!?'")\]*_~]+$/, '').length
+}
+
+/** A mark may open where a word does not run into it, and close where the word it closes does not run on: `5*3 and 2*4` and `snake_case` have no marks. */
+const opens = (source: string, at: number): boolean => at === 0 || !WORD.test(source[at - 1])
+const closes = (source: string, after: number): boolean => after >= source.length || !WORD.test(source[after])
+
+/** Inline marks. A mark that is not closed is plain text; nothing here can fail, and no text can make it slow or deep. */
+export function parseInline(source: string): Inline[] {
+  return inlines(source, 0, { left: SCAN_BUDGET })
+}
+
+function inlines(source: string, depth: number, budget: { left: number }): Inline[] {
+  const out: Inline[] = []
+  // Where a search for each kind of closing mark came up empty: no later opener of that kind can find one either, so the search is made once.
+  const none: Record<string, number> = {}
+  let text = ''
+  const flush = (): void => {
+    if (text) out.push({ t: 'text', v: text })
+    text = ''
+  }
+  let i = 0
+  while (i < source.length) {
+    const ch = source[i]
+    if (ch === '\\' && i + 1 < source.length) {
+      if (source[i + 1] === '\n') {
+        flush()
+        out.push({ t: 'br', hard: true })
+        i += 2
+        continue
+      }
+      if (ESCAPABLE.test(source[i + 1])) {
+        text += source[i + 1]
+        i += 2
+        continue
+      }
+    }
+    if (ch === '`') {
+      const close = source.indexOf('`', i + 1)
+      if (close > i + 1) {
+        flush()
+        out.push({ t: 'code', v: source.slice(i + 1, close) })
+        i = close + 1
+        continue
+      }
+    }
+    if (ch === 'h' || ch === 'H') {
+      const end = urlEnd(source, i)
+      if (end > i) {
+        text += source.slice(i, end)
+        i = end
+        continue
+      }
+    }
+    if (ch === '!') {
+      const image = MEDIA_IMAGE.exec(source.slice(i, i + 300))
+      if (image) {
+        flush()
+        out.push({ t: 'image', alt: image[1], id: image[2] })
+        i += image[0].length
+        continue
+      }
+    }
+    if (ch === '[') {
+      const link = LINK.exec(source.slice(i, i + 2200))
+      if (link) {
+        flush()
+        out.push({ t: 'link', href: link[2], c: inlines(link[1], depth + 1, budget) })
+        i += link[0].length
+        continue
+      }
+    }
+    if (ch === '*' || ch === '_') {
+      // A run of marks: four or more (a rule, a blank to fill in, a row of stars) is plain text, and so is one that is followed by a space.
+      let run = 1
+      while (source[i + run] === ch) run += 1
+      if (run >= 4 || /\s/.test(source[i + run] ?? ' ')) {
+        text += ch.repeat(run)
+        i += run
+        continue
+      }
+    }
+    if ((ch === '*' || ch === '_') && source[i + 1] === ch && opens(source, i) && !/\s/.test(source[i + 2] ?? ' ')) {
+      const close = findClose(source, i + 2, ch + ch, budget, none)
+      if (close > i + 2 && !/\s/.test(source[close - 1])) {
+        flush()
+        out.push({ t: 'strong', c: inlines(source.slice(i + 2, close), depth + 1, budget) })
+        i = close + 2
+        continue
+      }
+    }
+    if (ch === '*' || ch === '_') {
+      const close = opens(source, i) && !/\s/.test(source[i + 1] ?? ' ') ? findClose(source, i + 1, ch, budget, none) : -1
+      if (close > i + 1 && !/\s/.test(source[close - 1])) {
+        flush()
+        out.push({ t: 'em', c: inlines(source.slice(i + 1, close), depth + 1, budget) })
+        i = close + 1
+        continue
+      }
+    }
+    text += ch
+    i += 1
+  }
+  flush()
+  return out
+}
+
+/**
+ * The position of the closing mark, skipping escapes, code and web addresses; -1 when there is none, or when the scan has used its budget.
+ * A closing mark that ends a run (`***both***`) is taken at the end of the run, so the marks left over belong to the mark inside.
+ */
+function findClose(source: string, from: number, mark: string, budget: { left: number }, none: Record<string, number>): number {
+  if (none[mark] !== undefined && from >= none[mark]) return -1
+  for (let i = from; i < source.length; i += 1) {
+    if (budget.left <= 0) return -1
+    budget.left -= 1
+    if (source[i] === '\\') {
+      i += 1
+      continue
+    }
+    if (source[i] === '`') {
+      const end = source.indexOf('`', i + 1)
+      if (end > i) i = end
+      continue
+    }
+    if (source[i] === 'h' || source[i] === 'H') {
+      const end = urlEnd(source, i)
+      if (end > i) {
+        i = end - 1
+        continue
+      }
+    }
+    if (source.startsWith(mark, i)) {
+      if (!closes(source, i + mark.length)) continue
+      if (mark.length === 1 && source[i + 1] === mark) {
+        i += 1
+        continue
+      }
+      let at = i
+      while (mark.length === 2 && source[at + 2] === mark[0]) at += 1
+      return at
+    }
+  }
+  none[mark] = Math.min(none[mark] ?? from, from)
+  return -1
+}
+
+/** How many spaces end a line: counted from the end, so the cost is the length of the run whatever the line holds. */
+function trailingSpaces(line: string): number {
+  let n = 0
+  while (n < line.length && line[line.length - 1 - n] === ' ') n += 1
+  return n
+}
+
+/** The lines of one paragraph as inline marks, a line break between lines (hard when the line ends with two spaces). */
+function paragraph(lines: string[]): Inline[] {
+  const out: Inline[] = []
+  lines.forEach((line, index) => {
+    const spaces = trailingSpaces(line)
+    out.push(...parseInline(line.slice(0, line.length - spaces).trim()))
+    if (index < lines.length - 1) out.push({ t: 'br', hard: spaces >= 2 })
+  })
+  return out
+}
+
+const HEADING_OPEN = /^(#{1,6})[ \t]+/
+
+/** A heading line: its level and words. A closing run of `#` is part of the markup only when a space comes before it (`# C#` is a heading about C#). */
+function headingOf(line: string): { level: 1 | 2 | 3 | 4 | 5 | 6; text: string } | null {
+  const open = HEADING_OPEN.exec(line)
+  if (!open) return null
+  let text = line.slice(open[0].length).trimEnd()
+  let end = text.length
+  while (end > 0 && text[end - 1] === '#') end -= 1
+  if (end < text.length && (end === 0 || text[end - 1] === ' ' || text[end - 1] === '\t')) text = text.slice(0, end).trimEnd()
+  return { level: open[1].length as 1 | 2 | 3 | 4 | 5 | 6, text }
+}
+
+const RULE = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/
+/** A list line, at any indentation: the indentation says how deep it is. */
+const BULLET = /^([ \t]*)[-*+][ \t]+(.*)$/
+/** A list number has one or two digits: a line that starts with "2025. Our best year" is a sentence. */
+const NUMBERED = /^([ \t]*)(\d{1,2})[.)][ \t]+(.*)$/
+const QUOTE = /^[ \t]{0,3}>[ \t]?(.*)$/
+const FENCE = /^[ \t]{0,3}(```+|~~~+)/
+
+/** The width of an indentation, a tab counting as four spaces. */
+const indentWidth = (indent: string): number => [...indent].reduce((width, c) => width + (c === '\t' ? 4 : 1), 0)
+
+export function parseBlocks(source: string): Block[] {
+  const lines = source.replace(/\r\n?/g, '\n').split('\n')
+  const blocks: Block[] = []
+  let para: string[] = []
+  const endParagraph = (): void => {
+    if (para.length > 0) blocks.push({ t: 'p', c: paragraph(para) })
+    para = []
+  }
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i]
+    const fence = FENCE.exec(line)
+    if (fence) {
+      endParagraph()
+      const code: string[] = []
+      i += 1
+      while (i < lines.length && !lines[i].trimStart().startsWith(fence[1].slice(0, 3))) {
+        code.push(lines[i])
+        i += 1
+      }
+      i += 1
+      blocks.push({ t: 'pre', v: code.join('\n') })
+      continue
+    }
+    if (line.trim() === '') {
+      endParagraph()
+      i += 1
+      continue
+    }
+    const heading = headingOf(line)
+    if (heading) {
+      endParagraph()
+      blocks.push({ t: 'h', level: heading.level, c: parseInline(heading.text) })
+      i += 1
+      continue
+    }
+    if (RULE.test(line)) {
+      endParagraph()
+      blocks.push({ t: 'hr' })
+      i += 1
+      continue
+    }
+    if (BULLET.test(line) || NUMBERED.test(line)) {
+      endParagraph()
+      const ordered = NUMBERED.test(line) && !BULLET.test(line)
+      const kind = ordered ? NUMBERED : BULLET
+      const start = ordered ? Number(NUMBERED.exec(line)?.[2] ?? 1) : 1
+      const items: Inline[][] = []
+      const depths: number[] = []
+      const indents: number[] = []
+      while (i < lines.length) {
+        const match = kind.exec(lines[i])
+        if (match) {
+          // How deep an item is: how many shallower indentations are open above it.
+          const width = indentWidth(match[1])
+          while (indents.length > 0 && indents[indents.length - 1] > width) indents.pop()
+          if (indents.length === 0 || indents[indents.length - 1] < width) indents.push(width)
+          items.push(parseInline(match[ordered ? 3 : 2]))
+          depths.push(indents.length - 1)
+          i += 1
+          continue
+        }
+        // A line indented under an item goes on with that item instead of ending the list.
+        if (items.length > 0 && lines[i].trim() !== '' && indentWidth(/^[ \t]*/.exec(lines[i])?.[0] ?? '') >= 2 && !BULLET.test(lines[i]) && !NUMBERED.test(lines[i]) && !FENCE.test(lines[i])) {
+          items[items.length - 1] = [...items[items.length - 1], { t: 'br', hard: false }, ...parseInline(lines[i].trim())]
+          i += 1
+          continue
+        }
+        break
+      }
+      blocks.push(ordered ? { t: 'ol', items, depths, start } : { t: 'ul', items, depths })
+      continue
+    }
+    if (QUOTE.test(line)) {
+      endParagraph()
+      const paragraphs: string[][] = [[]]
+      while (i < lines.length) {
+        const match = QUOTE.exec(lines[i])
+        if (!match) break
+        if (match[1].trim() === '') paragraphs.push([])
+        else paragraphs[paragraphs.length - 1].push(match[1])
+        i += 1
+      }
+      blocks.push({ t: 'quote', c: paragraphs.filter((p) => p.length > 0).map(paragraph) })
+      continue
+    }
+    para.push(line)
+    i += 1
+  }
+  endParagraph()
+  return blocks
+}
+
+// ───────────────────────────── plain text ─────────────────────────────
+
+/** What stands where a picture was taken out, until the spaces around it are closed up. */
+const GAP = '\u0001'
+
+/** Takes the markers of removed pictures out of a line, with the spaces they left: one space stays between two words, none at an edge. Every other space stays. */
+function closeGaps(line: string): string {
+  if (!line.includes(GAP)) return line
+  let out = ''
+  let i = 0
+  while (i < line.length) {
+    if (line[i] !== GAP) {
+      out += line[i]
+      i += 1
+      continue
+    }
+    let keep = out.length
+    while (keep > 0 && (out[keep - 1] === ' ' || out[keep - 1] === '\t')) keep -= 1
+    const wordBefore = keep > 0 && out[keep - 1] !== '\n'
+    out = out.slice(0, keep)
+    let next = i + 1
+    while (next < line.length && (line[next] === ' ' || line[next] === '\t' || line[next] === GAP)) next += 1
+    if (wordBefore && next < line.length && line[next] !== '\n') out += ' '
+    i = next
+  }
+  return out
+}
+
+/** The words of an inline run without its marks: a link shows its address after the words, a picture shows nothing. */
+export function inlineToPlain(inlines: Inline[]): string {
+  return inlines
+    .map((node): string => {
+      switch (node.t) {
+        case 'text':
+          return node.v
+        case 'code':
+          return node.v
+        case 'strong':
+        case 'em':
+          return inlineToPlain(node.c)
+        case 'link': {
+          const words = inlineToPlain(node.c)
+          return words === node.href || words === '' ? node.href : `${words} (${node.href})`
+        }
+        case 'image':
+          return GAP
+        case 'br':
+          return '\n'
+      }
+    })
+    .join('')
+}
+
+/** What a platform that shows no marks receives: the words, with headings as lines, lists as bullets and quotes in quotation marks. */
+export function toPlainText(source: string): string {
+  const blocks = parseBlocks(source)
+  const parts = blocks.map((block): string => {
+    switch (block.t) {
+      case 'p':
+        return inlineToPlain(block.c)
+      case 'h':
+        return inlineToPlain(block.c)
+      case 'ul':
+        return block.items.map((item, index) => `${'  '.repeat(block.depths[index])}• ${inlineToPlain(item)}`).join('\n')
+      case 'ol': {
+        // Each depth counts on its own, and a shallower item starts the deeper ones again.
+        const counters: number[] = []
+        return block.items
+          .map((item, index) => {
+            const depth = block.depths[index]
+            counters.length = depth + 1
+            counters[depth] = (counters[depth] ?? (depth === 0 ? block.start - 1 : 0)) + 1
+            return `${'  '.repeat(depth)}${counters[depth]}. ${inlineToPlain(item)}`
+          })
+          .join('\n')
+      }
+      case 'quote':
+        return block.c.map((q) => `“${inlineToPlain(q)}”`).join('\n\n')
+      case 'pre':
+        return block.v
+      case 'hr':
+        return '———'
+    }
+  })
+  // A picture taken out of a line is closed up (nothing else in a line is touched, spacing and code included); a line does not end in spaces.
+  return parts
+    .map((part, index) => (blocks[index].t === 'pre' ? part : part.split('\n').map((line) => closeGaps(line).trimEnd()).join('\n').trim()))
+    .filter((part) => part !== '')
+    .join('\n\n')
+}
+
+const PICTURE_EVERYWHERE = /!\[[^\]\n]{0,200}\]\(media:([A-Za-z0-9-]{1,64})\)/g
+const PICTURE_HERE = /!\[[^\]\n]{0,200}\]\(media:[A-Za-z0-9-]{1,64}\)/
+/** What is left of a list, quote or heading line when its picture was taken out: nothing a reader should see (a bare `-` under a line would turn it into a heading). */
+const BARE_MARKER = /^[ \t]*(?:[-*+]|\d{1,2}[.)]|>|#{1,6})[ \t]*$/
+
+/**
+ * The text without pictures placed in it (all of them, or those `which` accepts). Only the pictures go: the spaces they leave are closed up,
+ * a line that held nothing else goes with its blank line so no gap is left, code (fenced) is not touched, and every other character of the
+ * text stays as the owner wrote it.
+ */
+export function removePictures(source: string, which: (id: string) => boolean = () => true): string {
+  if (!PICTURE_HERE.test(source)) return source
+  const out: string[] = []
+  let gap = false
+  let fence: string | null = null
+  for (const line of source.split('\n')) {
+    const opened = FENCE.exec(line)
+    if (fence !== null) {
+      if (line.trimStart().startsWith(fence)) fence = null
+      out.push(line)
+      gap = false
+      continue
+    }
+    if (opened) {
+      fence = opened[1].slice(0, 3)
+      out.push(line)
+      gap = false
+      continue
+    }
+    if (PICTURE_HERE.test(line)) {
+      let removed = false
+      const rest = closeGaps(
+        line.replace(PICTURE_EVERYWHERE, (mark, id: string) => {
+          if (!which(id)) return mark
+          removed = true
+          return GAP
+        })
+      )
+      if (removed) {
+        if (rest.trim() === '' || BARE_MARKER.test(rest)) {
+          gap = true
+          continue
+        }
+        out.push(rest)
+        gap = false
+        continue
+      }
+    }
+    // The blank line after a picture that stood alone would double the one before it.
+    if (gap && line.trim() === '' && (out.length === 0 || out[out.length - 1].trim() === '')) continue
+    out.push(line)
+    gap = false
+  }
+  return out.join('\n')
+}
+
+/** Pictures placed in a Markdown text, all removed (a platform that takes pictures beside the text, not inside it). */
+export const withoutInlinePictures = (source: string): string => removePictures(source).trim()
+
+// ───────────────────────────── platforms ─────────────────────────────
+
+export interface PlatformForm {
+  /** What the platform shows: `markdown` (Reddit) or plain text only. */
+  format: 'markdown' | 'plain'
+  /** Whether the platform has a title above the text. */
+  hasTitle: boolean
+  titleLimit: number | null
+  textLimit: number | null
+  /** `required`: a post without a picture is refused by the platform (Instagram). */
+  pictures: 'none' | 'optional' | 'required'
+  maxPictures: number
+}
+
+const OTHER: PlatformForm = { format: 'plain', hasTitle: false, titleLimit: null, textLimit: null, pictures: 'optional', maxPictures: 10 }
+
+/** What each platform of the application shows and holds. Limits are the platforms' published ones; a site that is not listed has none. */
+export const PLATFORM_FORMS: Record<string, PlatformForm> = {
+  reddit: { format: 'markdown', hasTitle: true, titleLimit: 300, textLimit: 40_000, pictures: 'optional', maxPictures: 20 },
+  instagram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 2_200, pictures: 'required', maxPictures: 10 },
+  facebook: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 63_206, pictures: 'optional', maxPictures: 10 },
+  threads: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 500, pictures: 'optional', maxPictures: 10 },
+  x: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 280, pictures: 'optional', maxPictures: 4 },
+  linkedin: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 3_000, pictures: 'optional', maxPictures: 9 },
+  telegram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 4_096, pictures: 'optional', maxPictures: 10 },
+  pinterest: { format: 'plain', hasTitle: true, titleLimit: 100, textLimit: 500, pictures: 'required', maxPictures: 1 },
+  tiktok: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 2_200, pictures: 'none', maxPictures: 0 },
+  youtube: { format: 'plain', hasTitle: true, titleLimit: 100, textLimit: 5_000, pictures: 'none', maxPictures: 0 }
+}
+
+export const formOf = (platform: string): PlatformForm => PLATFORM_FORMS[platform] ?? OTHER
+
+const LABELS: Record<string, string> = { reddit: 'Reddit', instagram: 'Instagram', facebook: 'Facebook', threads: 'Threads', x: 'X', linkedin: 'LinkedIn', telegram: 'Telegram', pinterest: 'Pinterest', tiktok: 'TikTok', youtube: 'YouTube' }
+
+/** The name of the platform for a sentence; a site that is not listed is "this site". */
+export const platformLabel = (platform: string): string => LABELS[platform] ?? 'This site'
+
+export interface PostContent {
+  title: string | null
+  text: string
+  link: string | null
+  attachments: Attachment[]
+  markup: PostMarkup
+}
+
+export interface RenderedPost {
+  title: string | null
+  text: string
+  link: string | null
+  attachments: Attachment[]
+  format: 'markdown' | 'plain'
+  /** Things the owner should know about how the platform will show this post; they do not stop it. */
+  notes: string[]
+  /** Reasons the platform cannot take this post as it is; an approval is refused while there are any. */
+  problems: string[]
+}
+
+export interface RenderOptions {
+  /** `keep`: pictures stay in the Markdown text (the AI browser places them in the platform's own editor). Default `drop`: pictures go beside the text. */
+  pictures?: 'drop' | 'keep'
+}
+
+/**
+ * The post as `platform` receives it. A draft that is not `markdown` is returned exactly as written: nothing is changed, so nothing that
+ * was approved before the post editor can differ. For a `markdown` draft: Reddit gets the Markdown (pictures beside it), every other
+ * platform gets plain text, and a title the platform has no place for is left out and said so.
+ */
+export function renderForPlatform(content: PostContent, platform: string, options: RenderOptions = {}): RenderedPost {
+  const form = formOf(platform)
+  if (content.markup !== 'markdown') {
+    return { title: content.title, text: content.text, link: content.link, attachments: content.attachments, format: 'plain', notes: [], problems: [] }
+  }
+  const notes: string[] = []
+  const problems: string[] = []
+  const placed = pictureIdsIn(content.text).length
+  const text = form.format === 'markdown' ? (options.pictures === 'keep' ? content.text.trim() : withoutInlinePictures(content.text)) : toPlainText(content.text)
+  let title = content.title
+  const label = platformLabel(platform)
+  if (form.format === 'plain' && /[*_#>`~]|\]\(|^[ \t]*[-+][ \t]/m.test(content.text)) notes.push(`${label} shows no formatting: the marks are removed and the words stay.`)
+  if (placed > 0 && options.pictures !== 'keep') notes.push(`${label} takes the pictures beside the text, not inside it: they are shown after the text, in order.`)
+  if (title && !form.hasTitle) {
+    notes.push(`${label} has no title: the title is left out.`)
+    title = null
+  }
+  if (form.pictures === 'none' && content.attachments.length > 0) problems.push(`${label} takes no pictures with a post.`)
+  if (form.pictures === 'required' && content.attachments.length === 0) problems.push(`${label} needs a picture: add one.`)
+  if (content.attachments.length > form.maxPictures && form.maxPictures > 0) problems.push(`${label} takes at most ${form.maxPictures} picture${form.maxPictures === 1 ? '' : 's'}; this post has ${content.attachments.length}.`)
+  if (title && form.titleLimit !== null && characterCount(title) > form.titleLimit) problems.push(`The title is ${characterCount(title)} characters; ${label} allows ${form.titleLimit}.`)
+  if (form.textLimit !== null && characterCount(text) > form.textLimit) problems.push(`The text is ${characterCount(text)} characters; ${label} allows ${form.textLimit}.`)
+  if (text === '' && content.attachments.length === 0 && !title && !content.link) problems.push('There is nothing to post: no words and no picture.')
+  return { title, text, link: content.link, attachments: content.attachments, format: form.format, notes, problems }
+}
+
+/**
+ * Why a markdown post cannot be sent from this application as it is, in words: what the platform cannot take (`problems` of the render) and
+ * what the way the application publishes cannot carry. Today a picture goes out only as a Reddit post by itself, and no other platform takes
+ * one; the owner can copy the post and publish it by hand. Older drafts are not judged here: their connectors check them when they send.
+ */
+export function sendProblems(platform: string, rendered: RenderedPost): string[] {
+  const problems = [...rendered.problems]
+  const label = platformLabel(platform)
+  // What the Reddit publisher refuses, said before the owner approves rather than after the send fails.
+  if (platform === 'reddit') {
+    if (!rendered.title?.trim()) problems.push('A Reddit post needs a title.')
+    if (rendered.link && rendered.text.trim()) problems.push('A Reddit post is a link or a text, not both: leave the link out, or the words (put the link in the words).')
+    if (rendered.link && !/^https?:\/\//i.test(rendered.link)) problems.push('The link must start with http:// or https://.')
+  }
+  if (rendered.attachments.length > 0) {
+    if (platform === 'reddit') {
+      if (rendered.attachments.length > 1) problems.push(`From this application Reddit takes one picture as a post by itself; this post has ${rendered.attachments.length}.`)
+      else if (rendered.text.trim() || rendered.link) problems.push('From this application Reddit takes a picture only as a post by itself, without text or a link. Use “Copy post” and publish it by hand, or post the words without the picture.')
+    } else {
+      problems.push(`Pictures cannot be sent to ${label} from this application yet. Use “Copy post” and publish it by hand.`)
+    }
+  }
+  return problems
+}

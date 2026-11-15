@@ -14,6 +14,7 @@
 //    application cannot find is `unknown`, which blocks a resend exactly as for a connector.
 //  - A mission that ends without a press is a definite failure: nothing was submitted, whatever the AI says.
 
+import { renderForPlatform } from '../../shared/post-format'
 import type { Comment } from '../../shared/types'
 import type { Core } from '../core'
 import { TakeoverError, type Connector, type ConnectorContext, type PublishedRef, type PublishRequest } from '../ports'
@@ -71,6 +72,14 @@ export function missionHosts(...urls: string[]): string[] {
   return [...hosts]
 }
 
+/** The content a mission was given is not the approved draft as its platform shows it: a programming error, refused before any step. */
+export class MissionContentError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'MissionContentError'
+  }
+}
+
 /**
  * The authority one mission is given. It is built for one grant and one attempt, from the content the mission will type, and it is the
  * only holder of a ticket: the toolbox sees a lease on one for the length of one submit step.
@@ -82,8 +91,11 @@ export class MissionAuthority implements PostAuthority {
   private readonly typedHash: string
 
   /**
-   * `typed` is what the mission will put into the form; the ticket the gate gives must be bound to exactly it. It is hashed here, with the
-   * same function the gate and the approval use, from the account as the grant knows it.
+   * `typed` is what the mission will put into the form. Two things bind it. The ticket the gate gives is bound to the hash of the APPROVED
+   * DRAFT (what the owner saw and approved: a post written in the post editor is hashed as its Markdown source, with its markup), so the
+   * ticket is checked against that hash, computed here with the same function the gate and the approval use. And what the mission types must
+   * be exactly what the application renders from that draft for this platform (the preview, the check and the send use the same function),
+   * so a mission that was handed anything else is refused here, before it can press anything.
    */
   constructor(
     private readonly core: Core,
@@ -93,9 +105,12 @@ export class MissionAuthority implements PostAuthority {
     typed: { attachments: PublishRequest['attachments'] },
     private readonly automatic: boolean
   ) {
-    // A copy nobody can change afterwards: what the mission types is what was hashed, and what the ticket must be bound to.
+    const shown = renderForPlatform(grant.draft, grant.channel.platform)
+    const same = shown.title === content.title && shown.text === content.text && shown.link === content.link && JSON.stringify(shown.attachments) === JSON.stringify(typed.attachments)
+    if (!same) throw new MissionContentError('What the mission would type is not what was approved for this platform. Nothing was submitted.')
+    // A copy nobody can change afterwards: what the mission types is what was checked above, and the ticket must be bound to the approved draft.
     this.content = Object.freeze({ ...content })
-    this.typedHash = contentHash({ title: content.title, text: content.text, link: content.link, attachments: typed.attachments }, { id: grant.account.id, identity: grant.account.identity }, content.destination)
+    this.typedHash = contentHash(grant.draft, grant.account, content.destination)
   }
 
   seal(): void {
@@ -183,7 +198,13 @@ export class MissionPublisher {
 
     const request = grant.request
     const content: ApprovedContent = { kind: request.kind, title: request.title, text: request.text, link: request.link, destination: request.destination }
-    const authority = new MissionAuthority(this.core, this.gate, grant, content, { attachments: request.attachments }, automatic)
+    let authority: MissionAuthority
+    try {
+      authority = new MissionAuthority(this.core, this.gate, grant, content, { attachments: request.attachments }, automatic)
+    } catch (error) {
+      if (error instanceof MissionContentError) return { status: 'not_started', error: error.message }
+      throw error
+    }
     let outcome: PostMissionOutcome | null = null
     let crash: string | null = null
     try {

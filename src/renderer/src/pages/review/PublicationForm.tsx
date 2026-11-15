@@ -2,19 +2,18 @@ import { useState } from 'react'
 import type { Id } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
 import { Button, Card, ErrorNote, useOpenForm } from '../../ui'
-import { DraftEditor, toInput, type DraftForm } from './DraftEditor'
+import { DraftEditor, emptyForm, toInput, type DraftForm } from './DraftEditor'
 import { PostDrafter } from './PostDrafter'
-
-const EMPTY: DraftForm = { title: '', text: '', link: '', attachments: [] }
+import type { PostAuthor } from './PostPreview'
 
 /** Write a standalone publication by hand. It is saved as a draft: nothing is published until it is approved. */
-export function PublicationForm({ productId, channelId, onCreated, onCancel }: { productId: Id; channelId: Id; onCreated: () => void; onCancel: () => void }) {
+export function PublicationForm({ productId, channelId, platform, author, onCreated, onCancel }: { productId: Id; channelId: Id; platform: string; author: PostAuthor; onCreated: () => void; onCancel: () => void }) {
   // The form is open on demand, so "Save as draft" is the screen's filled button while it is the form opened last.
   const saveVariant = useOpenForm()
-  const [form, setForm] = useState<DraftForm>(EMPTY)
+  const [form, setForm] = useState<DraftForm>(emptyForm(true))
   const [create, creating] = useAction(async () => {
     await call('publications.create', { channelId, draft: toInput(form, true) })
-    setForm(EMPTY)
+    setForm(emptyForm(true))
     onCreated()
   })
   const input = toInput(form, true)
@@ -24,7 +23,7 @@ export function PublicationForm({ productId, channelId, onCreated, onCancel }: {
     <Card title="New publication">
       <div className="review-body">
         <PostDrafter productId={productId} channelId={channelId} form={form} onChange={setForm} />
-        <DraftEditor form={form} onChange={setForm} withTitle disabled={creating.busy} draft={null} autoFocus ai={{ channelId }} />
+        <DraftEditor form={form} onChange={setForm} withTitle disabled={creating.busy} draft={null} autoFocus ai={{ channelId }} post={{ productId, platform, author }} />
         <ErrorNote error={creating.error} />
         <div className="form-actions">
           {empty && (

@@ -26,6 +26,7 @@ import { ACCOUNT_NAME_LIMIT, normalizeName, renameProblem } from '../renderer/sr
 import { CAPABILITY_LABEL, CAPABILITY_ORDER, abilityNeedsDecision, abilityStatusLabel, capabilityRows, membershipWord } from '../renderer/src/pages/channels/capability-words'
 import { JOIN_NOTE, JOIN_OTHER_RUN, JOIN_OWNER_HOLDS, isJoinRunOf, joinButton, joinLabel } from '../renderer/src/pages/channels/join-control'
 import { approveLabels } from '../renderer/src/pages/review/approve-labels'
+import { removalWords } from '../renderer/src/pages/review/removal-words'
 import { channelLabel } from '../renderer/src/pages/review/channel-label'
 import { platformMismatch } from '../renderer/src/pages/channels/platform-hint'
 import {
@@ -1374,5 +1375,13 @@ describe('"Let the AI join" on the channel card (DEC-029)', () => {
     expect(isJoinRunOf(run({ kind: 'signin' }), 'c1')).toBe(false)
     expect(isJoinRunOf(null, 'c1')).toBe(false)
     expect(isJoinRunOf(undefined, 'c1')).toBe(false)
+  })
+})
+
+describe('taking an item out of the queue', () => {
+  it('deletes a post of the owner and rejects a reply, each in its own words', () => {
+    expect(removalWords('standalone')).toMatchObject({ label: 'Delete', list: 'Deleted' })
+    expect(removalWords('standalone').question).toMatch(/Nothing was sent/)
+    expect(removalWords('reply')).toMatchObject({ label: 'Reject', list: 'Rejected' })
   })
 })

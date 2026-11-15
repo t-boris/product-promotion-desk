@@ -469,3 +469,18 @@ export interface ImageShrinker {
   /** Writes a copy of the image no larger than `maxBytes` into `outDir` and returns its path; rejects when it cannot be made that small. */
   shrink(source: string, maxBytes: number, outDir: string): Promise<string>
 }
+
+/**
+ * What the post editor needs from the operating system and cannot get without Electron (DEC-005): the file dialog, a small copy of a
+ * picture for the screen and the file manager. The main process supplies this; without it the core still works (no dialog, the whole file
+ * is shown as the thumbnail when it is small).
+ */
+export interface MediaTools {
+  /** Opens the system's file dialog for pictures; the absolute paths the owner chose, or an empty list when the dialog was closed. */
+  pick(): Promise<string[]>
+  /** A copy of the picture whose longest side is at most `side` pixels, as a data address. */
+  thumbnail(path: string, side: number): Promise<string>
+  /** Shows the file in the system's file manager. */
+  reveal(path: string): void
+}
+

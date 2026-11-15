@@ -28,7 +28,7 @@ export class PublicationsFlow {
   /** The owner writes a publication by hand. */
   async create(channelId: Id, input: DraftInput): Promise<Opportunity> {
     const channel = this.store.requireChannel(channelId)
-    const content = await normalizeDraftInput(input)
+    const content = await normalizeDraftInput(input, { productId: channel.productId, media: this.core.services.media! })
     if (!content.text && !content.link && content.attachments.length === 0) {
       throw new ApiError('invalid_input', 'A publication needs text, a link or an image.')
     }

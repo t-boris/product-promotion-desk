@@ -27,6 +27,7 @@ export function buildCard(core: Core, store: FlowStore, opp: Opportunity): Oppor
   return {
     opportunity: opp,
     channelTarget: channel.target,
+    channelPlatform: channel.platform,
     accountLabel: account.identity ? `${account.label} (${account.identity})` : account.label,
     comment,
     discussion,

@@ -168,6 +168,7 @@ export const mapDraft = (r: Row): Draft => ({
   text: r.text as string,
   link: (r.link as string | null) ?? null,
   attachments: parseJson(r.attachments_json as string, []),
+  markup: (r.markup as Draft['markup'] | undefined) ?? 'legacy',
   knowledgeVersionId: (r.knowledge_version_id as string | null) ?? null,
   usedClaimLineageIds: parseJson(r.used_claims_json as string, []),
   rationale: r.rationale as string,

@@ -34,6 +34,14 @@ function looksLike(mime: string, head: Buffer): boolean {
   }
 }
 
+/** The type of an image by its first bytes, or null when they are not one of the supported images. */
+export function sniffMime(head: Buffer): string | null {
+  for (const mime of ['image/png', 'image/jpeg', 'image/gif', 'image/webp']) if (looksLike(mime, head)) return mime
+  return null
+}
+
+export const EXTENSION_BY_MIME: Record<string, string> = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/gif': '.gif', 'image/webp': '.webp' }
+
 async function readHead(path: string): Promise<Buffer> {
   const handle = await open(path, 'r')
   try {

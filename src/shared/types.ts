@@ -54,7 +54,15 @@ export interface PromotionGoal {
 export type PromotionGoalInput = Omit<PromotionGoal, 'id'> & { id?: Id }
 
 /** The text fields the AI can write or improve (assist.refine). The core holds the rules of each one. */
-export type AssistField = 'goal.targetAction' | 'goal.metrics' | 'goal.notes' | 'product.description' | 'channel.style' | 'channel.topics' | 'channel.queries'
+export type AssistField =
+  | 'goal.targetAction'
+  | 'goal.metrics'
+  | 'goal.notes'
+  | 'product.description'
+  | 'channel.style'
+  | 'channel.topics'
+  | 'channel.queries'
+  | 'picture.description'
 
 /** What the AI helps with in a draft: the title, the text, or a whole new post (title and text). */
 export type DraftHelpField = 'title' | 'text' | 'post'
@@ -713,7 +721,41 @@ export interface Attachment {
   path: string
   mime: string
   sha256: string
+  /** The picture of the media library this file is (DEC-030). A picture placed inside a text is found by it: `![alt](media:<id>)`. */
+  mediaId?: Id
 }
+
+// ───────────────────────────── Pictures and the post editor (DEC-030) ─────────────────────────────
+
+export type MediaOrigin = 'picked' | 'pasted' | 'dropped' | 'generated'
+
+/** The shape of a picture the AI makes: a square one, a wide one (landscape) or a tall one (portrait). */
+export type MediaShape = 'square' | 'wide' | 'tall'
+
+/** A picture of a product's library. The file lives in the application's data folder and never changes; a draft that uses it is bound to its bytes. */
+export interface MediaItem {
+  id: Id
+  productId: Id
+  name: string
+  /** Absolute path inside the data folder. */
+  path: string
+  mime: string
+  sha256: string
+  bytes: number
+  width: number | null
+  height: number | null
+  origin: MediaOrigin
+  /** What it shows, in the owner's words: the description it was made from, or the alternative text of a picture the owner added. */
+  description: string
+  createdAt: IsoTime
+}
+
+/**
+ * How the words of a draft are marked up. `legacy`: the text is sent as it is written (every draft before the editor, every reply, every
+ * text the AI wrote). `markdown`: the owner wrote it in the post editor with marks (emphasis, headings, lists, quotes, links) and pictures
+ * placed in the text; each platform gets the form it can show (DEC-030).
+ */
+export type PostMarkup = 'legacy' | 'markdown'
 
 export interface Draft {
   id: Id
@@ -722,6 +764,8 @@ export interface Draft {
   text: string
   link: string | null
   attachments: Attachment[]
+  /** How the text is marked up (see `PostMarkup`); part of what an approval binds when it is `markdown`. */
+  markup: PostMarkup
   /** Passport version used to prepare the draft. */
   knowledgeVersionId: Id | null
   /** Lineage ids of the approved claims the draft relies on; a change to any of them forces re-review. */
@@ -877,6 +921,8 @@ export interface HistoryEntry {
 export interface OpportunityCard {
   opportunity: Opportunity
   channelTarget: string
+  /** The platform of the channel ("reddit", "facebook"): what the post editor shows the post as, and what a picture needs to be sent. */
+  channelPlatform: string
   accountLabel: string
   comment: Comment | null
   discussion: Discussion | null

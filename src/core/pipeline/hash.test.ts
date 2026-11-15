@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { commentBodyHash, contentHash, type HashedAccount } from './hash'
 
 describe('content hash (REQ-004 criterion 1)', () => {
-  const base: { title: string | null; text: string; link: string | null; attachments: { name: string; sha256: string }[] } = {
+  const base: { title: string | null; text: string; link: string | null; attachments: { name: string; sha256: string }[]; markup?: 'legacy' | 'markdown' } = {
     title: 'T',
     text: 'body',
     link: 'https://natalmystic.com',
@@ -25,6 +25,24 @@ describe('content hash (REQ-004 criterion 1)', () => {
     ['a removed attachment', { ...base, attachments: [] }]
   ])('changes when the %s changes', (_name, changed) => {
     expect(hash(changed)).not.toBe(hash())
+  })
+
+  it('hashes a legacy draft exactly as before the post editor existed (every earlier approval stays valid, DEC-030)', () => {
+    // Computed with the algorithm of 0.15.0 on this exact content; a change here would silently void every approval given before.
+    const golden = '64326e6388cd78d12f87adaeaf06f619f66c77ac8c24e4572051388ee0fcb619'
+    expect(hash()).toBe(golden)
+    expect(hash({ ...base, markup: 'legacy' })).toBe(golden)
+  })
+
+  it('binds a markdown draft to the version of the rules that turn it into what a platform receives', () => {
+    // Raise RENDER_VERSION when a rule of the renderer or a limit changes what is sent: every approval of a markdown post then stops matching
+    // and the owner approves what the new rule sends. This value changes with it, on purpose.
+    expect(hash({ ...base, markup: 'markdown' })).toBe('c5a23874db15f28b9575626f5b3f63e19fde66888946d2c4ac1db769f1ca5ed7')
+  })
+
+  it('binds a markdown draft to its markup, and so to what each platform will be shown', () => {
+    expect(hash({ ...base, markup: 'markdown' })).not.toBe(hash())
+    expect(hash({ ...base, markup: 'markdown' })).toBe(hash({ ...base, attachments: [{ name: 'a.png', sha256: 'aa' }], markup: 'markdown' }))
   })
 
   it('changes with the account and with the destination', () => {

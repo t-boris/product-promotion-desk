@@ -715,3 +715,27 @@ Plan:
 - Press **Assess again** on r/astrology: Read posts now shows what Reddit answered (status and its own words). Then decide with the owner whether the way the listing is read changes.
 - Try **Let the AI join** on a community the account has not joined (Claude Code engine). What it shows: the name and role of Reddit's real Join control in the page; if not recognised the AI reports needs_owner and nothing is pressed. Record the result in issue #8 (live Reddit acceptance).
 
+
+## 0.16.0 – 0.19.0: pictures, a post editor, one post for many channels, a content mix (owner 2026-11-15; plan approved; DEC-030..033)
+
+Why: the owner asked for four things at once: (1) a content mix per channel with the persona's own updates, (2) one post to many channels (Instagram, Facebook...), (3) pictures as a principal part of a post (pick, paste, generate from a description the owner edits), (4) long posts with formatting and pictures inside the text. Plan: `~/.claude/plans/twinkly-pondering-hammock.md`. Owner decisions: the AI drives the account's browser for pictures and other platforms (lifts DEC-013's exclusion), our own Markdown editor with no new library, the AI may create own-update drafts on a schedule (drafts only), one Approve per group after every version was seen. Four slices, each released and installed before the next.
+
+### Slice A — 0.16.0 pictures and the post editor (branch `feat/media-and-post-editor`; DEC-030)
+- [x] A1 Media store: table `media` (migration 302), `<dataDir>/media/`, add/list/remove/thumbnail, orphan cleanup; `Attachment` unchanged.
+- [x] A2 Ingestion: `FilePicker` port, main-process dialog, paste/drop bytes via `media.add`, thumbnails as data URLs, API `media.*`.
+- [x] A3 Generate from a description the owner edits: shared `ImageGenerator` (profile picture uses it too), shape, candidates, Stop, "Suggest a description" through the assist kit.
+- [x] A4 Draft `markup` (migration 303), hash compatibility, inline `![alt](media:id)`, image-only drafts, checks count pictures.
+- [x] A5 Per-platform renderer + `fit()` + limits on presets; one function for preview, hash input, matching.
+- [x] A6 Editor UI: toolbar, live preview, paste/drop/choose, Make a picture dialog; replaces the textarea and the typed-path box. Owner asked mid-way (2026-11-15): show the post as EACH channel shows it (Reddit, Instagram, Facebook, Threads, X, LinkedIn, Telegram; a picker, the channel's own platform first) → done (`post-preview.ts`, `PostPreview.tsx`). And: posts that have not been sent can be edited and deleted → edit works in every unsent state; *Delete* (a reject, final: no edit/defer/approve brings it back; its pictures are released) → done. "Copy for manual publishing" is not built: the owner can copy the text from the box; a button for it comes with slice B/C if still wanted.
+- [x] A7a Tests (3200+), 50 mutation checks (all killed), own-instance probe (105/105, light/dark, measured), independent reviews (round 1: 1 critical + 4 major + minors; round 2 on the fixes: 2 major + minors; all fixed except two noted below), DEC-030, spec, lessons 184-195, memory, full gate green (3225 tests, 70 mutants killed, probe 105/105).
+  - Noted, not built (slice B): the AI-browser read-back (`innerText` equals the approved text) will refuse a markdown post typed into a rich-text box that turns `# `, `- `, `**x**` into formatting while typing; it fails closed, and the per-platform briefs of B must say how each box takes text. The ticket check at lease time no longer re-derives the typed text (it is compared once, in the constructor); binding the rendered output into the approval itself is an approval-architecture change and is left for the owner to decide.
+- [ ] A7b PR, CI, merge, tag v0.16.0, release, `deploy:local`.
+
+### Slice B — 0.17.0 the AI publishes with pictures, on other platforms (DEC-031)
+- [ ] `ApprovedContent` carries files; mission publisher accepts drafts with pictures; `browser_attach` (approved name only, file input only, once each, before submit); progress-click allowlist; `looksLikeSubmit` widened; briefs per platform; tests + mutants; probe on local pages (file form, create wizard) in both browsers; review; DEC-031; release.
+
+### Slice C — 0.18.0 one post, many channels (DEC-032)
+- [ ] `post_groups` + `opportunities.group_id` (migration 304); adapt per channel; suggest channels; approve all (one approval per version); send all (owner's press, per-account order); screens; tests, probe, review, DEC-032, release.
+
+### Slice D — 0.19.0 content mix and own updates (DEC-033)
+- [ ] `ChannelSettings.mix`, updates journal, own-update prompt and check, `mix.run` job (drafts only, 3 waiting, pause), Content mix card, plan steps get `kind`/`everyDays`; tests, probe with a fake clock, review, DEC-033, release.

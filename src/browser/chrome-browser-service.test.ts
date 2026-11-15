@@ -350,7 +350,8 @@ describe('ChromeBrowserService', () => {
       const { service } = make({ launchGate })
       const fb = account('a')
       const pending = service.session(fb).withAgentControl('t', async (page) => page.url()).then(() => 'opened', (error: Error) => error.message)
-      await new Promise((resolve) => setTimeout(resolve, 0))
+      // Wait for the launch itself, not for a fixed moment: how many turns of the loop it takes to start is not what is under test.
+      for (let waited = 0; launches.length === 0 && waited < 200; waited += 1) await new Promise((resolve) => setTimeout(resolve, 5))
       expect(launches).toHaveLength(1)
       const releasing = service.releaseAccount(fb)
       open()

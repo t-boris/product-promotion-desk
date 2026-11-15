@@ -3,6 +3,7 @@
 
 import type { AgentAsk, CapabilityKey, Claim, Id, MetricSnapshot, SendAction } from '../shared/types'
 import type { PostMissionService } from './browser-agent/post-submit'
+import type { MediaService } from './media/service'
 
 /** Implemented by the passports module (I-1); consumed by drafting and sending (I-5, I-6). */
 export interface KnowledgeProvider {
@@ -80,6 +81,8 @@ export interface AgentQuestions {
 }
 
 export interface CoreServices {
+  /** The picture library (DEC-030); the draft input adds the pictures of a draft to it and reads them from it. */
+  media?: MediaService
   agent?: AgentQuestions
   /** Implemented by the channels module; the send flow runs an approved publication through it when the owner chose the AI browser (B1). */
   postMissions?: PostMissionService

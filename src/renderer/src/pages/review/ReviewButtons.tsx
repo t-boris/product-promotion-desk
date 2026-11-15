@@ -7,6 +7,7 @@ import { fingerprint, heldFor, needsCheck, type Approving, type Held } from './a
 import { approveLabels } from './approve-labels'
 import { PREPARABLE_STATES } from './labels'
 import { mainActionOf } from './main-action'
+import { removalWords } from './removal-words'
 import { ResolveUnknown } from './ResolveUnknown'
 import type { ReviewActions } from './useReviewActions'
 
@@ -31,6 +32,7 @@ export function ReviewButtons({ card, actions, dirty, input, primaryAction = fal
   const id = opp.id
   const hasText = input.text.trim().length > 0 || Boolean(input.link) || (input.attachments?.length ?? 0) > 0
   const main = mainActionOf(opp.state, dirty)
+  const removal = removalWords(opp.kind)
   // While a form opened on demand is open on the same screen, it owns the filled button (see `OpenFormsScope`).
   const resting = useMainVariant()
   const mainVariant = primaryAction && resting === 'primary' ? 'primary' : 'secondary'
@@ -95,12 +97,13 @@ export function ReviewButtons({ card, actions, dirty, input, primaryAction = fal
           Defer
         </Button>
       )}
+      {/* A post of the owner's is deleted, not rejected: it is theirs, and nothing of it was sent. Under the hood it is the same cancel. */}
       <ConfirmAction
-        label="Reject"
+        label={removal.label}
         variant="quiet"
         className="danger"
-        question="Rejects this for good. A rejected item cannot be reopened."
-        confirmLabel="Reject"
+        question={removal.question}
+        confirmLabel={removal.label}
         onConfirm={() => actions.reject(id)}
         disabled={busy}
         testId="reject"

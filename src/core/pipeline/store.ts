@@ -2,6 +2,7 @@
 // opportunity/draft/approval/action tables goes through here so the other flow modules stay free of SQL.
 
 import { ApiError } from '../../shared/api'
+import { renderForPlatform } from '../../shared/post-format'
 import type {
   Account,
   Approval,
@@ -16,6 +17,7 @@ import type {
   OpportunityDecision,
   OpportunityKind,
   OpportunityState,
+  PostMarkup,
   SendAction
 } from '../../shared/types'
 import type { Core } from '../core'
@@ -64,6 +66,8 @@ export interface DraftContent {
   text: string
   link: string | null
   attachments: Attachment[]
+  /** Left out, the draft is `legacy`: the text is sent as it is written. */
+  markup?: PostMarkup
 }
 
 export interface DraftMeta {
@@ -220,7 +224,9 @@ export class FlowStore {
    */
   disclosureProblemOf(opp: Opportunity, draft: Draft): string | null {
     const product = this.core.repos.product(opp.productId)
-    return disclosureProblem({ title: draft.title, text: draft.text, link: draft.link }, { name: product.name, websiteUrl: product.websiteUrl })
+    // What is judged is what the platform will show: a link in a Markdown text shows its words and its address, not its marks (DEC-030).
+    const shown = renderForPlatform(draft, this.requireChannel(opp.channelId).platform)
+    return disclosureProblem({ title: shown.title, text: shown.text, link: shown.link }, { name: product.name, websiteUrl: product.websiteUrl })
   }
 
   list(filter: OpportunityFilter = {}): Opportunity[] {
@@ -366,8 +372,8 @@ export class FlowStore {
     const id = newId()
     this.db
       .prepare(
-        `INSERT INTO drafts (id, opportunity_id, title, text, link, attachments_json, knowledge_version_id, used_claims_json, rationale, author, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO drafts (id, opportunity_id, title, text, link, attachments_json, markup, knowledge_version_id, used_claims_json, rationale, author, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         id,
@@ -376,6 +382,7 @@ export class FlowStore {
         content.text,
         content.link,
         toJson(content.attachments),
+        content.markup ?? 'legacy',
         meta.knowledgeVersionId,
         toJson(meta.usedClaimLineageIds),
         meta.rationale,

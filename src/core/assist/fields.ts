@@ -97,6 +97,17 @@ export const FIELDS: Record<AssistField, FieldSpec> = {
     scope: 'channel',
     guard: 'all',
     splitOnCommas: true
+  },
+  'picture.description': {
+    label: 'description of a picture for a post',
+    purpose:
+      'What ONE picture for the post shows, so an image tool can make it: the subject, the setting, the style and the mood, in two or three plain sentences. The picture holds no text or letters, no logo and no real person\'s likeness. It illustrates the post (the title and text of the form); it does not repeat them.',
+    shape: 'prose',
+    max: 500,
+    maxLines: 1,
+    scope: 'product',
+    guard: 'credentials',
+    splitOnCommas: false
   }
 }
 

@@ -14,6 +14,7 @@ import {
   type Connector,
   type ConnectorContext,
   type ImageShrinker,
+  type MediaTools,
   type SecretClipboard,
   type SecretStore,
   type TicketVerifier
@@ -45,6 +46,8 @@ export interface CoreDeps {
   agentBridge?: AgentBridge
   /** Makes a smaller copy of a picture when a site refuses it for its size; without it the AI cannot shrink one. */
   imageShrinker?: ImageShrinker
+  /** The file dialog, thumbnails and the file manager for the post editor (DEC-030); without it the editor has no dialog. */
+  mediaTools?: MediaTools
   /** Waits for a page to react between steps; tests supply one that does not wait. */
   sleep?: (ms: number) => Promise<void>
   echoLogs?: boolean
@@ -68,6 +71,7 @@ export class Core {
   readonly clipboard: SecretClipboard | null
   readonly agentBridge: AgentBridge | null
   readonly imageShrinker: ImageShrinker | null
+  readonly mediaTools: MediaTools | null
   readonly sleep: (ms: number) => Promise<void>
   readonly tickets: TicketAuthority
   readonly router = new ApiRouter()
@@ -98,6 +102,7 @@ export class Core {
     this.clipboard = deps.clipboard ?? null
     this.agentBridge = deps.agentBridge ?? null
     this.imageShrinker = deps.imageShrinker ?? null
+    this.mediaTools = deps.mediaTools ?? null
     this.sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
     this.browser = typeof deps.browser === 'function' ? deps.browser(this.tickets) : deps.browser
     this.router.register({

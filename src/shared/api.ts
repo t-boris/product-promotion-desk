@@ -38,6 +38,10 @@ import type {
   ClaimStatus,
   Attachment,
   Discussion,
+  MediaItem,
+  MediaOrigin,
+  MediaShape,
+  PostMarkup,
   EngineId,
   EngineStatus,
   HistoryEntry,
@@ -87,6 +91,8 @@ export interface DraftInput {
   text: string
   link?: string | null
   attachments?: Attachment[]
+  /** `markdown` for a post written in the post editor; left out, the draft is `legacy` (the text is sent as it is written). */
+  markup?: PostMarkup
 }
 
 /** method → [arguments, result]. Every handler is implemented in src/core/api/*. */
@@ -283,7 +289,7 @@ export interface ApiMethods {
    */
   'opportunities.resolveUnknown': [{ id: Id; outcome: 'published' | 'not_published'; url?: string }, OpportunityCard]
   // The rules an AI draft passes, read against the owner's own text before it is approved. Local: no engine, nothing stored.
-  'drafts.check': [{ opportunityId: Id; form?: { title: string; text: string; link: string } }, DraftCheckResult]
+  'drafts.check': [{ opportunityId: Id; form?: { title: string; text: string; link: string; markup?: PostMarkup } }, DraftCheckResult]
   /**
    * The AI writes (the field is empty, or `post`) or improves (the field is filled, steered by the owner's `instruction`) the title or the
    * text of a reply or of a post. A card is named by `opportunityId`; a new publication that has no card yet, by `channelId`. `form` is
@@ -297,6 +303,28 @@ export interface ApiMethods {
   'drafts.refine': [{ field: DraftHelpField; opportunityId?: Id; channelId?: Id; form: { title: string; text: string }; instruction?: string; about?: string }, DraftHelpResult]
   'publications.suggest': [{ channelId: Id }, OpportunityCard]
   'publications.create': [{ channelId: Id; draft: DraftInput }, OpportunityCard]
+
+  // pictures (DEC-030): the library of a product, ingestion (a dialog, a paste, a drop) and the AI's image tool
+  /**
+   * What can be done here: the system dialog and the file manager (not in the loopback web mode) and, when `checkEngine` is set, whether an
+   * engine with an image tool is installed and ready (and why not). Checking an engine starts a process, so only a screen that is about to
+   * make a picture asks for it.
+   */
+  'media.status': [{ checkEngine?: boolean }, { canPick: boolean; canReveal: boolean; canMake: boolean | null; makeReason: string | null }]
+  /** Opens the system's file dialog (main process) and adds what the owner chose; an empty list when the dialog was closed. */
+  'media.pick': [{ productId: Id }, MediaItem[]]
+  /** Adds a picture from bytes: pasted from the clipboard or dropped on the editor. The file is checked like any attachment. */
+  'media.add': [{ productId: Id; name: string; base64: string; origin: Exclude<MediaOrigin, 'generated'>; description?: string }, MediaItem]
+  'media.list': [{ productId: Id }, MediaItem[]]
+  /** A small copy for the screen as a data address (the CSP allows nothing else), or null when the file is gone. */
+  'media.thumb': [{ id: Id; side?: number }, { dataUrl: string } | null]
+  'media.describe': [{ id: Id; description: string }, MediaItem]
+  /** Takes a picture out of the library; refused while a draft uses it. */
+  'media.remove': [{ id: Id }, void]
+  /** The AI makes a picture from the description the owner wrote or edited (Codex's image tool); the result is a new item of the library. */
+  'media.make': [{ productId: Id; description: string; shape: MediaShape }, MediaItem]
+  /** Shows the picture's file in the system's file manager (for a post the owner publishes by hand). */
+  'media.reveal': [{ id: Id }, void]
   'publications.schedule': [{ id: Id; at: IsoTime | null }, OpportunityCard]
 
   // results and logs (REQ-005, REQ-006)
@@ -325,6 +353,7 @@ export type ChangeScope =
   | 'attention'
   | 'settings'
   | 'ai'
+  | 'media'
 
 /**
  * Pushed from the core to every connected UI. `navigate` is the exception: the main process sends it straight to its own windows
