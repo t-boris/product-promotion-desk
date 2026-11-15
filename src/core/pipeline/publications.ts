@@ -10,7 +10,7 @@ import { holdsCredential } from '../assist/kit'
 import { AiError } from '../ports'
 import { mentionsProduct, POST_DISCLOSURE_NOTE } from './auto-guard'
 import { disclosureProblem } from './disclosure'
-import { channelView, loadKnowledge, roleView } from './context'
+import { loadKnowledge, postChannelView, roleView } from './context'
 import { normalizeDraftInput, isHttpUrl } from './draft-input'
 import {
   buildPublicationPrompt,
@@ -77,7 +77,7 @@ export class PublicationsFlow {
         label: PUBLICATION_LABEL,
         system: PUBLICATION_SYSTEM,
         prompt: buildPublicationPrompt({
-          channel: channelView(channel),
+          channel: postChannelView(channel),
           product: { name: product.name, website: product.websiteUrl, description: product.description },
           role,
           approved: knowledge.approved,
@@ -165,7 +165,7 @@ export class PublicationsFlow {
         label: UPDATE_LABEL,
         system: UPDATE_SYSTEM,
         prompt: buildUpdatePrompt({
-          channel: channelView(channel),
+          channel: postChannelView(channel),
           product: { name: product.name, website: product.websiteUrl },
           role,
           persona: profile ? { name: profile.display_name, about: profile.about, purpose: profile.purpose } : null,

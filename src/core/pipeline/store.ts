@@ -228,7 +228,7 @@ export class FlowStore {
     const product = this.core.repos.product(opp.productId)
     // What is judged is what the platform will show: a link in a Markdown text shows its words and its address, not its marks (DEC-030).
     const shown = renderForPlatform(draft, this.requireChannel(opp.channelId).platform)
-    return disclosureProblem({ title: shown.title, text: shown.text, link: shown.link }, { name: product.name, websiteUrl: product.websiteUrl })
+    return disclosureProblem({ title: shown.title, text: shown.text, link: shown.shownLink }, { name: product.name, websiteUrl: product.websiteUrl })
   }
 
   list(filter: OpportunityFilter = {}): Opportunity[] {

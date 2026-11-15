@@ -132,7 +132,7 @@ describe('the gate', () => {
     const draft = world.core.repos.latestDraft(opp.id)!
     const channel = world.core.repos.channel(opp.channelId)
     const destination = world.store.resolveDestination(opp, channel)
-    world.store.insertApproval({ draftId: draft.id, contentHash: contentHash(draft, world.account, destination), accountId: world.account.id, identity: null, destination, approvedBy: 'user', ruleId: null })
+    world.store.insertApproval({ draftId: draft.id, contentHash: contentHash(draft, world.account, destination, channel.platform), accountId: world.account.id, identity: null, destination, approvedBy: 'user', ruleId: null })
     world.store.updateOpportunity(opp.id, { state: 'ready', reason: '' })
   }
 

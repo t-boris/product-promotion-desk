@@ -131,7 +131,7 @@ describe('approve, reject and defer', () => {
     expect(card.approval?.ruleId).toBeNull()
     expect(card.approval?.accountId).toBe(world.account.id)
     expect(card.approval?.destination).toBe(destination)
-    expect(card.approval?.contentHash).toBe(contentHash(draft, world.account, destination))
+    expect(card.approval?.contentHash).toBe(contentHash(draft, world.account, destination, 'fake'))
     expect(card.opportunity.state).toBe('ready')
   })
 

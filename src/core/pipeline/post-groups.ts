@@ -13,7 +13,7 @@
 // Nothing here approves or sends by itself: this file is not reached from the scheduler.
 
 import { ApiError, type DraftInput } from '../../shared/api'
-import { formOf, platformLabel, renderForPlatform, sendProblems, type PostContent, type SendWays } from '../../shared/post-format'
+import { characterCount, formOf, platformLabel, renderForPlatform, sendProblems, type PostContent, type SendWays } from '../../shared/post-format'
 import type {
   Channel,
   Draft,
@@ -58,10 +58,15 @@ export interface PostGroupsOptions {
 const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 /** The wish to the AI for one platform, in the words of the platform's own limits (it must stay within the AI helper's length for a wish). */
-export function adaptInstruction(platform: string): string {
+export function adaptInstruction(platform: string, link: string | null = null): string {
   const form = formOf(platform)
   const parts = [`Adapt this post for ${platformLabel(platform)}.`, form.format === 'markdown' ? 'Markdown is fine.' : 'Write plain text with no markdown marks.']
-  if (form.textLimit !== null && form.textLimit <= WISH_LIMIT_MAX) parts.push(`At most ${form.textLimit} characters (aim for ${Math.floor(form.textLimit * 0.9)}).`)
+  if (form.textLimit !== null && form.textLimit <= WISH_LIMIT_MAX) {
+    // Where the link goes at the end of the text (DEC-036) it takes room of the limit: the words get what is left.
+    const taken = form.link === 'in_text' && link?.trim() ? characterCount(link.trim()) + 2 : 0
+    const room = form.textLimit - taken > 20 ? form.textLimit - taken : form.textLimit
+    parts.push(room < form.textLimit ? `At most ${room} characters, because the link is added after the text (aim for ${Math.floor(room * 0.9)}).` : `At most ${form.textLimit} characters (aim for ${Math.floor(form.textLimit * 0.9)}).`)
+  }
   parts.push('Keep the meaning, every fact and every link; add no new claim.')
   return parts.join(' ')
 }
@@ -206,7 +211,7 @@ export class PostGroupsFlow {
       const account = this.core.repos.account(channel.accountId)
       const rendered = renderForPlatform(content, channel.platform)
       const problems = this.fitProblems(channel.platform, content, sendWays(this.core, undefined, channel))
-      const disclosure = disclosureProblem({ title: rendered.title, text: rendered.text, link: rendered.link }, { name: product.name, websiteUrl: product.websiteUrl })
+      const disclosure = disclosureProblem({ title: rendered.title, text: rendered.text, link: rendered.shownLink }, { name: product.name, websiteUrl: product.websiteUrl })
       if (disclosure) problems.push(disclosure)
       const unavailable = this.availabilityProblem(channel, account.status)
       const fits = problems.length === 0 && unavailable === null
@@ -260,7 +265,7 @@ export class PostGroupsFlow {
               field: 'text',
               opportunityId: opp.id,
               form: { title: group.master.title ?? '', text: group.master.text },
-              instruction: adaptInstruction(channel.platform)
+              instruction: adaptInstruction(channel.platform, group.master.link)
             })
             const text = (written.text ?? '').trim()
             if (!text) throw new ApiError('suggest_failed', 'The AI gave back no text.')

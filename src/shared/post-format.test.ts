@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Attachment } from './types'
-import { RENDER_VERSION, pictureIdsIn, removePictures, characterCount, formOf, parseBlocks, parseInline, renderForPlatform, sendProblems, toPlainText, withoutInlinePictures, type PostContent, type SendWays } from './post-format'
+import { RENDER_VERSION, linkPlacementOf, linkRuleOf, pictureIdsIn, removePictures, characterCount, formOf, parseBlocks, parseInline, renderForPlatform, sendProblems, toPlainText, withoutInlinePictures, type PostContent, type SendWays } from './post-format'
 
 const picture = (id: string): Attachment => ({ name: `${id}.png`, path: `/data/media/${id}.png`, mime: 'image/png', sha256: id.repeat(8), mediaId: id })
 const post = (over: Partial<PostContent> = {}): PostContent => ({ title: 'A title', text: 'Some words', link: null, attachments: [], markup: 'markdown', ...over })
@@ -336,6 +336,130 @@ describe('no letter or digit of the owner is ever lost on a plain platform', () 
   })
 })
 
+describe('the link of a post where the platform has no field for it (DEC-036)', () => {
+  const link = 'https://natalmystic.com'
+
+  it.each(['facebook', 'threads', 'x', 'linkedin', 'telegram'])('%s: the link is the last paragraph of the text, and no longer a part of its own', (platform) => {
+    for (const markup of ['markdown', 'legacy'] as const) {
+      const rendered = renderForPlatform(post({ title: null, text: 'A caption.', link, markup }), platform)
+      expect(rendered.text, `${platform} ${markup}`).toBe(`A caption.\n\n${link}`)
+      expect(rendered.link, `${platform} ${markup}`).toBeNull()
+      expect(rendered.notes.join(' '), `${platform} ${markup}`).toMatch(/no link field: the link is added at the end of the text/)
+      expect(rendered.problems, `${platform} ${markup}`).toEqual([])
+    }
+  })
+
+  it('instagram: the link is left out, and the preview says so; the caption is what the owner wrote', () => {
+    for (const markup of ['markdown', 'legacy'] as const) {
+      const rendered = renderForPlatform(post({ title: null, text: 'A caption.', link, markup, attachments: [picture('a')] }), 'instagram')
+      expect(rendered.text).toBe('A caption.')
+      expect(rendered.link).toBeNull()
+      expect(rendered.notes.join(' ')).toMatch(/does not make a link in a post clickable and has no field for it: the link is left out/)
+      expect(rendered.problems).toEqual([])
+    }
+  })
+
+  it('reddit and a site that is not listed keep the link as a field of its own', () => {
+    for (const platform of ['reddit', 'some-new-site', 'pinterest']) {
+      const rendered = renderForPlatform(post({ title: 'T', text: '', link }), platform)
+      expect(rendered.link, platform).toBe(link)
+      expect(rendered.notes.join(' '), platform).not.toMatch(/link/)
+    }
+    expect(renderForPlatform(post({ text: 'Old', link, markup: 'legacy' }), 'reddit')).toMatchObject({ text: 'Old', link })
+  })
+
+  it('does not add an address the text already holds, and a post of only a link is that link', () => {
+    expect(renderForPlatform(post({ title: null, text: `See ${link} now`, link }), 'facebook')).toMatchObject({ text: `See ${link} now`, link: null, notes: [] })
+    expect(renderForPlatform(post({ title: null, text: '', link }), 'facebook')).toMatchObject({ text: link, link: null })
+    expect(renderForPlatform(post({ title: null, text: 'Words', link: '   ' }), 'facebook')).toMatchObject({ text: 'Words', link: '   ', notes: [] })
+  })
+
+  it('adds the link when the text holds only a longer address that starts with it, and not when it holds the address itself, also at the end of a sentence', () => {
+    expect(renderForPlatform(post({ title: null, text: `See ${link}/pricing now`, link }), 'facebook').text).toBe(`See ${link}/pricing now\n\n${link}`)
+    expect(renderForPlatform(post({ title: null, text: `See ${link}.uk now`, link }), 'facebook').text).toBe(`See ${link}.uk now\n\n${link}`)
+    expect(renderForPlatform(post({ title: null, text: `See ${link}. Then more`, link }), 'facebook')).toMatchObject({ text: `See ${link}. Then more`, notes: [] })
+    expect(renderForPlatform(post({ title: null, text: `Look (${link}) now`, link }), 'facebook')).toMatchObject({ text: `Look (${link}) now`, notes: [] })
+    const marked = renderForPlatform(post({ title: null, text: `[the site](${link})`, link }), 'facebook')
+    expect(marked.text).toBe(`the site (${link})`)
+    expect(marked.notes.join(' ')).not.toMatch(/link field/)
+  })
+
+  it('knows the address of the link however the text writes it: another case, a closing slash, and not a longer address, another port or the end of another word', () => {
+    // (an older draft is read as it is written: marks in an address are not marks)
+    const held = (text: string, address = 'https://x.io'): boolean => renderForPlatform(post({ title: null, text, link: address, markup: 'legacy' }), 'facebook').notes.length === 0
+    expect(held('See HTTPS://X.IO now')).toBe(true)
+    expect(held('See https://x.io/ now')).toBe(true)
+    expect(held('See https://x.io/. Next')).toBe(true)
+    expect(held('See https://x.io now', 'https://x.io/')).toBe(true)
+    expect(held('See https://x.io/pricing now')).toBe(false)
+    expect(held('See https://x.io:8080/a now')).toBe(false)
+    expect(held('See https://x.io?ref=1 now')).toBe(false)
+    expect(held('See https://x.io#top now')).toBe(false)
+    expect(held('See https://x.io.uk now')).toBe(false)
+    expect(held('See xhttps://x.io now')).toBe(false)
+    expect(held('See notx.io/a now', 'x.io/a')).toBe(false)
+    expect(held('See x.io/a now', 'x.io/a')).toBe(true)
+    expect(held('See https://x.io/?, then', 'https://x.io/')).toBe(false)
+    expect(held('Ссылка (https://x.io) тут')).toBe(true)
+    // the path is read as it is written: a case-sensitive server tells /Docs from /docs, and a look-alike letter is another letter
+    expect(held('See https://x.io/docs/a now', 'https://x.io/Docs/A')).toBe(false)
+    expect(held('See https://X.IO/Docs/A now', 'https://x.io/Docs/A')).toBe(true)
+    expect(held('See https://\u212A.io now', 'https://k.io')).toBe(false)
+    // every character of an address is itself, and none is a pattern
+    expect(held('See https://x.io/a+b now', 'https://x.io/a+b')).toBe(true)
+    expect(held('See https://x.io/aab now', 'https://x.io/a+b')).toBe(false)
+    expect(held('See https://x.io/a_(b)?c=1 now', 'https://x.io/a_(b)?c=1')).toBe(true)
+    expect(held('See https://x.io/a) now', 'https://x.io/a)')).toBe(true)
+    expect(held('See https://x.io/a[1] now', 'https://x.io/a[1]')).toBe(true)
+    expect(held('See https://x.io/a$ now', 'https://x.io/a$')).toBe(true)
+    // a link of no more than a slash is nothing to look for
+    expect(renderForPlatform(post({ title: null, text: 'Words and  more ', link: '/' }), 'facebook').text).toBe('Words and  more\n\n/')
+  })
+
+  it('says that a link added to the end of an older post took it over the limit, which it did not while the link was a part of its own', () => {
+    const near = 'x'.repeat(480)
+    for (const markup of ['legacy', 'markdown'] as const) {
+      const over = renderForPlatform(post({ title: null, text: near, link, markup }), 'threads')
+      expect(over.problems.join(' '), markup).toMatch(/505 characters; Threads allows 500/)
+    }
+    // an older post that was over the limit without a link is not judged here (it never was), and one that fits with the link has nothing to say
+    expect(renderForPlatform(post({ title: null, text: 'x'.repeat(520), link: null, markup: 'legacy' }), 'threads').problems).toEqual([])
+    expect(renderForPlatform(post({ title: null, text: 'x'.repeat(520), link, markup: 'legacy' }), 'threads').problems).toEqual([])
+    expect(renderForPlatform(post({ title: null, text: 'x'.repeat(400), link, markup: 'legacy' }), 'threads').problems).toEqual([])
+    // Instagram adds nothing to the text, so it takes no room of the limit
+    expect(renderForPlatform(post({ title: null, text: 'x'.repeat(2_190), link, markup: 'legacy', attachments: [picture('a')] }), 'instagram').problems).toEqual([])
+  })
+
+  it('names how a link is placed, for the approval to be bound to it: only where the form has no field and the draft has a link', () => {
+    expect(linkPlacementOf('facebook', 'https://x.io')).toBe('in_text:1')
+    expect(linkPlacementOf('instagram', 'https://x.io')).toBe('left_out:1')
+    expect(linkPlacementOf('reddit', 'https://x.io')).toBeNull()
+    expect(linkPlacementOf('some-new-site', 'https://x.io')).toBeNull()
+    expect(linkPlacementOf('facebook', null)).toBeNull()
+    expect(linkPlacementOf('facebook', '   ')).toBeNull()
+    expect(linkPlacementOf('instagram', undefined)).toBeNull()
+  })
+
+  it('counts the link against the limit of the text: a post that fits without it and not with it is refused, with the number', () => {
+    const rendered = renderForPlatform(post({ title: null, text: 'x'.repeat(480), link }), 'threads')
+    expect(rendered.text.length).toBe(480 + 2 + link.length)
+    expect(rendered.problems.join(' ')).toMatch(/505 characters; Threads allows 500/)
+  })
+
+  it('does not take a link alone for a post on a platform that leaves it out', () => {
+    const problems = renderForPlatform(post({ title: null, text: '', link }), 'instagram').problems.join(' ')
+    expect(problems).toMatch(/nothing to post/)
+    expect(problems).toMatch(/needs a picture/)
+  })
+
+  it('tells the AI that writes a post what the platform does with a link, and nothing for a platform that has a field', () => {
+    expect(linkRuleOf('instagram')).toMatch(/leave "link" empty/)
+    expect(linkRuleOf('facebook')).toMatch(/added at the end of the text.*counts against the text limit/)
+    expect(linkRuleOf('reddit')).toBeNull()
+    expect(linkRuleOf('some-new-site')).toBeNull()
+  })
+})
+
 describe('what a platform receives is pinned to the version of the rules', () => {
   // Change a rule so that one of these results changes, and RENDER_VERSION must be raised in the same change: an approval of a markdown post
   // is bound to the version, and a post that was approved under the old rule must be approved again for the new one.
@@ -349,6 +473,19 @@ describe('what a platform receives is pinned to the version of the rules', () =>
 
   it.each(corpus)('%s: %j', (platform, input, output) => {
     expect(renderForPlatform(post({ title: null, text: input }), platform).text).toBe(output)
+  })
+
+  // The link of a draft where the platform has no field for it (DEC-036) changed what a post with a link receives, and is bound apart
+  // (`linkPlacementOf`, in the hash), so the version is the same: Reddit and a post with no link are not made to be approved again.
+  const linked: [string, string, string | null, string][] = [
+    ['facebook', 'Words', 'https://example.org/a', 'Words\n\nhttps://example.org/a'],
+    ['threads', 'Words', 'https://example.org/a', 'Words\n\nhttps://example.org/a'],
+    ['instagram', 'Words', 'https://example.org/a', 'Words'],
+    ['reddit', 'Words', 'https://example.org/a', 'Words']
+  ]
+
+  it.each(linked)('%s with a link: %j + %j', (platform, text, link, output) => {
+    expect(renderForPlatform(post({ title: null, text, link }), platform).text).toBe(output)
   })
 
   it('is version 1 for this corpus', () => {

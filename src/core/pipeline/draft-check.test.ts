@@ -132,6 +132,19 @@ describe('drafts.check: the connection to the product', () => {
     expect(findings[0].why).toContain('does not say that you are connected')
   })
 
+  it('reads a post where the platform has no link field as the platform shows it: the link at the end of the text is the product\'s own link, so "it" in "I work on it" is the product (DEC-036)', async () => {
+    world = makeWorld({ mode: 'draft' })
+    const opp = await world.newOpportunity()
+    world.core.db.prepare('UPDATE channels SET platform = ? WHERE id = ?').run('facebook', world.channel.id)
+    const link = 'https://natalmystic.com'
+    expect((await check(opp.id, { text: 'I work on it.', link })).findings).toEqual([])
+    // what Instagram leaves out is not read: a caption that does not name the product needs no statement, whatever its link
+    world.core.db.prepare('UPDATE channels SET platform = ? WHERE id = ?').run('instagram', world.channel.id)
+    expect((await check(opp.id, { text: PLAIN, link })).findings).toEqual([])
+    // and a caption that does name it still needs one
+    expect((await check(opp.id, { text: 'Natal Mystic is great.', link })).findings.map((f) => f.rule)).toEqual(['connection_unsaid'])
+  })
+
   it('blocks a text that denies a connection', async () => {
     world = makeWorld({ mode: 'draft' })
     const opp = await world.newOpportunity()

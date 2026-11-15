@@ -140,6 +140,25 @@ describe('when a draft of the mix is due', () => {
   })
 })
 
+describe('the link of a draft of the mix where the platform has no link field (DEC-036)', () => {
+  it('tells the AI of an update and of a post what its platform does with a link, and writes nothing about it for a platform that has a field', async () => {
+    const ruleSeenBy = async (platform: string, kind: 'own_update' | 'product_post'): Promise<string | undefined> => {
+      world = makeWorld({ mode: 'approval' })
+      world.core.db.prepare('UPDATE channels SET platform = ? WHERE id = ?').run(platform, world.channel.id)
+      script(kind === 'own_update' ? 'draft.update' : 'draft.publication', kind === 'own_update' ? UPDATE : POST)
+      if (kind === 'own_update') await note()
+      withMix(mix({ kind }))
+      expect(await run()).toBe(1)
+      const task = world.engine.calls.find((c) => c.label === (kind === 'own_update' ? 'draft.update' : 'draft.publication'))!
+      return (JSON.parse(task.prompt.slice(task.prompt.indexOf('{'))) as { channel: { linkRule?: string } }).channel.linkRule
+    }
+    expect(await ruleSeenBy('instagram', 'own_update')).toMatch(/leave "link" empty/)
+    expect(await ruleSeenBy('facebook', 'own_update')).toMatch(/added at the end of the text/)
+    expect(await ruleSeenBy('instagram', 'product_post')).toMatch(/leave "link" empty/)
+    expect(await ruleSeenBy('reddit', 'own_update')).toBeUndefined()
+  })
+})
+
 describe('what stops the mix', () => {
   it(`prepares nothing while ${MIX_WAITING_CAP} posts of the channel wait for the owner, and goes on when one is decided`, async () => {
     world = makeWorld({ mode: 'approval' })

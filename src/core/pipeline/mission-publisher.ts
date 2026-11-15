@@ -112,7 +112,7 @@ export class MissionAuthority implements PostAuthority {
     if (!same) throw new MissionContentError('What the mission would type is not what was approved for this platform. Nothing was submitted.')
     // A copy nobody can change afterwards: what the mission types is what was checked above, and the ticket must be bound to the approved draft.
     this.content = Object.freeze({ ...content })
-    this.typedHash = contentHash(grant.draft, grant.account, content.destination)
+    this.typedHash = contentHash(grant.draft, grant.account, content.destination, grant.channel.platform)
   }
 
   seal(): void {

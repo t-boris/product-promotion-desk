@@ -281,9 +281,9 @@ describe('the pictures of a draft', () => {
     const legacy = (await call('opportunities.saveDraft', { id: opp.id, draft: { text: 'plain words' } })) as { draft: { id: string } }
     const markdown = (await call('opportunities.saveDraft', { id: opp.id, draft: { text: 'plain words', markup: 'markdown' } })) as { draft: { id: string } }
     const account = world.core.repos.account(world.channel.accountId)
-    const hashOf = (id: string): string => contentHash(world.core.repos.draft(id), account, 'https://x/y')
+    const hashOf = (id: string): string => contentHash(world.core.repos.draft(id), account, 'https://x/y', 'fake')
     expect(hashOf(legacy.draft.id)).not.toBe(hashOf(markdown.draft.id))
-    expect(hashOf(legacy.draft.id)).toBe(contentHash({ title: null, text: 'plain words', link: null, attachments: [] }, account, 'https://x/y'))
+    expect(hashOf(legacy.draft.id)).toBe(contentHash({ title: null, text: 'plain words', link: null, attachments: [] }, account, 'https://x/y', 'fake'))
   })
 })
 

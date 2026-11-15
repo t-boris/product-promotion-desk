@@ -46,7 +46,7 @@ describe('SendGate (a): approval is bound to the exact content, account and dest
     expect(decision.allowed).toBe(true)
     if (!decision.allowed) return
     const draft = world.core.repos.latestDraft(opp.id)!
-    expect(decision.ticket.contentHash).toBe(contentHash(draft, world.account, commentOf(opp).url))
+    expect(decision.ticket.contentHash).toBe(contentHash(draft, world.account, commentOf(opp).url, 'fake'))
     expect(decision.ticket.accountId).toBe(world.account.id)
     expect(decision.ticket.destination).toBe(commentOf(opp).url)
     expect(decision.authorizationBasis).toMatch(/^user approval /)
@@ -125,7 +125,7 @@ describe('SendGate (a): approval is bound to the exact content, account and dest
     world.core.db.prepare("UPDATE opportunities SET category = 'thanks' WHERE id = ?").run(opp.id)
     await world.core.router.call('opportunities.saveDraft', { id: opp.id, draft: { text: 'Thank you!' } })
     const draft = world.core.repos.latestDraft(opp.id)!
-    world.store.insertApproval({ draftId: draft.id, contentHash: contentHash(draft, world.account, commentOf(opp).url), accountId: world.account.id, identity: world.account.identity, destination: commentOf(opp).url, approvedBy: 'auto_rule', ruleId: 'auto:thanks:v1' })
+    world.store.insertApproval({ draftId: draft.id, contentHash: contentHash(draft, world.account, commentOf(opp).url, 'fake'), accountId: world.account.id, identity: world.account.identity, destination: commentOf(opp).url, approvedBy: 'auto_rule', ruleId: 'auto:thanks:v1' })
     world.store.updateOpportunity(opp.id, { state: 'ready' })
 
     const block = await sendBlocked(world.opportunity(opp.id), true)
@@ -139,7 +139,7 @@ describe('SendGate (a): approval is bound to the exact content, account and dest
     const created = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'Hello', text: 'A post' } })
     const opp = created.opportunity
     const draft = world.core.repos.latestDraft(opp.id)!
-    world.store.insertApproval({ draftId: draft.id, contentHash: contentHash(draft, world.account, world.channel.url), accountId: world.account.id, identity: world.account.identity, destination: world.channel.url, approvedBy: 'auto_rule', ruleId: 'auto:thanks:v1' })
+    world.store.insertApproval({ draftId: draft.id, contentHash: contentHash(draft, world.account, world.channel.url, 'fake'), accountId: world.account.id, identity: world.account.identity, destination: world.channel.url, approvedBy: 'auto_rule', ruleId: 'auto:thanks:v1' })
     world.store.updateOpportunity(opp.id, { state: 'ready' })
 
     const block = await sendBlocked(world.opportunity(opp.id), true)

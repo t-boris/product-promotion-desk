@@ -51,7 +51,7 @@ export class DraftCheck {
     // a platform has no place for is not read at all (DEC-030). A text that is not markdown is read as it is.
     const written = this.contentOf(opp.id, args.form)
     const shown = renderForPlatform({ title: written.title || null, text: written.text, link: written.link || null, attachments: [], markup: written.markup }, channel.platform)
-    const content = { title: shown.title ?? '', text: shown.text, link: shown.link ?? '' }
+    const content = { title: shown.title ?? '', text: shown.text, link: shown.shownLink ?? '' }
     const product = this.core.repos.product(channel.productId)
     const knowledge = loadKnowledge(this.core, channel.productId)
 

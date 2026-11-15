@@ -211,7 +211,8 @@ export function PostPreview({ content, channelPlatform, author, aiBrowser = fals
   const choices = PREVIEW_PLATFORMS.some((p) => p.platform === channelPlatform) ? PREVIEW_PLATFORMS : [...PREVIEW_PLATFORMS, { platform: channelPlatform, label: platformLabel(channelPlatform) }]
   const kind = previewKind(platform)
   const rendered = renderForPlatform(content, platform)
-  const problems = content.markup === 'markdown' ? sendProblems(platform, rendered, { aiBrowser, ...(noConnector ? { noConnector } : {}) }) : []
+  // An older draft is judged by its connector; the one thing said of it is that a link added to the end of the text took it over the limit (DEC-036).
+  const problems = content.markup === 'markdown' ? sendProblems(platform, rendered, { aiBrowser, ...(noConnector ? { noConnector } : {}) }) : rendered.problems
   const ids = rendered.attachments.map((a) => a.mediaId).filter((id): id is string => id !== undefined)
   const thumbs = useThumbs(ids, 320)
   const empty = !rendered.title && rendered.text.trim() === '' && rendered.attachments.length === 0 && !rendered.link

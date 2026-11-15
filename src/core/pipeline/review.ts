@@ -44,7 +44,7 @@ export class ReviewFlow implements PipelineHooks {
     const channel = this.store.requireChannel(opp.channelId)
     const account = this.core.repos.account(channel.accountId)
     const destination = this.store.resolveDestination(opp, channel)
-    return { hash: contentHash(draft, account, destination), accountId: account.id, identity: hashedIdentity(account.identity), destination }
+    return { hash: contentHash(draft, account, destination, channel.platform), accountId: account.id, identity: hashedIdentity(account.identity), destination }
   }
 
   /**
@@ -103,11 +103,18 @@ export class ReviewFlow implements PipelineHooks {
       const platform = channel.platform
       const unfit = sendProblems(platform, renderForPlatform(draft, platform), sendWays(this.core, undefined, channel))
       if (unfit.length > 0) throw new ApiError('post_does_not_fit', unfit.join(' '))
-    } else if (opp.kind === 'standalone') {
-      // An older post (a suggestion of the AI, a mix draft) on a channel with no connector is carried by the AI browser or by nothing:
-      // what stops that is said now, at the approval, and not as a connector's failure after the press.
-      const stopped = noConnectorProblem(sendWays(this.core, undefined, this.store.requireChannel(opp.channelId)))
-      if (stopped) throw new ApiError('post_does_not_fit', stopped)
+    } else {
+      const channel = this.store.requireChannel(opp.channelId)
+      // An older draft is judged by its connector, as before; the one thing the render says of it is that a link added to the end of the text
+      // (a platform with no link field, DEC-036) took it over the limit, which did not count while the link was a part of its own.
+      const overLimit = renderForPlatform(draft, channel.platform).problems
+      if (overLimit.length > 0) throw new ApiError('post_does_not_fit', overLimit.join(' '))
+      if (opp.kind === 'standalone') {
+        // An older post (a suggestion of the AI, a mix draft) on a channel with no connector is carried by the AI browser or by nothing:
+        // what stops that is said now, at the approval, and not as a connector's failure after the press.
+        const stopped = noConnectorProblem(sendWays(this.core, undefined, channel))
+        if (stopped) throw new ApiError('post_does_not_fit', stopped)
+      }
     }
 
     this.core.db.transaction(() => {

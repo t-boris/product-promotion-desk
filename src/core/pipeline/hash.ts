@@ -1,6 +1,6 @@
 // Content hashing for approval binding (REQ-004 criterion 1) and for detecting edited comments.
 
-import { RENDER_VERSION } from '../../shared/post-format'
+import { RENDER_VERSION, linkPlacementOf } from '../../shared/post-format'
 import type { Attachment, Id, PostMarkup } from '../../shared/types'
 import { normalizeIdentity, sha256 } from './util'
 
@@ -21,7 +21,7 @@ export interface HashableContent {
   text: string
   link: string | null
   attachments: Pick<Attachment, 'name' | 'sha256'>[]
-  /** Only `markdown` enters the hash: every approval given before the post editor keeps its hash. */
+  /** Only `markdown` enters the hash: every approval given before the post editor keeps its hash (the version is raised when a rule changes what a platform receives). */
   markup?: PostMarkup
 }
 
@@ -29,9 +29,10 @@ export interface HashableContent {
  * The hash an approval is bound to: title, text, link, attachments (name + content hash), the account that
  * will publish, who is signed in to it, and the destination. Changing any of them yields a different hash, so
  * an approval can never be reused for other content, another account, another identity behind the same
- * account (a re-login as someone else) or another place.
+ * account (a re-login as someone else) or another place. `platform` is the platform of the channel: where a link goes on it (in the text, or
+ * left out, DEC-036) is bound too, so a draft approved before that rule is approved again; for a platform with a link field it adds nothing.
  */
-export function contentHash(content: HashableContent, account: HashedAccount, destination: string): string {
+export function contentHash(content: HashableContent, account: HashedAccount, destination: string, platform: string): string {
   return sha256(
     JSON.stringify({
       v: 2,
@@ -41,6 +42,8 @@ export function contentHash(content: HashableContent, account: HashedAccount, de
       attachments: content.attachments.map((a) => ({ name: a.name, sha256: a.sha256 })),
       // A key that is not set is left out by JSON.stringify, so a legacy draft hashes exactly as it did before markup existed (DEC-030).
       markup: content.markup === 'markdown' ? `markdown:${RENDER_VERSION}` : undefined,
+      // Left out of the hash (as `markup` is) unless the link is placed by a rule, so every hash given before stays as it was.
+      linkPlacement: linkPlacementOf(platform, content.link) ?? undefined,
       accountId: account.id,
       identity: hashedIdentity(account.identity),
       destination

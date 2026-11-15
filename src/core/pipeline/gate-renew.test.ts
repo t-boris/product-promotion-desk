@@ -107,7 +107,7 @@ describe('renewing the ticket of a running attempt', () => {
     const draft = world.store.insertDraft(second.opp.id, { title: null, text: 'Quite another text.', link: null, attachments: [] }, { knowledgeVersionId: null, usedClaimLineageIds: [], rationale: '', author: 'user' })
     world.store.insertApproval({
       draftId: draft.id,
-      contentHash: (await import('./hash')).contentHash(draft, world.account, second.grant.request.destination),
+      contentHash: (await import('./hash')).contentHash(draft, world.account, second.grant.request.destination, 'fake'),
       accountId: world.account.id,
       identity: null,
       destination: second.grant.request.destination,

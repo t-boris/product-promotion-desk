@@ -3,7 +3,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Opportunity } from '../../shared/types'
 import { DISCLOSURE_REASON, mentionsProduct } from './auto-guard'
-import { PUBLICATION_SYSTEM, ProposalError, REPLY_SYSTEM, parsePublicationProposal, parseReplyProposal } from './draft-prompt'
+import { channelView, postChannelView } from './context'
+import { PUBLICATION_SYSTEM, ProposalError, REPLY_SYSTEM, UPDATE_SYSTEM, parsePublicationProposal, parseReplyProposal } from './draft-prompt'
 import { closeWorld, makeWorld, type World, type WorldOptions } from './test-fixture'
 
 let world: World
@@ -131,6 +132,36 @@ describe('the voice of the login a draft is written with (DEC-010)', () => {
 
     expect(payloadOf(lastPrompt()).role).toEqual(ASTROLOGER)
     expect(card.draft?.rationale).toBe('from c1\nRole used: astrologer.')
+  })
+})
+
+describe('the link of a post where the platform has no field for it (DEC-036): the AI is told what the platform does with it', () => {
+  const ask = async (platform: string) => {
+    world = makeWorld({ mode: 'approval' })
+    world.core.db.prepare('UPDATE channels SET platform = ? WHERE id = ?').run(platform, world.channel.id)
+    world.engine.on('draft.publication', JSON.stringify({ topic: 'Charts', title: 'How charts work', text: 'A natal chart is built from your birth date, time and place.', link: '', rationale: 'from c1', usedClaimIds: ['c1'] }))
+    await world.core.router.call('publications.suggest', { channelId: world.channel.id })
+    return (payloadOf(lastPrompt()) as { channel: { linkRule?: string } }).channel.linkRule
+  }
+
+  it('tells it, for Instagram, to leave the link empty; for Facebook, that it is added at the end of the text; and nothing where the form has a field', async () => {
+    expect(await ask('instagram')).toMatch(/leave "link" empty/)
+    expect(await ask('facebook')).toMatch(/added at the end of the text/)
+    expect(await ask('reddit')).toBeUndefined()
+    expect(await ask('fake')).toBeUndefined()
+  })
+
+  it('shows the rule to the drafting of a post only: a reply and a refinement see the channel as before', () => {
+    world = makeWorld({ mode: 'approval' })
+    const instagram = { ...world.channel, platform: 'instagram' }
+    expect(postChannelView(instagram).linkRule).toMatch(/leave "link" empty/)
+    expect(postChannelView({ ...world.channel, platform: 'reddit' })).not.toHaveProperty('linkRule')
+    expect(channelView(instagram)).not.toHaveProperty('linkRule')
+  })
+
+  it('has the rule in the system prompt of a product post and of the owner\'s own update: it is followed when it is present', () => {
+    expect(PUBLICATION_SYSTEM).toContain('When context.channel.linkRule is present, follow it.')
+    expect(UPDATE_SYSTEM).toContain('When context.channel.linkRule is present, it comes first: follow it.')
   })
 })
 
