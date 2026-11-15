@@ -661,9 +661,10 @@ Design:
 
 Plan:
 - [x] Shared step runner; script-page base class; launcher; `ChromeRawPage`; `ChromeBrowserService`; routing service; tests on stand-ins; real-Chrome test (7 checks, `PPD_REAL_CHROME=1`).
-- [ ] Core: migration 209 (`browser`, `via_account_id`), store, `accounts.rename`, `accounts.setBrowser`, `accounts.setSignInVia`, create with `signsInVia`, remove refused while another account signs in through it, `BrowserState.chromeFound`, API and types.
-- [ ] Routing by `account.browser`; drop the platform policy and the fallback; `releaseAccount` (Chrome closed on a switch, profile kept).
-- [ ] Sign in through another account: preset `signsInWith`, mission kind `signin`, secret values bound to hosts in the toolbox, `agent.canStart`, `accounts.signIn` refused for such an account.
-- [ ] Renderer: rename in the header, Browser block, "Signs in with" in create and in the account, Threads has no e-mail/password steps, "Let the AI sign in with Instagram"; next-step logic; tests.
-- [ ] Packaged probe on an own instance: both browsers on a local Facebook-like page, a switch, the Threads link with a local fake Instagram/Threads pair, rename, light and dark, all routes measured (ui-standard-controls).
-- [ ] Spec section + V-32, lessons, independent review (the step runner and the secret-by-host rule are safety code), PR, CI, release 0.13.0, `deploy:local`; the owner tries Facebook in Chrome and Threads.
+- [x] Core: migration 209 (`browser`, `via_account_id`), store, `accounts.rename`, `accounts.setBrowser`, `accounts.setSignInVia`, create with `signsInVia`, remove refused while another account signs in through it, `BrowserState.chromeFound`, API and types.
+- [x] Routing by `account.browser`; drop the platform policy and the fallback; `releaseAccount` (Chrome closed on a switch, profile kept).
+- [x] Sign in through another account: preset `signsInWith`, mission kind `signin`, secret values bound to hosts in the toolbox, `agent.canStart`, `accounts.signIn` refused for such an account.
+- [x] Renderer: rename in the header, Browser block, "Signs in with" in create and in the account, Threads has no e-mail/password steps, "Let the AI sign in with Instagram"; next-step logic; tests.
+- [x] Probes on an own instance (dev build, own data folder, mock keychain, nothing off 127.0.0.1, no process left): mechanics 26/26 (real Chrome, a local page, both browsers, a switch back and forth, the Chrome session survives, the profile is removed with the account, Threads link rules); screens 40/40 (rename, Browser block, the Threads account and create form, light and dark, measured). NOT probed live: the AI's `signin` mission on Instagram/Threads (needs the engine and the real sites; covered by `sign-in-through.test.ts`, mutation-checked) and Facebook in Chrome (the owner at the keyboard).
+- [x] Spec section 20 + V-32/V-33, lessons 163-167 done.
+- [ ] Independent review (the step runner and the secret-by-host rule are safety code), PR, CI, release 0.13.0, `deploy:local`; the owner tries Facebook in Chrome and Threads.
