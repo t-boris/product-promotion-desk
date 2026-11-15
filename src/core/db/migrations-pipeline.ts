@@ -90,7 +90,9 @@ CREATE TABLE product_updates (
   product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   text TEXT NOT NULL,
   created_at TEXT NOT NULL,
-  used_in_opportunity_id TEXT
+  used_in_opportunity_id TEXT,
+  -- How many times the AI could not make a post from it (it is set aside after a few, so one note never holds the others back).
+  failed_tries INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX idx_product_updates_product ON product_updates(product_id, created_at);
 

@@ -6,7 +6,7 @@ import { RecordingSink } from './scheduler-harness'
 import { DEFAULT_EVERY_DAYS, dueAtMs, MIX_RETRY_GAP_MS, MIX_WAITING_CAP, mixBlocker, proposalFromPlan } from './mix'
 import { UPDATE_SYSTEM } from './draft-prompt'
 import { numbersNotInNote } from './update-check'
-import { closeWorld, makeWorld, type World } from './test-fixture'
+import { closeWorld, makeClaim, makeWorld, type World } from './test-fixture'
 
 let world: World
 afterEach(async () => {
@@ -111,6 +111,18 @@ describe('what stops the mix', () => {
     expect(world.engine.calls).toHaveLength(1)
   })
 
+  it('does not count replies that wait: they have their own queue', async () => {
+    world = makeWorld({ mode: 'approval' })
+    script('draft.publication', POST)
+    for (let i = 0; i < MIX_WAITING_CAP + 1; i += 1) {
+      const reply = await world.newOpportunity({ commentId: `t1_wait${i}` })
+      world.core.db.prepare("UPDATE opportunities SET state = 'awaiting_approval' WHERE id = ?").run(reply.id)
+    }
+    withMix(mix())
+    expect(await run()).toBe(1)
+    expect((await world.core.router.call('mix.get', { channelId: world.channel.id })).waiting).toBe(1)
+  })
+
   it('does nothing while the owner has paused automation, and when it runs again prepares what is due', async () => {
     world = makeWorld({ mode: 'approval' })
     script('draft.publication', POST)
@@ -171,6 +183,7 @@ describe('what stops the mix', () => {
     world.core.settings.updateApp({ engineId: null })
     expect(await run()).toBe(0)
     expect(world.engine.calls).toHaveLength(0)
+    expect(count('mix_state')).toBe(0) // not tried, so not a failed try either
   })
 
   it('does not try a post about the product while no fact is approved, and does not count that as a failure', async () => {
@@ -316,6 +329,16 @@ describe('an own update, written from the owner\'s note only', () => {
     })
   }
 
+  it('never states a price in an own update, even when the note and an approved fact name it: a price is for the posts that cite their fact', async () => {
+    world = makeWorld({ mode: 'approval', claims: [makeClaim('c1', 'The plan costs $9 a month.')] })
+    script('draft.update', { ...UPDATE, text: 'I lowered the price to $9 a month.' })
+    await note('Lowered the price to $9 a month')
+    withMix(mix({ kind: 'own_update' }))
+    expect(await run()).toBe(0)
+    expect(drafts()).toHaveLength(0)
+    expect((await world.core.router.call('mix.get', { channelId: world.channel.id })).kinds.find((k) => k.kind === 'own_update')?.problem).toMatch(/price/)
+  })
+
   it('lets the note\'s own numbers and address through, and the product\'s own site', async () => {
     world = makeWorld({ mode: 'approval' })
     script('draft.update', { ...UPDATE, text: 'Version 2.1 is out: details on https://github.com/owner/repo, product at https://natalmystic.com.', link: 'https://github.com/owner/repo' })
@@ -348,6 +371,58 @@ describe('an own update, written from the owner\'s note only', () => {
     await publications.suggestUpdate(world.channel.id, mine)
     await expect(publications.suggestUpdate(world.channel.id, mine)).rejects.toMatchObject({ code: 'invalid_state' })
     expect(drafts()).toHaveLength(1)
+    expect(world.engine.calls).toHaveLength(1) // the second was refused before the AI was asked
+  })
+
+  it('writes one post from a note when two are asked for at once: the second finds the note taken', async () => {
+    world = makeWorld({ mode: 'approval' })
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    world.engine.on('draft.update', async () => {
+      await gate
+      return JSON.stringify(UPDATE)
+    })
+    const mine = await note()
+    const publications = new (await import('./publications')).PublicationsFlow(world.core, world.store)
+    const first = publications.suggestUpdate(world.channel.id, mine).catch((e: unknown) => e)
+    const second = publications.suggestUpdate(world.channel.id, mine).catch((e: unknown) => e)
+    await new Promise((resolve) => setImmediate(resolve))
+    release()
+    const outcomes = await Promise.all([first, second])
+    expect(outcomes.filter((o) => o instanceof Error)).toHaveLength(1)
+    expect(outcomes.find((o) => o instanceof Error)).toMatchObject({ code: 'invalid_state' })
+    expect(drafts()).toHaveLength(1)
+  })
+
+  it('sets a note aside after three failed tries, goes on with the next one, and says so when none is left', async () => {
+    world = makeWorld({ mode: 'approval' })
+    script('draft.update', { ...UPDATE, text: 'I fixed it for 5000 people.' })
+    const stuck = await note('Cut the price')
+    world.clock.advance(1000)
+    const later = await note('Started a newsletter')
+    withMix(mix({ kind: 'own_update', everyDays: 1 }))
+    for (let i = 0; i < 3; i += 1) {
+      expect(await run()).toBe(0)
+      world.clock.advance(MIX_RETRY_GAP_MS + 1000)
+    }
+    expect(world.engine.calls).toHaveLength(3)
+    expect((await world.core.router.call('updates.list', { productId: world.product.id })).find((n) => n.id === stuck)?.failedTries).toBe(3)
+    // the oldest note is set aside: the next one is used
+    script('draft.update', { ...UPDATE, text: 'I started a newsletter.' })
+    expect(await run()).toBe(1)
+    expect(world.engine.calls[3].prompt).toContain('Started a newsletter')
+    expect(world.engine.calls[3].prompt).not.toContain('Cut the price')
+    const notes = await world.core.router.call('updates.list', { productId: world.product.id })
+    expect(notes.find((n) => n.id === later)?.usedInOpportunityId).not.toBeNull()
+    // only the one that was set aside is left: nothing is tried, and the card says why
+    world.clock.advance(2 * DAY)
+    expect(await run()).toBe(0)
+    expect(world.engine.calls).toHaveLength(4)
+    const card = await world.core.router.call('mix.get', { channelId: world.channel.id })
+    expect(card.unusedUpdates).toBe(0)
+    expect(card.kinds.find((k) => k.kind === 'own_update')?.problem).toMatch(/could not make a post from a note/)
   })
 })
 
@@ -383,6 +458,9 @@ describe('the card of the mix', () => {
     expect(after.waiting).toBe(1)
     world.setMode(world.channel.id, 'observe')
     expect((await world.core.router.call('mix.get', { channelId: world.channel.id })).blocked).toMatch(/only watches/)
+    world.setMode(world.channel.id, 'approval')
+    world.core.db.prepare("UPDATE channels SET status = 'paused' WHERE id = ?").run(world.channel.id)
+    expect((await world.core.router.call('mix.get', { channelId: world.channel.id })).blocked).toMatch(/paused/)
   })
 
   it('says how many posts wait when the cap is reached', async () => {
@@ -470,13 +548,54 @@ describe('the notes', () => {
     world = makeWorld({ mode: 'approval' })
     await expect(world.core.router.call('updates.add', { productId: world.product.id, text: '   ' })).rejects.toMatchObject({ code: 'invalid_input' })
     await expect(world.core.router.call('updates.add', { productId: world.product.id, text: 'x'.repeat(501) })).rejects.toMatchObject({ code: 'invalid_input' })
-    await expect(world.core.router.call('updates.add', { productId: 'nope', text: 'x' })).rejects.toBeDefined()
+    await expect(world.core.router.call('updates.add', { productId: 'nope', text: 'x' })).rejects.toMatchObject({ code: 'not_found' })
     script('draft.update', UPDATE)
     const id = await note()
     withMix(mix({ kind: 'own_update' }))
     await run()
     await expect(world.core.router.call('updates.remove', { id })).rejects.toMatchObject({ code: 'invalid_state' })
     await expect(world.core.router.call('updates.remove', { id: 'nope' })).rejects.toMatchObject({ code: 'not_found' })
+  })
+})
+
+describe('the ask for a note, in the attention list', () => {
+  const asks = async (): Promise<string[]> => (await world.core.router.call('attention.list', undefined)).filter((i) => i.id.startsWith('note:')).map((i) => i.title)
+
+  it('asks what is new when an own update is due and no note is left, and stops asking when a note exists', async () => {
+    world = makeWorld({ mode: 'approval' })
+    withMix(mix({ kind: 'own_update', everyDays: 7 }))
+    expect(await asks()).toEqual([`Tell what is new for ${world.channel.target}`])
+    const item = (await world.core.router.call('attention.list', undefined)).find((i) => i.id.startsWith('note:'))
+    expect(item).toMatchObject({ kind: 'question', refType: 'channel', refId: world.channel.id })
+    await note()
+    expect(await asks()).toEqual([])
+  })
+
+  it('does not ask when the kind is off, the channel cannot work, 3 posts already wait, or the next update is not due yet', async () => {
+    world = makeWorld({ mode: 'approval' })
+    withMix(mix({ kind: 'own_update', enabled: false }))
+    expect(await asks()).toEqual([])
+    withMix(mix({ kind: 'own_update' }))
+    world.setMode(world.channel.id, 'observe')
+    expect(await asks()).toEqual([])
+    world.setMode(world.channel.id, 'approval')
+    world.core.db.prepare("INSERT INTO mix_state (channel_id, kind, last_draft_at, last_attempt_at, last_error) VALUES (?, 'own_update', ?, ?, NULL)").run(world.channel.id, world.core.clock.now().toISOString(), world.core.clock.now().toISOString())
+    expect(await asks()).toEqual([])
+    world.clock.advance(8 * DAY)
+    expect(await asks()).toHaveLength(1)
+    for (let i = 0; i < MIX_WAITING_CAP; i += 1) await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { text: `Mine ${i}` } })
+    expect(await asks()).toEqual([])
+  })
+
+  it('is found by the job too: a scan that finds a note missing tells the attention list to look again', async () => {
+    world = makeWorld({ mode: 'approval' })
+    withMix(mix({ kind: 'own_update' }))
+    let told = 0
+    world.core.events.subscribe((event) => {
+      if (event.type === 'changed' && event.scope === 'channels') told += 1
+    })
+    expect(await run()).toBe(0)
+    expect(told).toBeGreaterThan(0)
   })
 })
 

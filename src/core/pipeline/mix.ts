@@ -26,6 +26,8 @@ const DAY_MS = 86_400_000
 /** How far the due time of a kind moves around its rhythm, so drafts do not appear at the same minute every week. */
 const JITTER = 0.1
 const MAX_NOTE_CHARS = 500
+/** A note the AI failed to make a post from this many times is set aside: one note never holds the others back. */
+export const MAX_NOTE_TRIES = 3
 
 export const MIX_KINDS: readonly MixKind[] = ['product_post', 'own_update', 'showcase']
 export const DEFAULT_EVERY_DAYS: Record<MixKind, number> = { product_post: 14, own_update: 7, showcase: 30 }
@@ -72,6 +74,19 @@ export function proposalFromPlan(plan: Channel['plan']): MixSetting[] {
   return out
 }
 
+/** Posts of the channel that wait for the owner, whoever made them. Replies are not counted: they have their own queue. */
+export function waitingCount(core: Core, channelId: Id): number {
+  const marks = WAITING_STATES.map(() => '?').join(', ')
+  const row = core.db.prepare(`SELECT COUNT(*) AS n FROM opportunities WHERE channel_id = ? AND kind = 'standalone' AND state IN (${marks})`).get(channelId, ...WAITING_STATES) as { n: number }
+  return row.n
+}
+
+/** The notes of a product a post can still be written from: not used, not set aside. Oldest first: what the owner did first is told first. */
+export function usableNotes(core: Core, productId: Id): ProductUpdate[] {
+  const rows = core.db.prepare('SELECT * FROM product_updates WHERE product_id = ? AND used_in_opportunity_id IS NULL AND failed_tries < ? ORDER BY created_at, rowid').all(productId, MAX_NOTE_TRIES) as Row[]
+  return rows.map(readNote)
+}
+
 interface State {
   lastDraftAt: IsoTime | null
   lastAttemptAt: IsoTime | null
@@ -93,8 +108,9 @@ export class MixFlow implements MixService {
   card(channelId: Id): MixCard {
     const channel = this.store.requireChannel(channelId)
     const now = this.core.clock.now().getTime()
-    const waiting = this.waiting(channelId)
-    const unused = this.unusedNotes(channel.productId).length
+    const waiting = waitingCount(this.core, channelId)
+    const unused = usableNotes(this.core, channel.productId).length
+    const setAside = (this.core.db.prepare('SELECT COUNT(*) AS n FROM product_updates WHERE product_id = ? AND used_in_opportunity_id IS NULL AND failed_tries >= ?').get(channel.productId, MAX_NOTE_TRIES) as { n: number }).n
     const facts = loadKnowledge(this.core, channel.productId).approved.length
     const kinds = MIX_KINDS.map((kind): MixKindCard => {
       const setting = channel.settings.mix.find((entry) => entry.kind === kind)
@@ -106,7 +122,7 @@ export class MixFlow implements MixService {
       if (enabled) {
         const retry = state.lastError && state.lastAttemptAt ? Date.parse(state.lastAttemptAt) + MIX_RETRY_GAP_MS : 0
         nextAt = new Date(Math.max(now, dueAtMs(channelId, kind, everyDays, state.lastDraftAt), retry)).toISOString()
-        if (kind === 'own_update' && unused === 0) problem = 'Waiting for a note: tell what is new.'
+        if (kind === 'own_update' && unused === 0) problem = setAside > 0 ? `The AI could not make a post from ${setAside === 1 ? 'a note' : `${setAside} notes`}. Rewrite ${setAside === 1 ? 'it' : 'them'}, or remove ${setAside === 1 ? 'it' : 'them'}, and tell what is new.` : 'Waiting for a note: tell what is new.'
         else if (NEEDS_FACTS.includes(kind) && facts === 0) problem = 'There are no approved facts about the product yet.'
         else if (waiting >= MIX_WAITING_CAP) problem = `${waiting} posts of this channel are waiting for you.`
         else if (state.lastError) problem = `The last try failed: ${state.lastError}`
@@ -132,7 +148,11 @@ export class MixFlow implements MixService {
   // ───────────── the owner's notes ("What's new") ─────────────
 
   addNote(productId: Id, text: string): ProductUpdate {
-    this.core.repos.product(productId)
+    try {
+      this.core.repos.product(productId)
+    } catch {
+      throw new ApiError('not_found', 'This product does not exist.')
+    }
     const clean = typeof text === 'string' ? text.replace(/\s+/g, ' ').trim() : ''
     if (!clean) throw new ApiError('invalid_input', 'Write what you did, in a line or two.')
     if (clean.length > MAX_NOTE_CHARS) throw new ApiError('invalid_input', `A note is a line or two: at most ${MAX_NOTE_CHARS} characters.`)
@@ -140,7 +160,7 @@ export class MixFlow implements MixService {
     const createdAt = this.core.clock.now().toISOString()
     this.core.db.prepare('INSERT INTO product_updates (id, product_id, text, created_at, used_in_opportunity_id) VALUES (?, ?, ?, ?, NULL)').run(id, productId, clean, createdAt)
     this.core.events.changed('channels')
-    return { id, productId, text: clean, createdAt, usedInOpportunityId: null }
+    return { id, productId, text: clean, createdAt, usedInOpportunityId: null, failedTries: 0 }
   }
 
   listNotes(productId: Id): ProductUpdate[] {
@@ -166,25 +186,30 @@ export class MixFlow implements MixService {
     if (this.running || !this.core.engines.selected()) return 0
     this.running = true
     let prepared = 0
+    let asked = false
     try {
       for (const channel of schedulableChannels(this.core)) {
         const wanted = channel.settings.mix.filter((entry) => entry.enabled)
-        if (wanted.length === 0 || mixBlocker(channel) !== null) continue
-        if (this.waiting(channel.id) >= MIX_WAITING_CAP) continue
+        if (mixBlocker(channel) !== null || waitingCount(this.core, channel.id) >= MIX_WAITING_CAP) continue
         for (const entry of wanted) {
           const now = this.core.clock.now().getTime()
           const state = this.state(channel.id, entry.kind)
           if (now < dueAtMs(channel.id, entry.kind, entry.everyDays, state.lastDraftAt)) continue
           if (state.lastError && state.lastAttemptAt && now < Date.parse(state.lastAttemptAt) + MIX_RETRY_GAP_MS) continue
           // Waiting for a note, or for approved facts, is not a failure: nothing is tried and nothing is recorded.
-          if (entry.kind === 'own_update' && this.unusedNotes(channel.productId).length === 0) continue
+          if (entry.kind === 'own_update' && usableNotes(this.core, channel.productId).length === 0) {
+            asked = true // the attention list asks the owner for a note (mix-attention.ts)
+            continue
+          }
           if (NEEDS_FACTS.includes(entry.kind) && loadKnowledge(this.core, channel.productId).approved.length === 0) continue
+          const note = entry.kind === 'own_update' ? usableNotes(this.core, channel.productId)[0] : undefined
           try {
-            await this.prepare(channel, entry.kind)
+            await this.prepare(channel, entry.kind, note)
             this.record(channel.id, entry.kind, { drafted: true })
             this.core.log.info('pipeline', `The content mix prepared a draft (${entry.kind.replace('_', ' ')}) for ${channel.target}. It waits for you.`, channel.id)
             prepared += 1
           } catch (error) {
+            if (note) this.core.db.prepare('UPDATE product_updates SET failed_tries = failed_tries + 1 WHERE id = ? AND used_in_opportunity_id IS NULL').run(note.id)
             this.record(channel.id, entry.kind, { drafted: false, error: errorMessage(error) })
             this.core.log.warn('pipeline', `The content mix could not prepare a draft (${entry.kind.replace('_', ' ')}) for ${channel.target}: ${errorMessage(error)}`, channel.id)
           }
@@ -194,35 +219,21 @@ export class MixFlow implements MixService {
     } finally {
       this.running = false
     }
-    if (prepared > 0) this.core.events.changed('channels')
+    if (prepared > 0 || asked) this.core.events.changed('channels')
     return prepared
   }
 
   // ───────────── parts ─────────────
 
-  private async prepare(channel: Channel, kind: MixKind): Promise<void> {
+  private async prepare(channel: Channel, kind: MixKind, note: ProductUpdate | undefined): Promise<void> {
     if (kind === 'own_update') {
-      const note = this.unusedNotes(channel.productId)[0]
-      if (!note) throw new ApiError('no_note', 'There is no unused note to write from.')
+      if (!note) throw new ApiError('no_note', 'There is no note to write from.')
       await this.publications.suggestUpdate(channel.id, note.id, { origin: ORIGIN })
     } else if (kind === 'showcase') {
       await this.publications.suggest(channel.id, { origin: `${ORIGIN} (showcase)`, focus: SHOWCASE_FOCUS })
     } else {
       await this.publications.suggest(channel.id, { origin: ORIGIN })
     }
-  }
-
-  /** The oldest note first: what the owner did first is told first. */
-  private unusedNotes(productId: Id): ProductUpdate[] {
-    const rows = this.core.db.prepare('SELECT * FROM product_updates WHERE product_id = ? AND used_in_opportunity_id IS NULL ORDER BY created_at, rowid').all(productId) as Row[]
-    return rows.map(readNote)
-  }
-
-  /** Posts of the channel that wait for the owner, whoever made them. */
-  private waiting(channelId: Id): number {
-    const marks = WAITING_STATES.map(() => '?').join(', ')
-    const row = this.core.db.prepare(`SELECT COUNT(*) AS n FROM opportunities WHERE channel_id = ? AND kind = 'standalone' AND state IN (${marks})`).get(channelId, ...WAITING_STATES) as { n: number }
-    return row.n
   }
 
   private state(channelId: Id, kind: MixKind): State {
@@ -252,6 +263,14 @@ interface Row {
   text: string
   created_at: string
   used_in_opportunity_id: string | null
+  failed_tries: number
 }
 
-const readNote = (row: Row): ProductUpdate => ({ id: row.id, productId: row.product_id, text: row.text, createdAt: row.created_at, usedInOpportunityId: row.used_in_opportunity_id })
+const readNote = (row: Row): ProductUpdate => ({
+  id: row.id,
+  productId: row.product_id,
+  text: row.text,
+  createdAt: row.created_at,
+  usedInOpportunityId: row.used_in_opportunity_id,
+  failedTries: row.failed_tries
+})

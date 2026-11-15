@@ -999,6 +999,8 @@ export interface ProductUpdate {
   createdAt: IsoTime
   /** The post prepared from it; null while it is unused. */
   usedInOpportunityId: Id | null
+  /** How many times the AI could not make a post from it; after 3 it is set aside until the owner rewrites it. */
+  failedTries: number
 }
 
 export interface MixKindCard extends MixSetting {
