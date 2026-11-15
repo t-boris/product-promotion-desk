@@ -6,7 +6,7 @@ import type { PageStep, PageStepResult } from '../core/ports'
 import { withTimeout } from './poll'
 import { fileInputScript } from './page-scripts'
 import { ScriptedPage } from './script-page'
-import { putFile, runPageStep, type StepDriver } from './step-runner'
+import { holdMs, pacing, putFile, runPageStep, type StepDriver } from './step-runner'
 import { isAbortedNavigation, normalizeBrowserUrl } from './targets'
 
 const DEFAULT_LOAD_TIMEOUT_MS = 30_000
@@ -96,8 +96,8 @@ export class ElectronRawPage extends ScriptedPage {
    * One step of the browser agent (DEC-017): the logic is in step-runner.ts, shared with every other back end; this page only says how
    * a mouse press, a key, text and a file reach a WebContents.
    */
-  async pageStep(step: PageStep, hosts: string[]): Promise<PageStepResult> {
-    return runPageStep(this.driver(this.live()), step, hosts)
+  async pageStep(step: PageStep, hosts: string[], alive?: () => void): Promise<PageStepResult> {
+    return runPageStep(this.driver(this.live()), step, hosts, alive)
   }
 
   private driver(contents: WebContents): StepDriver {
@@ -111,11 +111,14 @@ export class ElectronRawPage extends ScriptedPage {
         if (spec.char) contents.sendInputEvent({ type: 'char', keyCode: spec.char })
         contents.sendInputEvent({ type: 'keyUp', keyCode: spec.keyCode })
       },
+      mouseMove: async (x, y) => void contents.sendInputEvent({ type: 'mouseMove', x, y }),
       mouseClick: async (x, y) => {
-        contents.sendInputEvent({ type: 'mouseMove', x, y })
         contents.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 })
+        await pacing.sleep(holdMs())
         contents.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 })
       },
+      // Chromium counts a wheel turn up as positive; the step runner says positive is down.
+      wheel: async (x, y, dy) => void contents.sendInputEvent({ type: 'mouseWheel', x, y, deltaX: 0, deltaY: -dy, canScroll: true }),
       insertText: (text) => contents.insertText(text).then(() => undefined),
       attachFile: (expression, paths, what) => this.attach(contents, expression, paths, what)
     }

@@ -529,7 +529,7 @@ export class AgentRunService implements PostMissionService {
       shrink: this.core.imageShrinker ? (path, maxBytes) => this.core.imageShrinker!.shrink(path, maxBytes, shrunkDir) : undefined,
       report: (result) => void (live.reported = result),
       signal: live.abort.signal,
-      // A join mission has its own six tools, one allowed click and a pause between actions; the others are as they were.
+      // A join mission has its own seven tools, one allowed click and a pause between actions; the others are as they were.
       ...(join ? { maxCalls: MISSIONS[kind].maxCalls, join: { community: join.community, destination: join.destination, minGapMs: JOIN_MIN_GAP_MS, now: () => this.core.clock.now().getTime() } } : {})
     })
     try {

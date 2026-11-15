@@ -19,6 +19,7 @@ interface Item {
   ref: string
   role: string
   name: string
+  near?: string
   disabled?: boolean
   submits?: boolean
 }
@@ -194,6 +195,39 @@ describe('the tool that puts the approved pictures into a form', () => {
     await look(t)
     for (const ref of ['e2', 'e4', 'e3', 'e8']) expect(await attach(t, ref)).toMatchObject({ isError: true, text: expect.stringContaining('not a file input') })
     expect(t.page.uploaded).toEqual([])
+  })
+
+  it('never puts the pictures into a file input that the page says is for the profile (its photo, its cover): by its name, or by what stands around it', async () => {
+    const t = setup()
+    t.page.items.push(
+      { ref: 'e31', role: 'input:file', name: 'Change profile photo' },
+      { ref: 'e32', role: 'input:file', name: '', near: 'Edit profile' },
+      { ref: 'e33', role: 'input:file', name: 'Upload photo', near: 'Change profile photo' },
+      { ref: 'e34', role: 'input:file', name: '', near: 'Изменить фото профиля' },
+      { ref: 'e35', role: 'input:file', name: 'Cover photo' }
+    )
+    await look(t)
+    for (const ref of ['e31', 'e32', 'e33', 'e34', 'e35']) {
+      expect(await attach(t, ref), ref).toMatchObject({ isError: true, text: expect.stringContaining("own profile") })
+    }
+    expect(t.page.uploaded).toEqual([])
+  })
+
+  it('does not trust a page that dropped the profile from around an input since the AI looked: what it was shown counts too', async () => {
+    const t = setup()
+    t.page.items[0] = { ref: 'e1', role: 'input:file', name: 'Select pictures', near: 'Change profile photo' }
+    await look(t)
+    t.page.items[0] = { ref: 'e1', role: 'input:file', name: 'Select pictures' }
+    expect(await attach(t)).toMatchObject({ isError: true, text: expect.stringContaining('own profile') })
+    expect(t.page.uploaded).toEqual([])
+  })
+
+  it('puts them into the input of a new post, whatever stands around it that is not the profile', async () => {
+    const t = setup()
+    t.page.items[0] = { ref: 'e1', role: 'input:file', name: 'Select pictures', near: 'Create new post' }
+    await look(t)
+    expect((await attach(t)).isError).toBeFalsy()
+    expect(t.page.uploaded).toHaveLength(1)
   })
 
   it('needs the element to have been shown, to be the same one now, and to be on the page', async () => {

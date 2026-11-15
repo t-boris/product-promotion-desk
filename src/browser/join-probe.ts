@@ -108,7 +108,7 @@ export async function exerciseJoin(service: Pick<BrowserService, 'session'>, acc
   }
 
   const tools = make()
-  check('the mission has six tools', tools.tools.map((t) => t.name).join(',') === 'browser_snapshot,browser_navigate,browser_click,browser_wait_for,ask_owner,report_result', tools.tools.map((t) => t.name).join(','))
+  check('the mission has seven tools', tools.tools.map((t) => t.name).join(',') === 'browser_snapshot,browser_navigate,browser_click,browser_scroll,browser_wait_for,ask_owner,report_result', tools.tools.map((t) => t.name).join(','))
 
   // where it may go
   for (const [what, url] of [

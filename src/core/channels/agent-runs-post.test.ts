@@ -124,7 +124,7 @@ describe('what a post mission needs, and gives the AI', () => {
     asTheAI(w, async () => undefined)
     await run(w, request)
 
-    expect(w.t.bridge.host.tools.map((t) => t.name)).toEqual(['browser_snapshot', 'browser_navigate', 'browser_click', 'browser_select', 'browser_wait_for', 'browser_submit', 'ask_owner', 'report_result'])
+    expect(w.t.bridge.host.tools.map((t) => t.name)).toEqual(['browser_snapshot', 'browser_navigate', 'browser_click', 'browser_scroll', 'browser_select', 'browser_wait_for', 'browser_submit', 'ask_owner', 'report_result'])
     const task = w.t.engine.calls.at(-1)
     expect(task?.label).toBe('agent.post')
     expect(task?.agent?.server).toBe('ppd')

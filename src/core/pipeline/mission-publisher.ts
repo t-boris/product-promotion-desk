@@ -176,7 +176,7 @@ export class MissionPublisher {
    * keeps going through it, the way that is known to work. Everything else goes through the connector as before.
    */
   executorFor(grant: GateGrant, automatic: boolean): Executor {
-    const ways = sendWays(this.core, { automatic, approvedBy: grant.approval.approvedBy })
+    const ways = sendWays(this.core, { automatic, approvedBy: grant.approval.approvedBy }, grant.channel)
     const executor = chooseExecutor(ways, grant.draft, grant.channel.platform)
     if (ways.aiBrowser && executor === 'connector') this.core.log.info('send', 'This one is sent through the connector, which can carry it.', grant.channel.id)
     return executor

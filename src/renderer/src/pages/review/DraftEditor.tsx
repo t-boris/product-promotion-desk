@@ -64,7 +64,7 @@ interface Props {
    */
   ai?: { opportunityId?: Id; channelId?: Id }
   /** A post is written in the post editor (DEC-030): the product whose library holds its pictures, and the platform the preview shows it as. */
-  post?: { productId: Id; platform: string; author: PostAuthor }
+  post?: { productId: Id; platform: string; author: PostAuthor; /** The application does not read this channel: the AI browser is its only way, and needs no switch (DEC-035). */ reads: boolean }
 }
 
 /** Editor for a reply or a publication. Editing never changes what was approved: saving creates a new draft. */
@@ -139,7 +139,7 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
       {inEditor && post ? (
         <div className="post-pair">
           {textField}
-          <PostPreview content={previewContent} channelPlatform={post.platform} author={post.author} aiBrowser={settings.data?.publishWith === 'ai_browser'} />
+          <PostPreview content={previewContent} channelPlatform={post.platform} author={post.author} aiBrowser={settings.data?.publishWith === 'ai_browser' || !post.reads} noConnector={!post.reads} />
         </div>
       ) : (
         textField

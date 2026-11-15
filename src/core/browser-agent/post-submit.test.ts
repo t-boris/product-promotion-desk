@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { composePageOf, destinationMatches, fieldValueScript, formTextScript, isAttachControl, isPublishingControl, opensFileChooser, usesComposerDialog, looksLikeProgress, looksLikeSubmit, neverClicked, normalizeText, onComposePage, parseHeldText, platformWarning, replyTarget, sameContent } from './post-submit'
+import { changesProfile, composePageOf, destinationMatches, fieldValueScript, formTextScript, isAttachControl, isPublishingControl, opensFileChooser, usesComposerDialog, looksLikeProgress, looksLikeSubmit, neverClicked, normalizeText, onComposePage, parseHeldText, platformWarning, replyTarget, sameContent } from './post-submit'
 
 const HOSTS = ['reddit.com']
 const COMMENT = 'https://www.reddit.com/r/astrology/comments/abc123/my_chart/def456/'
@@ -270,6 +270,34 @@ describe('which name is that of a control that does something else to the accoun
   // The word is looked for as a whole word: letters before it or after it make another word.
   it.each(['Devoted fans', 'Adjoining rooms', 'Rejoice', 'Banner', 'Bandwidth', 'Blockquote', 'Blockchain', 'Allowance', 'Reportage', 'Followers', 'Granted', 'Grants program', 'Unvoted', 'Removal', 'Flagship', 'Subscribers', 'Authorization code', 'Mutex', 'Expand comment'])('is not: "%s"', (name) => {
     expect(neverClicked(name)).toBe(false)
+  })
+})
+
+describe('which name is about the account\'s own profile (DEC-035): a post mission never presses it, chooses it or gives it a file', () => {
+  it.each([
+    'Edit profile', 'Edit Profile', 'Edit your profile', 'Edit bio', 'Edit name', 'Change profile photo', 'Change Profile Photo', 'Add profile photo', 'Update profile picture', 'Upload profile picture', 'Profile photo',
+    'Profile picture', 'New profile photo', 'Change your profile', 'Set a profile photo', 'Change cover photo', 'Cover photo', 'Avatar', 'Change avatar', 'Bio', 'Add bio', 'Add a bio', 'Username', 'User name',
+    'Change username', 'Display name', 'Change display name', 'Phone number', 'Add phone number', 'Phone', 'Add your phone number', 'Change email', 'Update e-mail', 'Birthday', 'Gender', 'Pronouns', 'Password',
+    'Change password', 'Personal information', 'Personal details', 'Settings', 'Account settings', 'Advanced settings', 'Profile settings',
+    'Biografía', 'Biografia', 'Biografie', 'Biographie', 'Editar perfil', 'Editar tu perfil', 'Cambiar foto del perfil', 'Foto de perfil', 'Imagen de perfil', 'Nombre de usuario', 'Contraseña', 'Configuración', 'Editar o perfil', 'Foto do perfil', 'Senha', 'Modifica profilo', 'Foto del profilo', 'Impostazioni',
+    'Profilbild ändern', 'Profilbild', 'Profil bearbeiten', 'Benutzername', 'Passwort', 'Einstellungen', 'Modifier le profil', 'Photo de profil', "Nom d'utilisateur", 'Mot de passe', 'Paramètres',
+    'Редагувати профіль', 'Змінити фото профілю', 'Фото профілю', 'Пароль', 'Налаштування', 'Ім’я користувача', 'Изображение профиля',
+    'profilepic', 'profile.photo', 'profile:photo', 'profileimage', 'userpic', 'pfp', 'photo_profile', 'profile_avatar', 'user-pic',
+    'Edit page', 'Edit Page info', 'Edit public details', 'profile_pic', 'profile-photo', 'profilePhoto', 'cover_photo', 'coverPhoto', 'user_name', 'userName', 'old-password', 'phoneNumber',
+    'Редактировать профиль', 'Изменить профиль', 'Сменить фото профиля', 'Фото профиля', 'Изменить фото профиля', 'Добавить аватар', 'Аватар', 'Биография', 'Изменить биографию', 'Имя пользователя',
+    'Номер телефона', 'Добавить номер телефона', 'Телефон', 'Пароль', 'Изменить пароль', 'Настройки', 'Настройки профиля', 'Дата рождения', 'День рождения'
+  ])('is: %s', (name) => {
+    expect(changesProfile(name), name).toBe(true)
+    expect(neverClicked(name), name).toBe(true)
+  })
+
+  // What a post's own wizard says is not about the profile, and a word inside another word is not the word.
+  it.each([
+    'Next', 'Continue', 'Share', 'Post', 'Create', 'Create post', 'New post', 'Select from computer', 'Select from device', 'Add photo', 'Add photos/videos', 'Photo/video', 'Add photos or video', 'Write a caption...',
+    'Add location', 'Tag people', 'Add alt text', 'Crop', 'Back', 'Close', 'Discard', 'Edit', 'Aspect ratio', 'Browse', 'Attach media', 'Posting', 'Biology', 'Biography of a star', 'Phones', 'Phoned in', 'Passwords are hard',
+    'Settingsmith', 'Genderless', 'Siguiente', 'Compartir', 'Añadir fotos', 'Weiter', 'Teilen', 'Suivant', 'Partager', 'Далі', 'Поділитися', 'Додати фото', 'Pfpfp', 'Pfpx', 'Profile', 'Profilbildung',  'post_caption', 'media-upload', 'photoVideo', 'createPost', 'Pageant', 'Homepage', 'Next-step', 'Avatars of Mars', 'Далее', 'Поделиться', 'Опубликовать', 'Выбрать с компьютера', 'Добавить фото', 'Добавить подпись', 'Телефония', 'Биологический', 'Назад'
+  ])('is not: %s', (name) => {
+    expect(changesProfile(name), name).toBe(false)
   })
 })
 

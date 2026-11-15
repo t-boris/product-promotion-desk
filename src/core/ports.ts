@@ -157,8 +157,13 @@ export type PageStep =
   /** Puts a file (an absolute path, one the application chose) into a file input: a script cannot do this, the browser's own protocol does. */
   /** `path` goes into the input; `also` goes in with it, in one step (a file input holds the files of its last step, so several pictures go in together). */
   | { do: 'upload'; ref: string; path: string; also?: string[] }
-  | { do: 'click'; ref: string }
+  /** `still`: press only where the pointer already rests on the element (a `hover` was made); never scroll, glide or aim again. Nothing is waited for. */
+  | { do: 'click'; ref: string; still?: boolean }
   | { do: 'key'; key: 'Enter' | 'Tab' | 'Escape' }
+  /** The mouse wheel, as a person scrolls: down or up by most of a screen (`screen`) or half of one (`half`), in small smooth turns, over the middle of the page. */
+  | { do: 'scroll'; direction: 'down' | 'up'; amount: 'screen' | 'half' }
+  /** The pointer glides to an element and rests on it, with no press: a person points before pressing, and what must be seen before a press is seen first. */
+  | { do: 'hover'; ref: string }
 
 /**
  * `done`: carried out. `wrong_host`: the page is not one of `hosts`. `not_found`: no such element (the page changed). These two are answered

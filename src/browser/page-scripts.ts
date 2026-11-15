@@ -248,19 +248,87 @@ export interface LocatedElement {
   y?: number
   /** A click at x, y reaches the element (nothing else covers it). */
   hit?: boolean
+  /** The centre of the element is on the screen now (inside the window, with a small margin): a person clicks what they can see. */
+  inView?: boolean
+  /** The size of the window's page area, so a scroll can aim for the middle of it. */
+  vw?: number
+  vh?: number
   disabled?: boolean
   tag?: string
 }
 
-/** Scrolls the element into view and says where its centre is, as MarkView's browser does before a real click. */
+/**
+ * Where the element's centre is, without moving the page: a person scrolls with the wheel to what is off the screen (`scrollTo` in the step
+ * runner), and only a page that does not scroll that way is made to (`scrollIntoViewScript`).
+ */
 export function locateScript(ref: string): string {
   return `(() => {${FIND_REF(ref)}
-  el.scrollIntoView({ block: 'center', inline: 'center' });
   const r = el.getBoundingClientRect();
   const x = r.left + r.width / 2, y = r.top + r.height / 2;
-  const top = document.elementFromPoint(x, y);
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const inView = x >= 8 && x <= vw - 8 && y >= 8 && y <= vh - 8;
+  const top = inView ? document.elementFromPoint(x, y) : null;
   const hit = !!top && (top === el || el.contains(top) || top.contains(el) || (top.shadowRoot ? top.shadowRoot.contains(el) : false));
-  return { ok: true, x: x, y: y, hit: hit, disabled: !!el.disabled, tag: el.tagName.toLowerCase() };
+  return { ok: true, x: x, y: y, hit: hit, inView: inView, vw: vw, vh: vh, disabled: !!el.disabled, tag: el.tagName.toLowerCase() };
+})()`
+}
+
+/** The last resort for an element the wheel could not bring into view (a scroller the cursor is not over): the browser's own scroll to it. */
+export function scrollIntoViewScript(ref: string): string {
+  return `(() => {${FIND_REF(ref)}
+  el.scrollIntoView({ block: 'center', inline: 'center' });
+  return { ok: true };
+})()`
+}
+
+/** How far the part of the page under a point is scrolled: the nearest scrollable box around that point, else the page itself. */
+export function scrollStateScript(x: number, y: number): string {
+  return `(() => {
+  const scrolls = (n) => { const s = getComputedStyle(n); return /(auto|scroll|overlay)/.test(s.overflowY) && n.scrollHeight > n.clientHeight + 1; };
+  for (let n = document.elementFromPoint(${Math.round(x)}, ${Math.round(y)}); n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+    if (scrolls(n)) return { ok: true, top: n.scrollTop, max: n.scrollHeight - n.clientHeight, inner: true, vw: window.innerWidth, vh: window.innerHeight };
+  }
+  const d = document.scrollingElement || document.documentElement;
+  return { ok: true, top: d.scrollTop, max: d.scrollHeight - window.innerHeight, inner: false, vw: window.innerWidth, vh: window.innerHeight };
+})()`
+}
+
+export interface ScrollState {
+  ok: boolean
+  top?: number
+  max?: number
+  inner?: boolean
+  vw?: number
+  vh?: number
+}
+
+/** Where the owner's cursor dot is now (null before it was ever shown on this document), and the size of the window. Moves nothing. */
+export function cursorAtScript(): string {
+  return `(() => { const at = window.__ppdCursorAt || null; return { ok: true, x: at ? at.x : null, y: at ? at.y : null, vw: window.innerWidth, vh: window.innerHeight }; })()`
+}
+
+/**
+ * The cursor the owner watches: a small dot on the page that follows the real mouse (the real mouse has no pointer on the screen, since the
+ * events come from the application), shrinks while pressed and fades when nothing moves it. It takes no events, and says where it was.
+ */
+export function cursorScript(x: number, y: number, state: 'move' | 'down' | 'up'): string {
+  return `(() => {
+  let c = document.getElementById('__ppd-cursor');
+  if (!c) {
+    c = document.createElement('div');
+    c.id = '__ppd-cursor';
+    c.setAttribute('aria-hidden', 'true');
+    c.style.cssText = 'position:fixed;left:0;top:0;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:rgba(225,29,72,.8);box-shadow:0 0 0 3px rgba(255,255,255,.95),0 1px 8px rgba(0,0,0,.5);pointer-events:none;z-index:2147483647;opacity:1;transition:opacity .4s ease;';
+    (document.body || document.documentElement).appendChild(c);
+  }
+  const was = window.__ppdCursorAt || null;
+  window.__ppdCursorAt = { x: ${x}, y: ${y} };
+  c.style.opacity = '1';
+  c.style.transform = 'translate(${x}px,${y}px) scale(${state === 'down' ? 0.6 : 1})';
+  ${state === 'up' ? "c.style.boxShadow = '0 0 0 3px rgba(255,255,255,.95),0 0 0 14px rgba(225,29,72,.35)'; setTimeout(() => { c.style.boxShadow = '0 0 0 3px rgba(255,255,255,.95),0 1px 8px rgba(0,0,0,.5)'; }, 240);" : ''}
+  if (window.__ppdCursorTimer) clearTimeout(window.__ppdCursorTimer);
+  window.__ppdCursorTimer = setTimeout(() => { c.style.opacity = '0'; }, 5000);
+  return { ok: true, x: was ? was.x : null, y: was ? was.y : null, vw: window.innerWidth, vh: window.innerHeight };
 })()`
 }
 

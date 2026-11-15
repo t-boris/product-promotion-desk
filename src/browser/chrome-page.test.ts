@@ -1,9 +1,10 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { fakePage, type FakePage } from './chrome-fakes'
 import { ChromeRawPage, type ChromeHandle } from './chrome-page'
+import { pacing } from './step-runner'
 import type { Page } from 'puppeteer-core'
 
 /** A handle over a fake page, the way the service builds one; `ensured` counts how often the window was asked to be un-minimised. */
@@ -39,6 +40,14 @@ function make(address = 'https://www.facebook.com/r.php') {
   })
   return { raw, pages, handles, creations: () => creations }
 }
+
+const realSleep = pacing.sleep
+beforeEach(() => {
+  pacing.sleep = async () => undefined
+})
+afterEach(() => {
+  pacing.sleep = realSleep
+})
 
 describe('ChromeRawPage', () => {
   it('opens the page once for callers that arrive together', async () => {
@@ -142,13 +151,38 @@ describe('ChromeRawPage', () => {
       expect(pages[0].fronted).toBe(0)
     })
 
-    it('clicks with a real mouse press at the point the page gave, when the page saw it', async () => {
+    it('clicks with a real mouse press at the point the page gave, when the page saw it: the pointer glides there first, then the button goes down and up', async () => {
       const { raw, pages } = make()
       await raw.url()
-      pages[0].answers.push(['scrollIntoView', { ok: true, hit: true, x: 40, y: 50, disabled: false }], ['window.__ppdMouse || 0', { ok: true }])
+      pages[0].answers.push(['const inView', { ok: true, hit: true, inView: true, x: 40, y: 50, disabled: false }], ['window.__ppdMouse || 0', { ok: true }], ['__ppdCursorAt', { ok: true, x: null, y: null, vw: 1000, vh: 700 }])
       const result = await raw.pageStep({ do: 'click', ref: 'e3' }, ['facebook.com'])
       expect(result.status).toBe('done')
+      const input = pages[0].input
+      expect(input.slice(-2)).toEqual(['down', 'up'])
+      const moves = input.filter((i) => i.startsWith('move:'))
+      expect(moves.length).toBeGreaterThan(5)
+      expect(moves.at(-1)).toBe('move:40,50')
+    })
+
+    it('presses at the point it was given, not wherever the pointer was left (a still press after a hover moves nothing but the last few pixels)', async () => {
+      const { raw, pages } = make()
+      await raw.url()
+      pages[0].answers.push(['const inView', { ok: true, hit: true, inView: true, x: 40, y: 50, disabled: false }], ['window.__ppdMouse || 0', { ok: true }], ['__ppdCursorAt', { ok: true, x: 42, y: 51, vw: 1000, vh: 700 }])
+      const result = await raw.pageStep({ do: 'click', ref: 'e3', still: true }, ['facebook.com'])
+      expect(result.status).toBe('done')
       expect(pages[0].input).toEqual(['move:40,50', 'down', 'up'])
+    })
+
+    it('turns the real mouse wheel for a scroll, down as a positive turn, over the middle of the page', async () => {
+      const { raw, pages } = make()
+      await raw.url()
+      pages[0].answers.push(['scrollTop', { ok: true, top: 0, max: 2000, inner: false, vw: 1000, vh: 700 }], ['__ppdCursorAt', { ok: true, x: null, y: null, vw: 1000, vh: 700 }])
+      const result = await raw.pageStep({ do: 'scroll', direction: 'down', amount: 'screen' }, ['facebook.com'])
+      expect(result.status).toBe('done')
+      const wheels = pages[0].input.filter((i) => i.startsWith('wheel:')).map((i) => Number(i.slice(6)))
+      expect(wheels.length).toBeGreaterThan(3)
+      expect(wheels.every((dy) => dy > 0 && dy <= 100)).toBe(true)
+      expect(wheels.reduce((a, b) => a + b, 0)).toBe(560)
     })
 
     it('refuses a file that is not an absolute path before the page is touched', async () => {

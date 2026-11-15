@@ -20,7 +20,8 @@ export interface RawPage {
   click(selector: string): Promise<void>
   uploadFile(selector: string, path: string): Promise<void>
   signIn(form: SignInForm): Promise<{ status: SignInStatus }>
-  pageStep(step: PageStep, hosts: string[]): Promise<PageStepResult>
+  /** `alive` throws when the owner took the browser over meanwhile: a step that takes a while (a glide, a scroll) calls it before each input that reaches the page. */
+  pageStep(step: PageStep, hosts: string[], alive?: () => void): Promise<PageStepResult>
 }
 
 /**
@@ -105,8 +106,8 @@ export class ControlledSession implements BrowserSession {
       click: async (selector, ticket) => (authorized(ticket), alive(), raw.click(selector)),
       uploadFile: async (selector, path, ticket) => (authorized(ticket), alive(), raw.uploadFile(selector, path)),
       signIn: async (form) => (alive(), raw.signIn(form)),
-      pageStep: async (step, hosts) => (alive(), raw.pageStep(step, hosts)),
-      publishStep: async (step, hosts, ticket) => (authorized(ticket), alive(), raw.pageStep(step, hosts))
+      pageStep: async (step, hosts) => (alive(), raw.pageStep(step, hosts, alive)),
+      publishStep: async (step, hosts, ticket) => (authorized(ticket), alive(), raw.pageStep(step, hosts, alive))
     }
   }
 }

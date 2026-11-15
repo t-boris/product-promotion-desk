@@ -24,9 +24,14 @@ import type { Account } from '../shared/types'
 const PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Brand</title></head><body>
 <h1>Brand</h1>
 <nav><a id="logout" href="/logout">Log out</a> <a id="settings" href="/settings">Settings</a> <a id="other" href="/other/">Other profile</a></nav>
+<button id="edit-profile" type="button">Edit profile</button>
+<button id="avatar" type="button">Change profile photo</button>
+<p id="state">Nothing posted.</p>
+<p id="input-state">wheels: 0, moves: 0, cursor: no, scroll: 0</p>
+<!-- a profile page is long: what a person wants (Create) is below the first screen -->
+<div style="height: 2600px">A long profile.</div>
 <button id="create" type="button">Create</button>
 <button id="follow" type="button">Follow</button>
-<p id="state">Nothing posted.</p>
 <div id="dialog" hidden>
   <div id="step-pick">
     <button id="pick" type="button">Select from computer</button>
@@ -39,6 +44,10 @@ const PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>
     <button id="discard" type="button">Discard post</button>
     <button id="crop" type="button">Crop</button>
   </div>
+  <section id="avatar-box" aria-label="Profile photo" hidden>
+    <h2>Change profile photo</h2>
+    <form id="avatar-form" onsubmit="return false"><input id="avatar-file" name="profile_pic" type="file" accept="image/png" hidden></form>
+  </section>
   <div id="step-caption" hidden>
     <textarea id="caption" aria-label="Write a caption"></textarea>
     <button id="location" type="button">Add location</button>
@@ -51,8 +60,18 @@ const PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>
   const send = (path, body) => fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) })
   const hex = async (buffer) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', buffer))].map((b) => b.toString(16).padStart(2, '0')).join('')
   const taken = []
+  // What the page can tell of the hands that work it: real (trusted) wheel turns and mouse moves, how far it scrolled, and whether a cursor dot is drawn.
+  const input = { wheels: 0, moves: 0 }
+  const report = () => { document.getElementById('input-state').textContent = 'wheels: ' + input.wheels + ', moves: ' + input.moves + ', cursor: ' + (document.getElementById('__ppd-cursor') ? 'yes' : 'no') + ', scroll: ' + Math.round(window.scrollY) }
+  addEventListener('wheel', (e) => { if (e.isTrusted) { input.wheels++; report() } }, { capture: true, passive: true })
+  addEventListener('mousemove', (e) => { if (e.isTrusted) { input.moves++; if (input.moves % 4 === 0) report() } }, true)
+  addEventListener('scroll', report, { passive: true })
+  setInterval(report, 200)
+  document.getElementById('edit-profile').addEventListener('click', () => send('/edit-profile'))
+  document.getElementById('avatar').addEventListener('click', () => send('/avatar'))
+  document.getElementById('avatar-file').addEventListener('change', () => send('/avatar-file'))
   const show = (id) => { for (const step of ['step-pick', 'step-edit', 'step-caption']) document.getElementById(step).hidden = step !== id }
-  document.getElementById('create').addEventListener('click', () => { document.getElementById('dialog').hidden = false; show('step-pick') })
+  document.getElementById('create').addEventListener('click', () => { document.getElementById('dialog').hidden = false; document.getElementById('avatar-box').hidden = false; show('step-pick') })
   document.getElementById('pick').addEventListener('click', () => { send('/chooser'); document.getElementById('files').click() })
   document.getElementById('files').addEventListener('change', async (e) => {
     // the input holds the files of its last step, and the wizard takes what it holds each time
@@ -158,10 +177,11 @@ export async function exercisePictures(service: Pick<BrowserService, 'session'>,
       return found[1] as string
     }
     const fileInputRef = (snapshot: string): string => {
-      const found = [...snapshot.matchAll(/^\[(e\d+)\] input:file/gm)][0]
+      const found = [...snapshot.matchAll(/^\[(e\d+)\] input:file "Select pictures"/gm)][0]
       if (!found) throw new Error(`no file input in the snapshot:\n${snapshot}`)
       return found[1] as string
     }
+    const counter = (snapshot: string, what: 'wheels' | 'moves' | 'scroll'): number => Number(new RegExp(`${what}: (\\d+)`).exec(snapshot)?.[1] ?? -1)
     const look = async (): Promise<string> => (await toolbox.call('browser_snapshot', {})).text
 
     check('the mission has the tool that puts approved pictures in, and none that types, uploads or runs a script', toolbox.tools.some((t) => t.name === 'browser_attach') && !toolbox.tools.some((t) => /type|upload|evaluate|press_key/.test(t.name)), toolbox.tools.map((t) => t.name).join(','))
@@ -182,13 +202,53 @@ export async function exercisePictures(service: Pick<BrowserService, 'session'>,
     const opened = await toolbox.call('browser_navigate', { url: `${base}/brand/` })
     check('it opens the profile page, where the dialog opens', opened.isError !== true, opened.text.slice(0, 100))
 
-    // the dialog
+    // the page is long, and what the AI is shown is what is on the screen first
     let snapshot = await look()
-    const create = await toolbox.call('browser_click', { ref: refOf(snapshot, 'Create') })
-    check('it opens the Create dialog (the form is empty, so a click is free)', create.isError !== true, create.text.slice(0, 100))
+    check('the first look says the screen is at the top of a long page, and lists the profile controls on it', /at the top of the page.*scroll down/.test(snapshot) && snapshot.includes('"Edit profile"') && snapshot.includes('"Change profile photo"'), snapshot.slice(0, 200))
+    check('...and marks Create, which is below the first screen, as off the screen', /"Create"[^\n]*\(off screen\)/.test(snapshot) && !/"Edit profile"[^\n]*\(off screen\)/.test(snapshot), snapshot.split('\n').filter((l) => /Create|Edit profile/.test(l)).join(' | '))
+
+    // the profile is the account's own, and a post does not touch it: not by a press, not by a file
+    for (const name of ['Edit profile', 'Change profile photo']) {
+      const result = await toolbox.call('browser_click', { ref: refOf(snapshot, name) })
+      check(`it may not click "${name}"`, result.isError === true && /own profile/.test(result.text), result.text.slice(0, 120))
+    }
+    const settingsLink = await toolbox.call('browser_click', { ref: refOf(snapshot, 'Settings') })
+    check('...nor the link to the settings', settingsLink.isError === true && /own profile/.test(settingsLink.text), settingsLink.text.slice(0, 100))
+    check('...and the site saw none of it', !hits.some((h) => ['POST /edit-profile', 'POST /avatar', 'GET /settings'].includes(h)), hits.join(', '))
+
+    // scrolling with the wheel, as a person does
+    let scrolled = ''
+    for (let i = 0; i < 8 && /"Create"[^\n]*\(off screen\)/.test(snapshot); i++) {
+      scrolled = (await toolbox.call('browser_scroll', { direction: 'down' })).text
+      snapshot = await look()
+    }
+    check('it scrolls down until Create is on the screen, and is told where the page is', /Scrolled down\. It is now \d+% of the way down/.test(scrolled) && !/"Create"[^\n]*\(off screen\)/.test(snapshot), scrolled.slice(0, 160))
+    check('...the page moved', counter(snapshot, 'scroll') > 200, `scroll ${counter(snapshot, 'scroll')}`)
+    // what the page itself counted of the hands: real (trusted) wheel turns and mouse moves, and whether a cursor dot is drawn over it
+    const hands = snapshot.split('\n').find((l) => l.includes('wheels:')) ?? ''
+    check('...with real wheel turns, a notch at a time', counter(snapshot, 'wheels') >= 8, `wheels ${counter(snapshot, 'wheels')}`)
+    check('...and the owner sees a cursor dot, which moved over the page with real mouse moves', /cursor: yes/.test(snapshot) && counter(snapshot, 'moves') >= 10, hands)
+    const up = await toolbox.call('browser_scroll', { direction: 'up', amount: 'half' })
+    check('it can scroll up too, by half a screen', up.isError !== true && /Scrolled up/.test(up.text), up.text.slice(0, 120))
+
+    // a click on what is below the screen scrolls to it by itself, the way a person does
+    await toolbox.call('browser_navigate', { url: `${base}/brand/` })
     snapshot = await look()
+    check('after a new look at the page it is at the top again, with Create off the screen', /at the top of the page/.test(snapshot) && /"Create"[^\n]*\(off screen\)/.test(snapshot) && counter(snapshot, 'wheels') === 0, snapshot.slice(0, 100))
+    const create = await toolbox.call('browser_click', { ref: refOf(snapshot, 'Create') })
+    check('it opens the Create dialog by clicking Create where it is off the screen (the form is empty, so a click is free)', create.isError !== true, create.text.slice(0, 100))
+    snapshot = await look()
+    check('...the page was scrolled with the wheel to reach it, and the pointer moved to it', counter(snapshot, 'scroll') > 200 && counter(snapshot, 'wheels') >= 5 && counter(snapshot, 'moves') >= 10, snapshot.split('\n').find((l) => l.includes('wheels:')) ?? '')
     check('the page lists the hidden file input, the button that opens the chooser and a decoy', snapshot.includes('input:file') && ['Select from computer', 'Follow'].every((n) => snapshot.includes(`"${n}"`)), snapshot.slice(0, 700))
     const inputRef = fileInputRef(snapshot)
+    // the profile photo's own file input is on the page too, and a picture of a post never goes into it
+    const avatarInput = [...snapshot.matchAll(/^\[(e\d+)\] input:file "[^"]*" in "[^"]*Change profile photo[^"]*"/gm)][0]?.[1]
+    check('the page lists the profile photo\'s file input, with what stands around it', avatarInput !== undefined, snapshot.split('\n').filter((l) => l.includes('input:file')).join(' | '))
+    if (avatarInput) {
+      const intoAvatar = await toolbox.call('browser_attach', { ref: avatarInput })
+      check('it may not put the approved pictures into the profile photo\'s input', intoAvatar.isError === true && /own profile/.test(intoAvatar.text), intoAvatar.text.slice(0, 120))
+      check('...and the site saw no file there', !hits.includes('POST /avatar-file'), hits.join(', '))
+    }
 
     // what it may not do before a picture is in
     const chooser = await toolbox.call('browser_click', { ref: refOf(snapshot, 'Select from computer') })

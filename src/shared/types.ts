@@ -947,6 +947,8 @@ export interface OpportunityCard {
   channelTarget: string
   /** The platform of the channel ("reddit", "facebook"): what the post editor shows the post as, and what a picture needs to be sent. */
   channelPlatform: string
+  /** Whether the application reads the channel; a channel it does not read can be posted to only by the AI browser (DEC-035). */
+  channelReads: boolean
   accountLabel: string
   comment: Comment | null
   discussion: Discussion | null

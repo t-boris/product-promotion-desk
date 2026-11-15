@@ -2,21 +2,32 @@
 // executor ask the same question, so what the owner is told can be sent is what is sent (DEC-031).
 
 import { renderForPlatform, sendProblems, type SendWays } from '../../shared/post-format'
-import type { Draft } from '../../shared/types'
+import type { Channel, Draft } from '../../shared/types'
 import type { Core } from '../core'
 
 export type Executor = 'connector' | 'ai_browser'
 
 /**
- * Whether the AI browser may carry a send. It does when the owner chose it in the settings, the build has it, and the send is the owner's own
- * press on an approval the owner gave themselves: a scheduled send, or one on an automatic approval, never drives a browser. Without `send`
- * (the approval, before anyone presses anything) the question is whether it could, if the owner presses Send.
+ * Whether the AI browser may carry a send. It does when the owner chose it in the settings, or the channel is one the application does not read
+ * (Instagram, Facebook, Threads...: no connector can post to it, so there is nothing to choose, DEC-035), the build has it, and the send is the
+ * owner's own press on an approval the owner gave themselves: a scheduled send, or one on an automatic approval, never drives a browser.
+ * Without `send` (the approval, before anyone presses anything) the question is whether it could, if the owner presses Send. For a channel with
+ * no connector the engine is asked too: Claude Code is the one that can be held to the browser tools alone, and the owner is told so at the approval.
  */
-export function sendWays(core: Core, send?: { automatic: boolean; approvedBy: string }): SendWays {
-  const chosen = core.settings.app().publishWith === 'ai_browser' && core.services.postMissions !== undefined
-  if (!chosen) return { aiBrowser: false }
-  if (send && (send.automatic || send.approvedBy !== 'user')) return { aiBrowser: false, unattended: true }
-  return { aiBrowser: true }
+export function sendWays(core: Core, send?: { automatic: boolean; approvedBy: string }, channel?: Pick<Channel, 'reads'>): SendWays {
+  const noConnector = channel !== undefined && !channel.reads
+  const only = noConnector ? { noConnector: true } : {}
+  const chosen = (noConnector || core.settings.app().publishWith === 'ai_browser') && core.services.postMissions !== undefined
+  if (!chosen) return { aiBrowser: false, ...only }
+  if (send && (send.automatic || send.approvedBy !== 'user')) return { aiBrowser: false, unattended: true, ...only }
+  if (noConnector) {
+    const engine = core.engines.selected()
+    if (!engine) return { aiBrowser: false, noConnector: true, engineProblem: 'No AI engine is selected. The AI works the browser for this channel: choose Claude Code in Settings (AI engine), or use “Copy post” and publish it by hand.' }
+    if (!engine.supportsAgent || !engine.confinesAgent) {
+      return { aiBrowser: false, noConnector: true, engineProblem: `${engine.label} cannot be held to the browser tools alone, so it is not allowed to publish for you. The AI works the browser for this channel: choose Claude Code in Settings (AI engine), or use “Copy post” and publish it by hand.` }
+    }
+  }
+  return { aiBrowser: true, ...only }
 }
 
 /**
@@ -27,6 +38,8 @@ export function sendWays(core: Core, send?: { automatic: boolean; approvedBy: st
  */
 export function chooseExecutor(ways: SendWays, draft: Pick<Draft, 'attachments' | 'markup' | 'title' | 'text' | 'link'>, platform: string): Executor {
   if (!ways.aiBrowser) return 'connector'
+  // No connector can post to this channel: whatever the draft holds, the AI browser is the only way.
+  if (ways.noConnector) return 'ai_browser'
   if (draft.attachments.length > 0 && (draft.markup !== 'markdown' || sendProblems(platform, renderForPlatform(draft, platform), { aiBrowser: false }).length === 0)) return 'connector'
   return 'ai_browser'
 }

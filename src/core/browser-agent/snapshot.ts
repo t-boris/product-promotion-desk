@@ -9,6 +9,7 @@ export const SNAPSHOT_MAX_ELEMENTS = 160
 /** A list that is open shows all its options (a year list has a hundred): the first of them are enough. */
 const MAX_OPTION_ELEMENTS = 70
 const MAX_NAME = 80
+const MAX_NEAR = 120
 const MAX_VALUE = 60
 const MAX_OPTIONS = 40
 const MAX_TEXT = 2500
@@ -35,6 +36,10 @@ export interface SnapshotElement {
   form?: number
   /** The thing (a comment or a post, Reddit's `data-fullname` like t1_abc) the element sits under, as the site marks it: the nearest marked ancestor. Absent when the page marks none. */
   parent?: string
+  /** The element is not on the screen now (above or below the part of the page that shows): scroll to it, or click it, which scrolls by itself. */
+  offscreen?: boolean
+  /** For a file input: what the page says around it (the label and the heading of the dialog or form it is in), so a profile photo input is not taken for the one of a post. */
+  near?: string
 }
 
 export interface PageSnapshot {
@@ -46,6 +51,8 @@ export interface PageSnapshot {
   /** A visible human check (CAPTCHA) on the page, described; empty when there is none. */
   humanCheck: string
   elements: SnapshotElement[]
+  /** How far the page is scrolled (the document, not a box inside it): where the screen is on it. Absent when the page did not say. */
+  scroll?: { top: number; max: number }
 }
 
 /** Read-only except for one thing: it writes data-ppd-ref on the elements it lists, so a later step can find them again. */
@@ -86,7 +93,21 @@ export function snapshotScript(): string {
   const elements = [];
   let links = 0;
   let options = 0;
-  for (const el of all(selector, document)) {
+  // What a person sees comes first: the elements on the screen, then the rest of the page. A dialog that a site builds at the end of the page
+  // would otherwise be cut off by the limit while the page's hundred links before it are all listed.
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const onScreen = (el) => { const r = el.getBoundingClientRect(); return r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw; };
+  const candidates = all(selector, document);
+  // An open dialog covers the page behind it: what is in it comes before what is behind it, and a file input comes first wherever it is (a site hides
+  // it, with no size and no place on the screen, and a file goes into the input itself).
+  const dialogs = all('[role=dialog],[aria-modal=true],dialog[open]', document).filter(shown);
+  const inDialog = (el) => dialogs.some((d) => d.contains && d.contains(el));
+  const isFile = (el) => el.tagName.toLowerCase() === 'input' && (el.getAttribute('type') || '').toLowerCase() === 'file';
+  const front = [];
+  const visible = [];
+  const hidden = [];
+  for (const el of candidates) (isFile(el) || (onScreen(el) && inDialog(el)) ? front : onScreen(el) ? visible : hidden).push(el);
+  for (const el of [...front, ...visible, ...hidden]) {
     if (elements.length >= ${SNAPSHOT_MAX_ELEMENTS}) break;
     const tag = el.tagName.toLowerCase();
     const type = (el.getAttribute('type') || '').toLowerCase();
@@ -115,9 +136,25 @@ export function snapshotScript(): string {
     if (roleAttr === 'combobox' && tag !== 'input') { const held = clean(el.innerText, ${MAX_VALUE}); if (held && held !== name) item.value = held.replace(name, '').trim() || held; }
     if (tag === 'select') item.options = [...el.options].slice(0, ${MAX_OPTIONS}).map((o) => clean(o.textContent, 40)).filter((t) => t !== '');
     if (((tag === 'button' && el.type === 'submit' && el.form) || (tag === 'input' && (type === 'submit' || type === 'image')))) item.submits = true;
+    // A file input is usually hidden and has no name of its own: what stands around it says what it is for (a post's pictures, a profile photo).
+    if (tag === 'input' && type === 'file') {
+      // The nearest two containers that say something (a label or a heading): a form with no heading around the input does not hide the dialog around it.
+      const says = [];
+      for (let n = above(el), hops = 0; n && n.nodeType === 1 && hops < 40 && says.length < 2; n = above(n), hops++) {
+        if (!n.matches || !n.matches('[role=dialog],dialog,form,section,[role=region],fieldset')) continue;
+        const heading = n.querySelector ? n.querySelector('h1,h2,h3,[role=heading],legend') : null;
+        const bit = [n.getAttribute('aria-label'), heading && heading.innerText].filter(Boolean).join(' ');
+        if (bit) says.push(bit);
+      }
+      // What the site named the input in its own code (name, id) is a word of what it is for (profile_pic), and the file it takes is a hint too.
+      const code = [el.getAttribute('name'), el.getAttribute('id')].filter((v) => v && /^[A-Za-z][\\w.:-]{2,40}$/.test(v)).join(' ');
+      const near = clean([code, ...says, el.title].filter(Boolean).join(' '), ${MAX_NEAR});
+      if (near) item.near = near;
+    }
     const place = placeOf(el);
     if (place.form !== null) item.form = place.form;
     if (place.parent !== null) item.parent = place.parent;
+    if (!onScreen(el) && !(tag === 'input' && type === 'file')) item.offscreen = true;
     if (el.disabled || el.getAttribute('aria-disabled') === 'true') item.disabled = true;
     if (el.required || el.getAttribute('aria-required') === 'true') item.required = true;
     elements.push(item);
@@ -147,11 +184,30 @@ export function snapshotScript(): string {
   }
   const text = clean(document.body ? document.body.innerText : '', ${MAX_TEXT});
   if (humanCheck === '' && text.length < 600 && /verify you are (a )?human|are you a robot|not a robot|security check/i.test(text)) humanCheck = 'the page asks to prove you are human';
-  return { url: location.href, title: clean(document.title, 120), text: text, alerts: alerts, humanCheck: humanCheck, elements: elements };
+  const doc = document.scrollingElement || document.documentElement || { scrollTop: 0, scrollHeight: 0 };
+  return { url: location.href, title: clean(document.title, 120), text: text, alerts: alerts, humanCheck: humanCheck, elements: elements, scroll: { top: Math.round(doc.scrollTop), max: Math.max(0, Math.round(doc.scrollHeight - window.innerHeight)) } };
 })()`
 }
 
 const str = (value: unknown, max: number): string => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : '')
+
+/** Where the screen is on the page, when the page said it in numbers. */
+function scrollOf(raw: unknown): { scroll?: { top: number; max: number } } {
+  if (typeof raw !== 'object' || raw === null) return {}
+  const { top, max } = raw as Record<string, unknown>
+  if (typeof top !== 'number' || typeof max !== 'number' || !Number.isFinite(top) || !Number.isFinite(max) || top < 0 || max < 0) return {}
+  return { scroll: { top: Math.round(top), max: Math.round(max) } }
+}
+
+/** Where the screen is on the page, in words for the AI: at the top, somewhere in the middle (with how far), or at the bottom. */
+export function describeScroll(snapshot: Pick<PageSnapshot, 'scroll'>): string | null {
+  const scroll = snapshot.scroll
+  if (!scroll) return null
+  if (scroll.max <= 4) return 'The page fits on the screen: there is nothing to scroll to.'
+  if (scroll.top <= 4) return 'The screen is at the top of the page. There is more below: scroll down to see it.'
+  if (scroll.max - scroll.top <= 4) return 'The screen is at the bottom of the page. There is more above.'
+  return `The screen is ${Math.round((scroll.top / scroll.max) * 100)}% of the way down the page. There is more above and below.`
+}
 
 /** Checks the shape of what the page returned: it is untrusted, so every field is clamped and anything odd is dropped. */
 export function parseSnapshot(raw: unknown): PageSnapshot | null {
@@ -173,6 +229,8 @@ export function parseSnapshot(raw: unknown): PageSnapshot | null {
     if (e.submits === true) element.submits = true
     if (typeof e.form === 'number' && Number.isInteger(e.form) && e.form >= 1 && e.form <= 999) element.form = e.form
     if (typeof e.parent === 'string' && /^t\d_[a-z0-9]{1,13}$/.test(e.parent)) element.parent = e.parent
+    if (typeof e.near === 'string' && e.near.trim() !== '') element.near = str(e.near, MAX_NEAR)
+    if (e.offscreen === true) element.offscreen = true
     elements.push(element)
   }
   return {
@@ -181,7 +239,8 @@ export function parseSnapshot(raw: unknown): PageSnapshot | null {
     text: str(page.text, MAX_TEXT),
     alerts: Array.isArray(page.alerts) ? page.alerts.slice(0, MAX_ALERTS).map((a) => str(a, 200)).filter((a) => a !== '') : [],
     humanCheck: str(page.humanCheck, 120),
-    elements
+    elements,
+    ...scrollOf(page.scroll)
   }
 }
 
@@ -195,6 +254,8 @@ export function renderElements(snapshot: PageSnapshot): string {
       if (e.checked !== undefined) line += e.checked ? ' [checked]' : ' [unchecked]'
       if (e.value) line += ` value="${e.value}"`
       if (e.options && e.options.length > 0) line += ` options: ${e.options.join(' | ')}`
+      if (e.near) line += ` in "${e.near}"`
+      if (e.offscreen) line += ' (off screen)'
       if (e.required) line += ' (required)'
       if (e.disabled) line += ' (disabled)'
       return line

@@ -187,7 +187,7 @@ describe('what a join needs', () => {
 })
 
 describe('a join run', () => {
-  it('is held to the application\'s tools alone, with the six tools of a join and the brief of one', async () => {
+  it('is held to the application\'s tools alone, with the seven tools of a join and the brief of one', async () => {
     const j = await ready()
     let seen: string[] = []
     asTheAI(j, async (tools) => {
@@ -196,7 +196,7 @@ describe('a join run', () => {
     })
     await start(j)
     await finished(j)
-    expect(seen).toEqual(['browser_snapshot', 'browser_navigate', 'browser_click', 'browser_wait_for', 'ask_owner', 'report_result'])
+    expect(seen).toEqual(['browser_snapshot', 'browser_navigate', 'browser_click', 'browser_scroll', 'browser_wait_for', 'ask_owner', 'report_result'])
     const task = j.w.t.engine.calls.at(-1)
     expect(task?.label).toBe('agent.join')
     expect(task?.agent).toMatchObject({ confined: true })

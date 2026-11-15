@@ -17,7 +17,7 @@ export abstract class ScriptedPage implements RawPage {
   abstract url(): Promise<string>
   abstract read<T>(script: string): Promise<T>
   abstract uploadFile(selector: string, path: string): Promise<void>
-  abstract pageStep(step: PageStep, hosts: string[]): Promise<PageStepResult>
+  abstract pageStep(step: PageStep, hosts: string[], alive?: () => void): Promise<PageStepResult>
 
   async waitForSelector(selector: string, timeoutMs = 10_000): Promise<boolean> {
     return pollUntil(

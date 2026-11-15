@@ -36,6 +36,8 @@ class FormPage extends FakePage {
   fields = new Map<string, string>()
   alerts: string[] = []
   humanCheck = ''
+  /** How far the page is scrolled, when a test wants the look to say it. */
+  scroll: { top: number; max: number } | null = null
   /** What a press posted: the content of every field at that moment. */
   readonly posted: Record<string, string>[] = []
   readonly clicked: string[] = []
@@ -55,6 +57,8 @@ class FormPage extends FakePage {
   restore: Record<string, string> = {}
   /** Text in places the snapshot does not list (a hidden field, a field beyond the first 160 elements). */
   hidden: string[] = []
+  /** An editor built on a div has no name of its own: once it holds text it is named by that text. */
+  nameFieldsByContent = false
   /** A page whose fields cannot be read. */
   fieldsUnreadable = false
   /** A page on which the script that reads the fields fails (it throws). */
@@ -95,7 +99,12 @@ class FormPage extends FakePage {
         text: 'A thread',
         alerts: this.alerts,
         humanCheck: this.humanCheck,
-        elements: this.items.map((i) => ({ ...i, ...(this.fields.has(i.ref) ? { value: this.fields.get(i.ref)?.slice(0, 60) } : {}) }))
+        ...(this.scroll ? { scroll: this.scroll } : {}),
+        elements: this.items.map((i) => ({
+          ...i,
+          ...(this.fields.has(i.ref) ? { value: this.fields.get(i.ref)?.slice(0, 60) } : {}),
+          ...(this.nameFieldsByContent && i.ref === 'e1' && this.fields.has('e1') ? { name: this.fields.get('e1')?.slice(0, 60) } : {})
+        }))
       } as T
     }
     const field = /ppd-field (e\d+)/.exec(script)
@@ -171,10 +180,60 @@ const look = (t: Setup) => t.toolbox.call('browser_snapshot', {})
 const submitReply = (t: Setup, extra: Record<string, unknown> = {}) => t.toolbox.call('browser_submit', { text_ref: 'e1', submit_ref: 'e4', ...extra })
 const submitPost = (t: Setup, extra: Record<string, unknown> = {}) => t.toolbox.call('browser_submit', { title_ref: 'e2', text_ref: 'e1', link_ref: 'e3', submit_ref: 'e4', ...extra })
 
+describe('browser_submit never writes a post into the account\'s own profile (DEC-035)', () => {
+  const profileProblem = /own profile/
+
+  it.each(['Bio', 'Edit bio', 'Username', 'User name', 'Phone number', 'Add phone number', 'Display name', 'Biografía', 'Nombre de usuario', 'Біографія', 'Пароль', 'profile_pic'])('refuses a field named "%s": nothing is typed or pressed', async (name) => {
+    const t = setup()
+    t.page.items.find((i) => i.ref === 'e1')!.name = name
+    await look(t)
+    const result = await submitReply(t)
+    expect(result).toMatchObject({ isError: true, text: expect.stringMatching(profileProblem) })
+    expect(t.page.steps).toEqual([])
+    expect(t.authority.committed).toBe(false)
+    expect(t.page.posted).toEqual([])
+  })
+
+  it('refuses a control that is about the profile, even one named like Save', async () => {
+    const t = setup()
+    t.page.items.find((i) => i.ref === 'e4')!.name = 'Save profile settings'
+    await look(t)
+    expect(await submitReply(t)).toMatchObject({ isError: true, text: expect.stringMatching(profileProblem) })
+    expect(t.page.steps).toEqual([])
+  })
+
+  it('refuses a form that holds a profile field next to the one the text goes into, whatever the text field is called', async () => {
+    const t = setup()
+    for (const ref of ['e1', 'e4']) t.page.items.find((i) => i.ref === ref)!.form = 1
+    t.page.items.push({ ref: 'e9', role: 'input:tel', name: 'Phone number', form: 1 })
+    await look(t)
+    const result = await submitReply(t)
+    expect(result).toMatchObject({ isError: true, text: expect.stringMatching(profileProblem) })
+    expect(result.text).toContain('Phone number')
+    expect(t.page.steps).toEqual([])
+  })
+
+  it('does not mind a profile field in ANOTHER form of the page: a post form is judged by its own', async () => {
+    const t = setup()
+    for (const ref of ['e1', 'e4']) t.page.items.find((i) => i.ref === ref)!.form = 1
+    t.page.items.push({ ref: 'e9', role: 'input:tel', name: 'Phone number', form: 2 })
+    await look(t)
+    expect((await submitReply(t)).isError).toBeUndefined()
+  })
+
+  it('does not refuse an approved text that talks about the profile: only the names of the page are judged, and only before the typing', async () => {
+    const t = setup({ ...REPLY, text: 'Edit profile, change your bio, set a password: here is how.' })
+    t.page.nameFieldsByContent = true // after the typing the field is named by the text, which the profile words must not judge
+    await look(t)
+    expect((await submitReply(t)).isError).toBeUndefined()
+    expect(t.page.posted).toHaveLength(1)
+  })
+})
+
 describe('the tools of a post mission', () => {
   it('are a small set: looking, getting to the form, waiting, asking the owner, reporting, and browser_submit', () => {
     const t = setup()
-    expect(t.toolbox.tools.map((tool) => tool.name)).toEqual(['browser_snapshot', 'browser_navigate', 'browser_click', 'browser_select', 'browser_wait_for', 'browser_submit', 'ask_owner', 'report_result'])
+    expect(t.toolbox.tools.map((tool) => tool.name)).toEqual(['browser_snapshot', 'browser_navigate', 'browser_click', 'browser_scroll', 'browser_select', 'browser_wait_for', 'browser_submit', 'ask_owner', 'report_result'])
   })
 
   it('have no way to type, press a key, run a script, upload a file, keep a lesson or record a value', () => {
@@ -446,6 +505,97 @@ describe('a click or a choice of the AI\'s own is made only on the approved dest
     t.page.items.push({ ref: 'e9', role: 'link', name: 'Votes tab' })
     await look(t)
     expect((await t.toolbox.call('browser_click', { ref: 'e9' })).isError).toBe(true)
+  })
+})
+
+describe('a click or a choice never touches the account\'s own profile (DEC-035)', () => {
+  const PROFILE = { isError: true, text: expect.stringContaining('own profile') }
+  const NAMES = ['Edit profile', 'Change profile photo', 'Add profile photo', 'Add bio', 'Change username', 'Add phone number', 'Change password', 'Settings', 'Account settings', 'Редактировать профиль', 'Изменить фото профиля', 'Настройки']
+
+  it.each(NAMES)('refuses a click and a choice on "%s", and sends nothing to the page', async (name) => {
+    const t = setup(POST)
+    t.page.items.push({ ref: 'e9', role: 'button', name })
+    await look(t)
+    expect(await t.toolbox.call('browser_click', { ref: 'e9' })).toMatchObject(PROFILE)
+    expect(await t.toolbox.call('browser_select', { ref: 'e9', option: 'x' })).toMatchObject(PROFILE)
+    expect(t.page.steps).toEqual([])
+  })
+
+  it.each(['link', 'menuitem', 'tab', 'combobox', 'select'])('refuses it whatever the role: a %s named "Edit profile"', async (role) => {
+    const t = setup(POST)
+    t.page.items.push({ ref: 'e9', role, name: 'Edit profile' })
+    await look(t)
+    expect(await t.toolbox.call('browser_click', { ref: 'e9' })).toMatchObject(PROFILE)
+    expect(t.page.steps).toEqual([])
+  })
+
+  it('refuses an option of a list that is about the profile, though the list itself is not', async () => {
+    const t = setup(POST)
+    t.page.items.push({ ref: 'e9', role: 'combobox', name: 'More' })
+    await look(t)
+    expect(await t.toolbox.call('browser_select', { ref: 'e9', option: 'Edit profile' })).toMatchObject(PROFILE)
+    expect(t.page.steps).toEqual([])
+  })
+
+  it('leaves what a new post\'s own wizard says alone', async () => {
+    const t = setup(POST)
+    t.page.items.push({ ref: 'e9', role: 'button', name: 'Select from computer' }, { ref: 'e10', role: 'button', name: 'Add photos/videos' })
+    await look(t)
+    expect((await t.toolbox.call('browser_click', { ref: 'e10' })).isError).toBeFalsy()
+  })
+})
+
+describe('the mouse wheel', () => {
+  it('is a tool of a post mission: it scrolls the page down or up by a screen or half of one, and reports where the page is', async () => {
+    const t = setup(POST)
+    const tool = t.toolbox.tools.find((x) => x.name === 'browser_scroll')
+    expect(tool?.inputSchema.properties).toMatchObject({ direction: { enum: ['down', 'up'] }, amount: { enum: ['screen', 'half'] } })
+    t.page.forced.set(0, { status: 'done', detail: 'It is now 40% of the way down. There is more below.' })
+    const result = await t.toolbox.call('browser_scroll', { direction: 'down' })
+    expect(result.isError).toBeFalsy()
+    expect(result.text).toContain('40% of the way down')
+    expect(t.page.steps.map((s) => s.step)).toEqual([{ do: 'scroll', direction: 'down', amount: 'screen' }])
+    await t.toolbox.call('browser_scroll', { direction: 'up', amount: 'half' })
+    expect(t.page.steps.at(-1)?.step).toEqual({ do: 'scroll', direction: 'up', amount: 'half' })
+  })
+
+  it('refuses a direction that is not down or up, and nothing reaches the page', async () => {
+    const t = setup(POST)
+    for (const direction of ['left', '', 'Down', undefined]) expect(await t.toolbox.call('browser_scroll', { direction })).toMatchObject({ isError: true, text: expect.stringContaining('down or up') })
+    expect(t.page.steps).toEqual([])
+  })
+
+  it('is allowed while the form holds text: scrolling is not a press, and it changes nothing on the site', async () => {
+    const t = setup(POST)
+    t.page.fields.set('e1', 'text that is already in the form')
+    expect((await t.toolbox.call('browser_scroll', { direction: 'down' })).isError).toBeFalsy()
+  })
+
+  it('is sent to the page with the hosts of the platform and no others, and a step the page did not carry out is told as it is', async () => {
+    const t = setup(POST)
+    t.page.forced.set(0, { status: 'refused', detail: 'the page held still' })
+    expect(await t.toolbox.call('browser_scroll', { direction: 'down' })).toMatchObject({ isError: true, text: expect.stringContaining('the page held still') })
+    await t.toolbox.call('browser_scroll', { direction: 'up' })
+    expect(t.page.steps.map((s) => s.hosts)).toEqual([['fake.test'], ['fake.test']])
+  })
+
+  it('is held to the platform like every step: on another site it does nothing and says so', async () => {
+    const t = setup(POST)
+    t.page.forced.set(0, { status: 'wrong_host', detail: 'x' })
+    expect(await t.toolbox.call('browser_scroll', { direction: 'down' })).toMatchObject({ isError: true, text: expect.stringContaining('not on the platform') })
+  })
+
+  it('is refused once the mission has ended', async () => {
+    const t = setup(POST)
+    t.authority.sealed = true
+    expect(await t.toolbox.call('browser_scroll', { direction: 'down' })).toMatchObject({ isError: true })
+  })
+
+  it('tells the AI where the screen is on the page in every look, when the page says it', async () => {
+    const t = setup(POST)
+    ;(t.page as unknown as { scroll: { top: number; max: number } }).scroll = { top: 0, max: 2000 }
+    const result = await look(t)
+    expect(result.text).toMatch(/at the top of the page.*scroll down/)
   })
 })
 
@@ -792,9 +942,11 @@ describe('browser_submit: the application types the approved content and presses
     expect(result.isError).toBeUndefined()
     expect(result.text).toContain('pressed "Reply"')
     expect(t.page.posted).toEqual([{ e1: REPLY.text }])
+    // the pointer is put on the control before the last look (nothing is committed then), and the press that follows has no wait left
     expect(t.page.steps.map((s) => s.step)).toEqual([
       { do: 'type', ref: 'e1', text: REPLY.text },
-      { do: 'click', ref: 'e4' }
+      { do: 'hover', ref: 'e4' },
+      { do: 'click', ref: 'e4', still: true }
     ])
     expect(t.page.steps.every((s) => s.hosts.includes('fake.test'))).toBe(true)
     expect(t.authority.committed).toBe(true)
@@ -1412,7 +1564,7 @@ describe('browser_submit stops without pressing when the form is not as approved
   it('takes the point of no return back when the page did not receive the press, so another attempt is possible', async () => {
     const t = setup()
     await look(t)
-    t.page.forced.set(1, { status: 'not_found', detail: 'the control is gone' })
+    t.page.forced.set(2, { status: 'not_found', detail: 'the control is gone' }) // the press (after the typing and the hover)
 
     const first = await submitReply(t)
 
@@ -1428,9 +1580,64 @@ describe('browser_submit stops without pressing when the form is not as approved
   it('takes the point of no return back when the page was not there at all (the host), too', async () => {
     const t = setup()
     await look(t)
-    t.page.forced.set(1, { status: 'wrong_host', detail: 'the page is not one of this platform' })
+    t.page.forced.set(2, { status: 'wrong_host', detail: 'the page is not one of this platform' })
     expect(await submitReply(t)).toMatchObject({ isError: true, text: expect.stringContaining('could not be pressed') })
     expect(t.authority.committed).toBe(false)
+  })
+
+  it('stops before the point of no return when the pointer cannot be put on the control because the page is not the platform\'s: nothing is committed or pressed', async () => {
+    const t = setup()
+    await look(t)
+    t.page.forced.set(1, { status: 'wrong_host', detail: 'the page is not one of this platform' }) // the hover
+    expect(await submitReply(t)).toMatchObject({ isError: true, text: expect.stringContaining('could not be pointed at') })
+    expect(t.authority.committed).toBe(false)
+    expect(t.page.clicked).toEqual([])
+    expect(t.page.posted).toEqual([])
+  })
+
+  it('stops before the point of no return when the control keeps moving or is gone while the pointer aims at it: nothing is committed, the text typed stays, and the next attempt works', async () => {
+    const t = setup()
+    await look(t)
+    t.page.forced.set(1, { status: 'not_found', detail: 'e4 kept moving, so the pointer could not rest on it. Nothing was pressed.' }) // the hover
+    const first = await submitReply(t)
+    expect(first).toMatchObject({ isError: true, text: expect.stringContaining('could not be pointed at') })
+    expect(t.authority.committed).toBe(false)
+    expect(t.page.clicked).toEqual([])
+    expect(t.page.steps.map((s) => s.step.do)).toEqual(['type', 'hover'])
+    // the ticket is unused: the same mission goes on
+    const second = await submitReply(t)
+    expect(second.isError).toBeUndefined()
+    expect(t.authority.committed).toBe(true)
+  })
+
+  it('presses where the pointer rests and nothing else after the point of no return: the press asks for no scroll, glide or wait (still)', async () => {
+    const t = setup()
+    await look(t)
+    await submitReply(t)
+    const click = t.page.steps.map((s) => s.step).find((s) => s.do === 'click')
+    expect(click).toEqual({ do: 'click', ref: 'e4', still: true })
+  })
+
+  it('takes the point of no return back when the control left the point after the hover (the press answers not_found: nothing was pressed)', async () => {
+    const t = setup()
+    await look(t)
+    t.page.forced.set(2, { status: 'not_found', detail: 'e4 is not under the pointer any more (the page moved it). Nothing was pressed.' })
+    expect(await submitReply(t)).toMatchObject({ isError: true, text: expect.stringContaining('could not be pressed') })
+    expect(t.authority.committed).toBe(false)
+    expect(t.page.posted).toEqual([])
+  })
+
+  it('ends with nothing pressed when the owner presses Stop while the pointer is on its way to the control: the press is not yet committed', async () => {
+    const t = setup()
+    await look(t)
+    t.page.beforeStep = (step) => {
+      if (step.do === 'hover') t.authority.seal() // Stop, during the glide
+    }
+    const result = await submitReply(t)
+    expect(result.isError).toBe(true)
+    expect(t.authority.committed).toBe(false)
+    expect(t.page.clicked).toEqual([])
+    expect(t.page.posted).toEqual([])
   })
 
   it('keeps the point of no return when the press could not be confirmed after input that landed: a full-page navigation replaced the document', async () => {
@@ -1438,7 +1645,7 @@ describe('browser_submit stops without pressing when the form is not as approved
     await look(t)
     // The mouse press reached the page and the comment was posted; the page then replaced its own document, so the step could not find
     // its marker and answered "refused". Nothing in that answer says that nothing happened.
-    t.page.forced.set(1, { status: 'refused', detail: 'e4 could not be clicked.' })
+    t.page.forced.set(2, { status: 'refused', detail: 'e4 could not be clicked.' }) // the press
     t.page.beforeStep = (step) => {
       if (step.do === 'click') t.page.posted.push(Object.fromEntries(t.page.fields))
     }
