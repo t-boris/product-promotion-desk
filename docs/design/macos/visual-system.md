@@ -771,3 +771,39 @@ account and its "Open account" button is the filled one; the sign-in of the link
 |---|---|---|---|
 | V-32 | Rename, the Browser block and the linked-login screens follow the shared rules: controls at least 28 px, one filled button, nothing cut or overflowing, in light and dark | the packaged probe on an own instance (`MEASURE` and `LOOK` on the account of an ordinary platform, of a linked platform, the rename form open, the Browser block with Chrome chosen, the arrow key that only chooses, the apply button, the create form for Threads with and without an Instagram account): 47 checks | every check passes in both themes |
 | V-33 | The browser choice and the link are real: the choice is saved and refused while the browser is in use, Chrome runs on a profile of the account's own and is let go of at a switch, the session survives a switch back and forth, Threads cannot be made or removed out of order | the mechanics probe on an own instance with the installed Chrome and a local page (26 checks, nothing off 127.0.0.1, no process left); `account-browser.test.ts`, `sign-in-through.test.ts`, `routing-browser-service.test.ts` (mutation-checked) | every check passes |
+
+## 21. Open browser where a channel is chosen or shown (0.14.0)
+
+To choose a channel (a community, a group) the owner sometimes has to look at the platform, signed in as the account. One control, `OpenAccountBrowser`, is shown wherever a
+channel is chosen or shown, and it opens the account's own browser (Internal or Chrome, as the account says) with its session. It is not a new screen.
+
+**Where.** *Connect a channel* (beside the address; the one place with "Use the page I'm on"), each row of *Accounts of this product*, each *suggested channel* (in the account that
+"Use this" would use; hidden when the product has no account on that platform), the *channel card* (`channel-browse`, next to Activate, Pause and Remove), *Opportunities* and
+*Publications* (beside the channel picker), and the thread link in `ThreadView` ("Open in the account's browser", beside the system links, which stay). Results, Logs and the launch path
+show no such button.
+
+**What opens.** The platform's page where channels are found (`PlatformInfo.browseUrl`; Reddit: the list of communities); the address typed in Connect when the platform reads it as a channel
+of that platform (a handle turns into its profile); on a channel, its own page. A site with no page of its own and an empty address says "Type the address of the site first." beside the
+disabled button.
+
+**States.** The button is a bezel, never filled: the step's own action keeps the one filled button of the screen. It is disabled with its reason beside it (a `Hint`, `X-reason`) while
+the AI works on the account or while the browser is open already. While the owner holds the browser the button is replaced by one block on its own row (`.open-browser-panel`): a warn note
+("the app waits while you work in it"), "Show the window" and "Done, close the window"; in Connect also "Use the page I'm on". Where several buttons belong to one account (a row of
+Accounts, the Connect form, a channel card) the block is shown once, by the one that was pressed, or by the first of them when that one is not on the screen (the owner went elsewhere and came
+back, so "Done" is always within reach); the others are off and say "This account's browser is open already." (`openMode`, `blockHolder`, `useBlockClaim`).
+
+**Use the page I'm on.** Reads one thing: the address of the page in the owner's window, cut to scheme, host and path (no query, no fragment, no credentials), and fills *Channel address*.
+The field stays editable and *Connect channel* still checks the address. When something was cut (a query, a fragment) a line says so and asks the owner to check it is the page meant ("Everything
+after “?” or “#” was left out of the address."). With no page open it says "No page is open in the browser yet."; with several tabs open in Chrome it says it cannot tell which one the owner is on, and what
+to do; a page that is not a web page and a read that failed each have their own sentence.
+
+| Pattern | Markup | Rules |
+|---|---|---|
+| Open browser | `OpenAccountBrowser` (`X` = `connect-browse`, `account-browse-<id>`, `suggestion-browse`, `channel-browse`, `opportunities-browse`, `publications-browse`, `thread-browse-<id>`) | Bezel button, `X-reason` beside it when off, one `.open-browser-panel` row while the owner holds the browser, `X-use-page` only in Connect |
+| Address hint | `connect-browse-hint` under the Connect row: "Opens Reddit in this account's own browser, signed in as it. Find the place there, then press "Use the page I'm on"." | One muted line, platform named |
+
+| Id | Requirement | Method | Pass |
+|---|---|---|---|
+| V-34 | The control follows the shared rules in every place it appears: controls at least 28 px, no second filled button, nothing cut or overflowing, the open block on its own row, in light and dark | the probe on an own instance (`MEASURE` and `LOOK` on Connect, Accounts of this product, suggestions, the channel card, Opportunities, Publications) | every check passes |
+| V-35 | Opening and reading are real and small: the right page opens in the right browser, the app waits while the owner holds it, "Use the page I'm on" gives the address without query or fragment and only while the window is open, nothing else is read | `browse-channels.test.ts`, `electron-browser-service.test.ts`, `chrome-browser-service.test.ts`, `routing-browser-service.test.ts` (mutation-checked, every mutant killed but one redundant guard); the probe with a local page in both browsers | every check passes |
+

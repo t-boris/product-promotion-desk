@@ -3,7 +3,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import type { ApiEvent } from '../shared/api'
-import type { Account, AnalysisStage, AttentionItem, Channel, Claim, Product } from '../shared/types'
+import type { Account, AnalysisStage, AttentionItem, Channel, Claim, PlatformInfo, Product } from '../shared/types'
 import { createFanOut } from '../renderer/src/fan-out'
 import { closeForm, mainForm, openForm, type OpenFormIds } from '../renderer/src/open-forms'
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from '../renderer/src/menu-state'
@@ -26,6 +26,24 @@ import { ACCOUNT_NAME_LIMIT, normalizeName, renameProblem } from '../renderer/sr
 import { approveLabels } from '../renderer/src/pages/review/approve-labels'
 import { channelLabel } from '../renderer/src/pages/review/channel-label'
 import { platformMismatch } from '../renderer/src/pages/channels/platform-hint'
+import {
+  AI_WORKING,
+  NO_BROWSE_PAGE,
+  NO_PAGE_OPEN,
+  OPEN_ALREADY,
+  TYPE_ADDRESS_FIRST,
+  accountForIdea,
+  browseAddress,
+  browseBlocker,
+  browseHint,
+  holdingNote,
+  openBlocker,
+  blockHolder,
+  openMode,
+  pageResult,
+  ADDRESS_SHORTENED,
+  rowBlocker
+} from '../renderer/src/pages/channels/open-browser'
 import { MOVED_PAGES, PRODUCT_TABS, accountHref, accountsNewHref, channelsAccountOf, navigateHashOf, parseAccountsHash, parseHash, productHref, publicationsHref, publicationsProductOf } from '../renderer/src/route'
 import { accountText, accountsGroupName, accountsSummary, automationText, engineGroupName } from '../renderer/src/status-labels'
 
@@ -1068,5 +1086,159 @@ describe('why a product cannot be deleted yet (BUG-046)', () => {
     expect(deleteBlocker(2)).toBe('This product still has 2 connected channels. Remove them on the Channels tab first.')
     expect(deleteBlocker(12)).toBe('This product still has 12 connected channels. Remove them on the Channels tab first.')
     expect(deleteBlocker(2)).not.toMatch(/\(s\)/)
+  })
+})
+
+describe('"Open browser" where channels are chosen or shown (DEC-028)', () => {
+  const info = (over: Partial<PlatformInfo>): PlatformInfo => ({ connectorId: 'x', platform: 'reddit', label: 'Reddit', prepared: true, loginUrl: 'https://www.reddit.com/login', ...over })
+  const reddit = info({ browseUrl: 'https://www.reddit.com/subreddits/', handleUrl: undefined })
+  const facebook = info({ platform: 'facebook', label: 'Facebook', prepared: false, browseUrl: 'https://www.facebook.com/groups/discover/', handleUrl: 'https://www.facebook.com/{handle}' })
+  const site = info({ platform: 'web', label: 'Other website', prepared: false })
+  const platforms = [reddit, facebook, site]
+  const account = (id: string, platform: string): Account =>
+    ({ id, platform, label: id, identity: null, partition: 'p', status: 'ready', createdAt: '', productId: null, role: null, loginName: null, email: null, mailboxId: null, browser: 'internal', signsInVia: null, profileId: null }) as Account
+
+  describe('what a control shows', () => {
+    it('is the button unless the owner holds the account\'s browser', () => {
+      expect(openMode(undefined, false)).toBe('closed')
+      expect(openMode('none', true)).toBe('closed')
+      expect(openMode('agent', true)).toBe('closed')
+    })
+
+    it('is the block in the control that shows it while the owner holds the browser, and the button switched off in the others', () => {
+      expect(openMode('user', true)).toBe('open')
+      expect(openMode('user', false)).toBe('elsewhere')
+    })
+
+    it('shows the block once for an account: in the pressed control, or in the first one when the pressed one is not on the screen', () => {
+      expect(blockHolder('b', ['a', 'b', 'c'])).toBe('b')
+      expect(blockHolder(null, ['a', 'b'])).toBe('a')
+      expect(blockHolder('gone', ['a', 'b'])).toBe('a')
+      expect(blockHolder('a', [])).toBeNull()
+      expect(blockHolder(null, [])).toBeNull()
+    })
+  })
+
+  describe('why the button is off', () => {
+    it('is on when nothing speaks against it', () => {
+      expect(openBlocker({ aiWorking: false, mode: 'closed' })).toBeNull()
+      expect(openBlocker({ aiWorking: false, mode: 'closed', hostReason: null })).toBeNull()
+    })
+
+    it('says the AI works on the account, because its browser cannot be taken from under it', () => {
+      expect(openBlocker({ aiWorking: true, mode: 'closed' })).toBe(AI_WORKING)
+      expect(AI_WORKING).toContain('AI is working on this account')
+    })
+
+    it('says the browser is open already when another control of the screen opened it', () => {
+      expect(openBlocker({ aiWorking: false, mode: 'elsewhere' })).toBe(OPEN_ALREADY)
+    })
+
+    it('says the screen\'s own reason when there is no other', () => {
+      expect(openBlocker({ aiWorking: false, mode: 'closed', hostReason: TYPE_ADDRESS_FIRST })).toBe(TYPE_ADDRESS_FIRST)
+    })
+
+    it('puts the account\'s own state before the screen\'s reason', () => {
+      expect(openBlocker({ aiWorking: true, mode: 'closed', hostReason: TYPE_ADDRESS_FIRST })).toBe(AI_WORKING)
+      expect(openBlocker({ aiWorking: true, mode: 'elsewhere', hostReason: TYPE_ADDRESS_FIRST })).toBe(OPEN_ALREADY)
+    })
+  })
+
+  describe('the Connect form', () => {
+    it('opens a platform that has a browse page with nothing typed', () => {
+      expect(browseBlocker(reddit, '')).toBeNull()
+      expect(browseAddress(reddit, '')).toBeUndefined()
+      expect(browseAddress(reddit, '   ')).toBeUndefined()
+    })
+
+    it('has nothing to open on an unknown site until an address is typed', () => {
+      expect(browseBlocker(site, '')).toBe(TYPE_ADDRESS_FIRST)
+      expect(browseBlocker(site, '  ')).toBe(TYPE_ADDRESS_FIRST)
+      expect(browseBlocker(site, 'https://forum.example.com/c/general')).toBeNull()
+    })
+
+    it('treats a platform with an empty browse page as one without', () => {
+      expect(browseBlocker(info({ browseUrl: '' }), '')).toBe(TYPE_ADDRESS_FIRST)
+    })
+
+    it('does not say "type the address" before the platform list has arrived', () => {
+      expect(browseBlocker(undefined, '')).toBeNull()
+    })
+
+    it('hands the core what was typed, trimmed, and a handle as the address it stands for', () => {
+      expect(browseAddress(reddit, '  r/astrology ')).toBe('r/astrology')
+      expect(browseAddress(facebook, '@natalmystic')).toBe('https://www.facebook.com/natalmystic')
+    })
+
+    it('names the platform, and the one button that brings the address back', () => {
+      expect(browseHint(reddit)).toBe('Opens Reddit in this account’s own browser, signed in as it. Find the place there, then press “Use the page I’m on”.')
+      expect(browseHint(undefined)).toContain('Opens the site in')
+    })
+  })
+
+  describe('an account row', () => {
+    it('can be opened where the platform has a browse page', () => {
+      expect(rowBlocker(reddit)).toBeNull()
+      expect(rowBlocker(undefined)).toBeNull()
+    })
+
+    it('says an unknown site has no page that lists channels, and where to type its address', () => {
+      expect(rowBlocker(site)).toBe(NO_BROWSE_PAGE)
+      expect(NO_BROWSE_PAGE).toContain('connect a channel')
+    })
+
+    it('treats a platform with an empty browse page as one without', () => {
+      expect(rowBlocker(info({ browseUrl: '' }))).toBe(NO_BROWSE_PAGE)
+    })
+  })
+
+  describe('"Use the page I\'m on"', () => {
+    it('hands over the address of the page', () => {
+      expect(pageResult({ url: 'https://www.reddit.com/r/astrology/', title: 'Astrology', trimmed: false })).toEqual({ address: 'https://www.reddit.com/r/astrology/', note: null })
+      expect(pageResult({ url: 'https://www.reddit.com/r/astrology/', title: 'Astrology', trimmed: true })).toEqual({ address: 'https://www.reddit.com/r/astrology/', note: ADDRESS_SHORTENED })
+    })
+
+    it('says no page is open when the core answers with none, or an empty address', () => {
+      expect(pageResult(null)).toEqual({ note: NO_PAGE_OPEN })
+      expect(pageResult({ url: '  ', title: '' })).toEqual({ note: NO_PAGE_OPEN })
+      expect(NO_PAGE_OPEN).toBe('No page is open in the browser yet.')
+    })
+  })
+
+  describe('which account looks at a suggested channel', () => {
+    const idea = (platform: string, target = 'r/astrology') => ({ platform, target, reason: 'x' })
+
+    it('is the first account on the idea\'s platform, the product\'s own before the rest of the library', () => {
+      const accounts = [account('mine-fb', 'facebook'), account('mine-reddit', 'reddit'), account('lib-reddit', 'reddit')]
+      expect(accountForIdea(idea('reddit'), platforms, accounts)?.id).toBe('mine-reddit')
+      expect(accountForIdea(idea('facebook'), platforms, accounts)?.id).toBe('mine-fb')
+    })
+
+    it('falls back to the rest of the library when the product has none there', () => {
+      const accounts = [account('mine-fb', 'facebook'), account('lib-reddit', 'reddit')]
+      expect(accountForIdea(idea('reddit'), platforms, accounts)?.id).toBe('lib-reddit')
+    })
+
+    it('offers nothing when no account is on that platform', () => {
+      expect(accountForIdea(idea('reddit'), platforms, [account('fb', 'facebook')])).toBeUndefined()
+      expect(accountForIdea(idea('reddit'), platforms, [])).toBeUndefined()
+    })
+
+    it('looks at a site the app has no connector for with an account of the universal platform', () => {
+      expect(accountForIdea(idea('other', 'https://forum.example.com/'), platforms, [account('w', 'web'), account('r', 'reddit')])?.id).toBe('w')
+      expect(accountForIdea(idea('some-unknown-key', 'https://forum.example.com/'), platforms, [account('r', 'reddit')])).toBeUndefined()
+    })
+  })
+
+  describe('while the owner works in the window', () => {
+    it('says the app waits, and what ends it', () => {
+      expect(holdingNote(true)).toContain('so the app waits')
+      expect(holdingNote(true)).toContain('Done, close the window')
+    })
+
+    it('says the browser was taken over when there is no window to show', () => {
+      expect(holdingNote(false)).toContain('took over')
+      expect(holdingNote(false)).not.toContain('Done, close the window')
+    })
   })
 })

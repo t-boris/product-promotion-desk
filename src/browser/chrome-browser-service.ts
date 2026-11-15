@@ -12,12 +12,12 @@ import { mkdir, rm } from 'node:fs/promises'
 import type { Browser, ConsoleMessage, HTTPRequest, Page } from 'puppeteer-core'
 import type { Account, PageReport } from '../shared/types'
 import { ControlledSession } from '../core/browser-session'
-import type { BrowserService, BrowserSession, PageObserver, TicketVerifier } from '../core/ports'
+import type { BrowserService, BrowserSession, OwnerPage, PageObserver, TicketVerifier } from '../core/ports'
 import { ChromeRawPage, type ChromeHandle } from './chrome-page'
 import { chromeArguments, findChrome, isProfileDir, launchChrome, profileDirFor, profilesRoot, type LaunchChrome } from './chrome-launcher'
 import { pageReadingScript, type PageReading } from './page-scripts'
 import { PageRecorder } from './page-recorder'
-import { addressOf, forgetReports, saveReport } from './page-report'
+import { addressOf, forgetReports, saveReport, withoutQueries } from './page-report'
 import { normalizeBrowserUrl } from './targets'
 import { UserControl } from './toolbar-state'
 
@@ -111,7 +111,7 @@ export class ChromeBrowserService implements BrowserService, PageObserver {
    */
   showAgentBrowser(account: Account, focus = false): void {
     const entry = this.entry(account)
-    entry.agent.reveal(focus).catch((error: unknown) => this.onPageNote?.(account.id, `Chrome could not be shown: ${error instanceof Error ? error.message : String(error)}`))
+    entry.agent.reveal(focus).catch((error: unknown) => this.onPageNote?.(account.id, `Chrome could not be shown: ${withoutQueries(error instanceof Error ? error.message : String(error))}`))
   }
 
   async openForUser(account: Account, url?: string): Promise<{ tabId: string }> {
@@ -134,10 +134,21 @@ export class ChromeBrowserService implements BrowserService, PageObserver {
     }
     if (entry.agent.currentUrl() !== target) {
       // A page that is slow to load is not a failure to open: the owner sees it in the window.
-      await entry.agent.goto(target).catch((error: unknown) => this.onPageNote?.(account.id, `Chrome could not load the page: ${error instanceof Error ? error.message : String(error)}`))
+      await entry.agent.goto(target).catch((error: unknown) => this.onPageNote?.(account.id, `Chrome could not load the page: ${withoutQueries(error instanceof Error ? error.message : String(error))}`))
     }
     if (!already) this.onUserWindowChange?.(account.id, 'opened')
     return { tabId }
+  }
+
+  /** The address and title of the page while the owner holds the browser (DEC-028), from the browser's own record of the tab: no script runs in the page. */
+  async ownerPage(account: Account): Promise<OwnerPage | null> {
+    const entry = this.accounts.get(account.id)
+    const handle = entry?.control?.holdsControl ? entry.agent.existing() : null
+    if (!entry || !handle) return null
+    const info = (await handle.cdp.send('Target.getTargetInfo').catch(() => null)) as { targetInfo?: { title?: string } } | null
+    // Chrome lets the owner open more tabs (popups, links): then nobody can tell which one they are on, and the core says so.
+    const tabs = entry.browser ? (await entry.browser.pages().catch(() => [])).length : 1
+    return { url: handle.page.url(), title: info?.targetInfo?.title ?? '', tabs }
   }
 
   /** True while the owner holds this account's browser. */

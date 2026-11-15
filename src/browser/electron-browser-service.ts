@@ -1,7 +1,7 @@
 import { BaseWindow, session as electronSession, WebContentsView, type Session, type WebContents } from 'electron'
 import type { Account, PageReport } from '../shared/types'
 import { ControlledSession } from '../core/browser-session'
-import type { BrowserService, BrowserSession, PageObserver, TicketVerifier } from '../core/ports'
+import type { BrowserService, BrowserSession, OwnerPage, PageObserver, TicketVerifier } from '../core/ports'
 import { ElectronRawPage, type AgentSurface } from './agent-page'
 import { pageReadingScript, type PageReading } from './page-scripts'
 import { PageRecorder } from './page-recorder'
@@ -169,6 +169,14 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
     }
     if (this.options.diagnosticsDir) report.savedAs = await saveReport(this.options.diagnosticsDir, account.id, report, png)
     return report
+  }
+
+  /** The address and title of the page in the owner's window (DEC-028): what the window itself reports, nothing is read from the page. Null when the window is not open. */
+  async ownerPage(account: Account): Promise<OwnerPage | null> {
+    const window = this.accounts.get(account.id)?.userWindow
+    if (!window || window.isClosed() || window.siteContents().isDestroyed()) return null
+    const contents = window.siteContents()
+    return { url: contents.getURL(), title: contents.getTitle() }
   }
 
   /** True while the person's window for this account is open (the toolbar there shows who holds the browser). */

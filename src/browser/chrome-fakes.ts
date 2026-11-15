@@ -13,6 +13,8 @@ export interface FakePage extends EventEmitter {
   scripts: string[]
   /** Every DevTools command the page was sent. */
   commands: Array<{ method: string; params?: unknown }>
+  /** The title Chrome records for the tab (tests set it). */
+  tabTitle: string
   /** Window state the fake Chrome reports. */
   windowState: 'normal' | 'minimized'
   /** Input that reached the page, in order. */
@@ -32,6 +34,7 @@ export function fakePage(address = 'about:blank'): FakePage & Page {
   emitter.answers = []
   emitter.scripts = []
   emitter.commands = []
+  emitter.tabTitle = ''
   emitter.windowState = 'normal'
   emitter.input = []
   emitter.gotoError = null
@@ -49,6 +52,7 @@ export function fakePage(address = 'about:blank'): FakePage & Page {
         if (found && found[1] instanceof Error) return { result: {}, exceptionDetails: { text: 'failed', exception: { description: found[1].message } } }
         return { result: { value: found ? found[1] : null } }
       }
+      if (method === 'Target.getTargetInfo') return { targetInfo: { title: emitter.tabTitle, url: emitter.address } }
       if (method === 'Browser.getWindowForTarget') return { windowId: 7 }
       if (method === 'Browser.getWindowBounds') return { bounds: { windowState: emitter.windowState } }
       if (method === 'Browser.setWindowBounds') {

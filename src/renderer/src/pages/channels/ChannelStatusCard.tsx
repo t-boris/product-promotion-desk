@@ -1,15 +1,16 @@
 import { useState } from 'react'
-import type { Channel, Product } from '../../../../shared/types'
+import type { Account, Channel, Product } from '../../../../shared/types'
 import { call, useAction, useQuery } from '../../hooks'
 import { Badge, Button, Card, ConfirmAction, ErrorNote, formatTime, Hint, useMainVariant } from '../../ui'
 import { CHANNEL_STATUS_LABEL, CHANNEL_STATUS_TONE, nextCheckText } from './model'
+import { OpenAccountBrowser } from './OpenAccountBrowser'
 import { activateBlocker, canActivate, canPause } from './setup-stage'
 
 /**
  * Status, last run and next check, plus Activate / Pause and removal. "Activate" is the tab's filled button only at its stage (`filled`:
  * the channel was assessed and is still to be started); "Pause", "Resume" and "Pause this channel instead" are never filled.
  */
-export function ChannelStatusCard({ channel, product, accountLabel, filled, onRemoved }: { channel: Channel; product: Product | undefined; accountLabel: string; filled: boolean; onRemoved: () => void }) {
+export function ChannelStatusCard({ channel, product, account, accountLabel, filled, onRemoved }: { channel: Channel; product: Product | undefined; account: Account | undefined; accountLabel: string; filled: boolean; onRemoved: () => void }) {
   const main = useMainVariant()
   const runs = useQuery('runs.list', { channelId: channel.id, limit: 1 }, ['logs', 'channels'])
   const lastRun = runs.data?.[0]
@@ -95,6 +96,8 @@ export function ChannelStatusCard({ channel, product, accountLabel, filled, onRe
             Resume
           </Button>
         )}
+        {/* The channel's own page in the browser of its account, to look around signed in as it (DEC-028). */}
+        {account && <OpenAccountBrowser key={account.id} account={account} open={() => call('accounts.openBrowser', { accountId: account.id, url: channel.url })} testId="channel-browse" />}
         <span className="sep" />
         <ConfirmAction
           label="Remove"

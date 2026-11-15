@@ -317,6 +317,23 @@ describe('user takeover and login hand-off', () => {
     await expect(session.withAgentControl('monitor', async () => 'resumed')).resolves.toBe('resumed')
   })
 
+  it('tells the address and title of the page in the owner\'s window only, and only while that window is open (DEC-028)', async () => {
+    const { service } = setup()
+    const acc = account('a')
+    expect(await service.ownerPage(acc)).toBeNull()
+    await service.session(acc).withAgentControl('read', async (page) => page.goto('https://www.reddit.com/r/app-page/'))
+    expect(await service.ownerPage(acc)).toBeNull() // the page of the app is not the owner's
+    await service.openForUser(acc, 'https://www.reddit.com/subreddits/')
+    const site = created.views.find((view) => view.webContents.loaded.includes('https://www.reddit.com/subreddits/'))
+    if (!site) throw new Error('no site view')
+    site.webContents.pageTitle = 'Communities'
+    site.webContents.url = 'https://www.reddit.com/subreddits/?q=astro'
+    expect(await service.ownerPage(acc)).toEqual({ url: 'https://www.reddit.com/subreddits/?q=astro', title: 'Communities' })
+    expect(await service.ownerPage(account('other'))).toBeNull()
+    created.windows.find((window) => window.children.includes(site))?.close()
+    expect(await service.ownerPage(acc)).toBeNull()
+  })
+
   it('tells whether the account window is open, so the app does not release control behind it', async () => {
     const { service } = setup()
     const acc = account('a')

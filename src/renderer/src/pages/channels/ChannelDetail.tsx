@@ -27,7 +27,7 @@ export function ChannelDetail({
   const account = accounts.find((a) => a.id === channel.accountId)
   return (
     <div className="pane" data-testid={`channel-detail-${channel.id}`}>
-      <ChannelStatusCard channel={channel} product={products.find((p) => p.id === channel.productId)} accountLabel={account?.label ?? 'Unknown account'} filled={stage === 'activate'} onRemoved={onRemoved} />
+      <ChannelStatusCard channel={channel} product={products.find((p) => p.id === channel.productId)} account={account} accountLabel={account?.label ?? 'Unknown account'} filled={stage === 'activate'} onRemoved={onRemoved} />
       <CapabilityCard channel={channel} filled={stage === 'assess'} />
       <ChannelPlanCard channel={channel} platforms={platforms} blockedReason={planBlockedReason} />
       <ModeSelector channel={channel} />

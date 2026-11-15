@@ -3,6 +3,8 @@ import type { Account, Channel, ChannelSuggestion, PlatformInfo, Product } from 
 import { call, useAction } from '../../hooks'
 import { Button, Card, ErrorNote, Field, Hint, useMainVariant } from '../../ui'
 import { accountOptionLabel, addressExample, isSameAddress, isWebAddress, platformLabel, platformOfSuggestion, typedAddress } from './model'
+import { browseAddress, browseBlocker, browseHint } from './open-browser'
+import { OpenAccountBrowser } from './OpenAccountBrowser'
 import { PrepareSiteProfile } from './PrepareSiteProfile'
 
 export const ONE_LOGIN_SPEAKS = 'Only one login of this product speaks in a discussion. The other logins stay quiet in it.'
@@ -157,6 +159,21 @@ export function ConnectChannel({ product, needsAccount, accounts, firstAccountId
           </Button>
           {/* Why the button is off, beside it. */}
           {!ready && product && !needsAccount && <Hint data-testid="connect-reason">Type the channel address.</Hint>}
+          {/* Looking around in the account's own browser, to find the place: the page the owner ends on fills the address. Never filled: Connect stays the main action. */}
+          {product && !needsAccount && account && (
+            <OpenAccountBrowser
+              key={account.id}
+              account={account}
+              open={() => call('accounts.browseChannels', { accountId: account.id, address: browseAddress(info, target) })}
+              onUsePage={(url) => {
+                setTarget(url)
+                setJustJoined(false)
+              }}
+              blockedReason={browseBlocker(info, address)}
+              hint={browseHint(info)}
+              testId="connect-browse"
+            />
+          )}
         </div>
       </form>
       {account && info && !info.prepared && isWebAddress(address) && <PrepareSiteProfile key={`${account.id}|${address}`} productId={productId} accountId={account.id} url={address} />}

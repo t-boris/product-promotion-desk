@@ -79,6 +79,11 @@ export class FakeWebContents extends EventEmitter {
   getURL(): string {
     return this.url
   }
+  /** What the page's own title is (tests set it). */
+  pageTitle = ''
+  getTitle(): string {
+    return this.pageTitle
+  }
   isLoading(): boolean {
     return this.loading
   }

@@ -9,6 +9,8 @@ export interface PlatformPreset {
   platform: string
   label: string
   loginUrl: string
+  /** Where channels of the platform are found and chosen (a list or search of groups, communities, accounts); opened in the account's own browser (DEC-028). On the platform's own domains. */
+  browseUrl: string
   /** The registration page; opened in the account's own browser by "Create account on the platform" (DEC-015). Empty when the platform has none on the web. */
   signupUrl: string
   /** Said instead of the registration steps when there is no registration page: where the account is made. */
@@ -31,6 +33,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     platform: 'instagram',
     label: 'Instagram',
     loginUrl: 'https://www.instagram.com/accounts/login/',
+    browseUrl: 'https://www.instagram.com/explore/',
     signupUrl: 'https://www.instagram.com/accounts/emailsignup/',
     hosts: ['instagram.com'],
     handleUrl: 'https://www.instagram.com/{handle}/',
@@ -43,6 +46,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     platform: 'facebook',
     label: 'Facebook',
     loginUrl: 'https://www.facebook.com/login/',
+    browseUrl: 'https://www.facebook.com/groups/discover/',
     signupUrl: 'https://www.facebook.com/r.php',
     hosts: ['facebook.com', 'fb.com'],
     handleUrl: 'https://www.facebook.com/{handle}',
@@ -55,6 +59,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     platform: 'tiktok',
     label: 'TikTok',
     loginUrl: 'https://www.tiktok.com/login',
+    browseUrl: 'https://www.tiktok.com/explore',
     signupUrl: 'https://www.tiktok.com/signup',
     hosts: ['tiktok.com'],
     handleUrl: 'https://www.tiktok.com/@{handle}',
@@ -67,6 +72,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     platform: 'x',
     label: 'X (Twitter)',
     loginUrl: 'https://x.com/i/flow/login',
+    browseUrl: 'https://x.com/explore',
     signupUrl: 'https://x.com/i/flow/signup',
     hosts: ['x.com', 'twitter.com'],
     handleUrl: 'https://x.com/{handle}',
@@ -79,6 +85,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     platform: 'linkedin',
     label: 'LinkedIn',
     loginUrl: 'https://www.linkedin.com/login',
+    browseUrl: 'https://www.linkedin.com/groups/',
     signupUrl: 'https://www.linkedin.com/signup',
     hosts: ['linkedin.com'],
     handleUrl: 'https://www.linkedin.com/company/{handle}/',
@@ -91,6 +98,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     platform: 'youtube',
     label: 'YouTube',
     loginUrl: 'https://www.youtube.com/',
+    browseUrl: 'https://www.youtube.com/',
     signupUrl: 'https://accounts.google.com/signup',
     hosts: ['youtube.com', 'youtu.be'],
     handleUrl: 'https://www.youtube.com/@{handle}',
@@ -103,6 +111,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     platform: 'telegram',
     label: 'Telegram',
     loginUrl: 'https://web.telegram.org/',
+    browseUrl: 'https://web.telegram.org/',
     signupUrl: '',
     signupNote: 'Telegram accounts are made in the Telegram app on your phone, with your phone number. Then sign in here with the QR code.',
     hosts: ['t.me', 'telegram.me', 'web.telegram.org'],
@@ -116,6 +125,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     platform: 'threads',
     label: 'Threads',
     loginUrl: 'https://www.threads.net/login',
+    browseUrl: 'https://www.threads.net/',
     signupUrl: '',
     signupNote: 'Threads has no sign-up of its own: it uses an Instagram account. Add an Instagram account first, then sign in to Threads with it.',
     signsInWith: 'instagram',
@@ -130,6 +140,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     platform: 'pinterest',
     label: 'Pinterest',
     loginUrl: 'https://www.pinterest.com/login/',
+    browseUrl: 'https://www.pinterest.com/',
     signupUrl: 'https://www.pinterest.com/signup/',
     hosts: ['pinterest.com'],
     handleUrl: 'https://www.pinterest.com/{handle}/',

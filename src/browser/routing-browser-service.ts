@@ -4,7 +4,7 @@
 // one live browser at a time. Everything the core asks goes to the browser that serves the account.
 
 import type { Account, PageReport } from '../shared/types'
-import type { BrowserService, BrowserSession, PageObserver } from '../core/ports'
+import type { BrowserService, BrowserSession, OwnerPage, PageObserver } from '../core/ports'
 import { chooseBrowser } from './browser-choice'
 
 /** What a browser service of this application offers: the contract, and the optional parts of it every one of them has. */
@@ -15,6 +15,7 @@ export interface FullBrowserService extends BrowserService, PageObserver {
   closeUserWindow(account: Account): void
   forgetAccount(account: Account): Promise<void>
   releaseAccount?(account: Account): Promise<void>
+  ownerPage?(account: Account): Promise<OwnerPage | null>
 }
 
 export class RoutingBrowserService implements FullBrowserService {
@@ -75,6 +76,9 @@ export class RoutingBrowserService implements FullBrowserService {
   }
   pageReport(account: Account): Promise<PageReport | null> {
     return this.serving(account).pageReport(account)
+  }
+  async ownerPage(account: Account): Promise<OwnerPage | null> {
+    return (await this.serving(account).ownerPage?.(account)) ?? null
   }
 
   /** The account is about to move to the other browser: `account` is still the one with the old setting, so this lets go of the browser it leaves. */

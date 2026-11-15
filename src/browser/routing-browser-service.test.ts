@@ -19,7 +19,8 @@ function fake(name: string): FullBrowserService & { calls: string[] } {
     showUserWindow: (a) => (calls.push(`front:${a.id}`), true),
     closeUserWindow: (a) => void calls.push(`close:${a.id}`),
     pageReport: async (a) => (calls.push(`report:${a.id}`), { address: name } as unknown as PageReport),
-    forgetAccount: async (a) => void calls.push(`forget:${a.id}`)
+    forgetAccount: async (a) => void calls.push(`forget:${a.id}`),
+    ownerPage: async (a) => (calls.push(`owner:${a.id}`), { url: `https://${name}.example/`, title: name })
   }
   return service
 }
@@ -64,6 +65,15 @@ describe('RoutingBrowserService', () => {
     expect(await routing.pageReport(fb)).toMatchObject({ address: 'chrome' })
     expect(chrome.calls).toEqual(['show:f:true', 'has:f', 'front:f', 'close:f', 'report:f'])
     expect(internal.calls).toEqual([])
+  })
+
+  it('asks the browser that serves the account for the owner\'s page, and says nothing when that browser cannot tell', async () => {
+    const { routing, internal, chrome } = make()
+    expect(await routing.ownerPage(account('a', 'chrome'))).toEqual({ url: 'https://chrome.example/', title: 'chrome' })
+    expect(chrome.calls).toEqual(['owner:a'])
+    expect(internal.calls).toEqual([])
+    internal.ownerPage = undefined
+    expect(await routing.ownerPage(account('b', 'internal'))).toBeNull()
   })
 
   it('does not fall back to the other browser when Chrome is not installed: it only says so', () => {

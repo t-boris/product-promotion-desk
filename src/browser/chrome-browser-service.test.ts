@@ -186,6 +186,51 @@ describe('ChromeBrowserService', () => {
     })
   })
 
+  describe('the page of the owner (DEC-028)', () => {
+    it('is known only while the owner holds the browser: its address and the title Chrome records, no script run in the page', async () => {
+      const { service } = make()
+      const fb = account('a')
+      expect(await service.ownerPage(fb)).toBeNull()
+      expect(launches).toEqual([]) // asking never starts Chrome
+      await service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/groups/discover/'))
+      expect(await service.ownerPage(fb)).toBeNull() // the page of the app is not the owner's
+      await service.openForUser(fb, 'https://www.facebook.com/groups/discover/')
+      const page = pageOf()
+      page.tabTitle = 'Discover groups'
+      page.address = 'https://www.facebook.com/groups/yourgroup/?ref=x'
+      const scriptsBefore = page.scripts.length
+      expect(await service.ownerPage(fb)).toEqual({ url: 'https://www.facebook.com/groups/yourgroup/?ref=x', title: 'Discover groups', tabs: 1 })
+      expect(page.scripts.length).toBe(scriptsBefore)
+      service.closeUserWindow(fb)
+      expect(await service.ownerPage(fb)).toBeNull()
+    })
+  })
+
+  describe('the page of the owner with several tabs (DEC-028)', () => {
+    it('says how many pages the window holds, so the core can refuse to guess which one the owner is on', async () => {
+      const { service } = make()
+      const fb = account('a')
+      await service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/groups/discover/'))
+      await service.openForUser(fb, 'https://www.facebook.com/groups/discover/')
+      await launches[0].browser.newPage() // a link the owner opened in a new tab
+      expect((await service.ownerPage(fb))?.tabs).toBe(2)
+    })
+  })
+
+  describe('what is written about a page that did not load', () => {
+    it('keeps the host and the path of an address in the message, not its query or fragment', async () => {
+      const { service, notes } = make()
+      const fb = account('a')
+      await service.session(fb).withAgentControl('t', async (page) => page.url())
+      pageOf().gotoError = new Error('net::ERR_NAME_NOT_RESOLVED at https://www.facebook.com/groups/yours?token=SECRET#frag')
+      await service.openForUser(fb, 'https://www.facebook.com/groups/yours?token=SECRET')
+      const note = notes.find((line) => line.includes('could not load the page')) ?? ''
+      expect(note).toContain('www.facebook.com/groups/yours')
+      expect(note).not.toContain('SECRET')
+      expect(note).not.toContain('frag')
+    })
+  })
+
   describe('the page report', () => {
     it('is null while no page is open, and never starts Chrome', async () => {
       const { service } = make()

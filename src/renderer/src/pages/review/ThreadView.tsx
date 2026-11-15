@@ -1,6 +1,8 @@
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import type { Comment, OpportunityCard } from '../../../../shared/types'
 import { Badge, formatTime } from '../../ui'
+import { OPEN_IN_ACCOUNT_BROWSER } from '../channels/open-browser'
+import { OpenChannelBrowser } from '../channels/OpenChannelBrowser'
 import { isHttpUrl } from './labels'
 
 const BODY_PREVIEW = 700
@@ -19,7 +21,7 @@ function ExternalLink({ url, children }: { url: string | null | undefined; child
 }
 
 /** One comment of the conversation: who and when, then the words. A reply steps in by its depth; the one being answered has a bar. */
-function CommentBox({ comment, highlight, depth }: { comment: Comment; highlight?: boolean; depth: number }) {
+function CommentBox({ comment, highlight, depth, extra }: { comment: Comment; highlight?: boolean; depth: number; extra?: ReactNode }) {
   return (
     <div className={`thread-line${highlight ? ' highlight' : ''}`} style={{ '--depth': Math.min(depth, 4) } as CSSProperties} data-testid={highlight ? 'original-comment' : 'thread-comment'}>
       <div className="thread-meta">
@@ -27,6 +29,7 @@ function CommentBox({ comment, highlight, depth }: { comment: Comment; highlight
         {comment.isOwn && <Badge>Your account</Badge>}
         {comment.postedAt && <span>{formatTime(comment.postedAt)}</span>}
         {highlight && <ExternalLink url={comment.url}>Open comment in browser</ExternalLink>}
+        {extra}
       </div>
       <div className="thread-line-body">{preview(comment.body)}</div>
     </div>
@@ -52,6 +55,10 @@ export function ThreadView({ card }: { card: OpportunityCard }) {
     ancestors.unshift(found)
     parent = found.parentExternalId
   }
+  // The same place in the browser of the account the channel is served by, signed in as it (DEC-028): the comment, else the post.
+  // One control for the thread, in the post's line, or in the comment's when the post is not known.
+  const browseUrl = isHttpUrl(comment?.url) ? comment?.url : isHttpUrl(discussion?.url) ? discussion?.url : undefined
+  const inAccount = browseUrl ? <OpenChannelBrowser channelId={card.opportunity.channelId} url={browseUrl} label={OPEN_IN_ACCOUNT_BROWSER} testId={`thread-browse-${card.opportunity.id}`} /> : null
   const ancestorIds = new Set(ancestors.map((c) => c.id))
   const others = thread.filter((c) => !ancestorIds.has(c.id) && c.id !== comment?.id)
 
@@ -63,6 +70,7 @@ export function ThreadView({ card }: { card: OpportunityCard }) {
             <strong data-testid="discussion-title">{discussion.title || 'Untitled post'}</strong>
             <span>by {discussion.author}</span>
             <ExternalLink url={discussion.url}>Open post in browser</ExternalLink>
+            {inAccount}
           </div>
           {discussion.body && <div className="thread-post-body">{preview(discussion.body)}</div>}
         </div>
@@ -70,7 +78,7 @@ export function ThreadView({ card }: { card: OpportunityCard }) {
       {ancestors.map((c, i) => (
         <CommentBox key={c.id} comment={c} depth={i} />
       ))}
-      {comment && <CommentBox comment={comment} highlight depth={ancestors.length} />}
+      {comment && <CommentBox comment={comment} highlight depth={ancestors.length} extra={discussion ? null : inAccount} />}
       {others.length > 0 && <div className="thread-replies-label">Replies under it</div>}
       {others.map((c) => (
         <CommentBox key={c.id} comment={c} depth={ancestors.length + 1} />

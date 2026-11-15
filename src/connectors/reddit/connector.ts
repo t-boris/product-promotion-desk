@@ -1,6 +1,7 @@
 import type {
   ActivityBatch,
   BrowserPage,
+  ChannelGuide,
   Connector,
   ConnectorContext,
   LoginState,
@@ -65,6 +66,15 @@ export class RedditConnector implements Connector {
 
   signupUrl(): string {
     return `${REDDIT_ORIGIN}/register/`
+  }
+
+  /** DEC-028: the page where communities are found, and what to give as the address (the community, not the site). */
+  channelGuide(): ChannelGuide {
+    return {
+      browseUrl: `${REDDIT_ORIGIN}/subreddits/`,
+      example: 'r/yourcommunity',
+      hint: 'The community, not the whole site: r/astrology or https://www.reddit.com/r/astrology/. Feeds such as r/all or r/popular and user pages (u/…) are not accepted.'
+    }
   }
 
   async checkLogin(ctx: ConnectorContext): Promise<LoginState> {
