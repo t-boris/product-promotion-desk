@@ -10,7 +10,8 @@ import type { Account, AccountRole, Profile, ProfileFields } from '../../shared/
 import { sameFields } from '../../shared/profile'
 import { validateAttachments } from '../pipeline/attachments'
 import type { Core } from '../core'
-import { AiError, type AiEngine } from '../ports'
+import { withMadeImage } from '../media/make'
+import { AiError } from '../ports'
 import type { proposeProfile } from './ai-help'
 import { found, requireText } from './errors'
 import { missingIdentity, readProfileFields } from './profile-fields'
@@ -19,8 +20,6 @@ import { presetFor } from './presets'
 import { parseRole } from './roles'
 import type { ChannelsStore } from './store'
 
-const PICTURE_TIMEOUT_MS = 6 * 60 * 1000
-const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp']
 const MAX_LABEL = 80
 const MAX_PURPOSE = 400
 
@@ -240,22 +239,11 @@ export class PersonProfileService {
   async makePicture(args: { id: string }): Promise<Profile> {
     const { profile } = this.existing(args.id)
     if (!profile.pictureIdea) throw new ApiError('no_picture_idea', 'Describe the picture first: what it shows and how it looks.')
-    const engine = await this.imageEngine()
-    const draft = join(this.folder(profile.id), `draft-${Date.now()}`)
-    await mkdir(draft, { recursive: true })
-    try {
-      await engine.run({ label: 'accounts.picture', subject: profile.id, prompt: picturePrompt(profile), makeFiles: { dir: draft }, timeoutMs: PICTURE_TIMEOUT_MS })
-      const made = (await readdir(draft)).filter((name) => IMAGE_EXTENSIONS.includes(extname(name).toLowerCase())).sort()
-      if (made.length === 0) throw new ApiError('picture_failed', `${engine.label} did not make a picture file. Try again, or choose your own picture.`)
-      const [image] = await this.checkedImage(join(draft, made[0]))
+    return withMadeImage(this.core, { label: 'accounts.picture', subject: profile.id, prompt: picturePrompt(profile), folder: this.folder(profile.id) }, async (made, engineLabel) => {
+      const [image] = await this.checkedImage(made)
       const file = await this.keep(profile.id, image.path)
-      return this.afterPicture(profile, file, `${engine.label} made a picture`)
-    } catch (error) {
-      if (error instanceof AiError) throw new ApiError('picture_failed', error.message)
-      throw error
-    } finally {
-      await rm(draft, { recursive: true, force: true })
-    }
+      return this.afterPicture(profile, file, `${engineLabel} made a picture`)
+    })
   }
 
   /** The picture for the screen, as a data address, or null when there is none. */
@@ -282,16 +270,6 @@ export class PersonProfileService {
   /** The parts of a profile that stay as they are when only its status or picture changes. */
   private carry(profile: Profile): { label: string; productId: string | null; role: AccountRole | null; platforms: string[]; purpose: string; strategy: string; reasons: Profile['reasons'] } {
     return { label: profile.label, productId: profile.productId, role: profile.role, platforms: profile.platforms, purpose: profile.purpose, strategy: profile.strategy, reasons: profile.reasons }
-  }
-
-  private async imageEngine(): Promise<AiEngine> {
-    const selected = this.core.engines.selected()
-    const candidates = [...(selected ? [selected] : []), ...this.core.engines.all()].filter((engine) => engine.makesImages)
-    for (const engine of candidates) {
-      const status = await engine.check()
-      if (status.installed && status.ready) return engine
-    }
-    throw new ApiError('no_image_engine', 'Making a picture needs an engine with an image tool (Codex). Install Codex, or choose your own picture.')
   }
 
   private async checkedImage(path: string) {

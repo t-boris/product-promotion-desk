@@ -6,6 +6,7 @@
 
 import { ApiError, type DraftInput } from '../../shared/api'
 import type { Approval, Draft, Id, Opportunity, OpportunityState } from '../../shared/types'
+import { renderForPlatform, sendProblems } from '../../shared/post-format'
 import type { PipelineHooks } from '../services'
 import type { Core } from '../core'
 import { attachmentProblem } from './attachments'
@@ -30,6 +31,8 @@ export class ReviewFlow implements PipelineHooks {
   ) {}
 
   private assertEditable(opp: Opportunity, action: string): void {
+    // Rejected and deleted are final: no edit, deferral or second rejection puts an item back in the queue.
+    if (opp.state === 'cancelled') throw new ApiError('invalid_state', `Cannot ${action}: this item was rejected or deleted, and that cannot be undone.`)
     if (SEND_LOCKED_STATES.includes(opp.state)) {
       throw new ApiError('invalid_state', `Cannot ${action}: this item is ${opp.state === 'confirmed' ? 'already sent' : opp.state === 'sending' ? 'being sent' : 'waiting for its send result to be resolved'}.`)
     }
@@ -50,7 +53,7 @@ export class ReviewFlow implements PipelineHooks {
   async saveDraft(id: Id, input: DraftInput): Promise<Opportunity> {
     const opp = this.store.requireOpportunity(id)
     this.assertEditable(opp, 'edit the draft')
-    const content = await normalizeDraftInput(input)
+    const content = await normalizeDraftInput(input, { productId: opp.productId, media: this.core.services.media! })
     if (opp.kind === 'reply' && !content.text) throw new ApiError('invalid_input', 'A reply needs text.')
     const channel = this.store.requireChannel(opp.channelId)
     const previous = this.core.repos.latestDraft(id)
@@ -88,6 +91,12 @@ export class ReviewFlow implements PipelineHooks {
     if (opp.kind === 'reply' && !draft.text.trim()) throw new ApiError('invalid_input', 'The reply is empty.')
     const problem = await attachmentProblem(draft.attachments)
     if (problem) throw new ApiError('invalid_attachment', problem)
+    // A post written in the post editor is approved only when its platform can show it and this application can send it (DEC-030).
+    if (draft.markup === 'markdown') {
+      const platform = this.store.requireChannel(opp.channelId).platform
+      const unfit = sendProblems(platform, renderForPlatform(draft, platform))
+      if (unfit.length > 0) throw new ApiError('post_does_not_fit', unfit.join(' '))
+    }
 
     this.core.db.transaction(() => {
       const current = this.store.requireOpportunity(id)

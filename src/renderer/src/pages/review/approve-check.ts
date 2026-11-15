@@ -2,7 +2,7 @@
 // Pure, so they are tested without the interface (lesson 101).
 
 import type { DraftInput } from '../../../../shared/api'
-import type { DraftFinding } from '../../../../shared/types'
+import type { DraftFinding, PostMarkup } from '../../../../shared/types'
 
 /** What was pressed: "Approve" or "Approve and send". The panel keeps it so "Approve anyway" does exactly that. */
 export type Approving = 'approve' | 'approve_send'
@@ -16,8 +16,8 @@ export function needsCheck(draft: { author: 'ai' | 'user' } | null, dirty: boole
 }
 
 /** The editor as the core reads it. */
-export function checkForm(input: DraftInput): { title: string; text: string; link: string } {
-  return { title: input.title ?? '', text: input.text, link: input.link ?? '' }
+export function checkForm(input: DraftInput): { title: string; text: string; link: string; markup: PostMarkup } {
+  return { title: input.title ?? '', text: input.text, link: input.link ?? '', markup: input.markup === 'markdown' ? 'markdown' : 'legacy' }
 }
 
 /**
@@ -25,7 +25,7 @@ export function checkForm(input: DraftInput): { title: string; text: string; lin
  * something that is no longer on the screen and the panel goes. The attachments are not read by the rules and are not part of it.
  */
 export function fingerprint(input: DraftInput): string {
-  return JSON.stringify([input.title ?? '', input.text, input.link ?? ''])
+  return JSON.stringify([input.title ?? '', input.text, input.link ?? '', input.markup === 'markdown' ? 'markdown' : 'legacy'])
 }
 
 /** What the panel shows: the findings (or why the check could not be made) for the text with this fingerprint, after this button. */

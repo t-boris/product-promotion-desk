@@ -10,6 +10,7 @@ import type { Core } from '../core'
 import { newId } from '../db/database'
 import { TakeoverError, type Connector, type ConnectorContext, type PublishRequest, type RemoteDiscussion, type SendTicket } from '../ports'
 import { attachmentProblem } from './attachments'
+import { renderForPlatform, sendProblems } from '../../shared/post-format'
 import { commentBodyHash, contentHash, hashedIdentity } from './hash'
 import { autoCategoryOf, autoRuleId } from './modes'
 import { buildPublishRequest, publishCapability } from './request'
@@ -102,6 +103,13 @@ export class SendGate {
     const draft = first.draft as Draft
     const attachments = await attachmentProblem(draft.attachments)
     if (attachments) return block('review', 'attachment_changed', attachments)
+    // The same fit check the approval made, asked again at the send: what a platform can show and what this application can send are decided
+    // in code, and the code may have changed since the approval (a rule of the platform, a way of publishing the application no longer has).
+    if (draft.markup === 'markdown') {
+      const platform = first.channel.platform
+      const unfit = sendProblems(platform, renderForPlatform(draft, platform))
+      if (unfit.length > 0) return block('review', 'post_does_not_fit', ...unfit)
+    }
     if (first.opp.kind === 'reply') {
       const thread = await this.checkThread(first, ctx, connector)
       if (thread) return thread
@@ -128,7 +136,7 @@ export class SendGate {
       account,
       draft: draftNow,
       approval,
-      request: buildPublishRequest(opp, draftNow, comment, destination),
+      request: buildPublishRequest(opp, draftNow, comment, destination, channel.platform),
       contentHash: hash,
       authorizationBasis: approval.approvedBy === 'user' ? `user approval ${approval.id}` : `auto rule ${approval.ruleId}`
     }

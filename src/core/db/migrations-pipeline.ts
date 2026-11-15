@@ -28,5 +28,38 @@ CREATE INDEX idx_comments_parent ON comments(channel_id, parent_external_id);
 -- only so the SendGate can say WHY an approval no longer applies (a changed login, not an edited text).
 ALTER TABLE approvals ADD COLUMN signed_in_identity TEXT;
 `
+  },
+  {
+    id: 302,
+    name: 'pipeline: the picture library of a product (DEC-030)',
+    sql: `
+-- A picture is a file in the data folder (media/<id>.<ext>) that never changes: an approval binds the bytes by their hash, and a draft that
+-- uses a picture keeps pointing at the same file. One picture per product and content: adding the same file twice returns the first.
+CREATE TABLE media (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  file TEXT NOT NULL,
+  mime TEXT NOT NULL,
+  sha256 TEXT NOT NULL,
+  bytes INTEGER NOT NULL,
+  width INTEGER,
+  height INTEGER,
+  origin TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX idx_media_product_hash ON media(product_id, sha256);
+CREATE INDEX idx_media_product ON media(product_id, created_at);
+`
+  },
+  {
+    id: 303,
+    name: 'pipeline: how the text of a draft is marked up (DEC-030)',
+    sql: `
+-- 'legacy': the text is sent as it is written (every draft before the post editor, replies, text the AI wrote).
+-- 'markdown': written in the post editor; each platform gets the form it can show. Part of the approval hash only when it is 'markdown'.
+ALTER TABLE drafts ADD COLUMN markup TEXT NOT NULL DEFAULT 'legacy';
+`
   }
 ]

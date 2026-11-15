@@ -236,9 +236,10 @@ describe('the check before an approval', () => {
   })
 
   it('sends the editor to the core with every field set', () => {
-    expect(checkForm({ text: 'Hi' })).toEqual({ title: '', text: 'Hi', link: '' })
-    expect(checkForm({ title: 'T', text: 'Hi', link: 'https://x.test' })).toEqual({ title: 'T', text: 'Hi', link: 'https://x.test' })
-    expect(checkForm({ title: null, text: 'Hi', link: null })).toEqual({ title: '', text: 'Hi', link: '' })
+    expect(checkForm({ text: 'Hi' })).toEqual({ title: '', text: 'Hi', link: '', markup: 'legacy' })
+    expect(checkForm({ text: 'Hi', markup: 'markdown' })).toEqual({ title: '', text: 'Hi', link: '', markup: 'markdown' })
+    expect(checkForm({ title: 'T', text: 'Hi', link: 'https://x.test' })).toEqual({ title: 'T', text: 'Hi', link: 'https://x.test', markup: 'legacy' })
+    expect(checkForm({ title: null, text: 'Hi', link: null })).toEqual({ title: '', text: 'Hi', link: '', markup: 'legacy' })
   })
 
   it('knows a text by its title, text and link, and by nothing else', () => {

@@ -8,6 +8,7 @@ import { OpenChannelBrowser } from './channels/OpenChannelBrowser'
 import { useMainActionOwner } from './review/main-action'
 import { PublicationForm } from './review/PublicationForm'
 import { ProductFilter, useProductDirectory, useProductFilter } from './review/products'
+import { removalWords } from './review/removal-words'
 import { ReviewCard } from './review/ReviewCard'
 import './review/review.css'
 
@@ -42,6 +43,10 @@ function PublicationsScreen() {
   const channel = inScope.find((c) => c.id === chosen) ?? inScope[0]
   const channelId = channel?.id ?? ''
   const productName = channel ? directory.productNameOfChannel(channel.id) : undefined
+  const accounts = useQuery('accounts.list', undefined, ['accounts'])
+  const account = accounts.data?.find((a) => a.id === channel?.accountId)
+  // The sketch of a new post names the account it will go out from: its confirmed name on the platform, else the label it was given.
+  const authorName = account?.identity ?? account?.label ?? ''
   const list = useQuery('opportunities.list', { channelId: channelId || undefined, kind: 'standalone' }, ['opportunities'])
   const [writing, setWriting] = useState(false)
   const [suggest, suggesting] = useAction(async () => {
@@ -129,7 +134,7 @@ function PublicationsScreen() {
         </EmptyState>
       )}
 
-      {writing && channel && <PublicationForm productId={channel.productId} channelId={channel.id} onCreated={() => setWriting(false)} onCancel={() => setWriting(false)} />}
+      {writing && channel && <PublicationForm productId={channel.productId} channelId={channel.id} platform={channel.platform} author={{ name: authorName, target: channel.target }} onCreated={() => setWriting(false)} onCancel={() => setWriting(false)} />}
 
       <ErrorNote error={list.error} />
       {list.loading && !list.data && <Loading what="Loading" />}
@@ -180,7 +185,7 @@ function PublicationsScreen() {
           )}
           {cancelled.length > 0 && (
             <section className="review-section">
-              <h2>Rejected</h2>
+              <h2>{removalWords('standalone').list}</h2>
               <div className="review-list">
                 {cancelled.map((card) => (
                   <ReviewCard key={card.opportunity.id} card={card} collapsible defaultOpen={false} productName={productName} />

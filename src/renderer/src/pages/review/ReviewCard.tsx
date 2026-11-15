@@ -20,6 +20,7 @@ import {
   isUndisclosed
 } from './labels'
 import { mainActionOf } from './main-action'
+import { removalWords } from './removal-words'
 import { useReviewActions } from './useReviewActions'
 import './review.css'
 
@@ -77,7 +78,7 @@ export function ReviewCard({ card, collapsible = false, defaultOpen = true, prod
       <Card className={`review-card${open ? ' open' : ''}`}>
         <div className="review-head">
           <div className="review-id">
-            <Badge tone={STATE_TONE[opp.state]}>{STATE_LABEL[opp.state]}</Badge>
+            <Badge tone={STATE_TONE[opp.state]}>{opp.state === 'cancelled' && standalone ? removalWords('standalone').list : STATE_LABEL[opp.state]}</Badge>
             <Badge>{KIND_LABEL[opp.kind]}</Badge>
             {opp.category && <Badge>{CATEGORY_LABEL[opp.category]}</Badge>}
             {opp.decision && opp.decision !== 'reply' && <Badge tone="warn">{DECISION_LABEL[opp.decision]}</Badge>}
@@ -138,7 +139,7 @@ export function ReviewCard({ card, collapsible = false, defaultOpen = true, prod
               </div>
             )}
 
-            <DraftEditor form={form} onChange={setForm} withTitle={standalone} disabled={locked || actions.busy} draft={card.draft} ai={locked ? undefined : { opportunityId: opp.id }} />
+            <DraftEditor form={form} onChange={setForm} withTitle={standalone} disabled={locked || actions.busy} draft={card.draft} ai={locked ? undefined : { opportunityId: opp.id }} post={standalone ? { productId: opp.productId, platform: card.channelPlatform, author: { name: card.accountLabel, target: card.channelTarget } } : undefined} />
             {standalone && !locked && <ScheduleControl opportunity={opp} busy={actions.busy} onSchedule={(at) => void actions.schedule(opp.id, at)} />}
 
             <ActionSummary card={card} />

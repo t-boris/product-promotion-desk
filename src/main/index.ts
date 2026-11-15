@@ -15,6 +15,7 @@ import { appMenuTemplate } from './app-menu'
 import { installLifecycle } from './lifecycle'
 import { McpGateway } from './mcp-gateway'
 import { ElectronImageShrinker } from './image-shrinker'
+import { ElectronMediaTools } from './media-tools'
 import { createNotificationSink } from './notifications'
 import { createTray } from './tray'
 import { FileVault, TimedClipboard } from './vault'
@@ -70,6 +71,7 @@ async function start(): Promise<void> {
     connectors: createConnectors(),
     agentBridge: gateway,
     imageShrinker: new ElectronImageShrinker(),
+    mediaTools: new ElectronMediaTools(),
     // Passwords: encrypted by the system keychain, in a file of their own next to the database (DEC-014).
     secrets: new FileVault(join(dataDir, 'vault.bin'), safeStorage),
     clipboard: new TimedClipboard({ writeText: (text) => clipboard.writeText(text), readText: () => clipboard.readText() }),

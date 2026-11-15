@@ -849,3 +849,39 @@ kind on the same account, is not shown here (`isJoinRunOf`).
 | Membership row | `capability-membership` in `capabilities`, first row | Only where `canJoin`; its own words; amber tag for Not joined, Needs you and Banned |
 | Membership line | `channel-membership` in the card's `kv` list, after Account | Only where `canJoin`; "Not checked yet" before the first assessment |
 | Join button | `channel-join`, `channel-join-reason`, `channel-join-note`, `channel-join-run` | Bezel, never filled, reason beside it when off, the sentence under it, one run panel |
+
+## 23. The post editor, the picture library and the sketch of a post (0.16.0)
+
+A post (a standalone publication) is no longer a four-line text box with a typed file path. It is written in one editor, with pictures, and the owner sees how each platform will show it.
+Replies stay plain text: the editor is only for posts (`withTitle` + `post` of `DraftEditor`).
+
+**Where.** *Publications*: the new-post form and every post card that is not sent yet. Nothing is a new screen.
+
+**Layout.** Title (with *Improve with AI*), then a row of two wells that stack when the width is under 640 px: on the left *Text* (the AI helper beside its label, the toolbar, the text), on the right
+the sketch of the post. Under them *Link*, then *Pictures*, then, on demand, *Make a picture*.
+
+| Pattern | Markup | Rules |
+|---|---|---|
+| Toolbar | `.post-toolbar` (`mark-bold`, `mark-italic`, `mark-heading`, `mark-bullets`, `mark-numbers`, `mark-quote`, `mark-code`, `mark-link`) | Eight quiet buttons of the standard height, a word or a glyph on each, never an icon font; ⌘B, ⌘I, ⌘K; a mark that is on is taken off again |
+| Text | `draft-text` (`.post-text`) | Takes a pasted or dropped picture at the cursor, on a paragraph of its own; a drop shows a dashed outline |
+| Sketch | `post-preview` (`data-platform`), `preview-sketch` (`data-kind`) | A well with the picker *Preview as* and the count against the limit in its head, one card in the layout of the platform, one line saying it is a sketch, the notes (muted), the problems (red) |
+| Pictures | `post-pictures`, `draft-attachments` | Name and *In the text* / *Place in text* / *Remove* under each thumbnail; *Choose files…* only where the main process has a dialog; *Make a picture…*; *From the library (n)* |
+| Make a picture | `make-picture` | The description is the owner's (the AI proposes a start through the shared helper); shape Square / Wide / Tall; every press makes a new picture and none replaces another; the reason is beside the button when no engine can make one |
+
+**The sketch.** Reddit: a titled post with its marks drawn (headings, lists, quotes, code, links shown, not followed) and its pictures one under another. Instagram: a square picture over the
+caption, a count for a carousel ("1 / 3"), the caption folded after about 125 characters with "… more", and a dashed "needs a picture" box when there is none. Facebook and LinkedIn: the words, then the
+pictures in a grid with the rest counted ("+2"). Threads and X: a short post with the mark on the left and the count against 500 / 280. Telegram: a message with the pictures first. Any other site: the
+words. It uses neutral colours and no mark of the platform: it shows the order of things and what is cut, not the platform's look. It is drawn from `renderForPlatform`, the function the application
+sends with, so the sketch and the send cannot differ. The owner can look at the post as any platform; the platform of the channel is where it starts, and the line under the sketch says whose it is.
+
+**Unsent posts.** A post that has not been sent (a draft, approved, scheduled, deferred) is edited in place; saving withdraws the approval and the card says so. The side button of a post is
+*Delete* (a reply keeps *Reject*): it asks first ("Deletes this post. Nothing was sent, so nothing changes on any site. It cannot be brought back."), the post goes to the *Deleted* list with the badge
+*Deleted*, and nothing brings it back (no edit, no deferral, no approval). Its pictures are released: a picture only a deleted post carries can be removed from the library and is cleared like any other
+after 30 days; its card shows "Picture removed" where the file is gone.
+
+| Id | Requirement | Method | Pass |
+|---|---|---|---|
+| V-37 | The editor follows the shared rules: controls at least 28 px, one filled button, nothing cut or overflowing, in light and dark, with pictures, with the AI panel open and after the post is saved | the probe on an own instance (`MEASURE` and `LOOK`, 1280 px) | 0 failures |
+| V-38 | A pasted or dropped picture goes into the library once (same bytes, one item), into the post, into the text at the cursor and into the thumbnail strip; a file that is not a picture is ignored | the probe: synthetic paste and drop events in the real Electron renderer | each step observed |
+| V-39 | The sketch changes with the platform and never changes the post: each of the seven platforms has its own layout, the marks are gone where the platform shows none, the title is left out where there is none, the count is against the platform's limit | the probe walks the picker and reads `data-kind`, the count and the notes; the text box is read back unchanged | each platform observed |
+| V-40 | Delete of an unsent post is final and says so: asked first, the post leaves the queue, the list is *Deleted*, the card is badged *Deleted*, an edit of it is refused | the probe presses *Delete*, confirms, reads the list and the refused edit | observed |

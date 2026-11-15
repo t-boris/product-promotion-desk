@@ -1,6 +1,7 @@
 // Content hashing for approval binding (REQ-004 criterion 1) and for detecting edited comments.
 
-import type { Attachment, Id } from '../../shared/types'
+import { RENDER_VERSION } from '../../shared/post-format'
+import type { Attachment, Id, PostMarkup } from '../../shared/types'
 import { normalizeIdentity, sha256 } from './util'
 
 /** The account an approval is bound to: its id AND who is signed in to it right now (null when unknown). */
@@ -20,6 +21,8 @@ export interface HashableContent {
   text: string
   link: string | null
   attachments: Pick<Attachment, 'name' | 'sha256'>[]
+  /** Only `markdown` enters the hash: every approval given before the post editor keeps its hash. */
+  markup?: PostMarkup
 }
 
 /**
@@ -36,6 +39,8 @@ export function contentHash(content: HashableContent, account: HashedAccount, de
       text: content.text,
       link: content.link ? content.link : null,
       attachments: content.attachments.map((a) => ({ name: a.name, sha256: a.sha256 })),
+      // A key that is not set is left out by JSON.stringify, so a legacy draft hashes exactly as it did before markup existed (DEC-030).
+      markup: content.markup === 'markdown' ? `markdown:${RENDER_VERSION}` : undefined,
       accountId: account.id,
       identity: hashedIdentity(account.identity),
       destination

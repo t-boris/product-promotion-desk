@@ -374,7 +374,7 @@ export class SendingFlow implements SendingService {
     const comment = opp.commentId ? this.store.comment(opp.commentId) : null
     // The connector must only match what was created at or after this attempt: an older, identical reply or post
     // is not evidence that this one went out.
-    const request = { ...buildPublishRequest(opp, draft, comment, action.destination), attemptedAt: action.attemptedAt }
+    const request = { ...buildPublishRequest(opp, draft, comment, action.destination, this.store.requireChannel(opp.channelId).platform), attemptedAt: action.attemptedAt }
 
     let ref: PublishedRef | null
     try {

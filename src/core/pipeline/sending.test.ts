@@ -107,9 +107,11 @@ describe('SendGate (a): approval is bound to the exact content, account and dest
     world = makeWorld()
     const opp = await world.newOpportunity()
     const path = pngFile()
-    await world.core.router.call('opportunities.saveDraft', { id: opp.id, draft: { text: 'See the screenshot', attachments: [{ name: 'shot.png', path, mime: 'image/png', sha256: 'lies' }] } })
+    const saved = await world.core.router.call('opportunities.saveDraft', { id: opp.id, draft: { text: 'See the screenshot', attachments: [{ name: 'shot.png', path, mime: 'image/png', sha256: 'lies' }] } })
     await world.core.router.call('opportunities.approve', { id: opp.id })
-    writeFileSync(path, Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('replaced body')]))
+    // The picture is kept in the library: changing the original file changes nothing, changing the kept file blocks the send.
+    writeFileSync(path, Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('the original was edited')]))
+    writeFileSync(saved.draft!.attachments[0].path, Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('replaced body')]))
 
     const block = await sendBlocked(opp)
 
@@ -700,6 +702,45 @@ describe('standalone publications (REQ-003 criterion 5)', () => {
     world.core.settings.setRaw('automation.paused', false)
     expect(await sending().sendDuePublications()).toBe(1) // the second one is held back by the hourly limit
     expect(publishCalls()).toBe(1)
+  })
+
+  it('a post that is approved and scheduled can still be edited: the approval is withdrawn, nothing goes out at the planned time, and the new text is what is sent once it is approved again', async () => {
+    world = makeWorld()
+    const post = await scheduledAndApproved('first', 5)
+    const edited = await world.core.router.call('opportunities.saveDraft', { id: post.id, draft: { title: 'second', text: 'second body' } })
+    expect(edited.opportunity.state).toBe('draft')
+    expect(edited.opportunity.reason).toMatch(/approval no longer applies/)
+    expect(edited.opportunity.scheduledAt).not.toBeNull()
+    expect(edited.approval).toBeNull()
+
+    world.clock.advance(10 * 60_000)
+    expect(await sending().sendDuePublications()).toBe(0)
+    expect(publishCalls()).toBe(0)
+
+    await world.core.router.call('opportunities.approve', { id: post.id })
+    // the planned time passed while it waited for the owner: it is the owner's press that sends it now
+    expect((await sending().send(post.id)).state).toBe('confirmed')
+    expect(world.connector.published.map((p) => p.request.title)).toEqual(['second'])
+  })
+
+  it('a post that is approved and scheduled can be deleted: it is never sent, and its approval is gone', async () => {
+    world = makeWorld()
+    const keep = await scheduledAndApproved('keep', 5)
+    const gone = await scheduledAndApproved('gone', 5)
+    const card = await world.core.router.call('opportunities.reject', { id: gone.id })
+    expect(card.opportunity.state).toBe('cancelled')
+    expect(card.approval).toBeNull()
+
+    world.clock.advance(10 * 60_000)
+    expect(await sending().sendDuePublications()).toBe(1)
+    expect(world.connector.published.map((p) => p.request.title)).toEqual(['keep'])
+    expect(world.opportunity(keep.id).state).toBe('confirmed')
+    await expect(sending().send(gone.id)).rejects.toBeDefined()
+    // deleted is deleted: no edit, no deferral and no approval brings it back
+    await expect(world.core.router.call('opportunities.saveDraft', { id: gone.id, draft: { title: 'again', text: 'again' } })).rejects.toMatchObject({ code: 'invalid_state' })
+    await expect(world.core.router.call('opportunities.defer', { id: gone.id })).rejects.toMatchObject({ code: 'invalid_state' })
+    await expect(world.core.router.call('opportunities.approve', { id: gone.id })).rejects.toMatchObject({ code: 'invalid_state' })
+    expect(world.opportunity(gone.id).state).toBe('cancelled')
   })
 
   it('does not send a publication more than an hour past its planned time; it returns to review', async () => {

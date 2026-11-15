@@ -159,13 +159,13 @@ describe('approve, reject and defer', () => {
     expect(approvals(opp)).toHaveLength(0)
   })
 
-  it('refuses to approve an attachment that has vanished from disk', async () => {
+  it('refuses to approve a picture that has vanished from the library', async () => {
     world = makeWorld()
     const opp = await world.newOpportunity()
     const path = imageFile('gone.png')
-    await world.core.router.call('opportunities.saveDraft', { id: opp.id, draft: { text: 'see image', attachments: [att(path)] } })
+    const saved = await world.core.router.call('opportunities.saveDraft', { id: opp.id, draft: { text: 'see image', attachments: [att(path)] } })
     const { unlinkSync } = await import('node:fs')
-    unlinkSync(path)
+    unlinkSync(saved.draft!.attachments[0].path)
     await expect(world.core.router.call('opportunities.approve', { id: opp.id })).rejects.toMatchObject({ code: 'invalid_attachment' })
     expect(world.opportunity(opp.id).state).not.toBe('ready')
   })
@@ -307,7 +307,7 @@ describe('attachment validation (REQ-003: only images the connector can verify)'
 
   it.each([
     ['jpeg', 'p.jpg', Buffer.from([0xff, 0xd8, 0xff, 0xe0])],
-    ['gif', 'p.gif', Buffer.from('GIF89a')],
+    ['gif', 'p.gif', Buffer.concat([Buffer.from('GIF89a'), Buffer.from([1, 0, 1, 0])])], // a 1 × 1 header: the size is read from it
     ['webp', 'p.webp', Buffer.concat([Buffer.from('RIFF'), Buffer.from([0, 0, 0, 0]), Buffer.from('WEBP')])]
   ])('accepts %s', async (_name, file, head) => {
     world = makeWorld()
