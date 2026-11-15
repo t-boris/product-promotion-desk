@@ -755,4 +755,14 @@ Design (from the code map of 2026-11-15; every guard of the single-post path sta
 - [x] C5 Review of the core by a fresh reviewer (2 critical, several major: all fixed with tests and mutants); DEC-032; lessons 206-210; memory; 0.18.0; PR, CI, merge, tag, release, `deploy:local`.
 
 ### Slice D — 0.19.0 content mix and own updates (DEC-033)
-- [ ] `ChannelSettings.mix`, updates journal, own-update prompt and check, `mix.run` job (drafts only, 3 waiting, pause), Content mix card, plan steps get `kind`/`everyDays`; tests, probe with a fake clock, review, DEC-033, release.
+Design (2026-11-15, from the code map; every guard of the single-post path stays untouched, a mix draft is an ordinary draft):
+- Data: `ChannelSettings.mix` (list of `{kind, enabled, everyDays}`, kinds `product_post`, `own_update`, `showcase`; off by default; saved with `channels.updateSettings`). Migration 305: `product_updates` (the owner's notes; `used_in_opportunity_id`, `failed_tries`) and `mix_state` (last draft / last attempt / last error per channel and kind). `ChannelPlanStep.kind/everyDays` (optional, lenient parse).
+- Core: `mix.ts` (`MixFlow`: `card`, `propose`, notes, `runDue`; pure `dueAtMs` with a steady jitter, `mixBlocker`, `proposalFromPlan`), `publications.suggestUpdate` (own update from ONE note: `UPDATE_SYSTEM`, no claims to cite, addresses only the note's and the site's, `numbersNotInNote`, credential check, model flag `addsFactsBeyondNote`, note claimed atomically), `suggest(channelId, {focus, origin})` for the showcase, `mix-attention.ts` (the ask for a note in the attention list), the `mix` job in `PeriodicTasks` (only while not paused and after the startup reconciliation), API `mix.get`, `mix.propose`, `updates.add|list|remove`.
+- Rules: drafts only (no approval, no schedule, no send); one draft per channel per scan; at most 3 posts waiting per channel (replies not counted); a failed try waits 3 hours; a note failed 3 times is set aside; observe-only, paused, restricted or sign-in-needed channels are left alone; no engine = nothing tried.
+- Renderer: the Content mix card on the channel page (propose, edit, save, notes).
+- [x] D1 migration 305, types, settings validation, plan kind/everyDays.
+- [x] D2 `MixFlow`, `suggestUpdate`, the job, the attention ask, API; core tests (53) and mutants (killed or simplified).
+- [x] D3 Renderer: Content mix card on the channel page (propose with Undo, per-kind days, notes with set-aside and used, Save mix under the one-filled-button rule); logic in `mix-card.ts` with 38 tests; own-instance probe 135 of 135 checks, light and dark, 28 px controls, one filled button in every state, no overflow at 1280/980/960.
+- [x] D4 Independent review of the core (9 findings: 8 fixed with tests, 1 pre-existing noted); mutants 0 surviving (about 120); lessons 211-215; memory; DEC-033 updated.
+- [ ] D5 0.19.0: PR, CI, merge, tag, release, `deploy:local`.
+- Not built: the optional Attention item "what did you do this week?" beyond the ask for a note (the ask is built: "Tell what is new for <channel>"). Showcase attaches no picture. Optional per plan, left for the owner to ask for.

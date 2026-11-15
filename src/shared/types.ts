@@ -567,6 +567,18 @@ export interface ChannelSettings {
   /** Local HH:MM for the daily summary, or null for none. */
   digestTime: string | null
   notifications: boolean
+  /** The content mix (DEC-033): which kinds of own posts the AI may prepare drafts of on this channel, and how often. Empty = none. */
+  mix: MixSetting[]
+}
+
+/** What kind of own post a draft of the content mix is. Replies are what the monitor does and are not part of the mix. */
+export type MixKind = 'product_post' | 'own_update' | 'showcase'
+
+export interface MixSetting {
+  kind: MixKind
+  enabled: boolean
+  /** A draft of this kind is prepared about this often (whole days, 1 to 90). */
+  everyDays: number
 }
 
 export type ChannelStatus = 'setup' | 'active' | 'paused' | 'needs_user' | 'error'
@@ -604,7 +616,8 @@ export const DEFAULT_CHANNEL_SETTINGS: ChannelSettings = {
   limits: { perHour: 2, perDay: 6 },
   autoCategories: [],
   digestTime: null,
-  notifications: true
+  notifications: true,
+  mix: []
 }
 
 // ───────────────────────────── Discussions & comments (REQ-003) ─────────────────────────────
@@ -704,6 +717,10 @@ export interface ChannelPlanStep {
   /** What the owner has to prepare first (a photo, a short video, a text), or null when nothing. */
   youPrepare: string | null
   frequency: string | null
+  /** What the step is, as the content mix knows it (DEC-033); null for a plan made before the mix and for a step that is not a kind of post. */
+  kind?: MixKind | 'replies' | null
+  /** The rhythm in whole days, when the step has one the mix can use. */
+  everyDays?: number | null
 }
 
 /**
@@ -970,6 +987,41 @@ export interface PostVersion {
 export interface PostGroupCard {
   group: PostGroup
   versions: PostVersion[]
+}
+
+// ───────────────────────────── Content mix and the owner's own updates (DEC-033) ─────────────────────────────
+
+/** One line the owner wrote about something they did ("What's new"): the only source of an own-update draft. */
+export interface ProductUpdate {
+  id: Id
+  productId: Id
+  text: string
+  createdAt: IsoTime
+  /** The post prepared from it; null while it is unused. */
+  usedInOpportunityId: Id | null
+  /** How many times the AI could not make a post from it; after 3 it is set aside until the owner rewrites it. */
+  failedTries: number
+}
+
+export interface MixKindCard extends MixSetting {
+  /** When a draft of this kind was last prepared by the mix; null if never. */
+  lastDraftAt: IsoTime | null
+  /** When the next draft is due (never before now); null while the kind is off. */
+  nextAt: IsoTime | null
+  /** Why the last attempt did not give a draft, or what stops the next one, in words; null when nothing does. */
+  problem: string | null
+}
+
+export interface MixCard {
+  channelId: Id
+  kinds: MixKindCard[]
+  /** Posts of this channel waiting for the owner (not approved yet). The mix prepares no draft while this reaches `cap`. */
+  waiting: number
+  cap: number
+  /** Notes not used yet (of the channel's product). */
+  unusedUpdates: number
+  /** Why the mix cannot run on this channel at all now (observe-only, cannot publish, paused), or null. */
+  blocked: string | null
 }
 
 /** A channel of the product the post could also go to, and whether it fits there as it is. */

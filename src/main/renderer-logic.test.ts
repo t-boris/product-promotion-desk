@@ -3,7 +3,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import type { ApiEvent } from '../shared/api'
-import type { Account, AgentRun, AnalysisStage, AttentionItem, Channel, Claim, GroupChannelOption, OpportunityCard, OpportunityState, PlatformInfo, PostGroup, PostGroupResult, PostVersion, Product } from '../shared/types'
+import type { Account, AgentRun, AnalysisStage, AttentionItem, Channel, ChannelPlan, Claim, GroupChannelOption, MixCard, MixKindCard, MixSetting, OpportunityCard, OpportunityState, PlatformInfo, PostGroup, PostGroupResult, PostVersion, Product, ProductUpdate } from '../shared/types'
 import { createFanOut } from '../renderer/src/fan-out'
 import { closeForm, mainForm, openForm, type OpenFormIds } from '../renderer/src/open-forms'
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from '../renderer/src/menu-state'
@@ -75,6 +75,45 @@ import {
   ADDRESS_SHORTENED,
   rowBlocker
 } from '../renderer/src/pages/channels/open-browser'
+import {
+  DAYS_PROBLEM,
+  KIND_WORDS,
+  MIX_KINDS,
+  NEXT_SOON,
+  NOTE_MAX,
+  NOTE_SET_ASIDE_AFTER,
+  NOT_SAVED_YET,
+  PROPOSED_NOTE,
+  PROPOSED_SAME_NOTE,
+  REPLIES_WORDS,
+  SET_ASIDE_WORDS,
+  applyProposal,
+  canUndoProposal,
+  daysProblem,
+  draftsOnlyLine,
+  formDirty,
+  formFromCard,
+  formSignature,
+  formValid,
+  isSetAside,
+  kindStatus,
+  noteProblem,
+  normalizeNote,
+  parseDays,
+  planProposesMix,
+  proposalNote,
+  proposeBlock,
+  repliesLine,
+  rowChanged,
+  sameForm,
+  settingsFromForm,
+  shortDate,
+  showNoteCount,
+  statusLine,
+  splitNotes,
+  unusedLabel,
+  withRow
+} from '../renderer/src/pages/channels/mix-card'
 import { MOVED_PAGES, PRODUCT_TABS, accountHref, accountsNewHref, channelsAccountOf, navigateHashOf, parseAccountsHash, parseHash, productHref, publicationsHref, publicationsProductOf } from '../renderer/src/route'
 import { accountText, accountsGroupName, accountsSummary, automationText, engineGroupName } from '../renderer/src/status-labels'
 
@@ -1632,5 +1671,310 @@ describe('"Where to post": the ticks and what Save does with them (DEC-032)', ()
     expect(toggled(['a'], 'b')).toEqual(['a', 'b'])
     expect(toggled(['a', 'b', 'c'], 'b')).toEqual(['a', 'c'])
     expect(toggled([], 'a')).toEqual(['a'])
+  })
+})
+
+
+describe('the content mix card of a channel (DEC-033)', () => {
+  const NOW = Date.parse('2026-11-15T12:00:00.000Z')
+  const kind = (patch: Partial<MixKindCard> & Pick<MixKindCard, 'kind'>): MixKindCard => ({ enabled: false, everyDays: 14, lastDraftAt: null, nextAt: null, problem: null, ...patch })
+  /** What the core sends for a channel that never had a mix: all three kinds, off, each with its usual rhythm. */
+  const emptyCard = (): Pick<MixCard, 'kinds'> => ({ kinds: [kind({ kind: 'product_post', everyDays: 14 }), kind({ kind: 'own_update', everyDays: 7 }), kind({ kind: 'showcase', everyDays: 30 })] })
+  const saved = formFromCard(emptyCard())
+  const options = { locale: 'en-US', timeZone: 'UTC' }
+
+  describe('the form', () => {
+    it('has the three kinds in the card order, off, with the rhythm the core gives each', () => {
+      expect(MIX_KINDS).toEqual(['product_post', 'own_update', 'showcase'])
+      expect(saved).toEqual([
+        { kind: 'product_post', enabled: false, days: '14' },
+        { kind: 'own_update', enabled: false, days: '7' },
+        { kind: 'showcase', enabled: false, days: '30' }
+      ])
+    })
+
+    it('shows the saved kinds as they are, whatever order the core lists them in', () => {
+      const form = formFromCard({ kinds: [kind({ kind: 'showcase', enabled: true, everyDays: 21 }), kind({ kind: 'product_post', enabled: true, everyDays: 3 }), kind({ kind: 'own_update', everyDays: 7 })] })
+      expect(form.map((r) => r.kind)).toEqual(['product_post', 'own_update', 'showcase'])
+      expect(form).toEqual([
+        { kind: 'product_post', enabled: true, days: '3' },
+        { kind: 'own_update', enabled: false, days: '7' },
+        { kind: 'showcase', enabled: true, days: '21' }
+      ])
+    })
+
+    it('stays total when the core leaves a kind out: the kind is off with its usual rhythm', () => {
+      expect(formFromCard({ kinds: [] })).toEqual(saved)
+    })
+
+    it('is not dirty while it is the saved mix, and is dirty when a kind or its days change', () => {
+      expect(formDirty(saved, saved)).toBe(false)
+      expect(formDirty(withRow(saved, 'showcase', { enabled: true }), saved)).toBe(true)
+      expect(formDirty(withRow(saved, 'showcase', { days: '31' }), saved)).toBe(true)
+      expect(formDirty(withRow(withRow(saved, 'showcase', { days: '31' }), 'showcase', { days: '30' }), saved)).toBe(false)
+    })
+
+    it('reads the days as a number, so " 14 " and "014" are the saved 14, not a change', () => {
+      expect(formDirty(withRow(saved, 'product_post', { days: ' 14 ' }), saved)).toBe(false)
+      expect(formDirty(withRow(saved, 'product_post', { days: '014' }), saved)).toBe(false)
+    })
+
+    it('an unreadable number is a change from the saved one, so it is never hidden as "nothing changed"', () => {
+      const bad = withRow(saved, 'product_post', { days: '' })
+      expect(formDirty(bad, saved)).toBe(true)
+      expect(rowChanged(bad[0], saved[0])).toBe(true)
+    })
+
+    it('accepts whole days from 1 to 90 and nothing else', () => {
+      for (const ok of ['1', '7', '90', ' 30 ', '007']) expect(parseDays(ok)).not.toBeNull()
+      for (const bad of ['', ' ', '0', '91', '100', '1000', '-1', '1.5', '1,5', '7d', 'abc', '1e1', '+7']) expect(parseDays(bad)).toBeNull()
+      expect(parseDays('90')).toBe(90)
+      expect(parseDays('1')).toBe(1)
+      expect(daysProblem({ days: '0' })).toBe(DAYS_PROBLEM)
+      expect(daysProblem({ days: '12' })).toBeNull()
+      expect(DAYS_PROBLEM).toBe('Use a whole number of days from 1 to 90.')
+    })
+
+    it('is valid only while every row is valid, a kind that is off included (the core checks all of them)', () => {
+      expect(formValid(saved)).toBe(true)
+      expect(formValid(withRow(saved, 'showcase', { days: '91' }))).toBe(false)
+      expect(formValid(withRow(withRow(saved, 'showcase', { enabled: true }), 'own_update', { days: 'x' }))).toBe(false)
+    })
+
+    it('becomes the settings the core takes: every kind once, off ones with their rhythm, whole numbers', () => {
+      const form = withRow(withRow(saved, 'product_post', { enabled: true, days: ' 10 ' }), 'own_update', { enabled: true })
+      expect(settingsFromForm(form)).toEqual<MixSetting[]>([
+        { kind: 'product_post', enabled: true, everyDays: 10 },
+        { kind: 'own_update', enabled: true, everyDays: 7 },
+        { kind: 'showcase', enabled: false, everyDays: 30 }
+      ])
+      expect(settingsFromForm(withRow(form, 'showcase', { days: '0' }))).toBeNull()
+    })
+
+    it('the settings sent for the saved mix read back as the saved mix (a save and a reload change nothing)', () => {
+      const form = withRow(saved, 'product_post', { enabled: true })
+      const sent = settingsFromForm(form)
+      expect(sent).not.toBeNull()
+      const reloaded = formFromCard({ kinds: (sent ?? []).map((entry) => kind(entry)) })
+      expect(sameForm(reloaded, form)).toBe(true)
+      expect(formDirty(form, reloaded)).toBe(false)
+    })
+
+    it('has a signature that changes with what is saved and ignores how the number was typed', () => {
+      expect(formSignature(saved)).toBe(formSignature(withRow(saved, 'product_post', { days: ' 14 ' })))
+      expect(formSignature(saved)).not.toBe(formSignature(withRow(saved, 'product_post', { enabled: true })))
+      expect(formSignature(saved)).not.toBe(formSignature(withRow(saved, 'showcase', { days: '31' })))
+    })
+
+    it('withRow changes one kind and leaves the rest and the order alone', () => {
+      const next = withRow(saved, 'own_update', { enabled: true })
+      expect(next.map((r) => r.enabled)).toEqual([false, true, false])
+      expect(next.map((r) => r.kind)).toEqual(['product_post', 'own_update', 'showcase'])
+      expect(saved[1].enabled).toBe(false)
+    })
+  })
+
+  describe('the AI proposal', () => {
+    const proposal: MixSetting[] = [
+      { kind: 'product_post', enabled: true, everyDays: 10 },
+      { kind: 'showcase', enabled: true, everyDays: 21 }
+    ]
+
+    it('switches on the kinds it names with its days and switches off the others, keeping their days', () => {
+      const start = withRow(withRow(saved, 'own_update', { enabled: true }), 'own_update', { days: '5' })
+      expect(applyProposal(start, proposal)).toEqual([
+        { kind: 'product_post', enabled: true, days: '10' },
+        { kind: 'own_update', enabled: false, days: '5' },
+        { kind: 'showcase', enabled: true, days: '21' }
+      ])
+    })
+
+    it('is only a form: applying it makes the form dirty, and nothing is saved by it', () => {
+      const applied = applyProposal(saved, proposal)
+      expect(formDirty(applied, saved)).toBe(true)
+      expect(formValid(applied)).toBe(true)
+    })
+
+    it('switches a kind on even when the proposal lists it as off, because a kind in the proposal is a kind to prepare', () => {
+      const applied = applyProposal(saved, [{ kind: 'showcase', enabled: false, everyDays: 12 }])
+      expect(applied.find((r) => r.kind === 'showcase')).toEqual({ kind: 'showcase', enabled: true, days: '12' })
+    })
+
+    it('an empty proposal switches every kind off', () => {
+      const on = withRow(withRow(saved, 'product_post', { enabled: true }), 'showcase', { enabled: true })
+      expect(applyProposal(on, []).every((r) => !r.enabled)).toBe(true)
+    })
+
+    it('says what it is, and says so when it changes nothing', () => {
+      expect(PROPOSED_NOTE).toBe('The AI proposed this from the plan. Read it, change what you like, then save.')
+      expect(proposalNote(true)).toBe(PROPOSED_NOTE)
+      expect(proposalNote(false)).toBe(PROPOSED_SAME_NOTE)
+    })
+
+    it('"Undo" is offered only while the form is still exactly the proposal', () => {
+      const applied = applyProposal(saved, proposal)
+      const record = { before: null, applied }
+      expect(canUndoProposal(applied, record)).toBe(true)
+      expect(canUndoProposal(withRow(applied, 'product_post', { days: '11' }), record)).toBe(false)
+      expect(canUndoProposal(applied, null)).toBe(false)
+    })
+
+    it('the proposal needs no AI when the plan already names a kind of post, and needs one when it does not', () => {
+      const step = (patch: Partial<ChannelPlan['steps'][number]>): ChannelPlan['steps'][number] => ({ title: 't', detail: 'd', format: 'text', youPrepare: null, frequency: null, ...patch })
+      const plan = (...steps: ChannelPlan['steps']): ChannelPlan => ({ generatedAt: '2026-11-15T00:00:00.000Z', engineId: 'claude', summary: 's', steps, watchOut: [] })
+      expect(planProposesMix(null)).toBe(false)
+      expect(planProposesMix(plan())).toBe(false)
+      expect(planProposesMix(plan(step({})))).toBe(false)
+      expect(planProposesMix(plan(step({ kind: null })))).toBe(false)
+      expect(planProposesMix(plan(step({ kind: 'replies' })))).toBe(false)
+      expect(planProposesMix(plan(step({ kind: 'replies' }), step({ kind: 'showcase', everyDays: 30 })))).toBe(true)
+      expect(planProposesMix(plan(step({ kind: 'product_post' })))).toBe(true)
+    })
+
+    it('"Let the AI propose a mix" is off with the reason only when it would need the AI and the AI cannot be used', () => {
+      const withKinds = { generatedAt: '2026-11-15T00:00:00.000Z', engineId: 'claude' as const, summary: 's', steps: [{ title: 't', detail: 'd', format: 'text' as const, youPrepare: null, frequency: null, kind: 'product_post' as const, everyDays: 14 }], watchOut: [] }
+      expect(proposeBlock(withKinds, 'Choose an AI engine in Settings first.')).toBeNull()
+      expect(proposeBlock(null, 'Choose an AI engine in Settings first.')).toBe('Choose an AI engine in Settings first.')
+      expect(proposeBlock(null, null)).toBeNull()
+    })
+  })
+
+  describe('what each kind says about itself', () => {
+    const base = { now: NOW, changed: false, blocked: false, ...options }
+
+    it('says when the last draft was prepared and about when the next is due', () => {
+      const status = kindStatus(kind({ kind: 'product_post', enabled: true, lastDraftAt: '2026-11-03T09:00:00.000Z', nextAt: '2026-11-17T09:00:00.000Z' }), base)
+      expect(status).toEqual({ last: 'Last draft: Nov 3', next: 'Next draft: about Nov 17', problem: null, unsaved: false })
+    })
+
+    it('says "at the next check" when the due time has come (it is not later than now)', () => {
+      const soon = kindStatus(kind({ kind: 'product_post', enabled: true, nextAt: new Date(NOW).toISOString() }), base)
+      expect(soon.next).toBe(NEXT_SOON)
+      expect(NEXT_SOON).toBe('Next draft: at the next check, within a few minutes')
+      expect(kindStatus(kind({ kind: 'product_post', enabled: true, nextAt: new Date(NOW - 5 * 60_000).toISOString() }), base).next).toBe(NEXT_SOON)
+      expect(kindStatus(kind({ kind: 'product_post', enabled: true, nextAt: new Date(NOW + 1000).toISOString() }), base).next).toBe('Next draft: about Nov 15')
+    })
+
+    it('a kind that is off has no next line, and still says when it last gave a draft', () => {
+      const off = kindStatus(kind({ kind: 'showcase', lastDraftAt: '2026-10-01T09:00:00.000Z' }), base)
+      expect(off).toEqual({ last: 'Last draft: Oct 1', next: null, problem: null, unsaved: false })
+    })
+
+    it('a kind that never gave a draft has no last line', () => {
+      expect(kindStatus(kind({ kind: 'showcase', enabled: true, nextAt: new Date(NOW).toISOString() }), base).last).toBeNull()
+    })
+
+    it('shows the core\'s problem in place of the next time', () => {
+      const status = kindStatus(kind({ kind: 'own_update', enabled: true, nextAt: new Date(NOW).toISOString(), problem: 'Waiting for a note: tell what is new.' }), base)
+      expect(status.problem).toBe('Waiting for a note: tell what is new.')
+      expect(status.next).toBeNull()
+    })
+
+    it('a row the owner changed says it is not saved, and shows nothing the core said about the saved one', () => {
+      const status = kindStatus(kind({ kind: 'own_update', enabled: true, lastDraftAt: '2026-11-03T09:00:00.000Z', nextAt: '2026-11-17T09:00:00.000Z', problem: 'Waiting for a note: tell what is new.' }), { ...base, changed: true })
+      expect(status).toEqual({ last: 'Last draft: Nov 3', next: null, problem: null, unsaved: true })
+      expect(NOT_SAVED_YET).toBe('Not saved yet.')
+    })
+
+    it('on a channel the mix cannot run on, no next time is promised (the card says why once)', () => {
+      const status = kindStatus(kind({ kind: 'product_post', enabled: true, nextAt: new Date(NOW).toISOString() }), { ...base, blocked: true })
+      expect(status.next).toBeNull()
+    })
+
+    it('puts last, next and "not saved" in one line, so a narrow card breaks it between words; nothing to say gives no line', () => {
+      expect(statusLine({ last: 'Last draft: Nov 3', next: 'Next draft: about Nov 17', unsaved: false })).toBe('Last draft: Nov 3 · Next draft: about Nov 17')
+      expect(statusLine({ last: 'Last draft: Nov 3', next: null, unsaved: true })).toBe('Last draft: Nov 3 · Not saved yet.')
+      expect(statusLine({ last: null, next: null, unsaved: true })).toBe('Not saved yet.')
+      expect(statusLine({ last: null, next: NEXT_SOON, unsaved: false })).toBe(NEXT_SOON)
+      expect(statusLine({ last: null, next: null, unsaved: false })).toBeNull()
+    })
+
+    it('writes the year only when it is not the current one, and a dash for a date it cannot read', () => {
+      expect(shortDate('2026-11-03T09:00:00.000Z', NOW, options)).toBe('Nov 3')
+      expect(shortDate('2025-12-31T12:00:00.000Z', NOW, options)).toBe('Dec 31, 2025')
+      expect(shortDate('2027-01-02T12:00:00.000Z', NOW, options)).toBe('Jan 2, 2027')
+      expect(shortDate('not a date', NOW, options)).toBe('—')
+    })
+
+    it('has plain words for each kind, none of them a setting of replies', () => {
+      expect(MIX_KINDS.map((k) => KIND_WORDS[k].label)).toEqual(['Post about the product', 'My update, from your notes', 'Showcase of one feature'])
+      for (const k of MIX_KINDS) expect(KIND_WORDS[k].about).toMatch(/\.$/)
+    })
+
+    it('says what the monitor does with replies in each mode, as a line and not a setting', () => {
+      expect(Object.keys(REPLIES_WORDS).sort()).toEqual(['approval', 'auto', 'draft', 'observe'])
+      expect(repliesLine('observe')).toBe('Not part of the mix: the monitor handles them when someone writes to you. On this channel: it only watches, nothing is drafted.')
+      expect(repliesLine('draft')).toContain('saves reply drafts')
+      expect(repliesLine('approval')).toContain('your approval')
+      expect(repliesLine('auto')).toContain('automatic replies')
+    })
+
+    it('says drafts only, how many may wait, and how many wait now', () => {
+      expect(draftsOnlyLine({ cap: 3, waiting: 0 })).toBe('Drafts only: at most 3 wait for you at a time, and nothing is sent without your Approve.')
+      expect(draftsOnlyLine({ cap: 3, waiting: 2 })).toBe('Drafts only: at most 3 wait for you at a time (2 waiting now), and nothing is sent without your Approve.')
+    })
+  })
+
+  describe('the notes', () => {
+    const note = (id: string, createdAt: string, used = false, failedTries = 0): ProductUpdate => ({ id, productId: 'p', text: `note ${id}`, createdAt, usedInOpportunityId: used ? `op-${id}` : null, failedTries })
+
+    it('separates the notes that can still be removed from the last three that were used, newest first', () => {
+      const list = [note('a', '2026-11-14T10:00:00.000Z'), note('b', '2026-11-13T10:00:00.000Z', true), note('c', '2026-11-12T10:00:00.000Z'), note('d', '2026-11-11T10:00:00.000Z', true), note('e', '2026-11-10T10:00:00.000Z', true), note('f', '2026-11-09T10:00:00.000Z', true)]
+      const { open, usable, setAside, used } = splitNotes(list)
+      expect(open.map((n) => n.id)).toEqual(['a', 'c'])
+      expect(usable.map((n) => n.id)).toEqual(['a', 'c'])
+      expect(setAside).toEqual([])
+      expect(used.map((n) => n.id)).toEqual(['b', 'd', 'e'])
+    })
+
+    it('shows no used notes when there are none, and none at all for no notes', () => {
+      expect(splitNotes([])).toEqual({ open: [], usable: [], setAside: [], used: [] })
+      expect(splitNotes([note('a', '2026-11-14T10:00:00.000Z')]).used).toEqual([])
+    })
+
+    it('a note the AI gave up on is not used and not usable: it stays removable, apart from the ones the AI can still write from', () => {
+      const list = [note('a', '2026-11-14T10:00:00.000Z', false, NOTE_SET_ASIDE_AFTER), note('b', '2026-11-13T10:00:00.000Z', false, NOTE_SET_ASIDE_AFTER - 1), note('c', '2026-11-12T10:00:00.000Z', true, NOTE_SET_ASIDE_AFTER)]
+      const { open, usable, setAside, used } = splitNotes(list)
+      expect(open.map((n) => n.id)).toEqual(['a', 'b'])
+      expect(usable.map((n) => n.id)).toEqual(['b'])
+      expect(setAside.map((n) => n.id)).toEqual(['a'])
+      expect(used.map((n) => n.id)).toEqual(['c'])
+      expect(isSetAside(list[0])).toBe(true)
+      expect(isSetAside(list[1])).toBe(false)
+      // a used note is never "set aside", whatever it cost on the way
+      expect(isSetAside(list[2])).toBe(false)
+      expect(NOTE_SET_ASIDE_AFTER).toBe(3)
+      expect(SET_ASIDE_WORDS).toMatch(/Remove it/)
+    })
+
+    it('counts the notes that are not used, and the ones set aside apart', () => {
+      expect(unusedLabel(0)).toBe('none unused')
+      expect(unusedLabel(3)).toBe('3 not used')
+      expect(unusedLabel(2, 1)).toBe('2 not used, 1 set aside')
+      expect(unusedLabel(0, 2)).toBe('none unused, 2 set aside')
+    })
+
+    it('a note is one line of at most 500 characters, and an empty one is refused with a reason', () => {
+      expect(noteProblem('')).toBe('Write what you did, in a line or two.')
+      expect(noteProblem('   \n  ')).toBe('Write what you did, in a line or two.')
+      expect(noteProblem('Fixed the bug that put the birth time in the wrong place')).toBeNull()
+      expect(noteProblem('x'.repeat(NOTE_MAX))).toBeNull()
+      expect(noteProblem('x'.repeat(NOTE_MAX + 1))).toBe('A note is a line or two: at most 500 characters.')
+      expect(NOTE_MAX).toBe(500)
+    })
+
+    it('counts a note as the core keeps it: spaces and line breaks run together, ends trimmed', () => {
+      expect(normalizeNote('  Fixed   the\n bug  ')).toBe('Fixed the bug')
+      // 498 + one space (the three typed ones run together) + 1 = exactly 500 as kept; one more character is over.
+      expect(noteProblem(`${'x'.repeat(NOTE_MAX - 2)}   y`)).toBeNull()
+      expect(noteProblem(`${'x'.repeat(NOTE_MAX - 1)}   y`)).toBe('A note is a line or two: at most 500 characters.')
+    })
+
+    it('shows the count of characters only near the limit', () => {
+      expect(showNoteCount('x'.repeat(100))).toBe(false)
+      expect(showNoteCount('x'.repeat(399))).toBe(false)
+      expect(showNoteCount('x'.repeat(400))).toBe(true)
+      expect(showNoteCount('x'.repeat(500))).toBe(true)
+    })
   })
 })

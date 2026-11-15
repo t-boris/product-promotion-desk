@@ -21,7 +21,7 @@ import { collapseWhitespace } from '../passports/text'
 import { mentionsProduct } from './auto-guard'
 import { MAX_POST_CHARS, MAX_REPLY_CHARS, MAX_TITLE_CHARS } from './draft-prompt'
 import { buildReplyContext, ContextError, channelView, loadKnowledge, roleView, type ChannelView, type ClaimView, type ProductView, type ReplyContext, type RoleView } from './context'
-import { allowedHostsFor, checkDraftSafety, hostOf } from './safety'
+import { allowedHostsFor, checkDraftSafety, hostOf, hostsIn } from './safety'
 import type { FlowStore } from './store'
 
 export const DRAFT_WRITE_LABEL = 'drafts.write'
@@ -73,16 +73,6 @@ export interface DraftHelpInput {
   form: DraftFormInput
   instruction: string
   about: string
-}
-
-/** The hosts of the links in a text the owner wrote. */
-function ownHosts(text: string): string[] {
-  const hosts: string[] = []
-  for (const match of text.matchAll(/https?:\/\/[^\s)\]>"']+/gi)) {
-    const host = hostOf(match[0])
-    if (host) hosts.push(host)
-  }
-  return hosts
 }
 
 /** True when the AI writes from nothing (an empty field, or a whole new post) and false when it improves what the owner wrote. */
@@ -244,7 +234,7 @@ export function readDraftAnswer(raw: unknown, input: DraftHelpInput): Parsed<Dra
     approved: subject.approved,
     prohibited: subject.prohibited,
     // Improving the owner's text keeps the owner's own links: a link they wrote is not one the AI invented.
-    allowedHosts: [...allowedHostsFor(subject.product.website, subject.approved), ...ownHosts(`${input.form.title}\n${input.form.text}`)]
+    allowedHosts: [...allowedHostsFor(subject.product.website, subject.approved), ...hostsIn(`${input.form.title}\n${input.form.text}`)]
   })
   const problems = [...report.violations]
   // A post written from nothing stands on approved facts, as the AI's own posts do; any other text that states facts the owner's draft does not

@@ -25,7 +25,10 @@ import type {
   AutomationState,
   Channel,
   GroupChannelOption,
+  MixCard,
+  MixSetting,
   PostGroupCard,
+  ProductUpdate,
   PostGroupOutcome,
   ChannelMode,
   ChannelSettings,
@@ -306,6 +309,20 @@ export interface ApiMethods {
   'drafts.refine': [{ field: DraftHelpField; opportunityId?: Id; channelId?: Id; form: { title: string; text: string }; instruction?: string; about?: string }, DraftHelpResult]
   'publications.suggest': [{ channelId: Id }, OpportunityCard]
   'publications.create': [{ channelId: Id; draft: DraftInput }, OpportunityCard]
+
+  // content mix and the owner's own updates (DEC-033). The mix itself is saved with channels.updateSettings({ mix }).
+  /** The mix of a channel as the owner sees it: each kind, when it last gave a draft and when the next is due, what waits, what is unused. */
+  'mix.get': [{ channelId: Id }, MixCard]
+  /**
+   * The AI's proposal for the mix, from the steps of the channel's plan (asks the AI for a plan first when it has none with a rhythm).
+   * Nothing is saved or switched on: the owner edits it and saves it.
+   */
+  'mix.propose': [{ channelId: Id }, MixSetting[]]
+  /** Adds a note ("What's new") the AI may write one own-update post from. A note says what the owner did, in a line or two. */
+  'updates.add': [{ productId: Id; text: string }, ProductUpdate]
+  'updates.list': [{ productId: Id }, ProductUpdate[]]
+  /** Removes a note that was not used. */
+  'updates.remove': [{ id: Id }, void]
 
   // one post for several channels (DEC-032): a group is a wrapper, each version is an ordinary post of one channel
   /** Writes the post once for two or more channels of one product. Nothing is approved or sent. */

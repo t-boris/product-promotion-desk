@@ -1,7 +1,7 @@
 // Cross-module service contracts. Modules attach their implementation to `core.services` in `register()`
 // and consume other modules only through these interfaces, so they can be built and tested independently.
 
-import type { AgentAsk, CapabilityKey, Claim, Id, MetricSnapshot, SendAction } from '../shared/types'
+import type { AgentAsk, CapabilityKey, Channel, Claim, Id, MetricSnapshot, SendAction } from '../shared/types'
 import type { PostMissionService } from './browser-agent/post-submit'
 import type { MediaService } from './media/service'
 
@@ -62,6 +62,13 @@ export interface SendingService {
   sendDuePublications(): Promise<number>
 }
 
+/** The content mix (DEC-033): prepares the drafts that are due. It prepares drafts and nothing else: never an approval, never a send. */
+export interface MixService {
+  /** Looks at every channel that may be worked on and prepares what is due. Returns how many drafts were prepared. */
+  /** `stop` says the scan must end now (automation was paused, the app is closing); it is asked between channels. */
+  runDue(stop?: () => boolean): Promise<number>
+}
+
 /** Platform metrics snapshots (I-8). */
 export interface MetricsService {
   refresh(channelId: Id): Promise<MetricSnapshot[]>
@@ -71,6 +78,8 @@ export interface MetricsService {
 export interface ChannelsService {
   /** Marks a capability verified by actual authorized use (onboarding never publishes test messages). */
   markCapabilityVerified(channelId: Id, key: CapabilityKey, detail: string): void
+  /** Asks the AI for a plan of the channel and stores it (DEC-013); the content mix reads the rhythm of its steps (DEC-033). */
+  preparePlan?(channelId: Id): Promise<Channel>
 }
 
 /** Implemented by the channels module; read by the attention list: an AI working on an account that waits for the owner is something that needs them (DEC-018). */
@@ -93,4 +102,5 @@ export interface CoreServices {
   drafting?: DraftingService
   sending?: SendingService
   metrics?: MetricsService
+  mix?: MixService
 }

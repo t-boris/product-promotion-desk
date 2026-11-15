@@ -39,8 +39,8 @@ const knowledge = (approved: Claim[], active: string | null = 'v1'): KnowledgePr
 const PLAN = JSON.stringify({
   summary: 'Show the chart in short videos and answer comments.',
   steps: [
-    { title: 'Post a short video of a chart being made', detail: 'Screen-record the first chart from birth data to the plain-language reading.', format: 'video', youPrepare: 'A 30 second screen recording', frequency: 'once a week' },
-    { title: 'Answer comments under your posts', detail: 'Reply to questions about the reading, saying that you make the app.', format: 'other', youPrepare: null, frequency: 'daily' }
+    { title: 'Post a short video of a chart being made', detail: 'Screen-record the first chart from birth data to the plain-language reading.', format: 'video', youPrepare: 'A 30 second screen recording', frequency: 'once a week', kind: null, everyDays: null },
+    { title: 'Answer comments under your posts', detail: 'Reply to questions about the reading, saying that you make the app.', format: 'other', youPrepare: null, frequency: 'daily', kind: null, everyDays: null }
   ],
   watchOut: ['Check the account type needed for posting.', 'The platform restricts automation.']
 })
@@ -83,8 +83,8 @@ describe('channels.preparePlan', () => {
     expect(channel.plan).toMatchObject({ summary: 'Show the chart in short videos and answer comments.', engineId: w.t.engine.id })
     expect(channel.plan?.generatedAt).toBe(w.core.clock.now().toISOString())
     expect(channel.plan?.steps).toEqual([
-      { title: 'Post a short video of a chart being made', detail: 'Screen-record the first chart from birth data to the plain-language reading.', format: 'video', youPrepare: 'A 30 second screen recording', frequency: 'once a week' },
-      { title: 'Answer comments under your posts', detail: 'Reply to questions about the reading, saying that you make the app.', format: 'other', youPrepare: null, frequency: 'daily' }
+      { title: 'Post a short video of a chart being made', detail: 'Screen-record the first chart from birth data to the plain-language reading.', format: 'video', youPrepare: 'A 30 second screen recording', frequency: 'once a week', kind: null, everyDays: null },
+      { title: 'Answer comments under your posts', detail: 'Reply to questions about the reading, saying that you make the app.', format: 'other', youPrepare: null, frequency: 'daily', kind: null, everyDays: null }
     ])
     expect(channel.plan?.watchOut).toHaveLength(2)
     expect(w.changes).toContain('channels')
@@ -163,6 +163,31 @@ describe('planChannel', () => {
     return planChannel(w.t.engine, input)
   }
   const step = (extra: Record<string, unknown>) => ({ title: 'A step', detail: 'Do the thing.', format: 'video', youPrepare: null, frequency: null, ...extra })
+
+  it('reads the kind and the rhythm of a step for the content mix, and is lenient about what it does not know', async () => {
+    const plan = await ask({
+      summary: 'S',
+      steps: [
+        step({ title: 'A', kind: 'own_update', everyDays: 7 }),
+        step({ title: 'B', kind: ' Product_Post ', everyDays: 14 }),
+        step({ title: 'C', kind: 'replies', everyDays: 1 }),
+        step({ title: 'D', kind: 'sell_now', everyDays: 0 }),
+        step({ title: 'E', kind: 'showcase', everyDays: 120 }),
+        step({ title: 'F', kind: 'showcase', everyDays: 2.5 }),
+        step({ title: 'G' })
+      ],
+      watchOut: []
+    })
+    expect(plan.steps.map((s) => [s.title, s.kind, s.everyDays])).toEqual([
+      ['A', 'own_update', 7],
+      ['B', 'product_post', 14],
+      ['C', 'replies', 1],
+      ['D', null, null],
+      ['E', 'showcase', null],
+      ['F', 'showcase', null],
+      ['G', null, null]
+    ])
+  })
 
   it('drops a step the platform cannot take, keeps what is not a post, and keeps the order', async () => {
     const plan = await ask({

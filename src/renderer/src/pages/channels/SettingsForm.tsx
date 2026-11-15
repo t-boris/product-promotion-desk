@@ -15,7 +15,7 @@ export function SettingsForm({ channel }: { channel: Channel }) {
   const initial = toDraft(channel.settings)
   const [draft, setDraft] = useState<SettingsDraft>(initial)
   const [formError, setFormError] = useState<string | null>(null)
-  const [save, state] = useAction((settings: Channel['settings']) => call('channels.updateSettings', { channelId: channel.id, settings }))
+  const [save, state] = useAction((settings: Partial<Channel['settings']>) => call('channels.updateSettings', { channelId: channel.id, settings }))
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial)
   const saveVariant = useOpenForm(dirty)
   const set = <K extends keyof SettingsDraft>(key: K, value: SettingsDraft[K]): void => setDraft((d) => ({ ...d, [key]: value }))
