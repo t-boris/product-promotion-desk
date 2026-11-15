@@ -21,6 +21,8 @@ export interface PlatformPreset {
   hosts: string[]
   /** Address of a page from a handle, `{handle}` replaced: "@brand" becomes https://www.instagram.com/brand/. */
   handleUrl: string
+  /** The platform's own search for a word or a phrase, `{q}` replaced by the encoded query; on the platform's own domains. Only for the platforms the app watches through the browser (DEC-042). */
+  searchUrl?: string
   /** A typical address, shown as the placeholder of the address field. */
   example: string
   accepts: PlatformContentKind[]
@@ -37,6 +39,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     signupUrl: 'https://www.instagram.com/accounts/emailsignup/',
     hosts: ['instagram.com'],
     handleUrl: 'https://www.instagram.com/{handle}/',
+    searchUrl: 'https://www.instagram.com/explore/search/keyword/?q={q}',
     example: '@yourbrand',
     accepts: ['image', 'video'],
     hint: 'The address of the profile, e.g. https://www.instagram.com/yourbrand/ or @yourbrand.',
@@ -50,6 +53,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     signupUrl: 'https://www.facebook.com/r.php',
     hosts: ['facebook.com', 'fb.com'],
     handleUrl: 'https://www.facebook.com/{handle}',
+    searchUrl: 'https://www.facebook.com/search/posts/?q={q}',
     example: 'https://www.facebook.com/groups/yourgroup',
     accepts: ['text', 'image', 'video', 'link'],
     hint: 'The address of a page or a group, e.g. https://www.facebook.com/groups/astrologyclub.',
@@ -76,6 +80,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     signupUrl: 'https://x.com/i/flow/signup',
     hosts: ['x.com', 'twitter.com'],
     handleUrl: 'https://x.com/{handle}',
+    searchUrl: 'https://x.com/search?q={q}&f=live',
     example: '@yourbrand',
     accepts: ['text', 'image', 'video', 'link'],
     hint: 'The address of the profile, e.g. https://x.com/yourbrand or @yourbrand.',
@@ -89,6 +94,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     signupUrl: 'https://www.linkedin.com/signup',
     hosts: ['linkedin.com'],
     handleUrl: 'https://www.linkedin.com/company/{handle}/',
+    searchUrl: 'https://www.linkedin.com/search/results/content/?keywords={q}',
     example: 'https://www.linkedin.com/company/yourbrand/',
     accepts: ['text', 'image', 'video', 'link'],
     hint: 'The address of a company page or a group, e.g. https://www.linkedin.com/company/yourbrand/.',
@@ -131,6 +137,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     signsInWith: 'instagram',
     hosts: ['threads.net', 'threads.com'],
     handleUrl: 'https://www.threads.net/@{handle}',
+    searchUrl: 'https://www.threads.net/search?q={q}',
     example: '@yourbrand',
     accepts: ['text', 'image', 'video', 'link'],
     hint: 'The address of the profile, e.g. https://www.threads.net/@yourbrand or @yourbrand.',
@@ -157,6 +164,14 @@ export const presetFor = (platform: string): PlatformPreset | undefined => PLATF
 export const hostMatches = (hostname: string, domains: string[]): boolean => {
   const host = hostname.toLowerCase()
   return domains.some((domain) => host === domain || host.endsWith(`.${domain}`))
+}
+
+/** The address of the platform's own search for `query`, or null when the platform has none (or the address is not on its domains). */
+export function searchAddress(preset: PlatformPreset, query: string): string | null {
+  const text = query.replace(/\s+/g, ' ').trim().slice(0, 120)
+  if (!preset.searchUrl || !text) return null
+  const url = preset.searchUrl.replace('{q}', encodeURIComponent(text))
+  return addressOnPlatform(preset, url) ? url : null
 }
 
 /** "@brand" becomes the address of that handle on the platform; anything else is left as it was typed. */

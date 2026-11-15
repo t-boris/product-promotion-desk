@@ -41,15 +41,17 @@ export function registerFlowApi({ core, store, review, monitor, drafting, sendin
     }
   }
 
-  const setChannelStatus = (channel: Channel, status: Channel['status'], statusDetail: string): Channel => {
-    store.updateChannel(channel.id, { status, statusDetail })
+  const setChannelStatus = (channel: Channel, status: Channel['status'], statusDetail: string, nextCheckAt?: string): Channel => {
+    store.updateChannel(channel.id, { status, statusDetail, ...(nextCheckAt ? { nextCheckAt } : {}) })
     core.events.changed('attention')
     return core.repos.channel(channel.id)
   }
 
   /**
    * A channel the app cannot read is activated without a first read (DEC-034): there is nothing to read and no baseline to store. It is active
-   * so that the owner's own posts can go out; the monitor and the scheduler leave it alone, and no reply is ever prepared for it.
+   * so that the owner's own posts can go out; the monitor and the scheduler leave it alone, and no reply is ever prepared for it. One that the app
+   * looks at in the account's browser (DEC-042) is active with nothing to say about itself, and its first look is planned: the scheduler makes it
+   * (a look takes minutes, so it is not made inside this call).
    */
   const activateOwnPosts = (channel: Channel): Channel => {
     const account = core.repos.account(channel.accountId)
@@ -58,6 +60,7 @@ export function registerFlowApi({ core, store, review, monitor, drafting, sendin
     if (post && (post.status === 'unavailable' || post.status === 'restricted')) {
       throw new ApiError('publish_unavailable', `Posts cannot be made on this channel (${post.status}${post.detail ? `: ${post.detail}` : ''}).`)
     }
+    if (channel.watchedInBrowser) return setChannelStatus(channel, 'active', '', core.clock.now().toISOString())
     return setChannelStatus(channel, 'active', OWN_POSTS_DETAIL)
   }
 
@@ -100,10 +103,11 @@ export function registerFlowApi({ core, store, review, monitor, drafting, sendin
     'channels.checkNow': async ({ channelId }) => {
       const channel = store.requireChannel(channelId)
       if (channel.status === 'paused') throw new ApiError('channel_paused', 'The channel is paused. Resume it first.')
-      if (!channel.reads) throw new ApiError('not_read', 'The app does not read this channel: it is for your own posts, so there is nothing to check.')
+      if (!channel.reads && !channel.watchedInBrowser) throw new ApiError('not_read', 'The app does not read this channel: it is for your own posts, so there is nothing to check.')
       await core.runs.track('monitor', { channelId, productId: channel.productId }, async () => {
         const outcome = await monitor.runChannel(channelId)
-        const prepared = await drafting.processChannel(channelId)
+        // What the AI finds in a channel it only looks at in the browser is a finding: nothing is drafted for it (DEC-042).
+        const prepared = channel.watchedInBrowser ? { prepared: 0, needsUser: 0, autoSent: 0 } : await drafting.processChannel(channelId)
         const extra = prepared.prepared + prepared.needsUser + prepared.autoSent > 0 ? `; ${prepared.prepared} draft(s) prepared, ${prepared.autoSent} sent automatically, ${prepared.needsUser} need you` : ''
         return { status: outcome.status, summary: `${outcome.summary}${extra}` }
       })
@@ -123,7 +127,7 @@ export function registerFlowApi({ core, store, review, monitor, drafting, sendin
       // "Resume" never leaves setup: that is what Activate is for, with its checks of the account and of posting. A channel the app does not read has
       // no first read to tell a started channel from a new one, so a started one is told by having left setup.
       const next = channel.baselineDoneAt || (channel.status !== 'setup' && !channel.reads) ? 'active' : 'setup'
-      return setChannelStatus(channel, next, next === 'active' && !channel.reads ? OWN_POSTS_DETAIL : '')
+      return setChannelStatus(channel, next, next === 'active' && !channel.reads && !channel.watchedInBrowser ? OWN_POSTS_DETAIL : '')
     },
 
     // ───────────── review queues ─────────────

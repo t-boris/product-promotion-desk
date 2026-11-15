@@ -4,9 +4,10 @@
 // (nothing to approve or send), so it has no state in the opportunity maps: it has its own row, which carries the `id` and `at` every list
 // of the Feed needs, so the selection (`useListSelection`, `selectionAfterKey`) and the day groups work on either kind of row.
 
-import type { Channel, FindingCard, FindingCounts, FindingLabel, FindingStage, Id, IsoTime } from '../../../../shared/types'
+import type { FindingCard, FindingCounts, FindingLabel, FindingStage, Id, IsoTime } from '../../../../shared/types'
 import { rowExcerpt } from '../inbox/inbox-groups'
 import { LINE_LIMIT, type FeedEmpty, type FeedRow, type FeedState } from './feed-filter'
+import { isWatchable, type ReadingWays } from './watching-line'
 
 // ───────────── The tabs ─────────────
 
@@ -155,8 +156,8 @@ export function unseenToMark(selected: FindingRow | undefined, already: Readonly
 /** Why the Noted list shows nothing, when it does not: the Feed's own reasons, or that the AI has found nothing worth noting yet. */
 export type NotedEmpty = FeedEmpty | 'nothing_noted'
 
-export function notedEmptyKind(channels: readonly Pick<Channel, 'reads'>[], all: readonly FindingRow[], visible: readonly FindingRow[]): NotedEmpty | null {
+export function notedEmptyKind(channels: readonly ReadingWays[], all: readonly FindingRow[], visible: readonly FindingRow[]): NotedEmpty | null {
   if (channels.length === 0) return 'no_channels'
   if (all.length > 0) return visible.length === 0 ? 'no_match' : null
-  return channels.some((channel) => channel.reads) ? 'nothing_noted' : 'nothing_read'
+  return channels.some(isWatchable) ? 'nothing_noted' : 'nothing_read'
 }

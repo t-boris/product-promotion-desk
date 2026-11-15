@@ -51,6 +51,8 @@ export interface ChannelSeed {
   createdAt?: string
   /** false: a channel the app does not read (DEC-034). */
   reads?: boolean
+  /** 'reddit' unless a test needs another platform (DEC-042: instagram is looked at in the browser). */
+  platform?: string
 }
 
 export function seedChannel(core: Core, seed: ChannelSeed): Channel {
@@ -60,12 +62,13 @@ export function seedChannel(core: Core, seed: ChannelSeed): Channel {
     .prepare(
       `INSERT INTO channels (id, product_id, account_id, platform, connector_id, target, url, mode, settings_json,
          capabilities_json, status, status_detail, next_check_at, reads, created_at)
-       VALUES (?, ?, ?, 'reddit', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       id,
       seed.productId,
       seed.accountId,
+      seed.platform ?? 'reddit',
       seed.connectorId ?? 'fake',
       target,
       `https://fake.example/${target}`,

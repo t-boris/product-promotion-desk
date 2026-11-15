@@ -35,9 +35,12 @@ export const REPLIES_WORDS: Record<ChannelMode, string> = {
   auto: 'it sends only the simple automatic replies you allowed, the rest waits for you'
 }
 
-/** The replies line of the mix: what the monitor does on this channel, or that there is nothing to reply to (DEC-034). */
-export const repliesLine = (channel: Pick<Channel, 'mode' | 'reads'>): string =>
-  channel.reads ? `Not part of the mix: the monitor handles them when someone writes to you. On this channel: ${REPLIES_WORDS[channel.mode]}.` : 'Not on this platform: the app does not read it, so there is nothing to reply to. The mix is only for your own posts.'
+/** The replies line of the mix: what the monitor does on this channel, or that there is nothing to reply to (DEC-034; a channel the AI watches in the browser is still never replied to, DEC-042). */
+export const repliesLine = (channel: Pick<Channel, 'mode' | 'reads' | 'watchedInBrowser'>): string => {
+  if (channel.reads) return `Not part of the mix: the monitor handles them when someone writes to you. On this channel: ${REPLIES_WORDS[channel.mode]}.`
+  const why = channel.watchedInBrowser ? 'the AI only watches it in the browser and never replies' : 'the app does not read it'
+  return `Not on this platform: ${why}, so there is nothing to reply to. The mix is only for your own posts.`
+}
 
 // ───────────── the form ─────────────
 

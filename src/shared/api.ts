@@ -183,7 +183,7 @@ export interface ApiMethods {
    */
   'accounts.pageReport': [{ accountId: Id }, PageReport | null]
   /** `channelId` names the channel of a `join` task (required for it, refused for the other kinds). */
-  'agent.canStart': [{ accountId: Id; kind: AgentTaskKind; channelId?: Id }, AgentReadiness]
+  'agent.canStart': [{ accountId: Id; kind: AgentTaskKind | 'watch'; channelId?: Id }, AgentReadiness]
   'agent.start': [{ accountId: Id; kind: AgentTaskKind; channelId?: Id }, AgentRun]
   'agent.state': [{ accountId: Id }, AgentRun | null]
   'agent.stop': [{ accountId: Id }, AgentRun | null]

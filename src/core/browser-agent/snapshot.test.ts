@@ -128,7 +128,7 @@ describe('snapshotScript: the page as a list of labelled elements', () => {
       { ref: 'e3', role: 'input:checkbox', name: 'I agree', checked: true },
       { ref: 'e4', role: 'select', name: 'Month', value: 'January', options: ['January', 'February'] },
       { ref: 'e5', role: 'button', name: 'Submit', disabled: true },
-      { ref: 'e6', role: 'link', name: 'Log in', to: '/login/' }
+      { ref: 'e6', role: 'link', name: 'Log in', to: '/login/', href: 'https://www.facebook.com/login/' }
     ])
     expect(JSON.stringify(s)).not.toContain('hunter2')
   })
@@ -285,6 +285,16 @@ describe('parseSnapshot and its lines', () => {
   it('lists the elements one per line the way MarkView does', () => {
     const s = runSnapshot({ interactive: [{ tag: 'input', attrs: { type: 'text' }, placeholder: 'First name', value: 'Natal', required: true }, { tag: 'select', label: 'Month', options: ['January', 'February'] }] })
     expect(renderElements(s)).toBe('[e1] input:text "First name" value="Natal" (required)\n[e2] select "Month" value="January" options: January | February')
+  })
+
+  it('keeps the whole address of a link (any scheme, left to the reader) and lists it whole only when asked (DEC-042)', () => {
+    const s = runSnapshot({ interactive: [{ tag: 'a', attrs: { href: '/p/Cx123/?utm=1' }, text: 'A post' }, { tag: 'a', attrs: { href: 'https://other.example/x' }, text: 'Away' }, { tag: 'a', attrs: { href: `/${'a'.repeat(600)}` }, text: 'Too long' }] })
+    expect(s.elements.map((e) => e.href)).toEqual(['https://www.facebook.com/p/Cx123/?utm=1', 'https://other.example/x', undefined])
+    expect(renderElements(s).split('\n')[0]).toBe('[e1] link "A post" -> /p/Cx123/')
+    expect(renderElements(s, true).split('\n')[0]).toBe('[e1] link "A post" -> https://www.facebook.com/p/Cx123/?utm=1')
+    expect(renderElements(s, true).split('\n')[2]).toMatch(/^\[e3\] link "Too long" -> \/a+/)
+    const parsed = parseSnapshot({ url: 'u', title: 't', text: '', alerts: [], humanCheck: '', elements: [{ ref: 'e1', role: 'link', name: 'a', href: 7 }, { ref: 'e2', role: 'link', name: 'b', href: 'x'.repeat(501) }] })
+    expect(parsed?.elements.map((e) => e.href)).toEqual([undefined, undefined])
   })
 
 })

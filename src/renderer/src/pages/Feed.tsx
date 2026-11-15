@@ -11,7 +11,7 @@ import { ChannelAction } from './feed/ChannelAction'
 import { FeedDetail } from './feed/FeedDetail'
 import { FeedList } from './feed/FeedList'
 import { ReadingNotes } from './feed/ReadingNotes'
-import { FEED_SOURCES, buildFeedRows, emptyKind, groupByDay, readableChannels, sourceCounts, stateCounts, visibleRows, widestFilter, type FeedRow, type FeedSourceFilter } from './feed/feed-filter'
+import { FEED_SOURCES, buildFeedRows, channelOptionLabel, emptyKind, groupByDay, nothingFoundWords, readableChannels, sourceCounts, stateCounts, visibleRows, watchedChannels, widestFilter, type FeedRow, type FeedSourceFilter } from './feed/feed-filter'
 import { FEED_TABS, isFindingRow, judgedLine, notedCount, notedEmptyKind, opportunityListOf, unseenNoticeCount, visibleFindings, type FeedTab, type ListedRow } from './feed/finding-rows'
 import { FindingDetail } from './feed/FindingDetail'
 import { useFeedCards } from './feed/useFeedCards'
@@ -112,6 +112,8 @@ function FeedScreen({ product }: { product: Product }) {
   // The one filled button belongs to the selected item while it offers a main action.
   const main = useMainActionOwner(selectedId ? [selectedId] : [])
 
+  // A check is for every channel the app looks at, in the browser too (DEC-042); the older discussions are read through a connector only.
+  const checkable = watchedChannels(channels, channelId)
   const readable = readableChannels(channels, channelId)
   const olderChannel = olderFor !== null ? readableChannels(channels, null).find((c) => c.id === olderFor) : undefined
   const viewingOlder = olderChannel !== undefined
@@ -184,7 +186,7 @@ function FeedScreen({ product }: { product: Product }) {
           </Button>
         ) : (
           <>
-            <ChannelAction label={checking.busy ? 'Checking…' : 'Check now'} channels={readable} onPick={check} disabled={checking.busy} testId="check-now" />
+            <ChannelAction label={checking.busy ? 'Checking…' : 'Check now'} channels={checkable} onPick={check} disabled={checking.busy} testId="check-now" />
             <ChannelAction label="Older discussions" variant="quiet" channels={readable} onPick={setOlderFor} testId="feed-older" />
           </>
         )
@@ -259,8 +261,7 @@ function FeedScreen({ product }: { product: Product }) {
                   <option value="">All channels</option>
                   {channels.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.target}
-                      {c.reads ? '' : ' (not read)'}
+                      {channelOptionLabel(c)}
                     </option>
                   ))}
                 </select>
@@ -308,7 +309,7 @@ function FeedScreen({ product }: { product: Product }) {
 
           {empty === 'nothing_found' && (
             <EmptyState fill art="inbox" title="Nothing found yet">
-              New posts the AI finds worth a reply, new comments, replies to you and mentions show up here. A new channel starts with a first look at the posts of the last days (Settings, First look); after that only what is new is read. Press Check now to look again.
+              {nothingFoundWords(channels)}
             </EmptyState>
           )}
 

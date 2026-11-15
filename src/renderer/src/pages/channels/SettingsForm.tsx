@@ -4,13 +4,14 @@ import { AiField } from '../../assist/AiField'
 import { useAssistBlock } from '../../assist/useAssistBlock'
 import { call, useAction } from '../../hooks'
 import { Button, Card, ErrorNote, Field, useOpenForm } from '../../ui'
-import { clockTime } from '../feed/watching-line'
-import { CUSTOM_INTERVAL, CUSTOM_INTERVAL_HINT, INTERVAL_HINT, LOOK_BACK_HINT, intervalChoice, intervalChoices, isIntervalPreset, lookBackChoices, lookBackDoneHint } from './check-schedule'
+import { clockTime, isWatchable } from '../feed/watching-line'
+import { CUSTOM_INTERVAL, CUSTOM_INTERVAL_HINT, INTERVAL_HINT, LOOK_BACK_HINT, intervalChoice, intervalChoices, isIntervalPreset, lookBackChoices, lookBackDoneHint, queriesHint } from './check-schedule'
 import { fromDraft, toDraft, type SettingsDraft } from './form'
 
 /**
  * Language, style, topics, queries, how often to check and how far back the first look goes (a preset or a number of minutes; DEC-040), limits, automatic
- * categories (a channel the app does not read has no interval, first look, topics, queries or automatic replies), daily summary and notifications. "Save settings" is the filled
+ * categories (a channel the app does not read has no interval, first look, topics, queries or automatic replies; one the AI watches in the browser has all but the
+ * automatic replies, which need a connector, DEC-042), daily summary and notifications. "Save settings" is the filled
  * button only while the form has unsaved changes (then the setup stage's own button steps back to a bezel, see `useOpenForm`). The AI can
  * write or improve the style, the topics and the queries; numbers and switches that decide what goes out stay the owner's choice.
  */
@@ -30,9 +31,10 @@ export function SettingsForm({ channel }: { channel: Channel }) {
     if (value !== CUSTOM_INTERVAL) set('checkIntervalMin', value)
   }
   const { blocked } = useAssistBlock({ productId: channel.productId })
-  // What only matters when the app reads the channel (how often, how far back the first look goes, what to watch, which replies may go out by themselves) is left out of a channel
-  // it does not read (DEC-034); the values stay in the draft, so saving never drops them.
+  // What only matters when the app looks at the channel (how often, how far back the first look goes, what to watch) is left out of a channel it neither reads nor watches in the
+  // browser (DEC-034, DEC-042), and which replies may go out by themselves is left out of every channel without a connector; the values stay in the draft, so saving never drops them.
   const reads = channel.reads
+  const watched = isWatchable(channel)
   /** What is written in the other text fields of the form, so the AI fits the field into the channel's settings. */
   const around = (skip: 'style' | 'topics' | 'queries'): { label: string; text: string }[] =>
     (
@@ -61,7 +63,7 @@ export function SettingsForm({ channel }: { channel: Channel }) {
         <Field label="Languages" hint="Language codes, separated by commas, e.g. en, es.">
           <input className="input" value={draft.languages} onChange={(e) => set('languages', e.target.value)} data-testid="settings-languages" />
         </Field>
-        {reads && (
+        {watched && (
           <Field label="Check every" hint={INTERVAL_HINT}>
             <select className="input" value={intervalChoice(draft.checkIntervalMin, customInterval)} onChange={(e) => pickInterval(e.target.value)} data-testid="settings-interval-choice">
               {intervalChoices().map((choice) => (
@@ -72,12 +74,12 @@ export function SettingsForm({ channel }: { channel: Channel }) {
             </select>
           </Field>
         )}
-        {reads && intervalChoice(draft.checkIntervalMin, customInterval) === CUSTOM_INTERVAL && (
+        {watched && intervalChoice(draft.checkIntervalMin, customInterval) === CUSTOM_INTERVAL && (
           <Field label="Custom (minutes)" hint={CUSTOM_INTERVAL_HINT}>
             <input className="input" inputMode="numeric" value={draft.checkIntervalMin} onChange={(e) => set('checkIntervalMin', e.target.value)} data-testid="settings-interval" />
           </Field>
         )}
-        {reads && (
+        {watched && (
           <Field label="First look" hint={lookedBackAt ? lookBackDoneHint(clockTime(lookedBackAt, { now: new Date() })) : LOOK_BACK_HINT}>
             <select className="input" value={draft.lookBackDays} onChange={(e) => set('lookBackDays', e.target.value)} disabled={lookedBackAt !== null} data-testid="settings-look-back">
               {lookBackChoices(initial.lookBackDays).map((choice) => (
@@ -93,12 +95,12 @@ export function SettingsForm({ channel }: { channel: Channel }) {
             {(id) => <textarea id={id} className="input short" value={draft.style} onChange={(e) => set('style', e.target.value)} data-testid="settings-style" />}
           </AiField>
         </div>
-        {reads && (
+        {watched && (
           <div className="wide form-pair">
             <AiField label="Topics to watch" hint="One per line or separated by commas." field="channel.topics" channelId={channel.id} value={draft.topics} onChange={(text) => set('topics', text)} around={around('topics')} blocked={blocked} testId="settings-topics-ai">
               {(id) => <textarea id={id} className="input short" value={draft.topics} onChange={(e) => set('topics', e.target.value)} data-testid="settings-topics" />}
             </AiField>
-            <AiField label="Search queries" hint="One per line or separated by commas." field="channel.queries" channelId={channel.id} value={draft.queries} onChange={(text) => set('queries', text)} around={around('queries')} blocked={blocked} testId="settings-queries-ai">
+            <AiField label="Search queries" hint={queriesHint(channel)} field="channel.queries" channelId={channel.id} value={draft.queries} onChange={(text) => set('queries', text)} around={around('queries')} blocked={blocked} testId="settings-queries-ai">
               {(id) => <textarea id={id} className="input short" value={draft.queries} onChange={(e) => set('queries', e.target.value)} data-testid="settings-queries" />}
             </AiField>
           </div>

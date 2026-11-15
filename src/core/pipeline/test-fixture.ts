@@ -63,6 +63,8 @@ export interface ChannelOptions {
   connectorId?: string
   /** false: a channel the app does not read (DEC-034). */
   reads?: boolean
+  /** The channel's platform; 'fake' unless a test needs a platform with a preset (DEC-042: instagram is looked at in the browser). */
+  platform?: string
 }
 
 export interface World extends TestCore {
@@ -172,12 +174,13 @@ export function makeWorld(options: WorldOptions = {}): World {
     core.db
       .prepare(
         `INSERT INTO channels (id, product_id, account_id, platform, connector_id, target, url, mode, settings_json, capabilities_json, status, status_detail, baseline_done_at, last_run_at, last_success_at, next_check_at, reads, created_at)
-         VALUES (?, ?, ?, 'fake', ?, ?, ?, ?, ?, ?, ?, '', ?, NULL, NULL, NULL, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, NULL, NULL, NULL, ?, ?)`
       )
       .run(
         id,
         opts.productId ?? productId,
         accountId,
+        opts.platform ?? 'fake',
         opts.connectorId ?? 'fake',
         target,
         `https://fake.test/${target}`,

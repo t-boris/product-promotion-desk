@@ -115,7 +115,8 @@ describe('onboarding a subreddit end to end (REQ-002)', () => {
     const channel = await core.router.call('channels.connect', { productId: product.id, accountId: instagram.id, target: '@natalmystic' })
     core.db.prepare("UPDATE channels SET status = 'needs_user', status_detail = 'Account needs you' WHERE id = ?").run(channel.id)
     const assessed = await core.router.call('channels.assess', { channelId: channel.id })
-    expect(assessed).toMatchObject({ status: 'active', statusDetail: 'Your own posts only.', baselineDoneAt: null })
+    // Instagram is looked at in the account's browser (DEC-042): it is back to work with nothing to say about itself, and still has no first read.
+    expect(assessed).toMatchObject({ status: 'active', statusDetail: '', baselineDoneAt: null, reads: false, watchedInBrowser: true })
   })
 
   it('an assessment tells a channel again whether the app reads it (DEC-034)', async () => {

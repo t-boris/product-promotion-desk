@@ -9,6 +9,7 @@ import type { Channel, Finding, FindingCard, OpportunityCard } from '../shared/t
 import { FeedList } from '../renderer/src/pages/feed/FeedList'
 import { FindingDetail } from '../renderer/src/pages/feed/FindingDetail'
 import { ReadingNotes } from '../renderer/src/pages/feed/ReadingNotes'
+import { BROWSER_WATCH_NOTE, OWN_POSTS_NO_CHECK } from '../renderer/src/pages/channels/own-posts'
 import { buildFeedRows } from '../renderer/src/pages/feed/feed-filter'
 import { findingRowOf } from '../renderer/src/pages/feed/finding-rows'
 import { SegmentedControl } from '../renderer/src/ui'
@@ -203,6 +204,7 @@ describe('ReadingNotes: the channels\' own watching lines', () => {
       id,
       target: `r/${id}`,
       reads: true,
+      watchedInBrowser: false,
       status: 'active',
       statusDetail: '',
       lastRunAt: '2026-11-15T09:05:00.000Z',
@@ -242,5 +244,76 @@ describe('ReadingNotes: the channels\' own watching lines', () => {
   it('says paused automation in each channel\'s line', () => {
     const out = notes([channel('alpha'), channel('beta')], { ...context, automationPaused: true })
     expect(out.match(/Not watching: automation is paused/g)).toHaveLength(2)
+  })
+  describe('a channel the AI watches in the browser (DEC-042)', () => {
+    const insta = (over: Partial<Channel> = {}): Channel => channel('insta', { target: '@brand', reads: false, watchedInBrowser: true, ...over })
+    const unread = (): Channel => channel('own', { target: '@own', reads: false })
+
+    it('says in one quiet sentence that the AI watches it like a person, and replies to nothing', () => {
+      const out = notes([insta()], context)
+      expect(out).toContain('data-testid="feed-browser-watch"')
+      expect(out).toContain(BROWSER_WATCH_NOTE)
+      expect(out).toContain('Needs Claude Code as the AI engine.')
+      // It is not one the app does not read.
+      expect(out).not.toContain('feed-unread')
+      expect(out).not.toContain('own-posts-no-check')
+      expect(out).not.toContain('Not read by the app')
+    })
+
+    it('says it before the application has said whether automation is paused: the sentence does not depend on it', () => {
+      expect(notes([insta()], null)).toContain(BROWSER_WATCH_NOTE)
+    })
+
+    it('lists it under "Each channel" beside a channel a connector reads, with "in the browser" in its line', () => {
+      const out = notes([channel('alpha'), insta()], context)
+      expect(out).toContain('Each channel')
+      expect(out).toContain('<strong>r/alpha</strong> · Watching every ~3 h · last 10:05 · next ≈14:12')
+      expect(out).toContain('<strong>@brand</strong> · Watching every ~3 h in the browser · last 10:05 · next ≈14:12')
+      expect(out).toContain(BROWSER_WATCH_NOTE)
+    })
+
+    it('says the usual reason in its line when it is not watched', () => {
+      expect(notes([channel('alpha'), insta({ status: 'paused' })], context)).toContain('<strong>@brand</strong> · Not watching: this channel is paused')
+      expect(notes([channel('alpha'), insta()], { ...context, automationPaused: true })).toContain('<strong>@brand</strong> · Not watching: automation is paused')
+    })
+
+    it('lists two browser channels under "Each channel", and only the channel that is chosen when one is', () => {
+      const two = [insta(), insta({ id: 'threads', target: '@brand_threads' })]
+      expect(notes(two, context)).toContain('feed-watching-threads')
+      const chosen = notes(two, context, 'threads')
+      expect(chosen).toContain('feed-watching-threads')
+      expect(chosen).not.toContain('feed-watching-insta')
+      expect(chosen).toContain(BROWSER_WATCH_NOTE)
+    })
+
+    it('names a channel that is neither read nor watched as before, and not the one the AI watches', () => {
+      const out = notes([insta(), unread()], context)
+      expect(out).toContain('Not read by the app: @own.')
+      expect(out).not.toContain('@brand.')
+      expect(out).toContain(BROWSER_WATCH_NOTE)
+      // One watched channel is not several: no list.
+      expect(out).not.toContain('Each channel')
+    })
+
+    it('tells the chosen channel\'s own story: watched, or not read', () => {
+      const both = [insta(), unread()]
+      const watched = notes(both, context, 'insta')
+      expect(watched).toContain(BROWSER_WATCH_NOTE)
+      expect(watched).not.toContain('own-posts-no-check')
+      const left = notes(both, context, 'own')
+      expect(left).toContain('data-testid="own-posts-no-check"')
+      expect(left).toContain(`${OWN_POSTS_NO_CHECK}</p>`)
+      expect(left).not.toContain(BROWSER_WATCH_NOTE)
+    })
+
+    it('says nothing of it when the product has none, and names a channel a connector reads by nothing', () => {
+      expect(notes([channel('alpha'), unread()], context)).not.toContain('feed-browser-watch')
+      expect(notes([channel('alpha')], context)).toBe('')
+    })
+
+    it('does not report the abilities of a channel without a connector as a reading problem', () => {
+      const withCapabilities = insta({ capabilities: [{ key: 'read_posts', status: 'unavailable', detail: 'No connector.', checkedAt: null }] })
+      expect(notes([withCapabilities], context)).not.toContain('feed-reading-problems')
+    })
   })
 })

@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ChannelStatus } from '../shared/types'
 import { FAILURE_DETAIL_PREFIX } from '../shared/types'
-import { NOT_READ_LINE, clockTime, failureReason, intervalWords, productWatching, watchingLine, type WatchedChannel, type WatchingContext } from '../renderer/src/pages/feed/watching-line'
+import { NOT_READ_LINE, clockTime, failureReason, intervalWords, isWatchable, isWatchedInBrowser, productWatching, watchingLine, type WatchedChannel, type WatchingContext } from '../renderer/src/pages/feed/watching-line'
 
 // Sunday 15 Nov 2026, 12:00 UTC = 13:00 in UTC+1.
 const NOW = new Date('2026-11-15T12:00:00.000Z')
@@ -13,7 +13,7 @@ const ctx = (over: Partial<WatchingContext> = {}): WatchingContext => ({ now: NO
 
 function channel(over: Partial<WatchedChannel> & { checkIntervalMin?: number } = {}): WatchedChannel {
   const { checkIntervalMin = 180, ...rest } = over
-  return { status: 'active', statusDetail: '', reads: true, lastRunAt: '2026-11-15T09:05:00.000Z', nextCheckAt: '2026-11-15T13:12:00.000Z', settings: { checkIntervalMin }, ...rest }
+  return { status: 'active', statusDetail: '', reads: true, watchedInBrowser: false, lastRunAt: '2026-11-15T09:05:00.000Z', nextCheckAt: '2026-11-15T13:12:00.000Z', settings: { checkIntervalMin }, ...rest }
 }
 
 describe('intervalWords', () => {
@@ -266,5 +266,68 @@ describe('productWatching', () => {
       'Not watching any channel: 1 paused, 1 needs you, 1 failing, 1 being set up'
     )
     expect(productWatching([channel({ status: 'needs_user' }), channel({ status: 'needs_user' })], ctx())?.text).toBe('Not watching any channel: 2 need you')
+  })
+})
+
+// A channel the app has no connector for may be watched in the account's browser by the AI (DEC-042): the same schedule, said as such.
+describe('a channel watched in the browser (DEC-042)', () => {
+  const browser = (over: Partial<WatchedChannel> & { checkIntervalMin?: number } = {}): WatchedChannel => channel({ reads: false, watchedInBrowser: true, ...over })
+
+  it('tells a channel read through a connector from one watched in the browser, and from one that is neither', () => {
+    expect(isWatchedInBrowser({ reads: false, watchedInBrowser: true })).toBe(true)
+    expect(isWatchedInBrowser({ reads: false, watchedInBrowser: false })).toBe(false)
+    // A connector reads it: the flag cannot make it a browser channel.
+    expect(isWatchedInBrowser({ reads: true, watchedInBrowser: true })).toBe(false)
+    expect(isWatchedInBrowser({ reads: true, watchedInBrowser: false })).toBe(false)
+    expect(isWatchable({ reads: true, watchedInBrowser: false })).toBe(true)
+    expect(isWatchable({ reads: false, watchedInBrowser: true })).toBe(true)
+    expect(isWatchable({ reads: false, watchedInBrowser: false })).toBe(false)
+  })
+
+  it('has the normal schedule line, with the words "in the browser"', () => {
+    const line = watchingLine(browser(), ctx())
+    expect(line).toEqual({ kind: 'watching', watching: true, text: 'Watching every ~3 h in the browser · last 10:05 · next ≈14:12', schedule: 'Every ~3 h' })
+    expect(watchingLine(browser({ checkIntervalMin: 1440, lastRunAt: null, nextCheckAt: null }), ctx()).text).toBe('Watching once a day in the browser · last never · next soon')
+  })
+
+  it('leaves the how-often out for an interval it cannot say, and keeps the browser', () => {
+    const line = watchingLine(browser({ checkIntervalMin: 0 }), ctx())
+    expect(line.text).toBe('Watching in the browser · last 10:05 · next ≈14:12')
+    expect(line.schedule).toBe('On a schedule')
+  })
+
+  it('says a channel read through a connector is not read in the browser, even if the flag said so', () => {
+    expect(watchingLine(channel({ watchedInBrowser: true }), ctx()).text).toBe('Watching every ~3 h · last 10:05 · next ≈14:12')
+  })
+
+  it('says the usual reason when it is not watched, the same words as for any channel', () => {
+    for (const over of [{ status: 'setup' }, { status: 'paused' }, { status: 'needs_user', statusDetail: 'Sign in again.' }, { status: 'error' }, { status: 'active', statusDetail: `${FAILURE_DETAIL_PREFIX} (2 times in a row): timeout. Retrying in 10 min.` }] as Partial<WatchedChannel>[]) {
+      const asBrowser = watchingLine(browser(over), ctx())
+      expect(asBrowser).toEqual(watchingLine(channel(over), ctx()))
+      expect(asBrowser.watching).toBe(false)
+      expect(asBrowser.text).not.toContain('in the browser')
+    }
+    expect(watchingLine(browser(), ctx({ automationPaused: true }))).toEqual({ kind: 'automation_paused', watching: false, text: 'Not watching: automation is paused', schedule: 'Not watching: automation is paused' })
+  })
+
+  it('is not watched when the app neither reads it nor watches it in the browser: that line is what it was', () => {
+    for (const status of ['setup', 'active', 'paused', 'needs_user', 'error'] as ChannelStatus[]) {
+      expect(watchingLine(channel({ reads: false, watchedInBrowser: false, status }), ctx())).toEqual({ kind: 'not_read', watching: false, text: 'The app does not read this channel', schedule: 'The app does not read this channel' })
+    }
+  })
+
+  it('counts it as watched in the line of a product', () => {
+    expect(productWatching([browser()], ctx())).toEqual({ watching: true, text: 'Watching every ~3 h in the browser · last 10:05 · next ≈14:12' })
+    expect(productWatching([browser(), channel({ reads: false })], ctx())?.text).toBe('Watching every ~3 h in the browser · last 10:05 · next ≈14:12')
+    expect(productWatching([browser(), channel()], ctx())?.text).toBe('Watching 2 channels · next ≈14:12')
+    expect(productWatching([browser({ nextCheckAt: '2026-11-15T15:00:00.000Z' }), channel({ nextCheckAt: '2026-11-15T13:30:00.000Z' })], ctx())?.text).toBe('Watching 2 channels · next ≈14:30')
+    expect(productWatching([browser(), channel(), channel({ reads: false })], ctx())?.text).toBe('Watching 2 channels · next ≈14:12')
+  })
+
+  it('says why none is watched, a paused browser channel included, and what is left alone', () => {
+    expect(productWatching([browser({ status: 'paused' }), channel({ status: 'paused' })], ctx())?.text).toBe('Not watching any channel: 2 paused')
+    expect(productWatching([browser({ status: 'paused' })], ctx())).toEqual({ watching: false, text: 'Not watching: this channel is paused' })
+    expect(productWatching([browser(), channel()], ctx({ automationPaused: true }))).toEqual({ watching: false, text: 'Not watching: automation is paused' })
+    expect(productWatching([browser(), channel({ status: 'paused' })], ctx())?.text).toBe('Watching 1 of 2 channels · next ≈14:12')
   })
 })

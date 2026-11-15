@@ -199,7 +199,7 @@ describe('the tools of a join mission', () => {
   })
 
   it('cannot be made a post mission as well', () => {
-    expect(() => setup({ post: { authority: new TestAuthority(new TicketAuthority(new FakeClock()), { kind: 'post', title: 't', text: 'x', link: null, destination: 'https://fake.test/r/test' }), minGapMs: 0 } as never })).toThrow(/never both/)
+    expect(() => setup({ post: { authority: new TestAuthority(new TicketAuthority(new FakeClock()), { kind: 'post', title: 't', text: 'x', link: null, destination: 'https://fake.test/r/test' }), minGapMs: 0 } as never })).toThrow(/never more than one/)
   })
 })
 

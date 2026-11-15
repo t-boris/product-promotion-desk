@@ -1,8 +1,8 @@
 import type { Channel, Id } from '../../../../shared/types'
 import { Hint, More } from '../../ui'
 import { channelHref } from '../../route'
-import { OWN_POSTS_NO_CHECK } from '../channels/own-posts'
-import { readingProblems, readableChannels, unreadChannels, type FeedSourceFilter } from './feed-filter'
+import { BROWSER_WATCH_NOTE, OWN_POSTS_NO_CHECK } from '../channels/own-posts'
+import { browserWatchedChannels, readingProblems, unreadChannels, watchedChannels, type FeedSourceFilter } from './feed-filter'
 import { watchingLine, type WatchingContext } from './watching-line'
 import './feed.css'
 
@@ -12,19 +12,21 @@ const SHOWN = 3
 /**
  * Why a source may be empty although the channel is there, said on the Feed where the owner is looking: an ability the source depends on is
  * unavailable or needs the owner (the reason is the channel's own words, from its capability), or the app does not read the channel at
- * all (DEC-034). Where it is fixed is one link away. With several channels the app reads, each one's own watching line (how often, when
- * last, when next, or why not: DEC-040) is one click away under "Each channel"; the header line of the Feed is the product's one line.
+ * all (DEC-034). Where it is fixed is one link away. With several channels the app looks at (through a connector or, where it has none, in the
+ * browser: DEC-042), each one's own watching line (how often, when last, when next, or why not: DEC-040) is one click away under "Each channel";
+ * the header line of the Feed is the product's one line. A channel the AI watches in the browser is told apart by one quiet sentence.
  * Nothing is shown while every channel in view reads well and there is only one.
  */
 export function ReadingNotes({ channels, source, channelId, watching }: { channels: readonly Channel[]; source: FeedSourceFilter; channelId: Id | null; watching: WatchingContext | null }) {
   const problems = readingProblems(channels, { source, channelId })
   const unread = unreadChannels(channels, channelId)
   // The channel's own line is for a product that has several channels to tell apart; with one the header line says it.
-  const own = watching !== null && readableChannels(channels, null).length > 1 ? readableChannels(channels, channelId) : []
+  const own = watching !== null && watchedChannels(channels, null).length > 1 ? watchedChannels(channels, channelId) : []
+  const inBrowser = browserWatchedChannels(channels, channelId)
   // One channel with a problem is fixed on its own page (Status shows the abilities); several are fixed from the list.
   const problemChannels = new Set(problems.map((problem) => problem.channelId))
   const fixHref = problemChannels.size === 1 ? channelHref([...problemChannels][0]) : '#/channels'
-  if (problems.length === 0 && unread.length === 0 && own.length === 0) return null
+  if (problems.length === 0 && unread.length === 0 && own.length === 0 && inBrowser.length === 0) return null
   return (
     <div className="feed-notes" data-testid="feed-notes">
       {problems.length > 0 && (
@@ -58,6 +60,7 @@ export function ReadingNotes({ channels, source, channelId, watching }: { channe
           </ul>
         </More>
       )}
+      {inBrowser.length > 0 && <Hint data-testid="feed-browser-watch">{BROWSER_WATCH_NOTE}</Hint>}
       {unread.length > 0 &&
         (channelId !== null ? (
           <Hint data-testid="own-posts-no-check">{OWN_POSTS_NO_CHECK}</Hint>

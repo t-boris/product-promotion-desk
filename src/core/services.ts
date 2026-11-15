@@ -3,6 +3,7 @@
 
 import type { AgentAsk, CapabilityKey, Channel, Claim, Id, MetricSnapshot, SendAction } from '../shared/types'
 import type { PostMissionService } from './browser-agent/post-submit'
+import type { WatchMissionService } from './browser-agent/watch'
 import type { MediaService } from './media/service'
 
 /** Implemented by the passports module (I-1); consumed by drafting and sending (I-5, I-6). */
@@ -33,6 +34,11 @@ export interface MonitorOutcome {
   /** Short human-readable result shown in the run log. */
   summary: string
   newOpportunities: number
+  /**
+   * Only for `skipped`: when the channel is tried again, when that is sooner than its regular interval (a look at a channel that could not start, DEC-042). Nothing
+   * failed, so no backoff is counted.
+   */
+  retryAt?: string
 }
 
 /** Discussion collection (I-4). A failure of one channel is returned as an outcome and never thrown. */
@@ -95,6 +101,8 @@ export interface CoreServices {
   agent?: AgentQuestions
   /** Implemented by the channels module; the send flow runs an approved publication through it when the owner chose the AI browser (B1). */
   postMissions?: PostMissionService
+  /** Implemented by the channels module; the monitor's watch flow has the AI look at a channel the app has no connector for, in the account's browser (DEC-042). */
+  watchMissions?: WatchMissionService
   channels?: ChannelsService
   knowledge?: KnowledgeProvider
   pipeline?: PipelineHooks

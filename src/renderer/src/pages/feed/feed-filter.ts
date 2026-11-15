@@ -8,6 +8,7 @@ import type { CapabilityKey, CapabilityStatus, Channel, Id, IsoTime, Opportunity
 import { CAPABILITY_LABEL, CAPABILITY_STATUS_LABEL } from '../channels/capability-words'
 import { rowExcerpt } from '../inbox/inbox-groups'
 import { STATE_TONE } from '../review/labels'
+import { isWatchable, isWatchedInBrowser, type ReadingWays } from './watching-line'
 
 // ───────────── Source, state ─────────────
 
@@ -303,19 +304,38 @@ export function groupByDay(rows: readonly { id: Id; at: IsoTime }[], today: stri
 
 // ───────────── What is read ─────────────
 
-/** The channels a check or the older discussions are for: those the app reads, the chosen one alone when one is chosen. */
+/** The channels the app reads through a connector: the older discussions are for those, the chosen one alone when one is chosen. */
 export function readableChannels(channels: readonly Channel[], channelId: Id | null): Channel[] {
   return channels.filter((channel) => channel.reads && (channelId === null || channel.id === channelId))
 }
 
+/** The channels a check is for: those the app looks at itself, through a connector or in the browser (DEC-042), the chosen one alone when one is chosen. */
+export function watchedChannels(channels: readonly Channel[], channelId: Id | null): Channel[] {
+  return channels.filter((channel) => isWatchable(channel) && (channelId === null || channel.id === channelId))
+}
+
+/** The channels in view the AI watches in the browser (DEC-042): it judges what it sees there and replies to nothing. */
+export function browserWatchedChannels(channels: readonly Channel[], channelId: Id | null): Channel[] {
+  return channels.filter((channel) => isWatchedInBrowser(channel) && (channelId === null || channel.id === channelId))
+}
+
 /**
- * The channels in view that the app does not read at all (DEC-034): they take the owner's own posts and nothing else. With every channel
+ * The channels in view that the app neither reads nor watches (DEC-034): they take the owner's own posts and nothing else. With every channel
  * of the product unread, and none chosen, there is nothing to tell them from: the empty state says it (`emptyKind`) and none is named here.
  */
 export function unreadChannels(channels: readonly Channel[], channelId: Id | null): Channel[] {
-  const unread = channels.filter((channel) => !channel.reads && (channelId === null || channel.id === channelId))
+  const unread = channels.filter((channel) => !isWatchable(channel) && (channelId === null || channel.id === channelId))
   return channelId === null && unread.length === channels.length ? [] : unread
 }
+
+/** The channel as the channel pop-up names it: its address, and how the app looks at it where that is not through a connector. */
+export const channelOptionLabel = (channel: Pick<Channel, 'target'> & ReadingWays): string => {
+  if (channel.reads) return channel.target
+  return `${channel.target}${isWatchedInBrowser(channel) ? ' (in the browser)' : ' (not read)'}`
+}
+
+/** No channel of the product is read through a connector, and the AI watches at least one in the browser: nothing there is replied to. */
+export const onlyWatchedInBrowser = (channels: readonly ReadingWays[]): boolean => !channels.some((channel) => channel.reads) && channels.some(isWatchedInBrowser)
 
 /** The abilities a source depends on. */
 const SOURCE_ABILITIES: Record<FeedSourceFilter, readonly CapabilityKey[]> = {
@@ -361,14 +381,22 @@ export function readingProblems(channels: readonly Channel[], scope: { source: F
 
 // ───────────── Empty, and the words of an item ─────────────
 
-/** Why the list shows nothing, when it does not: no channel, none the app reads, nothing found yet, or filters that exclude everything. */
+/** Why the list shows nothing, when it does not: no channel, none the app reads or watches, nothing found yet, or filters that exclude everything. */
 export type FeedEmpty = 'no_channels' | 'nothing_read' | 'nothing_found' | 'no_match'
 
-export function emptyKind(channels: readonly Pick<Channel, 'reads'>[], rows: readonly FeedRow[], visible: readonly FeedRow[]): FeedEmpty | null {
+export function emptyKind(channels: readonly ReadingWays[], rows: readonly FeedRow[], visible: readonly FeedRow[]): FeedEmpty | null {
   if (channels.length === 0) return 'no_channels'
   if (rows.length > 0) return visible.length === 0 ? 'no_match' : null
-  return channels.some((channel) => channel.reads) ? 'nothing_found' : 'nothing_read'
+  return channels.some(isWatchable) ? 'nothing_found' : 'nothing_read'
 }
+
+/** What an empty "To decide" list says. */
+export const NOTHING_FOUND = 'New posts the AI finds worth a reply, new comments, replies to you and mentions show up here. A new channel starts with a first look at the posts of the last days (Settings, First look); after that only what is new is read. Press Check now to look again.'
+
+/** What it says when the AI only watches in the browser: nothing it reads there is replied to, so the list stays empty. */
+export const NOTHING_FOUND_BROWSER_ONLY = 'Nothing is replied to from what the AI reads in the browser, so there is nothing to decide here. What it finds worth knowing about is listed in Noted. Press Check now to look again.'
+
+export const nothingFoundWords = (channels: readonly ReadingWays[]): string => (onlyWatchedInBrowser(channels) ? NOTHING_FOUND_BROWSER_ONLY : NOTHING_FOUND)
 
 /** What the action bar says in place of buttons when the item has none: it is out, in flight, or put away for good. */
 export function barNote(state: OpportunityState): string | null {

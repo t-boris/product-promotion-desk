@@ -20,7 +20,18 @@ import { productLabels } from '../renderer/src/pages/products/product-labels'
 import { deleteBlocker, nextProductStep, passportStatus, websiteHost } from '../renderer/src/pages/products/product-status'
 import { isMirroredSource } from '../renderer/src/pages/products/source-view'
 import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block'
-import { OWN_POSTS_NO_CHECK, OWN_POSTS_NO_METRICS, OWN_POSTS_READING, OWN_POSTS_WHAT_IT_DOES, activateHint } from '../renderer/src/pages/channels/own-posts'
+import {
+  BROWSER_WATCH_NOTE,
+  BROWSER_WATCH_QUERIES_HINT,
+  BROWSER_WATCH_READING,
+  BROWSER_WATCH_WHAT_IT_DOES,
+  OWN_POSTS_NO_CHECK,
+  OWN_POSTS_NO_METRICS,
+  OWN_POSTS_READING,
+  OWN_POSTS_WHAT_IT_DOES,
+  activateHint,
+  ownPostsWhatItDoes
+} from '../renderer/src/pages/channels/own-posts'
 import { activateBlocker, canActivate, canPause, neverAssessed, setupStage } from '../renderer/src/pages/channels/setup-stage'
 import { afterCreateNote, nextStep } from '../renderer/src/pages/channels/next-step'
 import { chosenVia, contactLine, eligibleVia, viaBlocker, viaOption } from '../renderer/src/pages/channels/account-link'
@@ -1013,9 +1024,48 @@ describe('a channel the app does not read (DEC-034)', () => {
   })
 
   it('tells what Activate does: a baseline where the app reads, only switching on where it does not', () => {
-    expect(activateHint({ reads: true })).toMatch(/baseline/)
-    expect(activateHint({ reads: false })).toMatch(/Nothing is read/)
-    expect(activateHint({ reads: false })).not.toMatch(/baseline/)
+    expect(activateHint({ reads: true, watchedInBrowser: false })).toMatch(/baseline/)
+    expect(activateHint({ reads: false, watchedInBrowser: false })).toMatch(/Nothing is read/)
+    expect(activateHint({ reads: false, watchedInBrowser: false })).not.toMatch(/baseline/)
+  })
+})
+
+describe('a channel the AI watches in the browser (DEC-042): its words', () => {
+  const browser = { reads: false, watchedInBrowser: true }
+  const unread = { reads: false, watchedInBrowser: false }
+
+  it('says it is watched like a person by the AI, that it needs Claude Code, and that nothing is replied to, measured or posted from it', () => {
+    expect(BROWSER_WATCH_NOTE).toBe('Watched in the browser by the AI like a person: it scrolls, judges each post against your goals and notes what matters here. It never replies or posts from this. Needs Claude Code as the AI engine.')
+    for (const words of [BROWSER_WATCH_READING, BROWSER_WATCH_WHAT_IT_DOES, BROWSER_WATCH_NOTE, BROWSER_WATCH_QUERIES_HINT]) {
+      expect(words).toMatch(/^[A-Z]/)
+      expect(words).toMatch(/[.]$/)
+      expect(words).not.toMatch(/\b(baseline|Next check|Last run)\b/)
+    }
+    expect(BROWSER_WATCH_READING).toMatch(/Claude Code/)
+    expect(BROWSER_WATCH_READING).toMatch(/Nothing is replied to or measured/)
+    expect(BROWSER_WATCH_QUERIES_HINT).toBe('The AI also searches the platform for these (the first three).')
+  })
+
+  it('still says it takes only the owner\'s own posts, sent on the owner\'s press, and that the app cannot read the page back', () => {
+    expect(BROWSER_WATCH_WHAT_IT_DOES).toMatch(/Your own posts only/)
+    expect(BROWSER_WATCH_WHAT_IT_DOES).toMatch(/press Send/)
+    expect(BROWSER_WATCH_WHAT_IT_DOES).toMatch(/no reply is prepared/)
+    expect(BROWSER_WATCH_WHAT_IT_DOES).toMatch(/tell it whether the post is up/)
+    expect(BROWSER_WATCH_WHAT_IT_DOES).not.toMatch(/does not read/)
+  })
+
+  it('chooses the card words: the browser ones only where the AI watches the channel', () => {
+    expect(ownPostsWhatItDoes(browser)).toBe(BROWSER_WATCH_WHAT_IT_DOES)
+    expect(ownPostsWhatItDoes(unread)).toBe(OWN_POSTS_WHAT_IT_DOES)
+    expect(ownPostsWhatItDoes({ reads: true, watchedInBrowser: true })).toBe(OWN_POSTS_WHAT_IT_DOES)
+  })
+
+  it('tells what Activate does: it starts the watching and makes no baseline', () => {
+    const hint = activateHint(browser)
+    expect(hint).toMatch(/watching it in the browser/)
+    expect(hint).toMatch(/No baseline/)
+    expect(hint).not.toBe(activateHint(unread))
+    expect(activateHint({ reads: true, watchedInBrowser: true })).toMatch(/Reads the existing discussions/)
   })
 })
 
@@ -2223,16 +2273,24 @@ describe('the content mix card of a channel (DEC-033)', () => {
 
     it('says what the monitor does with replies in each mode, as a line and not a setting', () => {
       expect(Object.keys(REPLIES_WORDS).sort()).toEqual(['approval', 'auto', 'draft', 'observe'])
-      expect(repliesLine({ mode: 'observe', reads: true })).toBe('Not part of the mix: the monitor handles them when someone writes to you. On this channel: it only watches, nothing is drafted.')
-      expect(repliesLine({ mode: 'draft', reads: true })).toContain('saves reply drafts')
-      expect(repliesLine({ mode: 'approval', reads: true })).toContain('your approval')
-      expect(repliesLine({ mode: 'auto', reads: true })).toContain('automatic replies')
+      expect(repliesLine({ mode: 'observe', reads: true, watchedInBrowser: false })).toBe('Not part of the mix: the monitor handles them when someone writes to you. On this channel: it only watches, nothing is drafted.')
+      expect(repliesLine({ mode: 'draft', reads: true, watchedInBrowser: false })).toContain('saves reply drafts')
+      expect(repliesLine({ mode: 'approval', reads: true, watchedInBrowser: false })).toContain('your approval')
+      expect(repliesLine({ mode: 'auto', reads: true, watchedInBrowser: false })).toContain('automatic replies')
     })
 
     it('says there is nothing to reply to on a channel the app does not read, whatever its mode (DEC-034)', () => {
       for (const mode of Object.keys(REPLIES_WORDS) as (keyof typeof REPLIES_WORDS)[]) {
-        expect(repliesLine({ mode, reads: false })).toBe('Not on this platform: the app does not read it, so there is nothing to reply to. The mix is only for your own posts.')
+        expect(repliesLine({ mode, reads: false, watchedInBrowser: false })).toBe('Not on this platform: the app does not read it, so there is nothing to reply to. The mix is only for your own posts.')
       }
+    })
+
+    it('says the same of a channel the AI only watches in the browser, without saying the app does not read it (DEC-042)', () => {
+      for (const mode of Object.keys(REPLIES_WORDS) as (keyof typeof REPLIES_WORDS)[]) {
+        expect(repliesLine({ mode, reads: false, watchedInBrowser: true })).toBe('Not on this platform: the AI only watches it in the browser and never replies, so there is nothing to reply to. The mix is only for your own posts.')
+      }
+      // A connector reads it: the replies are the monitor's, whatever the flag says.
+      expect(repliesLine({ mode: 'observe', reads: true, watchedInBrowser: true })).toContain('the monitor handles them')
     })
 
     it('says drafts only, how many may wait, and how many wait now', () => {

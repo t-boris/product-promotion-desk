@@ -1,6 +1,9 @@
 // What the owner chooses on the Settings screen about watching a channel: how often it is checked and how far back its first look goes (DEC-040).
 // Pure text and numbers, so the choices are tested from src/main like the rest of the screens' logic.
 
+import { isWatchedInBrowser, type ReadingWays } from '../feed/watching-line'
+import { BROWSER_WATCH_QUERIES_HINT } from './own-posts'
+
 export interface Choice {
   /** What the draft holds (a number as text), or CUSTOM_INTERVAL. */
   value: string
@@ -37,6 +40,10 @@ export const LOOK_BACK_HINT = 'On the first check, look at the posts of this man
 /** Once the first look is made the choice cannot be used again: a channel looks back once. */
 export const lookBackDoneHint = (when: string): string => `Done${when ? ` ${when}` : ''}. A channel looks back once, on its first check; after that only new posts are read.`
 export const CUSTOM_INTERVAL_HINT = 'From 5 minutes to a week (10080).'
+
+/** Under the search queries: how they are written, and for a channel the AI watches in the browser that they are searched there too (DEC-042). */
+export const QUERIES_HINT = 'One per line or separated by commas.'
+export const queriesHint = (channel: ReadingWays): string => (isWatchedInBrowser(channel) ? `${QUERIES_HINT} ${BROWSER_WATCH_QUERIES_HINT}` : QUERIES_HINT)
 
 export const lookBackLabel = (days: number): string => (days === 0 ? 'None' : days === 1 ? '1 day' : `${days} days`)
 

@@ -81,6 +81,29 @@ export class FindingStore {
     return info.changes === 1
   }
 
+  /**
+   * Stores a post the AI looked at in the account's browser and judged there (DEC-042): its verdict is final, so a notice is `read` and a skip is `title`,
+   * as the triage's own are. A post of the channel that has a finding keeps it. Returns whether a row was added. No opportunity, no draft: the finding
+   * carries none.
+   */
+  addWatched(productId: Id, channelId: Id, item: { url: string; title: string; author: string; label: 'notice' | 'skip'; relation: string }, firstLook: boolean): boolean {
+    const now = this.now()
+    const info = this.db
+      .prepare(
+        `INSERT INTO findings (id, product_id, channel_id, external_id, title, url, author, posted_at, stage, label, relation, first_look, opportunity_id, seen_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, NULL, ?, ?)
+         ON CONFLICT (channel_id, external_id) DO NOTHING`
+      )
+      .run(newId(), productId, channelId, item.url, oneLine(item.title, MAX_STORED_TITLE), item.url, oneLine(item.author, MAX_STORED_AUTHOR), item.label === 'skip' ? 'title' : 'read', item.label, item.relation, firstLook ? 1 : 0, now, now)
+    return info.changes === 1
+  }
+
+  /** The addresses of the channel's most recent findings (the ones a look in the browser is told it judged already), newest first. */
+  recentUrls(channelId: Id, limit: number): string[] {
+    const rows = this.db.prepare('SELECT external_id AS id FROM findings WHERE channel_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?').all(channelId, limit) as { id: string }[]
+    return rows.map((row) => row.id)
+  }
+
   /** Whether this post of the channel has a finding already, whatever its stage. */
   has(channelId: Id, externalId: string): boolean {
     return this.db.prepare('SELECT 1 FROM findings WHERE channel_id = ? AND external_id = ?').get(channelId, externalId) !== undefined

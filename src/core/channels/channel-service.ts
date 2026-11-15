@@ -2,7 +2,7 @@
 
 import { ApiError } from '../../shared/api'
 import type { Account, CapabilityKey, Channel, ChannelMode, ChannelSettings, Product } from '../../shared/types'
-import { DEFAULT_CHANNEL_SETTINGS } from '../../shared/types'
+import { BROWSER_WATCH_PLATFORMS, DEFAULT_CHANNEL_SETTINGS } from '../../shared/types'
 import { nextCheckFor } from '../pipeline/scheduler-timing'
 import type { Core } from '../core'
 import { UNIVERSAL_CONNECTOR_ID } from '../connector-registry'
@@ -168,7 +168,8 @@ export class ChannelService {
       // The reason it needed the person is gone; monitoring resumes if it had started, else it awaits activation. The answer just given
       // decides, not the stored one: a channel that is read now has no baseline yet and awaits activation, a channel that is not read never will.
       patch.status = channel.baselineDoneAt || !reads ? 'active' : 'setup'
-      patch.statusDetail = reads ? '' : OWN_POSTS_DETAIL
+      // A channel the app only looks at in the browser says nothing about itself (DEC-042); one for own posts only says so.
+      patch.statusDetail = reads || BROWSER_WATCH_PLATFORMS.includes(channel.platform) ? '' : OWN_POSTS_DETAIL
     }
     if ((patch.status ?? channel.status) === 'setup') patch.statusDetail = 'Assessed. Review the settings, then activate the channel when ready.'
     const fallback = modeAfterAssessment({ mode: channel.mode, capabilities })

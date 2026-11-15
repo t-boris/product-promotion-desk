@@ -1,4 +1,5 @@
 import type { Core } from '../core'
+import { BrowserWatchFlow } from './browser-watch'
 import { DraftCheck } from './draft-check'
 import { DraftHelp } from './draft-help'
 import { DraftingFlow } from './drafting'
@@ -31,7 +32,7 @@ export function registerFlow(core: Core): void {
   const sending = new SendingFlow(core, store, gate, review, ingestor, watch)
   const findings = new FindingStore(core)
   const triage = new TriageFlow(core, store, findings, ingestor)
-  const monitor = new MonitorFlow(core, store, ingestor, watch, triage)
+  const monitor = new MonitorFlow(core, store, ingestor, watch, triage, new BrowserWatchFlow(core, store, findings, ingestor))
   const drafting = new DraftingFlow(core, store, review, sending)
   const publications = new PublicationsFlow(core, store)
 

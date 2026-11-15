@@ -268,7 +268,10 @@ describe('the words of a finding', () => {
 })
 
 describe('what to say when the Noted list is empty', () => {
-  const reading = [{ reads: true }, { reads: false }]
+  const reading = [
+    { reads: true, watchedInBrowser: false },
+    { reads: false, watchedInBrowser: false }
+  ]
   const rows = [rowOf({ id: 'a', channelId: 'c1' })]
 
   it('names the lack of a channel before anything else', () => {
@@ -281,7 +284,15 @@ describe('what to say when the Noted list is empty', () => {
   })
 
   it('says there is nothing to read when no channel of the product is read', () => {
-    expect(notedEmptyKind([{ reads: false }], [], [])).toBe('nothing_read')
+    expect(notedEmptyKind([{ reads: false, watchedInBrowser: false }], [], [])).toBe('nothing_read')
+  })
+
+  it('says nothing was noted yet, not that nothing is read, when the AI watches a channel in the browser (DEC-042)', () => {
+    const browser = [{ reads: false, watchedInBrowser: true }]
+    expect(notedEmptyKind(browser, [], [])).toBe('nothing_noted')
+    expect(notedEmptyKind([...browser, { reads: false, watchedInBrowser: false }], [], [])).toBe('nothing_noted')
+    expect(notedEmptyKind(browser, rows, [])).toBe('no_match')
+    expect(notedEmptyKind(browser, rows, rows)).toBeNull()
   })
 
   it('says nothing matches when notices exist and the channel chosen has none', () => {

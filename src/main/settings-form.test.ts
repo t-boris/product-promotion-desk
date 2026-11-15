@@ -11,12 +11,14 @@ import {
   INTERVAL_PRESETS,
   LOOK_BACK_DAYS,
   LOOK_BACK_HINT,
+  QUERIES_HINT,
   intervalChoice,
   intervalChoices,
   isIntervalPreset,
   lookBackChoices,
   lookBackDoneHint,
-  lookBackLabel
+  lookBackLabel,
+  queriesHint
 } from '../renderer/src/pages/channels/check-schedule'
 import { fromDraft, toDraft, type SettingsDraft } from '../renderer/src/pages/channels/form'
 
@@ -152,5 +154,15 @@ describe('Settings: the form keeps what it does not show', () => {
     const settings = settingsOf(toDraft({ ...DEFAULT_CHANNEL_SETTINGS, checkIntervalMin: 90, lookBackDays: 14 }))
     expect(settings).toMatchObject({ checkIntervalMin: 90, lookBackDays: 14 })
     expect('mix' in settings).toBe(false)
+  })
+})
+
+describe('Settings: the hint under the search queries (DEC-042)', () => {
+  it('says the AI also searches the platform for them, only for a channel it watches in the browser', () => {
+    expect(queriesHint({ reads: false, watchedInBrowser: true })).toBe('One per line or separated by commas. The AI also searches the platform for these (the first three).')
+    expect(queriesHint({ reads: true, watchedInBrowser: false })).toBe(QUERIES_HINT)
+    expect(queriesHint({ reads: false, watchedInBrowser: false })).toBe('One per line or separated by commas.')
+    // A connector reads the channel: the flag does not make it a browser channel.
+    expect(queriesHint({ reads: true, watchedInBrowser: true })).toBe(QUERIES_HINT)
   })
 })

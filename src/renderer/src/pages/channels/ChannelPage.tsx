@@ -5,6 +5,7 @@ import { call, useAction } from '../../hooks'
 import { CHANNEL_TABS, channelHref, type ChannelTab } from '../../route'
 import { tabAfterKey } from '../../tab-keys'
 import { Button, ErrorNote, Hint, ObjectHeader } from '../../ui'
+import { isWatchable } from '../feed/watching-line'
 import { CapabilityCard } from './CapabilityCard'
 import { ChannelMixCard } from './ChannelMixCard'
 import { ChannelPlanCard } from './ChannelPlanCard'
@@ -62,7 +63,8 @@ export function ChannelPage({
           <>
             {/* The channel's own page in the browser of its account, to look around signed in as it (DEC-028). */}
             {account && <OpenAccountBrowser key={account.id} account={account} open={() => call('accounts.openBrowser', { accountId: account.id, url: channel.url })} testId="channel-browse" />}
-            {channel.reads && (
+            {/* A check is for a channel the app looks at: through a connector or, where it has none, in the browser (DEC-042). */}
+            {isWatchable(channel) && (
               <Button onClick={() => void checkNow()} disabled={checking.busy} data-testid="check-now">
                 {checking.busy ? 'Checking…' : 'Check now'}
               </Button>

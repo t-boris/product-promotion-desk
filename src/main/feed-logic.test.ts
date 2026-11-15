@@ -10,10 +10,14 @@ import {
   FEED_STATES,
   LINE_LIMIT,
   NEW_POST_NOTE,
+  NOTHING_FOUND,
+  NOTHING_FOUND_BROWSER_ONLY,
   PROPOSAL_LABEL,
   SOURCE_LABEL,
   barNote,
+  browserWatchedChannels,
   buildFeedRows,
+  channelOptionLabel,
   dayLabel,
   emptyKind,
   feedCountLabel,
@@ -24,6 +28,8 @@ import {
   lineOf,
   matchesFilter,
   mergeCards,
+  nothingFoundWords,
+  onlyWatchedInBrowser,
   proposalOf,
   readableChannels,
   readingProblems,
@@ -33,6 +39,7 @@ import {
   statesOf,
   unreadChannels,
   visibleRows,
+  watchedChannels,
   whoOf,
   widestFilter,
   type FeedFilter,
@@ -84,9 +91,9 @@ function card(seed: Seed): OpportunityCard {
 
 const rowOf = (seed: Seed): FeedRow => feedRowOf(card(seed))
 
-function channel(id: string, options: { reads?: boolean; target?: string; capabilities?: Partial<Record<CapabilityKey, CapabilityStatus>>; detail?: string } = {}): Channel {
+function channel(id: string, options: { reads?: boolean; watchedInBrowser?: boolean; target?: string; capabilities?: Partial<Record<CapabilityKey, CapabilityStatus>>; detail?: string } = {}): Channel {
   const capabilities: Capability[] = Object.entries(options.capabilities ?? {}).map(([key, status]) => ({ key: key as CapabilityKey, status: status as CapabilityStatus, detail: options.detail ?? `why ${key}`, checkedAt: null }))
-  return { id, target: options.target ?? `r/${id}`, reads: options.reads ?? true, capabilities } as unknown as Channel
+  return { id, target: options.target ?? `r/${id}`, reads: options.reads ?? true, watchedInBrowser: options.watchedInBrowser ?? false, capabilities } as unknown as Channel
 }
 
 describe('the three lists', () => {
@@ -395,6 +402,70 @@ describe('what is read', () => {
     expect(unreadChannels([], null)).toEqual([])
   })
 
+  describe('a channel the AI watches in the browser (DEC-042)', () => {
+    const ig = channel('ig', { target: '@brand', reads: false, watchedInBrowser: true, capabilities: { read_inbox: 'unavailable', read_posts: 'unavailable' } })
+    const mixed = [...channels, ig]
+
+    it('is checked, but is not one whose older discussions are read: a connector does that', () => {
+      expect(watchedChannels(mixed, null).map((c) => c.id)).toEqual(['c1', 'c2', 'ig'])
+      expect(watchedChannels(mixed, 'ig').map((c) => c.id)).toEqual(['ig'])
+      expect(watchedChannels(mixed, 'c3')).toEqual([])
+      expect(watchedChannels(mixed, 'c1').map((c) => c.id)).toEqual(['c1'])
+      expect(readableChannels(mixed, null).map((c) => c.id)).toEqual(['c1', 'c2'])
+      expect(readableChannels(mixed, 'ig')).toEqual([])
+      expect(watchedChannels([], null)).toEqual([])
+    })
+
+    it('is named as watched in the browser, the chosen one alone when one is chosen', () => {
+      expect(browserWatchedChannels(mixed, null).map((c) => c.id)).toEqual(['ig'])
+      expect(browserWatchedChannels(mixed, 'ig').map((c) => c.id)).toEqual(['ig'])
+      expect(browserWatchedChannels(mixed, 'c1')).toEqual([])
+      expect(browserWatchedChannels(mixed, 'c3')).toEqual([])
+      // A connector reads it: the flag does not make it a browser channel.
+      expect(browserWatchedChannels([channel('x', { reads: true, watchedInBrowser: true })], null)).toEqual([])
+    })
+
+    it('is not "not read": the channels the app leaves alone are the ones that are neither', () => {
+      expect(unreadChannels(mixed, null).map((c) => c.id)).toEqual(['c3'])
+      expect(unreadChannels(mixed, 'ig')).toEqual([])
+      expect(unreadChannels(mixed, 'c3').map((c) => c.id)).toEqual(['c3'])
+      // Only browser channels and one unread: the unread one is named. Every channel unread: none is, as before.
+      expect(unreadChannels([ig, channel('u', { reads: false })], null).map((c) => c.id)).toEqual(['u'])
+      expect(unreadChannels([ig], null)).toEqual([])
+      expect(unreadChannels([channel('u1', { reads: false }), channel('u2', { reads: false })], null)).toEqual([])
+    })
+
+    it('says in the channel pop-up how the app looks at the channel', () => {
+      expect(channelOptionLabel(channel('c1'))).toBe('r/c1')
+      expect(channelOptionLabel(channel('c3', { target: '@brand', reads: false }))).toBe('@brand (not read)')
+      expect(channelOptionLabel(ig)).toBe('@brand (in the browser)')
+      expect(channelOptionLabel(channel('x', { target: 'r/x', reads: true, watchedInBrowser: true }))).toBe('r/x')
+    })
+
+    it('knows the product is watched in the browser only when no connector reads any channel of it', () => {
+      expect(onlyWatchedInBrowser([ig])).toBe(true)
+      expect(onlyWatchedInBrowser([ig, channel('u', { reads: false })])).toBe(true)
+      expect(onlyWatchedInBrowser(mixed)).toBe(false)
+      expect(onlyWatchedInBrowser([channel('u', { reads: false })])).toBe(false)
+      expect(onlyWatchedInBrowser([])).toBe(false)
+      expect(NOTHING_FOUND_BROWSER_ONLY).toMatch(/Noted/)
+      expect(NOTHING_FOUND_BROWSER_ONLY).toMatch(/Check now/)
+    })
+
+    it('says an empty To decide list stays empty only when nothing is replied to anywhere', () => {
+      expect(nothingFoundWords([ig])).toBe(NOTHING_FOUND_BROWSER_ONLY)
+      expect(nothingFoundWords(mixed)).toBe(NOTHING_FOUND)
+      expect(nothingFoundWords(channels)).toBe(NOTHING_FOUND)
+      expect(NOTHING_FOUND).toMatch(/replies to you and mentions/)
+      expect(NOTHING_FOUND).not.toMatch(/in the browser/)
+    })
+
+    it('leaves the abilities of a channel without a connector out of the reading problems', () => {
+      expect(readingProblems(mixed, { source: 'reply_to_me', channelId: 'ig' })).toEqual([])
+      expect(readingProblems(mixed, { source: 'all', channelId: null }).map((p) => p.channelId)).toEqual(['c2'])
+    })
+  })
+
   it('says why a source is empty: the ability it depends on, in the channel\'s own words', () => {
     const problems = readingProblems(channels, { source: 'reply_to_me', channelId: null })
     expect(problems).toEqual([
@@ -428,15 +499,35 @@ describe('what is read', () => {
 })
 
 describe('emptyKind', () => {
-  const read = [{ reads: true }, { reads: false }]
+  const read = [
+    { reads: true, watchedInBrowser: false },
+    { reads: false, watchedInBrowser: false }
+  ]
   const some = [rowOf({ id: 'a' })]
 
   it('says why nothing is listed', () => {
     expect(emptyKind([], [], [])).toBe('no_channels')
-    expect(emptyKind([{ reads: false }, { reads: false }], [], [])).toBe('nothing_read')
+    expect(
+      emptyKind(
+        [
+          { reads: false, watchedInBrowser: false },
+          { reads: false, watchedInBrowser: false }
+        ],
+        [],
+        []
+      )
+    ).toBe('nothing_read')
     expect(emptyKind(read, [], [])).toBe('nothing_found')
     expect(emptyKind(read, some, [])).toBe('no_match')
     expect(emptyKind(read, some, some)).toBeNull()
+  })
+
+  it('is not "nothing read" for a product whose channels are watched in the browser (DEC-042)', () => {
+    const browser = { reads: false, watchedInBrowser: true }
+    expect(emptyKind([browser], [], [])).toBe('nothing_found')
+    expect(emptyKind([browser, { reads: false, watchedInBrowser: false }], [], [])).toBe('nothing_found')
+    expect(emptyKind([browser], some, [])).toBe('no_match')
+    expect(emptyKind([browser], some, some)).toBeNull()
   })
 
   it('names the lack of a channel before anything else', () => {

@@ -14,6 +14,7 @@ const MAX_VALUE = 60
 const MAX_OPTIONS = 40
 const MAX_TEXT = 2500
 const MAX_ALERTS = 8
+const MAX_HREF = 500
 
 export interface SnapshotElement {
   /** "e12": the label the page carries in data-ppd-ref. */
@@ -30,6 +31,8 @@ export interface SnapshotElement {
   options?: string[]
   /** Where a link goes (path, or host for another site). */
   to?: string
+  /** The whole address of a link, as the page has it (any scheme: the reader decides what it accepts). Absent for a longer one. Only the watch mission reads it (DEC-042). */
+  href?: string
   /** Pressing it submits its form natively: a submit button of a form, an input of type submit or image. */
   submits?: boolean
   /** The form the element is in (the nearest form or role=form around it, shadow roots crossed), numbered by this look only: two elements of one look share it when they share the form. Absent when it is in none. */
@@ -128,7 +131,7 @@ export function snapshotScript(): string {
     const name = once(clean(el.getAttribute('aria-label') || labelledBy || label || el.innerText || el.placeholder || el.title || el.name || (type === 'submit' || type === 'button' ? el.value : ''), ${MAX_NAME}));
     const item = { ref: ref, role: role, name: name };
     if (tag === 'a') {
-      try { const u = new URL(el.getAttribute('href'), location.href); item.to = u.host === location.host ? u.pathname.slice(0, 40) : u.host; } catch (e) { /* not a link we can describe */ }
+      try { const u = new URL(el.getAttribute('href'), location.href); item.to = u.host === location.host ? u.pathname.slice(0, 40) : u.host; if (u.href.length <= ${MAX_HREF}) item.href = u.href; } catch (e) { /* not a link we can describe */ }
     }
     if (type === 'checkbox' || type === 'radio' || roleAttr === 'checkbox' || roleAttr === 'radio' || roleAttr === 'switch') item.checked = el.checked === true || el.getAttribute('aria-checked') === 'true';
     else if ((tag === 'input' || tag === 'textarea') && type !== 'password' && type !== 'submit' && type !== 'button' && el.value) item.value = clean(el.value, ${MAX_VALUE});
@@ -226,6 +229,7 @@ export function parseSnapshot(raw: unknown): PageSnapshot | null {
     if (e.required === true) element.required = true
     if (Array.isArray(e.options)) element.options = e.options.slice(0, MAX_OPTIONS).map((o) => str(o, 40)).filter((o) => o !== '')
     if (typeof e.to === 'string') element.to = str(e.to, 40)
+    if (typeof e.href === 'string' && e.href.length <= MAX_HREF) element.href = e.href.trim()
     if (e.submits === true) element.submits = true
     if (typeof e.form === 'number' && Number.isInteger(e.form) && e.form >= 1 && e.form <= 999) element.form = e.form
     if (typeof e.parent === 'string' && /^t\d_[a-z0-9]{1,13}$/.test(e.parent)) element.parent = e.parent
@@ -244,13 +248,16 @@ export function parseSnapshot(raw: unknown): PageSnapshot | null {
   }
 }
 
-/** One line per element, the way MarkView lists them: `[e12] input:text "First name" value="Natal" (required)`. */
-export function renderElements(snapshot: PageSnapshot): string {
+/**
+ * One line per element, the way MarkView lists them: `[e12] input:text "First name" value="Natal" (required)`. `wholeLinks` lists a link by its whole
+ * address instead of its path cut short (the watch mission records and opens posts by their addresses, DEC-042).
+ */
+export function renderElements(snapshot: PageSnapshot, wholeLinks = false): string {
   if (snapshot.elements.length === 0) return '(nothing to use on this page)'
   return snapshot.elements
     .map((e) => {
       let line = `[${e.ref}] ${e.role} "${e.name}"`
-      if (e.to) line += ` -> ${e.to}`
+      if (e.to) line += ` -> ${wholeLinks && e.href ? e.href : e.to}`
       if (e.checked !== undefined) line += e.checked ? ' [checked]' : ' [unchecked]'
       if (e.value) line += ` value="${e.value}"`
       if (e.options && e.options.length > 0) line += ` options: ${e.options.join(' | ')}`

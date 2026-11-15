@@ -1,7 +1,8 @@
 // What the Feed, a channel's status card and an Overview tile say about WATCHING a channel (DEC-040): how often it is looked at, when it was
 // last looked at and when it is next, or, honestly, why it is not being watched (automation paused, the channel paused, it needs the owner,
-// its last check failed, the app does not read it, it is not set up). Pure, so it is tested from src/main/feed-logic.test.ts; it imports
+// its last check failed, the app does not read it, it is not set up). Pure, so it is tested from src/main/watching-line.test.ts; it imports
 // only src/shared types. The words never say more than the channel's own fields do: a time is shown only when the channel has it.
+// A channel the app has no connector for may still be watched IN THE BROWSER by the AI (DEC-042): it has the same schedule and says so.
 
 import { localDay } from '../../../../shared/local-day'
 import { FAILURE_DETAIL_PREFIX, type Channel, type IsoTime } from '../../../../shared/types'
@@ -12,7 +13,16 @@ import { FAILURE_DETAIL_PREFIX, type Channel, type IsoTime } from '../../../../s
 export type WatchingKind = 'watching' | 'automation_paused' | 'channel_paused' | 'needs_you' | 'error' | 'not_read' | 'setup'
 
 /** The fields of a channel the line reads. A `Channel` is one; so is a literal in a test. */
-export type WatchedChannel = Pick<Channel, 'status' | 'statusDetail' | 'reads' | 'lastRunAt' | 'nextCheckAt'> & { settings: Pick<Channel['settings'], 'checkIntervalMin'> }
+export type WatchedChannel = Pick<Channel, 'status' | 'statusDetail' | 'reads' | 'watchedInBrowser' | 'lastRunAt' | 'nextCheckAt'> & { settings: Pick<Channel['settings'], 'checkIntervalMin'> }
+
+/** What decides how the app looks at a channel: a connector (`reads`) or, where it has none, the account's browser (DEC-042). */
+export type ReadingWays = Pick<Channel, 'reads' | 'watchedInBrowser'>
+
+/** The AI watches the channel in the account's browser, like a person. A channel the app reads through a connector is never one, whatever the flag says. */
+export const isWatchedInBrowser = (channel: ReadingWays): boolean => !channel.reads && channel.watchedInBrowser
+
+/** The app looks at the channel itself on a schedule, through a connector or in the browser. A channel that is neither takes only the owner's own posts (DEC-034). */
+export const isWatchable = (channel: ReadingWays): boolean => channel.reads || channel.watchedInBrowser
 
 export interface WatchingContext {
   /** The moment the line is for: a time before it is in the past, a time after it is still to come. */
@@ -114,12 +124,13 @@ function stopped(kind: Exclude<WatchingKind, 'watching'>, text: string): Watchin
 }
 
 /**
- * The line of one channel. A channel the app does not read, or one not set up, is not watched whatever else is true; then automation
- * paused, which stops every channel; then the channel's own state: paused, needing the owner (its own words), or failing (still retried, at
- * the time it has). Only an active channel on a running schedule says "Watching", with how often, when it was last looked at and when it is next.
+ * The line of one channel. A channel the app neither reads nor watches in the browser, or one not set up, is not watched whatever else is true; then
+ * automation paused, which stops every channel; then the channel's own state: paused, needing the owner (its own words), or failing (still retried, at
+ * the time it has). Only an active channel on a running schedule says "Watching", with how often, when it was last looked at and when it is next;
+ * a channel watched in the browser says "in the browser" there (the reasons it is not watched are the same for every channel).
  */
 export function watchingLine(channel: WatchedChannel, ctx: WatchingContext): WatchingLine {
-  if (!channel.reads) return stopped('not_read', NOT_READ_LINE)
+  if (!isWatchable(channel)) return stopped('not_read', NOT_READ_LINE)
   if (channel.status === 'setup') return stopped('setup', 'Not watching yet: the channel is still being set up')
   if (ctx.automationPaused) return stopped('automation_paused', 'Not watching: automation is paused')
   const detail = channel.statusDetail.trim()
@@ -138,10 +149,11 @@ export function watchingLine(channel: WatchedChannel, ctx: WatchingContext): Wat
   }
   const every = intervalWords(channel.settings.checkIntervalMin)
   const rest = `last ${lastWords(channel.lastRunAt, ctx)} · next ${nextWords(channel.nextCheckAt, ctx)}`
+  const where = isWatchedInBrowser(channel) ? ' in the browser' : ''
   return {
     kind: 'watching',
     watching: true,
-    text: every ? `Watching ${every} · ${rest}` : `Watching · ${rest}`,
+    text: every ? `Watching ${every}${where} · ${rest}` : `Watching${where} · ${rest}`,
     schedule: every ? `${every.charAt(0).toUpperCase()}${every.slice(1)}` : 'On a schedule'
   }
 }
@@ -163,13 +175,13 @@ const NOT_WATCHED_PARTS: readonly { kind: WatchingKind; words: (n: number) => st
 ]
 
 /**
- * One compact line for a product: with one channel the app reads, that channel's own line; with several, how many are watched and the
- * soonest next check among them ("Watching 3 channels · next ≈17:12", "Watching 2 of 3 channels · next soon"). Paused automation is said
- * as it is; with none watched the line says what stops them. Channels the app does not read are not counted (they are the Feed's "not
- * read" note). Null when the app reads no channel of the product: there is nothing to say.
+ * One compact line for a product: with one channel the app looks at (through a connector or in the browser), that channel's own line; with
+ * several, how many are watched and the soonest next check among them ("Watching 3 channels · next ≈17:12", "Watching 2 of 3 channels · next
+ * soon"). Paused automation is said as it is; with none watched the line says what stops them. Channels the app does not look at are not counted
+ * (they are the Feed's "not read" note). Null when the app looks at no channel of the product: there is nothing to say.
  */
 export function productWatching(channels: readonly WatchedChannel[], ctx: WatchingContext): WatchingSummary | null {
-  const readable = channels.filter((channel) => channel.reads)
+  const readable = channels.filter(isWatchable)
   if (readable.length === 0) return null
   const lines = readable.map((channel) => watchingLine(channel, ctx))
   if (readable.length === 1) return { watching: lines[0].watching, text: lines[0].text }

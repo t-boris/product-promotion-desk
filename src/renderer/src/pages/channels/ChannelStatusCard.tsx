@@ -3,14 +3,15 @@ import type { Account, Channel, PlatformInfo, Product } from '../../../../shared
 import { call, useAction, useQuery } from '../../hooks'
 import { Badge, Button, Card, ConfirmAction, ErrorNote, formatTime, Hint, useMainVariant } from '../../ui'
 import { useWatchingContext } from '../feed/useWatching'
-import { watchingLine } from '../feed/watching-line'
+import { isWatchable, isWatchedInBrowser, watchingLine } from '../feed/watching-line'
 import { JoinChannel } from './JoinChannel'
 import { CHANNEL_STATUS_LABEL, CHANNEL_STATUS_TONE, capabilityOf, membershipWord, nextCheckText } from './model'
-import { OWN_POSTS_READING, activateHint } from './own-posts'
+import { BROWSER_WATCH_READING, OWN_POSTS_READING, activateHint } from './own-posts'
 import { activateBlocker, canActivate, canPause } from './setup-stage'
 
 /**
- * Status, last run and next check (a channel the app does not read says why it has none), plus Activate / Pause and removal. "Activate" is the tab's filled button only at its stage (`filled`:
+ * Status, last run and next check (a channel the app neither reads nor watches in the browser says why it has none; one the AI watches in the browser says
+ * so and has them, DEC-042), plus Activate / Pause and removal. "Activate" is the tab's filled button only at its stage (`filled`:
  * the channel was assessed and is still to be started); "Pause", "Resume" and "Pause this channel instead" are never filled.
  */
 export function ChannelStatusCard({ channel, product, account, platform, accountLabel, filled, onRemoved }: { channel: Channel; product: Product | undefined; account: Account | undefined; platform?: PlatformInfo; accountLabel: string; filled: boolean; onRemoved: () => void }) {
@@ -64,9 +65,15 @@ export function ChannelStatusCard({ channel, product, account, platform, account
         <dd data-testid="channel-status">
           <Badge tone={CHANNEL_STATUS_TONE[channel.status]}>{CHANNEL_STATUS_LABEL[channel.status]}</Badge> <span className="muted">{channel.statusDetail}</span>
         </dd>
-        {/* A channel the app does not read has no runs, no last success and no next check (DEC-034): one row says why. */}
-        {channel.reads ? (
+        {/* A channel the app does not read has no runs, no last success and no next check (DEC-034): one row says why. One the AI watches in the browser has them (DEC-042), under a row that says how it is read. */}
+        {isWatchable(channel) ? (
           <>
+            {isWatchedInBrowser(channel) && (
+              <>
+                <dt>Reading</dt>
+                <dd data-testid="channel-reading">{BROWSER_WATCH_READING}</dd>
+              </>
+            )}
             <dt>Last run</dt>
             <dd data-testid="channel-last-run">
               {lastRun ? (

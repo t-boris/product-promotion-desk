@@ -7,6 +7,7 @@
 //  - While automation is paused nothing scheduled starts; explicit user actions do not pass through here.
 
 import type { Channel, Id } from '../../shared/types'
+import { WATCH_TIMEOUT_MS } from '../browser-agent/watch'
 import type { Core } from '../core'
 import type { RunResult } from '../runs'
 import type { DraftingService, MonitorOutcome } from '../services'
@@ -16,6 +17,9 @@ import { FAILURE_DETAIL_PREFIX, type ScheduleStore } from './scheduler-state'
 import { MINUTE_MS, backoffDelayMs, formatDuration, nextCheckFor, raceTimeout, realTimers, spreadTimes, type Timers } from './scheduler-timing'
 
 export const PAUSE_KEY = 'automation.paused'
+
+/** What a cycle of a channel watched in the browser is given beyond the AI's own time limit, for the bookkeeping around the look. */
+const WATCH_CYCLE_MARGIN_MS = 5 * MINUTE_MS
 
 export function isPaused(core: Core): boolean {
   return core.settings.getRaw<boolean>(PAUSE_KEY, false)
@@ -67,6 +71,8 @@ interface CycleResult {
   verdict: Verdict
   /** Raw reason for failures and suspensions. */
   error: string
+  /** A skipped cycle that is tried again sooner than the regular interval (a look at a channel that could not start). */
+  retryAt?: string
 }
 
 interface Inflight {
@@ -277,8 +283,10 @@ export class Scheduler {
     await this.core.runs.track('monitor', { channelId: channel.id, productId: channel.productId }, async () => {
       const cycle = this.cycle(channel)
       cycleDone = cycle
-      const timeoutError = `Timed out after ${formatDuration(this.options.runTimeoutMs)}`
-      result = await raceTimeout(cycle, this.options.runTimeoutMs, this.options.timers, (): CycleResult => {
+      // A look at a channel in the browser may take as long as the AI's own limit (DEC-042): the cycle is not cut short before that.
+      const limit = channel.watchedInBrowser ? Math.max(this.options.runTimeoutMs, WATCH_TIMEOUT_MS + WATCH_CYCLE_MARGIN_MS) : this.options.runTimeoutMs
+      const timeoutError = `Timed out after ${formatDuration(limit)}`
+      result = await raceTimeout(cycle, limit, this.options.timers, (): CycleResult => {
         entry.timedOut = true
         return { run: { status: 'failed', summary: timeoutError }, verdict: 'failed', error: timeoutError }
       })
@@ -302,8 +310,9 @@ export class Scheduler {
       return { run: { status: 'failed', summary: message(error) }, verdict: 'failed', error: message(error) }
     }
     const summary = outcome.summary || `${plural(outcome.newOpportunities, 'new opportunity', 'new opportunities')}`
-    if (outcome.status !== 'ok') return { run: { status: outcome.status, summary }, verdict: verdictOf(outcome.status), error: summary }
-    if (!drafting) return { run: { status: 'ok', summary }, verdict: 'ok', error: '' }
+    if (outcome.status !== 'ok') return { run: { status: outcome.status, summary }, verdict: verdictOf(outcome.status), error: summary, retryAt: outcome.retryAt }
+    // A channel the app only looks at in the browser has nothing to draft: what the AI finds there is a finding, never an opportunity (DEC-042).
+    if (!drafting || channel.watchedInBrowser) return { run: { status: 'ok', summary }, verdict: 'ok', error: '' }
 
     try {
       const parts = draftingParts(await drafting.processChannel(channel.id))
@@ -328,7 +337,7 @@ export class Scheduler {
         this.store.recordSuccess(channel.id, nowIso, regular)
         break
       case 'skipped':
-        this.store.recordSkipped(channel.id, nowIso, regular)
+        this.store.recordSkipped(channel.id, nowIso, result.retryAt ?? regular)
         break
       case 'failed': {
         const streak = this.store.recordFailure(channel.id, nowIso, result.error, (n) => {

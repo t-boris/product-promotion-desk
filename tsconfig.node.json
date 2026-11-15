@@ -12,5 +12,5 @@
     "electron.vite.config.ts",
     "vitest.config.ts"
   ],
-  "exclude": ["src/main/charts-render.test.ts", "src/main/feed-render.test.ts"]
+  "exclude": ["src/main/charts-render.test.ts", "src/main/feed-render.test.ts", "src/main/channel-render.test.ts", "src/main/feed-page-render.test.ts"]
 }

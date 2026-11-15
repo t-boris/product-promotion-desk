@@ -55,7 +55,9 @@ export function reviewChannels(core: Core, store: ScheduleStore, nowMs: number):
       core.log.warn('scheduler', `Channel ${channel.target} suspended: ${problem}`, channel.id)
       result.suspended.push(channel.id)
     } else if (channel.status === 'needs_user' && !problem && store.get(channel.id).autoResume) {
-      store.restore(channel.id, channel.reads ? new Date(nowMs).toISOString() : null, channel.reads ? '' : OWN_POSTS_DETAIL)
+      // A channel the app watches in the browser is looked at on the schedule like a read one (DEC-042); only a channel for own posts has no next check.
+      const observed = channel.reads || channel.watchedInBrowser
+      store.restore(channel.id, observed ? new Date(nowMs).toISOString() : null, observed ? '' : OWN_POSTS_DETAIL)
       core.log.info('scheduler', `Channel ${channel.target} resumed: the problem that suspended it is gone`, channel.id)
       result.restored.push(channel.id)
     }
@@ -70,9 +72,12 @@ export function schedulableChannels(core: Core): Channel[] {
   return core.repos.listChannels().filter((c) => RUNNABLE.includes(c.status) && permissionProblem(c, accounts.get(c.accountId)) === null)
 }
 
-/** The channels the scheduler may observe: the schedulable ones the app can read. A channel for own posts is only ever worked on for its posts. */
+/**
+ * The channels the scheduler may observe: the schedulable ones the app can read, and the ones it watches in the account's browser (DEC-042). A channel
+ * for own posts that is neither is only ever worked on for its posts.
+ */
 export function readableChannels(core: Core): Channel[] {
-  return schedulableChannels(core).filter((c) => c.reads)
+  return schedulableChannels(core).filter((c) => c.reads || c.watchedInBrowser)
 }
 
 /**

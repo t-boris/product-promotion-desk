@@ -19,6 +19,8 @@ import { missionPrompt, type Mission } from '../browser-agent/mission'
 import { postMissionPrompt } from '../browser-agent/post-mission'
 import type { PostMissionOutcome, PostMissionRequest, PostMissionService } from '../browser-agent/post-submit'
 import { BrowserToolbox, type MissionStatus } from '../browser-agent/toolbox'
+import { WATCH_MAX_CALLS, WATCH_MAX_FINDINGS, WATCH_MIN_GAP_MS, WATCH_TIMEOUT_MS, type WatchMissionRequest, type WatchMissionService, type WatchOutcome } from '../browser-agent/watch'
+import { watchMissionPrompt } from '../browser-agent/watch-mission'
 import type { Core } from '../core'
 import type { Connector, Membership } from '../ports'
 import type { LessonService } from './lessons'
@@ -57,8 +59,11 @@ const POST_MIN_GAP_MS = 2000
  * the questions to the owner and the stopping are the same for all.
  */
 interface MissionSpec {
-  /** `owner`: through `agent.start`. `send_flow`: only the send flow starts it, with a ticket for one approved publication in hand. */
-  startedBy: 'owner' | 'send_flow'
+  /**
+   * `owner`: through `agent.start`. `send_flow`: only the send flow starts it, with a ticket for one approved publication in hand. `watch_flow`: only the
+   * monitor's watch flow starts it, for one channel the app reads through the browser (DEC-042).
+   */
+  startedBy: 'owner' | 'send_flow' | 'watch_flow'
   timeoutMs: number
   /** Tool calls the mission has; the toolbox's own default when not given. */
   maxCalls?: number
@@ -73,7 +78,8 @@ const MISSIONS: Record<MissionKind, MissionSpec> = {
   profile: { startedBy: 'owner', timeoutMs: RUN_TIMEOUT_MS, opening: 'The AI is opening the profile page.', doing: 'fill in the profile of' },
   signin: { startedBy: 'owner', timeoutMs: RUN_TIMEOUT_MS, opening: 'The AI is opening the sign-in page.', doing: 'sign in to' },
   join: { startedBy: 'owner', timeoutMs: JOIN_TIMEOUT_MS, maxCalls: JOIN_MAX_CALLS, opening: 'The AI is opening the community page.', doing: 'join a community with' },
-  post: { startedBy: 'send_flow', timeoutMs: POST_TIMEOUT_MS, maxCalls: POST_MAX_CALLS, opening: 'The AI is opening the page to publish.', doing: 'publish for' }
+  post: { startedBy: 'send_flow', timeoutMs: POST_TIMEOUT_MS, maxCalls: POST_MAX_CALLS, opening: 'The AI is opening the page to publish.', doing: 'publish for' },
+  watch: { startedBy: 'watch_flow', timeoutMs: WATCH_TIMEOUT_MS, maxCalls: WATCH_MAX_CALLS, opening: 'The AI is opening the page to look at.', doing: 'watch a channel of' }
 }
 
 interface Live {
@@ -87,7 +93,7 @@ interface Live {
   exchange: { question: string; answer: string } | null
 }
 
-export class AgentRunService implements PostMissionService {
+export class AgentRunService implements PostMissionService, WatchMissionService {
   private readonly runs = new Map<string, Live>()
 
   constructor(
@@ -160,9 +166,11 @@ export class AgentRunService implements PostMissionService {
   }
 
   /** Whether a run can start now; the same checks as `start`, with the reason in words instead of an error, and nothing done. */
-  async canStart(args: { accountId: string; kind: AgentTaskKind; channelId?: string }): Promise<AgentReadiness> {
+  async canStart(args: { accountId: string; kind: AgentTaskKind | 'watch'; channelId?: string }): Promise<AgentReadiness> {
     try {
-      await this.prerequisites(this.accounts.account(args.accountId), args.kind, args.channelId)
+      const account = this.accounts.account(args.accountId)
+      if (args.kind === 'watch') await this.watchPrerequisites(account)
+      else await this.prerequisites(account, args.kind, args.channelId)
       return { ready: true, reason: null }
     } catch (error) {
       if (error instanceof ApiError) return { ready: false, reason: error.message }
@@ -243,19 +251,19 @@ export class AgentRunService implements PostMissionService {
    * No run going on the account, and an engine that can work the browser and is ready: what every kind of mission needs first. A mission
    * that publishes (`confined`) also needs an engine that can be held to the application's tools alone.
    */
-  private async readyEngine(account: Account, confined: false | 'publish' | 'join' = false): Promise<AiEngine> {
+  private async readyEngine(account: Account, confined: false | 'publish' | 'join' | 'watch' = false): Promise<AiEngine> {
     this.assertIdle(account)
 
     const engine = this.core.engines.selected()
     if (!engine) throw new ApiError('no_engine', 'No AI engine is selected. Choose Claude Code or Codex in Settings.')
     if (!engine.supportsAgent) throw new ApiError('engine_cannot_drive', `${engine.label} cannot work the browser. Choose Claude Code or Codex in Settings (AI engine).`)
     if (confined && !engine.confinesAgent) {
-      throw new ApiError(
-        'engine_cannot_confine',
-        confined === 'join'
-          ? `${engine.label} cannot be held to the browser tools alone (it can also run commands and read files), so it is not allowed to join a community for you. Choose Claude Code in Settings (AI engine), or join in the account's browser yourself.`
-          : `${engine.label} cannot be held to the browser tools alone (it can also run commands and read files), so it is not allowed to publish for you. Choose Claude Code in Settings (AI engine), or send through the connector.`
-      )
+      const refused = {
+        join: 'it is not allowed to join a community for you. Choose Claude Code in Settings (AI engine), or join in the account\'s browser yourself.',
+        watch: 'it is not allowed to read pages of strangers for you, so this channel is not watched. Choose Claude Code in Settings (AI engine).',
+        publish: 'it is not allowed to publish for you. Choose Claude Code in Settings (AI engine), or send through the connector.'
+      }
+      throw new ApiError('engine_cannot_confine', `${engine.label} cannot be held to the browser tools alone (it can also run commands and read files), so ${refused[confined]}`)
     }
     if (!this.core.agentBridge) throw new ApiError('no_agent_bridge', 'The AI browser agent is not available in this build.')
     const status = await engine.check()
@@ -374,6 +382,84 @@ export class AgentRunService implements PostMissionService {
     // The AI's own words are shown to the owner in the run; the log keeps a fixed phrase and the status it reported.
     this.core.log.info('accounts', `The AI ${committed ? 'pressed the button that publishes' : 'did not publish'} for ${account.label}${reported ? ` (it reported "${reported.status}")` : ''}.`)
     return { ended, committed, reported, humanCheck: observed.humanCheck, warning: observed.warning, error }
+  }
+
+  /** What a look at a channel needs (DEC-042): an account that is signed in, no run going on it, and an engine that can be held to the application's tools alone. */
+  private async watchPrerequisites(account: Account): Promise<AiEngine> {
+    if (account.status !== 'ready') throw new ApiError('not_ready', `${account.label} is not signed in, so its channels are not watched. Sign in first.`)
+    return this.readyEngine(account, 'watch')
+  }
+
+  async watchReady(accountId: string): Promise<AgentReadiness> {
+    return this.canStart({ accountId, kind: 'watch' })
+  }
+
+  /**
+   * One look at one channel, worked by the AI in the account's browser (DEC-042). Only the monitor's watch flow calls this. The AI only reads: its toolbox
+   * has no tool that clicks, types or runs a script, and the posts it records go to the flow's own recorder as findings. Like `run` it resolves when
+   * the mission is over. It throws (an ApiError) when the check cannot start: the account is busy, signed out or has no engine that can be confined.
+   * Whether the check counts as made is the flow's decision: what the AI said is only a note.
+   */
+  async watch(request: WatchMissionRequest): Promise<WatchOutcome> {
+    const account = this.accounts.account(request.accountId)
+    const engine = await this.watchPrerequisites(account)
+    const spec = MISSIONS.watch
+    const live: Live = {
+      abort: new AbortController(),
+      answer: null,
+      reported: null,
+      exchange: null,
+      run: { accountId: account.id, kind: 'watch', channelId: request.channelId, status: 'running', summary: spec.opening, lines: [], typed: [], question: null, learned: [], startedAt: this.core.clock.now().toISOString(), finishedAt: null }
+    }
+    // The engine check above awaited: another start may have taken the account meanwhile.
+    this.assertIdle(account)
+    this.runs.set(account.id, live)
+    let ended: WatchOutcome['ended'] = 'finished'
+    let error: string | null = null
+    let toolbox: BrowserToolbox | null = null
+    try {
+      this.core.log.info('accounts', `The AI started to ${spec.doing} ${account.label} on ${request.hosts[0] ?? 'the platform'} (${engine.label}).`)
+      this.core.events.changed('accounts')
+      this.core.browser.showAgentBrowser?.(account)
+      const session = this.core.browser.session(account)
+      toolbox = new BrowserToolbox({
+        withPage: (work) => session.withAgentControl('agent-watch', work),
+        hosts: request.hosts,
+        values: {},
+        sleep: this.core.sleep,
+        say: (line) => this.say(live, line),
+        ask: async () => 'Nobody can be asked in this mission.',
+        note: () => undefined,
+        report: (result) => void (live.reported = result),
+        signal: live.abort.signal,
+        maxCalls: spec.maxCalls,
+        watch: { places: request.brief.places.map((place) => place.url), record: request.record, maxFindings: WATCH_MAX_FINDINGS, minGapMs: WATCH_MIN_GAP_MS, now: () => this.core.clock.now().getTime() }
+      })
+      const said = await this.runEngine(live, engine, toolbox, 'agent.watch', account.profileId ?? account.id, watchMissionPrompt(request.brief, this.core.clock.now()), spec.timeoutMs, true)
+      if (said.trim()) this.say(live, `The AI: ${said.trim().replace(/\s+/g, ' ').slice(0, 240)}`)
+    } catch (caught) {
+      if (caught instanceof AiError && caught.kind === 'cancelled') ended = 'stopped'
+      else if (caught instanceof AiError && caught.kind === 'timeout') ended = 'timeout'
+      else if (caught instanceof TakeoverError || (caught instanceof ApiError && caught.code === 'browser_busy')) ended = 'busy'
+      else {
+        ended = 'error'
+        error = caught instanceof Error ? caught.message : String(caught)
+      }
+    } finally {
+      this.dropQuestion(live, 'The check is over.')
+    }
+    if (toolbox?.watchPaused) ended = 'busy'
+    if (live.run.status !== 'running') ended = 'stopped' // the owner stopped it (its run was finished by `stop`)
+
+    const reported = live.reported ? { status: live.reported.status, reason: live.reported.reason } : null
+    if (live.run.status === 'running') {
+      if (ended === 'busy') this.finish(live, 'stopped', 'The owner has the browser, so the check stops here and is made again later.')
+      else if (ended === 'timeout') this.finish(live, 'failed', 'The AI did not finish in twenty minutes and was stopped.')
+      else if (ended === 'error') this.finish(live, 'failed', `The AI stopped because of an error: ${error}`)
+      else this.finish(live, reported?.status ?? 'failed', reported?.reason || 'The AI ended without saying how it went.')
+    }
+    this.core.log.info('accounts', `The AI looked at a channel of ${account.label}${reported ? ` (it reported "${reported.status}")` : ''}.`)
+    return { ended, reported, humanCheck: toolbox?.observed.humanCheck ?? null, error }
   }
 
   /**

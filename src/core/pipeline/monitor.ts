@@ -5,9 +5,12 @@
 // `ctx.session.withAgentControl` (the session is not re-entrant), so this service must not wrap the call.
 
 import type { Account, AccountStatus, Channel } from '../../shared/types'
+import { WATCH_RETRY_MIN } from '../browser-agent/watch'
+import { OWN_POSTS_DETAIL } from '../channels/reads'
 import type { Core } from '../core'
 import { TakeoverError, type Connector, type ConnectorContext } from '../ports'
 import type { MonitorOutcome, MonitorService } from '../services'
+import type { BrowserWatchFlow, WatchResult } from './browser-watch'
 import type { Ingestor } from './ingest'
 import { collectInbox } from './inbox'
 import type { LoginWatch } from './login-watch'
@@ -31,7 +34,8 @@ export class MonitorFlow implements MonitorService {
     private readonly store: FlowStore,
     private readonly ingestor: Ingestor,
     private readonly watch: LoginWatch,
-    private readonly triage: TriageFlow
+    private readonly triage: TriageFlow,
+    private readonly browserWatch: BrowserWatchFlow
   ) {}
 
   async runChannel(channelId: string): Promise<MonitorOutcome> {
@@ -58,13 +62,15 @@ export class MonitorFlow implements MonitorService {
       return { status: 'failed', summary: errorMessage(error), newOpportunities: 0 }
     }
     if (channel.status === 'paused') return { status: 'skipped', summary: 'Channel is paused', newOpportunities: 0 }
-    // A channel the app cannot read has nothing to observe (DEC-034): it is not a failure, and nothing is retried.
-    if (!channel.reads) return { status: 'skipped', summary: 'The app does not read this channel (your own posts only)', newOpportunities: 0 }
+    // A channel the app cannot read has nothing to observe (DEC-034): it is not a failure, and nothing is retried. One it can only look at in the
+    // account's browser (DEC-042) is looked at below, once the account is known to be signed in.
+    if (!channel.reads && !channel.watchedInBrowser) return { status: 'skipped', summary: 'The app does not read this channel (your own posts only)', newOpportunities: 0 }
 
     if (account.status !== 'ready') {
       // The account state is already recorded by whoever set it; only the channel is suspended here.
       return this.suspend(channel, account.status === 'captcha' ? `Account "${account.label}" is waiting for a CAPTCHA to be solved` : `Account "${account.label}" is not available (${account.status}); sign in again to resume`)
     }
+    if (channel.watchedInBrowser) return this.watched(channel, account)
 
     let connector: Connector
     let ctx: ConnectorContext
@@ -101,6 +107,68 @@ export class MonitorFlow implements MonitorService {
       return this.succeed(channel, baseline, result.discussions, result.newComments, result.newOpportunities + inbox.newOpportunities + triage.newOpportunities, result.identityUnknown, notes)
     } catch (error) {
       return this.fail(channel, `Could not store the collected data: ${errorMessage(error)}`)
+    }
+  }
+
+  // ───────────── a channel looked at in the browser (DEC-042) ─────────────
+
+  /** One look at a channel the app has no connector for. The result becomes the channel's state through the same paths as a read channel's: success, failure, suspension. */
+  private async watched(channel: Channel, account: Account): Promise<MonitorOutcome> {
+    const result = await this.browserWatch.run(channel, account)
+    switch (result.status) {
+      case 'done':
+        return this.succeedWatched(channel, result.summary)
+      case 'failed':
+        return this.fail(channel, result.reason)
+      case 'deferred':
+        return this.defer(channel, result)
+      case 'needs_owner':
+        return this.needsOwner(channel, account, result)
+    }
+  }
+
+  private succeedWatched(channel: Channel, summary: string): MonitorOutcome {
+    const now = this.core.clock.now()
+    const wasTroubled = channel.status === 'needs_user' || channel.status === 'error'
+    this.store.updateChannel(channel.id, {
+      lastRunAt: now.toISOString(),
+      lastSuccessAt: now.toISOString(),
+      nextCheckAt: nextCheckFor(channel, now.getTime(), this.core.scheduleJitter),
+      // A channel stored before it was watched says it is for own posts only (DEC-034): once it is looked at, it does not.
+      ...(wasTroubled ? { status: 'active' as const, statusDetail: '' } : channel.statusDetail === OWN_POSTS_DETAIL ? { statusDetail: '' } : {})
+    })
+    this.core.events.changed('channels', 'attention')
+    return { status: 'ok', summary, newOpportunities: 0 }
+  }
+
+  /** The look did not run, and nothing failed: no failure is counted and nothing is suspended; it is tried again in a few minutes, or at the next regular check. */
+  private defer(channel: Channel, result: Extract<WatchResult, { status: 'deferred' }>): MonitorOutcome {
+    const now = this.core.clock.now()
+    const retryAt = result.soon ? minutesFrom(now, WATCH_RETRY_MIN) : nextCheckFor(channel, now.getTime(), this.core.scheduleJitter)
+    this.store.updateChannel(channel.id, { nextCheckAt: retryAt })
+    return { status: 'skipped', summary: result.reason, newOpportunities: 0, retryAt }
+  }
+
+  /** The AI stopped for a person. A human check or a signed-out account is told apart by the site's own answer, as for a failed read; anything else waits for the owner. */
+  private async needsOwner(channel: Channel, account: Account, result: Extract<WatchResult, { status: 'needs_owner' }>): Promise<MonitorOutcome> {
+    let problem: Problem = result.humanCheck ? 'captcha' : 'failed'
+    if (!result.humanCheck) {
+      try {
+        const { connector, ctx } = this.core.connectorContext(channel.id)
+        problem = await this.classify(connector, ctx, null)
+      } catch (error) {
+        this.core.log.warn('monitor', `Could not tell why the AI needs you: ${errorMessage(error)}`, channel.id)
+      }
+    }
+    switch (problem) {
+      case 'takeover':
+        return this.suspend(channel, 'You are controlling the browser; the check resumes when you hand it back')
+      case 'login':
+        return this.suspend(channel, `Account "${account.label}" is signed out: sign in again to resume`, 'login_required')
+      case 'captcha':
+        return this.suspend(channel, `The site asks for a CAPTCHA on account "${account.label}": solve it to resume`, 'captcha')
+      default:
+        return this.suspend(channel, result.reason)
     }
   }
 
