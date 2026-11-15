@@ -648,3 +648,20 @@ Plan:
 - [x] Renderer: pure logic (`approve-check.ts`: who is checked, fingerprint, may approve anyway, labels), panel in `ReviewButtons`, styles, focus; the panel goes away when the text changes.
 - [x] Tests (core, renderer logic), mutants (62, all killed but 4 equivalent), packaged probe on an own instance (45 checks, every state of the panel in light and dark), spec 19 + V-31, independent review (5 real defects fixed: the quote cut away from the words, cut at a dot inside a number or an address, split an emoji; the credential rule did not fold invisible characters; the check's caps were stricter than the save's; a card changed during the check; plus the JSDoc and the method list).
 - [x] PR #25, CI green, merge `9ef5fca`, tag v0.12.0, GitHub release, `deploy:local` (0.12.0 installed and verified). Not in it, for the next step: the remaining forms (account name, schedule time, older discussions, results summary), "Let the AI do this" per launch-path step, stream B2/B3, B1 follow-ups (M2, L2/L4, L6).
+
+## 0.13.0: Facebook accounts in the installed Chrome (branch `feat/chrome-browser`; DEC-025; owner: "ВПЕРЕД" after the proposal, 2026-11-14)
+
+Why: the first real Submit of the AI's Facebook sign-up in the built-in (Electron) browser was refused ("An error occurred during your registration"). Cause unproven (browser, "+" alias, IP/new profile, automation). The owner asked for Chrome. Not promised: that Facebook accepts it.
+
+Design (DEC-025): `ChromeBrowserService` behind the existing `RawPage` / `BrowserService` seam, `puppeteer-core` 25.16.0 pinned, the installed Google Chrome, debugging pipe, one profile folder per account under the data dir; `RoutingBrowserService` picks by platform (`CHROME_PLATFORMS = [facebook]`, `PPD_BROWSER=app|chrome` override); core rules unchanged (ControlledSession, ticket, hosts).
+
+Plan:
+- [ ] Shared step runner: the `pageStep` logic (host check, key, upload, click with a real mouse, typing, drop-downs) out of `ElectronRawPage` into one place with a small driver interface; Electron keeps passing all its tests.
+- [ ] `chrome-launcher.ts`: find Chrome (`PPD_CHROME_PATH` override for probes), profile folder, launch arguments (pure, tested), no automation flags.
+- [ ] `ChromeRawPage` (`RawPage` on a puppeteer page): goto, url, read, waitForSelector, fill, click, uploadFile, signIn, pageStep, key/click/type with the browser's input.
+- [ ] `ChromeBrowserService`: sessions, one Chrome per account (lazy), reveal/conceal, `openForUser` (takes control, brings Chrome to front), `hasUserWindow` / `showUserWindow` / `closeUserWindow`, user closing Chrome = control back + window closed, `pageReport` (text, screenshot, requests, console through `PageRecorder`), `forgetAccount` (close Chrome, remove the profile folder under the data dir only).
+- [ ] `RoutingBrowserService` + the choice (`browser-choice.ts`, pure, tested), Chrome missing -> built-in and one log line; wired in `src/main/index.ts`.
+- [ ] Tests: launcher args, choice table, step runner (both drivers), `ChromeRawPage` and the service on a fake page, routing; mutants.
+- [ ] Packaged probe on an own instance: real Chrome with its own profile (mock keychain), a local page with the Facebook-like form (text, drop-downs that are not lists, file input, Submit), the mission's steps through the real seam, takeover and give-back, page report, forgetAccount removes the profile, nothing on the network but 127.0.0.1.
+- [ ] Spec section + V-32, independent review (the step runner is shared safety code), PR, release 0.13.0, `deploy:local`; the owner tries Facebook at the keyboard.
+
