@@ -61,6 +61,11 @@ export interface PostAuthority {
   /** Whether the mission is over (the owner stopped it, the engine ended, it timed out or died): no ticket is given and no press is accepted from here on. */
   readonly sealed: boolean
   /**
+   * Whether the owner used a sign-in or sign-out page of the account's session since the mission checked who is signed in (DEC-038). From then on
+   * the check is out of date: no ticket is given, no press is accepted, and the mission's other steps are refused too. Nothing is submitted.
+   */
+  readonly sessionMoved: boolean
+  /**
    * Ends the mission's right to press, at once and for good: `lease` refuses, and a lease already given can no longer `commit`. The point
    * of no return can only move before this, so what `committed` says after it is final (a call still running when the engine ended, or
    * when the owner pressed Stop, cannot press after the application has read it). Called by whoever ends the mission.

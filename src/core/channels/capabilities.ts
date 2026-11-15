@@ -16,7 +16,8 @@ const KEY_TABLE: Record<CapabilityKey, null> = {
   verify_send: null,
   metrics: null,
   rules: null,
-  membership: null
+  membership: null,
+  read_inbox: null
 }
 export const CAPABILITY_KEYS = Object.keys(KEY_TABLE) as CapabilityKey[]
 
@@ -79,6 +80,17 @@ export function normalizeAssessment(previous: Capability[], assessed: Capability
 
     return { key, status, detail, checkedAt: at }
   })
+}
+
+export const NO_INBOX_REASON = 'This platform has no inbox the app can read, so replies to the account and mentions of it are not collected here.'
+
+/**
+ * A platform whose connector cannot read an inbox says so on the row of the capability (DEC-039), whatever the connector reported about it: the row
+ * is "unavailable" and the reason is the one the owner reads in the channel's Status. Pure.
+ */
+export function withInboxVerdict(capabilities: Capability[], canReadInbox: boolean, at: IsoTime): Capability[] {
+  if (canReadInbox) return capabilities
+  return capabilities.map((c): Capability => (c.key === 'read_inbox' ? { key: 'read_inbox', status: 'unavailable', detail: NO_INBOX_REASON, checkedAt: at } : c))
 }
 
 /** The result of an actual authorized use: the one way a sending ability becomes 'verified'. */

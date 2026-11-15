@@ -9,10 +9,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', async () => await import('./fake-electron'))
 
 import type { Account } from '../shared/types'
-import { TakeoverError, TicketError } from '../core/ports'
+import { SessionChangedError, TicketError } from '../core/ports'
 import { FakeClock } from '../core/testing/fakes'
 import { TicketAuthority } from '../core/tickets'
-import { created, type FakeWebContents } from './fake-electron'
+import { created, type FakeSession, type FakeWebContents } from './fake-electron'
 import { ElectronBrowserService } from './electron-browser-service'
 import { TOOLBAR_COMMAND_ORIGIN } from './toolbar-state'
 
@@ -117,20 +117,20 @@ describe('agent page', () => {
     expect(created.views).toHaveLength(1)
   })
 
-  it('hides the watched window while the owner has a window of their own, and brings it back when theirs closes', async () => {
+  it('leaves the window the owner watches the AI in exactly as it is while the owner has windows of their own (DEC-038)', async () => {
     const { service } = setup()
     const a = account('a')
     service.showAgentBrowser(a)
     const watched = created.windows[0]
     await service.openForUser(a, 'https://www.reddit.com/')
-    expect(watched.visible).toBe(false)
+    expect(watched.visible).toBe(true) // nothing is hidden for the owner's window
     created.windows[1].close()
     expect(watched.visible).toBe(true)
 
-    // A window that was never shown is not shown by the owner's window closing.
+    // A window that was never shown stays hidden.
     const b = account('b')
     await service.session(b).withAgentControl('t', async (page) => page.goto('https://b.test/'))
-    await service.openForUser(b)
+    await service.openForUser(b, 'https://b.test/')
     created.windows.at(-1)?.close()
     expect(created.windows[2].visible).toBe(false)
   })
@@ -267,74 +267,93 @@ describe('sign-in form that the page draws late (Reddit builds it from web compo
   })
 })
 
-describe('user takeover and login hand-off', () => {
-  it('takes control before showing the window, so the agent stops at once', async () => {
+describe('the owner\'s windows (DEC-038)', () => {
+  it('opens a window of the owner\'s without taking anything from the AI: a turn in progress goes on', async () => {
     const { service } = setup()
     const acc = account('a')
     const session = service.session(acc)
-    const inFlight = session.withAgentControl('assess', async (page) => {
+    const turn = session.withAgentControl('assess', async (page) => {
       await page.goto('https://www.reddit.com/')
       await service.openForUser(acc, 'https://www.reddit.com/login/')
       await page.goto('https://www.reddit.com/other')
+      return 'finished'
     })
-    await expect(inFlight).rejects.toBeInstanceOf(TakeoverError)
-    expect(session.control().holder).toBe('user')
-    expect(agentContents().loaded).toEqual(['https://www.reddit.com/'])
+    await expect(turn).resolves.toBe('finished')
+    expect(session.control()).toEqual({ holder: 'none', owner: null })
+    expect(agentContents().loaded).toEqual(['https://www.reddit.com/', 'https://www.reddit.com/other'])
   })
 
-  it('opens one window in the account partition with the toolbar, showing the login page', async () => {
+  it('opens one window in the account partition with the toolbar, showing the login page, next to the AI\'s own page', async () => {
     const { service } = setup()
+    await service.session(account('a')).withAgentControl('t', async (page) => page.goto('https://www.reddit.com/'))
     const result = await service.openForUser(account('a'), 'https://www.reddit.com/login/')
     expect(result.tabId).toBe('account-a')
-    expect(created.windows).toHaveLength(1)
-    const [site, bar] = created.views
+    expect(created.windows).toHaveLength(2) // the AI\'s hidden one and the owner\'s
+    const [, site, bar] = created.views
     expect(site.options.webPreferences).toMatchObject({ partition: 'persist:ppd-a', sandbox: true, nodeIntegration: false })
     expect(bar.options.webPreferences?.partition).toBe('ppd-toolbar') // not persistent, not shared with any site
     expect(site.webContents.loaded).toEqual(['https://www.reddit.com/login/'])
     expect(bar.webContents.loaded[0]).toMatch(/^data:text\/html/)
-    expect(decodeURIComponent(bar.webContents.loaded[0])).toContain('Done, close this window')
-    expect(created.windows[0].children).toEqual([site, bar])
+    expect(decodeURIComponent(bar.webContents.loaded[0])).toContain('Close window')
+    expect(created.windows[1].children).toEqual([site, bar])
+    expect(created.windows[0].visible).toBe(false) // the AI\'s page is still its own, hidden unless it was shown
   })
 
-  it('reuses the open window for the same account instead of opening another', async () => {
+  it('opens another window for another address, and brings the one that already shows an address to the front instead of opening it again', async () => {
     const { service } = setup()
     await service.openForUser(account('a'), 'https://www.reddit.com/login/')
     await service.openForUser(account('a'), 'https://www.reddit.com/settings/')
-    expect(created.windows).toHaveLength(1)
+    expect(created.windows).toHaveLength(2)
+    await service.openForUser(account('a'), 'https://www.reddit.com/login/')
+    expect(created.windows).toHaveLength(2)
     expect(created.windows[0].focused).toBe(1)
-    expect(created.views[0].webContents.loaded).toEqual(['https://www.reddit.com/login/', 'https://www.reddit.com/settings/'])
+    expect(created.windows[1].focused).toBe(0)
+    expect(created.views.filter((view) => view.options.webPreferences?.partition === 'persist:ppd-a').map((view) => view.webContents.loaded)).toEqual([['https://www.reddit.com/login/'], ['https://www.reddit.com/settings/']])
   })
 
-  it('gives control back when the toolbar button is pressed, and closes the window', async () => {
+  it('closes a window from the toolbar button: only that window, and nothing is handed back because nothing was taken', async () => {
     const { service } = setup()
     const acc = account('a')
     await service.openForUser(acc, 'https://www.reddit.com/login/')
+    await service.openForUser(acc, 'https://www.reddit.com/settings/')
     const bar = created.views[1].webContents
-    expect(bar.windowOpenHandler?.({ url: `${TOOLBAR_COMMAND_ORIGIN}/release` })).toEqual({ action: 'deny' })
+    expect(bar.windowOpenHandler?.({ url: `${TOOLBAR_COMMAND_ORIGIN}/close` })).toEqual({ action: 'deny' })
     expect(created.windows[0].destroyed).toBe(true)
-    const session = service.session(acc)
-    expect(session.control().holder).toBe('none')
-    await expect(session.withAgentControl('monitor', async () => 'resumed')).resolves.toBe('resumed')
+    expect(created.windows[1].destroyed).toBe(false)
+    expect(service.hasUserWindow(acc)).toBe(true)
+    expect(service.session(acc).control().holder).toBe('none')
+    // The old hand-back command is gone.
+    created.views[3].webContents.windowOpenHandler?.({ url: `${TOOLBAR_COMMAND_ORIGIN}/release` })
+    expect(created.windows[1].destroyed).toBe(false)
   })
 
-  it('tells the address and title of the page in the owner\'s window only, and only while that window is open (DEC-028)', async () => {
+  it('tells the address and title of the owner\'s window used last, and only while a window is open (DEC-028)', async () => {
     const { service } = setup()
     const acc = account('a')
     expect(await service.ownerPage(acc)).toBeNull()
     await service.session(acc).withAgentControl('read', async (page) => page.goto('https://www.reddit.com/r/app-page/'))
     expect(await service.ownerPage(acc)).toBeNull() // the page of the app is not the owner's
     await service.openForUser(acc, 'https://www.reddit.com/subreddits/')
-    const site = created.views.find((view) => view.webContents.loaded.includes('https://www.reddit.com/subreddits/'))
-    if (!site) throw new Error('no site view')
-    site.webContents.pageTitle = 'Communities'
-    site.webContents.url = 'https://www.reddit.com/subreddits/?q=astro'
+    await service.openForUser(acc, 'https://www.reddit.com/r/yoga/')
+    const first = created.views.find((view) => view.webContents.loaded.includes('https://www.reddit.com/subreddits/'))
+    const second = created.views.find((view) => view.webContents.loaded.includes('https://www.reddit.com/r/yoga/'))
+    if (!first || !second) throw new Error('no site view')
+    first.webContents.pageTitle = 'Communities'
+    first.webContents.url = 'https://www.reddit.com/subreddits/?q=astro'
+    second.webContents.pageTitle = 'Yoga'
+    // The one the owner used last is the one that came to the front last.
+    created.windows.find((window) => window.children.includes(second))?.emit('focus')
+    expect(await service.ownerPage(acc)).toEqual({ url: 'https://www.reddit.com/r/yoga/', title: 'Yoga' })
+    created.windows.find((window) => window.children.includes(first))?.emit('focus')
     expect(await service.ownerPage(acc)).toEqual({ url: 'https://www.reddit.com/subreddits/?q=astro', title: 'Communities' })
     expect(await service.ownerPage(account('other'))).toBeNull()
-    created.windows.find((window) => window.children.includes(site))?.close()
+    created.windows.find((window) => window.children.includes(first))?.close()
+    expect((await service.ownerPage(acc))?.url).toBe('https://www.reddit.com/r/yoga/') // the other one is the owner\'s now
+    created.windows.find((window) => window.children.includes(second))?.close()
     expect(await service.ownerPage(acc)).toBeNull()
   })
 
-  it('tells whether the account window is open, so the app does not release control behind it', async () => {
+  it('tells whether a window of the owner\'s is open', async () => {
     const { service } = setup()
     const acc = account('a')
     expect(service.hasUserWindow(acc)).toBe(false)
@@ -345,7 +364,7 @@ describe('user takeover and login hand-off', () => {
     expect(service.hasUserWindow(acc)).toBe(false)
   })
 
-  it('brings the open window above the application window, without loading anything', async () => {
+  it('brings the owner\'s window used last above the application window, without loading anything', async () => {
     const { service } = setup()
     const acc = account('a')
     expect(service.showUserWindow(acc)).toBe(false)
@@ -359,52 +378,48 @@ describe('user takeover and login hand-off', () => {
     expect(service.showUserWindow(acc)).toBe(false)
   })
 
-  it('closes the window for the app and gives the browser back once', async () => {
+  it('closes every window of the owner\'s for the app, and says "closed" once', async () => {
     const { service } = setup()
     const acc = account('a')
+    const changes: string[] = []
+    service.onUserWindowChange = (id, change) => changes.push(`${id}:${change}`)
     await service.openForUser(acc, 'https://www.reddit.com/login/')
-    expect(service.session(acc).control().holder).toBe('user')
+    await service.openForUser(acc, 'https://www.reddit.com/settings/')
     service.closeUserWindow(acc)
-    expect(created.windows[0].destroyed).toBe(true)
+    expect(created.windows.every((window) => window.destroyed)).toBe(true)
     expect(service.hasUserWindow(acc)).toBe(false)
-    expect(service.session(acc).control().holder).toBe('none')
+    expect(changes).toEqual(['a:opened', 'a:closed'])
     service.closeUserWindow(acc) // nothing is open any more: no error
+    expect(changes).toEqual(['a:opened', 'a:closed'])
   })
 
-  it('tells the core when the window opens and when it closes, however it was closed', async () => {
+  it('tells the core about the first window opening and the last one closing, however it was closed, and not about the ones between', async () => {
     const { service } = setup()
     const changes: string[] = []
     service.onUserWindowChange = (id, change) => changes.push(`${id}:${change}`)
     const acc = account('a')
     await service.openForUser(acc, 'https://www.reddit.com/login/')
-    await service.openForUser(acc, 'https://www.reddit.com/settings/') // the same window: not a second "opened"
+    await service.openForUser(acc, 'https://www.reddit.com/settings/')
+    await service.openForUser(acc, 'https://www.reddit.com/login/') // already open: nothing new
     expect(changes).toEqual(['a:opened'])
     created.windows[0].close()
+    expect(changes).toEqual(['a:opened'])
+    created.windows[1].close()
     expect(changes).toEqual(['a:opened', 'a:closed'])
     await service.openForUser(acc, 'https://www.reddit.com/login/')
     service.closeUserWindow(acc)
     expect(changes).toEqual(['a:opened', 'a:closed', 'a:opened', 'a:closed'])
   })
 
-  it('gives control back when the user simply closes the window', async () => {
+  it('does not touch the control of the session when a window closes: only an explicit take-over holds it, and a window cannot give it back', async () => {
     const { service } = setup()
     const acc = account('a')
     await service.openForUser(acc, 'https://www.reddit.com/login/')
+    service.session(acc).takeControl()
     created.windows[0].close()
-    expect(service.session(acc).control().holder).toBe('none')
-    expect(created.views.every((v) => v.webContents.destroyed)).toBe(true)
-  })
-
-  it('a late close event of an old window does not release a newer window\'s control', async () => {
-    const { service } = setup()
-    const acc = account('a')
-    await service.openForUser(acc, 'https://www.reddit.com/login/')
-    const first = created.windows[0]
-    created.views[1].webContents.windowOpenHandler?.({ url: `${TOOLBAR_COMMAND_ORIGIN}/release` })
-    await service.openForUser(acc, 'https://www.reddit.com/login/')
-    expect(created.windows).toHaveLength(2)
-    first.emit('closed') // duplicate/late event from the first window
     expect(service.session(acc).control().holder).toBe('user')
+    service.session(acc).releaseControl()
+    expect(service.session(acc).control().holder).toBe('none')
   })
 
   it('handles toolbar back and reload, and ignores unknown commands', async () => {
@@ -415,7 +430,7 @@ describe('user takeover and login hand-off', () => {
     bar.windowOpenHandler?.({ url: `${TOOLBAR_COMMAND_ORIGIN}/back` })
     bar.windowOpenHandler?.({ url: `${TOOLBAR_COMMAND_ORIGIN}/reload` })
     bar.windowOpenHandler?.({ url: `${TOOLBAR_COMMAND_ORIGIN}/format-disk` })
-    bar.windowOpenHandler?.({ url: 'https://evil.example/release' })
+    bar.windowOpenHandler?.({ url: 'https://evil.example/close' })
     expect([site.wentBack, site.reloaded]).toEqual([1, 1])
     expect(created.windows[0].destroyed).toBe(false)
   })
@@ -431,7 +446,7 @@ describe('user takeover and login hand-off', () => {
     expect(update).toContain('signed in as natal_bot')
   })
 
-  it('refuses a credential-bearing address without taking control or opening a window', async () => {
+  it('refuses a credential-bearing address without opening a window', async () => {
     const { service } = setup()
     const acc = account('a')
     await expect(service.openForUser(acc, 'https://me:secret@www.reddit.com/')).rejects.toThrow(/credentials/)
@@ -444,10 +459,87 @@ describe('user takeover and login hand-off', () => {
     await expect(service.openForUser(account('a'))).rejects.toThrow(/No address/)
   })
 
-  it('does not touch the page content of the user window (no scripts run in the site)', async () => {
+  it('does not touch the page content of the owner\'s window (no scripts run in the site)', async () => {
     const { service } = setup()
     await service.openForUser(account('a'), 'https://www.reddit.com/login/')
     expect(created.views[0].webContents.scripts).toEqual([])
+  })
+
+  describe('a sign-in or sign-out page used in an owner\'s window moves the session', () => {
+    async function withWindow() {
+      const { service, tickets } = setup()
+      const acc = account('a')
+      await service.session(acc).withAgentControl('t', async (page) => page.goto('https://www.reddit.com/'))
+      await service.openForUser(acc, 'https://www.reddit.com/r/yoga/')
+      const site = created.views.find((view) => view.webContents.loaded.includes('https://www.reddit.com/r/yoga/'))?.webContents as FakeWebContents
+      return { service, tickets, acc, site, session: service.session(acc), ses: created.sessions.get('persist:ppd-a') as FakeSession }
+    }
+
+    it('counts a navigation of the window to a sign-out, sign-in or account-switch address, and a redirect on the way', async () => {
+      const { site, session } = await withWindow()
+      const before = session.identityEpoch()
+      site.navigateTo('https://www.reddit.com/r/astrology/')
+      expect(session.identityEpoch()).toBe(before)
+      site.navigateTo('https://www.reddit.com/logout')
+      expect(session.identityEpoch()).toBeGreaterThan(before)
+      const afterLogout = session.identityEpoch()
+      site.navigateTo('https://www.reddit.com/login/', { redirect: true })
+      expect(session.identityEpoch()).toBeGreaterThan(afterLogout)
+    })
+
+    it('counts the first hop of a navigation and every hop of a redirect, not only the page it ends on, and nothing a frame inside the page does', async () => {
+      const { site, session } = await withWindow()
+      const before = session.identityEpoch()
+      // A sign-out that sends the window on to the home page: the page it ends on is an ordinary one.
+      site.emit('did-start-navigation', { url: 'https://www.reddit.com/logout', isMainFrame: true })
+      site.emit('did-navigate', {}, 'https://www.reddit.com/')
+      expect(session.identityEpoch()).toBe(before + 1)
+      site.emit('did-start-navigation', { url: 'https://www.reddit.com/r/yoga/', isMainFrame: true })
+      site.emit('did-redirect-navigation', { url: 'https://www.reddit.com/login/', isMainFrame: true })
+      site.emit('did-navigate', {}, 'https://www.reddit.com/r/yoga/')
+      expect(session.identityEpoch()).toBe(before + 2)
+      site.emit('did-start-navigation', { url: 'https://www.reddit.com/logout', isMainFrame: false })
+      site.emit('did-redirect-navigation', { url: 'https://www.reddit.com/logout', isMainFrame: false })
+      expect(session.identityEpoch()).toBe(before + 2)
+    })
+
+    it('counts the address the window is opened on, before it has loaded anything', async () => {
+      const { service, acc, session } = await withWindow()
+      const before = session.identityEpoch()
+      await service.openForUser(acc, 'https://www.reddit.com/login/')
+      expect(session.identityEpoch()).toBeGreaterThan(before)
+    })
+
+    it('counts a background request of the window to such an address, not an image and not a request of the AI\'s own page', async () => {
+      const { site, session, ses } = await withWindow()
+      const before = session.identityEpoch()
+      ses.emitSendHeaders({ url: 'https://www.reddit.com/logout', webContentsId: site.id, resourceType: 'image' }) // an <img> whose address is a sign-out page is not a sign-out
+      ses.emitSendHeaders({ url: 'https://www.reddit.com/api/me', webContentsId: site.id })
+      ses.emitSendHeaders({ url: 'https://www.reddit.com/api/accounts/logout/', webContentsId: agentContents().id })
+      expect(session.identityEpoch()).toBe(before)
+      ses.emitSendHeaders({ url: 'https://www.reddit.com/api/accounts/logout/', webContentsId: site.id })
+      expect(session.identityEpoch()).toBe(before + 1)
+    })
+
+    it('does not count what the AI\'s own page does: it may sign in and out as its missions say', async () => {
+      const { service, acc, session } = await withWindow()
+      const before = session.identityEpoch()
+      agentContents().navigateTo('https://www.reddit.com/login/')
+      await service.session(acc).withAgentControl('t', async (page) => page.goto('https://www.reddit.com/logout'))
+      expect(session.identityEpoch()).toBe(before)
+    })
+
+    it('stops a write of the AI\'s turn in progress, before it reaches the page, once the owner\'s window used such a page', async () => {
+      const { service, tickets, acc, site, session } = await withWindow()
+      const ticket = tickets.issue({ actionId: 'a', contentHash: 'h', accountId: 'a', destination: 'd' })
+      const turn = session.withAgentControl('mission', async (page) => {
+        site.navigateTo('https://www.reddit.com/logout')
+        await page.click('#x', ticket)
+      })
+      await expect(turn).rejects.toBeInstanceOf(SessionChangedError)
+      expect(agentContents().inputEvents).toEqual([])
+      expect(service.session(acc).control().holder).toBe('none')
+    })
   })
 })
 

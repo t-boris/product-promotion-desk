@@ -6,6 +6,7 @@ import type { Core } from '../core'
 import type { Db } from '../db/database'
 import { mapAction, mapOpportunity } from '../repos'
 import { noteRequestItems } from './mix-attention'
+import { sourceWords } from './reply-target'
 import type { ScheduleStore } from './scheduler-state'
 
 /** A channel that failed this many cycles in a row is surfaced even though its status is still 'active'. */
@@ -28,7 +29,7 @@ function opportunityItems(core: Core, db: Db, targets: Map<Id, string>): Attenti
   return rows.map((row): AttentionItem => {
     const opp: Opportunity = mapOpportunity(row)
     const where = targets.get(opp.channelId) ?? 'a channel'
-    const what = opp.kind === 'standalone' ? 'publication' : 'reply'
+    const what = sourceWords(opp)
     const draftText = core.repos.latestDraft(opp.id)?.text
     const detail = draftText ? excerpt(draftText) : excerpt(opp.reason)
     const base = { refType: 'opportunity' as const, refId: opp.id, createdAt: opp.updatedAt }

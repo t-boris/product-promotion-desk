@@ -32,12 +32,12 @@ describe('accounts.create', () => {
 })
 
 describe('login hand-off (REQ-002: the person types passwords on the site)', () => {
-  it('opens the account browser at the platform sign-in page and gives the person control', async () => {
+  it('opens a window of the account at the platform sign-in page, and nobody takes control of anything (DEC-038)', async () => {
     const w = await makeReadyWorld()
     const { tabId } = await w.call('accounts.openBrowser', { accountId: w.account.id })
     expect(tabId).toBeTruthy()
     expect(w.t.browser.opened).toEqual([{ accountId: w.account.id, url: 'https://fake.test/login' }])
-    expect(w.t.browser.session(w.account).control().holder).toBe('user')
+    expect(w.t.browser.session(w.account).control().holder).toBe('none')
   })
 
   it('opens a given address, adding https for bare hosts', async () => {
@@ -66,24 +66,59 @@ describe('login hand-off (REQ-002: the person types passwords on the site)', () 
     expect(w.t.browser.opened[0].url).toBe('https://fake.test/r/astrology')
   })
 
-  it('lets the person take and give back control, and automation yields at once', async () => {
+  it('lets the person take the AI\'s own page and give it back, shows it in front, and automation yields at once', async () => {
     const w = await makeReadyWorld()
     const session = w.t.browser.session(w.account)
     await w.call('accounts.takeControl', { accountId: w.account.id })
     expect(session.control().holder).toBe('user')
+    expect(w.t.browser.agentFocused).toEqual([w.account.id]) // the page the owner is to finish something in is put in front
     await expect(session.withAgentControl('monitor', async () => 1)).rejects.toMatchObject({ name: 'TakeoverError' })
     await w.call('accounts.releaseControl', { accountId: w.account.id })
     await expect(session.withAgentControl('monitor', async () => 1)).resolves.toBe(1)
   })
 
-  describe('the account window (the person works there; the app waits)', () => {
+  describe('the account window (the owner works there; the app does not wait, DEC-038)', () => {
     const state = (w: Awaited<ReturnType<typeof makeReadyWorld>>) => w.call('accounts.browser', { accountId: w.account.id })
 
-    it('says who holds the browser: nobody, then the person while the window is open', async () => {
+    it('says that nobody holds the browser, and whether a window of the owner is open; "user" only after an explicit take-over', async () => {
       const w = await makeReadyWorld()
       expect(await state(w)).toEqual({ holder: 'none', windowOpen: false, chromeFound: true })
       await w.call('accounts.openBrowser', { accountId: w.account.id })
+      expect(await state(w)).toEqual({ holder: 'none', windowOpen: true, chromeFound: true })
+      await w.call('accounts.takeControl', { accountId: w.account.id })
       expect(await state(w)).toEqual({ holder: 'user', windowOpen: true, chromeFound: true })
+    })
+
+    it('opens any number of windows; a window that already shows the address is brought to the front instead', async () => {
+      const w = await makeReadyWorld()
+      await w.call('accounts.openBrowser', { accountId: w.account.id, url: 'https://fake.test/a' })
+      await w.call('accounts.openBrowser', { accountId: w.account.id, url: 'https://fake.test/b' })
+      expect(w.t.browser.windows.get(w.account.id)).toEqual(['https://fake.test/a', 'https://fake.test/b'])
+      await w.call('accounts.openBrowser', { accountId: w.account.id, url: 'https://fake.test/a' })
+      expect(w.t.browser.windows.get(w.account.id)).toHaveLength(2)
+      expect(w.t.browser.shown).toEqual([w.account.id])
+    })
+
+    it('does not interrupt a turn of the AI in progress when the owner opens a window, and the turn can still finish', async () => {
+      const w = await makeReadyWorld()
+      const session = w.t.browser.session(w.account)
+      let finished = false
+      const turn = session.withAgentControl('mission', async (page) => {
+        await page.goto('https://fake.test/r/a')
+        await w.call('accounts.openBrowser', { accountId: w.account.id, url: 'https://fake.test/login' })
+        await page.goto('https://fake.test/r/b')
+        finished = true
+        return 'done'
+      })
+      await expect(turn).resolves.toBe('done')
+      expect(finished).toBe(true)
+      expect(session.control().holder).toBe('none')
+    })
+
+    it('does not make the AI wait for the window: the next turn starts while the window is open', async () => {
+      const w = await makeReadyWorld()
+      await w.call('accounts.openBrowser', { accountId: w.account.id })
+      await expect(w.t.browser.session(w.account).withAgentControl('monitor', async () => 1)).resolves.toBe(1)
     })
 
     it('brings an open window to the front without opening a page again, and says so when there is none', async () => {
@@ -124,23 +159,53 @@ describe('login hand-off (REQ-002: the person types passwords on the site)', () 
       expect(seen).toContain('accounts')
     })
 
-    it('does not refuse to give the browser back while the window is open: it closes the window and returns control', async () => {
+    it('giving control back returns the AI\'s page and leaves the owner\'s windows open', async () => {
       const w = await makeReadyWorld()
       await w.call('accounts.openBrowser', { accountId: w.account.id })
       const session = w.t.browser.session(w.account)
+      await w.call('accounts.takeControl', { accountId: w.account.id })
       expect(session.control().holder).toBe('user')
       await w.call('accounts.releaseControl', { accountId: w.account.id })
-      expect(w.t.browser.windows.has(w.account.id)).toBe(false)
-      expect(await state(w)).toMatchObject({ windowOpen: false })
-      await vi.waitFor(async () => expect(await session.withAgentControl('monitor', async () => 1)).toBe(1))
+      expect(w.t.browser.windows.has(w.account.id)).toBe(true)
+      expect(await state(w)).toMatchObject({ holder: 'none', windowOpen: true })
+      await expect(session.withAgentControl('monitor', async () => 1)).resolves.toBe(1)
     })
 
-    it('says what to do when an action needs the browser while the window is open', async () => {
+    it('an action that needs the browser works while a window is open, and says what to do only after an explicit take-over', async () => {
       const w = await makeReadyWorld()
       await w.call('accounts.openBrowser', { accountId: w.account.id })
+      w.fake.login = { loggedIn: true, identity: 'natal_bot', captcha: false }
+      await expect(w.call('accounts.checkLogin', { accountId: w.account.id })).resolves.toMatchObject({ status: 'ready', identity: 'natal_bot' })
+      await w.call('accounts.takeControl', { accountId: w.account.id })
       const error = await w.call('accounts.checkLogin', { accountId: w.account.id }).catch((e: unknown) => e)
       expect(error).toMatchObject({ code: 'browser_busy' })
-      expect((error as ApiError).message).toContain('window is open')
+      expect((error as ApiError).message).toContain('took control')
+    })
+
+    it('the owner\'s window is not looked at while the AI works on the account: closing it does not take the AI\'s page away', async () => {
+      const w = await makeReadyWorld()
+      await w.call('accounts.openBrowser', { accountId: w.account.id })
+      w.core.services.agent = { questions: () => [], working: (id) => id === w.account.id }
+      w.fake.calls.length = 0
+      w.t.browser.closeUserWindow(w.account)
+      await new Promise((r) => setTimeout(r, 20))
+      expect(w.fake.calls).not.toContain('checkLogin')
+    })
+
+    it('tells the core about the first window opening and the last one closing, not about the ones between', async () => {
+      const w = await makeReadyWorld()
+      const changes: string[] = []
+      const before = w.t.browser.onUserWindowChange
+      w.t.browser.onUserWindowChange = (id, change) => {
+        changes.push(change)
+        before?.(id, change)
+      }
+      await w.call('accounts.openBrowser', { accountId: w.account.id, url: 'https://fake.test/a' })
+      await w.call('accounts.openBrowser', { accountId: w.account.id, url: 'https://fake.test/b' })
+      w.t.browser.closeUserWindow(w.account, 'https://fake.test/a')
+      expect(changes).toEqual(['opened'])
+      w.t.browser.closeUserWindow(w.account, 'https://fake.test/b')
+      expect(changes).toEqual(['opened', 'closed'])
     })
 
     it('checks the sign-in once when the person closes the window, so no button has to be pressed', async () => {
@@ -272,7 +337,7 @@ describe('accounts.checkLogin', () => {
     expect('issue' in (seen as unknown as object)).toBe(false)
   })
 
-  it('refuses while the person holds the browser, without changing the account', async () => {
+  it('refuses while the person has taken control of the AI\'s page, without changing the account', async () => {
     const w = await makeReadyWorld()
     await w.call('accounts.takeControl', { accountId: w.account.id })
     expect(await w.refusal('accounts.checkLogin', { accountId: w.account.id })).toBe('browser_busy')

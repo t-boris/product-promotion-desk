@@ -3,6 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import type { ControlledSession } from '../../core/browser-session'
 import { makeTestCore } from '../../core/testing/fakes'
 import { TicketError, type PublishRequest } from '../../core/ports'
 import { authIssueOf, CaptchaRequiredError, LoginRequiredError } from '../errors'
@@ -101,6 +102,43 @@ describe('Reddit publishing: authorization', () => {
     }
     const outcome = await connector.publish(h.ctx, h.ticketFor(THREAD_URL), replyRequest())
     expect(outcome.status).toBe('failed')
+    expect(h.page.log.some((l) => l.startsWith('click form[id^="form-t1_c1"] button.save'))).toBe(false)
+  })
+})
+
+describe('Reddit publishing: the owner\'s windows share the session (DEC-038)', () => {
+  it('opening a window that signs nothing in or out does not stop a send', async () => {
+    const h = setup()
+    armReply(h)
+    // The owner browses (an address that is not a sign-in page says nothing to the session): the send goes through as before.
+    const outcome = await connector.publish(h.ctx, h.ticketFor(THREAD_URL), replyRequest())
+    expect(outcome.status).toBe('confirmed')
+  })
+
+  it('ends as a definite failure, with no submit click, when the owner used a sign-out page of the account while the form was being filled', async () => {
+    const h = setup()
+    armReply(h)
+    h.page.waitForSelector = async (selector: string) => {
+      if (selector.includes('textarea')) (h.ctx.session as ControlledSession).noteIdentityActivity()
+      return true
+    }
+    const outcome = await connector.publish(h.ctx, h.ticketFor(THREAD_URL), replyRequest())
+    expect(outcome).toMatchObject({ status: 'failed', error: expect.stringMatching(/sign-in may have changed/) })
+    expect(h.page.log.some((l) => l.startsWith('click form[id^="form-t1_c1"] button.save'))).toBe(false)
+  })
+})
+
+describe('Reddit publishing: a sign-out page used in the owner\'s window right before the submit click (DEC-038)', () => {
+  it('is still a definite failure: the refused click did not happen, so the text is not on the site, even though the submit step was reached', async () => {
+    const h = setup()
+    armReply(h)
+    const fill = h.page.fill.bind(h.page)
+    h.page.fill = async (selector: string, text: string) => {
+      await fill(selector, text)
+      ;(h.ctx.session as ControlledSession).noteIdentityActivity()
+    }
+    const outcome = await connector.publish(h.ctx, h.ticketFor(THREAD_URL), replyRequest())
+    expect(outcome).toMatchObject({ status: 'failed', error: expect.stringMatching(/sign-in may have changed/) })
     expect(h.page.log.some((l) => l.startsWith('click form[id^="form-t1_c1"] button.save'))).toBe(false)
   })
 })

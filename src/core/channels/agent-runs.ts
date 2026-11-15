@@ -513,10 +513,13 @@ export class AgentRunService implements PostMissionService {
     if (!bridge) return this.finish(live, 'failed', 'The AI browser agent is not available in this build.')
     const session = this.core.browser.session(account)
     const join = mission.join
+    // The owner may use a sign-in or sign-out page of the same session in a window of their own (DEC-038): a join is made by the account that was
+    // signed in when the mission began, or by nobody.
+    const startedAt = session.identityEpoch()
     // Smaller copies of a picture, for a site that limits its size; they are removed when the mission ends.
     const shrunkDir = pathJoin(this.core.dataDir, 'shrunk', account.id)
     const toolbox = new BrowserToolbox({
-      // Each call holds the browser only for itself, so the owner can take it between two calls.
+      // Each call holds the AI's page only for itself, so an explicit Take control can come between two calls.
       withPage: (work) => session.withAgentControl(`agent-${kind}`, work),
       hosts: mission.hosts,
       values: mission.values,
@@ -530,7 +533,7 @@ export class AgentRunService implements PostMissionService {
       report: (result) => void (live.reported = result),
       signal: live.abort.signal,
       // A join mission has its own seven tools, one allowed click and a pause between actions; the others are as they were.
-      ...(join ? { maxCalls: MISSIONS[kind].maxCalls, join: { community: join.community, destination: join.destination, minGapMs: JOIN_MIN_GAP_MS, now: () => this.core.clock.now().getTime() } } : {})
+      ...(join ? { maxCalls: MISSIONS[kind].maxCalls, join: { community: join.community, destination: join.destination, minGapMs: JOIN_MIN_GAP_MS, now: () => this.core.clock.now().getTime(), sessionMoved: () => session.identityEpoch() !== startedAt } } : {})
     })
     try {
       const today = this.core.clock.now().toISOString().slice(0, 10)

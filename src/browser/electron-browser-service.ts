@@ -6,8 +6,8 @@ import { ElectronRawPage, type AgentSurface } from './agent-page'
 import { pageReadingScript, type PageReading } from './page-scripts'
 import { PageRecorder } from './page-recorder'
 import { addressOf, forgetReports, saveReport } from './page-report'
+import { isSessionAddress } from '../core/session-address'
 import { cleanUserAgent, normalizeBrowserUrl, persistentPartition } from './targets'
-import { UserControl } from './toolbar-state'
 import { UserBrowserWindow } from './user-window'
 
 /** Size of the hidden agent window: sites lay out and test visibility against a real viewport, not 0 x 0. */
@@ -17,19 +17,33 @@ interface AccountBrowser {
   session: ControlledSession
   agent: ElectronRawPage
   partition: string
-  userWindow: UserBrowserWindow | null
+  /** The owner's windows on the account's session (DEC-038): any number, none of them takes anything from the AI. */
+  userWindows: Set<UserBrowserWindow>
+  /** The one the owner used last: "Use the page I'm on" reads it. */
+  lastUsed: UserBrowserWindow | null
   recorder: PageRecorder
-  /** The agent's window was shown to the owner and hidden while their own window is open; it comes back when theirs closes. */
-  resumeWatch: boolean
 }
 
+/** What the network layer says about a request, as far as this service reads it. */
+interface RequestDetails {
+  url: string
+  method: string
+  resourceType?: string
+  webContentsId?: number
+}
+
+/** The kinds of request an owner's window makes in the background that can sign an account out or in (a fetch, a form post, a beacon). */
+const BACKGROUND_KINDS = new Set(['xhr', 'ping', 'other', 'subFrame'])
+
 /**
- * Electron implementation of the browser service (REQ-002, REQ-004).
+ * Electron implementation of the browser service (REQ-002, REQ-004, DEC-038).
  *
  *  - one persistent session per account (`persist:` partition) and exactly one ControlledSession per account,
  *    so every channel and product sharing the account is serialized through the same object;
- *  - the agent works in a hidden WebContents of that partition; the user gets a separate window on the same
- *    partition and taking it stops the agent at once (ControlledSession);
+ *  - the AI works in a hidden WebContents of that partition; the owner gets as many separate windows on the same partition as they
+ *    open, and none of them takes the browser from the AI (only an explicit take-over of the AI's own page does, in ControlledSession);
+ *  - a window of the owner's that goes to a sign-in, sign-out or account-switch address tells the session (`noteIdentityActivity`), so a
+ *    mission that checked who is signed in before knows that the check is out of date;
  *  - this is the only place besides src/main that imports Electron.
  */
 export class ElectronBrowserService implements BrowserService, PageObserver {
@@ -40,6 +54,8 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
   /** Set by the core: a request of the page failed or was refused by the site. */
   onPageNote?: (accountId: string, note: string) => void
   private readonly recorders = new Map<string, PageRecorder>()
+  /** The account of each partition, for the network layer, which knows a partition and a page, not an account. */
+  private readonly owners = new Map<string, AccountBrowser>()
 
   /** `options.diagnosticsDir`: where page reports are saved (DEC-016); without it they are only returned. */
   constructor(
@@ -59,8 +75,8 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
     const entry: AccountBrowser = {
       partition,
       agent,
-      userWindow: null,
-      resumeWatch: false,
+      userWindows: new Set(),
+      lastUsed: null,
       recorder: new PageRecorder(
         () => Date.now(),
         () => this.pageHost(entry),
@@ -69,6 +85,7 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
       session: new ControlledSession(account.id, async () => agent, this.tickets)
     }
     this.recorders.set(partition, entry.recorder)
+    this.owners.set(partition, entry)
     this.accounts.set(account.id, entry)
     return entry
   }
@@ -81,51 +98,67 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
     this.entry(account).agent.reveal(focus)
   }
 
+  /**
+   * One more window of the account's session for the owner (DEC-038). A window that already shows exactly this address is brought to the front
+   * instead; the AI's page is not touched, nothing is taken from it, and nobody waits. The core is told when the first window opens.
+   */
   async openForUser(account: Account, url?: string): Promise<{ tabId: string }> {
     const entry = this.entry(account)
     const target = normalizeBrowserUrl(url ?? entry.agent.currentUrl() ?? '')
     const tabId = `account-${account.id}`
 
-    if (entry.userWindow && !entry.userWindow.isClosed()) {
-      entry.userWindow.navigate(target)
-      entry.userWindow.focus()
+    const same = [...entry.userWindows].find((window) => !window.isClosed() && window.address() === target)
+    if (same) {
+      same.focus()
       return { tabId }
     }
 
     this.configureSession(entry.partition)
-    // The agent stops interacting the moment the user takes the browser, before the window is even shown.
-    const control = new UserControl(entry.session)
-    control.begin()
-    // Two windows on one account would confuse: the owner's own window replaces the one they watch the AI in.
-    entry.resumeWatch = entry.agent.conceal()
-    try {
-      entry.userWindow = new UserBrowserWindow({
-        account: { label: account.label, identity: account.identity },
-        partition: entry.partition,
-        url: target,
-        control,
-        onClosed: () => {
-          entry.userWindow = null
-          if (entry.resumeWatch) {
-            entry.resumeWatch = false
-            entry.agent.reveal(false)
-          }
-          this.onUserWindowChange?.(account.id, 'closed')
-        }
-      })
-    } catch (error) {
-      control.release()
-      throw error
-    }
-    this.watchConsole(entry.userWindow.siteContents(), entry.recorder)
-    this.onUserWindowChange?.(account.id, 'opened')
+    const first = this.openWindows(entry) === 0
+    const window: UserBrowserWindow = new UserBrowserWindow({
+      account: { label: account.label, identity: account.identity },
+      partition: entry.partition,
+      url: target,
+      onAddress: (address) => this.ownerAddress(entry, address, 'page'),
+      onFocused: () => void (entry.lastUsed = window),
+      onClosed: () => {
+        entry.userWindows.delete(window)
+        if (entry.lastUsed === window) entry.lastUsed = null
+        if (this.openWindows(entry) === 0 && this.accounts.get(account.id) === entry) this.onUserWindowChange?.(account.id, 'closed')
+      }
+    })
+    entry.userWindows.add(window)
+    entry.lastUsed = window
+    this.owners.set(entry.partition, entry)
+    this.watchConsole(window.siteContents(), entry.recorder)
+    if (first) this.onUserWindowChange?.(account.id, 'opened')
     return { tabId }
   }
 
-  /** The page the account is on now: the owner's window while it is open, else the page the app works in. */
+  private openWindows(entry: AccountBrowser): number {
+    return [...entry.userWindows].filter((window) => !window.isClosed()).length
+  }
+
+  /**
+   * An address one of the owner's windows went to or asked for. The AI's own page never reports here: only the owner's windows can sign the
+   * session in, out or over to another account behind a mission's back, and the mission must not be refused for what the AI itself does.
+   */
+  private ownerAddress(entry: AccountBrowser, address: string, use: 'page' | 'request'): void {
+    if (isSessionAddress(address, use)) entry.session.noteIdentityActivity()
+  }
+
+  /** The window of the owner's that was used last and is still open. */
+  private ownerWindow(entry: AccountBrowser | undefined): UserBrowserWindow | null {
+    if (!entry) return null
+    const open = [...entry.userWindows].filter((window) => !window.isClosed() && !window.siteContents().isDestroyed())
+    if (entry.lastUsed && open.includes(entry.lastUsed)) return entry.lastUsed
+    return open.at(-1) ?? null
+  }
+
+  /** The page the account is on now: the owner's window used last while one is open, else the page the app works in. */
   private livePage(entry: AccountBrowser): { contents: WebContents; where: PageReport['where'] } | null {
-    const window = entry.userWindow
-    if (window && !window.isClosed() && !window.siteContents().isDestroyed()) return { contents: window.siteContents(), where: 'owner_window' }
+    const window = this.ownerWindow(entry)
+    if (window) return { contents: window.siteContents(), where: 'owner_window' }
     const contents = entry.agent.existingContents()
     return contents ? { contents, where: 'app_page' } : null
   }
@@ -171,50 +204,55 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
     return report
   }
 
-  /** The address and title of the page in the owner's window (DEC-028): what the window itself reports, nothing is read from the page. Null when the window is not open. */
+  /**
+   * The address and title of the page in the owner's window used last (DEC-028, DEC-038): what the window itself reports, nothing is read from
+   * the page. Null when no window is open. Windows are tracked by focus, so there is always one page the owner is on, and `tabs` stays unset.
+   */
   async ownerPage(account: Account): Promise<OwnerPage | null> {
-    const window = this.accounts.get(account.id)?.userWindow
-    if (!window || window.isClosed() || window.siteContents().isDestroyed()) return null
+    const window = this.ownerWindow(this.accounts.get(account.id))
+    if (!window) return null
     const contents = window.siteContents()
     return { url: contents.getURL(), title: contents.getTitle() }
   }
 
-  /** True while the person's window for this account is open (the toolbar there shows who holds the browser). */
+  /** True while at least one window of the owner's on this account is open. */
   hasUserWindow(account: Account): boolean {
-    const window = this.accounts.get(account.id)?.userWindow
-    return window !== null && window !== undefined && !window.isClosed()
+    const entry = this.accounts.get(account.id)
+    return entry !== undefined && this.openWindows(entry) > 0
   }
 
-  /** Brings the person's window for this account to the front. False when it is not open. */
+  /** Brings the owner's window used last to the front. False when none is open. */
   showUserWindow(account: Account): boolean {
-    const window = this.accounts.get(account.id)?.userWindow
-    if (!window || window.isClosed()) return false
+    const window = this.ownerWindow(this.accounts.get(account.id))
+    if (!window) return false
     window.focus()
     return true
   }
 
-  /** Closes the person's window without a prompt; closing it gives the browser back (UserControl releases once). */
+  /** Closes every window of the owner's on the account, without a prompt. */
   closeUserWindow(account: Account): void {
-    this.accounts.get(account.id)?.userWindow?.destroy()
+    for (const window of [...(this.accounts.get(account.id)?.userWindows ?? [])]) window.destroy()
   }
 
   /** Lets go of the account's windows and hidden page without erasing its session (the account moves to the other browser, DEC-026). */
   async releaseAccount(account: Account): Promise<void> {
     const entry = this.accounts.get(account.id)
     if (!entry) return
-    entry.userWindow?.destroy()
+    this.closeUserWindow(account)
     entry.agent.dispose()
     this.accounts.delete(account.id)
+    this.owners.delete(entry.partition)
   }
 
   /** Called when an account is deleted: closes its windows and wipes the stored session (cookies, storage). */
   async forgetAccount(account: Account): Promise<void> {
     const entry = this.accounts.get(account.id)
     const partition = entry?.partition ?? persistentPartition(account.partition)
-    entry?.userWindow?.destroy()
+    if (entry) this.closeUserWindow(account)
     entry?.session.takeControl() // nothing may start on a session that is being erased
     entry?.agent.dispose()
     this.accounts.delete(account.id)
+    this.owners.delete(partition)
     this.recorders.delete(partition)
     if (this.options.diagnosticsDir) await forgetReports(this.options.diagnosticsDir, account.id)
     const ses = electronSession.fromPartition(partition)
@@ -240,28 +278,20 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
       if (!contents.isDestroyed()) contents.close()
       if (!win.isDestroyed()) win.destroy()
     }
-    let revealed = false
     // The owner may close the window they watch the AI in: it is only hidden, the page and the AI's work go on.
     win.on('close', (event: { preventDefault(): void }) => {
       event.preventDefault()
-      revealed = false
       win.hide()
     })
     const reveal = (focus: boolean): void => {
       if (win.isDestroyed()) return
       win.setTitle(`${label} — the AI is working here`)
       win.showInactive()
-      revealed = true
       if (focus) {
         win.moveTop()
         win.focus()
         if (!contents.isDestroyed()) contents.focus()
       }
-    }
-    const conceal = (): void => {
-      if (win.isDestroyed()) return
-      revealed = false
-      win.hide()
     }
     contents.setAudioMuted(true)
     const recorder = this.recorders.get(partition)
@@ -272,7 +302,7 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
     })
     // A crashed page is dropped; the next operation creates a fresh one.
     contents.on('render-process-gone', dispose)
-    return { contents, dispose, reveal, conceal, isRevealed: () => revealed }
+    return { contents, dispose, reveal }
   }
 
   /** Applied once per partition: no permission prompts, no downloads, and a plain-Chromium user agent. */
@@ -287,5 +317,15 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
     // Notifications only: they change nothing about a request. What the page asked for and what the site answered (DEC-016).
     ses.webRequest.onCompleted((details) => this.recorders.get(partition)?.completed(details))
     ses.webRequest.onErrorOccurred((details) => this.recorders.get(partition)?.failed(details))
+    // Also a notification (it cannot change a request): what the owner's windows ask the site for in the background, so a sign-out or an
+    // account switch that is a request and not a page is seen as well (DEC-038). The AI's own page is not listened to.
+    ses.webRequest.onSendHeaders((details: RequestDetails) => this.ownerRequest(partition, details))
+  }
+
+  private ownerRequest(partition: string, details: RequestDetails): void {
+    const entry = this.owners.get(partition)
+    if (!entry || details.webContentsId === undefined || !BACKGROUND_KINDS.has(details.resourceType ?? '')) return
+    const ownerWindow = [...entry.userWindows].some((window) => !window.isClosed() && !window.siteContents().isDestroyed() && window.siteContents().id === details.webContentsId)
+    if (ownerWindow) this.ownerAddress(entry, details.url, 'request')
   }
 }

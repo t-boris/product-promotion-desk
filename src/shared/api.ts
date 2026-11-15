@@ -57,6 +57,7 @@ import type {
   LogLevel,
   OpportunityCard,
   OpportunityKind,
+  OpportunitySource,
   OpportunityState,
   PassportSection,
   PassportVersion,
@@ -65,6 +66,7 @@ import type {
   Product,
   ProductSource,
   PromotionGoalInput,
+  ResultsHistory,
   ResultsView,
   RoleSuggestion,
   MetricSnapshot,
@@ -73,7 +75,8 @@ import type {
   SiteProfileDraft,
   SourceKind,
   SourceScope,
-  AnalysisStage
+  AnalysisStage,
+  OverviewView
 } from './types'
 
 export interface SourcePreview {
@@ -279,7 +282,11 @@ export interface ApiMethods {
   'channels.checkNow': [{ channelId: Id }, Run]
 
   // opportunities, review queues, publications (REQ-003, REQ-004)
-  'opportunities.list': [{ channelId?: Id; kind?: OpportunityKind; states?: OpportunityState[] }, OpportunityCard[]]
+  /**
+   * Opportunities, newest first, at most 300. `productId` keeps those of one product; `source` those of one source (DEC-039): the Feed's chips are
+   * `source: 'new_post'`, `'comment'`, `'reply_to_me'` and `'mention'`. Every filter is optional and they combine.
+   */
+  'opportunities.list': [{ channelId?: Id; productId?: Id; kind?: OpportunityKind; source?: OpportunitySource; states?: OpportunityState[] }, OpportunityCard[]]
   'opportunities.get': [{ id: Id }, OpportunityCard]
   'opportunities.prepareDraft': [{ id: Id }, OpportunityCard]
   'opportunities.saveDraft': [{ id: Id; draft: DraftInput }, OpportunityCard]
@@ -369,6 +376,10 @@ export interface ApiMethods {
   // results and logs (REQ-005, REQ-006)
   'results.get': [{ productId?: Id }, ResultsView]
   'results.refresh': [{ channelId: Id }, MetricSnapshot[]]
+  /** Every kept reading of the product's channels over the last `days` days (1-365). Readings the platform did not give stay null. */
+  'results.history': [{ productId: Id; days: number }, ResultsHistory]
+  /** The funnel, the channels, the attention items and the sends per day of one product over the last `days` days (1-365); `utcOffsetMinutes` is `-new Date().getTimezoneOffset()`. */
+  'overview.get': [{ productId: Id; days: number; utcOffsetMinutes?: number }, OverviewView]
   'runs.list': [{ limit?: number; channelId?: Id }, Run[]]
   'logs.list': [{ limit?: number; level?: LogLevel }, LogEvent[]]
   'history.list': [{ limit?: number }, HistoryEntry[]]

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { ControlledSession } from '../../core/browser-session'
 import { makeTestCore } from '../../core/testing/fakes'
 import { TicketError, type PublishRequest } from '../../core/ports'
 import { authIssueOf, CaptchaRequiredError, LoginRequiredError } from '../errors'
@@ -41,7 +42,7 @@ describe('universal connector: unknown site without a valid profile', () => {
   it('says plainly that nothing is read here, keeps posting at needs_check, and never claims verified (DEC-034)', async () => {
     const { connector, ctx, page } = setup({ profile: null })
     const caps = await connector.assess(ctx)
-    expect(caps).toHaveLength(9)
+    expect(caps).toHaveLength(10)
     const status = Object.fromEntries(caps.map((c) => [c.key, c.status]))
     // Posting is the one ability that stays: the AI makes the post in the account's browser, and the owner confirms it afterwards.
     expect(status.publish_post).toBe('needs_check')
@@ -329,6 +330,20 @@ describe('universal connector: publishing', () => {
     h.page.errors = ['You are posting too fast']
     const outcome = await h.connector.publish(h.ctx, h.ticketFor(CHANNEL), post())
     expect(outcome).toMatchObject({ status: 'failed', error: expect.stringMatching(/too fast/) })
+  })
+
+  it('stops with a definite failure, and no submit click, when the owner used a sign-out page of the account in their own window while the flow typed (DEC-038)', async () => {
+    const h = setup()
+    h.page.afterSubmitUrl = 'https://forum.example.com/t/2'
+    h.page.site.get('https://forum.example.com/t/2')!.selectors.add('div.post.mine')
+    const fill = h.page.fill.bind(h.page)
+    h.page.fill = async (selector: string, text: string) => {
+      await fill(selector, text)
+      ;(h.ctx.session as ControlledSession).noteIdentityActivity()
+    }
+    const outcome = await h.connector.publish(h.ctx, h.ticketFor(reply().destination), reply())
+    expect(outcome).toMatchObject({ status: 'failed', error: expect.stringMatching(/sign-in may have changed/) })
+    expect(h.page.writes.some((w) => w.startsWith('click button.submit'))).toBe(false)
   })
 
   it('reports unknown when the page breaks after the submit click', async () => {

@@ -12,6 +12,7 @@ import type {
   PublishRequest,
   RemoteComment,
   RemoteDiscussion,
+  RemoteInboxItem,
   SendTicket
 } from '../../core/ports'
 import type { Capability, MetricReading } from '../../shared/types'
@@ -143,6 +144,32 @@ export class RedditConnector implements Connector {
       if (post.removed) return null
       const read = await this.readComments(page, api, sub, post, false)
       return toDiscussion(post, read.comments, read.incomplete)
+    })
+  }
+
+  /**
+   * Replies to the account and mentions of it that belong to the channel's community (DEC-039). Two read-only listings through the signed-in page: the
+   * inbox, then the mentions list (paced, a second call). A refused mentions list does not lose the inbox's items: mentions are listed in the inbox too.
+   * Nothing is marked as read and nothing is written.
+   */
+  async readInbox(ctx: ConnectorContext, options: { limit: number } = { limit: 25 }): Promise<RemoteInboxItem[]> {
+    const sub = this.subreddit(ctx).toLowerCase()
+    return ctx.session.withAgentControl(`inbox:${ctx.channel.id}`, async (page) => {
+      await ensureRedditOrigin(page, ctx.channel.url)
+      const api = new RedditApi(page)
+      const inbox = await api.inbox('inbox', options.limit)
+      if (!inbox.ok) throw await refusalError(page, api, inbox, `Could not read the inbox: ${inbox.reason}`)
+      if (this.pacingMs > 0) await this.runtime.sleep(this.pacingMs)
+      const mentions = await api.inbox('mentions', options.limit)
+
+      const byId = new Map<string, RemoteInboxItem>()
+      for (const entry of [...inbox.value, ...(mentions.ok ? mentions.value : [])]) {
+        if (entry.subreddit.toLowerCase() !== sub) continue
+        const known = byId.get(entry.item.comment.externalId)
+        // Seen in both lists: it is a mention (the mentions list is the one that says so).
+        if (!known || entry.item.kind === 'mention') byId.set(entry.item.comment.externalId, entry.item)
+      }
+      return [...byId.values()].slice(0, options.limit)
     })
   }
 

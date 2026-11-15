@@ -13,13 +13,14 @@ import type { Channel, Id, Opportunity, OpportunityState } from '../../shared/ty
 import type { Core } from '../core'
 import { AiError } from '../ports'
 import type { DraftingService } from '../services'
-import { buildReplyContext, loadKnowledge, type Knowledge, type ReplyContext } from './context'
+import { buildReplyContext, contextIsCurrent, loadKnowledge, type Knowledge, type ReplyContext } from './context'
 import { withRole } from './role'
 import { buildReplyPrompt, parseReplyProposal, REPLY_LABEL, REPLY_SYSTEM, type ReplyProposal } from './draft-prompt'
 import { DISCLOSURE_REASON, mentionsProduct } from './auto-guard'
 import { disclosureProblem } from './disclosure'
 import { SendBlockedError } from './gate'
 import { autoEligibility, TOOL_FREE_REQUIRED_REASON } from './modes'
+import { NEW_POST_NEVER_AUTO_REASON } from './reply-target'
 import type { ReviewFlow } from './review'
 import { allowedHostsFor, checkDraftSafety } from './safety'
 import type { SendingFlow } from './sending'
@@ -200,9 +201,8 @@ export class DraftingFlow implements DraftingService {
     }
 
     // The thread may have changed while the AI was working: a draft for the old text must not be saved.
-    const current = this.store.comment(ctx.comment.id)
-    if (!current || current.contentHash !== ctx.comment.contentHash) {
-      this.store.transition(id, ['analyzing'], 'discovered', 'The comment changed while the draft was being prepared; it will be prepared again.')
+    if (!contextIsCurrent(this.store, ctx)) {
+      this.store.transition(id, ['analyzing'], 'discovered', `The ${ctx.source === 'new_post' ? 'post' : 'comment'} changed while the draft was being prepared; it will be prepared again.`)
       return 'skipped'
     }
 
@@ -263,6 +263,7 @@ export class DraftingFlow implements DraftingService {
             channel,
             category: proposal.category,
             decision: proposal.decision,
+            source: ctx.source,
             commentBody: ctx.comment.body,
             reply: proposal.reply,
             usedClaimIds: proposal.usedClaimIds,
@@ -276,7 +277,7 @@ export class DraftingFlow implements DraftingService {
     // Safe defaults: a draft in 'draft' mode stays a draft; everything else waits for approval.
     const mode = explicit ? (channel.mode === 'draft' || channel.mode === 'observe' ? 'draft' : 'approval') : channel.mode
     const target: OpportunityState = mode === 'draft' ? 'draft' : 'awaiting_approval'
-    const verbatim = [TOOL_FREE_REQUIRED_REASON, DISCLOSURE_REASON]
+    const verbatim = [TOOL_FREE_REQUIRED_REASON, DISCLOSURE_REASON, NEW_POST_NEVER_AUTO_REASON]
     // The owner is reminded of the missing disclosure whatever the mode: editing the text is theirs to do before approving.
     const undisclosed =
       (mentionsProduct(proposal.reply, ctx.product.name) && !proposal.disclosesConnection) ||

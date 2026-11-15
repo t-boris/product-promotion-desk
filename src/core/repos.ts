@@ -150,6 +150,7 @@ export const mapOpportunity = (r: Row): Opportunity => ({
   channelId: r.channel_id as string,
   productId: r.product_id as string,
   kind: r.kind as Opportunity['kind'],
+  source: (r.source as Opportunity['source'] | undefined) ?? 'comment',
   state: r.state as Opportunity['state'],
   commentId: (r.comment_id as string | null) ?? null,
   discussionId: (r.discussion_id as string | null) ?? null,

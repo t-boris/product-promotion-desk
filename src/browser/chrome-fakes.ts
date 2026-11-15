@@ -24,6 +24,11 @@ export interface FakePage extends EventEmitter {
   gotos: Array<{ url: string; timeout: number | undefined }>
   fronted: number
   shots: Array<unknown>
+  /** The page that opened this one (a pop-up, a link in a new tab), or null for a page nobody opened. */
+  openedBy: FakePage | null
+  /** The DevTools sessions that were opened and closed again on the page. */
+  sessionsOpened: number
+  sessionsClosed: number
 }
 
 /** A page that behaves as far as the tests need: scripts answer from `answers`, input is recorded. */
@@ -41,8 +46,13 @@ export function fakePage(address = 'about:blank'): FakePage & Page {
   emitter.gotos = []
   emitter.fronted = 0
   emitter.shots = []
+  emitter.openedBy = null
+  emitter.sessionsOpened = 0
+  emitter.sessionsClosed = 0
 
+  const frame = { url: () => emitter.address }
   const cdp = {
+    detach: async () => void (emitter.sessionsClosed += 1),
     send: async (method: string, params?: Record<string, unknown>): Promise<unknown> => {
       emitter.commands.push({ method, params })
       if (method === 'Runtime.evaluate') {
@@ -66,8 +76,12 @@ export function fakePage(address = 'about:blank'): FakePage & Page {
   const page = Object.assign(emitter, {
     url: () => emitter.address,
     isClosed: () => emitter.closed,
-    mainFrame: () => 'main-frame',
-    createCDPSession: async () => cdp as unknown as CDPSession,
+    mainFrame: () => frame,
+    createCDPSession: async () => {
+      emitter.sessionsOpened += 1
+      return cdp as unknown as CDPSession
+    },
+    target: () => ({ type: () => 'page', opener: () => (emitter.openedBy ? (emitter.openedBy as unknown as Page).target() : undefined), page: async () => page }),
     goto: async (url: string, options?: { timeout?: number }) => {
       emitter.gotos.push({ url, timeout: options?.timeout })
       if (emitter.gotoError) {
@@ -102,11 +116,29 @@ export function fakePage(address = 'about:blank'): FakePage & Page {
   return page as unknown as FakePage & Page
 }
 
+/** What the page's main frame is, as a `framenavigated` event carries it. */
+export const mainFrameOf = (page: FakePage & Page): unknown => page.mainFrame()
+
+/** The owner (or a page) goes to an address in a page: the address changes and the browser says the main frame navigated. */
+export function navigate(page: FakePage & Page, address: string): void {
+  page.address = address
+  page.emit('framenavigated', page.mainFrame())
+}
+
+/** A page asks for something in the background. */
+export function request(page: FakePage & Page, url: string, resourceType = 'fetch'): void {
+  page.emit('request', { url: () => url, method: () => 'POST', resourceType: () => resourceType, frame: () => page.mainFrame() })
+}
+
 export interface FakeBrowser extends EventEmitter {
   connected: boolean
   pageList: Array<FakePage & Page>
   newPages: number
   closeCalls: number
+  /** What each `newPage` was asked for. */
+  newPageOptions: Array<{ type?: string; background?: boolean } | undefined>
+  /** The next page made fails its first `goto` with this error (a slow or unreachable site). */
+  nextGotoError: Error | null
 }
 
 export function fakeBrowser(first: (FakePage & Page) | null = fakePage()): FakeBrowser & Browser {
@@ -115,11 +147,16 @@ export function fakeBrowser(first: (FakePage & Page) | null = fakePage()): FakeB
   emitter.pageList = first ? [first] : []
   emitter.newPages = 0
   emitter.closeCalls = 0
+  emitter.newPageOptions = []
+  emitter.nextGotoError = null
   return Object.assign(emitter, {
     pages: async () => emitter.pageList.filter((page) => !page.closed),
-    newPage: async () => {
+    newPage: async (options?: { type?: string; background?: boolean }) => {
       const page = fakePage()
+      page.gotoError = emitter.nextGotoError
+      emitter.nextGotoError = null
       emitter.newPages += 1
+      emitter.newPageOptions.push(options)
       emitter.pageList.push(page)
       return page
     },
@@ -129,6 +166,20 @@ export function fakeBrowser(first: (FakePage & Page) | null = fakePage()): FakeB
       emitter.emit('disconnected')
     }
   }) as unknown as FakeBrowser & Browser
+}
+
+/**
+ * A page that Chrome made without the application asking: the owner opened a tab (or a link of one of their pages did), or the AI's page opened
+ * a pop-up. The browser says a target was created.
+ */
+export function pageAppears(browser: FakeBrowser, openedBy: (FakePage & Page) | null = null, address = 'about:blank', options: { announced?: boolean } = {}): FakePage & Page {
+  const page = fakePage(address)
+  page.openedBy = openedBy
+  browser.pageList.push(page)
+  browser.emit('targetcreated', page.target())
+  // `announced: false`: the opening page does not say it opened this one (it may say so later, or not at all): only the opener of the target tells.
+  if (openedBy && options.announced !== false) openedBy.emit('popup', page)
+  return page
 }
 
 /** The Chrome going away on its own (the owner quit it, or it crashed). */

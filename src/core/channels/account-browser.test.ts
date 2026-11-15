@@ -65,12 +65,22 @@ describe('the browser of an account', () => {
     expect((await w.call('accounts.list', undefined))[0].browser).toBe('internal')
   })
 
-  it('is not changed while the owner holds the account\'s browser', async () => {
+  it('is not changed while a window of the owner\'s is open: the change would close it (DEC-038)', async () => {
     const w = await makeReadyWorld()
     await w.call('accounts.openBrowser', { accountId: w.account.id })
-    expect(await w.refusal('accounts.setBrowser', { accountId: w.account.id, browser: 'chrome' })).toBe('browser_busy')
+    const error = await w.call('accounts.setBrowser', { accountId: w.account.id, browser: 'chrome' }).catch((e: unknown) => e)
+    expect(error).toMatchObject({ code: 'browser_busy', message: expect.stringContaining('Close it') })
     expect(w.t.browser.released).toEqual([])
     expect((await w.call('accounts.list', undefined))[0].browser).toBe('internal')
+    w.t.browser.closeUserWindow(w.account)
+    expect((await w.call('accounts.setBrowser', { accountId: w.account.id, browser: 'chrome' })).browser).toBe('chrome')
+  })
+
+  it('is not changed while the owner holds the AI\'s page (an explicit take-over)', async () => {
+    const w = await makeReadyWorld()
+    await w.call('accounts.takeControl', { accountId: w.account.id })
+    expect(await w.refusal('accounts.setBrowser', { accountId: w.account.id, browser: 'chrome' })).toBe('browser_busy')
+    expect(w.t.browser.released).toEqual([])
   })
 
   it('is not changed while the AI works on the account', async () => {

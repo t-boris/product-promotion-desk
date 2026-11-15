@@ -1,11 +1,12 @@
-// The window the user gets for login hand-off and takeover: the account's site on top of its persistent session,
-// under a slim toolbar. Nothing here runs a script in the page by itself: passwords are typed by the user on the site's own
-// page and are never read, logged or stored by the application. The page is read only when the owner asks (DEC-016), and
-// then never the value of a form field.
+// A window the owner gets on an account's browser (DEC-038): the account's site on top of its persistent session, under a slim toolbar.
+// It is one more window of the session, not a hand-over: the AI keeps its own hidden page, nothing waits, and nobody takes control. Nothing
+// here runs a script in the page by itself: passwords are typed by the owner on the site's own page and are never read, logged or stored by
+// the application. The page is read only when the owner asks (DEC-016), and then never the value of a form field. What the window reports
+// is the addresses it goes to (`onAddress`), so the session can tell when a sign-in or sign-out page was used in it.
 
 import { BaseWindow, WebContentsView, type WebContents } from 'electron'
 import { normalizeBrowserUrl } from './targets'
-import { initialToolbar, parseToolbarCommand, reduceToolbar, toolbarHtml, toolbarView, type ToolbarCommand, type ToolbarEvent, type ToolbarState, type UserControl } from './toolbar-state'
+import { initialToolbar, parseToolbarCommand, reduceToolbar, toolbarHtml, toolbarView, type ToolbarCommand, type ToolbarEvent, type ToolbarState } from './toolbar-state'
 
 const TOOLBAR_HEIGHT = 46
 /** Not persistent: the toolbar page shares no cookies or storage with any site. */
@@ -16,7 +17,10 @@ export interface UserWindowOptions {
   /** Electron partition string ("persist:..."): the same session the agent uses. */
   partition: string
   url: string
-  control: UserControl
+  /** An address the window is going to or has reached (its page, not what the page loads in the background): the redirects on the way included. */
+  onAddress: (url: string) => void
+  /** The window came to the front: it is the one the owner uses now ("Use the page I'm on" reads this one). */
+  onFocused: () => void
   onClosed: () => void
 }
 
@@ -27,9 +31,11 @@ export class UserBrowserWindow {
   private state: ToolbarState
   private barReady = false
   private closed = false
+  private readonly opened: string
 
   constructor(private readonly options: UserWindowOptions) {
     const url = normalizeBrowserUrl(options.url)
+    this.opened = url
     this.state = initialToolbar(options.account, url)
 
     // BaseWindow, not BrowserWindow: the main process counts BrowserWindows to decide whether the app window is open.
@@ -60,9 +66,11 @@ export class UserBrowserWindow {
 
     this.wireSite(this.site.webContents)
     this.wireToolbar(this.bar.webContents)
+    this.win.on('focus', () => this.options.onFocused())
     this.win.on('closed', () => this.afterClosed())
 
     void this.bar.webContents.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(toolbarHtml())}`)
+    options.onAddress(url)
     void this.site.webContents.loadURL(url).catch(() => undefined) // a failed load is shown by the page itself
   }
 
@@ -75,17 +83,18 @@ export class UserBrowserWindow {
     return this.site.webContents
   }
 
+  /** The address the window shows, or is loading: what it was opened on until it has loaded something. */
+  address(): string {
+    if (this.closed || this.site.webContents.isDestroyed()) return ''
+    return this.site.webContents.getURL() || this.opened
+  }
+
   /** Brings the window above the application's own window, which is usually in front of it and hides it. */
   focus(): void {
     if (this.closed) return
     if (this.win.isMinimized()) this.win.restore()
     this.win.moveTop()
     this.win.focus()
-  }
-
-  navigate(url: string): void {
-    if (this.closed) return
-    void this.site.webContents.loadURL(normalizeBrowserUrl(url)).catch(() => undefined)
   }
 
   private layout(): void {
@@ -106,7 +115,17 @@ export class UserBrowserWindow {
   }
 
   private wireSite(contents: WebContents): void {
-    const navigated = (url: string): void => this.dispatch({ type: 'navigated', url, canGoBack: contents.navigationHistory.canGoBack() })
+    const navigated = (url: string): void => {
+      this.options.onAddress(url)
+      this.dispatch({ type: 'navigated', url, canGoBack: contents.navigationHistory.canGoBack() })
+    }
+    // The page the window goes to, and every hop of a redirect on the way (a sign-out that redirects to the sign-in page is both).
+    contents.on('did-start-navigation', (details) => {
+      if (details.isMainFrame) this.options.onAddress(details.url)
+    })
+    contents.on('did-redirect-navigation', (details) => {
+      if (details.isMainFrame) this.options.onAddress(details.url)
+    })
     contents.on('did-navigate', (_event, url) => navigated(url))
     contents.on('did-navigate-in-page', (_event, url, isMainFrame) => {
       if (isMainFrame) navigated(url)
@@ -145,21 +164,11 @@ export class UserBrowserWindow {
     if (contents.isDestroyed()) return
     if (command === 'back' && contents.navigationHistory.canGoBack()) contents.navigationHistory.goBack()
     else if (command === 'reload') contents.reload()
-    else if (command === 'release') this.release()
-  }
-
-  /** "Done, close this window": the agent may use the account again, and this window closes. */
-  release(): void {
-    if (this.closed) return
-    this.options.control.release()
-    this.dispatch({ type: 'release' })
-    this.win.close()
+    else if (command === 'close') this.destroy()
   }
 
   private afterClosed(): void {
     this.closed = true
-    // Closing the window also gives control back (idempotent when the button was used).
-    this.options.control.release()
     for (const view of [this.site, this.bar]) if (!view.webContents.isDestroyed()) view.webContents.close()
     this.options.onClosed()
   }

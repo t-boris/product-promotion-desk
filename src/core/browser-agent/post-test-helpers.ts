@@ -9,6 +9,7 @@ import type { ApprovedContent, LeaseResult, PostAuthority, SubmitLease } from '.
 export class TestAuthority implements PostAuthority {
   committed = false
   sealed = false
+  sessionMoved = false
   leases = 0
   refuse: string | null = null
   readonly issued: SendTicket[] = []
@@ -23,6 +24,7 @@ export class TestAuthority implements PostAuthority {
   async lease<T>(use: (lease: SubmitLease) => Promise<T>): Promise<LeaseResult<T>> {
     if (this.sealed) return { ok: false, reason: 'the mission is over' }
     if (this.committed) return { ok: false, reason: 'the control was already pressed' }
+    if (this.sessionMoved) return { ok: false, reason: 'the sign-in may have changed' }
     if (this.refuse) return { ok: false, reason: this.refuse }
     this.leases += 1
     const ticket = this.tickets.issue({ actionId: 'action-1', contentHash: 'hash-1', accountId: this.accountId, destination: this.content.destination })
@@ -32,6 +34,7 @@ export class TestAuthority implements PostAuthority {
       commit: () => {
         if (this.sealed) throw new Error('the mission is over')
         if (this.committed) throw new Error('the control was already pressed')
+        if (this.sessionMoved) throw new Error('the sign-in may have changed')
         this.committed = true
       },
       release: () => {

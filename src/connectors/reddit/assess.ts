@@ -210,6 +210,16 @@ export async function assessSubreddit(ctx: ConnectorContext): Promise<Capability
       seen.length > 0 ? `Readable: ${seen.join(', ')}. Anything Reddit hides is shown as unavailable, never as zero.` : 'No platform metric was observable yet.'
     )
 
+    // ── The account's inbox (DEC-039): read-only, one small listing. A refusal of it never touches the other rows. ──
+    const inbox = await attempt(() => api.inbox('inbox', 1))
+    if (inbox.ok && inbox.value.ok) {
+      b.set('read_inbox', 'verified', 'The account\'s inbox can be read, so replies to it and mentions of it can be collected.')
+    } else {
+      const status = inbox.ok && !inbox.value.ok ? inbox.value.status : 0
+      const why = inbox.ok && !inbox.value.ok ? inbox.value.reason : inbox.ok ? '' : inbox.reason
+      b.set('read_inbox', [401, 403, 404].includes(status) ? 'unavailable' : 'needs_check', `The account's inbox could not be read (${why || 'no reason given'}), so replies to it and mentions of it are not collected.`)
+    }
+
     // ── Publishing UI (reachability only, nothing is typed or clicked) ──
     const sample = posts.find((p) => !p.locked && !p.archived)
     const finalPost = verdicts.post.status === 'needs_check' ? await checkForm(page, verdicts.post, oldSubmitUrl(sub, 'self'), SEL.postForm, 'submit form') : verdicts.post

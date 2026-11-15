@@ -1,4 +1,5 @@
 import {
+  SessionChangedError,
   TakeoverError,
   type BrowserPage,
   type BrowserSession,
@@ -25,16 +26,19 @@ export interface RawPage {
 }
 
 /**
- * Wraps one account's browser identity with the application-level rules of REQ-002 and REQ-004:
- *  - control is held by exactly one party; agent runs for the same account are serialized;
- *  - when the user takes control, the agent immediately stops interacting with the tab;
- *  - every write-class page action requires a valid SendTicket issued by the SendGate.
+ * Wraps one account's browser identity with the application-level rules of REQ-002 and REQ-004 (DEC-038):
+ *  - the AI's turns on its page for the same account are serialized; the owner's windows are separate pages of the session and take nothing;
+ *  - when the owner explicitly takes control of the AI's page, the agent immediately stops interacting with it;
+ *  - every write-class page action requires a valid SendTicket issued by the SendGate, and is refused when the owner used a sign-in or
+ *    sign-out page of the session since the turn began.
  */
 export class ControlledSession implements BrowserSession {
   private holder: 'agent' | 'user' | 'none' = 'none'
   private owner: string | null = null
   /** Incremented on every takeover so an in-flight agent run can detect that it lost control. */
   private epoch = 0
+  /** Incremented when the owner did something in the session that can change who is signed in (see `identityEpoch`). */
+  private identityChanges = 0
   private tail: Promise<unknown> = Promise.resolve()
   private page: RawPage | null = null
 
@@ -46,6 +50,15 @@ export class ControlledSession implements BrowserSession {
 
   control(): { holder: 'agent' | 'user' | 'none'; owner: string | null } {
     return { holder: this.holder, owner: this.owner }
+  }
+
+  identityEpoch(): number {
+    return this.identityChanges
+  }
+
+  /** Called by the browser service when an owner window used a sign-in, sign-out or account-switch page of this session. */
+  noteIdentityActivity(): void {
+    this.identityChanges += 1
   }
 
   takeControl(): void {
@@ -68,10 +81,11 @@ export class ControlledSession implements BrowserSession {
       // The user may have taken control while this run waited in the queue.
       if (this.userHolds()) throw new TakeoverError()
       const myEpoch = this.epoch
+      const identityAtStart = this.identityChanges
       this.holder = 'agent'
       this.owner = owner
       this.page ??= await this.openPage()
-      return await work(this.guard(this.page, myEpoch))
+      return await work(this.guard(this.page, myEpoch, identityAtStart))
     } finally {
       if (this.agentHolds()) {
         this.holder = 'none'
@@ -90,12 +104,15 @@ export class ControlledSession implements BrowserSession {
     return this.holder === 'agent'
   }
 
-  private guard(raw: RawPage, epoch: number): BrowserPage {
+  private guard(raw: RawPage, epoch: number, identityAtStart: number): BrowserPage {
     const alive = (): void => {
       if (this.userHolds() || this.epoch !== epoch) throw new TakeoverError()
     }
+    // A write that publishes or types into a form is refused when the owner used a sign-in or sign-out page of the session during this turn:
+    // the page may now be signed in as somebody else. Reads and steps that publish nothing are not.
     const authorized = (ticket: SendTicket): void => {
       this.tickets.assertValid(ticket, { accountId: this.accountId })
+      if (this.identityChanges !== identityAtStart) throw new SessionChangedError()
     }
     return {
       goto: async (url, options) => (alive(), raw.goto(url, options)),

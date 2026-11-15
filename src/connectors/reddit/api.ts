@@ -6,6 +6,7 @@ import { fetchJsonScript, type FetchResult } from '../page-scripts'
 import { asRecord, str } from '../text'
 import {
   mapAbout,
+  mapInbox,
   mapListing,
   mapMe,
   mapMoreChildren,
@@ -16,6 +17,7 @@ import {
   type MappedComments,
   type MappedThread,
   type OwnComment,
+  type RedditInboxEntry,
   type RedditPost
 } from './mapping'
 
@@ -179,6 +181,17 @@ export class RedditApi {
     if (res.status !== 200) return failure(res)
     const comments = mapOwnComments(res.json)
     return comments ? { ok: true, value: comments } : { ok: false, status: res.status, reason: 'unexpected listing format' }
+  }
+
+  /**
+   * The account's inbox (`inbox`: replies to it and mentions) or its mentions list, newest first. Read-only: `mark=false` says that nothing is to be
+   * marked as read, so the owner's own unread badge is left as it was.
+   */
+  async inbox(box: 'inbox' | 'mentions', limit: number): Promise<ApiOutcome<RedditInboxEntry[]>> {
+    const res = await this.get(`/message/${box}.json?limit=${Math.max(1, Math.min(100, limit))}&mark=false&raw_json=1`)
+    if (res.status !== 200) return failure(res)
+    const entries = mapInbox(res.json, box === 'mentions')
+    return entries ? { ok: true, value: entries } : { ok: false, status: res.status, reason: 'unexpected listing format' }
   }
 
   /** One thing by fullname via /api/info.json (post or comment), used to read a fresh submission back. */

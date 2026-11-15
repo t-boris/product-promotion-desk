@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import type { AgentRun, Capability } from '../../shared/types'
 import { AiError, type ConnectorContext, type Membership } from '../ports'
 import { FakeConnector } from '../testing/fake-connector'
+import type { FakeBrowserService } from '../testing/fakes'
 import { JOIN_PRESSED } from '../browser-agent/join'
 import type { McpToolHost } from '../mcp/protocol'
 import { makeReadyWorld, type World } from './test-helpers'
@@ -366,6 +367,37 @@ describe('a join run', () => {
     await finished(j)
     expect(outcomes).toEqual(['link refused', 'leave refused', 'join pressed', 'second press refused', 'typing refused'])
     expect(j.w.t.browser.page(j.w.account.id).steps.filter((s) => s.step.do === 'click').map((s) => 'ref' in s.step && s.step.ref)).toEqual(['e1'])
+  })
+
+  it('presses nothing once the owner used a sign-out or sign-in page of the account\'s session in a window of their own (DEC-038): a join is made by the account that was signed in when the mission began', async () => {
+    const j = await ready()
+    const outcomes: string[] = []
+    asTheAI(j, async (_tools, call) => {
+      await call('browser_snapshot')
+      ;(j.w.core.browser as unknown as FakeBrowserService).ownerNavigated(j.w.account, 'https://fake.test/logout')
+      const joined = await call('browser_click', { ref: 'e1' })
+      outcomes.push(joined.isError ? 'join refused' : 'join pressed')
+      await call('report_result', { status: 'needs_owner', reason: 'The account may have changed.' })
+    })
+    await start(j)
+    await finished(j)
+    expect(outcomes).toEqual(['join refused'])
+    expect(j.w.t.browser.page(j.w.account.id).steps.filter((s) => s.step.do === 'click')).toEqual([])
+  })
+
+  it('a window the owner opens on some other page does not stop the join: the AI presses Join in its own page beside it', async () => {
+    const j = await ready()
+    const outcomes: string[] = []
+    asTheAI(j, async (_tools, call) => {
+      await call('browser_snapshot')
+      await (j.w.core.browser as unknown as FakeBrowserService).openForUser(j.w.account, 'https://fake.test/r/other')
+      outcomes.push((await call('browser_click', { ref: 'e1' })).isError ? 'join refused' : 'join pressed')
+      j.fake.member = true
+      await call('report_result', { status: 'done', reason: 'Joined.' })
+    })
+    await start(j)
+    await finished(j)
+    expect(outcomes).toEqual(['join pressed'])
   })
 
   it('stops when the owner presses Stop, and does not read the platform afterwards', async () => {

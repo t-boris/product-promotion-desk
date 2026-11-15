@@ -12,7 +12,7 @@ import { makeTestCore, type TestCore } from '../testing/fakes'
 import { buildCard } from './cards'
 import { FlowStore } from './store'
 
-const CAPABILITY_KEYS: CapabilityKey[] = ['read_posts', 'read_comments', 'detect_changes', 'publish_post', 'publish_reply', 'verify_send', 'metrics', 'rules', 'membership']
+const CAPABILITY_KEYS: CapabilityKey[] = ['read_posts', 'read_comments', 'detect_changes', 'publish_post', 'publish_reply', 'verify_send', 'metrics', 'rules', 'membership', 'read_inbox']
 
 export const verifiedCapabilities = (): Capability[] => CAPABILITY_KEYS.map((key) => ({ key, status: 'verified', detail: '', checkedAt: null }))
 

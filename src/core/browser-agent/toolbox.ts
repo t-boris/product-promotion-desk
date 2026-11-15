@@ -9,7 +9,7 @@
 // number of calls. Full access of the engine is the owner's decision (DEC-018): these checks keep the work sane, they are not a wall.
 
 import { stat } from 'node:fs/promises'
-import { TakeoverError, type BrowserPage, type PageStep } from '../ports'
+import { SessionChangedError, TakeoverError, type BrowserPage, type PageStep } from '../ports'
 import type { McpTool, McpToolHost, McpToolResult } from '../mcp/protocol'
 import { DOCUMENT_TOKEN_SCRIPT, approvedFileProblem, changesPostSettings, changesProfile, communitiesShown, communityOf, destinationMatches, fieldValueScript, filesHeldScript, formTextScript, isAttachControl, isPublishingControl, looksLikeProgress, looksLikeSubmit, neverClicked, opensFileChooser, onComposePage, composePageOf, parseHeldFiles, parseHeldText, replyTarget, platformWarning, sameContent, usesComposerDialog, type HeldText, type PostSetup, type SubmitLease } from './post-submit'
 import { isJoinControl, joinNamesCommunity, JOIN_AMBIGUOUS, JOIN_CHANGED, JOIN_CLICK_ONLY, JOIN_INSTRUCTIONS, JOIN_PRESSED, JOIN_WRONG_PAGE, type JoinSetup } from './join'
@@ -226,6 +226,9 @@ const joinTools = (join: JoinSetup): McpTool[] => [
 
 const SUBMITTED =
   'The approved content was submitted: the control was pressed, and nothing more may be clicked, chosen or opened in this mission. Look at the page once (browser_snapshot or browser_wait_for), then call report_result. The application checks by itself that the text is on the site.'
+/** The owner used a sign-in or sign-out page of the account's session while the mission worked (DEC-038): who is signed in is not known any more. */
+export const SESSION_MOVED =
+  "A sign-in or sign-out page was used in the account's browser by the owner while this mission worked, so it is not known who is signed in. Nothing more is done in this mission, and nothing is published. Call report_result with needs_owner and say so."
 const STOPPED = 'The owner stopped this task. Stop now and do not call any tool.'
 const ENDED = 'This mission is over. Stop now and do not call any tool.'
 const FORM_HOLDS_TEXT =
@@ -364,6 +367,10 @@ export class BrowserToolbox implements McpToolHost {
         this.deps.say('You have the browser. The AI waits for you.')
         return fail(OWNER_HAS_BROWSER)
       }
+      if (error instanceof SessionChangedError) {
+        this.deps.say('A sign-in or sign-out page was used in the account\'s browser. Nothing more is done.')
+        return fail(SESSION_MOVED)
+      }
       throw error
     }
   }
@@ -486,7 +493,12 @@ export class BrowserToolbox implements McpToolHost {
 
   /** What a post mission refuses to do on the page now, in words for the AI, or null. */
   private refusalNow(): string | null {
-    return this.overNow() ?? (this.deps.post?.authority.committed ? SUBMITTED : this.joined ? JOIN_PRESSED : null)
+    return this.overNow() ?? (this.deps.post?.authority.committed ? SUBMITTED : this.joined ? JOIN_PRESSED : null) ?? this.sessionProblem()
+  }
+
+  /** Whether the account's sign-in may have changed since the mission began (DEC-038), as words for the AI: nothing that writes is done after it. */
+  private sessionProblem(): string | null {
+    return this.deps.post?.authority.sessionMoved === true || this.deps.join?.sessionMoved?.() === true ? SESSION_MOVED : null
   }
 
   /**
@@ -1073,12 +1085,22 @@ export class BrowserToolbox implements McpToolHost {
     if (problem) return { refused: problem }
 
     // No wait between this look and the point of no return: whatever ended the mission before it is seen here, and `commit` itself refuses after a seal.
-    const over = this.overNow()
+    const over = this.overNow() ?? this.sessionProblem()
     if (over) return { refused: over }
     lease.commit()
     // `still`: the pointer already rests on the control (the hover above), so the press is where it is, with no scroll, glide or wait after the
     // point of no return; a control that has left the point is not pressed.
-    const pressed = await page.publishStep({ do: 'click', ref: submitRef, still: true }, hosts, lease.ticket)
+    let pressed
+    try {
+      pressed = await page.publishStep({ do: 'click', ref: submitRef, still: true }, hosts, lease.ticket)
+    } catch (error) {
+      // The session guard answers before any input reaches the page: the press definitely did not happen, so the point of no return is taken back.
+      if (error instanceof SessionChangedError) {
+        lease.release()
+        return { refused: SESSION_MOVED }
+      }
+      throw error
+    }
     this.touched()
     if (pressed.status === 'wrong_host' || pressed.status === 'not_found') {
       // These two are answered before any press reaches the page: nothing was pressed. The point of no return is taken back, and the

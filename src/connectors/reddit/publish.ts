@@ -5,6 +5,7 @@
 
 import { existsSync, statSync } from 'node:fs'
 import {
+  SessionChangedError,
   TakeoverError,
   type BrowserPage,
   type ConnectorContext,
@@ -106,6 +107,8 @@ export async function publishToReddit(
           ? await sendReply(page, api, ticket, request, sub, identity, runtime, markSubmitted)
           : await sendPost(page, api, ticket, request, sub, identity, runtime, markSubmitted)
       } catch (error) {
+        // The session refused a write before it reached the page: the owner used a sign-in or sign-out page of the account meanwhile (DEC-038). Nothing was typed or pressed by this write, so nothing was submitted, even when it was the submit click.
+        if (error instanceof SessionChangedError) return failed(error.message)
         // After the submit click an exception proves nothing: the post may or may not exist.
         if (submitted) return unknown(`The submission was made but its result could not be confirmed: ${errorMessage(error)}`)
         if (error instanceof TakeoverError) return failed('The user took control of the browser before anything was submitted.')

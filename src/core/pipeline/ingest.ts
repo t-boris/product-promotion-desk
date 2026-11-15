@@ -7,15 +7,20 @@
 //    is_own and never creates an opportunity, so neither the app nor a second login of the product can start a
 //    reply chain with the product's own voices (DEC-010);
 //  - a comment in a discussion where another login of the product already speaks gets no reply opportunity;
-//  - a comment that changes after an opportunity exists sends that opportunity back to review (unless already sent).
+//  - a comment that changes after an opportunity exists sends that opportunity back to review (unless already sent);
+//  - a post seen for the first time, by someone else, that names one of the channel's topics becomes an opportunity of its own (source `new_post`), never at
+//    the baseline and never for a post of the product's own logins (DEC-039); an edited post sends its pending opportunity back to review;
+//  - what the account's inbox lists (replies to it, mentions of it) is stored and queued by the same rules, once per comment (`ingestInbox`).
 
 import type { Account, Channel, Comment, Id, Opportunity, OpportunityState } from '../../shared/types'
-import type { RemoteComment, RemoteDiscussion } from '../ports'
+import type { RemoteComment, RemoteDiscussion, RemoteInboxItem } from '../ports'
 import type { Core } from '../core'
 import { newId } from '../db/database'
 import { commentBodyHash } from './hash'
+import { postHash } from './reply-target'
 import type { ReviewFlow } from './review'
 import type { FlowStore } from './store'
+import { matchedTerm } from './topic-match'
 import { normalizeIdentity } from './util'
 
 export interface IngestResult {
@@ -29,6 +34,15 @@ export interface IngestResult {
 }
 
 export const COMMENT_EDITED_REASON = 'The comment was edited after the draft was prepared; review it again.'
+export const POST_EDITED_REASON = 'The post was edited after the draft was prepared; review it again.'
+
+export interface InboxIngestResult {
+  /** Comments of the inbox stored for the first time. */
+  stored: number
+  newOpportunities: number
+  /** Items of the inbox that a discussion read had already queued as plain comments, now named for what they are. */
+  relabelled: number
+}
 
 /** Opportunities that have not been sent and can still be withdrawn when the comment turns out to be our own. */
 const WITHDRAWABLE: OpportunityState[] = ['discovered', 'analyzing', 'needs_user', 'no_reply', 'draft', 'awaiting_approval', 'ready', 'deferred', 'error']
@@ -54,19 +68,25 @@ export class Ingestor {
 
   /** Applies a freshly read thread (used when the SendGate finds the thread changed) with normal, non-baseline rules. */
   refreshThread(channel: Channel, account: Account, discussion: RemoteDiscussion): IngestResult {
-    const result = this.core.db.transaction(() => this.apply(channel, account, [discussion], false))()
+    // A thread read again for the gate is not a new post, even for a discussion this channel did not store before.
+    const result = this.core.db.transaction(() => this.apply(channel, account, [discussion], false, false))()
     this.store.notify()
     return result
   }
 
-  private apply(channel: Channel, account: Account, discussions: RemoteDiscussion[], baseline: boolean): IngestResult {
+  /** Every login of the product writes as the product, and so does every confirmed send of it: what they wrote is our own, whichever login wrote it (DEC-010). */
+  private ownMarks(channel: Channel, account: Account): { identities: Set<string>; resultIds: Set<string> } {
+    const identities = new Set(this.store.productAccounts(channel.productId, account.id).map((a) => normalizeIdentity(a.identity)))
+    identities.delete('')
+    return { identities, resultIds: new Set([...this.store.confirmedExternalIds(account.id), ...this.store.productConfirmedExternalIds(channel)]) }
+  }
+
+  private apply(channel: Channel, account: Account, discussions: RemoteDiscussion[], baseline: boolean, newPosts = true): IngestResult {
     const now = this.store.now()
     const identity = normalizeIdentity(account.identity)
     // Every login of the product writes as the product, so a comment by any of them is our own, not only the
     // comments of the login this channel uses.
-    const ownIdentities = new Set(this.store.productAccounts(channel.productId, account.id).map((a) => normalizeIdentity(a.identity)))
-    ownIdentities.delete('')
-    const ownResultIds = new Set([...this.store.confirmedExternalIds(account.id), ...this.store.productConfirmedExternalIds(channel)])
+    const { identities: ownIdentities, resultIds: ownResultIds } = this.ownMarks(channel, account)
     const result: IngestResult = {
       discussions: 0,
       comments: 0,
@@ -77,8 +97,17 @@ export class Ingestor {
     }
 
     for (const remote of discussions) {
-      const discussionId = this.upsertDiscussion(channel.id, remote, now)
+      const seen = this.upsertDiscussion(channel.id, remote, now)
+      const discussionId = seen.id
       result.discussions++
+      if (seen.created) {
+        // A post first seen after the baseline, by someone else, that names a topic of the channel (never when our own comments cannot be told apart).
+        if (newPosts && !baseline && identity !== '' && !ownIdentities.has(normalizeIdentity(remote.author)) && !ownResultIds.has(remote.externalId) && remote.locked !== true && remote.archived !== true) {
+          if (this.queueNewPost(channel, discussionId, remote)) result.newOpportunities++
+        }
+      } else if (seen.changed) {
+        this.reactToPostChange(discussionId, remote.url)
+      }
       for (const c of remote.comments) {
         result.comments++
         const isOwn = ownIdentities.has(normalizeIdentity(c.author)) || ownResultIds.has(c.externalId)
@@ -98,17 +127,38 @@ export class Ingestor {
     return result
   }
 
-  private upsertDiscussion(channelId: Id, d: RemoteDiscussion, now: string): Id {
-    const row = this.core.db.prepare('SELECT id FROM discussions WHERE channel_id = ? AND external_id = ?').get(channelId, d.externalId) as { id: string } | undefined
+  /** `created`: first time this channel sees the post. `changed`: its title, text or address is not what was stored. */
+  private upsertDiscussion(channelId: Id, d: RemoteDiscussion, now: string): { id: Id; created: boolean; changed: boolean } {
+    const row = this.core.db.prepare('SELECT id, url, title, body FROM discussions WHERE channel_id = ? AND external_id = ?').get(channelId, d.externalId) as
+      | { id: string; url: string; title: string; body: string }
+      | undefined
     if (row) {
       this.core.db.prepare('UPDATE discussions SET url = ?, title = ?, author = ?, body = ?, last_seen_at = ? WHERE id = ?').run(d.url, d.title, d.author, d.body, now, row.id)
-      return row.id
+      return { id: row.id, created: false, changed: row.url !== d.url || postHash(row) !== postHash(d) }
     }
+    return { id: this.insertDiscussion(channelId, d, now), created: true, changed: false }
+  }
+
+  private insertDiscussion(channelId: Id, d: Pick<RemoteDiscussion, 'externalId' | 'url' | 'title' | 'author' | 'body'>, now: string): Id {
     const id = newId()
     this.core.db
       .prepare('INSERT INTO discussions (id, channel_id, external_id, url, title, author, body, selected, first_seen_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)')
       .run(id, channelId, d.externalId, d.url, d.title, d.author, d.body, now, now)
     return id
+  }
+
+  /** Queues the reply to a new post when it is about one of the channel's topics or queries. Returns whether a reply opportunity was opened. */
+  private queueNewPost(channel: Channel, discussionId: Id, remote: RemoteDiscussion): boolean {
+    const term = matchedTerm({ title: remote.title, body: remote.body }, { topics: channel.settings.topics, queries: channel.settings.queries })
+    if (term === null || this.store.opportunityForPost(discussionId)) return false
+    const post = this.core.repos.discussion(discussionId)
+    return !this.store.openPostOpportunity(channel, post, `New post that matches "${term}"`).blocked
+  }
+
+  /** The post changed after its reply was prepared: pending work goes back to review, as it does for an edited comment. */
+  private reactToPostChange(discussionId: Id, newUrl: string): void {
+    const opp = this.store.opportunityForPost(discussionId)
+    if (opp) this.reactToChange(opp, newUrl, POST_EDITED_REASON)
   }
 
   private insertComment(channelId: Id, discussionId: Id, c: RemoteComment, baseline: boolean, isOwn: boolean, now: string): Comment {
@@ -145,7 +195,7 @@ export class Ingestor {
   }
 
   /** Thread changes before sending must be honored: pending work goes back to review with an explanation. */
-  private reactToChange(opp: Opportunity, newUrl: string): void {
+  private reactToChange(opp: Opportunity, newUrl: string, why = COMMENT_EDITED_REASON): void {
     if (opp.destination !== newUrl) this.store.updateOpportunity(opp.id, { destination: newUrl })
     switch (opp.state) {
       case 'draft':
@@ -155,11 +205,82 @@ export class Ingestor {
       case 'needs_user':
       case 'no_reply':
       case 'error':
-        this.review.returnToReview(opp.id, COMMENT_EDITED_REASON)
+        this.review.returnToReview(opp.id, why)
         break
       default:
         // discovered/analyzing: the context is read when drafting; cancelled/sending/unknown/confirmed: leave as is.
         break
     }
+  }
+
+  // ───────────── the account's inbox (DEC-039) ─────────────
+
+  /**
+   * Stores what the account's inbox listed and queues it, once per comment: a reply to the account becomes an opportunity of source `reply_to_me`, a mention
+   * `mention`. The same rules as for any comment: the first read of the inbox (`baseline`) stores and queues nothing; what any login of the product wrote is
+   * our own and queues nothing; a discussion where another login of the product already speaks gets none (DEC-010); a comment read again changes nothing.
+   *
+   * `threads` holds the whole discussion of an item when the monitor could read it: it gives the AI the post and the comments around the item. Its comments
+   * are stored as baseline, so nothing in them is queued but the item itself. The discussion of an item that is already stored is never overwritten.
+   */
+  ingestInbox(channel: Channel, account: Account, items: RemoteInboxItem[], options: { baseline: boolean; threads?: Map<string, RemoteDiscussion> }): InboxIngestResult {
+    const result = this.core.db.transaction(() => {
+      const out = this.applyInbox(channel, account, items, options.baseline, options.threads ?? new Map())
+      if (options.baseline) this.store.markInboxBaselineDone(channel.id)
+      return out
+    })()
+    this.store.notify()
+    return result
+  }
+
+  private applyInbox(channel: Channel, account: Account, items: RemoteInboxItem[], baseline: boolean, threads: Map<string, RemoteDiscussion>): InboxIngestResult {
+    const now = this.store.now()
+    const identity = normalizeIdentity(account.identity)
+    const { identities: ownIdentities, resultIds: ownResultIds } = this.ownMarks(channel, account)
+    const result: InboxIngestResult = { stored: 0, newOpportunities: 0, relabelled: 0 }
+
+    for (const item of items) {
+      const c = item.comment
+      const existing = this.store.commentByExternalId(channel.id, c.externalId)
+      if (existing) {
+        // Read again: nothing is stored twice. A comment that the discussion read queued as a plain comment is named for what it is.
+        const opp = existing.isOwn ? null : this.store.opportunityForComment(existing.id)
+        if (opp && opp.kind === 'reply' && opp.source === 'comment') {
+          this.store.updateOpportunity(opp.id, { source: item.kind })
+          result.relabelled++
+        }
+        continue
+      }
+      const isOwn = ownIdentities.has(normalizeIdentity(c.author)) || ownResultIds.has(c.externalId)
+      const discussionId = this.inboxDiscussion(channel, item, threads.get(item.discussionExternalId), ownIdentities, ownResultIds, now)
+      const stored = this.insertComment(channel.id, discussionId, c, baseline, isOwn, now)
+      result.stored++
+      // Never queue work when we cannot recognise our own comments: a reply chain with ourselves would be possible.
+      if (!baseline && !isOwn && identity !== '' && !this.store.opportunityForComment(stored.id)) {
+        if (!this.store.openReplyOpportunity(channel, stored, item.kind).blocked) result.newOpportunities++
+      }
+    }
+    return result
+  }
+
+  /** The stored discussion of an inbox item: the one already stored, else the thread as read, else a bare one made from what the item says. */
+  private inboxDiscussion(
+    channel: Channel,
+    item: RemoteInboxItem,
+    thread: RemoteDiscussion | undefined,
+    ownIdentities: Set<string>,
+    ownResultIds: Set<string>,
+    now: string
+  ): Id {
+    const known = this.store.discussionByExternalId(channel.id, item.discussionExternalId)
+    if (known) return known.id
+    if (!thread) return this.insertDiscussion(channel.id, { externalId: item.discussionExternalId, url: item.discussionUrl, title: item.discussionTitle, author: '', body: '' }, now)
+    const id = this.insertDiscussion(channel.id, { externalId: item.discussionExternalId, url: thread.url || item.discussionUrl, title: thread.title || item.discussionTitle, author: thread.author, body: thread.body }, now)
+    for (const other of thread.comments) {
+      if (other.externalId === item.comment.externalId || this.store.commentByExternalId(channel.id, other.externalId)) continue
+      const isOwn = ownIdentities.has(normalizeIdentity(other.author)) || ownResultIds.has(other.externalId)
+      this.insertComment(channel.id, id, other, true, isOwn, now)
+    }
+    return id
   }
 }

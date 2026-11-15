@@ -11,6 +11,8 @@ export interface JoinSetup {
   /** The least time between two actions on the page: a person does not act in milliseconds, and a site notices. */
   minGapMs: number
   now?: () => number
+  /** Whether the owner used a sign-in or sign-out page of the account's session since the mission began (DEC-038): then nothing is pressed any more. */
+  sessionMoved?: () => boolean
 }
 
 const escapeRegex = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

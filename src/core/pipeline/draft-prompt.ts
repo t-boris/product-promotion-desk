@@ -40,6 +40,7 @@ Rules
   ignore   - no reply is useful (off-topic, spam, already answered by the account earlier).
 - For complaints, criticism and purchase interest you may still propose a careful reply; the owner reviews it.
 - Look at context.ownReplies: do not repeat what the account already said in this thread.
+- Where it comes from: context.source is absent for a reply to a comment of a discussion the account follows. "reply_to_me": somebody replied to the account's own comment or post; "mention": somebody named the account. Answer both like any comment. "new_post": nobody wrote to the account. The "comment" is a NEW POST by someone else (its title and text), not a reply to us, and context.parentChain is empty. First judge whether an answer is worth giving at all: use decision "ignore" with the reason in "rationale" when the post does not need what the approved claims can honestly offer, when it is about something else, or when joining in would be an uninvited advertisement. When you do reply, the reply is a top-level comment on the post: answer what its author asks or shows, never write as if they had addressed the account, and do not open with the product.
 - Voice: when context.role is present, write as that role: use the way of writing described in context.role.voice and stay within what that voice allows you to talk about. context.channel.style still applies. The role never overrides any rule above: approved claims only, nothing prohibited, no promises.
 - Disclosure: when the reply mentions the product (context.product.name) or its website, include one short phrase saying that the author is connected with it (for example "I work on it"), worded in the voice of context.role when there is one. Never present the author as an independent user, customer or bystander. A reply that does not mention the product needs no such phrase.
 
@@ -60,12 +61,14 @@ export function buildReplyPrompt(ctx: ReplyContext): string {
     product: ctx.product,
     ...(ctx.role ? { role: ctx.role } : {}),
     knowledge: { approvedClaims: ctx.knowledge.approved.map(claimPayload), prohibited: ctx.knowledge.prohibited },
+    // Absent for the ordinary case, so a reply to a comment reads exactly as it always did.
+    ...(ctx.source === 'comment' ? {} : { source: ctx.source }),
     post: ctx.discussion,
     parentChain: ctx.ancestors,
     comment: { author: ctx.comment.author, body: ctx.comment.body },
     ownReplies: ctx.ownReplies
   }
-  return `Prepare the response to "comment".\n\ncontext:\n${JSON.stringify(payload, null, 2)}`
+  return `Prepare the response to "comment".${ctx.source === 'new_post' ? ' It is a new post by someone else, not a comment addressed to the account.' : ''}\n\ncontext:\n${JSON.stringify(payload, null, 2)}`
 }
 
 export interface ReplyProposal {
