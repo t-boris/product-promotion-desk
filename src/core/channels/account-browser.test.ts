@@ -80,6 +80,17 @@ describe('the browser of an account', () => {
     expect(w.t.browser.released).toEqual([])
   })
 
+  it('stores the new setting before the old browser is let go of, and lets go of the one the account had', async () => {
+    const w = await makeReadyWorld()
+    const seen: Array<{ stored: unknown; passed: string }> = []
+    w.t.browser.releaseAccount = async (a) => {
+      seen.push({ stored: (w.core.db.prepare('SELECT browser AS v FROM accounts WHERE id = ?').get(a.id) as { v: string }).v, passed: a.browser })
+    }
+    await w.call('accounts.setBrowser', { accountId: w.account.id, browser: 'chrome' })
+    // Anything that arrives while the old browser is closing already routes to the new one; the account it is told about still names the old one.
+    expect(seen).toEqual([{ stored: 'chrome', passed: 'internal' }])
+  })
+
   it('still changes when the old browser would not let go cleanly', async () => {
     const w = await makeReadyWorld()
     w.t.browser.releaseAccount = async () => {

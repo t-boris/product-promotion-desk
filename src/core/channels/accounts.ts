@@ -141,6 +141,8 @@ export class AccountsService {
     if (!presetFor(account.platform)?.signsInWith) throw new ApiError('invalid_input', `${account.label} has its own credentials; it does not sign in through another account.`)
     const via = this.signInThrough(account.platform, args.viaAccountId, account.profileId)
     if (via === account.signsInVia) return account
+    // A sign-in that is running has already taken the password of the account it was started with.
+    if (this.core.services.agent?.working(account.id)) throw new ApiError('agent_running', `The AI is working on ${account.label}. Change the account it signs in through when it is done.`)
     const updated = this.store.setAccountVia(account.id, via)
     this.core.log.info('accounts', `${account.label} now signs in through ${via ? this.account(via).label : 'no account'}.`)
     this.core.events.changed('accounts', 'attention')
@@ -163,15 +165,17 @@ export class AccountsService {
     if (this.core.browser.session(account).control().holder !== 'none' || hasOpenUserWindow(this.core.browser, account)) {
       throw new ApiError('browser_busy', `${BROWSER_BUSY} The browser of an account is changed when nobody uses it.`)
     }
+    // The new setting is stored first: from here every call routes to the new browser, so nothing can start a page in the one that is being let go of.
+    this.store.setAccountBrowser(account.id, args.browser)
+    // Nothing is known about the sign-in in the new browser until it is looked at there; the last identity is kept to notice another person.
+    const updated = this.store.setLogin(account.id, 'login_required', null)
     try {
+      // `account` still carries the old setting, which is how the old browser is told apart from the new one.
       await this.core.browser.releaseAccount?.(account)
     } catch (error) {
       // A page that would not close must not hold the owner's choice back; the old browser ends with the application.
       this.core.log.warn('accounts', `The old browser of ${account.label} did not let go cleanly: ${error instanceof Error ? error.message : String(error)}`)
     }
-    this.store.setAccountBrowser(account.id, args.browser)
-    // Nothing is known about the sign-in in the new browser until it is looked at there; the last identity is kept to notice another person.
-    const updated = this.store.setLogin(account.id, 'login_required', null)
     this.core.log.info('accounts', `${account.label} now works in the ${args.browser === 'chrome' ? 'Chrome' : 'internal'} browser. Its sign-in has to be made there; the one in the other browser stays where it is.`)
     this.core.events.changed('accounts', 'attention')
     return updated

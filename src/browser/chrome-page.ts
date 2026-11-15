@@ -81,6 +81,8 @@ export class ChromeRawPage extends ScriptedPage {
   }
 
   async dispose(): Promise<void> {
+    // A page that is being opened right now would otherwise be opened after this and live on: wait for it, then let go of whatever there is.
+    await this.creating?.catch(() => undefined)
     const handle = this.handle
     this.handle = null
     await handle?.dispose().catch(() => undefined)

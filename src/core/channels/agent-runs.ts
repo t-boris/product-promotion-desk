@@ -127,12 +127,12 @@ export class AgentRunService implements PostMissionService {
     return snapshot(live.run)
   }
 
-  /** Every question an AI is waiting on now, for the pop-up that appears on any screen. */
   /** True while a mission is running on the account. */
   working(accountId: string): boolean {
     return this.runs.get(accountId)?.run.status === 'running'
   }
 
+  /** Every question an AI is waiting on now, for the pop-up that appears on any screen. */
   questions(): AgentAsk[] {
     const asks: AgentAsk[] = []
     for (const [accountId, live] of this.runs) {
@@ -358,7 +358,12 @@ export class AgentRunService implements PostMissionService {
    * to the hosts of the Instagram account's platform: the toolbox refuses to type it on any other page, Threads' own included.
    */
   private signInMission(account: Account): () => Promise<Mission> {
-    if (!account.signsInVia) throw new ApiError('invalid_input', `${account.label} has credentials of its own: sign in with its saved password, or in its browser.`)
+    if (!account.signsInVia) {
+      const wanted = presetFor(account.platform)?.signsInWith
+      // An account made before the platform signed in through another one has no link yet: the way on is to choose the account, not a password.
+      if (wanted) throw new ApiError('no_via', `${account.label} signs in through a ${presetFor(wanted)?.label ?? wanted} account, and none is chosen yet. Choose it in the account first.`)
+      throw new ApiError('invalid_input', `${account.label} has credentials of its own: sign in with its saved password, or in its browser.`)
+    }
     const via = this.accounts.account(account.signsInVia)
     const login = via.loginName ?? via.email
     const viaPlatform = presetFor(via.platform)?.label ?? via.platform

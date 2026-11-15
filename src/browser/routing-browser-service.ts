@@ -86,7 +86,16 @@ export class RoutingBrowserService implements FullBrowserService {
   async forgetAccount(account: Account): Promise<void> {
     const serving = this.serving(account)
     const other = serving === this.chrome ? this.internal : this.chrome
-    await serving.forgetAccount(account)
-    await other.forgetAccount(account).catch(() => undefined)
+    // Both are tried whatever happens to the first, and a failure is passed on: the account is kept so that the owner can retry, rather than
+    // deleted with a profile (cookies) left on disk that nothing points to any more.
+    const failures: unknown[] = []
+    for (const service of [serving, other]) {
+      try {
+        await service.forgetAccount(account)
+      } catch (error) {
+        failures.push(error)
+      }
+    }
+    if (failures.length > 0) throw failures[0]
   }
 }

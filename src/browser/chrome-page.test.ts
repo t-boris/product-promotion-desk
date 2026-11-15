@@ -184,6 +184,25 @@ describe('ChromeRawPage', () => {
     })
   })
 
+  it('lets go of a page that was still being opened when it is disposed, so it does not live on', async () => {
+    let open!: () => void
+    const gate = new Promise<void>((resolve) => (open = resolve))
+    const handles: Array<Awaited<ReturnType<typeof handleFor>>> = []
+    const raw = new ChromeRawPage(async () => {
+      await gate
+      const handle = await handleFor(fakePage('https://www.facebook.com/'))
+      handles.push(handle)
+      return handle
+    })
+    const opening = raw.url()
+    const disposing = raw.dispose()
+    open()
+    await Promise.all([opening, disposing])
+    expect(handles).toHaveLength(1)
+    expect(handles[0].disposed).toBe(1)
+    expect(raw.existing()).toBeNull()
+  })
+
   it('disposes the page once and forgets it', async () => {
     const { raw, handles, creations } = make()
     await raw.url()

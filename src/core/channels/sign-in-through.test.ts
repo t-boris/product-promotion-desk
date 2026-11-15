@@ -85,6 +85,16 @@ describe('making an account that signs in through another', () => {
     expect(await w.refusal('accounts.setSignInVia', { accountId: first.id, viaAccountId: second.id })).toBe('invalid_input')
   })
 
+  it('is not moved to another Instagram account while the AI works on it (the mission has taken the password of the first)', async () => {
+    const w = await world()
+    const first = await instagram(w, 'First')
+    const second = await instagram(w, 'Second')
+    const th = await threads(w, first.id)
+    w.core.services.agent = { questions: () => [], working: (id) => id === th.id }
+    expect(await w.refusal('accounts.setSignInVia', { accountId: th.id, viaAccountId: second.id })).toBe('agent_running')
+    expect((await w.call('accounts.list', undefined)).find((a) => a.id === th.id)?.signsInVia).toBe(first.id)
+  })
+
   it('keeps the Instagram account until nobody signs in through it', async () => {
     const w = await world()
     const ig = await instagram(w)
@@ -152,6 +162,15 @@ describe('the sign-in mission', () => {
     expect(await w.call('agent.canStart', { accountId: th.id, kind: 'signin' })).toMatchObject({ ready: false, reason: expect.stringContaining('Brand on Instagram') })
     await w.call('vault.savePassword', { accountId: ig.id, loginName: 'selena@example.com', password: PASSWORD })
     expect(await w.call('agent.canStart', { accountId: th.id, kind: 'signin' })).toEqual({ ready: true, reason: null })
+  })
+
+  it('says to choose the Instagram account, not to use a password, for a Threads account that has none chosen yet (made before the link existed)', async () => {
+    const w = await world()
+    const ig = await instagram(w)
+    const th = await threads(w, ig.id)
+    w.core.db.prepare('UPDATE accounts SET via_account_id = NULL WHERE id = ?').run(th.id)
+    expect(await w.refusal('agent.start', { accountId: th.id, kind: 'signin' })).toBe('no_via')
+    expect(await w.call('agent.canStart', { accountId: th.id, kind: 'signin' })).toMatchObject({ ready: false, reason: expect.stringContaining('Choose it in the account first') })
   })
 
   it('is refused for an account that has credentials of its own', async () => {

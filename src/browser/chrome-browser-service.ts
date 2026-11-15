@@ -21,6 +21,9 @@ import { addressOf, forgetReports, saveReport } from './page-report'
 import { normalizeBrowserUrl } from './targets'
 import { UserControl } from './toolbar-state'
 
+/** What a session says that was kept somewhere after its account was let go of. */
+const RETIRED = 'The browser of this account was changed (or the account was removed), so this page is not used any more.'
+
 /** The width of the picture kept in a report: the same as the built-in browser's. */
 const REPORT_PICTURE_WIDTH = 1000
 
@@ -43,6 +46,8 @@ interface AccountChrome {
   browser: Browser | null
   /** Set while the owner holds the browser (they asked to open it); released by "give it back" or by closing the window. */
   control: UserControl | null
+  /** Set when the account was let go of (it moved to the other browser, or was erased): a session that is still held somewhere never starts Chrome again. */
+  retired: boolean
 }
 
 /** What a request is, in the words the page recorder knows. Pure: a document is the page itself or a frame in it. */
@@ -88,6 +93,7 @@ export class ChromeBrowserService implements BrowserService, PageObserver {
       profileDir: profileDirFor(this.options.dataDir, account.partition),
       browser: null,
       control: null,
+      retired: false,
       recorder: new PageRecorder(
         () => Date.now(),
         () => this.pageHost(entry),
@@ -234,6 +240,7 @@ export class ChromeBrowserService implements BrowserService, PageObserver {
   async releaseAccount(account: Account): Promise<void> {
     const entry = this.accounts.get(account.id)
     if (!entry) return
+    entry.retired = true
     entry.control = null
     this.accounts.delete(account.id)
     await entry.agent.dispose()
@@ -269,11 +276,17 @@ export class ChromeBrowserService implements BrowserService, PageObserver {
   }
 
   private async running(account: Account, entry: AccountChrome): Promise<Browser> {
+    if (entry.retired) throw new Error(RETIRED)
     if (entry.browser?.connected) return entry.browser
     const executable = this.find()
     if (!executable) throw new Error('Google Chrome was not found on this Mac.')
     await mkdir(profilesRoot(this.options.dataDir), { recursive: true })
     const browser = await this.launch(executable, chromeArguments(entry.profileDir, this.env))
+    if (entry.retired) {
+      // The account was let go of while Chrome was starting: this Chrome is nobody's.
+      await browser.close().catch(() => undefined)
+      throw new Error(RETIRED)
+    }
     entry.browser = browser
     browser.on('disconnected', () => {
       // The owner quit Chrome (or it crashed): whoever held the browser is done, and the next use starts a new one.

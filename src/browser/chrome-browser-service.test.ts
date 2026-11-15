@@ -16,7 +16,7 @@ let dataDir: string
 let launches: Array<{ executable: string; args: string[]; browser: FakeBrowser & Browser }>
 let chrome: string | null
 
-function make(options: { diagnostics?: boolean } = {}) {
+function make(options: { diagnostics?: boolean; launchGate?: Promise<void> } = {}) {
   const events: string[] = []
   const notes: string[] = []
   const service = new ChromeBrowserService(
@@ -28,6 +28,7 @@ function make(options: { diagnostics?: boolean } = {}) {
       launch: async (executable, args) => {
         const browser = fakeBrowser()
         launches.push({ executable, args, browser })
+        await options.launchGate
         return browser
       },
       env: {}
@@ -283,6 +284,35 @@ describe('ChromeBrowserService', () => {
       expect(existsSync(join(profile, 'Cookies'))).toBe(true)
       await service.session(fb).withAgentControl('t', async (page) => page.url())
       expect(launches).toHaveLength(2)
+    })
+
+    it('never starts Chrome again for a session that was kept from before the account was let go of', async () => {
+      const { service } = make()
+      const fb = account('a')
+      const kept = service.session(fb)
+      await kept.withAgentControl('t', async (page) => page.url())
+      await service.releaseAccount(fb)
+      await expect(kept.withAgentControl('t', async (page) => page.url())).rejects.toThrow('was changed')
+      expect(launches).toHaveLength(1)
+      // the account in its new life (back in Chrome later) gets a session of its own
+      await service.session(fb).withAgentControl('t', async (page) => page.url())
+      expect(launches).toHaveLength(2)
+    })
+
+    it('closes a Chrome that was still starting when the account was let go of, and the page that wanted it fails', async () => {
+      let open!: () => void
+      const launchGate = new Promise<void>((resolve) => (open = resolve))
+      const { service } = make({ launchGate })
+      const fb = account('a')
+      const pending = service.session(fb).withAgentControl('t', async (page) => page.url()).then(() => 'opened', (error: Error) => error.message)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(launches).toHaveLength(1)
+      const releasing = service.releaseAccount(fb)
+      open()
+      await releasing
+      expect(await pending).toContain('was changed')
+      expect(launches[0].browser.closeCalls).toBe(1)
+      expect(launches[0].browser.connected).toBe(false)
     })
 
     it('does nothing for an account that was never used', async () => {

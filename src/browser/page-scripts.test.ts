@@ -1,6 +1,6 @@
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
-import { clickScript, describeFailure, existsScript, fileInputByRefScript, fileInputScript, fillScript, locateScript, mouseSeenScript, mouseWatchScript, pageReadingScript, prepareTypingScript, scriptClickScript, selectOptionScript, setValueScript, signInScript, typedScript, type PageReading } from './page-scripts'
+import { clickScript, describeFailure, existsScript, fileInputByRefScript, fileInputScript, fillScript, locateScript, mouseSeenScript, mouseWatchScript, pageReadingScript, prepareTypingScript, scriptClickScript, selectOptionScript, setValueScript, signInScript, typedScript, typingGuardScript, type PageReading } from './page-scripts'
 
 // A tiny DOM: enough to run the injected scripts and observe what they do.
 class FakeEvent {
@@ -309,5 +309,53 @@ describe('step scripts of the browser agent (DEC-017)', () => {
     expect(run(selectOptionScript('e4', 'Ma'), new HTMLSelectElement())).toEqual({ ok: true })
     expect(run(selectOptionScript('e4', 'Smarch'), new HTMLSelectElement())).toEqual({ ok: false, reason: 'no_such_option' })
     expect(run(selectOptionScript('e4', 'x'), { shadowRoot: null })).toEqual({ ok: false, reason: 'not_a_list' })
+  })
+})
+
+describe('typingGuardScript (asked right before text is typed)', () => {
+  const REF = '[data-ppd-ref="e1"]'
+  /** Runs the guard on a page at `host` whose focus is whatever `focus` returns for the element. */
+  function guard(hosts: string[], host: string, focus: (el: FakeInput) => unknown = (el) => el): { ok: boolean; reason?: string; host?: string } {
+    const el = new FakeInput()
+    const document = { ...makeRoot({ [REF]: el }), activeElement: focus(el) }
+    return run(typingGuardScript('e1', hosts), document, { location: { hostname: host } })
+  }
+
+  it('passes only on a host of the platform with the cursor in the element', () => {
+    expect(guard(['instagram.com'], 'www.instagram.com')).toEqual({ ok: true })
+    expect(guard(['instagram.com'], 'INSTAGRAM.com')).toEqual({ ok: true })
+    expect(guard(['facebook.com', 'instagram.com'], 'm.instagram.com')).toEqual({ ok: true })
+  })
+
+  it('refuses any other host, a look-alike, and a host that only ends with the same letters, and names the host', () => {
+    for (const host of ['threads.net', 'instagram.com.evil.example', 'notinstagram.com', 'evilinstagram.com', '', 'instagram.co']) {
+      expect(guard(['instagram.com'], host), host).toEqual({ ok: false, reason: 'wrong_host', host })
+    }
+    expect(guard([], 'instagram.com')).toMatchObject({ ok: false, reason: 'wrong_host' })
+  })
+
+  it('refuses when the cursor is in another element, or nowhere', () => {
+    expect(guard(['instagram.com'], 'instagram.com', () => new FakeInput())).toEqual({ ok: false, reason: 'not_focused' })
+    expect(guard(['instagram.com'], 'instagram.com', () => null)).toEqual({ ok: false, reason: 'not_focused' })
+    expect(guard(['instagram.com'], 'instagram.com', () => ({}))).toEqual({ ok: false, reason: 'not_focused' })
+  })
+
+  it('follows the cursor into an open shadow root, and into nested ones', () => {
+    expect(guard(['instagram.com'], 'instagram.com', (el) => ({ shadowRoot: { activeElement: el } }))).toEqual({ ok: true })
+    expect(guard(['instagram.com'], 'instagram.com', (el) => ({ shadowRoot: { activeElement: { shadowRoot: { activeElement: el } } } }))).toEqual({ ok: true })
+    expect(guard(['instagram.com'], 'instagram.com', () => ({ shadowRoot: { activeElement: new FakeInput() } }))).toEqual({ ok: false, reason: 'not_focused' })
+  })
+
+  it('says the element is gone when it is not in the page, whatever the host', () => {
+    const result = run<{ ok: boolean; reason?: string }>(typingGuardScript('e9', ['instagram.com']), { ...makeRoot({}), activeElement: null }, { location: { hostname: 'instagram.com' } })
+    expect(result).toEqual({ ok: false, reason: 'not_found' })
+  })
+
+  it('treats the hosts as data: quotes and code in them cannot break out of the script', () => {
+    const sandbox: Record<string, unknown> = {}
+    const hostile = `x"]; globalThis.pwned = true; ["`
+    expect(guard([hostile], 'instagram.com').ok).toBe(false)
+    run(typingGuardScript('e1', [hostile]), { ...makeRoot({ [REF]: new FakeInput() }), activeElement: null }, { location: { hostname: 'a.b' }, globalThis: sandbox })
+    expect(sandbox.pwned).toBeUndefined()
   })
 })

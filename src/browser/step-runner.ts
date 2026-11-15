@@ -9,7 +9,7 @@
 import { stat } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
 import type { PageStep, PageStepResult } from '../core/ports'
-import { fileInputByRefScript, locateScript, markOptionScript, mouseSeenScript, mouseWatchScript, prepareTypingScript, scriptClickScript, selectOptionScript, setValueScript, typedScript, type ActionResult, type LocatedElement } from './page-scripts'
+import { fileInputByRefScript, locateScript, markOptionScript, mouseSeenScript, mouseWatchScript, prepareTypingScript, scriptClickScript, selectOptionScript, setValueScript, typedScript, typingGuardScript, type ActionResult, type LocatedElement } from './page-scripts'
 
 export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
@@ -47,6 +47,10 @@ export async function putFile(driver: StepDriver, expression: string, path: stri
   await driver.attachFile(expression, path, what)
 }
 
+function wrongHost(host: string): PageStepResult {
+  return { status: 'wrong_host', detail: `The page is ${host ? `on ${host}` : 'not loaded'}, which is not a page of this platform, so nothing was done.` }
+}
+
 export async function runPageStep(driver: StepDriver, step: PageStep, hosts: string[]): Promise<PageStepResult> {
   let host = ''
   try {
@@ -54,9 +58,7 @@ export async function runPageStep(driver: StepDriver, step: PageStep, hosts: str
   } catch {
     // No page yet.
   }
-  if (!hosts.some((domain) => host === domain || host.endsWith(`.${domain}`))) {
-    return { status: 'wrong_host', detail: `The page is ${host ? `on ${host}` : 'not loaded'}, which is not a page of this platform, so nothing was done.` }
-  }
+  if (!hosts.some((domain) => host === domain || host.endsWith(`.${domain}`))) return wrongHost(host)
 
   if (step.do === 'key') {
     await driver.focus()
@@ -95,6 +97,14 @@ export async function runPageStep(driver: StepDriver, step: PageStep, hosts: str
   const prepared = await driver.read<ActionResult>(prepareTypingScript(step.ref))
   if (!prepared.ok) return { status: 'refused', detail: prepared.reason === 'disabled' ? `${step.ref} is disabled.` : `${step.ref} does not take text.` }
   await driver.focus()
+  // The window was given focus after the element was prepared, and an earlier host check is a moment old: before a single character is typed (a
+  // password among them) the page itself says it is still this platform's and that the cursor is in this element.
+  const guard = await driver.read<ActionResult & { host?: string }>(typingGuardScript(step.ref, hosts))
+  if (!guard.ok) {
+    if (guard.reason === 'wrong_host') return wrongHost(guard.host ?? '')
+    if (guard.reason === 'not_found') return { status: 'not_found', detail: `There is no element ${step.ref} on the page now: it changed since the snapshot.` }
+    return { status: 'refused', detail: `The cursor is not in ${step.ref}, so nothing was typed.` }
+  }
   await driver.insertText(step.text)
   if (!(await driver.read<ActionResult>(typedScript(step.ref, step.text))).ok) {
     const fallback = await driver.read<ActionResult>(setValueScript(step.ref, step.text))

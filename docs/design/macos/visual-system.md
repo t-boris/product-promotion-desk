@@ -747,7 +747,9 @@ nothing on any platform: it is the owner's own label for the login (the list, th
 (`SegmentedControl`, now with a `disabled` for the whole group and for one option): "Internal" (the default) and "Google Chrome". A line under the title says what is chosen. The choice is off
 with a reason beside it (a `Hint`) while the AI works on the account or its browser is in use (its window is open, or the owner took control); "Google Chrome" is off with "Google Chrome was
 not found on this Mac." when Chrome is not installed (there is no fallback to the other browser). An off segment has the quiet label and no hover; the selected one keeps its thumb. A note
-under the control says the sign-in is kept in the browser it was made in, so after a switch the account signs in again in the other one.
+under the control says the sign-in is kept in the browser it was made in, so after a switch the account signs in again in the other one. The control only chooses: a switch signs the
+account out and closes its Chrome, so it is applied by a bezel button beside the control ("Use Google Chrome" / "Use Internal"), which appears only while the choice differs from the
+account's browser; an arrow key between the segments never changes anything by itself. The reason beside an off group is tied to it (`aria-describedby`).
 
 **Signs in with** (`AccountViaLine`, DEC-027). For a platform with `signsInWith` the e-mail and the password blocks are not shown; step 3 is "Signs in with Instagram": the chosen account
 (platform badge, name, status), "Open account" (it goes to that account on the same screen) and a pick-row with the accounts it may use and "Use this account". The sign-in is step 4. In the
@@ -761,11 +763,11 @@ account and its "Open account" button is the filled one; the sign-in of the link
 | Pattern | Markup | Rules |
 |---|---|---|
 | Rename | `AccountHeader`: "Rename" in the header actions; `form.pick-row` with one `.input`, "Save name" and "Cancel" | One field, no dialog. Enter saves, Escape closes. Disabled save for an empty, unchanged or over-long name. The open form owns the filled button. |
-| Browser setting | `AccountBrowser`: an unnumbered `AccountBlock` (`.step-num.blank` keeps the column), `SegmentedControl` with `disabled`, a `Hint` for the reason, a `muted small` note | A setting, not a step: no number, never the filled button. Off with a reason, never silently. |
+| Browser setting | `AccountBrowser`: an unnumbered `AccountBlock` (`.step-num.blank` keeps the column), `SegmentedControl` with `disabled` and `describedBy`, a bezel "Use …" button while the pick differs, a `Hint` for the reason, a `muted small` note | A setting, not a step: no number, never the filled button. Choosing and applying are two acts. Off with a reason, never silently. |
 | Signs in with | `AccountViaLine`: `AccountBlock` step 3 with the badge and name, "Open account", `.pick-row` of a `select.input` and "Use this account" | Replaces e-mail and password for that platform. "Open account" is filled when the account it signs in through is the next thing to do. |
 | Sign-in through | `AccountSignIn` with `through`: "Let the AI sign in with Instagram", the browser buttons, a `muted small` note that the platform has no password of its own | No password button, no create-account buttons. The owner is never asked for a Threads credential. |
 
 | Id | Requirement | Method | Pass |
 |---|---|---|---|
-| V-32 | Rename, the Browser block and the linked-login screens follow the shared rules: controls at least 28 px, one filled button, nothing cut or overflowing, in light and dark | the packaged probe on an own instance (`MEASURE` and `LOOK` on the account of an ordinary platform, of a linked platform, the rename form open, the Browser block with Chrome chosen, the create form for Threads with and without an Instagram account): 40 checks | every check passes in both themes |
+| V-32 | Rename, the Browser block and the linked-login screens follow the shared rules: controls at least 28 px, one filled button, nothing cut or overflowing, in light and dark | the packaged probe on an own instance (`MEASURE` and `LOOK` on the account of an ordinary platform, of a linked platform, the rename form open, the Browser block with Chrome chosen, the arrow key that only chooses, the apply button, the create form for Threads with and without an Instagram account): 47 checks | every check passes in both themes |
 | V-33 | The browser choice and the link are real: the choice is saved and refused while the browser is in use, Chrome runs on a profile of the account's own and is let go of at a switch, the session survives a switch back and forth, Threads cannot be made or removed out of order | the mechanics probe on an own instance with the installed Chrome and a local page (26 checks, nothing off 127.0.0.1, no process left); `account-browser.test.ts`, `sign-in-through.test.ts`, `routing-browser-service.test.ts` (mutation-checked) | every check passes |

@@ -600,7 +600,7 @@ describe('page steps of the browser agent (DEC-017): real input first, a script 
 
   it('types with real input: the field is focused and selected first, then the text is inserted, then it is checked', async () => {
     const { service } = setup()
-    const done = step(service, [{ ok: true, x: 5, y: 5, hit: true }, { ok: true }, { ok: true }], (page) => page.pageStep({ do: 'type', ref: 'e1', text: 'Natal' }, hosts))
+    const done = step(service, [{ ok: true, x: 5, y: 5, hit: true }, { ok: true }, { ok: true }, { ok: true }], (page) => page.pageStep({ do: 'type', ref: 'e1', text: 'Natal' }, hosts))
     await expect(settled(done)).resolves.toEqual({ status: 'done', detail: 'Typed into e1.' })
     expect(agentContents().inserted).toEqual(['Natal'])
     expect(agentContents().focused).toBeGreaterThan(0)
@@ -609,15 +609,32 @@ describe('page steps of the browser agent (DEC-017): real input first, a script 
 
   it('falls back to a script when the typed text did not land, and says so', async () => {
     const { service } = setup()
-    const done = step(service, [{ ok: true, x: 5, y: 5, hit: true }, { ok: true }, { ok: false }, { ok: true }], (page) => page.pageStep({ do: 'type', ref: 'e1', text: 'Natal' }, hosts))
+    const done = step(service, [{ ok: true, x: 5, y: 5, hit: true }, { ok: true }, { ok: true }, { ok: false }, { ok: true }], (page) => page.pageStep({ do: 'type', ref: 'e1', text: 'Natal' }, hosts))
     const result = (await settled(done)) as { status: string; detail: string }
     expect(result).toMatchObject({ status: 'done' })
     expect(result.detail).toMatch(/by script \(real typing did not take\)/)
   })
 
+  const refusedBeforeTyping = async (guard: unknown): Promise<{ status: string; detail: string }> => {
+    const { service } = setup()
+    const done = step(service, [{ ok: true, x: 5, y: 5, hit: true }, { ok: true }, guard], (page) => page.pageStep({ do: 'type', ref: 'e2', text: 'S3cret-Pa$$w0rd!' }, hosts))
+    const result = (await settled(done)) as { status: string; detail: string }
+    expect(JSON.stringify(result)).not.toContain('S3cret')
+    expect(agentContents().inserted).toEqual([])
+    return result
+  }
+
+  it('types nothing when the page says it is no longer the platform\'s (the guard right before the text)', async () => {
+    expect((await refusedBeforeTyping({ ok: false, reason: 'wrong_host', host: 'evil.example' })).status).toBe('wrong_host')
+  })
+
+  it('types nothing when the cursor is not in the element (the guard right before the text)', async () => {
+    expect((await refusedBeforeTyping({ ok: false, reason: 'not_focused' })).status).toBe('refused')
+  })
+
   it('does not put a password anywhere in its answer, and never in an error', async () => {
     const { service } = setup()
-    const done = step(service, [{ ok: true, x: 5, y: 5, hit: true }, { ok: true }, { ok: false }, { ok: false, reason: 'disabled' }], (page) => page.pageStep({ do: 'type', ref: 'e2', text: 'S3cret-Pa$$w0rd!' }, hosts))
+    const done = step(service, [{ ok: true, x: 5, y: 5, hit: true }, { ok: true }, { ok: true }, { ok: false }, { ok: false, reason: 'disabled' }], (page) => page.pageStep({ do: 'type', ref: 'e2', text: 'S3cret-Pa$$w0rd!' }, hosts))
     const result = await settled(done)
     expect(JSON.stringify(result)).not.toContain('S3cret')
     expect(result).toMatchObject({ status: 'refused' })

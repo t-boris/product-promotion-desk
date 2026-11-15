@@ -109,23 +109,31 @@ describe('RoutingBrowserService', () => {
     expect(noted).toEqual(['r:x', 'f:y'])
   })
 
-  it('forgets an account in the browser that serves it and in the other, and a failure in the other is not a failure', async () => {
+  it('forgets an account in the browser that serves it and in the other', async () => {
     const { routing, internal, chrome } = make()
-    const fb = account('f', 'chrome')
+    await routing.forgetAccount(account('f', 'chrome'))
+    expect(chrome.calls).toContain('forget:f')
+    expect(internal.calls).toContain('forget:f')
+  })
+
+  it('does not hide a failure of the other browser (cookies could stay on disk), after trying both', async () => {
+    const { routing, internal, chrome } = make()
     internal.forgetAccount = async () => {
       internal.calls.push('forget:f')
-      throw new Error('nothing to forget')
+      throw new Error('could not clear the old session')
     }
-    await expect(routing.forgetAccount(fb)).resolves.toBeUndefined()
+    await expect(routing.forgetAccount(account('f', 'chrome'))).rejects.toThrow('could not clear the old session')
     expect(chrome.calls).toContain('forget:f')
     expect(internal.calls).toContain('forget:f')
   })
 
   it('does not hide a failure of the browser that serves the account', async () => {
-    const { routing, chrome } = make()
+    const { routing, internal, chrome } = make()
     chrome.forgetAccount = async () => {
       throw new Error('could not remove the profile')
     }
     await expect(routing.forgetAccount(account('f', 'chrome'))).rejects.toThrow('could not remove the profile')
+    // the other browser was still asked to forget it
+    expect(internal.calls).toContain('forget:f')
   })
 })

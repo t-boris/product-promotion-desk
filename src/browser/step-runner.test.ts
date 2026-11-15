@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { PageStep } from '../core/ports'
-import { fileInputByRefScript, locateScript, markOptionScript, mouseSeenScript, mouseWatchScript, prepareTypingScript, scriptClickScript, selectOptionScript, setValueScript, typedScript } from './page-scripts'
+import { fileInputByRefScript, locateScript, markOptionScript, mouseSeenScript, mouseWatchScript, prepareTypingScript, scriptClickScript, selectOptionScript, setValueScript, typedScript, typingGuardScript } from './page-scripts'
 import { checkUploadable, runPageStep, type StepDriver } from './step-runner'
 
 const HOSTS = ['facebook.com']
@@ -138,21 +138,74 @@ describe('typing', () => {
     const f = fake()
     on(f, locateScript('e1'), { ok: true })
     on(f, prepareTypingScript('e1'), { ok: true })
+    on(f, typingGuardScript('e1', HOSTS), { ok: true })
     on(f, typedScript('e1', 'Boris'), { ok: true })
     expect(await run(f, { do: 'type', ref: 'e1', text: 'Boris' })).toEqual({ status: 'done', detail: 'Typed into e1.' })
-    expect(f.calls).toEqual(['read:answered', 'read:answered', 'focus', 'insert:Boris', 'read:answered'])
+    expect(f.calls).toEqual(['read:answered', 'read:answered', 'focus', 'read:answered', 'insert:Boris', 'read:answered'])
   })
 
   it('sets the value by script only when the typing did not land, and refuses when that does not either', async () => {
     const f = fake()
     on(f, locateScript('e1'), { ok: true })
     on(f, prepareTypingScript('e1'), { ok: true })
+    on(f, typingGuardScript('e1', HOSTS), { ok: true })
     on(f, typedScript('e1', 'Boris'), { ok: false })
     expect((await run(f, { do: 'type', ref: 'e1', text: 'Boris' })).detail).toContain('did not take the text')
     on(f, setValueScript('e1', 'Boris'), { ok: true })
     const result = await run(f, { do: 'type', ref: 'e1', text: 'Boris' })
     expect(result.status).toBe('done')
     expect(result.detail).toContain('by script')
+  })
+})
+
+describe('typing is guarded in the page, right before the first character', () => {
+  /** A typing step that reaches the point of typing: the element is there and takes text; what the guard answers is the case. */
+  function ready(guard: unknown): Fake {
+    const f = fake()
+    on(f, locateScript('e1'), { ok: true })
+    on(f, prepareTypingScript('e1'), { ok: true })
+    on(f, typingGuardScript('e1', HOSTS), guard)
+    on(f, typedScript('e1', 'secret'), { ok: true })
+    on(f, setValueScript('e1', 'secret'), { ok: true })
+    return f
+  }
+
+  it('types nothing, by any route, when the page left the platform after the first check', async () => {
+    const f = ready({ ok: false, reason: 'wrong_host', host: 'evil.example' })
+    const result = await run(f, { do: 'type', ref: 'e1', text: 'secret' })
+    expect(result.status).toBe('wrong_host')
+    expect(result.detail).toContain('on evil.example')
+    expect(f.calls.some((c) => c.startsWith('insert'))).toBe(false)
+    // nothing after the guard: no read that checks the field and no setValue fallback either
+    expect(f.calls).toEqual(['read:answered', 'read:answered', 'focus', 'read:answered'])
+  })
+
+  it('types nothing when the cursor is not in the element (the page moved the focus)', async () => {
+    const f = ready({ ok: false, reason: 'not_focused' })
+    const result = await run(f, { do: 'type', ref: 'e1', text: 'secret' })
+    expect(result).toEqual({ status: 'refused', detail: 'The cursor is not in e1, so nothing was typed.' })
+    expect(f.calls.some((c) => c.startsWith('insert'))).toBe(false)
+    expect(f.calls).toEqual(['read:answered', 'read:answered', 'focus', 'read:answered'])
+  })
+
+  it('says the element is gone when the page changed under the guard', async () => {
+    const f = ready({ ok: false, reason: 'not_found' })
+    expect((await run(f, { do: 'type', ref: 'e1', text: 'secret' })).status).toBe('not_found')
+    expect(f.calls.some((c) => c.startsWith('insert'))).toBe(false)
+  })
+
+  it('refuses when the guard says nothing it understands (it fails closed)', async () => {
+    const f = ready({ ok: false })
+    expect((await run(f, { do: 'type', ref: 'e1', text: 'secret' })).status).toBe('refused')
+    expect(f.calls.some((c) => c.startsWith('insert'))).toBe(false)
+  })
+
+  it('asks the page about the hosts the step was given, and nothing wider', () => {
+    const script = typingGuardScript('e1', ['instagram.com'])
+    expect(script).toContain('["instagram.com"]')
+    expect(script).toContain('location.hostname')
+    expect(script).toContain('document.activeElement')
+    expect(script).toContain('shadowRoot.activeElement')
   })
 })
 

@@ -1,6 +1,8 @@
 // Starting the owner's installed Google Chrome for one account (DEC-025): where it is, where its profile lives, how it is started.
 // Chrome is started as a normal browser with a profile folder of its own and a debugging pipe only this application holds (no network port).
-// Nothing here changes what a page can learn about the browser: no automation banner flag, no headless mode, no script.
+// Nothing here hides or fakes anything: no automation banner flag, no headless mode, no user agent, no script. Chrome itself reports
+// `navigator.webdriver = true` while a program drives it over a debugging pipe (measured with the real Chrome, chrome-real.test.ts), and a site
+// may act on that; it is not changed here (DEC-025: a normal browser, and the owner finishes by hand what a site refuses).
 
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'

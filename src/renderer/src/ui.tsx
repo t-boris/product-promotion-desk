@@ -194,7 +194,8 @@ export function SegmentedControl<T extends string>({
   onChange,
   name,
   testIdPrefix,
-  disabled
+  disabled,
+  describedBy
 }: {
   label: string
   /** An option can be off on its own (`disabled`), or the whole group can (`disabled` below): the reason is said beside the control. */
@@ -204,9 +205,11 @@ export function SegmentedControl<T extends string>({
   name: string
   testIdPrefix?: string
   disabled?: boolean
+  /** The id of the text that says why the group is off, or what it does. */
+  describedBy?: string
 }) {
   return (
-    <div className="segmented" role="radiogroup" aria-label={label}>
+    <div className="segmented" role="radiogroup" aria-label={label} aria-describedby={describedBy}>
       {options.map((option) => (
         <label key={option.value} className={`segmented-option${option.value === value ? ' on' : ''}${disabled || option.disabled ? ' off' : ''}`}>
           <input
