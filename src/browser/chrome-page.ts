@@ -26,9 +26,11 @@ export interface ChromeHandle {
   dispose(): Promise<void>
   /** Shows the window of the page, un-minimised; `focus` also puts it in front of the owner's windows (the owner has to act in it). */
   showWindow(focus: boolean): Promise<void>
-  /** Minimises that window; the page goes on. */
-  hideWindow(): Promise<void>
-  isShown(): boolean
+  /**
+   * Un-minimises the window when the owner minimised it, without putting it in front. A page in a minimised window is hidden to the site and
+   * Chrome drops its keyboard input, so the AI cannot work in it.
+   */
+  ensureShown(): Promise<void>
 }
 
 interface RuntimeResult {
@@ -65,15 +67,6 @@ export class ChromeRawPage extends ScriptedPage {
   /** Shows the window of the page (opening the page if there is none yet). */
   async reveal(focus: boolean): Promise<void> {
     await (await this.live()).showWindow(focus)
-  }
-
-  /** Minimises the window of the page; true when it was shown. */
-  async conceal(): Promise<boolean> {
-    const handle = this.handle
-    if (!handle?.isAlive()) return false
-    const was = handle.isShown()
-    await handle.hideWindow()
-    return was
   }
 
   /** URL currently loaded, without opening a page. Used to offer the same address to the owner. */
@@ -146,8 +139,9 @@ export class ChromeRawPage extends ScriptedPage {
       currentUrl: () => page.url(),
       read: (script) => this.read(script),
       // The page's own scripts focus the element they work on, and Chrome's input reaches a page whose window is behind others: nothing is
-      // pushed in front of the owner's windows (that is `reveal`, asked for on purpose).
-      focus: async () => undefined,
+      // pushed in front of the owner's windows (that is `reveal`, asked for on purpose). Only a minimised window is brought back: there the
+      // page is hidden to the site and takes no keys.
+      focus: () => handle.ensureShown(),
       pressKey: (key) => page.keyboard.press(key),
       mouseClick: async (x, y) => {
         await page.mouse.move(x, y)

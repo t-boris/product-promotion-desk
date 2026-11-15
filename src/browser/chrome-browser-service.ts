@@ -43,8 +43,6 @@ interface AccountChrome {
   browser: Browser | null
   /** Set while the owner holds the browser (they asked to open it); released by "give it back" or by closing the window. */
   control: UserControl | null
-  /** The next page opened is shown at once (the owner is watching the AI work); otherwise it is minimised as soon as it is open. */
-  showNext: boolean
 }
 
 /** What a request is, in the words the page recorder knows. Pure: a document is the page itself or a frame in it. */
@@ -90,7 +88,6 @@ export class ChromeBrowserService implements BrowserService, PageObserver {
       profileDir: profileDirFor(this.options.dataDir, account.partition),
       browser: null,
       control: null,
-      showNext: false,
       recorder: new PageRecorder(
         () => Date.now(),
         () => this.pageHost(entry),
@@ -108,7 +105,6 @@ export class ChromeBrowserService implements BrowserService, PageObserver {
    */
   showAgentBrowser(account: Account, focus = false): void {
     const entry = this.entry(account)
-    entry.showNext = true
     entry.agent.reveal(focus).catch((error: unknown) => this.onPageNote?.(account.id, `Chrome could not be shown: ${error instanceof Error ? error.message : String(error)}`))
   }
 
@@ -124,10 +120,10 @@ export class ChromeBrowserService implements BrowserService, PageObserver {
       entry.control = control
     }
     try {
-      entry.showNext = true
       await entry.agent.reveal(true)
     } catch (error) {
-      this.giveBack(account.id, entry)
+      // The window never opened, so nobody is told it closed: only the control that was taken is returned.
+      this.giveBack(account.id, entry, false)
       throw error
     }
     if (entry.agent.currentUrl() !== target) {
@@ -157,12 +153,12 @@ export class ChromeBrowserService implements BrowserService, PageObserver {
     if (entry) this.giveBack(account.id, entry)
   }
 
-  /** Returns control once; true only for the call that did. */
-  private giveBack(accountId: string, entry: AccountChrome): boolean {
+  /** Returns control once; true only for the call that did. `announce` is false when the window was never opened. */
+  private giveBack(accountId: string, entry: AccountChrome, announce = true): boolean {
     const control = entry.control
     entry.control = null
     const released = control?.release() ?? false
-    if (released) this.onUserWindowChange?.(accountId, 'closed')
+    if (released && announce) this.onUserWindowChange?.(accountId, 'closed')
     return released
   }
 
@@ -239,11 +235,7 @@ export class ChromeBrowserService implements BrowserService, PageObserver {
     const page = (await browser.pages()).find((candidate) => !candidate.isClosed()) ?? (await browser.newPage())
     const cdp = await page.createCDPSession()
     this.watch(account, entry, page)
-    let shown = true
-    const setWindow = async (state: 'normal' | 'minimized'): Promise<void> => {
-      const { windowId } = (await cdp.send('Browser.getWindowForTarget')) as { windowId: number }
-      await cdp.send('Browser.setWindowBounds', { windowId, bounds: { windowState: state } })
-    }
+    const windowId = async (): Promise<number> => ((await cdp.send('Browser.getWindowForTarget')) as { windowId: number }).windowId
     const handle: ChromeHandle = {
       page,
       cdp,
@@ -252,18 +244,15 @@ export class ChromeBrowserService implements BrowserService, PageObserver {
         if (!page.isClosed()) await page.close().catch(() => undefined)
       },
       showWindow: async (focus) => {
-        await setWindow('normal')
+        await cdp.send('Browser.setWindowBounds', { windowId: await windowId(), bounds: { windowState: 'normal' } })
         if (focus) await page.bringToFront()
-        shown = true
       },
-      hideWindow: async () => {
-        await setWindow('minimized')
-        shown = false
-      },
-      isShown: () => shown
+      ensureShown: async () => {
+        const id = await windowId()
+        const { bounds } = (await cdp.send('Browser.getWindowBounds', { windowId: id })) as { bounds: { windowState?: string } }
+        if (bounds.windowState === 'minimized') await cdp.send('Browser.setWindowBounds', { windowId: id, bounds: { windowState: 'normal' } })
+      }
     }
-    // A window nobody asked to see is not left in front of the owner's work: it is minimised as soon as the page is open.
-    if (!entry.showNext) await handle.hideWindow().catch(() => undefined)
     return handle
   }
 
