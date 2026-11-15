@@ -1,0 +1,111 @@
+/* Accounts (visual-system.md §10.3): one list of the logins grouped by profile, and the selected profile or account beside it. Colours,
+   sizes and radii come from the shared tokens in styles.css. The page stylesheets are bundled before styles.css (main.tsx imports it
+   last), so a rule here that sets what a shared rule of styles.css also sets is written one step more specific. */
+
+/* The page is as tall as the window (`Page fill`): the panes below the header share what is left and scroll on their own. */
+.accounts-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.accounts-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: clamp(248px, 34%, 340px) minmax(0, 1fr);
+  gap: var(--space-3);
+}
+.accounts-list,
+.accounts-detail-pane {
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ───────────── The list ───────────── */
+
+.accounts-list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+.accounts-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+}
+.accounts-group-head {
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+}
+.accounts-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-1);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+.accounts-row:hover {
+  background: var(--hover-fill);
+}
+.accounts-row.selected {
+  /* Selection is neutral; the accent is kept for the one main action of the screen. */
+  background: var(--selection);
+}
+/* A login sits under its profile: one step in, with a hairline down its left edge. */
+.accounts-row.login.under {
+  width: calc(100% - var(--space-3));
+  margin-left: var(--space-3);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  box-shadow: inset 1px 0 0 var(--line-strong);
+}
+.accounts-row-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.accounts-row-top .badge {
+  flex: none;
+}
+.accounts-row-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--fw-medium);
+}
+.accounts-row-line {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+}
+
+/* ───────────── The selected profile or account ───────────── */
+
+/* Its own scroll, and a container: the account's narrow rules (the step controls, the profile grid) follow this pane's width, not the window's. */
+.accounts-detail-pane {
+  overflow-y: auto;
+  container-type: inline-size;
+}

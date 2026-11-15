@@ -1,4 +1,4 @@
-// Pure helpers for the Products page. Kept free of React so the rules shown to the user are easy to read in one place.
+// Pure helpers for Setup. Kept free of React so the rules shown to the user are easy to read in one place.
 
 import { PASSPORT_SECTIONS, type Claim, type PassportSection, type PassportView, type SourceScope } from '../../../../shared/types'
 

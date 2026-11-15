@@ -8,6 +8,7 @@ import { AgentRunPanel } from './AgentRunPanel'
 import { CopyButton } from './CopyButton'
 import type { NextStep } from './next-step'
 import { PageReportView } from './PageReportView'
+import { signInControlNote } from '../accounts/account-browser-reason'
 
 /**
  * Signing in (REQ-012, DEC-014, DEC-015, REQ-016): create the account on the platform if it does not exist yet (the AI does it in the
@@ -58,12 +59,12 @@ export function AccountSignIn({
   const [stopAgent, stoppingAgent] = useAction(() => call('agent.stop', { accountId: account.id }))
   const [copyPassword, copying] = useAction(() => call('vault.copyPassword', { accountId: account.id }))
   const browser = useQuery('accounts.browser', { accountId: account.id }, ['accounts'])
-  const [show, showing] = useAction(() => call('accounts.showBrowser', { accountId: account.id }))
-  const [done, finishing] = useAction(() => call('accounts.releaseControl', { accountId: account.id }))
   const [look, looking] = useAction(async () => setPageReport({ report: await call('accounts.pageReport', { accountId: account.id }) }))
-  const error = opening.error ?? checking.error ?? signingIn.error ?? signingUp.error ?? copying.error ?? showing.error ?? finishing.error ?? looking.error
-  // While the person holds the browser the app waits, so nothing that needs the browser is offered: the screen says what to do instead.
-  const yours = browser.data?.holder === 'user'
+  const error = opening.error ?? checking.error ?? signingIn.error ?? signingUp.error ?? copying.error ?? looking.error
+  // A window of the owner's takes nothing from the AI (DEC-038): only an explicit Take control (More) stops the AI's page, and then what goes
+  // through that page (the saved password, the check, the AI) waits; opening a window of one's own does not.
+  const controlNote = signInControlNote(browser.data)
+  const taken = controlNote !== null
   const windowOpen = browser.data?.windowOpen === true
   const ready = account.status === 'ready'
   const agentRun = agent.data ?? null
@@ -78,8 +79,6 @@ export function AccountSignIn({
   // A login that signs in through another account: the AI is the step while it can start; otherwise the account's own browser.
   const aiNext = linked && signInNext && agentReady && account.status !== 'captcha'
   const browserNext = signInNext && !passwordNext && !aiNext
-  // While the owner holds the browser the one thing to do is in that window; it is the main action unless an earlier step is still open.
-  const holding = next === 'signin' || next === null
 
   const summary = (
     <>
@@ -93,61 +92,46 @@ export function AccountSignIn({
 
   return (
     <AccountBlock step={step} title="Sign-in" summary={summary} testId={`signin-${account.id}`}>
-      {yours ? (
-        <>
-          <div className="note warn" role="status" data-testid={`browser-state-${account.id}`}>
-            {windowOpen
-              ? 'The browser window of this account is open and you are working in it, so the app waits. When you are done, press “Done, close this window” in that window (or close it): the app then checks the sign-in by itself.'
-              : 'You took over this account’s browser, so the app does not use it. Give it back when you are done.'}
-          </div>
-          <div className="row">
-            {windowOpen && (
-              <Button variant={holding ? main : 'ghost'} onClick={() => void show()} disabled={showing.busy} data-testid={`browser-show-${account.id}`}>
-                Show the window
-              </Button>
-            )}
-            {windowOpen && (
-              <Button onClick={() => void look()} disabled={looking.busy} data-testid={`page-report-${account.id}`}>
-                {looking.busy ? 'Looking…' : 'What does the page show?'}
-              </Button>
-            )}
-            <Button onClick={() => void done()} disabled={finishing.busy} data-testid={`browser-done-${account.id}`}>
-              {windowOpen ? 'Done, close the window' : 'Give control back'}
-            </Button>
-          </div>
-          {pageReport && <PageReportView report={pageReport.report} testId={`page-report-view-${account.id}`} />}
-        </>
-      ) : (
-        <div className="row">
-          {linked && !ready && (
-            <Button variant={aiNext ? main : 'secondary'} onClick={() => void startAgent()} disabled={!agentReady || startingAgent.busy || agentWorking} data-testid={`agent-start-${account.id}`}>
-              {startingAgent.busy ? 'Starting…' : `Let the AI sign in with ${through.label}`}
-            </Button>
-          )}
-          {!linked && hasPassword && (
-            <Button variant={passwordNext ? main : 'ghost'} onClick={() => void signIn()} disabled={signingIn.busy || agentWorking} data-testid={`password-signin-${account.id}`}>
-              {signingIn.busy ? 'Signing in…' : 'Sign in with saved password'}
-            </Button>
-          )}
-          <Button variant={browserNext ? main : 'ghost'} onClick={() => void open()} disabled={opening.busy || agentWorking} data-testid={`account-open-${account.id}`}>
-            Open browser to sign in
-          </Button>
-          <Button onClick={() => void check()} disabled={checking.busy || agentWorking} data-testid={`account-check-${account.id}`}>
-            {checking.busy ? 'Checking…' : 'Check sign-in'}
-          </Button>
-          {!linked && info?.signupUrl && !ready && (
-            <Button variant="secondary" onClick={() => void startAgent()} disabled={!agentReady || startingAgent.busy || agentWorking} data-testid={`agent-start-${account.id}`}>
-              {startingAgent.busy ? 'Starting…' : 'Let the AI create the account'}
-            </Button>
-          )}
-          {!linked && info?.signupUrl && !ready && (
-            <Button onClick={() => void signUp()} disabled={signingUp.busy || agentWorking} data-testid={`signup-open-${account.id}`}>
-              {signingUp.busy ? 'Opening…' : `Create account on ${info.label} myself`}
-            </Button>
-          )}
+      {controlNote && (
+        <div className="note warn" role="status" data-testid={`signin-control-note-${account.id}`}>
+          {controlNote}
         </div>
       )}
-      {!yours && (linked || info?.signupUrl) && !ready && agentWhy && (
+      <div className="row">
+        {linked && !ready && (
+          <Button variant={aiNext ? main : 'secondary'} onClick={() => void startAgent()} disabled={!agentReady || startingAgent.busy || agentWorking || taken} data-testid={`agent-start-${account.id}`}>
+            {startingAgent.busy ? 'Starting…' : `Let the AI sign in with ${through.label}`}
+          </Button>
+        )}
+        {!linked && hasPassword && (
+          <Button variant={passwordNext ? main : 'ghost'} onClick={() => void signIn()} disabled={signingIn.busy || agentWorking || taken} data-testid={`password-signin-${account.id}`}>
+            {signingIn.busy ? 'Signing in…' : 'Sign in with saved password'}
+          </Button>
+        )}
+        <Button variant={browserNext ? main : 'ghost'} onClick={() => void open()} disabled={opening.busy} data-testid={`account-open-${account.id}`}>
+          Open browser to sign in
+        </Button>
+        <Button onClick={() => void check()} disabled={checking.busy || agentWorking || taken} data-testid={`account-check-${account.id}`}>
+          {checking.busy ? 'Checking…' : 'Check sign-in'}
+        </Button>
+        {windowOpen && (
+          <Button onClick={() => void look()} disabled={looking.busy} data-testid={`page-report-${account.id}`}>
+            {looking.busy ? 'Looking…' : 'What does the page show?'}
+          </Button>
+        )}
+        {!linked && info?.signupUrl && !ready && (
+          <Button variant="secondary" onClick={() => void startAgent()} disabled={!agentReady || startingAgent.busy || agentWorking || taken} data-testid={`agent-start-${account.id}`}>
+            {startingAgent.busy ? 'Starting…' : 'Let the AI create the account'}
+          </Button>
+        )}
+        {!linked && info?.signupUrl && !ready && (
+          <Button onClick={() => void signUp()} disabled={signingUp.busy} data-testid={`signup-open-${account.id}`}>
+            {signingUp.busy ? 'Opening…' : `Create account on ${info.label} myself`}
+          </Button>
+        )}
+      </div>
+      {pageReport && <PageReportView report={pageReport.report} testId={`page-report-view-${account.id}`} />}
+      {(linked || info?.signupUrl) && !ready && agentWhy && (
         <div className="note warn" role="status" data-testid={`agent-missing-${account.id}`}>
           <strong>The AI cannot start yet.</strong> {agentWhy}
         </div>
@@ -190,7 +174,7 @@ export function AccountSignIn({
                   'Choose a password yourself and keep it somewhere safe.'
                 )}
               </li>
-              <li>Pass the site’s checks yourself (a CAPTCHA, a code sent to the e-mail). When you are in, press “Done, close this window” in that window: the app then checks the sign-in by itself.</li>
+              <li>Pass the site’s checks yourself (a CAPTCHA, a code sent to the e-mail). When you are in, close that window (“Close window” at its top): the app then checks the sign-in by itself.</li>
             </ol>
           ) : (
             <p className="muted small" data-testid={`signup-note-${account.id}`}>

@@ -36,13 +36,13 @@ export function nextProductStep(stages: LaunchStage[]): string | null {
 }
 
 /**
- * Why a product cannot be deleted yet: a connected channel has to be removed first, on the Channels tab. Asked before the confirm, so the
+ * Why a product cannot be deleted yet: a connected channel has to be removed first, on the Channels screen. Asked before the confirm, so the
  * owner is never asked "This cannot be undone" for a delete that the core then refuses (BUG-046). Null when nothing stands in the way.
  */
 export function deleteBlocker(channelCount: number): string | null {
   if (channelCount <= 0) return null
   const one = channelCount === 1
-  return `This product still has ${channelCount} connected ${one ? 'channel' : 'channels'}. Remove ${one ? 'it' : 'them'} on the Channels tab first.`
+  return `This product still has ${channelCount} connected ${one ? 'channel' : 'channels'}. Remove ${one ? 'it' : 'them'} on the Channels screen first.`
 }
 
 /**

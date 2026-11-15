@@ -57,7 +57,7 @@ export function PostGroupSection({ groups, error, isOwner, onMainAction }: { gro
   )
 }
 
-function PostGroupBox({ card, primaryAction, onMainAction }: { card: PostGroupCard; primaryAction: boolean; onMainAction: (id: Id, offering: boolean) => void }) {
+export function PostGroupBox({ card, primaryAction, onMainAction }: { card: PostGroupCard; primaryAction: boolean; onMainAction: (id: Id, offering: boolean) => void }) {
   const { group, versions } = card
   const [work, setWork] = useState<{ step: GroupStep | null; error: string | null }>({ step: null, error: null })
   const [report, setReport] = useState<Report | null>(null)

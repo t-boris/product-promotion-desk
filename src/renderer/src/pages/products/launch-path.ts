@@ -2,7 +2,7 @@
 // (the first one not done, the next step) or not yet. Pure, so the rules are tested from src/main/renderer-logic.test.ts.
 
 import type { Channel, Id, Opportunity, OpportunityState } from '../../../../shared/types'
-import { productHref, publicationsHref, type ProductTab } from '../../route'
+import { postsHref, productHref, type ProductTab } from '../../route'
 
 export type LaunchStageId = 'product' | 'passport' | 'goal' | 'channel' | 'publication'
 export type LaunchStageState = 'done' | 'current' | 'todo'
@@ -11,7 +11,7 @@ export type LaunchStageState = 'done' | 'current' | 'todo'
 export interface LaunchFacts {
   /**
    * At least one source. products.create and products.update refuse a product without one, but removing sources one by one
-   * (sources.remove) can still empty it. The product page counts its sources; the product list, which has no sources, assumes one.
+   * (sources.remove) can still empty it. Setup counts its sources; the product switcher, which has no sources, assumes one.
    */
   hasSources: boolean
   passportApproved: boolean
@@ -27,12 +27,12 @@ export interface LaunchStage {
   id: LaunchStageId
   label: string
   state: LaunchStageState
-  /** Where the stage is worked on: its product tab, or Publications filtered by the product. */
+  /** Where the stage is worked on: its Setup tab, the Channels screen or Posts, for that product. */
   href: string
   /** What finishing the stage means, for the tooltip of a stage that is not done. */
   todo: string
   /**
-   * What the owner does to finish the stage, in the words of a button ("Build the passport"). The one label that the Attention checklist, the
+   * What the owner does to finish the stage, in the words of a button ("Build the passport"). The one label that the Inbox checklist, the
    * "Next: …" row of the product list and the next-stage button of a product tab all use, so the three never name different steps (BUG-064).
    */
   action: string
@@ -47,7 +47,7 @@ const STAGES: { id: LaunchStageId; label: string; todo: string; action: (facts: 
   { id: 'passport', label: 'Passport', todo: 'Build and approve the passport.', action: () => 'Build the passport', done: (f) => f.passportApproved, href: (id) => productHref(id, 'passport') },
   { id: 'goal', label: 'Goal', todo: 'Write a goal.', action: () => 'Write a goal', done: (f) => f.goals > 0, href: (id) => productHref(id, 'goal') },
   { id: 'channel', label: 'Channel', todo: 'Connect a channel.', action: () => 'Connect a channel', done: (f) => f.channels > 0, href: (id) => productHref(id, 'channels') },
-  { id: 'publication', label: 'Publication', todo: 'Approve a publication.', action: (f) => ((f.draftPublications ?? 0) > 0 ? 'Approve a draft' : 'Write a publication'), done: (f) => f.approvedPublications > 0, href: (id) => publicationsHref(id) }
+  { id: 'publication', label: 'Publication', todo: 'Approve a publication.', action: (f) => ((f.draftPublications ?? 0) > 0 ? 'Approve a draft' : 'Write a publication'), done: (f) => f.approvedPublications > 0, href: (id) => postsHref(id) }
 ]
 
 /** The five stages. The first stage that is not done is the current one; the facts decide every other stage on its own. */
@@ -72,7 +72,7 @@ export function nextStage(stages: LaunchStage[]): LaunchStage | null {
 }
 
 /**
- * The stage each tab of the product page works on. The Analysis tab is the AI's way to the passport and Results is where a channel's
+ * The stage each place of a product works on: the tabs of Setup, the Channels screen and the Overview. The Analysis tab is the AI's way to the passport and Results is where a channel's
  * numbers appear, so both follow the stage they serve; their one action ("Connect a channel" on an empty Results) is that stage's own.
  */
 export const TAB_STAGE: Record<ProductTab, LaunchStageId> = { sources: 'product', passport: 'passport', analysis: 'passport', goal: 'goal', channels: 'channel', results: 'channel' }

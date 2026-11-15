@@ -1,7 +1,7 @@
 // Wording and small pure rules for the Channels screen. Kept apart from the components so they stay easy to read.
 
 import type { Account, AccountStatus, Capability, CapabilityKey, CapabilityStatus, Channel, ChannelMode, ChannelStatus, PlanFormat, PlatformInfo } from '../../../../shared/types'
-import type { Tone } from '../../ui'
+import type { Tone } from '../../tone'
 
 // The two rules about an address that "Open browser" needs too live in a module without components, so they are tested on their own.
 export { platformOfSuggestion, typedAddress } from './address'

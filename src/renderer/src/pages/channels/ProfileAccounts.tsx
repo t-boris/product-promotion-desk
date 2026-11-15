@@ -4,6 +4,7 @@ import { Button, Card, ErrorNote } from '../../ui'
 import { contactLine } from './account-link'
 import { AccountStatusLine } from './AccountStatus'
 import { AgentRunPanel } from './AgentRunPanel'
+import { profileFillReason } from '../accounts/account-browser-reason'
 
 /**
  * The accounts of a profile (DEC-019): one row per platform, its login there. A profile has one account per platform, so the rows are
@@ -115,7 +116,8 @@ function FillProfile({ profile, account }: { profile: Profile; account: Account 
   const run = agent.data ?? null
   const working = run?.status === 'running'
   const signedIn = account.status === 'ready'
-  const reason = !signedIn ? 'Sign this account in first (open it, step 5).' : canFill.data && !canFill.data.ready ? canFill.data.reason : null
+  const browser = useQuery('accounts.browser', { accountId: account.id }, ['accounts'])
+  const reason = profileFillReason(signedIn, browser.data, canFill.data)
   return (
     <div className="stack">
       <div className="row">

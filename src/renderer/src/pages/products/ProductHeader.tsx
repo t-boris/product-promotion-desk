@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { PassportView, Product } from '../../../../shared/types'
-import { productHref, type ProductTab } from '../../route'
+import { productHref, setupHref } from '../../route'
 import { AiField } from '../../assist/AiField'
 import { useAssistBlock } from '../../assist/useAssistBlock'
 import { call, useAction } from '../../hooks'
@@ -63,7 +63,7 @@ function EditDetails({ product, onDone }: { product: Product; onDone: () => void
   )
 }
 
-export function ProductHeader({ view, channels, onDeleted, onOpenTab }: { view: PassportView; channels: number; onDeleted: () => void; onOpenTab: (tab: ProductTab) => void }) {
+export function ProductHeader({ view, channels, onDeleted, onOpenAnalysis }: { view: PassportView; channels: number; onDeleted: () => void; onOpenAnalysis: () => void }) {
   const { product } = view
   const passport = passportStatus(product, view.version, view.claims)
   const [editing, setEditing] = useState(false)
@@ -135,7 +135,7 @@ export function ProductHeader({ view, channels, onDeleted, onOpenTab }: { view: 
             <Badge tone={passport.tone}>{passport.label}</Badge>
             {/* Statements waiting for the owner: a link to the Passport tab, where they are reviewed (BUG-037). */}
             {passport.detail && (
-              <a className="badge badge-warn" href={productHref(product.id, 'passport')} title="Review them on the Passport tab" data-testid="passport-review-link">
+              <a className="badge badge-warn" href={setupHref('passport')} title="Review them on the Passport tab" data-testid="passport-review-link">
                 {passport.detail}
               </a>
             )}
@@ -143,7 +143,7 @@ export function ProductHeader({ view, channels, onDeleted, onOpenTab }: { view: 
               // Amber and clickable: it is a step still to do, not a quiet caption (QA findings 42, 48).
               <>
                 <Badge tone="warn">{ANALYSIS_LABELS.idle}</Badge>
-                <button type="button" className="link-btn" onClick={() => onOpenTab('analysis')} title={NOT_ANALYZED_HINT} data-testid="open-analysis">
+                <button type="button" className="link-btn" onClick={onOpenAnalysis} title={NOT_ANALYZED_HINT} data-testid="open-analysis">
                   Open Analysis
                 </button>
               </>
@@ -157,7 +157,7 @@ export function ProductHeader({ view, channels, onDeleted, onOpenTab }: { view: 
         <div className="note" role="status" data-testid="delete-product-blocked">
           {blocker}{' '}
           <a href={productHref(product.id, 'channels')} data-testid="delete-product-open-channels">
-            Open the Channels tab
+            Open Channels
           </a>
         </div>
       )}

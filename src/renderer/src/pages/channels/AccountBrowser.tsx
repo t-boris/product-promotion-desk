@@ -2,6 +2,7 @@ import type { Account, BrowserChoice } from '../../../../shared/types'
 import { useState } from 'react'
 import { call, useAction, useQuery } from '../../hooks'
 import { Button, ErrorNote, Hint, SegmentedControl } from '../../ui'
+import { browserSwitchReason } from '../accounts/account-browser-reason'
 import { AccountBlock } from './AccountBlock'
 
 const BROWSER_LABEL: Record<BrowserChoice, string> = { internal: 'Internal', chrome: 'Google Chrome' }
@@ -13,7 +14,8 @@ const BROWSER_NOTE: Record<BrowserChoice, string> = {
 /**
  * The browser an account works in (DEC-026): the app's own (the default) or the installed Google Chrome. It is a setting of the account, not
  * a step: the sign-in of an account is kept in the browser it was made in, so after a switch the account signs in again in the other one.
- * Changed only while nobody uses the account's browser (the AI is not working on it, its window is not open); the reason is said beside it.
+ * Changed only while the switch closes nothing and stops nobody (the AI is not working on the account, control of its page was not taken, no window
+ * of the owner's is open); the reason is said beside it.
  * A switch signs the account out and closes its Chrome, so the control only chooses and a button applies it: an arrow key between the two
  * segments never changes anything by itself.
  */
@@ -29,12 +31,9 @@ export function AccountBrowser({ account }: { account: Account }) {
   })
   const chromeMissing = state.data?.chromeFound === false
   const working = agent.data?.status === 'running'
-  const inUse = state.data !== undefined && (state.data.holder !== 'none' || state.data.windowOpen)
-  const reason = working
-    ? 'The AI is working on this account. Change its browser when it is done.'
-    : inUse
-      ? 'The account’s browser is in use now (its window is open, or you took control). Close it or give control back, then change the browser.'
-      : null
+  // Opening a window takes nothing from the AI (DEC-038); the switch is refused while the AI works, after Take control, and while a window of
+  // the owner's is open (the switch would close it). The core decides; the screen says which one before the click.
+  const reason = browserSwitchReason(working, state.data)
   const chromeReason = chromeMissing ? 'Google Chrome was not found on this Mac.' : null
 
   return (

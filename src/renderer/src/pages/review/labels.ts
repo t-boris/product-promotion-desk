@@ -1,4 +1,4 @@
-import type { CommentCategory, OpportunityDecision, OpportunityKind, OpportunityState, SendState } from '../../../../shared/types'
+import type { CommentCategory, Opportunity, OpportunityDecision, OpportunityKind, OpportunitySource, OpportunityState, SendState } from '../../../../shared/types'
 import type { Tone } from '../../tone'
 
 export const STATE_LABEL: Record<OpportunityState, string> = {
@@ -73,6 +73,18 @@ export const STATE_HINT: Partial<Record<OpportunityState, string>> = {
   sending: 'Being published right now.',
   unknown_result: 'It is not known whether this was published. It will not be sent again until you check the platform.',
   deferred: 'Set aside. Approve it again when you want to send it.'
+}
+
+const DISCOVERED_HINT: Record<OpportunitySource, string> = {
+  comment: STATE_HINT.discovered as string,
+  new_post: 'A new post that matches your topics. No draft yet: prepare one with the AI or write the reply yourself.',
+  reply_to_me: 'Someone replied to you. No draft yet: prepare one with the AI or write the reply yourself.',
+  mention: 'Someone mentioned you. No draft yet: prepare one with the AI or write the reply yourself.'
+}
+
+/** The hint of an item's state; a new item says what it is (a comment, a post, a reply to the owner, a mention), as the Feed lists them (DEC-039). */
+export function stateHintFor(opportunity: Pick<Opportunity, 'state' | 'source'>): string | undefined {
+  return opportunity.state === 'discovered' ? DISCOVERED_HINT[opportunity.source] : STATE_HINT[opportunity.state]
 }
 
 // The core words these reasons (DEC-010); the card recognises them to say what to do about them.

@@ -16,7 +16,7 @@ export interface Prefill {
 
 interface Props {
   product: Product | undefined
-  /** There is no account in the app yet: the card is dimmed and says so once (BUG-030). Decided by the Channels tab. */
+  /** There is no account in the app yet: the card is dimmed and says so once (BUG-030). Decided by the Channels screen. */
   needsAccount: boolean
   /** Every account of the library (DEC-015): any of them can serve this product. */
   accounts: Account[]

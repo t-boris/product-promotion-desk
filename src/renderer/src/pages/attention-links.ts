@@ -15,7 +15,7 @@ export interface LinkSources {
 
 /**
  * Where the owner fixes a problem that is not a decision about content. A channel belongs to a product (DEC-009), so its
- * link opens that product's Channels tab. An account belongs to no product (DEC-015): its link opens the Accounts section with that
+ * link opens that product's Channels screen. An account belongs to no product (DEC-015): its link opens the Accounts section with that
  * account selected, and the products that use it are named. The attention item carries only the channel or account id, so everything is looked up here.
  */
 export function fixLinkFor(item: AttentionItem, { channels, products }: LinkSources): FixLink | null {
@@ -30,17 +30,17 @@ export function fixLinkFor(item: AttentionItem, { channels, products }: LinkSour
       return { href: accountHref(item.refId), label: 'Open Accounts', productName: names.length > 0 ? names.join(', ') : null }
     }
     case 'product':
-      return { href: productHref(item.refId), label: 'Open product', productName: products.find((p) => p.id === item.refId)?.name ?? null }
+      return { href: productHref(item.refId), label: 'Open Setup', productName: products.find((p) => p.id === item.refId)?.name ?? null }
     default:
       return null
   }
   const productName = productId ? (products.find((p) => p.id === productId)?.name ?? null) : null
-  if (!productId) return { href: productHref(null), label: 'Open Products', productName: null }
+  if (!productId) return { href: productHref(null), label: 'Open Setup', productName: null }
   return { href: productHref(productId, 'channels'), label: productName ? `Open ${productName} channels` : 'Open channels', productName }
 }
 
-/** Where the owner connects a channel: the Channels tab of the chosen product, or the product list when no product is
- *  chosen ("All products"), since a channel always belongs to a product (DEC-009). */
+/** Where the owner connects a channel: the Channels screen of the product, or Setup (where a product is added) when there is none,
+ *  since a channel always belongs to a product (DEC-009). */
 export function connectChannelHref(productId: string | null | undefined): string {
   return productId ? productHref(productId, 'channels') : productHref(null)
 }

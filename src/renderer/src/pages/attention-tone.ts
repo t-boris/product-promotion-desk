@@ -1,4 +1,4 @@
-// The colour of an attention item and of the count next to "Attention" in the menu. A pure module (no JSX), so it is
+// The colour of an attention item and of the count next to "Inbox" in the menu. A pure module (no JSX), so it is
 // tested from src/main/renderer-logic.test.ts.
 import type { AttentionKind } from '../../../shared/types'
 import type { Tone } from '../tone'

@@ -21,6 +21,8 @@ interface Props {
   primaryAction?: boolean
   /** A secondary action that belongs to the item but not to its decision ("Also post to…"): first in the row of main actions, never filled. */
   extra?: ReactNode
+  /** The test id of the main button when the screen names it itself (the Inbox's `inbox-primary`); the usual one ("approve", "send", "reconcile") then goes to `data-action`. */
+  primaryTestId?: string
 }
 
 /**
@@ -29,7 +31,7 @@ interface Props {
  * main actions come first and the rare ones last, so Tab reaches Reject after everything else and never first (BUG-039); the
  * stylesheet puts them at the left. Reject cannot be undone, so it asks first, in its own place.
  */
-export function ReviewButtons({ card, actions, dirty, input, primaryAction = false, extra }: Props) {
+export function ReviewButtons({ card, actions, dirty, input, primaryAction = false, extra, primaryTestId }: Props) {
   const { opportunity: opp } = card
   const id = opp.id
   const hasText = input.text.trim().length > 0 || Boolean(input.link) || (input.attachments?.length ?? 0) > 0
@@ -39,6 +41,8 @@ export function ReviewButtons({ card, actions, dirty, input, primaryAction = fal
   const resting = useMainVariant()
   const mainVariant = primaryAction && resting === 'primary' ? 'primary' : 'secondary'
   const { busy } = actions
+  // The main button's identity: its usual test id, or the one the screen gave it (then the usual one stays readable as `data-action`).
+  const mainIds = (action: string): { 'data-testid': string; 'data-action'?: string } => (primaryTestId ? { 'data-testid': primaryTestId, 'data-action': action } : { 'data-testid': action })
   // A text the owner wrote is read against the rules of an AI draft before it is approved; with findings the panel stands in for the buttons.
   const [held, setHeld] = useState<Held | null>(null)
   const panel = heldFor(held, input)
@@ -57,7 +61,7 @@ export function ReviewButtons({ card, actions, dirty, input, primaryAction = fal
         <div className="review-actions">
           <span className="muted small review-actions-note">Looks for the reply on the platform. It is never sent a second time before the result is known.</span>
           <div className="review-actions-main">
-            <Button variant={mainVariant} onClick={() => void actions.reconcile(id)} disabled={busy} data-testid="reconcile">
+            <Button variant={mainVariant} onClick={() => void actions.reconcile(id)} disabled={busy} {...mainIds('reconcile')}>
               Check the platform
             </Button>
           </div>
@@ -95,7 +99,7 @@ export function ReviewButtons({ card, actions, dirty, input, primaryAction = fal
     setHeld({ which, findings: outcome.findings, error: outcome.error, fingerprint: fingerprint(input) })
   }
   const editText = (): void => {
-    const container = here.current?.closest('.review-card')
+    const container = here.current?.closest('[data-review-item]')
     setHeld(null)
     container?.querySelector<HTMLElement>('textarea.draft-text')?.focus()
   }
@@ -161,7 +165,7 @@ export function ReviewButtons({ card, actions, dirty, input, primaryAction = fal
             </Button>
           ))}
         {main === 'send' ? (
-          <Button variant={mainVariant} onClick={() => void actions.send(id)} disabled={busy} data-testid="send">
+          <Button variant={mainVariant} onClick={() => void actions.send(id)} disabled={busy} {...mainIds('send')}>
             Send now
           </Button>
         ) : (
@@ -169,7 +173,7 @@ export function ReviewButtons({ card, actions, dirty, input, primaryAction = fal
             <Button onClick={() => void approveWith('approve_send')} disabled={busy || !hasText} data-testid="approve-send">
               {label.approveAndSend}
             </Button>
-            <Button variant={mainVariant} onClick={() => void approveWith('approve')} disabled={busy || !hasText} data-testid="approve">
+            <Button variant={mainVariant} onClick={() => void approveWith('approve')} disabled={busy || !hasText} {...mainIds('approve')}>
               {label.approve}
             </Button>
           </>

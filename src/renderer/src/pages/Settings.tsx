@@ -4,6 +4,7 @@ import { parseWebPort, usablePort } from '../../../shared/web-port'
 import { call, useAction, useQuery } from '../hooks'
 import { Icon } from '../icons'
 import { Badge, Button, Card, EmptyState, ErrorNote, Hint, Loading, More, Page, Switch } from '../ui'
+import { MailboxesCard } from './channels/MailboxesCard'
 import { engineChoiceVariant, recommendedEngineId, splitEngineDetail } from './engine-detail'
 import { LessonsCard } from './LessonsCard'
 import './settings.css'
@@ -12,6 +13,8 @@ export function SettingsPage() {
   const engines = useQuery('engines.list', undefined, ['settings'])
   const settings = useQuery('app.settings.get', undefined, ['settings'])
   const info = useQuery('app.info', undefined, ['settings'])
+  // The base mailbox of the account library (DEC-037, phase C5): the Accounts screen lists logins only, the address they are made from is a setting.
+  const mailboxes = useQuery('mailboxes.list', undefined, ['accounts'])
   // The port field: what the owner typed and has not applied yet (null shows the port in use), and why it was refused.
   const [draft, setDraft] = useState<string | null>(null)
   const [portError, setPortError] = useState<string | null>(null)
@@ -59,7 +62,7 @@ export function SettingsPage() {
   }
 
   return (
-    <Page title="Settings" subtitle="AI engine, notifications, publishing, local web access and version">
+    <Page title="Settings" subtitle="AI engine, notifications, publishing, base mailbox, local web access and version">
       <Card
         title="AI engine"
         actions={
@@ -160,6 +163,8 @@ export function SettingsPage() {
         </More>
         {publishWithAi && current?.engineId !== 'claude' && <div className="hint warn">Claude Code is not the selected engine, so the AI cannot publish yet: select Claude Code above, or a send will stop and tell you.</div>}
       </Card>
+
+      <MailboxesCard mailboxes={mailboxes.data ?? []} />
 
       <Card title="Local web access">
         <Hint>Serves this interface on 127.0.0.1 so it can be opened in a browser tab on this Mac, for example to check the app.</Hint>

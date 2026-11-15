@@ -482,6 +482,11 @@ a:any-link {
   background: var(--error);
   color: var(--on-error);
 }
+.count.neutral {
+  /* A quantity, not a call to act (the Feed's undecided items): the quiet fill of the sidebar, never amber or red. */
+  background: var(--selection);
+  color: var(--text-2);
+}
 
 /* The content column is opaque: only the sidebar shows the window material. It is the container of the narrow-window rules. */
 .main {
@@ -659,6 +664,11 @@ a.btn {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+/* A page of panes (the Inbox) is exactly as tall as the window, so each pane scrolls and the page does not. */
+.page.page-fill {
+  height: 100%;
+  min-height: 0;
 }
 .page-head {
   display: flex;
@@ -1523,86 +1533,6 @@ input[type='radio'] {
 
 /* ───────────── Page patterns (visual-system.md §9) ───────────── */
 
-/* List + detail: a panel of rows beside the object a row opens, side by side down to the minimum window. The detail is a
-   container, so its own narrow rules (the launch path) follow its width and not the window's. */
-.split {
-  display: grid;
-  grid-template-columns: clamp(208px, 27%, 300px) minmax(0, 1fr);
-  gap: var(--space-4);
-  align-items: start;
-}
-.split-list {
-  position: sticky;
-  top: 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.split-detail {
-  min-width: 0;
-  container-type: inline-size;
-}
-
-/* A list panel: rows on one surface, the selected one tinted. No card per row. */
-.panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-half);
-  padding: 6px;
-  background: var(--surface-1);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-}
-.panel-row {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-half);
-  min-width: 0;
-  padding: var(--space-2) 10px;
-  border-radius: var(--radius-md);
-  text-align: left;
-}
-.panel-row:hover {
-  background: var(--hover-fill);
-}
-.panel-row:active {
-  background: var(--press-fill);
-}
-.panel-row.active {
-  background: var(--accent-tint);
-}
-.panel-row-top {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-}
-.panel-row-title {
-  flex: 1;
-  min-width: 0;
-  font-weight: var(--fw-semibold);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.panel-row-line {
-  min-width: 0;
-  color: var(--text-2);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.panel-row-line.wrap {
-  white-space: normal;
-}
-/* A name that other products share ends in the time it was created (BUG-054): that is the part that tells the rows apart, so it wraps instead of being cut. */
-.panel-row-title.wrap {
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
 /* The header of an object (a product, an account, a channel): its name, a meta line, its actions. No box around it. */
 .obj-head {
   display: flex;
@@ -1902,7 +1832,6 @@ a:not(.btn):not(.badge):not(.nav-item):not(.tb-value):hover,
 .disclosure > summary,
 .more > summary,
 .menu-item,
-.panel-row,
 .input,
 .segmented-option {
   transition:

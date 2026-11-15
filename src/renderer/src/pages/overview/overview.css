@@ -1,0 +1,107 @@
+/* Overview (visual-system.md §10.2): cards in a two-column grid that folds to one column, the channel tiles and the suggestion lines.
+   Colours, sizes and radii come from the shared tokens in styles.css. */
+
+.overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.ov-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: var(--space-3);
+}
+.ov-grid > .card {
+  min-width: 0;
+}
+.ov-note {
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-caption);
+}
+
+/* Channel tiles: each one is a link to the channel's page. */
+.ov-tiles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  gap: var(--space-3);
+}
+.ov-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  color: var(--text-1);
+  text-decoration: none;
+}
+.ov-tile:hover {
+  background: var(--hover-fill);
+}
+.ov-tile-top {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.ov-tile-target {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--fw-semibold);
+}
+.ov-tile-platform,
+.ov-tile-counts,
+.ov-tile-when {
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+}
+.ov-tile-metric {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 28px;
+  margin-top: var(--space-1);
+}
+.ov-tile-latest {
+  font-variant-numeric: tabular-nums;
+}
+
+/* "The AI suggests": the sentence, the fact under it, and the one link on the right. */
+.ov-suggestions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ov-suggestions li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--line);
+}
+.ov-suggestions li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.ov-suggestion-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.ov-suggestions .btn {
+  flex: none;
+}
+
+.ov-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}

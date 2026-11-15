@@ -16,7 +16,7 @@ const base: BlockFacts = { productId: 'p1', needsPassport: false, approved: fals
 describe('assistBlock', () => {
   it('asks for the passport only when the help needs it', () => {
     expect(assistBlock(base)).toBeNull()
-    expect(assistBlock({ ...base, needsPassport: true })).toMatchObject({ text: 'Approve the product passport first so the suggestions fit it.', fix: { href: '#/products/p1/passport' } })
+    expect(assistBlock({ ...base, needsPassport: true })).toMatchObject({ text: 'Approve the product passport first so the suggestions fit it.', fix: { href: '#/setup/passport?product=p1' } })
     expect(assistBlock({ ...base, needsPassport: true, approved: true })).toBeNull()
     expect(assistBlock({ ...base, needsPassport: true, approved: null })).toBeNull()
     expect(assistBlock({ ...base, needsPassport: true, productId: undefined })).toBeNull()

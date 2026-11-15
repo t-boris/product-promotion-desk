@@ -1,55 +1,38 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { AgentQuestionDialog } from './AgentQuestionDialog'
 import { AiPill } from './AiProgress'
+import { FeedCount } from './FeedCount'
 import { attentionCountTone } from './pages/attention-tone'
 import { useAutomation, useEvents, useQuery } from './hooks'
 import { Icon, type IconName } from './icons'
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from './menu-state'
 import { PAGES } from './pages'
-import { MOVED_PAGES, navigateHashOf, parseHash } from './route'
+import { useCurrentProduct } from './product-context'
+import { ProductSwitcher } from './ProductSwitcher'
+import { navigateHashOf, type PageId } from './route'
 import { NO_ACCOUNTS, NO_ENGINE, accountsGroupName, accountsSummary, automationText, engineGroupName } from './status-labels'
 import { Badge, Button, IconButton } from './ui'
 import type { Tone } from './tone'
+import { useHashRoute } from './use-hash-route'
 
 /** One glyph per main area; the ids are the ones of `PAGES`. */
-const NAV_ICONS: Record<string, IconName> = {
-  attention: 'attention',
-  products: 'products',
+const NAV_ICONS: Record<PageId, IconName> = {
+  overview: 'overview',
+  inbox: 'inbox',
+  feed: 'feed',
+  posts: 'posts',
+  channels: 'channels',
   accounts: 'accounts',
-  opportunities: 'opportunities',
-  publications: 'publications',
+  setup: 'setup',
   logs: 'logs',
   settings: 'settings'
 }
-/** Log and Settings are pinned to the bottom of the sidebar; the order of the seven entries does not change. */
-const FOOT_PAGES = new Set(['logs', 'settings'])
+/** Log and Settings are pinned to the bottom of the sidebar; the order of the others does not change. */
+const FOOT_PAGES = new Set<PageId>(['logs', 'settings'])
 
 /** The colour of a status dot for a tone: grey for neutral and informational. */
 function dotTone(tone: Tone): string {
   return tone === 'good' || tone === 'warn' || tone === 'bad' ? tone : ''
-}
-
-/**
- * The page is the first segment of the hash; `#/products/<productId>/<tab>` is still the Products page, which reads
- * the rest itself. Old Channels and Results links are redirected (without a history entry) to the product list.
- */
-function useHashRoute(): string {
-  const read = (): string => {
-    const { page } = parseHash(window.location.hash)
-    const moved = MOVED_PAGES[page]
-    if (moved) {
-      window.history.replaceState(null, '', `#/${moved}`)
-      return moved
-    }
-    return PAGES.some((p) => p.id === page) ? page : PAGES[0].id
-  }
-  const [route, setRoute] = useState(read)
-  useEffect(() => {
-    const onChange = (): void => setRoute(read())
-    window.addEventListener('hashchange', onChange)
-    return () => window.removeEventListener('hashchange', onChange)
-  }, [])
-  return route
 }
 
 /** The browser's storage, or undefined where the browser refuses even to hand it out. */
@@ -74,6 +57,7 @@ export function App() {
     const hash = navigateHashOf(event)
     if (hash) window.location.hash = hash
   })
+  const { current: currentProduct } = useCurrentProduct()
   const attention = useQuery('attention.list', undefined, ['attention', 'opportunities', 'channels', 'accounts'])
   const accounts = useQuery('accounts.list', undefined, ['accounts'])
   const info = useQuery('app.info', undefined, [])
@@ -98,9 +82,10 @@ export function App() {
       }}
       data-testid={`nav-${page.id}`}
     >
-      {NAV_ICONS[page.id] && <Icon name={NAV_ICONS[page.id]} />}
+      <Icon name={NAV_ICONS[page.id]} />
       <span>{page.label}</span>
-      {page.id === 'attention' && countTone && (
+      {page.id === 'feed' && currentProduct && <FeedCount key={currentProduct.id} productId={currentProduct.id} />}
+      {page.id === 'inbox' && countTone && (
         <span className={`count ${countTone}`} data-testid="attention-count">
           {attentionCount}
         </span>
@@ -125,6 +110,7 @@ export function App() {
             </span>
             <span>Promotion Desk</span>
           </div>
+          <ProductSwitcher />
           <nav aria-label="Work areas">
             <div className="nav-group">{PAGES.filter((page) => !FOOT_PAGES.has(page.id)).map(navItem)}</div>
             <div className="nav-group nav-foot">{PAGES.filter((page) => FOOT_PAGES.has(page.id)).map(navItem)}</div>

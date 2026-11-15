@@ -1,0 +1,335 @@
+/* Posts (visual-system.md §10.3): the controls, the list with the selected post beside it, and the month. Colours, sizes and radii come
+   from the shared tokens in styles.css. The page stylesheets are bundled before styles.css (main.tsx imports it last), so a rule here
+   that sets what a shared rule of styles.css also sets is written one step more specific. */
+
+/* The page is as tall as the window (`Page fill`): the controls keep their height, the panes below share what is left and scroll on their own. */
+.posts-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ───────────── Controls: the state segments, then the channel, the search and the sort in one wrapping row ───────────── */
+
+.posts-controls {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2) var(--space-4);
+}
+.posts-controls .toolbar {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+}
+.posts-toolbar .field:nth-child(2) {
+  flex: 1;
+  min-width: 140px;
+}
+.posts-toolbar .input[type='search'] {
+  width: 100%;
+}
+
+/* ───────────── List and the post beside it ───────────── */
+
+.posts-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: clamp(248px, 36%, 360px) minmax(0, 1fr);
+  gap: var(--space-3);
+}
+.posts-list,
+.posts-detail-pane {
+  min-width: 0;
+  min-height: 0;
+}
+.posts-list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+  padding: var(--space-2);
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+.posts-row-wrap {
+  display: flex;
+  flex-direction: column;
+}
+.posts-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-1);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+.posts-row:hover {
+  background: var(--hover-fill);
+}
+.posts-row.selected {
+  /* Selection is neutral; the accent is kept for the one main action of the screen. */
+  background: var(--selection);
+}
+.posts-thumb {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--surface-2);
+}
+/* A post without a picture keeps the frame, so the titles of all rows start at the same place. */
+.posts-thumb-empty {
+  border: 1px dashed var(--line-strong);
+  background: none;
+}
+.posts-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+}
+.posts-row-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.posts-row-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--fw-medium);
+}
+.posts-row-top .badge {
+  flex: none;
+}
+.posts-row-line {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+}
+.posts-row-when {
+  font-variant-numeric: tabular-nums;
+}
+/* A group, once selected, opens into its versions: one quiet line each, under the row. */
+.posts-versions {
+  margin: 0 0 var(--space-1) calc(40px + var(--space-4));
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+}
+.posts-version {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+}
+.posts-version-target {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.posts-version-state {
+  flex: none;
+}
+
+/* The selected post: its content scrolls, its action bar (the shared `.inbox-bar`) stays at the bottom. */
+.posts-detail-pane {
+  display: flex;
+  flex-direction: column;
+}
+.posts-detail {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.posts-detail-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4);
+}
+
+/* ───────────── Calendar ───────────── */
+
+.posts-calendar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.posts-cal-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.posts-cal-title {
+  margin: 0;
+  min-width: 9ch;
+  font-size: var(--fs-section);
+  font-weight: var(--fw-semibold);
+}
+.posts-cal-head .flip svg {
+  transform: scaleX(-1);
+}
+.posts-cal-grid {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  overflow: hidden;
+}
+.posts-cal-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+.posts-cal-weekday {
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  border-bottom: 1px solid var(--line);
+}
+.posts-cal-day {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-half);
+  min-width: 0;
+  min-height: 76px;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+  background: none;
+  color: var(--text-1);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+.posts-cal-week > .posts-cal-day:first-child {
+  border-left: 0;
+}
+.posts-cal-weekdays + .posts-cal-week > .posts-cal-day {
+  border-top: 0;
+}
+.posts-cal-day:hover {
+  background: var(--hover-fill);
+}
+.posts-cal-day.chosen {
+  background: var(--selection);
+}
+.posts-cal-day.outside,
+.posts-cal-day.past {
+  color: var(--text-2);
+}
+.posts-cal-num {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-caption);
+}
+.posts-cal-day.today .posts-cal-num {
+  /* Today is marked by weight and an underline, never by the accent: the accent belongs to the screen's one main action. */
+  font-weight: var(--fw-semibold);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.posts-cal-entry,
+.posts-cal-more,
+.posts-cal-rhythm {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-caption);
+}
+.posts-cal-entry {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  color: var(--text-1);
+}
+.posts-cal-entry.sent {
+  background: var(--good-bg);
+}
+.posts-cal-more {
+  color: var(--text-2);
+}
+.posts-cal-rhythm {
+  color: var(--text-3);
+  font-style: italic;
+}
+.posts-cal-day-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+}
+.posts-cal-day-panel h3 {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+}
+.posts-cal-day-panel p {
+  margin: 0;
+}
+.posts-cal-agenda {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.posts-cal-agenda li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.posts-cal-agenda-time {
+  flex: none;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.posts-cal-agenda-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

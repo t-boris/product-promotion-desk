@@ -1,5 +1,6 @@
-// The "Getting started" steps of an empty Attention page. Pure, so the order and the words are tested without the interface.
+// The "Getting started" steps of an empty Inbox. Pure, so the order and the words are tested without the interface.
 
+import { INBOX_HREF, NEW_PRODUCT_HREF } from '../route'
 import type { LaunchStage, LaunchStageId } from './products/launch-path'
 
 export interface StartStep {
@@ -23,7 +24,7 @@ export interface StartFacts {
 }
 
 /**
- * The stages that are a step of Getting started. Publications are the work the app does once it is set up, so a path that has reached them
+ * The stages that are a step of Getting started. Posts are the work the app does once it is set up, so a path that has reached them
  * leaves the checklist to the account and the automation.
  */
 const LAUNCH_STEP_STAGES: readonly LaunchStageId[] = ['product', 'passport', 'goal', 'channel']
@@ -42,7 +43,7 @@ export function startSteps(facts: StartFacts): StartStep[] {
       title: 'Add a product',
       hint: 'A name and a website or a short description. The app reads it and builds a passport you approve.',
       action: 'Add a product',
-      href: '#/products',
+      href: NEW_PRODUCT_HREF,
       done: facts.products > 0
     },
     ...launch,
@@ -63,7 +64,7 @@ export function startSteps(facts: StartFacts): StartStep[] {
           ? 'Running: your channels are checked on schedule. You can pause it at any time from the top bar.'
           : 'While it is paused, nothing is checked or sent. It is paused on purpose until the first account is ready.',
       action: 'Resume automation',
-      href: '#/attention',
+      href: INBOX_HREF,
       done: facts.paused === false
     }
   ]

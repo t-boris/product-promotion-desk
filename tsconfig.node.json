@@ -11,5 +11,6 @@
     "src/preload/**/*",
     "electron.vite.config.ts",
     "vitest.config.ts"
-  ]
+  ],
+  "exclude": ["src/main/charts-render.test.ts"]
 }
