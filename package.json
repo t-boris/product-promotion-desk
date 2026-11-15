@@ -25,7 +25,8 @@
     "deploy:local": "npm run dist && node scripts/deploy-local.mjs"
   },
   "dependencies": {
-    "better-sqlite3": "13.0.3"
+    "better-sqlite3": "13.0.3",
+    "puppeteer-core": "25.16.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",
