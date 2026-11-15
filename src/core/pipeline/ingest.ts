@@ -10,16 +10,19 @@
 //  - a comment that changes after an opportunity exists sends that opportunity back to review (unless already sent);
 //  - a post seen for the first time, by someone else, that names one of the channel's topics becomes an opportunity of its own (source `new_post`), never at
 //    the baseline and never for a post of the product's own logins (DEC-039); an edited post sends its pending opportunity back to review;
-//  - what the account's inbox lists (replies to it, mentions of it) is stored and queued by the same rules, once per comment (`ingestInbox`).
+//  - what the account's inbox lists (replies to it, mentions of it) is stored and queued by the same rules, once per comment (`ingestInbox`);
+//  - a post the AI triage found worth a reply (DEC-040) is stored with its comments as BASELINE (nothing in them is ever queued) and becomes the same
+//    `new_post` opportunity, under the same guards (`ingestTriagedPost`); every discussion keeps the time the post was written (`posted_at`).
 
 import type { Account, Channel, Comment, Id, Opportunity, OpportunityState } from '../../shared/types'
 import type { RemoteComment, RemoteDiscussion, RemoteInboxItem } from '../ports'
 import type { Core } from '../core'
+import { oneLine } from '../assist/kit'
 import { newId } from '../db/database'
 import { commentBodyHash } from './hash'
 import { postHash } from './reply-target'
 import type { ReviewFlow } from './review'
-import type { FlowStore } from './store'
+import { OTHER_LOGIN_SPEAKS_REASON, type FlowStore } from './store'
 import { matchedTerm } from './topic-match'
 import { normalizeIdentity } from './util'
 
@@ -43,6 +46,23 @@ export interface InboxIngestResult {
   /** Items of the inbox that a discussion read had already queued as plain comments, now named for what they are. */
   relabelled: number
 }
+
+/** What became of a post the AI triage found worth a reply (DEC-040). */
+export interface TriagedPostResult {
+  /** The `new_post` opportunity the post has now: the one this call opened, or the one it had already. Null when none could be opened. */
+  opportunity: Opportunity | null
+  /** True only when this call opened it. */
+  opened: boolean
+  /** Why no opportunity was opened, in words for the owner; null when there is one. */
+  blocked: string | null
+}
+
+export const IDENTITY_UNKNOWN_REASON = 'The account identity is unknown, so nothing is queued: sign in so your own comments can be recognised.'
+export const OWN_POST_REASON = 'The post was written by one of your own logins'
+export const LOCKED_POST_REASON = 'The post is locked or archived, so it cannot be answered'
+export const POST_SET_ASIDE_REASON = 'A reply to this post was set aside before'
+/** Starts the reason of an opportunity the AI triage opened, so the owner sees where it came from. */
+export const AI_FOUND_PREFIX = 'AI found it relevant: '
 
 /** Opportunities that have not been sent and can still be withdrawn when the comment turns out to be our own. */
 const WITHDRAWABLE: OpportunityState[] = ['discovered', 'analyzing', 'needs_user', 'no_reply', 'draft', 'awaiting_approval', 'ready', 'deferred', 'error']
@@ -139,11 +159,12 @@ export class Ingestor {
     return { id: this.insertDiscussion(channelId, d, now), created: true, changed: false }
   }
 
-  private insertDiscussion(channelId: Id, d: Pick<RemoteDiscussion, 'externalId' | 'url' | 'title' | 'author' | 'body'>, now: string): Id {
+  /** `posted_at` is kept for every discussion that is stored from now on (DEC-040); a row stored before keeps none. */
+  private insertDiscussion(channelId: Id, d: Pick<RemoteDiscussion, 'externalId' | 'url' | 'title' | 'author' | 'body' | 'postedAt'>, now: string): Id {
     const id = newId()
     this.core.db
-      .prepare('INSERT INTO discussions (id, channel_id, external_id, url, title, author, body, selected, first_seen_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)')
-      .run(id, channelId, d.externalId, d.url, d.title, d.author, d.body, now, now)
+      .prepare('INSERT INTO discussions (id, channel_id, external_id, url, title, author, body, posted_at, selected, first_seen_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)')
+      .run(id, channelId, d.externalId, d.url, d.title, d.author, d.body, d.postedAt, now, now)
     return id
   }
 
@@ -274,13 +295,68 @@ export class Ingestor {
   ): Id {
     const known = this.store.discussionByExternalId(channel.id, item.discussionExternalId)
     if (known) return known.id
-    if (!thread) return this.insertDiscussion(channel.id, { externalId: item.discussionExternalId, url: item.discussionUrl, title: item.discussionTitle, author: '', body: '' }, now)
-    const id = this.insertDiscussion(channel.id, { externalId: item.discussionExternalId, url: thread.url || item.discussionUrl, title: thread.title || item.discussionTitle, author: thread.author, body: thread.body }, now)
+    if (!thread) return this.insertDiscussion(channel.id, { externalId: item.discussionExternalId, url: item.discussionUrl, title: item.discussionTitle, author: '', body: '', postedAt: null }, now)
+    const id = this.insertDiscussion(channel.id, { externalId: item.discussionExternalId, url: thread.url || item.discussionUrl, title: thread.title || item.discussionTitle, author: thread.author, body: thread.body, postedAt: thread.postedAt }, now)
     for (const other of thread.comments) {
       if (other.externalId === item.comment.externalId || this.store.commentByExternalId(channel.id, other.externalId)) continue
       const isOwn = ownIdentities.has(normalizeIdentity(other.author)) || ownResultIds.has(other.externalId)
       this.insertComment(channel.id, id, other, true, isOwn, now)
     }
     return id
+  }
+
+  // ───────────── a post the AI triage found worth a reply (DEC-040) ─────────────
+
+  /**
+   * Says whether a post was written by any login of the product or is one the app itself published. The triage never judges what is ours. Built once for
+   * a whole listing: it reads the logins and the confirmed sends a single time.
+   */
+  ownPostTest(channel: Channel, account: Account): (post: Pick<RemoteDiscussion, 'author' | 'externalId'>) => boolean {
+    const { identities, resultIds } = this.ownMarks(channel, account)
+    return (post) => identities.has(normalizeIdentity(post.author)) || resultIds.has(post.externalId)
+  }
+
+  /**
+   * Opens the ordinary `new_post` opportunity (DEC-039) for a post the AI read and found worth a reply, and stores the post for it. Everything that guards
+   * a new post found by topic holds here too, and none of it is the AI's to decide:
+   *  - the account identity must be known (without it our own posts cannot be told apart);
+   *  - never a post of any login of the product, never a locked or archived one;
+   *  - one voice per discussion (DEC-010): when another login of the product speaks there, the opportunity is recorded as cancelled and the post is `blocked`;
+   *  - one `new_post` opportunity per discussion: when the monitor already queued the post by topic, that one is returned, no second one is made, and one the
+   *    owner had set aside is not opened again;
+   *  - the comments under the post are stored as BASELINE, so nothing in them is queued and no reply is ever prepared for an old comment.
+   * The opportunity is only `discovered`: the draft, the owner's Approve and the send gate all still stand between it and the platform (automatic mode
+   * never answers a new post, DEC-039). A post already stored keeps its row as it is.
+   */
+  ingestTriagedPost(channel: Channel, account: Account, post: RemoteDiscussion, relation: string): TriagedPostResult {
+    const result = this.core.db.transaction(() => this.applyTriagedPost(channel, account, post, relation))()
+    this.store.notify()
+    return result
+  }
+
+  private applyTriagedPost(channel: Channel, account: Account, post: RemoteDiscussion, relation: string): TriagedPostResult {
+    const blocked = (reason: string): TriagedPostResult => ({ opportunity: null, opened: false, blocked: reason })
+    if (normalizeIdentity(account.identity) === '') return blocked(IDENTITY_UNKNOWN_REASON)
+    const { identities: ownIdentities, resultIds: ownResultIds } = this.ownMarks(channel, account)
+    if (ownIdentities.has(normalizeIdentity(post.author)) || ownResultIds.has(post.externalId)) return blocked(OWN_POST_REASON)
+    if (post.locked === true || post.archived === true) return blocked(LOCKED_POST_REASON)
+
+    let discussion = this.store.discussionByExternalId(channel.id, post.externalId)
+    if (!discussion) {
+      const now = this.store.now()
+      const id = this.insertDiscussion(channel.id, post, now)
+      for (const c of post.comments) {
+        if (this.store.commentByExternalId(channel.id, c.externalId)) continue
+        const isOwn = ownIdentities.has(normalizeIdentity(c.author)) || ownResultIds.has(c.externalId)
+        this.insertComment(channel.id, id, c, true, isOwn, now)
+      }
+      discussion = this.core.repos.discussion(id)
+    }
+
+    const existing = this.store.opportunityForPost(discussion.id)
+    if (existing) return existing.state === 'cancelled' ? blocked(existing.reason || POST_SET_ASIDE_REASON) : { opportunity: existing, opened: false, blocked: null }
+
+    const opened = this.store.openPostOpportunity(channel, discussion, `${AI_FOUND_PREFIX}${oneLine(relation, 200)}`)
+    return opened.blocked ? blocked(OTHER_LOGIN_SPEAKS_REASON) : { opportunity: opened.opportunity, opened: true, blocked: null }
   }
 }

@@ -73,6 +73,17 @@ export class FakeConnector implements Connector {
   /** Errors thrown by the corresponding method; set to null to heal. */
   fetchActivityError: Error | null = null
   fetchThreadError: Error | null = null
+  /**
+   * What `listPosts` shows (DEC-040): the posts of the community, newest first, each without comments. Empty until a test adds posts with `addPost`, so a
+   * test that does not care about the triage sees none. Set `listPosts` to undefined for a platform that cannot list posts.
+   */
+  posts: RemoteDiscussion[] = []
+  /** The whole threads of the posts that `addPost` added; `fetchThread` reads them, `fetchActivity` does not show them. */
+  readonly postThreads = new Map<string, RemoteDiscussion>()
+  /** The error `listPosts` throws; set to null to heal. */
+  listPostsError: Error | null = null
+  /** The requests `listPosts` received, to check what the triage asks the platform. */
+  readonly listPostsRequests: { since: string; max: number }[] = []
   /** What the account's inbox holds (DEC-039), newest first, and the error `readInbox` throws; set `readInbox` to undefined for a platform with no inbox. */
   inbox: RemoteInboxItem[] = []
   inboxError: Error | null = null
@@ -114,8 +125,34 @@ export class FakeConnector implements Connector {
     return discussion
   }
 
+  /**
+   * A post of the community that `listPosts` shows (without its comments) and `fetchThread` can read (with `comments`), but `fetchActivity` does not
+   * return: the monitor's ordinary read stays out of the triage's way. Posts are listed newest first by `postedAt` (one without a time is listed first).
+   */
+  addPost(d: Partial<RemoteDiscussion> & { externalId: string }): RemoteDiscussion {
+    const post: RemoteDiscussion = {
+      url: `https://fake.test/r/test/comments/${d.externalId}`,
+      title: `Post ${d.externalId}`,
+      author: 'op_user',
+      body: 'Original post body',
+      postedAt: '2026-11-08T10:00:00.000Z',
+      comments: [],
+      ...d
+    }
+    this.postThreads.set(post.externalId, post)
+    this.posts.push({ ...post, comments: [] })
+    this.posts.sort((a, b) => Date.parse(b.postedAt ?? '9999-12-31') - Date.parse(a.postedAt ?? '9999-12-31'))
+    return post
+  }
+
+  /** Takes a post off the platform: it is no longer listed and its thread cannot be read. */
+  removePost(externalId: string): void {
+    this.postThreads.delete(externalId)
+    this.posts = this.posts.filter((p) => p.externalId !== externalId)
+  }
+
   addComment(discussionId: string, c: Partial<RemoteComment> & { externalId: string }): RemoteComment {
-    const discussion = this.discussion(discussionId)
+    const discussion = this.postThreads.get(discussionId) ?? this.discussion(discussionId)
     const comment: RemoteComment = {
       parentExternalId: discussionId,
       author: 'some_user',
@@ -211,12 +248,23 @@ export class FakeConnector implements Connector {
     return this.withBrowser(ctx, 'fake-thread', () => {
       if (this.fetchThreadError) throw this.fetchThreadError
       this.onFetchThread?.()
-      const found = this.discussions.find((d) => d.externalId === discussionExternalId)
+      const found = this.discussions.find((d) => d.externalId === discussionExternalId) ?? this.postThreads.get(discussionExternalId)
       if (!found) return null
       const copy: RemoteDiscussion = structuredClone(found)
       if (this.lockedDiscussions.has(discussionExternalId)) copy.locked = true
       if (this.incompleteDiscussions.has(discussionExternalId)) copy.incomplete = true
       return copy
+    })
+  }
+
+  /** Like the real connector: the posts written since `since` (a post with no time is kept), newest first, at most `max`, without comments. */
+  listPosts: Connector['listPosts'] = async (ctx, options) => {
+    this.calls.push('listPosts')
+    this.listPostsRequests.push({ since: options.since, max: options.max })
+    return this.withBrowser(ctx, 'fake-list', () => {
+      if (this.listPostsError) throw this.listPostsError
+      const since = Date.parse(options.since)
+      return structuredClone(this.posts.filter((p) => p.postedAt === null || Date.parse(p.postedAt) >= since).slice(0, options.max))
     })
   }
 

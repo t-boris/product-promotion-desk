@@ -2,6 +2,7 @@ import type { Core } from '../core'
 import { DraftCheck } from './draft-check'
 import { DraftHelp } from './draft-help'
 import { DraftingFlow } from './drafting'
+import { FindingStore } from './findings'
 import { registerFlowApi } from './flow-api'
 import { SendGate } from './gate'
 import { Ingestor } from './ingest'
@@ -13,6 +14,7 @@ import { PublicationsFlow } from './publications'
 import { ReviewFlow } from './review'
 import { SendingFlow } from './sending'
 import { FlowStore } from './store'
+import { TriageFlow } from './triage'
 
 /**
  * Registers the discussion → draft → approval → sending flow (I-4, I-5, I-6): the monitor, drafting, review,
@@ -27,7 +29,9 @@ export function registerFlow(core: Core): void {
   const gate = new SendGate(core, store)
   const watch = new LoginWatch(core, store)
   const sending = new SendingFlow(core, store, gate, review, ingestor, watch)
-  const monitor = new MonitorFlow(core, store, ingestor, watch)
+  const findings = new FindingStore(core)
+  const triage = new TriageFlow(core, store, findings, ingestor)
+  const monitor = new MonitorFlow(core, store, ingestor, watch, triage)
   const drafting = new DraftingFlow(core, store, review, sending)
   const publications = new PublicationsFlow(core, store)
 
@@ -36,7 +40,7 @@ export function registerFlow(core: Core): void {
   core.services.drafting = drafting
   core.services.sending = sending
 
-  registerFlowApi({ core, store, review, monitor, drafting, sending, publications })
+  registerFlowApi({ core, store, review, monitor, drafting, sending, publications, findings })
   const draftHelp = new DraftHelp(core, store)
   core.router.register({ 'drafts.refine': (args) => draftHelp.refine(args) })
   const groups = new PostGroupsFlow(core, store, review, sending, draftHelp)

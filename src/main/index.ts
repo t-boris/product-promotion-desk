@@ -75,6 +75,8 @@ async function start(): Promise<void> {
     // Passwords: encrypted by the system keychain, in a file of their own next to the database (DEC-014).
     secrets: new FileVault(join(dataDir, 'vault.bin'), safeStorage),
     clipboard: new TimedClipboard({ writeText: (text) => clipboard.writeText(text), readText: () => clipboard.readText() }),
+    // Channels are checked a few minutes earlier or later than their interval says, so they never start together (DEC-040).
+    scheduleJitter: true,
     echoLogs: !app.isPackaged
   })
 

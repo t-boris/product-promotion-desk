@@ -4,9 +4,11 @@
 import { ApiError } from '../../shared/api'
 import type { Channel, Id, Run } from '../../shared/types'
 import type { Core } from '../core'
+import { requireText } from '../channels/errors'
 import { OWN_POSTS_DETAIL, channelReads } from '../channels/reads'
 import { buildCard } from './cards'
 import type { DraftingFlow } from './drafting'
+import { checkIds, checkLabels, type FindingStore } from './findings'
 import { SendBlockedError } from './gate'
 import type { MonitorFlow } from './monitor'
 import type { PublicationsFlow } from './publications'
@@ -23,9 +25,10 @@ export interface FlowServices {
   drafting: DraftingFlow
   sending: SendingFlow
   publications: PublicationsFlow
+  findings: FindingStore
 }
 
-export function registerFlowApi({ core, store, review, monitor, drafting, sending, publications }: FlowServices): void {
+export function registerFlowApi({ core, store, review, monitor, drafting, sending, publications, findings }: FlowServices): void {
   const card = (id: Id) => buildCard(core, store, store.requireOpportunity(id))
 
   /** A blocked send becomes a readable API error carrying the gate's reasons. */
@@ -160,6 +163,14 @@ export function registerFlowApi({ core, store, review, monitor, drafting, sendin
     'opportunities.resolveUnknown': async ({ id, outcome, url }) => {
       await sending.resolveUnknown(id, outcome, url)
       return card(id)
+    },
+
+    // ───────────── what the AI triage judged of a channel's posts (DEC-040) ─────────────
+    // Ids are global: marking a finding seen needs no product, and an id that is not a finding is ignored.
+    'findings.list': ({ productId, channelId, labels, limit }) => findings.list({ productId: requireText(productId, 'The product'), channelId: channelId || undefined, labels: checkLabels(labels), limit }),
+    'findings.counts': ({ productId, channelId }) => findings.counts(requireText(productId, 'The product'), channelId || undefined),
+    'findings.markSeen': ({ ids }) => {
+      if (findings.markSeen(checkIds(ids)) > 0) findings.notify()
     },
 
     // ───────────── standalone publications ─────────────

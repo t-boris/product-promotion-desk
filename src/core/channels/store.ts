@@ -26,6 +26,8 @@ export interface ChannelPatch {
   plan?: ChannelPlan | null
   reads?: boolean
   target?: string
+  /** Only the settings change moves it (a shorter interval): the scheduler and the monitor own it otherwise. */
+  nextCheckAt?: string
 }
 
 export class ChannelsStore {
@@ -255,6 +257,7 @@ export class ChannelsStore {
     if (patch.plan !== undefined) add('plan_json', patch.plan === null ? null : toJson(patch.plan))
     if (patch.reads !== undefined) add('reads', patch.reads ? 1 : 0)
     if (patch.target !== undefined) add('target', patch.target)
+    if (patch.nextCheckAt !== undefined) add('next_check_at', patch.nextCheckAt)
     if (sets.length > 0) this.db.prepare(`UPDATE channels SET ${sets.join(', ')} WHERE id = ?`).run(...values, id)
     return this.repos.channel(id)
   }

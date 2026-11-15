@@ -11,7 +11,9 @@ import type { MonitorOutcome, MonitorService } from '../services'
 import type { Ingestor } from './ingest'
 import { collectInbox } from './inbox'
 import type { LoginWatch } from './login-watch'
+import { nextCheckFor } from './scheduler-timing'
 import type { FlowStore } from './store'
+import type { TriageFlow } from './triage'
 import { errorMessage, minutesFrom } from './util'
 
 /** How many recent discussions a cycle reads. */
@@ -28,7 +30,8 @@ export class MonitorFlow implements MonitorService {
     private readonly core: Core,
     private readonly store: FlowStore,
     private readonly ingestor: Ingestor,
-    private readonly watch: LoginWatch
+    private readonly watch: LoginWatch,
+    private readonly triage: TriageFlow
   ) {}
 
   async runChannel(channelId: string): Promise<MonitorOutcome> {
@@ -92,7 +95,10 @@ export class MonitorFlow implements MonitorService {
       const result = this.ingestor.ingest(channel, account, discussions)
       // The account's inbox after the discussion read (DEC-039); it never throws and never fails the cycle.
       const inbox = await collectInbox(this.core, this.store, this.ingestor, channel, account, connector, ctx)
-      return this.succeed(channel, baseline, result.discussions, result.newComments, result.newOpportunities + inbox.newOpportunities, result.identityUnknown, inbox.note)
+      // The AI triage of the channel's posts (DEC-040), last: it can take minutes, and it never throws and never fails the cycle.
+      const triage = await this.triage.run(channel, account, connector, ctx)
+      const notes = [inbox.note, triage.note].filter((note) => note !== '').join('; ')
+      return this.succeed(channel, baseline, result.discussions, result.newComments, result.newOpportunities + inbox.newOpportunities + triage.newOpportunities, result.identityUnknown, notes)
     } catch (error) {
       return this.fail(channel, `Could not store the collected data: ${errorMessage(error)}`)
     }
@@ -100,13 +106,13 @@ export class MonitorFlow implements MonitorService {
 
   // ───────────── outcomes ─────────────
 
-  private succeed(channel: Channel, baseline: boolean, discussions: number, newComments: number, newOpportunities: number, identityUnknown: boolean, inboxNote = ''): MonitorOutcome {
+  private succeed(channel: Channel, baseline: boolean, discussions: number, newComments: number, newOpportunities: number, identityUnknown: boolean, notes = ''): MonitorOutcome {
     const now = this.core.clock.now()
     const wasTroubled = channel.status === 'needs_user' || channel.status === 'error'
     this.store.updateChannel(channel.id, {
       lastRunAt: now.toISOString(),
       lastSuccessAt: now.toISOString(),
-      nextCheckAt: minutesFrom(now, channel.settings.checkIntervalMin),
+      nextCheckAt: nextCheckFor(channel, now.getTime(), this.core.scheduleJitter),
       ...(wasTroubled ? { status: 'active' as const, statusDetail: '' } : {}),
       ...(identityUnknown ? { statusDetail: 'The account identity is unknown, so nothing is queued: sign in so your own comments can be recognised.' } : {})
     })
@@ -116,7 +122,7 @@ export class MonitorFlow implements MonitorService {
         ? `${discussions} discussion(s) read, ${newComments} new comment(s) stored; nothing queued because the account identity is unknown`
         : `${discussions} discussion(s) read, ${newComments} new comment(s), ${newOpportunities} new opportunity(ies)`
     this.core.events.changed('channels', 'attention')
-    return { status: 'ok', summary: inboxNote ? `${summary}; ${inboxNote}` : summary, newOpportunities }
+    return { status: 'ok', summary: notes ? `${summary}; ${notes}` : summary, newOpportunities }
   }
 
   private fail(channel: Channel, detail: string): MonitorOutcome {
@@ -140,7 +146,7 @@ export class MonitorFlow implements MonitorService {
       status: channel.status === 'setup' ? 'setup' : 'needs_user',
       statusDetail: detail,
       lastRunAt: now.toISOString(),
-      nextCheckAt: minutesFrom(now, channel.settings.checkIntervalMin)
+      nextCheckAt: nextCheckFor(channel, now.getTime(), this.core.scheduleJitter)
     })
     if (accountStatus) this.watch.setAccountStatus(channel.accountId, accountStatus)
     this.core.events.changed('attention')

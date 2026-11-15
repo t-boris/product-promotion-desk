@@ -3,7 +3,7 @@
 // continues from the same state instead of starting blindly.
 
 import type { Db } from '../db/database'
-import type { Id } from '../../shared/types'
+import { FAILURE_DETAIL_PREFIX, type Id } from '../../shared/types'
 
 export interface ScheduleState {
   channelId: Id
@@ -23,8 +23,8 @@ interface Row {
 const EMPTY = (channelId: Id): ScheduleState => ({ channelId, consecutiveFailures: 0, autoResume: false, lastError: '' })
 const fromRow = (r: Row): ScheduleState => ({ channelId: r.channel_id, consecutiveFailures: r.consecutive_failures, autoResume: r.auto_resume === 1, lastError: r.last_error })
 
-/** Start of the status_detail the scheduler writes while a channel is failing. */
-export const FAILURE_DETAIL_PREFIX = 'Last check failed'
+/** Start of the status_detail the scheduler writes while a channel is failing (the text is shared with the renderer's watching line). */
+export { FAILURE_DETAIL_PREFIX }
 
 export interface RetryPlan {
   nextCheckAt: string

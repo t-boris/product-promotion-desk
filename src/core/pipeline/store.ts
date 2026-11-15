@@ -67,6 +67,8 @@ export interface ChannelPatch {
   lastSuccessAt?: string
   nextCheckAt?: string | null
   baselineDoneAt?: string
+  /** When the one-time look-back was made (DEC-040). */
+  lookedBackAt?: string
   reads?: boolean
 }
 
@@ -441,6 +443,7 @@ export class FlowStore {
     if (patch.lastSuccessAt !== undefined) add('last_success_at', patch.lastSuccessAt)
     if (patch.nextCheckAt !== undefined) add('next_check_at', patch.nextCheckAt)
     if (patch.baselineDoneAt !== undefined) add('baseline_done_at', patch.baselineDoneAt)
+    if (patch.lookedBackAt !== undefined) add('looked_back_at', patch.lookedBackAt)
     if (patch.reads !== undefined) add('reads', patch.reads ? 1 : 0)
     if (sets.length === 0) return
     this.db.prepare(`UPDATE channels SET ${sets.join(', ')} WHERE id = ?`).run(...values, id)

@@ -619,6 +619,9 @@ export interface Channel {
   createdAt: IsoTime
 }
 
+/** Start of the status text a channel carries while its checks fail (the scheduler writes it; the watching line reads it back without repeating it). */
+export const FAILURE_DETAIL_PREFIX = 'Last check failed'
+
 export const DEFAULT_CHANNEL_SETTINGS: ChannelSettings = {
   languages: ['en'],
   style: '',
@@ -983,7 +986,10 @@ export interface OpportunityCard {
 /** What the AI made of a post: worth a reply, worth noticing, or not relevant to the product's goal. */
 export type FindingLabel = 'reply' | 'notice' | 'skip'
 
-/** `pending`: found but not yet judged (the AI engine was not ready); `title`: judged by its title alone; `read`: opened and read. */
+/**
+ * `pending`: found but not yet judged (the AI engine was not ready); `title`: judged by its title alone (not relevant: label `skip`; relevant: no label yet,
+ * the post waits to be opened and read); `read`: opened and read, and labelled.
+ */
 export type FindingStage = 'pending' | 'title' | 'read'
 
 /** One post of a channel that was judged once. The owner decides what to do with it; nothing here is ever sent. */
@@ -998,7 +1004,7 @@ export interface Finding {
   author: string
   postedAt: IsoTime | null
   stage: FindingStage
-  /** Null while `stage` is `pending`. */
+  /** Null while `stage` is `pending`, and also while `stage` is `title` and the post waits to be read (it was judged relevant by its title). */
   label: FindingLabel | null
   /** One line: how the post relates, or does not relate, to the product's goal. Written by the AI from page text; shown as data. */
   relation: string
@@ -1022,7 +1028,7 @@ export interface FindingCounts {
   notices: number
   /** Posts judged not relevant: counted, never listed unless the owner asks. */
   skipped: number
-  /** Found but not yet judged. */
+  /** Posts without a label: found but not yet judged, and judged relevant by title but not yet read. */
   pending: number
 }
 

@@ -295,7 +295,7 @@ export interface ApiMethods {
    * absent; a pending finding has no label and is listed only when `labels` is absent). Read-only.
    */
   'findings.list': [{ productId: Id; channelId?: Id; labels?: FindingLabel[]; limit?: number }, FindingCard[]]
-  'findings.counts': [{ productId: Id }, FindingCounts]
+  'findings.counts': [{ productId: Id; /** Only the findings of this channel; every channel of the product when absent. */ channelId?: Id }, FindingCounts]
   /** The owner looked at these findings: they stop counting as unseen. */
   'findings.markSeen': [{ ids: Id[] }, void]
   'opportunities.get': [{ id: Id }, OpportunityCard]

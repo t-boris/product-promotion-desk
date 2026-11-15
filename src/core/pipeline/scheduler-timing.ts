@@ -1,5 +1,7 @@
 // Pure timing helpers and the injectable timer seam of the scheduler. Nothing here touches the database.
 
+import type { Channel, IsoTime } from '../../shared/types'
+
 /** Timers are injected so tests can drive the scheduler deterministically. Handles are opaque. */
 export interface Timers {
   setInterval(fn: () => void, ms: number): unknown
@@ -24,6 +26,36 @@ export const MINUTE_MS = 60_000
 export function backoffDelayMs(failures: number, baseMs: number, capMs: number): number {
   const exponent = Math.min(Math.max(failures, 1) - 1, 30)
   return Math.min(capMs, baseMs * 2 ** exponent)
+}
+
+/** A check starts at most this long before or after its time, or this share of the interval, whichever is less (DEC-040). */
+export const JITTER_MAX_MIN = 20
+export const JITTER_SHARE = 0.1
+/** A check is never planned sooner than this after now, whatever the jitter says. */
+export const MIN_NEXT_CHECK_MS = MINUTE_MS
+
+/** A steady number in [0, 1) from a text (FNV-1a, as in mix.ts): the same text always gives the same number, so a planned time can be shown and tested. */
+const unit = (text: string): number => {
+  let hash = 0x811c9dc5
+  for (let i = 0; i < text.length; i += 1) hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193) >>> 0
+  return hash / 0x1_0000_0000
+}
+
+/** How far a check of a channel may move either way: 10 percent of its interval, at most 20 minutes. */
+export function jitterWindowMs(intervalMin: number): number {
+  return Math.min(JITTER_MAX_MIN, intervalMin * JITTER_SHARE) * MINUTE_MS
+}
+
+/**
+ * The one place that decides when a channel is next checked (DEC-040): now plus the channel's interval, moved by a jitter so channels
+ * never start together. The jitter is steady: it comes from the channel and its last run only (the same inputs give the same time), and it is
+ * off (`jitter` false) wherever exact times are needed, which is every test that does not test it; the application turns it on.
+ * The time is never sooner than a minute from now. Retrying after a failure has its own rules and does not come here.
+ */
+export function nextCheckFor(channel: Pick<Channel, 'id' | 'lastRunAt' | 'settings'>, nowMs: number, jitter: boolean): IsoTime {
+  const intervalMin = Math.max(1, channel.settings.checkIntervalMin)
+  const offsetMs = jitter ? Math.round(jitterWindowMs(intervalMin) * (unit(`${channel.id}:${channel.lastRunAt ?? ''}`) * 2 - 1)) : 0
+  return new Date(nowMs + Math.max(MIN_NEXT_CHECK_MS, intervalMin * MINUTE_MS + offsetMs)).toISOString()
 }
 
 /** Next-check times for `count` due channels, spread out so a wake-up or restart never fires them all at once. */

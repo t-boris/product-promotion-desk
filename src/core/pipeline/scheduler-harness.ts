@@ -38,6 +38,9 @@ export interface Harness extends TestCore {
 /** Scheduler options that make tests deterministic: no wake-up detection, no spreading, short shutdown grace. */
 export const TEST_SCHEDULER = { tickMs: 15_000, wakeGapMs: Number.MAX_SAFE_INTEGER, wakeSettleMs: 0, spreadMs: 0, shutdownGraceMs: 100 }
 
+/** The interval of a harness channel unless the test says otherwise. */
+export const HARNESS_INTERVAL_MIN = 30
+
 export function makeHarness(overrides: Partial<CoreDeps> = {}): Harness {
   const base = makeTestCore(overrides)
   const timers = new ManualTimers(base.clock)
@@ -66,7 +69,8 @@ export function makeHarness(overrides: Partial<CoreDeps> = {}): Harness {
     productId,
     account,
     automation,
-    channel: (seed = {}) => seedChannel(base.core, { productId, accountId: account.id, ...seed }),
+    // The interval is pinned so the timing tests do not move with the product's default (180 minutes, DEC-040); a test of the default passes its own settings.
+    channel: (seed = {}) => seedChannel(base.core, { productId, accountId: account.id, ...seed, settings: { checkIntervalMin: HARNESS_INTERVAL_MIN, ...seed.settings } }),
     start: async ({ wait = true, ...options } = {}) => {
       await startAutomation(base.core, {
         notifier: sink,

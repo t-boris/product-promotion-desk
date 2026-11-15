@@ -50,6 +50,8 @@ export interface CoreDeps {
   mediaTools?: MediaTools
   /** Waits for a page to react between steps; tests supply one that does not wait. */
   sleep?: (ms: number) => Promise<void>
+  /** A channel is checked a few minutes earlier or later than its interval says, so channels never start together (DEC-040). The application turns it on; tests leave it off for exact times. */
+  scheduleJitter?: boolean
   echoLogs?: boolean
 }
 
@@ -73,6 +75,8 @@ export class Core {
   readonly imageShrinker: ImageShrinker | null
   readonly mediaTools: MediaTools | null
   readonly sleep: (ms: number) => Promise<void>
+  /** One switch for every writer of a channel's next check (the scheduler and the monitor), so they never disagree. */
+  readonly scheduleJitter: boolean
   readonly tickets: TicketAuthority
   readonly router = new ApiRouter()
   readonly services: CoreServices = {}
@@ -104,6 +108,7 @@ export class Core {
     this.imageShrinker = deps.imageShrinker ?? null
     this.mediaTools = deps.mediaTools ?? null
     this.sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
+    this.scheduleJitter = deps.scheduleJitter ?? false
     this.browser = typeof deps.browser === 'function' ? deps.browser(this.tickets) : deps.browser
     this.router.register({
       'ai.activity': () => this.aiActivity.list(),

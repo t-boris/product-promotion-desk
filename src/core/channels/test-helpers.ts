@@ -57,9 +57,9 @@ export interface World {
   addAccount(label?: string, productId?: string): Promise<Account>
 }
 
-export function makeWorld(options: { fake?: FakeConnector; extra?: FakeConnector[] } = {}): World {
+export function makeWorld(options: { fake?: FakeConnector; extra?: FakeConnector[]; scheduleJitter?: boolean } = {}): World {
   const fake = options.fake ?? new FakeConnector()
-  const t = makeTestCore({ connectors: [fake, ...(options.extra ?? [])] })
+  const t = makeTestCore({ connectors: [fake, ...(options.extra ?? [])], scheduleJitter: options.scheduleJitter })
   const { core } = t
   const changes: ChangeScope[] = []
   core.events.subscribe((event) => {
@@ -98,7 +98,7 @@ export function makeWorld(options: { fake?: FakeConnector; extra?: FakeConnector
 }
 
 /** A world with one account already created. */
-export async function makeReadyWorld(options: { fake?: FakeConnector; extra?: FakeConnector[] } = {}): Promise<World> {
+export async function makeReadyWorld(options: { fake?: FakeConnector; extra?: FakeConnector[]; scheduleJitter?: boolean } = {}): Promise<World> {
   const world = makeWorld(options)
   world.account = await world.addAccount()
   return world

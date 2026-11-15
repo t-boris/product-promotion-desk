@@ -87,6 +87,28 @@ export function mapListing(json: unknown): RedditPost[] | null {
   })
 }
 
+/** A page of a listing and where the next one starts. */
+export interface ListingPage {
+  posts: RedditPost[]
+  /** Fullname to pass as `after` for the next page; null when the listing ends. */
+  after: string | null
+}
+
+/** What `after` may look like: a fullname. It goes into the next request's address, so nothing else is accepted. */
+const AFTER_TOKEN = /^t[0-9]_[a-z0-9]{1,12}$/i
+
+/**
+ * A listing with the token for its next page. A token Reddit gave that is not a fullname makes the whole page unusable (null), not "the end":
+ * a listing that cannot be continued must not be taken for one that is complete. A missing or empty token is the end.
+ */
+export function mapListingPage(json: unknown): ListingPage | null {
+  const posts = mapListing(json)
+  if (!posts) return null
+  const after = asRecord(asRecord(json)?.data)?.after
+  if (after === undefined || after === null || after === '') return { posts, after: null }
+  return typeof after === 'string' && AFTER_TOKEN.test(after) ? { posts, after } : null
+}
+
 function mapComment(data: Record<string, unknown>, fallbackBase: string): RemoteComment | 'skipped' | null {
   const fullname = str(data.name) || (str(data.id) ? `t1_${str(data.id)}` : '')
   if (!fullname) return null
@@ -167,7 +189,10 @@ export function mapMoreChildren(json: unknown, postPermalink: string): MappedCom
   return mapped
 }
 
-/** `incomplete` is set only when true, so a fully read thread looks exactly like it did before the flag existed. */
+/**
+ * `incomplete`, `locked` and `archived` are set only when true, so an ordinary thread looks exactly like it did before the flags existed. `locked` and
+ * `archived` are what the ingest reads to open no reply for a post that cannot be answered: without them here that guard saw nothing on Reddit.
+ */
 export function toDiscussion(post: RedditPost, comments: RemoteComment[], incomplete = false): RemoteDiscussion {
   return {
     externalId: post.fullname,
@@ -177,7 +202,9 @@ export function toDiscussion(post: RedditPost, comments: RemoteComment[], incomp
     body: post.body,
     postedAt: post.createdAt,
     comments,
-    ...(incomplete ? { incomplete: true } : {})
+    ...(incomplete ? { incomplete: true } : {}),
+    ...(post.locked ? { locked: true } : {}),
+    ...(post.archived ? { archived: true } : {})
   }
 }
 

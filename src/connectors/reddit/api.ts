@@ -8,12 +8,14 @@ import {
   mapAbout,
   mapInbox,
   mapListing,
+  mapListingPage,
   mapMe,
   mapMoreChildren,
   mapOwnComments,
   mapRules,
   mapThread,
   type AboutInfo,
+  type ListingPage,
   type MappedComments,
   type MappedThread,
   type OwnComment,
@@ -107,11 +109,25 @@ export class RedditApi {
     return res.status === 200 ? mapMe(res.json) : null
   }
 
+  /** The address of a page of a community's newest posts; `after` (a fullname, already checked by the mapping) continues a listing. */
+  private newPath(subreddit: string, limit: number, after: string | null): string {
+    const path = `/r/${subreddit}/new.json?limit=${Math.max(1, Math.min(100, limit))}&raw_json=1`
+    return after === null ? path : `${path}&after=${after}`
+  }
+
   async listing(subreddit: string, limit: number): Promise<ApiOutcome<RedditPost[]>> {
-    const res = await this.get(`/r/${subreddit}/new.json?limit=${Math.max(1, Math.min(100, limit))}&raw_json=1`)
+    const res = await this.get(this.newPath(subreddit, limit, null))
     if (res.status !== 200) return failure(res)
     const posts = mapListing(res.json)
     return posts ? { ok: true, value: posts } : { ok: false, status: res.status, reason: 'unexpected listing format' }
+  }
+
+  /** One page of the newest posts, starting after the fullname `after` (null: the first page), with the token of the next page (DEC-040). */
+  async listingPage(subreddit: string, limit: number, after: string | null): Promise<ApiOutcome<ListingPage>> {
+    const res = await this.get(this.newPath(subreddit, limit, after))
+    if (res.status !== 200) return failure(res)
+    const page = mapListingPage(res.json)
+    return page ? { ok: true, value: page } : { ok: false, status: res.status, reason: 'unexpected listing format' }
   }
 
   async thread(subreddit: string, postFullnameOrId: string): Promise<ApiOutcome<MappedThread>> {

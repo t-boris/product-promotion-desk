@@ -110,7 +110,7 @@ export function applySettingsPatch(current: ChannelSettings, patch: unknown): Ch
   }
   if (given.lookBackDays !== undefined) {
     const n = given.lookBackDays
-    if (!isCount(n) || n > MAX_LOOK_BACK_DAYS) throw invalid(`The first look goes back a whole number of days, 0 to ${MAX_LOOK_BACK_DAYS}.`)
+    if (!isCount(n) || n < 0 || n > MAX_LOOK_BACK_DAYS) throw invalid(`The first look goes back a whole number of days, 0 to ${MAX_LOOK_BACK_DAYS}.`)
     next.lookBackDays = n
   }
   if (given.limits !== undefined) next.limits = parseLimits(given.limits, current.limits)

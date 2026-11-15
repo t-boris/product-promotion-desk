@@ -11,6 +11,7 @@ import type {
   Comment,
   Discussion,
   Draft,
+  Finding,
   Mailbox,
   Opportunity,
   PassportVersion,
@@ -128,6 +129,24 @@ export const mapDiscussion = (r: Row): Discussion => ({
   selectedForProcessing: r.selected === 1,
   firstSeenAt: r.first_seen_at as string,
   lastSeenAt: r.last_seen_at as string
+})
+
+export const mapFinding = (r: Row): Finding => ({
+  id: r.id as string,
+  productId: r.product_id as string,
+  channelId: r.channel_id as string,
+  externalId: r.external_id as string,
+  title: r.title as string,
+  url: r.url as string,
+  author: r.author as string,
+  postedAt: (r.posted_at as string | null) ?? null,
+  stage: r.stage as Finding['stage'],
+  label: (r.label as Finding['label'] | null) ?? null,
+  relation: r.relation as string,
+  firstLook: r.first_look === 1,
+  opportunityId: (r.opportunity_id as string | null) ?? null,
+  seenAt: (r.seen_at as string | null) ?? null,
+  createdAt: r.created_at as string
 })
 
 export const mapComment = (r: Row): Comment => ({
