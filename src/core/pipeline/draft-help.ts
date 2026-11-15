@@ -75,6 +75,16 @@ export interface DraftHelpInput {
   about: string
 }
 
+/** The hosts of the links in a text the owner wrote. */
+function ownHosts(text: string): string[] {
+  const hosts: string[] = []
+  for (const match of text.matchAll(/https?:\/\/[^\s)\]>"']+/gi)) {
+    const host = hostOf(match[0])
+    if (host) hosts.push(host)
+  }
+  return hosts
+}
+
 /** True when the AI writes from nothing (an empty field, or a whole new post) and false when it improves what the owner wrote. */
 export function isWriting(input: Pick<DraftHelpInput, 'field' | 'form'>): boolean {
   if (input.field === 'post') return true
@@ -233,7 +243,8 @@ export function readDraftAnswer(raw: unknown, input: DraftHelpInput): Parsed<Dra
     usedClaimIds,
     approved: subject.approved,
     prohibited: subject.prohibited,
-    allowedHosts: allowedHostsFor(subject.product.website, subject.approved)
+    // Improving the owner's text keeps the owner's own links: a link they wrote is not one the AI invented.
+    allowedHosts: [...allowedHostsFor(subject.product.website, subject.approved), ...ownHosts(`${input.form.title}\n${input.form.text}`)]
   })
   const problems = [...report.violations]
   // A post written from nothing stands on approved facts, as the AI's own posts do; any other text that states facts the owner's draft does not

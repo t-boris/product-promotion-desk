@@ -50,20 +50,24 @@ export class ReviewFlow implements PipelineHooks {
   /**
    * Stores the owner's edit as a new draft and invalidates every approval of the previous content.
    * The AI rationale and fact lineage are carried over, so a later change to those facts still forces re-review. `author` is 'ai' only for a
-   * text the AI wrote for the owner to read (a post group's adaptation); the owner's own edit is 'user'.
+   * text the AI wrote for the owner to read (a post group's adaptation); the owner's own edit is 'user'. `expectDraftId`: the edit is refused
+   * (`conflict`) unless that draft is still the latest.
    */
-  async saveDraft(id: Id, input: DraftInput, options: { author?: 'user' | 'ai' } = {}): Promise<Opportunity> {
+  async saveDraft(id: Id, input: DraftInput, options: { author?: 'user' | 'ai'; expectDraftId?: Id } = {}): Promise<Opportunity> {
     const opp = this.store.requireOpportunity(id)
     this.assertEditable(opp, 'edit the draft')
     const content = await normalizeDraftInput(input, { productId: opp.productId, media: this.core.services.media! })
     if (opp.kind === 'reply' && !content.text) throw new ApiError('invalid_input', 'A reply needs text.')
     const channel = this.store.requireChannel(opp.channelId)
-    const previous = this.core.repos.latestDraft(id)
 
     this.core.db.transaction(() => {
       // Re-read inside the transaction: the state may have changed while attachments were being checked.
       const current = this.store.requireOpportunity(id)
       this.assertEditable(current, 'edit the draft')
+      // The draft this one replaces is the latest one NOW, not the one that was there when the call began; and a caller that wrote its text from
+      // a draft it read earlier (the AI's adaptation) says which, so that it never replaces what was written in the meantime.
+      const previous = this.core.repos.latestDraft(id)
+      if (options.expectDraftId !== undefined && previous?.id !== options.expectDraftId) throw new ApiError('conflict', 'The draft changed while this text was being written.')
       // A draft that is already in review keeps its place; one that is not must not start a second voice.
       if (!SPEAKING_STATES.includes(current.state) && this.store.otherLoginSpeakingFor(current)) throw new ApiError('invalid_state', OTHER_LOGIN_SPEAKS_REASON)
       this.store.insertDraft(id, content, {

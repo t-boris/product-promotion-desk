@@ -190,6 +190,22 @@ describe('drafts.refine: the AI never hands over text the pipeline would block',
     })
   }
 
+  it('keeps a link the owner wrote when it improves their text, and still hands back one it brought itself', async () => {
+    world = makeWorld({ mode: 'draft' })
+    const opp = await replyCard()
+    const mine = 'it makes charts, the code is at https://github.com/owner/repo'
+    world.engine.on('drafts.improve', answer({ text: `${BORING} The code is at https://github.com/owner/repo` }))
+    expect(await help({ field: 'text', opportunityId: opp.id, form: { title: '', text: mine } })).toEqual({ text: `${BORING} The code is at https://github.com/owner/repo` })
+    expect(world.engine.calls.map((c) => c.label)).toEqual(['drafts.improve'])
+
+    world.engine.calls.length = 0
+    world.engine.on('drafts.improve', answer({ text: `${BORING} See https://evil.example.com and https://github.com/owner/repo` }))
+    world.engine.on('drafts.improve.repair', answer({ text: BORING }))
+    expect(await help({ field: 'text', opportunityId: opp.id, form: { title: '', text: mine } })).toEqual({ text: BORING })
+    expect(world.engine.calls.map((c) => c.label)).toEqual(['drafts.improve', 'drafts.improve.repair'])
+    expect(world.engine.calls[1].prompt).toMatch(/evil\.example\.com/)
+  })
+
   it('refuses with the reasons when the second answer is blocked too, and stores nothing', async () => {
     world = makeWorld({ mode: 'draft' })
     const opp = await replyCard()

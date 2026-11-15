@@ -9,6 +9,7 @@ import { useMainActionOwner } from './review/main-action'
 import { PublicationForm } from './review/PublicationForm'
 import { ProductFilter, useProductDirectory, useProductFilter } from './review/products'
 import { removalWords } from './review/removal-words'
+import { PostGroupSection } from './review/PostGroupSection'
 import { ReviewCard } from './review/ReviewCard'
 import './review/review.css'
 
@@ -48,6 +49,10 @@ function PublicationsScreen() {
   // The sketch of a new post names the account it will go out from: its confirmed name on the platform, else the label it was given.
   const authorName = account?.identity ?? account?.label ?? ''
   const list = useQuery('opportunities.list', { channelId: channelId || undefined, kind: 'standalone' }, ['opportunities'])
+  // The groups are the product's, not the channel's: one post for several channels is listed once, whichever channel the screen is on (DEC-032).
+  const groupProductId = channel?.productId ?? ''
+  const groups = useQuery('postGroups.list', { productId: groupProductId }, ['opportunities'], { skip: groupProductId === '' })
+  const groupCards = groupProductId ? (groups.data ?? []) : []
   const [writing, setWriting] = useState(false)
   const [suggest, suggesting] = useAction(async () => {
     if (channelId) await call('publications.suggest', { channelId })
@@ -55,12 +60,13 @@ function PublicationsScreen() {
 
   const postAbility = channel?.capabilities.find((c) => c.key === 'publish_post')
   const cannotPost = postAbility && (postAbility.status === 'unavailable' || postAbility.status === 'restricted')
-  const cards = channelId ? (list.data ?? []) : []
+  // A version of a group is shown in the group section; the single posts do not show it a second time. A deleted one stays in the record of deleted posts.
+  const cards = channelId ? (list.data ?? []).filter((c) => !c.opportunity.groupId || c.opportunity.state === 'cancelled') : []
   const pending = cards.filter((c) => !CLOSED.includes(c.opportunity.state))
   const sent = cards.filter((c) => c.opportunity.state === 'confirmed')
   const cancelled = cards.filter((c) => c.opportunity.state === 'cancelled')
-  // The first open draft that offers a main action has the screen's one filled button.
-  const mainAction = useMainActionOwner(pending.map((card) => card.opportunity.id))
+  // The first open group or draft that offers a main action has the screen's one filled button; the groups come first on the screen.
+  const mainAction = useMainActionOwner([...groupCards.map((g) => g.group.id), ...pending.map((card) => card.opportunity.id)])
   // With nothing to show, the empty state below offers "Write one myself" as the screen's filled button; the toolbar then does not offer a
   // second one with the same name (BUG-057). Both are worked out from this one condition.
   const emptyOffersWrite = Boolean(channelId) && list.data !== undefined && pending.length === 0 && !writing
@@ -134,7 +140,22 @@ function PublicationsScreen() {
         </EmptyState>
       )}
 
-      {writing && channel && <PublicationForm productId={channel.productId} channelId={channel.id} platform={channel.platform} author={{ name: authorName, target: channel.target }} onCreated={() => setWriting(false)} onCancel={() => setWriting(false)} />}
+      {writing && channel && (
+        <PublicationForm
+          productId={channel.productId}
+          channelId={channel.id}
+          platform={channel.platform}
+          author={{ name: authorName, target: channel.target }}
+          onCreated={(createdFor) => {
+            // A post written for one other channel is shown where it is.
+            setChosen(createdFor)
+            setWriting(false)
+          }}
+          onCancel={() => setWriting(false)}
+        />
+      )}
+
+      <PostGroupSection groups={groupCards} error={groups.error} isOwner={mainAction.isOwner} onMainAction={mainAction.offer} />
 
       <ErrorNote error={list.error} />
       {list.loading && !list.data && <Loading what="Loading" />}
@@ -150,7 +171,8 @@ function PublicationsScreen() {
                 action={
                   // The next step; filled because nothing else on the screen is: no draft has an Approve, and the form is closed.
                   emptyOffersWrite && (
-                    <Button variant="primary" onClick={() => setWriting(true)} data-testid="write-publication-empty">
+                    // A group above that offers its main action has the filled button; this one then steps back to a bezel.
+                    <Button variant={mainAction.hasOwner ? 'ghost' : 'primary'} onClick={() => setWriting(true)} data-testid="write-publication-empty">
                       Write one myself
                     </Button>
                   )
@@ -169,6 +191,7 @@ function PublicationsScreen() {
                   productName={productName}
                   primaryAction={mainAction.isOwner(card.opportunity.id)}
                   onMainAction={mainAction.offer}
+                  alsoPostTo
                 />
               ))}
             </div>
@@ -178,7 +201,7 @@ function PublicationsScreen() {
               <h2>Sent</h2>
               <div className="review-list">
                 {sent.map((card) => (
-                  <ReviewCard key={card.opportunity.id} card={card} collapsible defaultOpen={false} productName={productName} />
+                  <ReviewCard key={card.opportunity.id} card={card} collapsible defaultOpen={false} productName={productName} alsoPostTo />
                 ))}
               </div>
             </section>

@@ -2,6 +2,7 @@ import { useLayoutEffect, useState, type ReactNode } from 'react'
 import type { Id, OpportunityCard } from '../../../../shared/types'
 import { Badge, Button, Card, ErrorNote, formatTime } from '../../ui'
 import { ActionSummary } from './ActionSummary'
+import { AlsoPostPanel } from './AlsoPostPanel'
 import { DraftEditor, useDraftForm } from './DraftEditor'
 import { ReviewButtons } from './ReviewButtons'
 import { ScheduleControl } from './ScheduleControl'
@@ -20,6 +21,7 @@ import {
   isUndisclosed
 } from './labels'
 import { mainActionOf } from './main-action'
+import { alsoPostAllowed } from './post-group'
 import { removalWords } from './removal-words'
 import { useReviewActions } from './useReviewActions'
 import './review.css'
@@ -44,6 +46,16 @@ interface Props {
   onMainAction?: (id: Id, offering: boolean) => void
   /** Something that belongs to the card but not to the item: for example "Dismiss" once the item no longer needs a decision. */
   footer?: ReactNode
+  /** Tags after the kind of the item in the head (a version of a group says "Edited by you"). */
+  tags?: ReactNode
+  /** What the owner should read with the draft before deciding, under it and above the buttons (how a version goes out, what the platform will refuse). */
+  notes?: ReactNode
+  /** Tells the list whether the owner has changes in the editor that are not saved, so a group can refuse to approve what is not on the screen. */
+  onDirty?: (id: Id, dirty: boolean) => void
+  /** Something else is working on this item (its group): the editor and the buttons are off until it is done, so nothing typed is lost to a new draft. */
+  frozen?: boolean
+  /** Offer "Also post to…" on a post of the owner's that is not in a group yet. */
+  alsoPostTo?: boolean
 }
 
 /**
@@ -53,12 +65,17 @@ interface Props {
  * account and destination an approval is bound to, and the reason for the current state, including why a send was blocked
  * (REQ-003, REQ-004).
  */
-export function ReviewCard({ card, collapsible = false, defaultOpen = true, productName, primaryAction = false, onMainAction, footer }: Props) {
+export function ReviewCard({ card, collapsible = false, defaultOpen = true, productName, primaryAction = false, onMainAction, footer, tags, notes, onDirty, frozen = false, alsoPostTo = false }: Props) {
   const [open, setOpen] = useState(defaultOpen || !collapsible)
   const opp = card.opportunity
   const standalone = opp.kind === 'standalone'
   const { form, setForm, dirty, input } = useDraftForm(card.draft, standalone)
   const actions = useReviewActions()
+  // While the group works on this item nothing here is offered; the card shows the work as busy.
+  const working = frozen || actions.busy
+  const buttons = working === actions.busy ? actions : { ...actions, busy: true }
+  const [alsoOpen, setAlsoOpen] = useState(false)
+  const alsoPost = alsoPostTo && alsoPostAllowed(card)
   const locked = LOCKED_STATES.includes(opp.state) || opp.state === 'analyzing' || opp.state === 'cancelled'
   const conflict = isLoginConflict(opp.reason)
   // A held item must not be told to "prepare a draft" when that is exactly what is refused.
@@ -72,6 +89,12 @@ export function ReviewCard({ card, collapsible = false, defaultOpen = true, prod
     onMainAction(opp.id, offersMain)
     return () => onMainAction(opp.id, false)
   }, [opp.id, offersMain, onMainAction])
+  // A group needs to know which versions have changes that are not saved.
+  useLayoutEffect(() => {
+    if (!onDirty) return
+    onDirty(opp.id, dirty)
+    return () => onDirty(opp.id, false)
+  }, [opp.id, dirty, onDirty])
 
   return (
     <div data-testid={`review-card-${opp.id}`} data-state={opp.state}>
@@ -82,6 +105,7 @@ export function ReviewCard({ card, collapsible = false, defaultOpen = true, prod
             <Badge>{KIND_LABEL[opp.kind]}</Badge>
             {opp.category && <Badge>{CATEGORY_LABEL[opp.category]}</Badge>}
             {opp.decision && opp.decision !== 'reply' && <Badge tone="warn">{DECISION_LABEL[opp.decision]}</Badge>}
+            {tags}
             {productName && (
               <span className="review-product" data-testid="card-product">
                 {productName}
@@ -139,12 +163,34 @@ export function ReviewCard({ card, collapsible = false, defaultOpen = true, prod
               </div>
             )}
 
-            <DraftEditor form={form} onChange={setForm} withTitle={standalone} disabled={locked || actions.busy} draft={card.draft} ai={locked ? undefined : { opportunityId: opp.id }} post={standalone ? { productId: opp.productId, platform: card.channelPlatform, author: { name: card.accountLabel, target: card.channelTarget } } : undefined} />
-            {standalone && !locked && <ScheduleControl opportunity={opp} busy={actions.busy} onSchedule={(at) => void actions.schedule(opp.id, at)} />}
+            <DraftEditor form={form} onChange={setForm} withTitle={standalone} disabled={locked || working} draft={card.draft} ai={locked ? undefined : { opportunityId: opp.id }} post={standalone ? { productId: opp.productId, platform: card.channelPlatform, author: { name: card.accountLabel, target: card.channelTarget } } : undefined} />
+            {standalone && !locked && <ScheduleControl opportunity={opp} busy={working} onSchedule={(at) => void actions.schedule(opp.id, at)} />}
 
+            {notes}
             <ActionSummary card={card} />
             <ErrorNote error={actions.error} />
-            <ReviewButtons card={card} actions={actions} dirty={dirty} input={input} primaryAction={primaryAction} />
+            {alsoPost && alsoOpen && <AlsoPostPanel card={card} onClose={() => setAlsoOpen(false)} />}
+            <ReviewButtons
+              card={card}
+              actions={buttons}
+              dirty={dirty}
+              input={input}
+              primaryAction={primaryAction}
+              extra={
+                alsoPost ? (
+                  <>
+                    {dirty && (
+                      <span className="muted small" data-testid="also-post-reason">
+                        Save your changes first.
+                      </span>
+                    )}
+                    <Button onClick={() => setAlsoOpen(true)} disabled={working || dirty || alsoOpen} data-testid="also-post-to">
+                      Also post to…
+                    </Button>
+                  </>
+                ) : undefined
+              }
+            />
           </div>
         )}
         {footer && <div className="review-foot">{footer}</div>}

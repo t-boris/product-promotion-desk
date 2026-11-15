@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { DraftInput } from '../../../../shared/api'
 import type { OpportunityCard } from '../../../../shared/types'
 import { Button, ConfirmAction, useMainVariant } from '../../ui'
@@ -19,6 +19,8 @@ interface Props {
   input: DraftInput
   /** This card owns the screen's one filled button; on every other card the same main action is a secondary one. */
   primaryAction?: boolean
+  /** A secondary action that belongs to the item but not to its decision ("Also post to…"): first in the row of main actions, never filled. */
+  extra?: ReactNode
 }
 
 /**
@@ -27,7 +29,7 @@ interface Props {
  * main actions come first and the rare ones last, so Tab reaches Reject after everything else and never first (BUG-039); the
  * stylesheet puts them at the left. Reject cannot be undone, so it asks first, in its own place.
  */
-export function ReviewButtons({ card, actions, dirty, input, primaryAction = false }: Props) {
+export function ReviewButtons({ card, actions, dirty, input, primaryAction = false, extra }: Props) {
   const { opportunity: opp } = card
   const id = opp.id
   const hasText = input.text.trim().length > 0 || Boolean(input.link) || (input.attachments?.length ?? 0) > 0
@@ -64,7 +66,14 @@ export function ReviewButtons({ card, actions, dirty, input, primaryAction = fal
       </div>
     )
   }
-  if (main === null) return null
+  if (main === null) {
+    // An item that is out has no decision left; what can still be done with it ("Also post to…") stays.
+    return extra ? (
+      <div className="review-actions" data-testid="review-buttons">
+        <div className="review-actions-main">{extra}</div>
+      </div>
+    ) : null
+  }
 
   const label = approveLabels(dirty)
   const goOn = (which: Approving): void => {
@@ -121,6 +130,7 @@ export function ReviewButtons({ card, actions, dirty, input, primaryAction = fal
   return (
     <div className="review-actions" data-testid="review-buttons" ref={here}>
       <div className="review-actions-main">
+        {extra}
         {main === 'approve' && !hasText && (
           <span className="muted small" data-testid="approve-reason">
             Write the text first.

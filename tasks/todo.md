@@ -748,11 +748,11 @@ Design (from the code map of 2026-11-15; every guard of the single-post path sta
 - `PostGroupsFlow` (`post-groups.ts`): `create` (>= 2 channels of one product, all `publish_post`-capable, one account per channel; one transaction), `extend` ("also post to…" for an existing standalone, which becomes the first version), `get`, `list({productId})`, `suggestChannels` (rule-based ranking with a one-line reason, nothing pre-ticked), `adapt` (AI rewrite per version through `DraftHelp`, author `ai`; a version the owner edited by hand is skipped unless `force`), `approve` (one press; calls `ReviewFlow.approve` per version, only for the draft the owner saw: `seen` map; invalid ones listed with the reason and left out), `sendAll` (the owner's one press; one after another, a small gap, one failure never stops the others), `remove` (rejects unsent versions; the group stays while a sent version exists).
 - Shared: `chooseExecutor(ways, draft, platform)` in `send-ways.ts` (used by `executorFor` and by the group card's "will go by"); `ReviewFlow.saveDraft(id, input, {author})`.
 - Renderer: Publications "New post": "Where to post" list (ticks, fits, reason), "Suggest channels"; the group section (versions stacked as ordinary review cards, "Approve all N", "Send all now", "Adapt with AI"); after "Suggest with AI" and on an approved single post: "Also post to…".
-- [ ] C1 migration 304, types, repo mapper, `chooseExecutor`, `saveDraft` author option.
-- [ ] C2 `PostGroupsFlow` + API (`postGroups.*`) + register; core tests (create/extend/adapt/approve/send/remove, independence of versions, partial failure, per-account limits, seen-draft guard, hash compatibility untouched).
-- [ ] C3 Mutation checks on the group rules (seen guard, independence, no approval without the owner's press, hand-edited kept).
-- [ ] C4 Renderer: Where-to-post list, group section, actions; measured light and dark; UI probe.
-- [ ] C5 Review by a fresh reviewer; fixes; DEC-032; lessons; memory; 0.18.0; PR, CI, merge, tag, release, `deploy:local`.
+- [x] C1 migration 304, types, repo mapper, `chooseExecutor`, `saveDraft` author option.
+- [x] C2 `PostGroupsFlow` + API (`postGroups.*`) + register; core tests (create/extend/adapt/approve/send/remove, independence of versions, partial failure, per-account limits, seen-draft guard, hash compatibility untouched).
+- [x] C3 Mutation checks on the group rules (seen guard, independence, no approval without the owner's press, hand-edited kept).
+- [x] C4 Renderer: Where-to-post list, group section, actions; measured light and dark; UI probe (127 checks, own instance, no real site).
+- [x] C5 Review of the core by a fresh reviewer (2 critical, several major: all fixed with tests and mutants); DEC-032; lessons 206-210; memory; 0.18.0; PR, CI, merge, tag, release, `deploy:local`.
 
 ### Slice D — 0.19.0 content mix and own updates (DEC-033)
 - [ ] `ChannelSettings.mix`, updates journal, own-update prompt and check, `mix.run` job (drafts only, 3 waiting, pause), Content mix card, plan steps get `kind`/`everyDays`; tests, probe with a fake clock, review, DEC-033, release.

@@ -4,14 +4,16 @@
 // groups exist, so what the owner approved is what is sent, as for a single post, and a version that fails never holds another back.
 //
 // What a group adds is only convenience, and every step of it is the owner's press or a proposal:
-//  - the AI rewrites the master for each platform (`adapt`); a version the owner changed by hand is left alone unless asked to start over;
+//  - the AI rewrites the master for each platform (`adapt`); a version the owner changed by hand, or approved, is left alone unless the owner
+//    points at it, and the AI's text never replaces what the owner wrote while it was being written;
 //  - one press approves every version after the owner has read it (`approve`): each by its own approval, only for the draft the owner was
 //    shown (`seen`), and a version that cannot be approved is named with its reason and left out;
-//  - one press sends the approved versions one after another (`sendAll`).
+//  - one press sends the versions that were approved at that moment, one after another (`sendAll`): a version approved, changed or edited
+//    after the press is not sent by it.
 // Nothing here approves or sends by itself: this file is not reached from the scheduler.
 
 import { ApiError, type DraftInput } from '../../shared/api'
-import { formOf, platformLabel, renderForPlatform, sendProblems, type PostContent } from '../../shared/post-format'
+import { formOf, platformLabel, renderForPlatform, sendProblems, type PostContent, type SendWays } from '../../shared/post-format'
 import type {
   Channel,
   Draft,
@@ -28,6 +30,7 @@ import type {
 import { newId, toJson } from '../db/database'
 import type { Core } from '../core'
 import { buildCard } from './cards'
+import { disclosureProblem } from './disclosure'
 import { normalizeDraftInput } from './draft-input'
 import type { DraftHelp } from './draft-help'
 import { SendBlockedError } from './gate'
@@ -43,6 +46,8 @@ export const GROUP_SEND_GAP_MS = 5000
 const FINISHED: Opportunity['state'][] = ['sending', 'confirmed', 'unknown_result']
 const NOT_PUBLISHABLE = ['unavailable', 'restricted']
 const BLOCKS_A_SEND = ['unavailable', 'restricted', 'needs_user']
+/** A platform with a limit above this has none worth telling the AI (Reddit's 40,000 is not a limit a post is shortened for). */
+const WISH_LIMIT_MAX = 5000
 
 export interface PostGroupsOptions {
   /** The pause between two sends; tests make it nothing. */
@@ -56,7 +61,7 @@ const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTim
 export function adaptInstruction(platform: string): string {
   const form = formOf(platform)
   const parts = [`Adapt this post for ${platformLabel(platform)}.`, form.format === 'markdown' ? 'Markdown is fine.' : 'Write plain text with no markdown marks.']
-  if (form.textLimit !== null && form.textLimit <= 5000) parts.push(`At most ${form.textLimit} characters (aim for ${Math.floor(form.textLimit * 0.9)}).`)
+  if (form.textLimit !== null && form.textLimit <= WISH_LIMIT_MAX) parts.push(`At most ${form.textLimit} characters (aim for ${Math.floor(form.textLimit * 0.9)}).`)
   parts.push('Keep the meaning, every fact and every link; add no new claim.')
   return parts.join(' ')
 }
@@ -72,6 +77,21 @@ const sameMaster = (draft: Draft, master: PostMaster): boolean =>
 export const editedByHand = (draft: Draft | null, master: PostMaster): boolean => draft !== null && draft.author === 'user' && !sameMaster(draft, master)
 
 const labelOf = (channel: Channel): string => `${platformLabel(channel.platform)} ${channel.target}`
+
+/**
+ * Where the master came from, copied into every version made from it: a post the AI proposed from approved facts keeps the facts it stands on,
+ * so a fact that is withdrawn later returns every copy of it to review, not only the first.
+ */
+interface Provenance {
+  knowledgeVersionId: Id | null
+  usedClaimLineageIds: Id[]
+  rationale: string
+  author: 'ai' | 'user'
+}
+
+const OWN_WORDS: Provenance = { knowledgeVersionId: null, usedClaimLineageIds: [], rationale: '', author: 'user' }
+
+type StoredGroup = PostGroup & { provenance: Provenance }
 
 export class PostGroupsFlow {
   private readonly busy = new Set<Id>()
@@ -93,7 +113,7 @@ export class PostGroupsFlow {
     if (!content.text && !content.link && content.attachments.length === 0) throw new ApiError('invalid_input', 'A post needs text, a link or a picture.')
     const master: PostMaster = { title: content.title, text: content.text, link: content.link, attachments: content.attachments, markup: content.markup ?? 'legacy' }
     const id = this.core.db.transaction(() => {
-      const group = this.insertGroup(productId, master)
+      const group = this.insertGroup(productId, master, OWN_WORDS)
       for (const channel of channels) this.addVersion(group, channel)
       return group.id
     })()
@@ -110,10 +130,12 @@ export class PostGroupsFlow {
     const draft = this.core.repos.latestDraft(opp.id)
     if (!draft) throw new ApiError('no_draft', 'This post has no text yet.')
     const id = this.core.db.transaction(() => {
-      let group: PostGroup
+      let group: StoredGroup
       if (opp.groupId) group = this.requireGroup(opp.groupId)
       else {
-        group = this.insertGroup(opp.productId, { title: draft.title, text: draft.text, link: draft.link, attachments: draft.attachments, markup: draft.markup })
+        const master: PostMaster = { title: draft.title, text: draft.text, link: draft.link, attachments: draft.attachments, markup: draft.markup }
+        const provenance: Provenance = { knowledgeVersionId: draft.knowledgeVersionId, usedClaimLineageIds: draft.usedClaimLineageIds, rationale: draft.rationale, author: draft.author }
+        group = this.insertGroup(opp.productId, master, provenance)
         this.store.updateOpportunity(opp.id, { groupId: group.id })
       }
       const taken = new Set(this.liveVersions(group.id).map((v) => v.channelId))
@@ -128,7 +150,7 @@ export class PostGroupsFlow {
   // ───────────── reading ─────────────
 
   get(id: Id): PostGroupCard {
-    const group = this.requireGroup(id)
+    const { provenance: _provenance, ...group } = this.requireGroup(id)
     const ways = sendWays(this.core)
     const versions = this.liveVersions(id).map((opp): PostVersion => {
       const card = buildCard(this.core, this.store, opp)
@@ -136,7 +158,11 @@ export class PostGroupsFlow {
       const draft = card.draft
       const account = this.core.repos.account(channel.accountId)
       const problems: string[] = []
-      if (draft && draft.markup === 'markdown') problems.push(...sendProblems(channel.platform, renderForPlatform(draft, channel.platform), ways))
+      if (draft) {
+        problems.push(...this.fitProblems(channel.platform, draft, ways))
+        const disclosure = this.store.disclosureProblemOf(opp, draft)
+        if (disclosure) problems.push(disclosure)
+      }
       const unavailable = this.availabilityProblem(channel, account.status)
       if (unavailable) problems.push(unavailable)
       return {
@@ -161,6 +187,7 @@ export class PostGroupsFlow {
   /**
    * Every channel of the product that could carry a post, and whether this post fits it as it is. The app suggests those that fit and are not
    * chosen yet; it chooses nothing. A rule, not the AI: the limits of a platform are facts, and a post that does not fit says what is wrong.
+   * It judges what the approval judges (the platform's limits and pictures, the rule that a post naming the product says who is speaking).
    */
   channels(productId: Id, input: DraftInput, chosen: Id[] = []): GroupChannelOption[] {
     const content: PostContent = {
@@ -171,13 +198,16 @@ export class PostGroupsFlow {
       markup: input.markup === 'markdown' ? 'markdown' : 'legacy'
     }
     const ways = sendWays(this.core)
+    const product = this.core.repos.product(productId)
     const options: GroupChannelOption[] = []
     for (const channel of this.core.repos.listChannels().filter((c) => c.productId === productId)) {
       const publish = channel.capabilities.find((c) => c.key === 'publish_post')
       if (publish && NOT_PUBLISHABLE.includes(publish.status)) continue
       const account = this.core.repos.account(channel.accountId)
       const rendered = renderForPlatform(content, channel.platform)
-      const problems = sendProblems(channel.platform, rendered, ways)
+      const problems = this.fitProblems(channel.platform, content, ways)
+      const disclosure = disclosureProblem({ title: rendered.title, text: rendered.text, link: rendered.link }, { name: product.name, websiteUrl: product.websiteUrl })
+      if (disclosure) problems.push(disclosure)
       const unavailable = this.availabilityProblem(channel, account.status)
       const fits = problems.length === 0 && unavailable === null
       options.push({
@@ -195,38 +225,54 @@ export class PostGroupsFlow {
 
   // ───────────── the group-wide steps (each is the owner's press) ─────────────
 
-  /** The AI rewrites the master for each version's platform. It stores a new draft by the AI; any approval of the version no longer applies. */
+  /**
+   * The AI rewrites the master for each version's platform. It stores a new draft by the AI; any approval of the version no longer applies.
+   * Without `opportunityIds` it leaves alone what the owner has a claim on: a version they changed by hand, one they approved, one they put
+   * off, one that was sent. Naming a version asks for it (an edited one also needs `force`). If the owner changes a version while the AI is
+   * writing, the AI's text is dropped and the owner's stays.
+   */
   async adapt(id: Id, opportunityIds: Id[] | undefined, force: boolean): Promise<PostGroupOutcome> {
     const group = this.requireGroup(id)
+    if (opportunityIds && opportunityIds.some((one) => !this.liveVersions(id).some((v) => v.id === one))) {
+      throw new ApiError('invalid_input', 'That is not a version of this post.')
+    }
     this.claim(id)
     try {
       const results: PostGroupResult[] = []
       for (const opp of this.liveVersions(id)) {
-        if (opportunityIds && !opportunityIds.includes(opp.id)) continue
+        const picked = opportunityIds !== undefined
+        if (picked && !opportunityIds.includes(opp.id)) continue
         const channel = this.store.requireChannel(opp.channelId)
         const label = labelOf(channel)
+        const skip = (reason: string): void => {
+          results.push({ opportunityId: opp.id, channelLabel: label, status: 'skipped', reason })
+        }
         const draft = this.core.repos.latestDraft(opp.id)
-        if (SEND_LOCKED_STATES.includes(opp.state)) {
-          results.push({ opportunityId: opp.id, channelLabel: label, status: 'skipped', reason: 'It was sent already.' })
-          continue
-        }
-        if (editedByHand(draft, group.master) && !force) {
-          results.push({ opportunityId: opp.id, channelLabel: label, status: 'skipped', reason: 'You changed it by hand, so it was left as it is. Start over to let the AI adapt it again.' })
-          continue
-        }
-        try {
-          const written = await this.help.refine({
-            field: 'text',
-            opportunityId: opp.id,
-            form: { title: group.master.title ?? '', text: group.master.text },
-            instruction: adaptInstruction(channel.platform)
-          })
-          const text = (written.text ?? '').trim()
-          if (!text) throw new ApiError('suggest_failed', 'The AI gave back no text.')
-          await this.review.saveDraft(opp.id, { ...group.master, text }, { author: 'ai' })
-          results.push({ opportunityId: opp.id, channelLabel: label, status: 'done', reason: 'Adapted. Read it, then approve.' })
-        } catch (error) {
-          results.push({ opportunityId: opp.id, channelLabel: label, status: 'failed', reason: errorMessage(error) })
+        if (!draft) skip('It has no text yet.')
+        else if (SEND_LOCKED_STATES.includes(opp.state)) skip('It was sent already.')
+        else if (group.master.text.trim() === '') skip('The post has no words to adapt (only a picture or a link).')
+        else if (editedByHand(draft, group.master) && !force) skip('You changed it by hand, so it was left as it is. Start over to let the AI adapt it again.')
+        else if (!picked && opp.state === 'deferred') skip('You put it off, so it was left as it is. Choose it to adapt it.')
+        else if (!picked && this.core.repos.activeApproval(draft.id)) skip('You approved it, so it was left as it is. Choose it to adapt it again (that cancels its approval).')
+        else {
+          try {
+            const written = await this.help.refine({
+              field: 'text',
+              opportunityId: opp.id,
+              form: { title: group.master.title ?? '', text: group.master.text },
+              instruction: adaptInstruction(channel.platform)
+            })
+            const text = (written.text ?? '').trim()
+            if (!text) throw new ApiError('suggest_failed', 'The AI gave back no text.')
+            // Only if the version is still the draft that was adapted: a hand edit made while the AI wrote is not replaced.
+            await this.review.saveDraft(opp.id, { ...group.master, text }, { author: 'ai', expectDraftId: draft.id })
+            const saved = this.core.repos.latestDraft(opp.id)
+            const problems = saved ? this.fitProblems(channel.platform, saved, sendWays(this.core)) : []
+            results.push({ opportunityId: opp.id, channelLabel: label, status: 'done', reason: problems.length > 0 ? `Adapted, but ${problems[0]}` : 'Adapted. Read it, then approve.' })
+          } catch (error) {
+            if (error instanceof ApiError && error.code === 'conflict') skip('You changed it while the AI was writing, so the AI\'s text was dropped.')
+            else results.push({ opportunityId: opp.id, channelLabel: label, status: 'failed', reason: errorMessage(error) })
+          }
         }
       }
       return { card: this.get(id), results }
@@ -241,56 +287,85 @@ export class PostGroupsFlow {
    */
   async approve(id: Id, seen: Record<Id, Id>): Promise<PostGroupOutcome> {
     this.requireGroup(id)
-    const results: PostGroupResult[] = []
-    for (const opp of this.liveVersions(id)) {
-      const label = labelOf(this.store.requireChannel(opp.channelId))
-      if (FINISHED.includes(opp.state)) {
-        results.push({ opportunityId: opp.id, channelLabel: label, status: 'skipped', reason: 'It was sent already.' })
-        continue
+    if (typeof seen !== 'object' || seen === null || Array.isArray(seen)) throw new ApiError('invalid_input', 'Say which text of each version you were shown.')
+    this.claim(id)
+    try {
+      const results: PostGroupResult[] = []
+      for (const opp of this.liveVersions(id)) {
+        const label = labelOf(this.store.requireChannel(opp.channelId))
+        const skip = (reason: string): void => {
+          results.push({ opportunityId: opp.id, channelLabel: label, status: 'skipped', reason })
+        }
+        if (FINISHED.includes(opp.state)) {
+          skip('It was sent already.')
+          continue
+        }
+        const draft = this.core.repos.latestDraft(opp.id)
+        if (!draft) skip('It has no text yet.')
+        else if (seen[opp.id] === undefined) skip('It was not shown to you: read it, then approve.')
+        else if (seen[opp.id] !== draft.id) skip('It changed after you looked at it: read it again, then approve.')
+        else {
+          // The approval is the single post's: its checks, its hash, its refusals (the platform's limits, the disclosure, a picture that is gone).
+          try {
+            await this.review.approve(opp.id)
+            results.push({ opportunityId: opp.id, channelLabel: label, status: 'done', reason: 'Approved.' })
+          } catch (error) {
+            skip(errorMessage(error))
+          }
+        }
       }
-      const draft = this.core.repos.latestDraft(opp.id)
-      if (!draft || seen[opp.id] !== draft.id) {
-        results.push({ opportunityId: opp.id, channelLabel: label, status: 'skipped', reason: draft ? 'It changed after you looked at it: read it again, then approve.' : 'It has no text yet.' })
-        continue
-      }
-      // The approval is the single post's: its checks, its hash, its refusals (the platform's limits, the disclosure, a picture that is gone).
-      try {
-        await this.review.approve(opp.id)
-        results.push({ opportunityId: opp.id, channelLabel: label, status: 'done', reason: 'Approved.' })
-      } catch (error) {
-        results.push({ opportunityId: opp.id, channelLabel: label, status: 'skipped', reason: errorMessage(error) })
-      }
+      return { card: this.get(id), results }
+    } finally {
+      this.busy.delete(id)
     }
-    return { card: this.get(id), results }
   }
 
-  /** The owner's one press: the approved versions go out one after another, a pause between; one that fails or is held stops nothing else. */
+  /**
+   * The owner's one press. It sends the versions that were approved AT THAT MOMENT, as they were approved (the approval of each is
+   * noted at the press): one approved, changed or edited afterwards is not sent by it. They go out one after another with a pause; one that
+   * fails or is held stops nothing else.
+   */
   async sendAll(id: Id): Promise<PostGroupOutcome> {
     this.requireGroup(id)
     this.claim(id)
     try {
+      // version -> the approval it had at the press (an approval is of one exact draft, so this says both)
+      const pressed = new Map<Id, Id>()
+      for (const opp of this.liveVersions(id)) {
+        if (opp.state !== 'ready') continue
+        const draft = this.core.repos.latestDraft(opp.id)
+        const approval = draft ? this.core.repos.activeApproval(draft.id) : null
+        if (approval) pressed.set(opp.id, approval.id)
+      }
       const results: PostGroupResult[] = []
       let first = true
       for (const opp of this.liveVersions(id)) {
         const label = labelOf(this.store.requireChannel(opp.channelId))
-        if (FINISHED.includes(opp.state)) {
-          results.push({ opportunityId: opp.id, channelLabel: label, status: 'skipped', reason: 'It was sent already.' })
-          continue
-        }
-        if (this.store.requireOpportunity(opp.id).state !== 'ready') {
-          results.push({ opportunityId: opp.id, channelLabel: label, status: 'skipped', reason: 'It is not approved yet.' })
-          continue
-        }
-        if (!first) await (this.options.sleep ?? realSleep)(this.options.gapMs ?? GROUP_SEND_GAP_MS)
-        first = false
-        try {
-          const action = await this.sending.send(opp.id)
-          if (action.state === 'confirmed') results.push({ opportunityId: opp.id, channelLabel: label, status: 'done', reason: 'Published.' })
-          else if (action.state === 'unknown') results.push({ opportunityId: opp.id, channelLabel: label, status: 'failed', reason: 'The result is unknown: check the page, then say whether it was published.' })
-          else results.push({ opportunityId: opp.id, channelLabel: label, status: 'failed', reason: action.error ?? 'It was not published.' })
-        } catch (error) {
-          const reason = error instanceof SendBlockedError ? error.message : errorMessage(error)
+        const skip = (reason: string): void => {
           results.push({ opportunityId: opp.id, channelLabel: label, status: 'skipped', reason })
+        }
+        const mark = pressed.get(opp.id)
+        if (FINISHED.includes(opp.state)) skip('It was sent already.')
+        else if (opp.scheduledAt && opp.scheduledAt > this.store.now()) skip(`It is scheduled for ${opp.scheduledAt}: it goes out then, or press Send on it.`)
+        else if (!mark) skip('It was not approved when you pressed Send all.')
+        else {
+          // An approval is of one exact draft and ends with any edit, deferral or withdrawal: the same approval still active is the same post.
+          const draft = this.core.repos.latestDraft(opp.id)
+          const approval = draft ? this.core.repos.activeApproval(draft.id) : null
+          if (approval?.id !== mark) {
+            skip('It changed after you pressed Send all, so it was not sent.')
+            continue
+          }
+          if (!first) await (this.options.sleep ?? realSleep)(this.options.gapMs ?? GROUP_SEND_GAP_MS)
+          first = false
+          try {
+            const action = await this.sending.send(opp.id)
+            if (action.state === 'confirmed') results.push({ opportunityId: opp.id, channelLabel: label, status: 'done', reason: 'Published.' })
+            else if (action.state === 'unknown') results.push({ opportunityId: opp.id, channelLabel: label, status: 'failed', reason: 'The result is unknown: check the page, then say whether it was published.' })
+            else results.push({ opportunityId: opp.id, channelLabel: label, status: 'failed', reason: action.error ?? 'It was not published.' })
+          } catch (error) {
+            skip(error instanceof SendBlockedError ? error.message : errorMessage(error))
+          }
         }
       }
       return { card: this.get(id), results }
@@ -316,25 +391,26 @@ export class PostGroupsFlow {
     this.busy.add(id)
   }
 
-  private requireGroup(id: Id): PostGroup {
+  private requireGroup(id: Id): StoredGroup {
     const row = this.core.db.prepare('SELECT id, product_id, master_json, created_at FROM post_groups WHERE id = ?').get(id) as
       | { id: string; product_id: string; master_json: string; created_at: string }
       | undefined
     if (!row) throw new ApiError('not_found', 'This post for several channels does not exist.')
-    return { id: row.id, productId: row.product_id, master: JSON.parse(row.master_json) as PostMaster, createdAt: row.created_at }
+    const { provenance, ...master } = JSON.parse(row.master_json) as PostMaster & { provenance?: Provenance }
+    return { id: row.id, productId: row.product_id, master, createdAt: row.created_at, provenance: provenance ?? OWN_WORDS }
   }
 
-  private insertGroup(productId: Id, master: PostMaster): PostGroup {
+  private insertGroup(productId: Id, master: PostMaster, provenance: Provenance): StoredGroup {
     const id = newId()
     const createdAt = this.store.now()
-    this.core.db.prepare('INSERT INTO post_groups (id, product_id, master_json, created_at) VALUES (?, ?, ?, ?)').run(id, productId, toJson(master), createdAt)
-    return { id, productId, master, createdAt }
+    this.core.db.prepare('INSERT INTO post_groups (id, product_id, master_json, created_at) VALUES (?, ?, ?, ?)').run(id, productId, toJson({ ...master, provenance }), createdAt)
+    return { id, productId, master, createdAt, provenance }
   }
 
-  /** A version is an ordinary standalone post of one channel, written from the master. */
-  private addVersion(group: PostGroup, channel: Channel): void {
+  /** A version is an ordinary standalone post of one channel, written from the master and standing on the same facts. */
+  private addVersion(group: StoredGroup, channel: Channel): void {
     const opp = this.store.createStandalone(channel, 'draft', 'Written by you, for several channels', group.id)
-    this.store.insertDraft(opp.id, group.master, { knowledgeVersionId: null, usedClaimLineageIds: [], rationale: '', author: 'user' })
+    this.store.insertDraft(opp.id, group.master, group.provenance)
   }
 
   /** The versions in the order they were made (the order the owner chose the channels in). */
@@ -356,6 +432,17 @@ export class PostGroupsFlow {
     })
   }
 
+  /**
+   * What the platform will refuse about this post as it is: for a post written in the editor, what the approval refuses (limits, pictures, the
+   * ways to carry them); for an older one the approval checks nothing, but a text longer than the platform takes is still said.
+   */
+  private fitProblems(platform: string, content: PostContent, ways: SendWays): string[] {
+    const rendered = renderForPlatform(content, platform)
+    if (content.markup === 'markdown') return sendProblems(platform, rendered, ways)
+    const limit = formOf(platform).textLimit
+    return limit !== null && rendered.text.length > limit ? [`the text is longer than ${platformLabel(platform)} takes (${rendered.text.length} of ${limit} characters).`] : []
+  }
+
   private availabilityProblem(channel: Channel, accountStatus: string): string | null {
     if (channel.status === 'paused') return 'The channel is paused.'
     if (channel.status === 'setup') return 'The channel is not set up yet.'
@@ -369,7 +456,7 @@ export class PostGroupsFlow {
     const form = formOf(platform)
     const label = platformLabel(platform)
     if (form.pictures === 'required') return `${label} needs a picture, and this post has ${content.attachments.length === 1 ? 'one' : content.attachments.length}.`
-    if (form.textLimit !== null && form.textLimit <= 5000) return `${text.length} of ${form.textLimit} characters.`
+    if (form.textLimit !== null && form.textLimit <= WISH_LIMIT_MAX) return `${text.length} of ${form.textLimit} characters.`
     return `${label} takes it as written.`
   }
 }
