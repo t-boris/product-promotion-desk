@@ -14,12 +14,12 @@
 //    application cannot find is `unknown`, which blocks a resend exactly as for a connector.
 //  - A mission that ends without a press is a definite failure: nothing was submitted, whatever the AI says.
 
-import { renderForPlatform, sendProblems } from '../../shared/post-format'
+import { renderForPlatform } from '../../shared/post-format'
 import type { Comment } from '../../shared/types'
 import type { Core } from '../core'
 import { TakeoverError, type Connector, type ConnectorContext, type PublishedRef, type PublishRequest } from '../ports'
 import { EXTENSION_BY_MIME } from './attachments'
-import { sendWays } from './send-ways'
+import { chooseExecutor, sendWays, type Executor } from './send-ways'
 import type { ApprovedContent, ApprovedFile, LeaseResult, PostAuthority, PostMissionOutcome, PostMissionRequest, SubmitLease } from '../browser-agent/post-submit'
 import type { GateGrant, SendGate } from './gate'
 import { contentHash } from './hash'
@@ -35,7 +35,7 @@ export const READ_BACK_DELAY_MS = 2000
 /** What the mission service refuses with before anything was started: the AI browser cannot be used right now, and nothing happened. */
 const NOT_STARTED_CODES = ['agent_running', 'no_engine', 'engine_cannot_drive', 'engine_cannot_confine', 'engine_unavailable', 'no_agent_bridge']
 
-export type Executor = 'connector' | 'ai_browser'
+export type { Executor }
 
 /**
  * The answer of a mission, in the shape the send flow settles:
@@ -176,17 +176,10 @@ export class MissionPublisher {
    * keeps going through it, the way that is known to work. Everything else goes through the connector as before.
    */
   executorFor(grant: GateGrant, automatic: boolean): Executor {
-    if (!sendWays(this.core, { automatic, approvedBy: grant.approval.approvedBy }).aiBrowser) return 'connector'
-    if (grant.draft.attachments.length > 0) {
-      const platform = grant.channel.platform
-      const rendered = renderForPlatform(grant.draft, platform)
-      // Legacy drafts are judged by their connector, as before: it refuses what it cannot carry.
-      if (grant.draft.markup !== 'markdown' || sendProblems(platform, rendered, { aiBrowser: false }).length === 0) {
-        this.core.log.info('send', 'This one is sent through the connector, which can carry it.', grant.channel.id)
-        return 'connector'
-      }
-    }
-    return 'ai_browser'
+    const ways = sendWays(this.core, { automatic, approvedBy: grant.approval.approvedBy })
+    const executor = chooseExecutor(ways, grant.draft, grant.channel.platform)
+    if (ways.aiBrowser && executor === 'connector') this.core.log.info('send', 'This one is sent through the connector, which can carry it.', grant.channel.id)
+    return executor
   }
 
   /** One mission for one reserved attempt, and the application's own reading of the site afterwards. Never throws for what it can name. */

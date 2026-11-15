@@ -3,7 +3,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import type { ApiEvent } from '../shared/api'
-import type { Account, AgentRun, AnalysisStage, AttentionItem, Channel, Claim, PlatformInfo, Product } from '../shared/types'
+import type { Account, AgentRun, AnalysisStage, AttentionItem, Channel, Claim, GroupChannelOption, OpportunityCard, OpportunityState, PlatformInfo, PostGroup, PostGroupResult, PostVersion, Product } from '../shared/types'
 import { createFanOut } from '../renderer/src/fan-out'
 import { closeForm, mainForm, openForm, type OpenFormIds } from '../renderer/src/open-forms'
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from '../renderer/src/menu-state'
@@ -27,6 +27,34 @@ import { CAPABILITY_LABEL, CAPABILITY_ORDER, abilityNeedsDecision, abilityStatus
 import { JOIN_NOTE, JOIN_OTHER_RUN, JOIN_OWNER_HOLDS, isJoinRunOf, joinButton, joinLabel } from '../renderer/src/pages/channels/join-control'
 import { approveLabels } from '../renderer/src/pages/review/approve-labels'
 import { removalWords } from '../renderer/src/pages/review/removal-words'
+import {
+  CANNOT_POST_REASON,
+  CHOOSE_A_CHANNEL,
+  NOT_APPROVED_YET,
+  alsoPostAllowed,
+  approveAllLabel,
+  channelCount,
+  draftInputOf,
+  extendLabel,
+  groupMain,
+  groupStamp,
+  groupTitle,
+  hasWarnings,
+  reasonBeside,
+  resultsHeadline,
+  saveIntent,
+  saveLabel,
+  seenOf,
+  sendAllLabel,
+  sendBlocker,
+  stepBlocker,
+  stepLabel,
+  toggled,
+  versionLabel,
+  wayLine,
+  whereRows
+} from '../renderer/src/pages/review/post-group'
+import { mainOwner } from '../renderer/src/pages/review/main-action'
 import { channelLabel } from '../renderer/src/pages/review/channel-label'
 import { platformMismatch } from '../renderer/src/pages/channels/platform-hint'
 import {
@@ -1383,5 +1411,226 @@ describe('taking an item out of the queue', () => {
     expect(removalWords('standalone')).toMatchObject({ label: 'Delete', list: 'Deleted' })
     expect(removalWords('standalone').question).toMatch(/Nothing was sent/)
     expect(removalWords('reply')).toMatchObject({ label: 'Reject', list: 'Rejected' })
+  })
+})
+
+describe('one post for several channels: the group card and its main action (DEC-032)', () => {
+  /** A version as the screen gets it: only what the rules read. */
+  const version = (id: string, state: OpportunityState, extra: { approved?: boolean; draftId?: string | null; platform?: string; target?: string } = {}): PostVersion =>
+    ({
+      card: {
+        opportunity: { id, state, kind: 'standalone', groupId: 'g1' },
+        channelPlatform: extra.platform ?? 'reddit',
+        channelTarget: extra.target ?? 'r/test',
+        draft: extra.draftId === null ? null : { id: extra.draftId ?? `d-${id}` },
+        approval: extra.approved ? { id: `a-${id}` } : null
+      } as unknown as OpportunityCard,
+      problems: [],
+      edited: false,
+      way: 'connector'
+    }) as PostVersion
+  const approved = (id: string): PostVersion => version(id, 'ready', { approved: true })
+  const open = (id: string): PostVersion => version(id, 'awaiting_approval')
+  const group = (master: Partial<PostGroup['master']>): PostGroup => ({ id: 'g1', productId: 'p1', createdAt: '2026-11-15T10:00:00.000Z', master: { title: null, text: '', link: null, attachments: [], markup: 'markdown', ...master } })
+
+  it('names a group by the title of the master, else by its first words', () => {
+    expect(groupTitle(group({ title: ' Launch day ', text: 'ignored' }))).toBe('Launch day')
+    expect(groupTitle(group({ text: 'We are live today.\n\nCome and see it' }))).toBe('We are live today. Come and see it')
+    expect(groupTitle(group({ text: 'one two three four five six seven eight nine ten' }))).toBe('one two three four five six seven eight…')
+    expect(groupTitle(group({ text: '' }))).toBe('Post for several channels')
+    expect(groupTitle(group({ text: 'x'.repeat(200) })).length).toBeLessThanOrEqual(81)
+  })
+
+  it('counts channels and names a version by its platform and place, as the core names it in its reports', () => {
+    expect(channelCount(1)).toBe('1 channel')
+    expect(channelCount(3)).toBe('3 channels')
+    expect(versionLabel(version('a', 'draft', { platform: 'threads', target: '@brand' }).card)).toBe('Threads @brand')
+  })
+
+  it('says how a version goes out, in the words of the screen', () => {
+    expect(wayLine('connector')).toBe('Goes out by: connector')
+    expect(wayLine('ai_browser')).toBe("Goes out by: the AI in the account's browser: you press Send")
+  })
+
+  it('builds `seen` from the draft each card on the screen shows, and leaves out a version with no draft', () => {
+    const versions = [version('a', 'draft', { draftId: 'da' }), version('b', 'draft', { draftId: 'db' }), version('c', 'draft', { draftId: null })]
+    expect(seenOf(versions)).toEqual({ a: 'da', b: 'db' })
+    expect(seenOf([])).toEqual({})
+  })
+
+  it('offers "Send all now" once every version that can still go is approved, "Approve all" otherwise, and nothing once all are out', () => {
+    expect(groupMain([open('a'), open('b')])).toBe('approve')
+    expect(groupMain([approved('a'), open('b')])).toBe('approve')
+    expect(groupMain([approved('a'), approved('b')])).toBe('send')
+    // a version that is out does not hold the others back from "Send all now"
+    expect(groupMain([approved('a'), version('b', 'confirmed')])).toBe('send')
+    expect(groupMain([open('a'), version('b', 'confirmed')])).toBe('approve')
+    expect(groupMain([version('a', 'confirmed'), version('b', 'sending')])).toBeNull()
+    expect(groupMain([])).toBeNull()
+  })
+
+  it('does not count a version as approved unless it is ready and carries its approval', () => {
+    expect(groupMain([version('a', 'ready', { approved: false })])).toBe('approve')
+    expect(groupMain([version('a', 'awaiting_approval', { approved: true })])).toBe('approve')
+  })
+
+  it('counts what the buttons say: the versions that can still be approved, and the ones that would go', () => {
+    const versions = [approved('a'), open('b'), version('c', 'confirmed'), approved('d')]
+    expect(approveAllLabel(versions)).toBe('Approve all 3')
+    expect(sendAllLabel(versions)).toBe('Send all now (2)')
+    expect(sendAllLabel([open('a')])).toBe('Send all now (0)')
+  })
+
+  it('refuses to approve, adapt or send while a step runs or a version holds changes that are not saved, and says so', () => {
+    expect(stepBlocker({ working: false, unsaved: [] })).toBeNull()
+    expect(stepBlocker({ working: true, unsaved: [] })).toMatch(/step that is running/)
+    expect(stepBlocker({ working: false, unsaved: ['Reddit r/test'] })).toBe('Save your changes to Reddit r/test first.')
+    expect(stepBlocker({ working: false, unsaved: ['Reddit r/test', 'Threads @brand'] })).toBe('Save your changes to Reddit r/test and Threads @brand first.')
+    expect(stepBlocker({ working: false, unsaved: ['A', 'B', 'C'] })).toBe('Save your changes to A, B and C first.')
+    const calm = { working: false, unsaved: [] }
+    expect(sendBlocker([open('a'), open('b')], calm)).toBe(NOT_APPROVED_YET)
+    expect(sendBlocker([approved('a'), open('b')], calm)).toBeNull()
+    expect(sendBlocker([approved('a')], { working: false, unsaved: ['Reddit r/test'] })).toMatch(/Save your changes/)
+    expect(sendBlocker([approved('a')], { working: true, unsaved: [] })).toMatch(/step that is running/)
+  })
+
+  it('shows one reason beside the buttons: the one that holds back the first button that is off', () => {
+    expect(reasonBeside(null, NOT_APPROVED_YET)).toBe(NOT_APPROVED_YET)
+    expect(reasonBeside('Save your changes to A first.', NOT_APPROVED_YET)).toBe('Save your changes to A first.')
+    expect(reasonBeside(null, null)).toBeNull()
+  })
+
+  it('says which step a slow call is on', () => {
+    const versions = [approved('a'), approved('b'), open('c')]
+    expect(stepLabel('send', versions)).toMatch(/^Sending to 2 channels…/)
+    expect(stepLabel('send', [approved('a')])).toMatch(/^Sending to 1 channel…/)
+    expect(stepLabel('adapt', versions)).toBe('Adapting for 3 channels…')
+    expect(stepLabel('approve', versions)).toBe('Approving 3 versions…')
+  })
+
+  it('writes a headline for what a step did, and counts warnings so a skipped or failed version is never silent', () => {
+    const result = (status: PostGroupResult['status']): PostGroupResult => ({ opportunityId: status, channelLabel: 'Reddit r/test', status, reason: 'why' })
+    expect(resultsHeadline('approve', [result('done'), result('skipped')])).toBe('Approved 1 of 2 versions.')
+    expect(resultsHeadline('send', [result('done')])).toBe('Sent 1 of 1 version.')
+    expect(resultsHeadline('adapt', [result('failed'), result('failed')])).toBe('Adapted 0 of 2 versions.')
+    expect(resultsHeadline('adapt', [])).toBe('Nothing was adapted.')
+    expect(hasWarnings([result('done')])).toBe(false)
+    expect(hasWarnings([result('done'), result('skipped')])).toBe(true)
+    expect(hasWarnings([result('failed')])).toBe(true)
+  })
+
+  it('stamps a group so a report is dropped once any version changes its state or its draft', () => {
+    const before = [approved('a'), open('b')]
+    expect(groupStamp(before)).toBe(groupStamp([approved('a'), open('b')]))
+    expect(groupStamp(before)).not.toBe(groupStamp([approved('a'), approved('b')]))
+    expect(groupStamp(before)).not.toBe(groupStamp([approved('a'), version('b', 'awaiting_approval', { draftId: 'newer' })]))
+  })
+
+  it('a group takes part in the one filled button like a card: the first in the order that offers one owns it, and a group that offers none hands it on', () => {
+    // the order the screen gives: its groups first, then its single posts
+    const order = ['group-1', 'group-2', 'post-1', 'post-2']
+    expect(mainOwner(order, new Set(['group-1', 'post-1']))).toBe('group-1')
+    expect(mainOwner(order, new Set(['group-2', 'post-1']))).toBe('group-2')
+    expect(mainOwner(order, new Set(['post-2', 'post-1']))).toBe('post-1')
+    // every version of a group is outside the order, so none of them can ever own it, whatever it offers
+    expect(mainOwner(order, new Set(['version-of-group-1']))).toBeUndefined()
+    expect(mainOwner(order, new Set())).toBeUndefined()
+  })
+
+  it('"Also post to…" is offered on a post of the owner that has text and is not in a group, not on a reply, a group version or a post in flight', () => {
+    const card = (state: OpportunityState, extra: Record<string, unknown> = {}): Pick<OpportunityCard, 'opportunity' | 'draft'> =>
+      ({ opportunity: { state, kind: 'standalone', groupId: null, ...extra }, draft: { id: 'd' } }) as unknown as Pick<OpportunityCard, 'opportunity' | 'draft'>
+    for (const state of ['draft', 'awaiting_approval', 'ready', 'confirmed'] as OpportunityState[]) expect(alsoPostAllowed(card(state))).toBe(true)
+    for (const state of ['sending', 'unknown_result', 'cancelled', 'analyzing'] as OpportunityState[]) expect(alsoPostAllowed(card(state))).toBe(false)
+    expect(alsoPostAllowed(card('draft', { kind: 'reply' }))).toBe(false)
+    expect(alsoPostAllowed(card('draft', { groupId: 'g1' }))).toBe(false)
+    expect(alsoPostAllowed({ ...card('draft'), draft: null })).toBe(false)
+  })
+
+  it("asks about the post's own text as the draft", () => {
+    const draft = { id: 'd', title: 'T', text: 'Body', link: 'https://example.com', attachments: [], markup: 'markdown' } as unknown as Parameters<typeof draftInputOf>[0]
+    expect(draftInputOf(draft)).toEqual({ title: 'T', text: 'Body', link: 'https://example.com', attachments: [], markup: 'markdown' })
+  })
+})
+
+describe('"Where to post": the ticks and what Save does with them (DEC-032)', () => {
+  const option = (channelId: string, extra: Partial<GroupChannelOption> = {}): GroupChannelOption => ({
+    channelId,
+    platform: 'reddit',
+    target: `r/${channelId}`,
+    accountLabel: `account ${channelId}`,
+    fits: true,
+    reason: 'Reddit takes it as written.',
+    suggested: true,
+    ...extra
+  })
+  const own = { channelId: 'a', platform: 'reddit', target: 'r/a', accountLabel: 'me' }
+
+  it('lists nothing until the core has answered', () => {
+    expect(whereRows(undefined, ['a'], own)).toBeUndefined()
+  })
+
+  it('keeps the order the core ranked, marks as suggested only a channel that fits and is not ticked, and ticks nothing', () => {
+    const rows = whereRows([option('a'), option('b'), option('c', { fits: false, suggested: false, reason: 'Instagram needs a picture.' })], ['a'], own) ?? []
+    expect(rows.map((r) => r.channelId)).toEqual(['a', 'b', 'c'])
+    expect(rows.map((r) => r.suggested)).toEqual([false, true, false])
+    expect(rows[2]).toMatchObject({ fits: false, reason: 'Instagram needs a picture.', listed: true })
+    // the owner ticks b: it is no longer a suggestion
+    expect((whereRows([option('a'), option('b')], ['a', 'b'], own) ?? []).map((r) => r.suggested)).toEqual([false, false])
+  })
+
+  it("shows the screen's own channel as a row of its own when posting is off there, and never when it is listed or left out on purpose", () => {
+    const rows = whereRows([option('b')], ['a'], own) ?? []
+    expect(rows.map((r) => r.channelId)).toEqual(['a', 'b'])
+    expect(rows[0]).toMatchObject({ listed: false, fits: false, reason: CANNOT_POST_REASON, suggested: false, accountLabel: 'me' })
+    expect(whereRows([option('a'), option('b')], ['a'], own)?.filter((r) => r.channelId === 'a')).toHaveLength(1)
+    // "Also post to…" does not offer the channel the post is already in
+    expect((whereRows([option('a'), option('b')], [], undefined, ['a']) ?? []).map((r) => r.channelId)).toEqual(['b'])
+    expect((whereRows([option('b')], [], own, ['a']) ?? []).map((r) => r.channelId)).toEqual(['b'])
+  })
+
+  it('one tick saves one post of its own channel, as before; two or more save one post for several channels', () => {
+    const rows = whereRows([option('a'), option('b'), option('c')], [], own)
+    expect(saveIntent(['a'], rows)).toEqual({ kind: 'single', channelId: 'a' })
+    expect(saveIntent(['b'], rows)).toEqual({ kind: 'single', channelId: 'b' })
+    expect(saveIntent(['a', 'c'], rows)).toEqual({ kind: 'group', channelIds: ['a', 'c'] })
+    expect(saveIntent(['c', 'a', 'b'], rows)).toEqual({ kind: 'group', channelIds: ['c', 'a', 'b'] })
+    expect(saveIntent([], rows)).toEqual({ kind: 'none', reason: CHOOSE_A_CHANNEL })
+  })
+
+  it('before the channels are known the form still saves for the channel it opened on', () => {
+    expect(saveIntent(['a'], undefined)).toEqual({ kind: 'single', channelId: 'a' })
+  })
+
+  it('a channel that cannot post now may still be saved alone as a draft, but is never silently dropped from a group', () => {
+    const rows = whereRows([option('b')], [], own)
+    expect(saveIntent(['a'], rows)).toEqual({ kind: 'single', channelId: 'a' })
+    const refused = saveIntent(['a', 'b'], rows)
+    expect(refused.kind).toBe('none')
+    expect(refused.kind === 'none' && refused.reason).toBe('Reddit r/a cannot be part of a post for several channels now. Untick it.')
+    // unticked, the others go as a group
+    expect(saveIntent(['b'], rows)).toEqual({ kind: 'single', channelId: 'b' })
+  })
+
+  it('ignores a tick for a channel that is not listed any more, and counts a channel once', () => {
+    const rows = whereRows([option('a'), option('b')], [], own)
+    expect(saveIntent(['a', 'gone'], rows)).toEqual({ kind: 'single', channelId: 'a' })
+    expect(saveIntent(['a', 'a'], rows)).toEqual({ kind: 'single', channelId: 'a' })
+  })
+
+  it('the one button slot says what it does with the number of channels', () => {
+    expect(saveLabel({ kind: 'single', channelId: 'a' })).toBe('Save as draft')
+    expect(saveLabel({ kind: 'none', reason: CHOOSE_A_CHANNEL })).toBe('Save as draft')
+    expect(saveLabel({ kind: 'group', channelIds: ['a', 'b'] })).toBe('Save for 2 channels')
+    expect(saveLabel({ kind: 'group', channelIds: ['a', 'b', 'c'] })).toBe('Save for 3 channels')
+    expect(extendLabel(0)).toBe('Save for more channels')
+    expect(extendLabel(1)).toBe('Save for 1 more channel')
+    expect(extendLabel(2)).toBe('Save for 2 more channels')
+  })
+
+  it('a tick toggles one channel and keeps the order of the others', () => {
+    expect(toggled(['a'], 'b')).toEqual(['a', 'b'])
+    expect(toggled(['a', 'b', 'c'], 'b')).toEqual(['a', 'c'])
+    expect(toggled([], 'a')).toEqual(['a'])
   })
 })

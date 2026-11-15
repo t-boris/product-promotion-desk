@@ -686,6 +686,8 @@ export interface Opportunity {
   reason: string
   /** Planned send time for standalone publications. */
   scheduledAt: IsoTime | null
+  /** The post group this is one version of (one post for several channels), or null. Nothing but the group view reads it. */
+  groupId: Id | null
   createdAt: IsoTime
   updatedAt: IsoTime
 }
@@ -931,6 +933,69 @@ export interface OpportunityCard {
   draft: Draft | null
   approval: Approval | null
   lastAction: SendAction | null
+}
+
+// ───────────── one post for several channels (DEC-032) ─────────────
+
+/** The text the owner wrote once; each channel's version is made from it. */
+export interface PostMaster {
+  title: string | null
+  text: string
+  link: string | null
+  attachments: Attachment[]
+  markup: PostMarkup
+}
+
+/** A wrapper around ordinary posts: each version is a standalone opportunity of one channel with its own drafts, approval, send and failure. */
+export interface PostGroup {
+  id: Id
+  productId: Id
+  master: PostMaster
+  createdAt: IsoTime
+}
+
+export type SendWay = 'connector' | 'ai_browser'
+
+export interface PostVersion {
+  /** The ordinary card of the version: it is edited, approved and sent through the same calls as any post. */
+  card: OpportunityCard
+  /** What stops this version from fitting its platform as it is (limits, a missing picture), or from being sent now (a paused channel). Empty: nothing. */
+  problems: string[]
+  /** The owner changed this version by hand: the AI's "Adapt" leaves it alone unless asked to start over. */
+  edited: boolean
+  /** How it goes out when the owner presses Send: by the connector, or by the AI in the account's browser (the owner's press, never scheduled). */
+  way: SendWay
+}
+
+export interface PostGroupCard {
+  group: PostGroup
+  versions: PostVersion[]
+}
+
+/** A channel of the product the post could also go to, and whether it fits there as it is. */
+export interface GroupChannelOption {
+  channelId: Id
+  platform: string
+  target: string
+  accountLabel: string
+  fits: boolean
+  /** One line: why it fits, or what is wrong. */
+  reason: string
+  /** The app suggests it: it fits and is not already chosen. */
+  suggested: boolean
+}
+
+/** What happened to one version in a group-wide step (adapt, approve, send). */
+export interface PostGroupResult {
+  opportunityId: Id
+  channelLabel: string
+  status: 'done' | 'skipped' | 'failed'
+  reason: string
+}
+
+export interface PostGroupOutcome {
+  card: PostGroupCard
+  results: PostGroupResult[]
 }
 
 export interface ResultsView {

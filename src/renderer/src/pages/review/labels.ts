@@ -1,5 +1,5 @@
 import type { CommentCategory, OpportunityDecision, OpportunityKind, OpportunityState, SendState } from '../../../../shared/types'
-import type { Tone } from '../../ui'
+import type { Tone } from '../../tone'
 
 export const STATE_LABEL: Record<OpportunityState, string> = {
   discovered: 'New',

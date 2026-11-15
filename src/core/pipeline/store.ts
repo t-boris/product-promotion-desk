@@ -50,6 +50,7 @@ export interface OpportunityPatch {
   decision?: OpportunityDecision | null
   destination?: string
   scheduledAt?: string | null
+  groupId?: Id | null
 }
 
 export interface ChannelPatch {
@@ -279,7 +280,8 @@ export class FlowStore {
     })
   }
 
-  createStandalone(channel: Channel, state: OpportunityState, reason: string): Opportunity {
+  /** `groupId`: the post group this is one version of (DEC-032); a post of one channel has none. */
+  createStandalone(channel: Channel, state: OpportunityState, reason: string, groupId: Id | null = null): Opportunity {
     return this.insertOpportunity({
       channelId: channel.id,
       productId: channel.productId,
@@ -289,7 +291,8 @@ export class FlowStore {
       discussionId: null,
       destination: channel.url,
       reason,
-      scheduledAt: null
+      scheduledAt: null,
+      groupId
     })
   }
 
@@ -303,15 +306,16 @@ export class FlowStore {
     destination: string
     reason: string
     scheduledAt: string | null
+    groupId?: Id | null
   }): Opportunity {
     const id = newId()
     const now = this.now()
     this.db
       .prepare(
-        `INSERT INTO opportunities (id, channel_id, product_id, kind, state, comment_id, discussion_id, category, decision, destination, reason, scheduled_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?)`
+        `INSERT INTO opportunities (id, channel_id, product_id, kind, state, comment_id, discussion_id, category, decision, destination, reason, scheduled_at, group_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?)`
       )
-      .run(id, p.channelId, p.productId, p.kind, p.state, p.commentId, p.discussionId, p.destination, p.reason, p.scheduledAt, now, now)
+      .run(id, p.channelId, p.productId, p.kind, p.state, p.commentId, p.discussionId, p.destination, p.reason, p.scheduledAt, p.groupId ?? null, now, now)
     return this.requireOpportunity(id)
   }
 
@@ -328,6 +332,7 @@ export class FlowStore {
     if (patch.decision !== undefined) add('decision', patch.decision)
     if (patch.destination !== undefined) add('destination', patch.destination)
     if (patch.scheduledAt !== undefined) add('scheduled_at', patch.scheduledAt)
+    if (patch.groupId !== undefined) add('group_id', patch.groupId)
     this.db.prepare(`UPDATE opportunities SET ${sets.join(', ')} WHERE id = ?`).run(...values, id)
   }
 

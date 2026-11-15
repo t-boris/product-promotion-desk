@@ -61,5 +61,23 @@ CREATE INDEX idx_media_product ON media(product_id, created_at);
 -- 'markdown': written in the post editor; each platform gets the form it can show. Part of the approval hash only when it is 'markdown'.
 ALTER TABLE drafts ADD COLUMN markup TEXT NOT NULL DEFAULT 'legacy';
 `
+  },
+  {
+    id: 304,
+    name: 'pipeline: one post for several channels (DEC-032)',
+    sql: `
+-- A post group is a wrapper: the master text the owner wrote and the versions made from it. Each version is an ordinary standalone
+-- opportunity of one channel (own drafts, own approval, own send, own failure); nothing else in the pipeline reads group_id.
+CREATE TABLE post_groups (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL,
+  master_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+ALTER TABLE opportunities ADD COLUMN group_id TEXT;
+CREATE INDEX idx_opportunities_group ON opportunities(group_id) WHERE group_id IS NOT NULL;
+-- One live version per channel in a group (a cancelled one may be made again).
+CREATE UNIQUE INDEX idx_opportunities_group_channel ON opportunities(group_id, channel_id) WHERE group_id IS NOT NULL AND state <> 'cancelled';
+`
   }
 ]

@@ -24,6 +24,9 @@ import type {
   AttentionItem,
   AutomationState,
   Channel,
+  GroupChannelOption,
+  PostGroupCard,
+  PostGroupOutcome,
   ChannelMode,
   ChannelSettings,
   ChannelSuggestion,
@@ -303,6 +306,25 @@ export interface ApiMethods {
   'drafts.refine': [{ field: DraftHelpField; opportunityId?: Id; channelId?: Id; form: { title: string; text: string }; instruction?: string; about?: string }, DraftHelpResult]
   'publications.suggest': [{ channelId: Id }, OpportunityCard]
   'publications.create': [{ channelId: Id; draft: DraftInput }, OpportunityCard]
+
+  // one post for several channels (DEC-032): a group is a wrapper, each version is an ordinary post of one channel
+  /** Writes the post once for two or more channels of one product. Nothing is approved or sent. */
+  'postGroups.create': [{ productId: Id; channelIds: Id[]; draft: DraftInput }, PostGroupCard]
+  /** "Also post to…": an existing post of the owner joins a group (made if it has none) and gets a version for each channel. */
+  'postGroups.extend': [{ opportunityId: Id; channelIds: Id[] }, PostGroupCard]
+  'postGroups.get': [{ id: Id }, PostGroupCard]
+  /** Groups of a product that still have a version, newest first. */
+  'postGroups.list': [{ productId: Id }, PostGroupCard[]]
+  /** The product's channels with whether this post fits each as it is; the app suggests those that fit. Nothing is chosen for the owner. */
+  'postGroups.channels': [{ productId: Id; draft: DraftInput; chosen?: Id[] }, GroupChannelOption[]]
+  /** The AI rewrites the master for each version's platform (the limits, plain text). A version the owner edited by hand stays unless `force`. */
+  'postGroups.adapt': [{ id: Id; opportunityIds?: Id[]; force?: boolean }, PostGroupOutcome]
+  /** The owner's one press after reading every version: approves each version, each by its own exact content. `seen` is the draft of each version the owner was shown. */
+  'postGroups.approve': [{ id: Id; seen: Record<Id, Id> }, PostGroupOutcome]
+  /** The owner's one press: sends the approved versions one after another; one that fails stops nothing else. */
+  'postGroups.sendAll': [{ id: Id }, PostGroupOutcome]
+  /** Deletes the versions that were not sent; a sent one stays. */
+  'postGroups.remove': [{ id: Id }, PostGroupCard]
 
   // pictures (DEC-030): the library of a product, ingestion (a dialog, a paste, a drop) and the AI's image tool
   /**
