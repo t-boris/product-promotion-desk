@@ -12,7 +12,8 @@ export function AccountBlock({
   testId,
   children
 }: {
-  step: number
+  /** The number of the step; a block that is a setting, not a step, has none (the column keeps its place). */
+  step?: number
   title: string
   summary: ReactNode
   actions?: ReactNode
@@ -22,7 +23,7 @@ export function AccountBlock({
   return (
     <section className="card step" data-testid={testId}>
       <div className="step-head">
-        <span className="step-num" aria-hidden="true">
+        <span className={`step-num${step === undefined ? ' blank' : ''}`} aria-hidden="true">
           {step}
         </span>
         <div className="step-main">

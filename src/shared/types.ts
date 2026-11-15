@@ -198,6 +198,9 @@ export interface PassportView {
 
 export type AccountStatus = 'ready' | 'login_required' | 'captcha' | 'suspended'
 
+/** Which browser an account works in (DEC-026): the application's own, or the owner's installed Google Chrome. */
+export type BrowserChoice = 'internal' | 'chrome'
+
 export interface Account {
   id: Id
   platform: string
@@ -227,6 +230,10 @@ export interface Account {
   mailboxId: Id | null
   /** The profile (person) this login belongs to; null for a login that has none (DEC-019). At most one account per platform for a profile. */
   profileId: Id | null
+  /** The browser this account's session lives in and every operation on it uses (DEC-026). A session made in one browser is not in the other. */
+  browser: BrowserChoice
+  /** The account this one signs in through (DEC-027): a Threads account signs in through its Instagram account. Null for a login with its own credentials. */
+  signsInVia: Id | null
 }
 
 /** A base mailbox (DEC-015): an ordinary mailbox of the owner, from which each account gets an address of its own. */
@@ -259,6 +266,8 @@ export interface VaultStatus {
 export interface BrowserState {
   holder: 'agent' | 'user' | 'none'
   windowOpen: boolean
+  /** Whether Google Chrome is installed on this Mac: the choice of Chrome for an account needs it (DEC-026). */
+  chromeFound: boolean
 }
 
 /** One request the page made that is worth knowing about: what was sent to where, and what came back. Never a query string, header or body. */
@@ -306,7 +315,7 @@ export interface SignInResult {
 
 /** What the browser agent can be asked to do on an account's own browser (DEC-017). More kinds follow: read, answer, set up a profile. */
 /** `signup`: create the account on the platform. `profile`: fill in the profile of an account that exists (about-text, place, website, picture). */
-export type AgentTaskKind = 'signup' | 'profile'
+export type AgentTaskKind = 'signup' | 'profile' | 'signin'
 /**
  * What a run of the browser agent is. The first two are started by the owner (`agent.start`); `post` is started only by the send flow,
  * for one approved publication, and cannot be started through the API.
@@ -453,6 +462,8 @@ export interface PlatformInfo {
   signupUrl?: string
   /** Said instead of the registration steps when the platform has no registration page on the web. */
   signupNote?: string
+  /** The platform whose account this one signs in through (DEC-027): Threads signs in with Instagram. Such an account has no credentials of its own. */
+  signsInWith?: string
   /** Named platform served by the universal connector (DEC-013): what address to give, what a post holds, what to know. */
   hint?: string
   /** A typical address to type, shown as the placeholder; and the template that turns "@name" into an address (`{handle}`). */

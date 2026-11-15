@@ -2,11 +2,11 @@
 // Passwords are typed by the person on the site's own page; nothing here reads, requests or stores credentials.
 
 import { ApiError } from '../../shared/api'
-import type { Account, AccountRole, BrowserState, Channel, PageReport } from '../../shared/types'
+import type { Account, AccountRole, BrowserChoice, BrowserState, Channel, PageReport } from '../../shared/types'
 import { DEFAULT_CHANNEL_SETTINGS } from '../../shared/types'
 import type { Core } from '../core'
 import { TakeoverError, type BrowserService, type Connector, type ConnectorContext, type PageObserver } from '../ports'
-import { browserError, found, requireText } from './errors'
+import { BROWSER_BUSY, browserError, found, requireText } from './errors'
 import { parseEmail } from './mailboxes'
 import { loginOutcome } from './login'
 import { connectorForPlatform, listPlatforms } from './platforms'
@@ -19,6 +19,13 @@ import { parseBrowserUrl } from './urls'
 
 const MAX_LABEL = 80
 const ACCOUNT_CHANGED_DETAIL = 'The signed-in account changed; review before sending'
+
+/** The name of an account: text, spaces folded, not longer than the limit. */
+function parseLabel(value: unknown): string {
+  const label = requireText(value, 'The account name').replace(/\s+/g, ' ')
+  if (label.length > MAX_LABEL) throw new ApiError('invalid_input', `The account name is too long (limit ${MAX_LABEL} characters).`)
+  return label
+}
 
 /** Implemented by the Electron browser service: wipes the stored session (cookies, storage) of a removed account. */
 interface SessionForgetting {
@@ -76,12 +83,11 @@ export class AccountsService {
   }
 
   /** An account has its own login and browser session and is not tied to a product (DEC-015); `productId` only records what it was made for. */
-  create(args: { productId?: string; platform: string; label: string; role?: AccountRole | null; email?: string | null; mailboxId?: string | null; profileId?: string | null }): Account {
+  create(args: { productId?: string; platform: string; label: string; role?: AccountRole | null; email?: string | null; mailboxId?: string | null; profileId?: string | null; signsInVia?: string | null }): Account {
     const productId = args.productId === undefined || args.productId === null ? null : requireText(args.productId, 'The product')
     const product = productId ? found(() => this.core.repos.product(productId), 'The product') : null
     const platform = requireText(args.platform, 'The platform').toLowerCase()
-    const label = requireText(args.label, 'The account name').replace(/\s+/g, ' ')
-    if (label.length > MAX_LABEL) throw new ApiError('invalid_input', `The account name is too long (limit ${MAX_LABEL} characters).`)
+    const label = parseLabel(args.label)
     const known = listPlatforms(this.core.connectors).map((p) => p.platform)
     if (!known.includes(platform)) {
       throw new ApiError('invalid_input', `Unknown platform "${platform}". Available: ${known.join(', ') || 'none'}.`)
@@ -90,10 +96,89 @@ export class AccountsService {
     const email = args.email ? parseEmail(args.email) : null
     const mailboxId = email && args.mailboxId ? this.knownMailbox(args.mailboxId) : null
     const profileId = args.profileId ? this.profileFor(args.profileId, platform, null) : null
-    const account = this.store.insertAccount(product?.id ?? null, platform, label, role, email, mailboxId, profileId)
-    this.core.log.info('accounts', `Account created${product ? ` for "${product.name}"` : ''}: ${label} (${platform})${role ? `, role "${role.name}"` : ''}${email ? `, e-mail ${email}` : ''}. Sign in through the account browser.`)
+    const via = this.signInThrough(platform, args.signsInVia, profileId)
+    const account = this.store.insertAccount(product?.id ?? null, platform, label, role, email, mailboxId, profileId, via)
+    this.core.log.info('accounts', `Account created${product ? ` for "${product.name}"` : ''}: ${label} (${platform})${role ? `, role "${role.name}"` : ''}${email ? `, e-mail ${email}` : ''}${via ? `, signs in through ${this.account(via).label}` : ''}. Sign in through the account browser.`)
     this.core.events.changed('accounts', 'attention')
     return account
+  }
+
+  /**
+   * The account a login of this platform signs in through (DEC-027), checked: a platform that signs in with another (Threads with Instagram)
+   * is made only with an existing account of that platform, and any other platform takes none. Returns its id, or null.
+   */
+  private signInThrough(platform: string, viaId: string | null | undefined, profileId: string | null): string | null {
+    const preset = presetFor(platform)
+    const needs = preset?.signsInWith ?? null
+    if (!needs) {
+      if (viaId) throw new ApiError('invalid_input', `${preset?.label ?? platform} accounts have their own credentials; they do not sign in through another account.`)
+      return null
+    }
+    const wanted = presetFor(needs)?.label ?? needs
+    if (!viaId) throw new ApiError('needs_login_account', `${preset?.label ?? platform} signs in with a ${wanted} account. Add the ${wanted} account first, then add this one.`)
+    const via = found(() => this.core.repos.account(requireText(viaId, `The ${wanted} account`)), `The ${wanted} account`)
+    if (via.platform !== needs) throw new ApiError('invalid_input', `${preset?.label ?? platform} signs in with a ${wanted} account, but ${via.label} is on ${via.platform}.`)
+    if (profileId && via.profileId && via.profileId !== profileId) {
+      throw new ApiError('invalid_input', `${via.label} belongs to another profile. A login signs in through an account of its own profile.`)
+    }
+    return via.id
+  }
+
+  /** Changes the name of an account (the one the owner reads in lists and headers); the same rules as when it is made. */
+  rename(args: { accountId: string; label: string }): Account {
+    const account = this.account(args.accountId)
+    const label = parseLabel(args.label)
+    if (label === account.label) return account
+    const updated = this.store.renameAccount(account.id, label)
+    this.core.log.info('accounts', `Account ${account.label} renamed to ${label}.`)
+    this.core.events.changed('accounts', 'attention')
+    return updated
+  }
+
+  /** Changes the account this one signs in through (DEC-027). */
+  setSignInVia(args: { accountId: string; viaAccountId: string }): Account {
+    const account = this.account(args.accountId)
+    if (!presetFor(account.platform)?.signsInWith) throw new ApiError('invalid_input', `${account.label} has its own credentials; it does not sign in through another account.`)
+    const via = this.signInThrough(account.platform, args.viaAccountId, account.profileId)
+    if (via === account.signsInVia) return account
+    // A sign-in that is running has already taken the password of the account it was started with.
+    if (this.core.services.agent?.working(account.id)) throw new ApiError('agent_running', `The AI is working on ${account.label}. Change the account it signs in through when it is done.`)
+    const updated = this.store.setAccountVia(account.id, via)
+    this.core.log.info('accounts', `${account.label} now signs in through ${via ? this.account(via).label : 'no account'}.`)
+    this.core.events.changed('accounts', 'attention')
+    return updated
+  }
+
+  /**
+   * Chooses the browser an account works in (DEC-026). The session of the account stays in the browser it was made in, so the account is
+   * signed out here until it signs in again in the new one; the old browser's page and window are let go (Chrome is closed, its profile
+   * kept). Not while the AI works on the account or someone holds its browser, and not for Chrome when Chrome is not installed.
+   */
+  async setBrowser(args: { accountId: string; browser: BrowserChoice }): Promise<Account> {
+    const account = this.account(args.accountId)
+    if (args.browser !== 'internal' && args.browser !== 'chrome') throw new ApiError('invalid_input', 'The browser is Internal or Chrome.')
+    if (args.browser === account.browser) return account
+    if (args.browser === 'chrome' && this.core.browser.chromeFound?.() === false) {
+      throw new ApiError('chrome_missing', 'Google Chrome was not found on this Mac. Install it, or keep the internal browser.')
+    }
+    if (this.core.services.agent?.working(account.id)) throw new ApiError('agent_running', `The AI is working on ${account.label}. Change its browser when it is done.`)
+    if (this.core.browser.session(account).control().holder !== 'none' || hasOpenUserWindow(this.core.browser, account)) {
+      throw new ApiError('browser_busy', `${BROWSER_BUSY} The browser of an account is changed when nobody uses it.`)
+    }
+    // The new setting is stored first: from here every call routes to the new browser, so nothing can start a page in the one that is being let go of.
+    this.store.setAccountBrowser(account.id, args.browser)
+    // Nothing is known about the sign-in in the new browser until it is looked at there; the last identity is kept to notice another person.
+    const updated = this.store.setLogin(account.id, 'login_required', null)
+    try {
+      // `account` still carries the old setting, which is how the old browser is told apart from the new one.
+      await this.core.browser.releaseAccount?.(account)
+    } catch (error) {
+      // A page that would not close must not hold the owner's choice back; the old browser ends with the application.
+      this.core.log.warn('accounts', `The old browser of ${account.label} did not let go cleanly: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    this.core.log.info('accounts', `${account.label} now works in the ${args.browser === 'chrome' ? 'Chrome' : 'internal'} browser. Its sign-in has to be made there; the one in the other browser stays where it is.`)
+    this.core.events.changed('accounts', 'attention')
+    return updated
   }
 
   /** The profile a login may belong to: it exists, and has no other login on this platform (one login per platform for a profile). */
@@ -163,6 +248,10 @@ export class AccountsService {
 
   async remove(id: unknown): Promise<void> {
     const account = this.account(id)
+    const dependents = this.store.accountsSigningInVia(account.id)
+    if (dependents.length > 0) {
+      throw new ApiError('in_use', `${dependents.map((a) => a.label).join(', ')} ${dependents.length === 1 ? 'signs' : 'sign'} in through ${account.label}. Remove ${dependents.length === 1 ? 'that account' : 'those accounts'} first.`)
+    }
     const channels = this.store.channelsOfAccount(account.id)
     if (channels.length > 0) {
       const names = channels.map((c) => c.target).join(', ')
@@ -252,7 +341,7 @@ export class AccountsService {
   /** Who holds the account's browser and whether the person's window is open. */
   browserState(accountId: unknown): BrowserState {
     const account = this.account(accountId)
-    return { holder: this.core.browser.session(account).control().holder, windowOpen: hasOpenUserWindow(this.core.browser, account) }
+    return { holder: this.core.browser.session(account).control().holder, windowOpen: hasOpenUserWindow(this.core.browser, account), chromeFound: this.core.browser.chromeFound?.() ?? false }
   }
 
   /** What the page of the account shows and did, taken now because the owner asked (DEC-016). `null`: nothing is open. */

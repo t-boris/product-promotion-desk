@@ -19,6 +19,11 @@ export interface TaskValue {
   describe: string
   /** A password: never shown to the AI, never logged. */
   secret: boolean
+  /**
+   * The hosts this value may be typed on, when they are narrower than the mission's (DEC-027): the password of the Instagram account that
+   * Threads signs in through goes only on Instagram's own pages, never on Threads'. The step itself refuses on any other page.
+   */
+  hosts?: string[]
 }
 
 /** A file the application lets the AI put into a file input, by name. The AI never gives a path: only these files can leave this computer. */
@@ -496,17 +501,19 @@ export class BrowserToolbox implements McpToolHost {
   }
 
   /** Carries out one step on the page the caller already holds and reports what the page looks like afterwards. `verb` is the line for the owner. */
-  private async stepOn(page: BrowserPage, step: PageStep, verb: string, afterwards: boolean): Promise<McpToolResult> {
-    const outcome = await page.pageStep(step, this.deps.hosts)
-    if (outcome.status === 'wrong_host') return fail('The page is not on the platform, so nothing was done. Use browser_navigate to go back to it.')
+  private async stepOn(page: BrowserPage, step: PageStep, verb: string, afterwards: boolean, only?: string[]): Promise<McpToolResult> {
+    const outcome = await page.pageStep(step, only ?? this.deps.hosts)
+    if (outcome.status === 'wrong_host') {
+      return fail(only ? `This value is typed only on pages of ${only.join(', ')}, and the page is somewhere else, so nothing was typed. Go to that page first.` : 'The page is not on the platform, so nothing was done. Use browser_navigate to go back to it.')
+    }
     this.deps.say(outcome.status === 'done' ? verb : `${verb} (${outcome.detail})`)
     if (outcome.status !== 'done') return fail(`Nothing happened: ${outcome.detail}. The page may have changed; look again with browser_snapshot.`)
     return afterwards ? this.afterStep(page, `${verb}.`) : ok(`${verb}.`)
   }
 
   /** The same, in a stretch of control of its own (the missions that type, press keys and upload: they have no phases to guard). */
-  private async carryOut(step: PageStep, verb: string, afterwards: boolean): Promise<McpToolResult> {
-    return this.deps.withPage((page) => this.stepOn(page, step, verb, afterwards))
+  private async carryOut(step: PageStep, verb: string, afterwards: boolean, only?: string[]): Promise<McpToolResult> {
+    return this.deps.withPage((page) => this.stepOn(page, step, verb, afterwards, only))
   }
 
   private async click(reference: string): Promise<McpToolResult> {
@@ -536,6 +543,7 @@ export class BrowserToolbox implements McpToolHost {
     const whole = PLACEHOLDER_WHOLE.exec(value)
     let text = value
     let verb: string
+    let only: string[] | undefined
     if (whole) {
       const name = whole[1] as string
       const known = this.deps.values[name]
@@ -544,13 +552,14 @@ export class BrowserToolbox implements McpToolHost {
         return fail(element ? `{{${name}}} is a secret and goes only into a password field; ${reference} is not one.` : `Look at the page first (browser_snapshot): {{${name}}} goes only into a password field and ${reference} is not on the page you have seen.`)
       }
       text = known.value
+      only = known.hosts
       verb = `Typed ${known.secret ? 'the password' : name === 'EMAIL' ? 'the e-mail address' : `{{${name}}}`} into "${this.labelOf(reference)}"`
     } else if (HAS_PLACEHOLDER.test(value)) {
       return fail('A {{NAME}} must be the whole value; type it on its own.')
     } else {
       verb = `Typed "${oneLine(value, 60)}" into "${this.labelOf(reference)}"`
     }
-    const result = await this.carryOut({ do: 'type', ref: reference, text }, verb, false)
+    const result = await this.carryOut({ do: 'type', ref: reference, text }, verb, false, only)
     if (result.isError) return result
     if (!whole) this.deps.note(this.labelOf(reference), value)
     if (!submit) return result

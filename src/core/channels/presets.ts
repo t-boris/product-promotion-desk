@@ -13,6 +13,8 @@ export interface PlatformPreset {
   signupUrl: string
   /** Said instead of the registration steps when there is no registration page: where the account is made. */
   signupNote?: string
+  /** The platform whose account this one signs in through (DEC-027): an account is made only with such an account to sign in through, and has no credentials of its own. */
+  signsInWith?: string
   /** Domains of the platform; an address on any other domain does not belong to it. */
   hosts: string[]
   /** Address of a page from a handle, `{handle}` replaced: "@brand" becomes https://www.instagram.com/brand/. */
@@ -116,6 +118,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     loginUrl: 'https://www.threads.net/login',
     signupUrl: '',
     signupNote: 'Threads has no sign-up of its own: it uses an Instagram account. Add an Instagram account first, then sign in to Threads with it.',
+    signsInWith: 'instagram',
     hosts: ['threads.net', 'threads.com'],
     handleUrl: 'https://www.threads.net/@{handle}',
     example: '@yourbrand',

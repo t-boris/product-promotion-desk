@@ -17,8 +17,29 @@ import { PageReportView } from './PageReportView'
  * Only one button of this step is ever filled, and only while sign-in is the account's next step (`next`): the saved password when there is
  * one, else the account's browser (also to solve a CAPTCHA). "Let the AI create the account" is a helper and is never filled.
  */
-export function AccountSignIn({ account, info, vaultAvailable, hasPassword, next }: { account: Account; info: PlatformInfo | undefined; vaultAvailable: boolean; hasPassword: boolean; next: NextStep['block'] }) {
+export function AccountSignIn({
+  account,
+  info,
+  step,
+  through,
+  vaultAvailable,
+  hasPassword,
+  next
+}: {
+  account: Account
+  info: PlatformInfo | undefined
+  /** The number of this step: 5, or 4 for a login that has no e-mail and no password block. */
+  step: number
+  /** Set for a login that signs in through another account (DEC-027): the name of that platform and the account (null while none is chosen). */
+  through?: { label: string; account: Account | null }
+  vaultAvailable: boolean
+  hasPassword: boolean
+  next: NextStep['block']
+}) {
   const main = useMainVariant()
+  // A login with no credentials of its own signs in through another account: the AI does it (kind 'signin'); there is no password to sign in with and no registration.
+  const linked = through !== undefined
+  const kind = linked ? 'signin' : 'signup'
   const [signedIn, setSignedIn] = useState<SignInResult | null>(null)
   const [pageReport, setPageReport] = useState<{ report: PageReport | null } | null>(null)
   const [open, opening] = useAction(() => call('accounts.openBrowser', { accountId: account.id }))
@@ -29,10 +50,10 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword, next
   })
   const [signUp, signingUp] = useAction(() => call('accounts.openBrowser', { accountId: account.id, url: info?.signupUrl }))
   const agent = useQuery('agent.state', { accountId: account.id }, ['accounts'])
-  const canStart = useQuery('agent.canStart', { accountId: account.id, kind: 'signup' }, ['accounts', 'settings'])
+  const canStart = useQuery('agent.canStart', { accountId: account.id, kind }, ['accounts', 'settings'])
   const [startAgent, startingAgent] = useAction(async () => {
     setPageReport(null)
-    await call('agent.start', { accountId: account.id, kind: 'signup' })
+    await call('agent.start', { accountId: account.id, kind })
   })
   const [stopAgent, stoppingAgent] = useAction(() => call('agent.stop', { accountId: account.id }))
   const [copyPassword, copying] = useAction(() => call('vault.copyPassword', { accountId: account.id }))
@@ -53,8 +74,10 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword, next
 
   // The saved password signs in by itself; a CAPTCHA, or no saved password, needs the account's own browser.
   const signInNext = next === 'signin'
-  const passwordNext = signInNext && hasPassword && account.status !== 'captcha'
-  const browserNext = signInNext && !passwordNext
+  const passwordNext = !linked && signInNext && hasPassword && account.status !== 'captcha'
+  // A login that signs in through another account: the AI is the step while it can start; otherwise the account's own browser.
+  const aiNext = linked && signInNext && agentReady && account.status !== 'captcha'
+  const browserNext = signInNext && !passwordNext && !aiNext
   // While the owner holds the browser the one thing to do is in that window; it is the main action unless an earlier step is still open.
   const holding = next === 'signin' || next === null
 
@@ -69,7 +92,7 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword, next
   )
 
   return (
-    <AccountBlock step={5} title="Sign-in" summary={summary} testId={`signin-${account.id}`}>
+    <AccountBlock step={step} title="Sign-in" summary={summary} testId={`signin-${account.id}`}>
       {yours ? (
         <>
           <div className="note warn" role="status" data-testid={`browser-state-${account.id}`}>
@@ -96,7 +119,12 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword, next
         </>
       ) : (
         <div className="row">
-          {hasPassword && (
+          {linked && !ready && (
+            <Button variant={aiNext ? main : 'secondary'} onClick={() => void startAgent()} disabled={!agentReady || startingAgent.busy || agentWorking} data-testid={`agent-start-${account.id}`}>
+              {startingAgent.busy ? 'Starting…' : `Let the AI sign in with ${through.label}`}
+            </Button>
+          )}
+          {!linked && hasPassword && (
             <Button variant={passwordNext ? main : 'ghost'} onClick={() => void signIn()} disabled={signingIn.busy || agentWorking} data-testid={`password-signin-${account.id}`}>
               {signingIn.busy ? 'Signing in…' : 'Sign in with saved password'}
             </Button>
@@ -107,27 +135,32 @@ export function AccountSignIn({ account, info, vaultAvailable, hasPassword, next
           <Button onClick={() => void check()} disabled={checking.busy || agentWorking} data-testid={`account-check-${account.id}`}>
             {checking.busy ? 'Checking…' : 'Check sign-in'}
           </Button>
-          {info?.signupUrl && !ready && (
+          {!linked && info?.signupUrl && !ready && (
             <Button variant="secondary" onClick={() => void startAgent()} disabled={!agentReady || startingAgent.busy || agentWorking} data-testid={`agent-start-${account.id}`}>
               {startingAgent.busy ? 'Starting…' : 'Let the AI create the account'}
             </Button>
           )}
-          {info?.signupUrl && !ready && (
+          {!linked && info?.signupUrl && !ready && (
             <Button onClick={() => void signUp()} disabled={signingUp.busy || agentWorking} data-testid={`signup-open-${account.id}`}>
               {signingUp.busy ? 'Opening…' : `Create account on ${info.label} myself`}
             </Button>
           )}
         </div>
       )}
-      {!yours && info?.signupUrl && !ready && agentWhy && (
+      {!yours && (linked || info?.signupUrl) && !ready && agentWhy && (
         <div className="note warn" role="status" data-testid={`agent-missing-${account.id}`}>
           <strong>The AI cannot start yet.</strong> {agentWhy}
         </div>
       )}
       <ErrorNote error={startingAgent.error ?? stoppingAgent.error} />
-      {agentRun?.kind === 'signup' && <AgentRunPanel run={agentRun} onStop={() => void stopAgent()} stopping={stoppingAgent.busy} testId={`agent-run-${account.id}`} />}
+      {agentRun?.kind === kind && <AgentRunPanel run={agentRun} onStop={() => void stopAgent()} stopping={stoppingAgent.busy} testId={`agent-run-${account.id}`} />}
       <p className="muted small">A CAPTCHA, a code or any other check on the site is always yours: the app stops and tells you.</p>
-      {!ready && info && (info.signupUrl || info.signupNote) && (
+      {linked && (
+        <p className="muted small" data-testid={`signin-through-note-${account.id}`}>
+          {info?.label ?? 'This platform'} has no password of its own. The AI signs in through {through.account ? <strong>{through.account.label}</strong> : `the ${through.label} account`} with its saved login; you are never asked for a {info?.label ?? 'platform'} password.
+        </p>
+      )}
+      {!linked && !ready && info && (info.signupUrl || info.signupNote) && (
         <div className="stack well" data-testid={`signup-help-${account.id}`}>
           <strong className="small">No account on {info.label} yet?</strong>
           {info.signupUrl ? (

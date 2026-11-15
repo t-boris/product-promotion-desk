@@ -284,6 +284,21 @@ export function prepareTypingScript(ref: string): string {
 })()`
 }
 
+/**
+ * Asked right before text is typed, after the window was given focus: the cursor is in the element the step named, and the page is still one of
+ * `hosts`. Both are decided in the page in one pass, so the text cannot land in another field (a CAPTCHA frame, a field the page moved the focus
+ * to) or on another site between the earlier checks and the keystrokes. Fails closed: anything unexpected refuses.
+ */
+export function typingGuardScript(ref: string, hosts: string[]): string {
+  return `(() => {${FIND_REF(ref)}
+  const host = location.hostname.toLowerCase();
+  if (!${JSON.stringify(hosts)}.some((domain) => host === domain || host.endsWith('.' + domain))) return { ok: false, reason: 'wrong_host', host };
+  let focused = document.activeElement;
+  while (focused && focused.shadowRoot && focused.shadowRoot.activeElement) focused = focused.shadowRoot.activeElement;
+  return focused === el ? { ok: true } : { ok: false, reason: 'not_focused' };
+})()`
+}
+
 /** Whether the field now holds exactly the text (checked in the page, so the text is never sent back). */
 export function typedScript(ref: string, text: string): string {
   return `(() => {${FIND_REF(ref)}

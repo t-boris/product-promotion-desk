@@ -237,6 +237,16 @@ export class FakeBrowserService implements BrowserService {
     return session
   }
 
+  /** Whether Google Chrome counts as installed (tests set it), and the accounts that were let go of for the other browser. */
+  chromeInstalled = true
+  readonly released: string[] = []
+  chromeFound(): boolean {
+    return this.chromeInstalled
+  }
+  async releaseAccount(account: Account): Promise<void> {
+    this.released.push(account.id)
+  }
+
   /** Accounts whose window for the person is open, and how many times each was brought to the front. */
   readonly windows = new Set<string>()
   readonly shown: string[] = []

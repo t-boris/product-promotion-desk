@@ -383,7 +383,7 @@ Texts are the current ones and do not change.
 |---|---|---|---|
 | Tabs Accounts / Profiles / Mailboxes | Segmented control under the page header | — | — |
 | No accounts / New account (`CreateAccount`) | Group-box form | "Add account" in the form (the header "Add account" is bezel) | the form itself |
-| List + detail (`AccountDetail`) | List + detail; detail = object header, "Next:" note, numbered step group boxes 1 Role, 2 Profile, 3 E-mail, 4 Password, 5 Sign-in (the number sits in a 24 px column, `--step-gutter`; everything below a step's head, in every step, is indented to start under its title), "More" disclosure | the next step only (from `next-step.ts`); other step buttons bezel | — |
+| List + detail (`AccountDetail`) | List + detail; detail = object header, "Next:" note, numbered step group boxes 1 Role, 2 Profile, 3 E-mail, 4 Password, [Browser: an unnumbered setting, §20], 5 Sign-in (a login that signs in through another account has 3 Signs in with and 4 Sign-in, §20) (the number sits in a 24 px column, `--step-gutter`; everything below a step's head, in every step, is indented to start under its title), "More" disclosure | the next step only (from `next-step.ts`); other step buttons bezel | — |
 | Profiles (`ProfilesPanel`, `ProfileDetail`, `ProfileAccounts`) | List + detail; "New profile" above the list as a bezel button with a plus glyph; platform toggles as a toggle group (pressed = tint, not filled) | "Make the profile" / "Propose a profile" / "Approve" / "Make an account" — one at a time by stage | no profile: the new-profile form opens by itself (as today); "Select a profile" when none is picked |
 | Mailboxes (`MailboxesCard`) | Group box with rows + add field | "Add mailbox" | today a sentence only; target: the sentence and the add field as the next step |
 
@@ -732,3 +732,42 @@ and puts the focus in the text of the card. The buttons are disabled while the c
 | Id | Requirement | Method | Pass |
 |---|---|---|---|
 | V-31 | The owner's text is read before it is approved; with findings nothing is approved or saved and the panel names each rule, the words and why; a blocking finding offers no "Approve anyway"; the panel goes when the text changes | `draft-check.test.ts`, `safety.test.ts`, `renderer-assist.test.ts` (each mutation-checked), and the packaged probe on an own instance (43 checks: clean text, AI draft left alone, three advice findings, the blocking connection line, both buttons, typing, Edit the text, light/dark at 1320x880 and 980x640) | as described; V-06, V-09 hold (one filled button per screen, no cut buttons) |
+
+## 20. The browser of an account, rename, and a login that signs in through another (0.13.0)
+
+Three things on the account screen, none of them a new screen: the name of an account can be changed, the account says which browser it works in, and a platform that signs
+in with another one (Threads with Instagram) has no e-mail and no password of its own.
+
+**Rename** (`AccountHeader`). The header of an account (`ObjectHeader`) has a bezel "Rename" button on the right. It opens one field under the header (`.pick-row`: the field, "Save name", "Cancel"),
+filled with the current name and selected. Enter or "Save name" saves, Escape or "Cancel" closes. "Save name" is disabled while the name is empty, unchanged or longer than 80 characters
+(`renameProblem`), the field takes no more than 80, and the core folds the spaces (`accounts.rename`). While the form is open it owns the filled button of the screen. Renaming changes
+nothing on any platform: it is the owner's own label for the login (the list, the header, the channel pickers).
+
+**Browser** (`AccountBrowser`, DEC-026). An unnumbered group box between the steps and the sign-in: it is a setting of the account, not a step. A radio group in the segmented track
+(`SegmentedControl`, now with a `disabled` for the whole group and for one option): "Internal" (the default) and "Google Chrome". A line under the title says what is chosen. The choice is off
+with a reason beside it (a `Hint`) while the AI works on the account or its browser is in use (its window is open, or the owner took control); "Google Chrome" is off with "Google Chrome was
+not found on this Mac." when Chrome is not installed (there is no fallback to the other browser). An off segment has the quiet label and no hover; the selected one keeps its thumb. A note
+under the control says the sign-in is kept in the browser it was made in, so after a switch the account signs in again in the other one. The control only chooses: a switch signs the
+account out and closes its Chrome, so it is applied by a bezel button beside the control ("Use Google Chrome" / "Use Internal"), which appears only while the choice differs from the
+account's browser; an arrow key between the segments never changes anything by itself. The reason beside an off group is tied to it (`aria-describedby`).
+
+**Signs in with** (`AccountViaLine`, DEC-027). For a platform with `signsInWith` the e-mail and the password blocks are not shown; step 3 is "Signs in with Instagram": the chosen account
+(platform badge, name, status), "Open account" (it goes to that account on the same screen) and a pick-row with the accounts it may use and "Use this account". The sign-in is step 4. In the
+sign-in block the password button and the create-account buttons are gone; "Let the AI sign in with Instagram" starts the `signin` mission, and the browser buttons stay. The create form asks for
+the account ("Signs in with Instagram", required, one candidate is preselected) instead of the e-mail and the mailbox; with no Instagram account the form says so first ("Add the Instagram
+account first") and Add account stays off.
+
+The one filled button is the button of the step the "Next:" note names, as in §10.3. When the account it signs in through is not ready (no login or no saved password), the note names that
+account and its "Open account" button is the filled one; the sign-in of the linked account is not.
+
+| Pattern | Markup | Rules |
+|---|---|---|
+| Rename | `AccountHeader`: "Rename" in the header actions; `form.pick-row` with one `.input`, "Save name" and "Cancel" | One field, no dialog. Enter saves, Escape closes. Disabled save for an empty, unchanged or over-long name. The open form owns the filled button. |
+| Browser setting | `AccountBrowser`: an unnumbered `AccountBlock` (`.step-num.blank` keeps the column), `SegmentedControl` with `disabled` and `describedBy`, a bezel "Use …" button while the pick differs, a `Hint` for the reason, a `muted small` note | A setting, not a step: no number, never the filled button. Choosing and applying are two acts. Off with a reason, never silently. |
+| Signs in with | `AccountViaLine`: `AccountBlock` step 3 with the badge and name, "Open account", `.pick-row` of a `select.input` and "Use this account" | Replaces e-mail and password for that platform. "Open account" is filled when the account it signs in through is the next thing to do. |
+| Sign-in through | `AccountSignIn` with `through`: "Let the AI sign in with Instagram", the browser buttons, a `muted small` note that the platform has no password of its own | No password button, no create-account buttons. The owner is never asked for a Threads credential. |
+
+| Id | Requirement | Method | Pass |
+|---|---|---|---|
+| V-32 | Rename, the Browser block and the linked-login screens follow the shared rules: controls at least 28 px, one filled button, nothing cut or overflowing, in light and dark | the packaged probe on an own instance (`MEASURE` and `LOOK` on the account of an ordinary platform, of a linked platform, the rename form open, the Browser block with Chrome chosen, the arrow key that only chooses, the apply button, the create form for Threads with and without an Instagram account): 47 checks | every check passes in both themes |
+| V-33 | The browser choice and the link are real: the choice is saved and refused while the browser is in use, Chrome runs on a profile of the account's own and is let go of at a switch, the session survives a switch back and forth, Threads cannot be made or removed out of order | the mechanics probe on an own instance with the installed Chrome and a local page (26 checks, nothing off 127.0.0.1, no process left); `account-browser.test.ts`, `sign-in-through.test.ts`, `routing-browser-service.test.ts` (mutation-checked) | every check passes |

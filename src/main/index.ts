@@ -4,7 +4,10 @@ import { BrowserWindow, Menu, app, clipboard, ipcMain, powerMonitor, safeStorage
 import { ApiError, IPC_EVENT, IPC_INVOKE, type ApiEvent, type ApiMethod } from '../shared/api'
 import { APP_NAME } from '../shared/app-name'
 import { createEngines } from '../ai'
+import { ChromeBrowserService } from '../browser/chrome-browser-service'
+import { findChrome } from '../browser/chrome-launcher'
 import { ElectronBrowserService } from '../browser/electron-browser-service'
+import { RoutingBrowserService } from '../browser/routing-browser-service'
 import { createConnectors } from '../connectors'
 import { createCore } from '../core/core'
 import { getAutomation, startAutomation } from '../core/pipeline'
@@ -57,7 +60,13 @@ async function start(): Promise<void> {
     dataDir,
     appVersion: app.getVersion(),
     engines: createEngines(),
-    browser: (tickets) => new ElectronBrowserService(tickets, { diagnosticsDir: join(dataDir, 'diagnostics') }),
+    // Facebook accounts work in the owner's installed Chrome, every other platform in the built-in browser (DEC-025).
+    browser: (tickets) =>
+      new RoutingBrowserService(
+        new ElectronBrowserService(tickets, { diagnosticsDir: join(dataDir, 'diagnostics') }),
+        new ChromeBrowserService(tickets, { dataDir, diagnosticsDir: join(dataDir, 'diagnostics') }),
+        { chromeFound: () => findChrome() !== null }
+      ),
     connectors: createConnectors(),
     agentBridge: gateway,
     imageShrinker: new ElectronImageShrinker(),

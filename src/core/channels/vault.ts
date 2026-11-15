@@ -60,6 +60,8 @@ export class VaultService {
 
   async savePassword(args: { accountId: string; loginName: string; password: string }): Promise<Account> {
     const account = this.accounts.account(args.accountId)
+    // An account that signs in through another has no credentials of its own to keep (DEC-027).
+    if (account.signsInVia) throw new ApiError('signs_in_through_another', `${account.label} signs in through ${this.accounts.account(account.signsInVia).label}: it has no password of its own to save.`)
     const loginName = requireText(args.loginName, 'The login name')
     if (loginName.length > MAX_LOGIN_NAME) throw new ApiError('invalid_input', `The login name is too long (limit ${MAX_LOGIN_NAME} characters).`)
     const password = typeof args.password === 'string' ? args.password : ''

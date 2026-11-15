@@ -1,6 +1,7 @@
 import type { Account, Channel, PlatformInfo } from '../../../../shared/types'
 import { accountsNewHref } from '../../route'
 import { Button, Card, Hint, More, useMainVariant } from '../../ui'
+import { contactLine } from './account-link'
 import { AccountStatusLine } from './AccountStatus'
 import { platformLabel } from './model'
 
@@ -65,7 +66,7 @@ export function AccountsCard({
               </div>
               <div className="hint">
                 {account.role ? `Role: ${account.role.name} · ` : ''}
-                {account.email ?? 'no e-mail address yet'} · {used} channel{used === 1 ? '' : 's'} of this product
+                {contactLine(account, platforms.find((p) => p.platform === account.platform)?.signsInWith !== undefined)} · {used} channel{used === 1 ? '' : 's'} of this product
               </div>
             </div>
           )

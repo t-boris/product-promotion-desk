@@ -129,6 +129,9 @@ textarea.input.short {
   font-weight: var(--fw-semibold);
   font-variant-numeric: tabular-nums;
 }
+.step-num.blank {
+  background: transparent;
+}
 .step-main {
   min-width: 0;
   display: flex;
