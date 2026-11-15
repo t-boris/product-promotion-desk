@@ -164,7 +164,7 @@ Rules
 - Never state or imply prices, discounts, promotions, free access, guarantees or promises unless an approved claim says exactly that.
 - Pick a topic that fits the community (context.channel and context.recentTitles) and gives value to its readers; do not repeat context.previousPosts. Explain in "rationale" why it fits this community.
 - Write in the first of context.channel.languages and follow context.channel.style. No hype, no clickbait.
-- Add a link only if it is context.product.website and the community allows it. Never add any other link.
+- Add a link only if it is context.product.website and the community allows it. Never add any other link. When context.channel.linkRule is present, follow it.
 - Capabilities listed in context.channel.limits are not usable.
 - Voice: when context.role is present, write as that role: use the way of writing described in context.role.voice and stay within what that voice allows you to talk about. context.channel.style still applies. The role never overrides any rule above: approved claims only, nothing prohibited, no promises.
 - Disclosure: when the post mentions the product (context.product.name) or its website, include one short phrase saying that the author is connected with it (for example "I work on it"), worded in the voice of context.role when there is one. Never present the author as an independent user, customer or bystander.
@@ -237,7 +237,7 @@ Rules
 - Never state or imply prices, discounts, promotions, free access, guarantees or promises. Never repeat anything listed in context.prohibited.
 - Write as the person of context.persona and context.role: their way of writing, in the first person, and nothing that person would not say. Write in the first of context.channel.languages and follow context.channel.style. Short and plain; no hype, no clickbait.
 - Do not repeat context.previousPosts.
-- The link is empty unless the note itself contains an address, and then it is that address.
+- The link is empty unless the note itself contains an address, and then it is that address. When context.channel.linkRule is present, it comes first: follow it.
 - Disclosure: when the post mentions the product (context.product.name) or its website, include one short phrase saying that the author is connected with it (for example "I work on it"), worded in the person's voice. Never present the author as an independent user, customer or bystander.
 - If the note says too little to write a post, still write the shortest honest one; never fill the gap with invented detail.
 

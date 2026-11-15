@@ -155,7 +155,8 @@ export async function exercisePictures(service: Pick<BrowserService, 'session'>,
   const folder = mkdtempSync(join(tmpdir(), 'ppd-post-picture-'))
   try {
     const files = makePictures(folder)
-    const caption = 'A caption the owner approved,\nwith a second line.'
+    // The caption as the application hands it over when the draft had a link and the platform no field for it (DEC-036): the link is the last paragraph.
+    const caption = 'A caption the owner approved,\nwith a second line.\n\nhttps://example.test/product'
     const content: ApprovedContent = { kind: 'post', title: null, text: caption, link: null, destination: `${base}/brand/`, attachments: files }
     const authority = new TestAuthority(tickets, content, account.id)
     const reports: string[] = []

@@ -114,7 +114,10 @@ export class SendGate {
       if (unfit.length > 0) return block('review', 'post_does_not_fit', ...unfit)
     } else {
       // An older draft is judged by its connector, as before; but a channel with no connector has no other way than the AI browser, and why that
-      // cannot carry this send (the engine, a send nobody presses) is told here, not as the connector's "no site profile".
+      // cannot carry this send (the engine, a send nobody presses) is told here, not as the connector's "no site profile". And a link added to the
+      // end of the text (a platform with no link field, DEC-036) may have taken it over the limit, which the approval said as well.
+      const overLimit = renderForPlatform(draft, platform).problems
+      if (overLimit.length > 0) return block('review', 'post_does_not_fit', ...overLimit)
       const stopped = noConnectorProblem(ways)
       if (stopped) return block('review', 'post_does_not_fit', stopped)
     }
@@ -132,7 +135,7 @@ export class SendGate {
     const draftNow = now.draft as Draft
     const approval = this.core.repos.activeApproval(draftNow.id) as Approval
     const destination = this.store.resolveDestination(opp, channel)
-    const hash = contentHash(draftNow, account, destination)
+    const hash = contentHash(draftNow, account, destination, channel.platform)
     const actionId = newId()
     const ticket = this.core.tickets.issue({ actionId, contentHash: hash, accountId: account.id, destination })
     return {
@@ -180,7 +183,7 @@ export class SendGate {
     const draft = now.draft as Draft
     const approval = this.core.repos.activeApproval(draft.id)
     const destination = this.store.resolveDestination(opp, channel)
-    const hash = contentHash(draft, account, destination)
+    const hash = contentHash(draft, account, destination, channel.platform)
     // The approval, the draft and every bound value must be exactly the ones this attempt was authorized with.
     if (!approval || approval.id !== grant.approval.id || draft.id !== grant.draft.id || hash !== grant.contentHash || account.id !== grant.account.id || destination !== grant.request.destination) {
       return block('review', 'approval_stale', 'The approval, the content, the account or the destination is no longer the one this send was authorized for.')
@@ -218,11 +221,11 @@ export class SendGate {
 
     // The approval covers the exact content, account and destination; recompute all of it from the current records.
     const destination = this.store.resolveDestination(opp, channel)
-    const hash = contentHash(draft, account, destination)
+    const hash = contentHash(draft, account, destination, channel.platform)
     if (approval.contentHash !== hash || approval.accountId !== account.id || approval.destination !== destination) {
       // Say WHY when the only difference is who is signed in: the owner approved a reply for another login.
       const approvedIdentity = this.store.approvalIdentity(approval.id)
-      const sameAsApproved = approval.accountId === account.id && approval.destination === destination && approval.contentHash === contentHash(draft, { id: account.id, identity: approvedIdentity }, destination)
+      const sameAsApproved = approval.accountId === account.id && approval.destination === destination && approval.contentHash === contentHash(draft, { id: account.id, identity: approvedIdentity }, destination, channel.platform)
       if (sameAsApproved && hashedIdentity(approvedIdentity) !== hashedIdentity(account.identity)) {
         return block('review', 'identity_changed', 'Approval no longer applies: the signed-in identity changed; approve again.')
       }

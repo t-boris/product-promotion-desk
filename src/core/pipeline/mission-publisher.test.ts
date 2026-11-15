@@ -126,7 +126,7 @@ describe('a mission that goes right', () => {
       const result = await press(request, {
         during: (ticket) => {
           held = ticket
-          world.core.tickets.assertValid(ticket, { accountId: world.account.id, destination, contentHash: contentHash(draft, world.account, destination) })
+          world.core.tickets.assertValid(ticket, { accountId: world.account.id, destination, contentHash: contentHash(draft, world.account, destination, 'fake') })
         }
       })
       expect(result.ok).toBe(true)
@@ -375,7 +375,7 @@ describe('a post written in the post editor goes through the AI browser as the p
     useMissions(async (request) => {
       const result = await press(request, {
         during: (ticket) => {
-          world.core.tickets.assertValid(ticket, { accountId: world.account.id, destination: request.authority.content.destination, contentHash: contentHash(draft, world.account, request.authority.content.destination) })
+          world.core.tickets.assertValid(ticket, { accountId: world.account.id, destination: request.authority.content.destination, contentHash: contentHash(draft, world.account, request.authority.content.destination, 'fake') })
         }
       })
       expect(result).toMatchObject({ ok: true })

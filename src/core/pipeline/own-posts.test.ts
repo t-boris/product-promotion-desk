@@ -8,6 +8,7 @@ import { toJson } from '../db/database'
 import type { PostMissionOutcome, PostMissionRequest, PostMissionService } from '../browser-agent/post-submit'
 import { AI_BROWSER_BASIS } from './mission-publisher'
 import { FakeMetricsService } from './scheduler-fakes'
+import { contentHash } from './hash'
 import { sendWays } from './send-ways'
 import { closeWorld, makeWorld, type World } from './test-fixture'
 
@@ -248,9 +249,126 @@ describe('its own posts', () => {
     const media = (await (world.core.router.call as (m: string, a: unknown) => Promise<{ id: string; name: string; path: string }>)('media.add', { productId: world.product.id, name: 'p.png', base64: Buffer.concat([header, Buffer.from('p')]).toString('base64'), origin: 'pasted' }))
     const { opportunity } = await world.core.router.call('publications.create', {
       channelId: world.channel.id,
-      draft: { text: 'A caption. I work on this product.', markup: 'markdown', attachments: [{ name: media.name, path: media.path, mime: '', sha256: '', mediaId: media.id }] }
+      draft: { text: 'A caption. I work on it.', markup: 'markdown', attachments: [{ name: media.name, path: media.path, mime: '', sha256: '', mediaId: media.id }] }
     })
     await expect(world.core.router.call('opportunities.approve', { id: opportunity.id })).resolves.toBeDefined()
+  })
+
+  describe('with a link in the draft (DEC-036): the form of the platform has no field for it, and the AI is not asked to fill one', () => {
+    const LINK = 'https://natalmystic.com'
+    const sendWithLink = async (platform: string, markup: 'markdown' | 'legacy') => {
+      world = ownPostsWorld({ status: 'active' })
+      world.core.db.prepare('UPDATE channels SET platform = ? WHERE id = ?').run(platform, world.channel.id)
+      const missions = new ScriptedMissions(async (request) => {
+        await request.authority.lease(async (lease) => {
+          lease.commit()
+          return lease.ticket
+        })
+      })
+      world.core.services.postMissions = missions
+      const header = Buffer.alloc(24)
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(header)
+      const media = (await (world.core.router.call as (m: string, a: unknown) => Promise<{ id: string; name: string; path: string }>)('media.add', { productId: world.product.id, name: 'p.png', base64: Buffer.concat([header, Buffer.from('p')]).toString('base64'), origin: 'picked' }))
+      const { opportunity } = await world.core.router.call('publications.create', {
+        channelId: world.channel.id,
+        draft: { title: 'A title', text: 'A caption. I work on it.', link: LINK, markup, attachments: [{ name: media.name, path: media.path, mime: '', sha256: '', mediaId: media.id }] }
+      })
+      // Approve says nothing against it (the preview of the platform says what became of the link: see post-format.test.ts).
+      await expect(world.core.router.call('opportunities.approve', { id: opportunity.id })).resolves.toBeDefined()
+      await world.sending.send(opportunity.id)
+      return missions.requests[0]!.authority.content
+    }
+
+    it.each(['markdown', 'legacy'] as const)('Instagram, a %s draft: the mission is given the caption and no link, so it has no field to look for (the screenshot case)', async (markup) => {
+      const content = await sendWithLink('instagram', markup)
+      expect(content.link).toBeNull()
+      expect(content.text).toBe('A caption. I work on it.')
+      expect(content.attachments).toHaveLength(1)
+    })
+
+    it('does not send what was approved before the rule: an approval of a draft with a link given under the old hash is approved again (DEC-036)', async () => {
+      world = ownPostsWorld({ status: 'active' })
+      world.core.db.prepare('UPDATE channels SET platform = ? WHERE id = ?').run('instagram', world.channel.id)
+      const missions = new ScriptedMissions(async () => undefined)
+      world.core.services.postMissions = missions
+      const header = Buffer.alloc(24)
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(header)
+      const media = (await (world.core.router.call as (m: string, a: unknown) => Promise<{ id: string; name: string; path: string }>)('media.add', { productId: world.product.id, name: 'p.png', base64: Buffer.concat([header, Buffer.from('p')]).toString('base64'), origin: 'picked' }))
+      const { opportunity } = await world.core.router.call('publications.create', {
+        channelId: world.channel.id,
+        draft: { text: 'A caption. I work on it.', link: LINK, markup: 'legacy', attachments: [{ name: media.name, path: media.path, mime: '', sha256: '', mediaId: media.id }] }
+      })
+      await world.core.router.call('opportunities.approve', { id: opportunity.id })
+      // what the approval was before the rule existed: the hash of the draft without where its link goes
+      const draft = world.core.repos.latestDraft(opportunity.id)!
+      const account = world.core.repos.account(world.channel.accountId)
+      const approval = world.core.repos.activeApproval(draft.id)!
+      const before = contentHash(draft, account, approval.destination, 'reddit')
+      expect(before).not.toBe(approval.contentHash)
+      world.core.db.prepare('UPDATE approvals SET content_hash = ? WHERE id = ?').run(before, approval.id)
+      await expect(world.sending.send(opportunity.id)).rejects.toMatchObject({ block: { code: 'approval_stale', effect: 'review' } })
+      expect(missions.requests).toHaveLength(0)
+      // approved again, it goes
+      await world.core.router.call('opportunities.approve', { id: opportunity.id })
+      await world.sending.send(opportunity.id)
+      expect(missions.requests).toHaveLength(1)
+    })
+
+    it('still says that the signed-in identity changed, and not that the content did, for a draft whose link is placed in the text', async () => {
+      world = ownPostsWorld({ status: 'active' })
+      world.core.db.prepare('UPDATE channels SET platform = ? WHERE id = ?').run('facebook', world.channel.id)
+      world.core.db.prepare('UPDATE accounts SET identity = ? WHERE id = ?').run('brand_account', world.account.id)
+      world.core.services.postMissions = new ScriptedMissions(async () => undefined)
+      const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { text: 'A caption. I work on it.', link: LINK, markup: 'legacy' } })
+      await world.core.router.call('opportunities.approve', { id: opportunity.id })
+      world.core.db.prepare('UPDATE accounts SET identity = ? WHERE id = ?').run('someone_else', world.account.id)
+      await expect(world.sending.send(opportunity.id)).rejects.toMatchObject({ block: { code: 'identity_changed', effect: 'review' } })
+    })
+
+    it('refuses an older draft that the link added to the end of the text took over the limit, at the approval and at the send (it did not count while the link was a part of its own)', async () => {
+      world = ownPostsWorld({ status: 'active' })
+      world.core.db.prepare('UPDATE channels SET platform = ? WHERE id = ?').run('threads', world.channel.id)
+      const missions = new ScriptedMissions(async () => undefined)
+      world.core.services.postMissions = missions
+      const text = `I work on it. ${'x'.repeat(466)}`
+      const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { text, link: LINK, markup: 'legacy' } })
+      await expect(world.core.router.call('opportunities.approve', { id: opportunity.id })).rejects.toMatchObject({ code: 'post_does_not_fit', message: expect.stringMatching(/505 characters; Threads allows 500/) })
+      // the owner shortens the link away; approved, then the text grows by an edit that bypasses the approval (the gate asks again at the send)
+      await world.core.router.call('opportunities.saveDraft', { id: opportunity.id, draft: { text, link: null, markup: 'legacy' } })
+      await world.core.router.call('opportunities.approve', { id: opportunity.id })
+      const draft = world.core.repos.latestDraft(opportunity.id)!
+      world.core.db.prepare('UPDATE drafts SET link = ? WHERE id = ?').run(LINK, draft.id)
+      const account = world.core.repos.account(world.channel.accountId)
+      const approval = world.core.repos.activeApproval(draft.id)!
+      world.core.db.prepare('UPDATE approvals SET content_hash = ? WHERE id = ?').run(contentHash(world.core.repos.draft(draft.id), account, approval.destination, 'threads'), approval.id)
+      await expect(world.sending.send(opportunity.id)).rejects.toMatchObject({ block: { code: 'post_does_not_fit' } })
+      expect(missions.requests).toHaveLength(0)
+    })
+
+    it('reads the disclosure as before the link moved: "it" in "I work on it" is the product the link names, wherever the link stands in the post', async () => {
+      // the link is the last paragraph of a Facebook post, after the statement; a post approved for Facebook with this text must not be refused for it
+      const content = await sendWithLink('facebook', 'markdown')
+      expect(content.text).toMatch(/I work on it\.\n\nhttps:\/\/natalmystic\.com$/)
+    })
+
+    it('judges a post by what it will show: Instagram leaves the link out, so a caption that does not name the product needs no disclosure, and Facebook shows the link, so it does', async () => {
+      const draft = async (platform: string) => {
+        world = ownPostsWorld({ status: 'active' })
+        world.core.db.prepare('UPDATE channels SET platform = ? WHERE id = ?').run(platform, world.channel.id)
+        world.core.services.postMissions = new ScriptedMissions(async () => undefined)
+        const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { text: 'A caption without a name.', link: LINK, markup: 'markdown' } })
+        return world.core.router.call('opportunities.approve', { id: opportunity.id })
+      }
+      await expect(draft('facebook')).rejects.toMatchObject({ code: 'disclosure_missing' })
+      // (no picture: Instagram would also say that it needs one, which is not what is asked here)
+      await expect(draft('instagram')).rejects.toMatchObject({ code: 'post_does_not_fit', message: expect.stringMatching(/needs a picture/) })
+    })
+
+    it.each(['markdown', 'legacy'] as const)('Facebook, a %s draft: the link is the last paragraph of the text the mission types', async (markup) => {
+      const content = await sendWithLink('facebook', markup)
+      expect(content.link).toBeNull()
+      expect(content.text).toBe(`A caption. I work on it.\n\n${LINK}`)
+    })
   })
 
   it('are never sent by a scheduled or an automatic send: the AI browser carries only a press of the owner, and nothing else can carry them', () => {

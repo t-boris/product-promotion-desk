@@ -9,7 +9,7 @@ describe('content hash (REQ-004 criterion 1)', () => {
     attachments: [{ name: 'a.png', sha256: 'aa' }]
   }
   const account: HashedAccount = { id: 'acc', identity: 'brand' }
-  const hash = (content = base, who = account, destination = 'https://x/y') => contentHash(content, who, destination)
+  const hash = (content = base, who = account, destination = 'https://x/y', platform = 'reddit') => contentHash(content, who, destination, platform)
 
   it('is stable for equal content', () => {
     expect(hash()).toBe(hash({ ...base, attachments: [{ name: 'a.png', sha256: 'aa' }] }))
@@ -40,6 +40,24 @@ describe('content hash (REQ-004 criterion 1)', () => {
     expect(hash({ ...base, markup: 'markdown' })).toBe('c5a23874db15f28b9575626f5b3f63e19fde66888946d2c4ac1db769f1ca5ed7')
   })
 
+  it('binds a draft with a link to where its platform places the link (DEC-036), and leaves every other hash as it was', () => {
+    const noLink = { ...base, link: null }
+    // a platform with a link field, and a draft without a link, hash exactly as before the rule
+    expect(hash(base, account, 'https://x/y', 'reddit')).toBe(hash(base, account, 'https://x/y', 'some-new-site'))
+    expect(hash(noLink, account, 'https://x/y', 'facebook')).toBe(hash(noLink, account, 'https://x/y', 'reddit'))
+    expect(hash({ ...base, link: '  ' }, account, 'https://x/y', 'instagram')).toBe(hash({ ...base, link: '  ' }, account, 'https://x/y', 'reddit'))
+    // a link the platform has no field for: the approval is another one, for the text with the link at its end, or without it
+    const onFacebook = hash(base, account, 'https://x/y', 'facebook')
+    const onInstagram = hash(base, account, 'https://x/y', 'instagram')
+    expect(onFacebook).not.toBe(hash(base, account, 'https://x/y', 'reddit'))
+    expect(onInstagram).not.toBe(hash(base, account, 'https://x/y', 'reddit'))
+    expect(onInstagram).not.toBe(onFacebook)
+    expect(hash({ ...base, markup: 'markdown' }, account, 'https://x/y', 'threads')).not.toBe(hash({ ...base, markup: 'markdown' }, account, 'https://x/y', 'reddit'))
+    // Pinned: renaming the key, or raising LINK_PLACEMENT_VERSION without meaning to, would send every approval of such a draft back to review.
+    expect(onFacebook).toBe('cf12ac85ae4e206c15dc90f31aa2763fea4bc649ac7c7c989b070a7411a5eb75')
+    expect(onInstagram).toBe('26258edcbadee3ea28c0380722275092e252302d0f3544adb05531561b4ddf74')
+  })
+
   it('binds a markdown draft to its markup, and so to what each platform will be shown', () => {
     expect(hash({ ...base, markup: 'markdown' })).not.toBe(hash())
     expect(hash({ ...base, markup: 'markdown' })).toBe(hash({ ...base, attachments: [{ name: 'a.png', sha256: 'aa' }], markup: 'markdown' }))
@@ -64,12 +82,12 @@ describe('content hash (REQ-004 criterion 1)', () => {
 
   it('treats a missing and an empty optional field alike, but not text moved between fields', () => {
     expect(hash({ ...base, title: null })).toBe(hash({ ...base, title: '' }))
-    expect(contentHash({ title: 'ab', text: 'c', link: null, attachments: [] }, { id: 'a', identity: null }, 'd')).not.toBe(contentHash({ title: 'a', text: 'bc', link: null, attachments: [] }, { id: 'a', identity: null }, 'd'))
+    expect(contentHash({ title: 'ab', text: 'c', link: null, attachments: [] }, { id: 'a', identity: null }, 'd', 'reddit')).not.toBe(contentHash({ title: 'a', text: 'bc', link: null, attachments: [] }, { id: 'a', identity: null }, 'd', 'reddit'))
   })
 
   it('ignores the local path and mime of an attachment, which are not part of what is published', () => {
-    const a = contentHash({ ...base, attachments: [{ name: 'a.png', sha256: 'aa', path: '/one', mime: 'image/png' } as never] }, account, 'd')
-    const b = contentHash({ ...base, attachments: [{ name: 'a.png', sha256: 'aa', path: '/two', mime: 'image/jpeg' } as never] }, account, 'd')
+    const a = contentHash({ ...base, attachments: [{ name: 'a.png', sha256: 'aa', path: '/one', mime: 'image/png' } as never] }, account, 'd', 'reddit')
+    const b = contentHash({ ...base, attachments: [{ name: 'a.png', sha256: 'aa', path: '/two', mime: 'image/jpeg' } as never] }, account, 'd', 'reddit')
     expect(a).toBe(b)
   })
 

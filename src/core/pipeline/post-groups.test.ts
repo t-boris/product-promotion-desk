@@ -220,6 +220,18 @@ describe('which channels the post fits', () => {
     expect(approved.results.every((r) => r.status === 'skipped')).toBe(true)
   })
 
+  it('reads a version as its platform shows it: a link at the end of a Threads post does not take the statement of who speaks away (DEC-036)', async () => {
+    const { flow } = setup(['reddit', 'threads', 'instagram'])
+    const said = flow.channels(world.product.id, { title: 'T', text: 'I work on it.', link: 'https://natalmystic.com', markup: 'markdown' })
+    expect(said.find((o) => o.platform === 'threads')).toMatchObject({ fits: true })
+    // with no statement, the link at the end of a Threads post names the product, and Instagram, which leaves the link out, names nothing: only the missing picture is said
+    const silent = flow.channels(world.product.id, { title: 'T', text: 'Charts are fun.', link: 'https://natalmystic.com', markup: 'markdown' })
+    expect(silent.find((o) => o.platform === 'threads')).toMatchObject({ fits: false })
+    expect(silent.find((o) => o.platform === 'threads')?.reason).toMatch(/connect/i)
+    expect(silent.find((o) => o.platform === 'instagram')).toMatchObject({ fits: false })
+    expect(silent.find((o) => o.platform === 'instagram')?.reason).toMatch(/needs a picture/)
+  })
+
   it('knows a picture makes Instagram fit, and leaves out a channel that cannot post at all; a paused one is shown with the reason', async () => {
     const { channels, flow } = setup()
     const m = await picture()
@@ -250,6 +262,16 @@ describe('adapting for each platform with the AI', () => {
     expect(out.card.group.master.text).toBe(MASTER.text)
     expect(helper.asked.map((a) => a.instruction)).toEqual(channels.map((_, i) => adaptInstruction(['reddit', 'threads', 'instagram'][i]!)))
     expect(helper.asked.every((a) => a.text === MASTER.text)).toBe(true)
+  })
+
+  it('asks in the words of the limit that is left when the link is added to the end of the text, and only where it is', async () => {
+    const { channels, flow, helper } = setup()
+    const card = await flow.create(world.product.id, channels.map((c) => c.id), { ...MASTER, link: 'https://natalmystic.com' })
+    await flow.adapt(card.group.id, undefined, false)
+    const wishes = Object.fromEntries(helper.asked.map((a, i) => [['reddit', 'threads', 'instagram'][i]!, a.instruction ?? '']))
+    expect(wishes.threads).toMatch(/At most 475 characters, because the link is added after the text \(aim for 427\)/)
+    expect(wishes.instagram).toMatch(/At most 2200 characters \(aim for 1980\)/)
+    expect(wishes.reddit).not.toMatch(/At most/)
   })
 
   it('leaves a version the owner changed by hand, unless asked to start over', async () => {
@@ -351,6 +373,10 @@ describe('adapting for each platform with the AI', () => {
     expect(adaptInstruction('threads')).toMatch(/plain text with no markdown/)
     expect(adaptInstruction('reddit')).toMatch(/Markdown is fine/)
     expect(adaptInstruction('reddit')).not.toMatch(/At most/)
+    // where the link is added to the end of the text it takes room of the limit, and the words are asked to leave it
+    expect(adaptInstruction('threads', 'https://natalmystic.com')).toMatch(/At most 475 characters, because the link is added after the text \(aim for 427\)/)
+    expect(adaptInstruction('instagram', 'https://natalmystic.com')).toMatch(/At most 2200 characters \(aim for 1980\)/)
+    expect(adaptInstruction('threads', '   ')).toMatch(/At most 500 characters \(aim for 450\)/)
   })
 })
 

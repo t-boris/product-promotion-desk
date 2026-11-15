@@ -10,7 +10,7 @@ import type { Attachment, PostMarkup } from './types'
 /**
  * The version of what a markdown post becomes on a platform. It is part of the approval hash of a markdown post: change a rule of the
  * renderer or a limit of a platform in a way that changes what is sent, and raise this number, so that every approval given under the old
- * rule stops matching and the owner approves what the new rule sends. (A draft that is not markdown is never rendered and never affected.)
+ * rule stops matching and the owner approves what the new rule sends. (A draft that is not markdown is never rendered by these rules, except for where its link goes, which `linkPlacementOf` binds apart.)
  */
 export const RENDER_VERSION = 1
 
@@ -518,25 +518,86 @@ export interface PlatformForm {
   /** `required`: a post without a picture is refused by the platform (Instagram). */
   pictures: 'none' | 'optional' | 'required'
   maxPictures: number
+  /**
+   * Where a draft's link goes. `field`: the platform's form has a field for it (Reddit), and a site that is not listed is taken to have one.
+   * `in_text`: no field, but a link in the text works: it is the last paragraph of the text. `left_out`: no field, and a link in the text does
+   * not work either (Instagram does not make a caption's link clickable): it is not sent, and the preview says so (DEC-036).
+   */
+  link: 'field' | 'in_text' | 'left_out'
 }
 
-const OTHER: PlatformForm = { format: 'plain', hasTitle: false, titleLimit: null, textLimit: null, pictures: 'optional', maxPictures: 10 }
+const OTHER: PlatformForm = { format: 'plain', hasTitle: false, titleLimit: null, textLimit: null, pictures: 'optional', maxPictures: 10, link: 'field' }
 
 /** What each platform of the application shows and holds. Limits are the platforms' published ones; a site that is not listed has none. */
 export const PLATFORM_FORMS: Record<string, PlatformForm> = {
-  reddit: { format: 'markdown', hasTitle: true, titleLimit: 300, textLimit: 40_000, pictures: 'optional', maxPictures: 20 },
-  instagram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 2_200, pictures: 'required', maxPictures: 10 },
-  facebook: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 63_206, pictures: 'optional', maxPictures: 10 },
-  threads: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 500, pictures: 'optional', maxPictures: 10 },
-  x: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 280, pictures: 'optional', maxPictures: 4 },
-  linkedin: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 3_000, pictures: 'optional', maxPictures: 9 },
-  telegram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 4_096, pictures: 'optional', maxPictures: 10 },
-  pinterest: { format: 'plain', hasTitle: true, titleLimit: 100, textLimit: 500, pictures: 'required', maxPictures: 1 },
-  tiktok: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 2_200, pictures: 'none', maxPictures: 0 },
-  youtube: { format: 'plain', hasTitle: true, titleLimit: 100, textLimit: 5_000, pictures: 'none', maxPictures: 0 }
+  reddit: { format: 'markdown', hasTitle: true, titleLimit: 300, textLimit: 40_000, pictures: 'optional', maxPictures: 20, link: 'field' },
+  instagram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 2_200, pictures: 'required', maxPictures: 10, link: 'left_out' },
+  facebook: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 63_206, pictures: 'optional', maxPictures: 10, link: 'in_text' },
+  threads: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 500, pictures: 'optional', maxPictures: 10, link: 'in_text' },
+  x: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 280, pictures: 'optional', maxPictures: 4, link: 'in_text' },
+  linkedin: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 3_000, pictures: 'optional', maxPictures: 9, link: 'in_text' },
+  telegram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 4_096, pictures: 'optional', maxPictures: 10, link: 'in_text' },
+  pinterest: { format: 'plain', hasTitle: true, titleLimit: 100, textLimit: 500, pictures: 'required', maxPictures: 1, link: 'field' },
+  tiktok: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 2_200, pictures: 'none', maxPictures: 0, link: 'field' },
+  youtube: { format: 'plain', hasTitle: true, titleLimit: 100, textLimit: 5_000, pictures: 'none', maxPictures: 0, link: 'field' }
 }
 
 export const formOf = (platform: string): PlatformForm => PLATFORM_FORMS[platform] ?? OTHER
+
+/**
+ * What the AI that writes a post is told about the platform's link: nothing when the form has a field for it, else where it goes. The same
+ * rule `renderForPlatform` applies, so the AI does not write what the platform cannot take.
+ */
+export function linkRuleOf(platform: string): string | null {
+  const link = formOf(platform).link
+  if (link === 'in_text') return `${platformLabel(platform)} has no link field: a link is added at the end of the text, and counts against the text limit.`
+  if (link === 'left_out') return `${platformLabel(platform)} does not show links in a post: leave "link" empty.`
+  return null
+}
+
+/**
+ * Whether the text already holds this very address, not a longer one that starts with it ("https://x.io" is not in "https://x.io/pricing" or
+ * in "https://x.io:8080"), with or without a closing slash ("https://x.io" is in "https://x.io/."), and not as the end of another word
+ * ("x.io/a" is not in "notx.io/a"). The scheme and the host are read without their case ("https://X.io" is "https://x.io"); the rest of the
+ * address is not, because a path can be case-sensitive: "https://x.io/Docs" is not "https://x.io/docs".
+ */
+function holdsAddress(text: string, address: string): boolean {
+  const base = address.replace(/\/+$/, '')
+  if (base === '') return false
+  const origin = /^(?:[a-z][a-z0-9+.-]*:\/\/)?[^/?#]*/i.exec(base)?.[0].length ?? 0
+  const pattern = [...base]
+    .map((c, i) => (i < origin && /[A-Za-z]/.test(c) ? `[${c.toLowerCase()}${c.toUpperCase()}]` : c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    .join('')
+  const more = '[\\p{L}\\p{N}_%~@+/?#&=-]'
+  return new RegExp(`(?<![\\p{L}\\p{N}_@./:-])${pattern}(?:/(?!${more}|\\.[\\p{L}\\p{N}]|:\\d))?(?!${more}|\\.[\\p{L}\\p{N}]|:\\d)`, 'u').test(text)
+}
+
+/**
+ * The link of a draft where the platform has no field for it (DEC-036). `in_text`: the last paragraph of the text, unless the text already holds
+ * that very address. `left_out`: not sent. Either way the link is no longer a separate part of the post, so nothing is typed into a field that is
+ * not there, and the preview says what became of it.
+ */
+function placeLink(form: PlatformForm, label: string, text: string, link: string | null): { text: string; link: string | null; shown: string | null; note: string | null } {
+  const address = link?.trim() ?? ''
+  if (address === '' || form.link === 'field') return { text, link, shown: link, note: null }
+  if (form.link === 'left_out') return { text, link: null, shown: null, note: `${label} does not make a link in a post clickable and has no field for it: the link is left out of the post.` }
+  if (holdsAddress(text, address)) return { text, link: null, shown: link, note: null }
+  return { text: text.trim() === '' ? address : `${text.trimEnd()}\n\n${address}`, link: null, shown: link, note: `${label} has no link field: the link is added at the end of the text.` }
+}
+
+/** Raised when where a link goes on a platform, or what is said of it, changes: an approval given under the old placement stops matching. */
+export const LINK_PLACEMENT_VERSION = 1
+
+/**
+ * How the link of a draft is placed on `platform` when its form has no field for it (`in_text:1`, `left_out:1`), or null when the draft has no link
+ * or the form has a field. The approval hash carries it (DEC-036): a draft approved before the rule existed, or under another placement, was
+ * approved for a different post than the one this rule types, and is approved again. Reddit and a draft without a link are never touched.
+ */
+export function linkPlacementOf(platform: string, link: string | null | undefined): string | null {
+  const how = formOf(platform).link
+  if (how === 'field' || !link || link.trim() === '') return null
+  return `${how}:${LINK_PLACEMENT_VERSION}`
+}
 
 const LABELS: Record<string, string> = { reddit: 'Reddit', instagram: 'Instagram', facebook: 'Facebook', threads: 'Threads', x: 'X', linkedin: 'LinkedIn', telegram: 'Telegram', pinterest: 'Pinterest', tiktok: 'TikTok', youtube: 'YouTube' }
 
@@ -555,6 +616,11 @@ export interface RenderedPost {
   title: string | null
   text: string
   link: string | null
+  /**
+   * The link as the post shows it: the draft's link where it stands in the text (DEC-036), null where the platform leaves it out. What the
+   * disclosure of the author's connection is read with, together with the text: "I work on it" is about the product the link names.
+   */
+  shownLink: string | null
   attachments: Attachment[]
   format: 'markdown' | 'plain'
   /** Things the owner should know about how the platform will show this post; they do not stop it. */
@@ -569,21 +635,39 @@ export interface RenderOptions {
 }
 
 /**
- * The post as `platform` receives it. A draft that is not `markdown` is returned exactly as written: nothing is changed, so nothing that
- * was approved before the post editor can differ. For a `markdown` draft: Reddit gets the Markdown (pictures beside it), every other
+ * The post as `platform` receives it. A draft that is not `markdown` is returned as written, but for where its link goes (DEC-036): nothing else
+ * is changed, so nothing that was approved before the post editor can differ. For a `markdown` draft: Reddit gets the Markdown (pictures beside it), every other
  * platform gets plain text, and a title the platform has no place for is left out and said so.
  */
 export function renderForPlatform(content: PostContent, platform: string, options: RenderOptions = {}): RenderedPost {
   const form = formOf(platform)
   if (content.markup !== 'markdown') {
-    return { title: content.title, text: content.text, link: content.link, attachments: content.attachments, format: 'plain', notes: [], problems: [] }
+    // Written as it is, except where the platform has no field for the link (it is the last line of the text, or left out): nothing could carry it otherwise.
+    // Nothing else of an older draft is judged here; but a link added to the text can take it over the limit, and that is said (it did not count before).
+    const label = platformLabel(platform)
+    const placed = placeLink(form, label, content.text, content.link)
+    // Only what the link caused: a draft that was over the limit without it was never judged here, and is not now.
+    const over = placed.text !== content.text && form.textLimit !== null && characterCount(content.text) <= form.textLimit && characterCount(placed.text) > form.textLimit
+    return {
+      title: content.title,
+      text: placed.text,
+      link: placed.link,
+      shownLink: placed.shown,
+      attachments: content.attachments,
+      format: 'plain',
+      notes: placed.note ? [placed.note] : [],
+      problems: over ? [`The text is ${characterCount(placed.text)} characters; ${label} allows ${form.textLimit}.`] : []
+    }
   }
   const notes: string[] = []
   const problems: string[] = []
   const placed = pictureIdsIn(content.text).length
-  const text = form.format === 'markdown' ? (options.pictures === 'keep' ? content.text.trim() : withoutInlinePictures(content.text)) : toPlainText(content.text)
+  const words = form.format === 'markdown' ? (options.pictures === 'keep' ? content.text.trim() : withoutInlinePictures(content.text)) : toPlainText(content.text)
   let title = content.title
   const label = platformLabel(platform)
+  const linked = placeLink(form, label, words, content.link)
+  const text = linked.text
+  if (linked.note) notes.push(linked.note)
   if (form.format === 'plain' && /[*_#>`~]|\]\(|^[ \t]*[-+][ \t]/m.test(content.text)) notes.push(`${label} shows no formatting: the marks are removed and the words stay.`)
   if (placed > 0 && options.pictures !== 'keep') notes.push(`${label} takes the pictures beside the text, not inside it: they are shown after the text, in order.`)
   if (title && !form.hasTitle) {
@@ -595,8 +679,8 @@ export function renderForPlatform(content: PostContent, platform: string, option
   if (content.attachments.length > form.maxPictures && form.maxPictures > 0) problems.push(`${label} takes at most ${form.maxPictures} picture${form.maxPictures === 1 ? '' : 's'}; this post has ${content.attachments.length}.`)
   if (title && form.titleLimit !== null && characterCount(title) > form.titleLimit) problems.push(`The title is ${characterCount(title)} characters; ${label} allows ${form.titleLimit}.`)
   if (form.textLimit !== null && characterCount(text) > form.textLimit) problems.push(`The text is ${characterCount(text)} characters; ${label} allows ${form.textLimit}.`)
-  if (text === '' && content.attachments.length === 0 && !title && !content.link) problems.push('There is nothing to post: no words and no picture.')
-  return { title, text, link: content.link, attachments: content.attachments, format: form.format, notes, problems }
+  if (text === '' && content.attachments.length === 0 && !title && !linked.link) problems.push('There is nothing to post: no words and no picture.')
+  return { title, text, link: linked.link, shownLink: linked.shown, attachments: content.attachments, format: form.format, notes, problems }
 }
 
 /** How this application can publish, as far as it decides what a post may hold: the AI browser carries pictures to any platform, and only on a send the owner presses (DEC-031). */
