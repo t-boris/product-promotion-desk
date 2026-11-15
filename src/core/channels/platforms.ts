@@ -22,6 +22,7 @@ export function platformInfo(connector: Connector): PlatformInfo {
     prepared: connector.id !== UNIVERSAL_CONNECTOR_ID,
     loginUrl: connector.loginUrl(),
     ...(connector.signupUrl ? { signupUrl: connector.signupUrl() } : {}),
+    ...(connector.membership ? { canJoin: true } : {}),
     ...guideFields(connector)
   }
 }

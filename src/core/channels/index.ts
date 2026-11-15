@@ -48,7 +48,7 @@ export function register(core: Core): void {
   const signIn = new SignInService(core, accounts, vault, store)
   const people = new PersonProfileService(core, store, { proposeProfile })
   const lessons = new LessonService(core)
-  const agent = new AgentRunService(core, accounts, vault, people, lessons)
+  const agent = new AgentRunService(core, accounts, vault, people, lessons, channels)
   // An account found signed out gets one try with its saved password (DEC-014), without holding up the check that found it.
   accounts.onSignedOut = (account) => void signIn.maybeAutomatic(account)
 

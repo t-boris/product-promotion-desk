@@ -1,7 +1,7 @@
 // Pure mapping from Reddit's documented listing/comment JSON to the connector contract.
 // Everything is defensive: a malformed node is skipped instead of failing the whole read.
 
-import type { RemoteComment, RemoteDiscussion } from '../../core/ports'
+import type { Membership, RemoteComment, RemoteDiscussion } from '../../core/ports'
 import { asRecord, isoFromEpochSeconds, num, str } from '../text'
 
 export const REDDIT_ORIGIN = 'https://www.reddit.com'
@@ -189,6 +189,8 @@ export interface AboutInfo {
   submissionType: string
   userIsBanned: boolean
   userIsContributor: boolean
+  /** Whether the signed-in account has joined: true or false as Reddit said, null when it did not say (signed out, hidden). */
+  userIsSubscriber: boolean | null
   over18: boolean
 }
 
@@ -204,8 +206,22 @@ export function mapAbout(json: unknown): AboutInfo | null {
     submissionType: str(data.submission_type, 'any'),
     userIsBanned: data.user_is_banned === true,
     userIsContributor: data.user_is_contributor === true,
+    userIsSubscriber: typeof data.user_is_subscriber === 'boolean' ? data.user_is_subscriber : null,
     over18: data.over18 === true || data.over_18 === true
   }
+}
+
+/** How a community admits people, from Reddit's `subreddit_type`: only an open or a restricted one is joined by pressing a button. */
+function accessOf(type: string): Membership['access'] {
+  if (type === 'public' || type === 'archived') return 'open'
+  if (type === 'restricted' || type === 'gold_restricted') return 'restricted'
+  if (type === 'private' || type === 'employees_only') return 'private'
+  return 'unknown'
+}
+
+/** What a community's page says about the signed-in account's place in it (DEC-029). Pure. */
+export function membershipOf(about: AboutInfo): Membership {
+  return { member: about.userIsSubscriber, banned: about.userIsBanned, access: accessOf(about.subredditType) }
 }
 
 export function mapRules(json: unknown): { name: string; text: string }[] | null {

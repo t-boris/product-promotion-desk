@@ -25,10 +25,12 @@ export function ChannelDetail({
   onRemoved: () => void
 }) {
   const account = accounts.find((a) => a.id === channel.accountId)
+  // What the platform can do for this channel (tell whether the account joined): the Membership row and the join button are for those that can.
+  const platform = platforms.find((p) => p.platform === channel.platform)
   return (
     <div className="pane" data-testid={`channel-detail-${channel.id}`}>
-      <ChannelStatusCard channel={channel} product={products.find((p) => p.id === channel.productId)} account={account} accountLabel={account?.label ?? 'Unknown account'} filled={stage === 'activate'} onRemoved={onRemoved} />
-      <CapabilityCard channel={channel} filled={stage === 'assess'} />
+      <ChannelStatusCard channel={channel} product={products.find((p) => p.id === channel.productId)} account={account} platform={platform} accountLabel={account?.label ?? 'Unknown account'} filled={stage === 'activate'} onRemoved={onRemoved} />
+      <CapabilityCard channel={channel} filled={stage === 'assess'} platform={platform} />
       <ChannelPlanCard channel={channel} platforms={platforms} blockedReason={planBlockedReason} />
       <ModeSelector channel={channel} />
       {/* Remounted when the saved settings change elsewhere, so the form never shows stale values. */}

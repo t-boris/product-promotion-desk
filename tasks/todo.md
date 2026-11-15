@@ -689,3 +689,24 @@ Next (not started):
 - Facebook in Chrome and Threads through Instagram at the keyboard (0.13.0, still unproven live); the remaining AI forms; "Let the AI do this" per launch-path step; B2/B3.
 - A sweep of orphan `chrome-profiles/*` at start-up; whether Chrome should deny popups and downloads; the discount rule `\s?` evasion (needs the owner's word).
 - The removable worktree `/Users/boris/github.com/ppd-browser` and `~/Desktop/ppd-0.11.0-screens/` (not touched without the owner's word).
+
+## 0.15.0: say why Reddit refused, show membership, let the AI join on the owner's press (branch `feat/membership-join`; DEC-029; owner 2026-11-15; plan approved)
+
+Why: the owner saw Read posts "Unavailable: access denied" on a public community they had joined by hand (the same sign-in read the rules and the numbers), one refusal shown as three red rows, no word about what Reddit answered, and the app does not join communities and no screen says so. Plan: `/Users/boris/.claude/plans/twinkly-pondering-hammock.md`.
+
+Plan:
+- [x] Contract: `CapabilityKey` += `membership`, `AgentTaskKind` += `join`, `agent.canStart`/`agent.start` take `channelId`, `AgentRun.channelId`, `PlatformInfo.canJoin`, `Connector.membership?`.
+- [x] Diagnostics: `FetchResult.type`, `refusalWords` (JSON reason in plain words, a fixed phrase for a known block page, never raw HTML, no handle or address), assess says what else worked and does not repeat one refusal as three problems.
+- [x] Membership: `AboutInfo.userIsSubscriber` (tri-state), `membershipOf`, the Membership row and its words (Member / Not joined / Banned / Needs you), the line on the channel card; nine keys everywhere.
+- [x] Join: `isJoinControl`, the toolbox join mode (six tools, one press, community fence, fresh look), `join-mission.ts`, `MISSIONS.join`, start checks, conclude reads membership itself, re-assess after done.
+- [x] Renderer: `JoinChannel` on the channel card, canStart reasons, run panel for the channel's own run, pure rules with tests.
+- [x] Tests, mutation checks on the safety rules, probe on an own instance (local community page through the real toolbox in both browsers; card measured light and dark).
+- [x] Independent review of the click policy and of what reaches logs and prompts; DEC-029, spec, lessons, memory.
+- [ ] Full gate, PR, CI, merge, tag v0.15.0, release, `deploy:local`.
+
+### Review (0.15.0)
+
+- Checked: unit tests for every new rule; 61 mutants on the safety rules (join control, one press, community fence, fresh and shown look, ambiguity, engine confinement, "done only when the app reads membership", diagnostics scrubbing), all killed (one equivalent one removed); the real toolbox on a local community page in real Chrome (`PPD_REAL_CHROME=1 npx vitest run src/browser/join-real.test.ts`, a real mouse click, every decoy refused, only the Join reaches the site) and in the internal browser (34/34, script click fallback reported); the channel card measured light and dark (53/53).
+- Independent review (given the code, not the conclusion) found: a bare "Join" is not bound to a community (fixed: several candidates press none unless exactly one is named after the community; the control must be the one that was shown); a stored "needs you" is not always a private community (fixed: the refusal says what it can be); the AI's words reached the log (fixed: fixed phrase + status; the owner sees them as "The AI says: ..."); a pressed join followed by needs_owner skipped the app's own read (fixed: read when pressed); the timeout text said half an hour for ten minutes and skipped the read (fixed); `plainWords` kept a bare e-mail local part (fixed, comment made honest).
+- Known, left on purpose: the press is aimed at the centre of the located element (`hit` checks nothing covers it at that moment); a layout shift in the few milliseconds between locating and pressing is shared code of every mission and is not closed here. The probe of the real Reddit Join control and the real 403 are for the owner to try.
+

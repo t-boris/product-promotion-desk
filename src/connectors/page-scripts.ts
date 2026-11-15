@@ -8,6 +8,8 @@ export interface FetchResult {
   json: unknown
   /** Start of the body when it was not JSON, or the network error message. */
   text: string
+  /** The content type of the answer, cut short ("text/html; charset=utf-8"). Never a header with a cookie or a token in it. */
+  type?: string
 }
 
 /**
@@ -25,7 +27,7 @@ export function fetchJsonScript(path: string): string {
     const text = await res.text();
     let json = null;
     try { json = JSON.parse(text); } catch (e) { json = null; }
-    return { status: res.status, json: json, text: json === null ? text.slice(0, 300) : '' };
+    return { status: res.status, json: json, text: json === null ? text.slice(0, 300) : '', type: String(res.headers.get('content-type') || '').slice(0, 60) };
   } catch (e) {
     return { status: 0, json: null, text: String((e && e.message) || e) };
   }

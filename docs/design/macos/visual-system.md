@@ -806,4 +806,46 @@ to do; a page that is not a web page and a read that failed each have their own 
 |---|---|---|---|
 | V-34 | The control follows the shared rules in every place it appears: controls at least 28 px, no second filled button, nothing cut or overflowing, the open block on its own row, in light and dark | the probe on an own instance (`MEASURE` and `LOOK` on Connect, Accounts of this product, suggestions, the channel card, Opportunities, Publications) | every check passes |
 | V-35 | Opening and reading are real and small: the right page opens in the right browser, the app waits while the owner holds it, "Use the page I'm on" gives the address without query or fragment and only while the window is open, nothing else is read | `browse-channels.test.ts`, `electron-browser-service.test.ts`, `chrome-browser-service.test.ts`, `routing-browser-service.test.ts` (mutation-checked, every mutant killed but one redundant guard); the probe with a local page in both browsers | every check passes |
+| V-36 | The join control and the Membership words follow the shared rules: "Let the AI join r/x" is a bezel and never the filled button, at least 28 px, with its reason beside it while off; the channel's own run is shown once, under it; Membership is the first row of the table for a platform that can tell it, with the words Member / Not joined / Banned / Needs you, and no row, no card line and no button for a platform that cannot | `renderer-logic.test.ts` (`capability-words.ts`, `join-control.ts`); the probe on an own instance (`MEASURE` and `LOOK` on the channel card, light and dark) | every check passes |
 
+## 22. Membership and "Let the AI join" (0.15.0)
+
+The owner joined a community by hand and the table said Read posts was unavailable; the app does not join by itself, and no screen said so. The channel now shows whether the account is a member
+of the community, and offers to join on the owner's press. Nothing here is a new screen.
+
+**Where.** The *channel card* (`ChannelStatusCard`) and the table *What this account can do here* (`CapabilityCard`). Only for a platform whose connector can tell membership
+(`PlatformInfo.canJoin`; Reddit today). For any other platform there is no Membership row, no Membership line on the card and no button: the generic "needs verification" such a connector
+would put in the row would say something the app does not know.
+
+**The words.** Membership is a fact about the account, not an ability, so its states do not use the common words (`abilityStatusLabel`):
+
+| Capability status | Word | Shown as |
+|---|---|---|
+| verified | Member | dot |
+| needs_check | Not joined | amber tag (the owner may decide: `abilityNeedsDecision`) |
+| needs_user | Needs you | amber tag (a private community: joining needs an invitation or approval) |
+| restricted | Banned | amber tag |
+| unavailable | Unavailable | dot |
+
+A channel never assessed says "Not checked yet" on the card (`membershipWord`). The row is the first of the table: whether the account joined explains what the rows below it can read.
+The legend under the table keeps the common words.
+
+**The button.** `JoinChannel` sits in the card's row of actions, beside *Open browser*: "Let the AI join r/x" (the channel's own name, once), a bezel and never the filled button (the step's own
+action keeps the one filled button of the screen), at least 28 px through the tokens. It is there while the platform can tell membership and the account is not a member (a channel never assessed
+has it too). Under it one muted sentence (`channel-join-note`): "Opens this community in the account's browser and presses Join, nothing else. You can stop it any time. The app never joins on its own."
+The press is the owner's approval; the core holds the AI to the one click and reads the membership itself afterwards.
+
+**Off, with the reason beside it** (`channel-join-reason`, a `Hint` in the row, as the other buttons): the core says it cannot start (no AI engine, the engine cannot be held to the browser tools
+alone, the account is not signed in, banned: `agent.canStart`); another run works on the account ("The AI is working on this account. Join when it is done."); the owner holds the browser
+("Close the browser window first (Done) so the AI can work in it."). *Open browser* is off meanwhile as it is for any AI work on the account.
+
+**The run.** While the AI works on this channel (`run.kind === 'join'` and `run.channelId` is the channel's) the one run panel is shown under the button (`AgentRunPanel`, testid
+`channel-join-run`: what it is doing, the steps, Stop); a question of the AI is the global pop-up. When the run ends the panel stays with how it ended (done, needs you, could not finish) until
+the owner goes elsewhere. After a join that worked the channel is assessed again, the button goes (the account is a member) and the panel stays. A run of another channel, or of another
+kind on the same account, is not shown here (`isJoinRunOf`).
+
+| Pattern | Markup | Rules |
+|---|---|---|
+| Membership row | `capability-membership` in `capabilities`, first row | Only where `canJoin`; its own words; amber tag for Not joined, Needs you and Banned |
+| Membership line | `channel-membership` in the card's `kv` list, after Account | Only where `canJoin`; "Not checked yet" before the first assessment |
+| Join button | `channel-join`, `channel-join-reason`, `channel-join-note`, `channel-join-run` | Bezel, never filled, reason beside it when off, the sentence under it, one run panel |

@@ -15,7 +15,8 @@ const KEY_TABLE: Record<CapabilityKey, null> = {
   publish_reply: null,
   verify_send: null,
   metrics: null,
-  rules: null
+  rules: null,
+  membership: null
 }
 export const CAPABILITY_KEYS = Object.keys(KEY_TABLE) as CapabilityKey[]
 

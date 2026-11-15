@@ -164,8 +164,9 @@ export interface ApiMethods {
    * of its console. Only when asked. `null` when the account has no page open. A form field's value is never read.
    */
   'accounts.pageReport': [{ accountId: Id }, PageReport | null]
-  'agent.canStart': [{ accountId: Id; kind: AgentTaskKind }, AgentReadiness]
-  'agent.start': [{ accountId: Id; kind: AgentTaskKind }, AgentRun]
+  /** `channelId` names the channel of a `join` task (required for it, refused for the other kinds). */
+  'agent.canStart': [{ accountId: Id; kind: AgentTaskKind; channelId?: Id }, AgentReadiness]
+  'agent.start': [{ accountId: Id; kind: AgentTaskKind; channelId?: Id }, AgentRun]
   'agent.state': [{ accountId: Id }, AgentRun | null]
   'agent.stop': [{ accountId: Id }, AgentRun | null]
   /** The owner answers the AI's question (the pop-up): a text, or "done" for "I did it". */

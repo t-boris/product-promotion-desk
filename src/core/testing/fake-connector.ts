@@ -48,7 +48,7 @@ export interface FakeConnectorOptions {
   identity?: string
 }
 
-const ALL_CAPABILITIES: CapabilityKey[] = ['read_posts', 'read_comments', 'detect_changes', 'publish_post', 'publish_reply', 'verify_send', 'metrics', 'rules']
+const ALL_CAPABILITIES: CapabilityKey[] = ['read_posts', 'read_comments', 'detect_changes', 'publish_post', 'publish_reply', 'verify_send', 'metrics', 'rules', 'membership']
 
 export class FakeConnector implements Connector {
   readonly id: string

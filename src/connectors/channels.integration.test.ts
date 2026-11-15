@@ -134,6 +134,7 @@ describe('platforms and site profiles (DEC-009)', () => {
       prepared: true,
       loginUrl: 'https://www.reddit.com/login/',
       signupUrl: 'https://www.reddit.com/register/',
+      canJoin: true,
       browseUrl: 'https://www.reddit.com/subreddits/',
       example: 'r/yourcommunity',
       hint: expect.stringContaining('r/all')
