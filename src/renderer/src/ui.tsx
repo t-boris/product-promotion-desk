@@ -193,20 +193,30 @@ export function SegmentedControl<T extends string>({
   value,
   onChange,
   name,
-  testIdPrefix
+  testIdPrefix,
+  disabled
 }: {
   label: string
-  options: { value: T; label: string }[]
+  /** An option can be off on its own (`disabled`), or the whole group can (`disabled` below): the reason is said beside the control. */
+  options: { value: T; label: string; disabled?: boolean }[]
   value: T
   onChange: (value: T) => void
   name: string
   testIdPrefix?: string
+  disabled?: boolean
 }) {
   return (
     <div className="segmented" role="radiogroup" aria-label={label}>
       {options.map((option) => (
-        <label key={option.value} className={`segmented-option${option.value === value ? ' on' : ''}`}>
-          <input type="radio" name={name} checked={option.value === value} onChange={() => onChange(option.value)} data-testid={testIdPrefix ? `${testIdPrefix}${option.value}` : undefined} />
+        <label key={option.value} className={`segmented-option${option.value === value ? ' on' : ''}${disabled || option.disabled ? ' off' : ''}`}>
+          <input
+            type="radio"
+            name={name}
+            checked={option.value === value}
+            disabled={disabled || option.disabled}
+            onChange={() => onChange(option.value)}
+            data-testid={testIdPrefix ? `${testIdPrefix}${option.value}` : undefined}
+          />
           {option.label}
         </label>
       ))}

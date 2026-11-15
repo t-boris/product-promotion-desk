@@ -1,6 +1,7 @@
 import type { Account, PlatformInfo, Profile } from '../../../../shared/types'
 import { call, useAction, useQuery } from '../../hooks'
 import { Button, Card, ErrorNote } from '../../ui'
+import { contactLine } from './account-link'
 import { AccountStatusLine } from './AccountStatus'
 import { AgentRunPanel } from './AgentRunPanel'
 
@@ -73,7 +74,7 @@ function PlatformRow({
         <div className="platform-row-main">
           <strong>{name}</strong>{' '}
           {account ? <AccountStatusLine status={account.status} /> : <span className="muted">no account yet</span>}
-          {account && <div className="muted small">{account.email ?? 'no e-mail address yet'}</div>}
+          {account && <div className="muted small">{contactLine(account, platform?.signsInWith !== undefined)}</div>}
         </div>
         <div className="platform-row-actions">
           {account ? (

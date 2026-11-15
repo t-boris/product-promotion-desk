@@ -144,7 +144,7 @@ function AccountsScreen() {
               </aside>
               <div className="split-detail">
                 {selected ? (
-                  <AccountDetail key={selected.id} account={selected} platforms={platforms.data ?? []} mailboxes={mailboxes.data ?? []} vault={vault.data} onOpenProfile={openProfile} />
+                  <AccountDetail key={selected.id} account={selected} platforms={platforms.data ?? []} mailboxes={mailboxes.data ?? []} vault={vault.data} onOpenProfile={openProfile} onOpenAccount={openAccount} />
                 ) : (
                   <EmptyState title="Select an account">Pick an account to see what it still needs.</EmptyState>
                 )}

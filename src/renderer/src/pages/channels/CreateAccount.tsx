@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import type { Account, AccountRole, Mailbox, PlatformInfo, Profile } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
 import { Button, ErrorNote, Field, Hint, useOpenForm } from '../../ui'
+import { chosenVia, eligibleVia, viaBlocker, viaOption } from './account-link'
 import { afterCreateNote } from './next-step'
 import { ROLE_NAME_LIMIT, ROLE_VOICE_LIMIT } from './RoleEditor'
 
@@ -44,7 +45,8 @@ export function CreateAccount({
   const [email, setEmail] = useState('')
   const [chosenMailbox, setChosenMailbox] = useState('')
   const [fromMailbox, setFromMailbox] = useState<string | null>(null)
-  const [create, state] = useAction((args: { productId?: string; platform: string; label: string; role?: AccountRole; email?: string; mailboxId?: string; profileId?: string }) => call('accounts.create', args))
+  const [viaId, setViaId] = useState('')
+  const [create, state] = useAction((args: { productId?: string; platform: string; label: string; role?: AccountRole; email?: string; mailboxId?: string; profileId?: string; signsInVia?: string }) => call('accounts.create', args))
   const mailboxId = mailboxes.some((m) => m.id === chosenMailbox) ? chosenMailbox : (mailboxes[0]?.id ?? '')
   const [propose, proposing] = useAction(async (platformKey: string) => {
     const result = await call('accounts.proposeEmail', { mailboxId, platform: platformKey })
@@ -57,12 +59,20 @@ export function CreateAccount({
   const freeProfiles = profiles.filter((p) => !accounts.some((a) => a.profileId === p.id && a.platform === platform))
   const profile = freeProfiles.find((p) => p.id === profileId)
   const roleIncomplete = !profile && roleName.trim() === '' && roleVoice.trim() !== ''
+  // A platform that signs in with another (Threads with Instagram, DEC-027) has no e-mail or password of its own: it is made with an account
+  // of that platform to sign in through, which has to exist first.
+  const info = platforms.find((p) => p.platform === platform)
+  const signsInWith = info?.signsInWith
+  const wantedLabel = signsInWith ? (platforms.find((p) => p.platform === signsInWith)?.label ?? signsInWith) : ''
+  const candidates = signsInWith ? eligibleVia(accounts, signsInWith, profile?.id ?? null) : []
+  const via = signsInWith ? chosenVia(candidates, viaId) : ''
+  const viaProblem = signsInWith && info ? viaBlocker(info.label, wantedLabel, candidates, via) : null
   // Why "Add account" cannot be pressed yet, beside the button (the field that is missing first).
-  const createBlocker = !platform ? 'Choose a platform.' : !label.trim() ? 'Name the account.' : roleIncomplete ? 'Give the role a name, or clear the voice.' : null
+  const createBlocker = !platform ? 'Choose a platform.' : viaProblem ? viaProblem : !label.trim() ? 'Name the account.' : roleIncomplete ? 'Give the role a name, or clear the voice.' : null
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault()
-    if (!label.trim() || !platform || roleIncomplete) return
+    if (!label.trim() || !platform || roleIncomplete || viaProblem) return
     const wanted = !profile && roleName.trim() ? { name: roleName.trim(), voice: roleVoice.trim() } : undefined
     const account = await create({
       ...(product ? { productId: product.id } : {}),
@@ -70,7 +80,8 @@ export function CreateAccount({
       label: label.trim(),
       ...(wanted ? { role: wanted } : {}),
       ...(profile ? { profileId: profile.id } : {}),
-      ...(email.trim() ? { email: email.trim(), ...(fromMailbox ? { mailboxId: fromMailbox } : {}) } : {})
+      ...(signsInWith ? { signsInVia: via } : {}),
+      ...(!signsInWith && email.trim() ? { email: email.trim(), ...(fromMailbox ? { mailboxId: fromMailbox } : {}) } : {})
     })
     if (account) onCreated(account)
   }
@@ -78,8 +89,12 @@ export function CreateAccount({
   return (
     <form onSubmit={(e) => void submit(e)} data-testid="create-account-form">
       <div className="form-row">
-        <Field label="Platform" hint={platforms.find((p) => p.platform === platform)?.note ?? 'The site this account is on. It cannot be changed later.'}>
-          <select className="input" value={platform} onChange={(e) => setChosen(e.target.value)} disabled={platforms.length === 0} data-testid="account-platform">
+        <Field label="Platform" hint={info?.note ?? 'The site this account is on. It cannot be changed later.'}>
+          <select className="input" value={platform} onChange={(e) => {
+              setChosen(e.target.value)
+              setViaId('')
+            }}
+            disabled={platforms.length === 0} data-testid="account-platform">
             <option value="">Choose a platform…</option>
             {platforms.map((p) => (
               <option key={p.connectorId} value={p.platform}>
@@ -92,36 +107,50 @@ export function CreateAccount({
           <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Brand account" data-testid="account-label" />
         </Field>
       </div>
-      <div className="form-row">
-        <Field label="E-mail address (optional)" hint={mailboxes.length > 0 ? 'What the account signs up with. You can also set it later.' : 'What the account signs up with. To get proposed addresses, add your own mailbox on the “Mailboxes” tab.'}>
-          <input
-            className="input"
-            value={email}
-            onChange={(e) => {
-              setEmail(e.target.value)
-              setFromMailbox(null)
-            }}
-            autoComplete="off"
-            data-testid="account-email"
-          />
+      {signsInWith && (
+        <Field label={`Signs in with ${wantedLabel}`} hint={`${info?.label ?? 'This platform'} has no password of its own: the AI signs in through this ${wantedLabel} account, and you are never asked for ${info?.label ?? 'platform'} credentials.`}>
+          <select className="input" value={via} onChange={(e) => setViaId(e.target.value)} disabled={candidates.length === 0} data-testid="account-via">
+            <option value="">{candidates.length === 0 ? `No ${wantedLabel} account yet` : `Choose the ${wantedLabel} account…`}</option>
+            {candidates.map((a) => (
+              <option key={a.id} value={a.id}>
+                {viaOption(a)}
+              </option>
+            ))}
+          </select>
         </Field>
-        {mailboxes.length > 0 && (
-          <Field label="Or propose one from your mailbox" hint="A separate address for this account, made from the mailbox.">
-            <div className="pick-row">
-              <select className="input" value={mailboxId} onChange={(e) => setChosenMailbox(e.target.value)} aria-label="Base mailbox" data-testid="account-mailbox">
-                {mailboxes.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.address}
-                  </option>
-                ))}
-              </select>
-              <Button variant="secondary" onClick={() => void propose(platform)} disabled={proposing.busy || platform === ''} data-testid="account-propose-email">
-                Propose
-              </Button>
-            </div>
+      )}
+      {!signsInWith && (
+        <div className="form-row">
+          <Field label="E-mail address (optional)" hint={mailboxes.length > 0 ? 'What the account signs up with. You can also set it later.' : 'What the account signs up with. To get proposed addresses, add your own mailbox on the “Mailboxes” tab.'}>
+            <input
+              className="input"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value)
+                setFromMailbox(null)
+              }}
+              autoComplete="off"
+              data-testid="account-email"
+            />
           </Field>
-        )}
-      </div>
+          {mailboxes.length > 0 && (
+            <Field label="Or propose one from your mailbox" hint="A separate address for this account, made from the mailbox.">
+              <div className="pick-row">
+                <select className="input" value={mailboxId} onChange={(e) => setChosenMailbox(e.target.value)} aria-label="Base mailbox" data-testid="account-mailbox">
+                  {mailboxes.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.address}
+                    </option>
+                  ))}
+                </select>
+                <Button variant="secondary" onClick={() => void propose(platform)} disabled={proposing.busy || platform === ''} data-testid="account-propose-email">
+                  Propose
+                </Button>
+              </div>
+            </Field>
+          )}
+        </div>
+      )}
       {profiles.length > 0 && (
         <Field label="Profile (optional)" hint="The person behind this login. It speaks with the profile's role; a profile has one login per platform.">
           <select className="input" value={profile?.id ?? ''} onChange={(e) => setProfileId(e.target.value)} disabled={platform === ''} data-testid="account-profile">
@@ -146,14 +175,14 @@ export function CreateAccount({
       )}
       {roleIncomplete && <p className="muted small">Give the role a name, or clear the voice.</p>}
       <div className="row">
-        <Button variant={submitVariant} type="submit" disabled={!label.trim() || !platform || roleIncomplete || state.busy} data-testid="account-create">
+        <Button variant={submitVariant} type="submit" disabled={!label.trim() || !platform || roleIncomplete || viaProblem !== null || state.busy} data-testid="account-create">
           {state.busy ? 'Adding…' : 'Add account'}
         </Button>
         {onCancel && <Button onClick={onCancel}>Cancel</Button>}
         {createBlocker && <Hint data-testid="account-create-reason">{createBlocker}</Hint>}
       </div>
       <p className="muted small" data-testid="account-create-note">
-        {afterCreateNote(product)}
+        {afterCreateNote(product, signsInWith !== undefined)}
       </p>
       <ErrorNote error={state.error ?? proposing.error} />
     </form>

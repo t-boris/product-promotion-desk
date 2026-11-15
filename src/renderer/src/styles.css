@@ -1126,6 +1126,14 @@ table.table {
   color: var(--text-1);
   box-shadow: var(--shadow-thumb);
 }
+/* A segment that cannot be chosen: the quiet label, no hover; the selected one keeps its thumb (it is still where the account is). */
+.segmented-option.off,
+.segmented-option.off:hover {
+  color: var(--text-3);
+}
+.segmented-option.off:not(.on):hover {
+  background: transparent;
+}
 
 @media (max-width: 760px) {
   /* A browser window narrower than the application's own minimum (the local web access): the menu becomes a strip on top. */

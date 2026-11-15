@@ -21,6 +21,8 @@ import { isMirroredSource } from '../renderer/src/pages/products/source-view'
 import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block'
 import { activateBlocker, canActivate, canPause, neverAssessed, setupStage } from '../renderer/src/pages/channels/setup-stage'
 import { afterCreateNote, nextStep } from '../renderer/src/pages/channels/next-step'
+import { chosenVia, contactLine, eligibleVia, viaBlocker, viaOption } from '../renderer/src/pages/channels/account-link'
+import { ACCOUNT_NAME_LIMIT, normalizeName, renameProblem } from '../renderer/src/pages/channels/account-name'
 import { approveLabels } from '../renderer/src/pages/review/approve-labels'
 import { channelLabel } from '../renderer/src/pages/review/channel-label'
 import { platformMismatch } from '../renderer/src/pages/channels/platform-hint'
@@ -319,7 +321,7 @@ describe('the new-account form of the Accounts section', () => {
 })
 
 describe('the next step of an account', () => {
-  const account = (over: Partial<Account>): Account => ({ id: 'a', platform: 'reddit', label: 'A', identity: null, partition: 'p', status: 'login_required', createdAt: '', productId: null, role: null, loginName: null, email: null, mailboxId: null, profileId: null, ...over })
+  const account = (over: Partial<Account>): Account => ({ id: 'a', platform: 'reddit', label: 'A', identity: null, partition: 'p', status: 'login_required', createdAt: '', productId: null, role: null, loginName: null, email: null, mailboxId: null, browser: 'internal', signsInVia: null, profileId: null, ...over })
 
   it('goes through address, password and sign-in, in that order', () => {
     expect(nextStep(account({}), false, true).block).toBe('email')
@@ -343,6 +345,126 @@ describe('the next step of an account', () => {
     expect(fromProduct).toMatch(/later/i)
     // A product whose name has not arrived yet is still a product.
     expect(afterCreateNote({ name: undefined })).toContain('Channels tab of this product')
+  })
+})
+
+describe('an account that signs in through another account (DEC-027)', () => {
+  const base = { id: 'a', platform: 'reddit', label: 'A', identity: null, partition: 'p', status: 'login_required' as const, createdAt: '', productId: null, role: null, loginName: null, email: null, mailboxId: null, browser: 'internal' as const, signsInVia: null, profileId: null }
+  const account = (over: Partial<Account>): Account => ({ ...base, ...over })
+  const threads = (over: Partial<Account> = {}): Account => account({ id: 't', platform: 'threads', label: 'Brand on Threads', signsInVia: 'i', ...over })
+  const instagram = (over: Partial<Account> = {}): Account => account({ id: 'i', platform: 'instagram', label: 'Brand on Instagram', email: 'brand@example.com', loginName: 'brand', ...over })
+
+  describe('nextStep', () => {
+    it('asks for the account to sign in through first, and never for an address or a password', () => {
+      const step = nextStep(threads({ signsInVia: null }), false, true, { account: null, label: 'Instagram', hasPassword: false })
+      expect(step.block).toBe('via')
+      expect(step.text).toMatch(/choose the Instagram account/)
+      expect(step.text).not.toMatch(/e-mail address|save its password/)
+    })
+
+    it('then goes straight to the sign-in, whatever the account itself holds', () => {
+      const through = { account: instagram(), label: 'Instagram', hasPassword: true }
+      const step = nextStep(threads(), false, true, through)
+      expect(step.block).toBe('signin')
+      expect(step.text).toMatch(/step 4/)
+      expect(step.text).toMatch(/Brand on Instagram/)
+    })
+
+    it('says what the account it signs in through is missing, because it signs in through it', () => {
+      const noPassword = nextStep(threads(), false, true, { account: instagram(), label: 'Instagram', hasPassword: false })
+      expect(noPassword.block).toBe('via')
+      expect(noPassword.text).toMatch(/Brand on Instagram needs its login/)
+      expect(noPassword.text).toMatch(/saved password/)
+      expect(noPassword.text).toMatch(/Brand on Threads signs in through it/)
+      const noLogin = nextStep(threads(), false, true, { account: instagram({ email: null, loginName: null }), label: 'Instagram', hasPassword: true })
+      expect(noLogin.text).toMatch(/needs its login/)
+    })
+
+    it('asks to solve a check, and is done once signed in', () => {
+      const through = { account: instagram(), label: 'Instagram', hasPassword: true }
+      expect(nextStep(threads({ status: 'captcha' }), false, true, through).text).toMatch(/solve the check/)
+      expect(nextStep(threads({ status: 'ready' }), false, true, through)).toMatchObject({ block: null })
+    })
+
+    it('leaves every other account exactly as it was', () => {
+      expect(nextStep(account({}), false, true).block).toBe('email')
+      expect(nextStep(account({ email: 'a@b.co' }), false, true).block).toBe('password')
+      expect(nextStep(account({ email: 'a@b.co' }), true, true).text).toMatch(/step 5/)
+    })
+
+    it('has a note after "Add account" that promises no address and no password', () => {
+      expect(afterCreateNote(null, true)).toMatch(/sign in through the account you chose/)
+      expect(afterCreateNote(null, true)).not.toMatch(/set the address/)
+      expect(afterCreateNote({ name: 'Natal Mystic' }, true)).toContain('Channels tab of Natal Mystic')
+      expect(afterCreateNote(null, false)).toBe(afterCreateNote(null))
+    })
+  })
+
+  describe('which accounts it may sign in through', () => {
+    const accounts = [
+      instagram({ id: 'i1', label: 'Brand', profileId: 'p1' }),
+      instagram({ id: 'i2', label: 'Founder', profileId: 'p2' }),
+      instagram({ id: 'i3', label: 'Loose', profileId: null }),
+      account({ id: 'r1', platform: 'reddit', label: 'Not Instagram', profileId: 'p1' })
+    ]
+
+    it('lists only the accounts of that platform', () => {
+      expect(eligibleVia(accounts, 'instagram', null).map((a) => a.id)).toEqual(['i1', 'i2', 'i3'])
+    })
+
+    it('leaves out accounts of another profile than the login\'s own, and keeps those without a profile', () => {
+      expect(eligibleVia(accounts, 'instagram', 'p1').map((a) => a.id)).toEqual(['i1', 'i3'])
+      expect(eligibleVia(accounts, 'instagram', 'p3').map((a) => a.id)).toEqual(['i3'])
+    })
+
+    it('says the state of an account beside its name', () => {
+      expect(viaOption(instagram({ status: 'ready' }))).toBe('Brand on Instagram · Signed in')
+    })
+
+    it('preselects the only candidate, keeps a choice that is still possible, and never guesses between several', () => {
+      const one = [instagram({ id: 'i1' })]
+      const two = [instagram({ id: 'i1' }), instagram({ id: 'i2' })]
+      expect(chosenVia(one, '')).toBe('i1')
+      expect(chosenVia(two, '')).toBe('')
+      expect(chosenVia(two, 'i2')).toBe('i2')
+      expect(chosenVia(two, 'gone')).toBe('')
+      expect(chosenVia([], 'i1')).toBe('')
+    })
+
+    it('says why the account cannot be added yet', () => {
+      expect(viaBlocker('Threads', 'Instagram', [], '')).toBe('Threads signs in with an Instagram account. Add the Instagram account first.')
+      expect(viaBlocker('Pinterest', 'Facebook', [], '')).toBe('Pinterest signs in with a Facebook account. Add the Facebook account first.')
+      expect(viaBlocker('Threads', 'Instagram', [instagram(), instagram({ id: 'i2' })], '')).toBe('Choose the Instagram account Threads signs in through.')
+      expect(viaBlocker('Threads', 'Instagram', [instagram()], 'i')).toBeNull()
+    })
+
+    it('says how a list line reaches such an account, never "no e-mail address yet"', () => {
+      expect(contactLine(account({ email: 'a@b.co' }), false)).toBe('a@b.co')
+      expect(contactLine(account({}), false)).toBe('no e-mail address yet')
+      expect(contactLine(threads(), true)).toBe('signs in through another account')
+      expect(contactLine(threads({ signsInVia: null }), true)).toBe('no account to sign in through yet')
+    })
+  })
+})
+
+describe('the name of an account', () => {
+  it('is spaces folded and trimmed, as the core keeps it', () => {
+    expect(normalizeName('  Brand   on  Reddit ')).toBe('Brand on Reddit')
+  })
+
+  it('cannot be saved empty, unchanged or too long', () => {
+    expect(renameProblem('Brand', '   ')).toBe('empty')
+    expect(renameProblem('Brand', '')).toBe('empty')
+    expect(renameProblem('Brand', 'Brand')).toBe('unchanged')
+    expect(renameProblem('Brand', '  Brand ')).toBe('unchanged')
+    expect(renameProblem('Brand', 'B'.repeat(ACCOUNT_NAME_LIMIT + 1))).toBe('too_long')
+  })
+
+  it('can be saved when it is a new name, up to the limit', () => {
+    expect(renameProblem('Brand', 'Brand on Reddit')).toBeNull()
+    expect(renameProblem('Brand', 'brand')).toBeNull()
+    expect(renameProblem('Brand', 'B'.repeat(ACCOUNT_NAME_LIMIT))).toBeNull()
+    expect(ACCOUNT_NAME_LIMIT).toBe(80)
   })
 })
 
