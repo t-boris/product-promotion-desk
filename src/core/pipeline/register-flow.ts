@@ -7,6 +7,7 @@ import { SendGate } from './gate'
 import { Ingestor } from './ingest'
 import { LoginWatch } from './login-watch'
 import { MonitorFlow } from './monitor'
+import { PostGroupsFlow } from './post-groups'
 import { PublicationsFlow } from './publications'
 import { ReviewFlow } from './review'
 import { SendingFlow } from './sending'
@@ -37,6 +38,18 @@ export function registerFlow(core: Core): void {
   registerFlowApi({ core, store, review, monitor, drafting, sending, publications })
   const draftHelp = new DraftHelp(core, store)
   core.router.register({ 'drafts.refine': (args) => draftHelp.refine(args) })
+  const groups = new PostGroupsFlow(core, store, review, sending, draftHelp)
+  core.router.register({
+    'postGroups.create': ({ productId, channelIds, draft }) => groups.create(productId, channelIds, draft),
+    'postGroups.extend': ({ opportunityId, channelIds }) => groups.extend(opportunityId, channelIds),
+    'postGroups.get': ({ id }) => groups.get(id),
+    'postGroups.list': ({ productId }) => groups.list(productId),
+    'postGroups.channels': ({ productId, draft, chosen }) => groups.channels(productId, draft, chosen),
+    'postGroups.adapt': ({ id, opportunityIds, force }) => groups.adapt(id, opportunityIds, force ?? false),
+    'postGroups.approve': ({ id, seen }) => groups.approve(id, seen),
+    'postGroups.sendAll': ({ id }) => groups.sendAll(id),
+    'postGroups.remove': ({ id }) => groups.remove(id)
+  })
   const draftCheck = new DraftCheck(core, store)
   core.router.register({ 'drafts.check': (args) => draftCheck.check(args) })
 }

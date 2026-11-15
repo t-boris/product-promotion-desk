@@ -49,9 +49,10 @@ export class ReviewFlow implements PipelineHooks {
 
   /**
    * Stores the owner's edit as a new draft and invalidates every approval of the previous content.
-   * The AI rationale and fact lineage are carried over, so a later change to those facts still forces re-review.
+   * The AI rationale and fact lineage are carried over, so a later change to those facts still forces re-review. `author` is 'ai' only for a
+   * text the AI wrote for the owner to read (a post group's adaptation); the owner's own edit is 'user'.
    */
-  async saveDraft(id: Id, input: DraftInput): Promise<Opportunity> {
+  async saveDraft(id: Id, input: DraftInput, options: { author?: 'user' | 'ai' } = {}): Promise<Opportunity> {
     const opp = this.store.requireOpportunity(id)
     this.assertEditable(opp, 'edit the draft')
     const content = await normalizeDraftInput(input, { productId: opp.productId, media: this.core.services.media! })
@@ -69,7 +70,7 @@ export class ReviewFlow implements PipelineHooks {
         knowledgeVersionId: previous?.knowledgeVersionId ?? null,
         usedClaimLineageIds: previous?.usedClaimLineageIds ?? [],
         rationale: previous?.rationale ?? '',
-        author: 'user'
+        author: options.author ?? 'user'
       })
       const hadApproval = this.store.invalidateApprovals(id, 'The draft was edited after approval') > 0
       const wasInReview = current.state === 'awaiting_approval' || current.state === 'ready'
