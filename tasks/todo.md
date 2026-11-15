@@ -680,4 +680,12 @@ Plan:
 - [x] Renderer: `OpenAccountBrowser`, Connect a channel (+ "Use the page I'm on"), Accounts of this product, suggested channels, the channel card, Opportunities, Publications; logic tests.
 - [x] Probes on an own instance (local site only, both browsers, light and dark, measured): mechanics 24/24 (built-in browser and the installed Chrome), screens 55/55; spec section 21 + V-34/V-35, DEC-028, lessons 172-175.
 - [x] Independent review of `currentPage` (no leak found; fixed: a cut address is flagged, several Chrome tabs are refused, a failed or non-web read has its own sentence, path parameters and addresses in Chrome error notes are cut, one "app waits" block per account, stale state in the form). Known and left: an AI-suggested address on a site with no preset opens after one click (same as `accounts.openBrowser`); Telegram Web routes by fragment, so its address is flagged as cut.
-- [ ] Full gate, PR, CI, release 0.14.0, `deploy:local`.
+- [x] Full gate (typecheck, eslint, 2966 tests, build), PR #29, CI green, merge `3e9f839`, tag v0.14.0, GitHub release, `deploy:local` (0.14.0 installed; the packaged app passes the mechanics probe 24/24).
+
+Next (not started):
+- The owner tries Open browser at the keyboard: Reddit communities page, Facebook groups discovery, "Use the page I'm on" in the built-in browser and in Chrome; says what to change.
+- The AI searches a platform for channels with the product's keywords (the owner looks first, the AI proposes); live Reddit acceptance (issue #8).
+- Telegram Web routes by the address fragment: map `#@name` to `t.me/name` when "Use the page I'm on" sees it.
+- Facebook in Chrome and Threads through Instagram at the keyboard (0.13.0, still unproven live); the remaining AI forms; "Let the AI do this" per launch-path step; B2/B3.
+- A sweep of orphan `chrome-profiles/*` at start-up; whether Chrome should deny popups and downloads; the discount rule `\s?` evasion (needs the owner's word).
+- The removable worktree `/Users/boris/github.com/ppd-browser` and `~/Desktop/ppd-0.11.0-screens/` (not touched without the owner's word).
