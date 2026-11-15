@@ -8,9 +8,9 @@ very neat macOS application."*
 
 This document is the contract for the implementation and verification steps. It has:
 
-- the list of all seven sections and their nested screens with the target pattern and the one main action of each (§10);
+- the list of all sections and their nested screens with the target pattern and the one main action of each (§10; since DEC-037 the sections are the nine of §24, and §24 says where this document still describes the seven of 0.8.0);
 - the token table (§5), the type scale (§6) and the component table with sizes and states (§7);
-- the baseline screenshots of 0.8.0 (`baseline/`) and the target mock (`mock.html`, `target/`) (§2, §3);
+- the baseline screenshots of 0.8.0 (`baseline/0.8.0/`) and the target mock (`mock.html`, `target/`) (§2, §3);
 - numbered, measurable requirements (§12) and the texts the two QA scenarios depend on (§13).
 
 ---
@@ -48,14 +48,14 @@ Captured on 2026-11-14 with `scripts/design/tour.mjs` and `scripts/design/native
 `/Applications/Product Promotion Desk.app` 0.8.0 (own `PPD_DATA_DIR` in the session scratchpad, own debugging port, demo data
 with `example.com` names, automation paused, nothing sent). The owner's application and data were not touched. Full set: 72
 page shots (7 sections and nested screens × dark/light × 1320×880/980×640) + 4 native window shots; 34 of them are kept in
-`baseline/`, with the measurements of all 72 in `baseline/metrics.json`.
+`baseline/0.8.0/`, with the measurements of all 72 in `baseline/0.8.0/metrics.json`. The folder `baseline/` itself holds the re-shot of 0.21.0 (below).
 
 | Shot | What it shows |
 |---|---|
-| `baseline/native-1320-passport.png`, `native-980-passport.png`, `native-980-attention.png` | The real window: window buttons, title band, solid sidebar |
-| `baseline/dark-1320-01-attention.png` … `dark-1320-09-menu-hidden.png` (19) | Every section and nested screen, dark, 1320×880 |
-| `baseline/light-1320-*.png` (5) | Attention, Passport, Channels, Accounts, Settings in light |
-| `baseline/dark-980-*.png` (6), `light-980-03-product-passport.png` | The minimum window |
+| `baseline/0.8.0/native-1320-passport.png`, `native-980-passport.png`, `native-980-attention.png` | The real window: window buttons, title band, solid sidebar |
+| `baseline/0.8.0/dark-1320-01-attention.png` … `dark-1320-09-menu-hidden.png` (19) | Every section and nested screen, dark, 1320×880 |
+| `baseline/0.8.0/light-1320-*.png` (5) | Attention, Passport, Channels, Accounts, Settings in light |
+| `baseline/0.8.0/dark-980-*.png` (6), `light-980-03-product-passport.png` | The minimum window |
 
 Findings (measured, not guessed):
 
@@ -135,12 +135,14 @@ The content column (`.main`) always paints `--surface-0`.
   (`sidebar.left` glyph), accessible name and tooltip **"Hide menu"** (text unchanged, `data-testid="menu-hide"` kept).
 - **Section header**: the brand mark (16 px accent tile with the three rising bars, `data-testid="brand-mark"` kept) and the text
   **"Promotion Desk"** in 13/600 `--text-2`, 28 px row.
-- **Items** (`nav-item`, order unchanged): 28 px rows, 10 px side padding, radius 6, gap 8; a 16 px icon in `--accent-on-tint`,
+- **Product switcher** (DEC-037, §24): one 28 px row directly under the section header, the current product's name and its five
+  launch dots on a pop-up button (`data-testid="product-switcher"`, chevron-up-down glyph on the right).
+- **Items** (`nav-item`, `data-testid="nav-<id>"`): 28 px rows, 10 px side padding, radius 6, gap 8; a 16 px icon in `--accent-on-tint`,
   label 13 px `--text-1`. Hover `--hover-fill`; selected `--selection` (neutral) and weight 500 with `aria-current="page"`
-  kept; focus ring (§7). Attention keeps its count capsule on the right (20 px tall, amber with `--on-attention`, red only
-  while an item is a failure, BUG-016) and tabular numbers.
-- Groups: Attention, Products, Accounts, Opportunities, Publications at the top; **Log and Settings pinned to the bottom**
-  (same order of the seven entries).
+  kept; focus ring (§7). The Inbox keeps the count capsule on the right (`attention-count`; 20 px tall, amber with `--on-attention`,
+  red only while an item is a failure, BUG-016) and tabular numbers.
+- Groups (V-04): **Overview, Inbox, Feed, Posts, Channels, Accounts, Setup** at the top; **Log and Settings pinned to the bottom**
+  (nine entries in all).
 
 ### 4.4 Toolbar band (`.topbar` → toolbar)
 
@@ -321,8 +323,9 @@ Motion: background, border and colour transitions in `--dur-fast`; disclosure ch
 - One component `Icon` in a new `src/renderer/src/icons.tsx` with a fixed set of inline SVG glyphs, drawn for this app in the
   SF Symbols manner: 16 × 16 view box, 1.5 px stroke in `currentColor`, round caps and joins, no fill (except tiny dots).
   **No icon library** (no new dependency; SF Symbols are not embedded). The set is in `mock.html` (`<symbol id="i-…">`).
-- Navigation: Attention = bell, Products = box, Accounts = person in a circle, Opportunities = speech bubble, Publications =
-  paper plane, Log = bulleted list, Settings = gear. Chrome and actions: sidebar.left, plus, play, pause, chevron right, chevron
+- Navigation (DEC-037): Overview = three rising bars, Inbox = tray, Feed = broadcast arcs, Posts = paper plane, Channels = three
+  linked nodes, Accounts = person in a circle, Setup = two sliders, Log = bulleted list, Settings = gear. (0.8.0 had Attention = bell,
+  Products = box, Opportunities = speech bubble, Publications = paper plane; those glyphs are gone.) Chrome and actions: sidebar.left, plus, play, pause, chevron right, chevron
   down, up/down chevrons (pop-up button), checkmark, xmark, ellipsis, info, warning triangle, sparkles (AI).
 - All glyphs share the same box and optical weight; in the sidebar they sit at the same x (left padding 10 px) and are
   vertically centred on the 28 px row.
@@ -339,43 +342,56 @@ Motion: background, border and colour transitions in `--dur-fast`; disclosure ch
 | **List + detail** | Products, Accounts, Profiles | Columns `clamp(208px, 27%, 300px)` and `minmax(0, 1fr)`, gap 16; **side by side down to 980×640 with the menu shown** (no stacked cards); list panel sticky; rows one-line titles with ellipsis; the detail is a container (`container-type: inline-size`) for its own narrow rules |
 | **Detail pane** | product, account, channel | Object header (§4.5) → launch path (product only) → segmented tabs → group boxes; at 980×640 the tab row ends at y ≤ 300 px |
 | **Group-box form** | Settings, account steps, channel settings, goal cards, create/edit forms | Group box per topic; label-left rows for switches and short values; label-above fields in `.form-row` grids for text (labels top-aligned, lesson 25); the open form owns the filled button |
-| **Review list** | Attention, Opportunities, Publications | One group box per item: head row (tags, channel, time), body (thread / draft fields), actions right-aligned at the bottom; the main action is filled only on the first item, the same action is `secondary` on the others |
+| **Master-detail with action bar** | Inbox (Decide) | Columns `clamp(216px, 32%, 300px)` and `minmax(0, 1fr)`, gap 16; the page is exactly as tall as the window (`Page fill`, §24) so the list and the item scroll on their own; the list is grouped (Replies, Posts, Questions from the AI, Results to confirm; 13/600 `--text-2` group titles with a count), one row = state dot, channel, relative time, author or title, an excerpt of 60 characters; the item beside it is shown in full and its actions are pinned in a bottom bar (Reject/Delete and Dismiss on the left, the one filled button on the right) |
+| **Review list** | Feed, Posts | One group box per item: head row (tags, channel, time), body (thread / draft fields), actions right-aligned at the bottom; the main action is filled only on the first item, the same action is `secondary` on the others |
 | **Table** | Log tabs, Results metrics, channel capability | Full width inside a group box; zebra; wrap long text; no sideways scroll |
 | **Empty state** | every list and page | §7; in the free height of its column (`fill`) |
-| **Getting started** | Attention, first run | Group box with eyebrow, 26 px headline that names the newest product ("Launch Northwind Notes", "Launch your first product" while there is none; a long name wraps inside the card), the launch path, one filled button for the next step, the step list |
+| **Getting started** | Inbox, first run (the current product has no channel) | Group box with eyebrow, 26 px headline that names the newest product ("Launch Northwind Notes", "Launch your first product" while there is none; a long name wraps inside the card), the launch path, one filled button for the next step, the step list |
 
 ---
 
-## 10. Screens: all seven sections and their nested screens
+## 10. Screens: the sections and their nested screens (DEC-037: see §24 for the nine sections and the routes)
 
 "Filled" names the one main action of the screen in the target (the next step); everything else is bezel, secondary or quiet.
 Texts are the current ones and do not change.
 
-### 10.1 Attention (`#/attention`, `pages/Attention.tsx`)
+### 10.1 Inbox (`#/inbox`, `pages/Inbox.tsx`; was Attention, `#/attention`)
+
+The page header carries one segmented control, **Decide** and **Fix** (`inbox-segment-decide`, `inbox-segment-fix`), with a count in each
+label while there is something in it. Everything is the current product's (§24); the sidebar count stays global, and a line under the
+header names the other products that have something waiting ("Waiting in other products: …", each a link that switches the product).
 
 | Screen / state | Target pattern | Filled | Empty state → next step |
 |---|---|---|---|
-| Getting started (a launch step open) | Getting-started group box | the next step: "Add a product", then the newest product's next stage of the launch path ("Build the passport" / "Write a goal" / "Connect a channel", `startSteps`), then "Connect an account" / "Resume automation" | — |
-| All done | Empty state | none (only "Open Opportunities" bezel) | "Nothing needs you right now" → "Open Opportunities" |
-| Connections and accounts | Group box, one row per problem: tag, title, product line, fix button on the right | none (fix buttons bezel) | — |
-| Needs your decision | Review list | "Approve" of the first card | — |
+| Getting started (the current product has no channel and nothing waits) | Getting-started group box | the next step: "Add a product", then the product's next stage of the launch path ("Build the passport" / "Write a goal" / "Connect a channel", `startSteps`), then "Connect an account" / "Resume automation" | — |
+| All done (a channel exists, nothing waits) | Empty state | none (only "Open Feed" bezel) | "Nothing needs you right now" → "Open Feed" |
+| Decide | Master-detail with action bar (§9): the list (`inbox-list`, rows `inbox-row-<id>`), the item in full (`inbox-detail`: `ReviewIdentity`, `ReviewBody`, `ReviewActionRow`) | the action bar's one filled button (`inbox-primary`; the label and target come from `mainActionOf` and the approve labels); every other button of the item is a bezel or quiet | the "All done" / "Getting started" states above |
+| Fix | One group box, one row per problem: tag, title, product line, fix button on the right (`problem-list`, `attention-<kind>`, `attention-link-<kind>`) | none (fix buttons bezel) | "No connection or account problems" |
 
-### 10.2 Products (`#/products/<id>/<tab>`, `pages/Products.tsx`)
+Keys: Up/Down move the selection in the list (only from the list or with nothing focused, never inside a field); Cmd/Ctrl+Enter presses
+the filled button when it is enabled. After an action the selection moves to the next row that still waits; the order of the list is
+frozen while the owner works (what appeared stays where it first appeared, new items come after), as the Attention list was.
+
+### 10.2 Setup (`#/setup[/<tab>]`, `pages/Setup.tsx`; was Products, `#/products/<id>/<tab>`)
+
+Since DEC-037 the product is chosen in the sidebar's product switcher, so the list and the two-pane layout are gone: Setup shows the
+current product's header, launch path and four tabs (Sources, Passport, Analysis, Goal). Its channels and results are the Channels and
+Overview screens (below). The rows that describe the product list or the Channels and Results tabs hold for the screens that took them over.
 
 | Screen / state | Target pattern | Filled | Empty state → next step |
 |---|---|---|---|
-| No products | Page header + empty state | "Add your first product" ("New product" is bezel) | "No products yet" → "Add your first product" |
+| No products | Page header + empty state (`add-first-product`) | "Add your first product" ("New product" is the entry of the switcher) | "No products yet" → "Add your first product" |
 | New product form (`CreateProduct`) | Group box form at the top of the page | "Create product" | — |
-| List + detail | List + detail; product rows: name + launch dots, the website's host (full address and full name in the tooltip) or "No website yet", "Next: …" (the next stage of the launch path in the words of its action: "Next: build the passport", "write a goal", "connect a channel", "write a publication" / "approve a draft"; §11) | per tab | — |
+| List + detail (until phase A; now the product switcher's rows) | The switcher's rows; product rows: name + launch dots, the website's host (full address and full name in the tooltip) or "No website yet", "Next: …" (the next stage of the launch path in the words of its action: "Next: build the passport", "write a goal", "connect a channel", "write a publication" / "approve a draft"; §11) | per tab | — |
 | Product header (`ProductHeader`), Edit details form | Object header; edit form as a group box | "Save" while editing | — |
-| Launch path + tabs | Stepper + segmented control (Sources, Passport, Analysis, Goal, Channels, Results) | — | — |
+| Launch path + tabs | Stepper + segmented control (Sources, Passport, Analysis, Goal; Channels and Results are screens of their own) | — | — |
 | Sources (`SourcesTab`, `AddSource`, `SourcePreviewPanel`) | "Add a source" group box (kind as segmented control), "Sources" group box with rows (Edit/Remove on the right), preview as a well | "Add source" while the product has no source, afterwards the link to the next stage (§11); "Save" while an inline edit is open | "No sources yet" → the add form |
 | Passport, empty | Group box with the lead line, the Sections checklist, Versions | "Open Analysis" ("Approve passport" bezel, disabled with its reason) | "No passport yet." → "Open Analysis" |
 | Passport with statements (`ClaimRow`, `ClaimForm`) | "Product passport" group box (version line, Approve all / Approve passport); one group box per section with statement rows (tags, text, source line; Approve secondary, Edit, More menu) | "Approve passport" (when allowed) while the passport is the next stage, afterwards the link to the next stage (§11); "Add"/"Save" of an open form | per section: "nothing here yet" + quiet "Add statement" |
 | Analysis | Group box with steps and progress | "Start analysis" / "Resume analysis" / "Run again" while the passport is the next stage, afterwards the link to the next stage (§11) | "No AI engine is selected." → link to Settings |
-| Goal | One group box per goal; saved goal compact (Edit, quiet Remove, "Show on Results") | "Add goal" / "Save goal" of the open form; the lone first-goal form while Goal is the next stage, otherwise the link to the next stage (§11) | "Add a goal" |
-| Channels (`ChannelsPanel` and `channels/*`) | Accounts strip (group box), "Connect a channel" group box, channel list panel + channel detail group boxes (status, capability, plan, mode, settings), "Ideas from the AI" disclosure | exactly one, by setup stage, while Channel is the path's next stage: "Add an account" (no account) → "Connect channel"; once a channel is connected "Assess channel" and "Activate" are bezels (they stay available) and the link to the next stage is filled (§11); "Save settings" only while the settings form has changes | "No channels yet" → "Connect your first channel above." |
-| Results | Group boxes: goals, metrics table, conversions note | "Connect a channel" when there is no channel and Channel is the path's next stage; otherwise the link to the next stage, or none when the path is complete ("Refresh all" bezel) | "No channels for this product yet" → "Connect a channel" |
+| Goal | One group box per goal; saved goal compact (Edit, quiet Remove, "Show on Overview") | "Add goal" / "Save goal" of the open form; the lone first-goal form while Goal is the next stage, otherwise the link to the next stage (§11) | "Add a goal" |
+| Channels, now `#/channels` (`ChannelsPanel` and `channels/*`) | Accounts strip (group box), "Connect a channel" group box, channel list panel + channel detail group boxes (status, capability, plan, mode, settings), "Ideas from the AI" disclosure | exactly one, by setup stage, while Channel is the path's next stage: "Add an account" (no account) → "Connect channel"; once a channel is connected "Assess channel" and "Activate" are bezels (they stay available) and the link to the next stage is filled (§11); "Save settings" only while the settings form has changes | "No channels yet" → "Connect your first channel above." |
+| Results, now Overview `#/overview` (`ResultsPanel`, interim) | Group boxes: goals, metrics table, conversions note | "Connect a channel" when there is no channel and Channel is the path's next stage; otherwise the link to the next stage, or none when the path is complete ("Refresh all" bezel) | "No channels for this product yet" → "Connect a channel" |
 
 ### 10.3 Accounts (`#/accounts`, `#/accounts/new`, `pages/Accounts.tsx`)
 
@@ -387,7 +403,9 @@ Texts are the current ones and do not change.
 | Profiles (`ProfilesPanel`, `ProfileDetail`, `ProfileAccounts`) | List + detail; "New profile" above the list as a bezel button with a plus glyph; platform toggles as a toggle group (pressed = tint, not filled) | "Make the profile" / "Propose a profile" / "Approve" / "Make an account" — one at a time by stage | no profile: the new-profile form opens by itself (as today); "Select a profile" when none is picked |
 | Mailboxes (`MailboxesCard`) | Group box with rows + add field | "Add mailbox" | today a sentence only; target: the sentence and the add field as the next step |
 
-### 10.4 Opportunities (`#/opportunities`)
+### 10.4 Feed (`#/feed`; was Opportunities, `#/opportunities`)
+
+The current product's items only; there is no product filter on the screen any more.
 
 | Screen / state | Target pattern | Filled | Empty state → next step |
 |---|---|---|---|
@@ -395,11 +413,13 @@ Texts are the current ones and do not change.
 | Items | Review list (`ReviewCard`, `ThreadView`, `DraftEditor`, `ReviewButtons`, `ScheduleControl`, `ResolveUnknown`) | main action of the first card | "Nothing here" → "Connect a channel" (no channel) / "No items match this filter." |
 | Older discussions | Disclosure + rows | — | "No discussions recorded yet" |
 
-### 10.5 Publications (`#/publications/<productId>`)
+### 10.5 Posts (`#/posts`; was Publications, `#/publications/<productId>`)
+
+The current product's posts; there is no product filter on the screen any more.
 
 | Screen / state | Target pattern | Filled | Empty state → next step |
 |---|---|---|---|
-| Toolbar (product filter, "Suggest with AI", "Write one myself") | Pop-up button + bezel/secondary buttons (an AI helper is never filled); while the empty state below offers "Write one myself" the toolbar leaves its own out, so one button of that name is on screen (BUG-057) | — | — |
+| Toolbar ("Suggest with AI", "Write one myself"; the Product pop-up is gone) | Pop-up button + bezel/secondary buttons (an AI helper is never filled); while the empty state below offers "Write one myself" the toolbar leaves its own out, so one button of that name is on screen (BUG-057) | — | — |
 | New publication (`PublicationForm`) | Group-box form | "Save as draft" | — |
 | Drafts, approved and scheduled; Sent; Rejected | Review list + row lists | main action of the first draft | "No channels yet" → "Connect a channel"; "No drafts" ("Ask the AI for a suggestion or write one yourself.") → "Write one myself", filled, as its action (`write-publication-empty`; the toolbar's `write-publication` is not drawn while it shows) |
 | Posting not available | Note (warn) | — | — |
@@ -439,7 +459,7 @@ split, no sideways scroll.
 ## 11. Launch path
 
 Kept exactly as DEC-022 decides (stages, counts, links, "approved publication" meaning); only the look changes: stepper of
-§7 under the object header, the five dots on each product row, and the getting-started block on Attention. At 980×640 with the
+§7 under the object header, the five dots on each product row of the switcher, and the getting-started block on the Inbox. At 980×640 with the
 menu shown the stepper stays on one row (mock: `pathRows: 1`).
 
 **One next step (BUG-064).** The launch path is the single source of "what next". `launchStages` gives every stage its state and the
@@ -480,7 +500,7 @@ Measured on the packaged build of the branch with `scripts/design/tour.mjs` (72 
 | V-01 | Window: hidden-inset title, vibrancy sidebar, transparent window colour, min size 980×640 | read `createWindow`; native capture | as §4.1 |
 | V-02 | Window buttons centred on the 52 px band and nothing interactive under them | native capture: centre y of the red button ±1 px of 26 px (measured 25.6); tour `underLights` (x < 84; the buttons end near x = 79) | empty on every screen |
 | V-03 | Window drag works on the sidebar band and the toolbar; the toggle, links and buttons inside them are no-drag | computed `-webkit-app-region`; drag the window by the toolbar in the native window | drag moves the window; every control clicks |
-| V-04 | Sidebar: 7 items in today's order, each with one 16×16 icon at the same x; Log and Settings at the bottom; neutral selection with `aria-current`; "Promotion Desk" visible; hide/show works and keeps the route | DOM read + click | all true, both themes |
+| V-04 | Sidebar (rewritten by DEC-037; the plan and the decision call this rule V-03, but V-03 is the drag region): the product switcher under "Promotion Desk", then 9 items in this order: Overview, Inbox, Feed, Posts, Channels, Accounts, Setup, with Log and Settings at the bottom; each with one 16×16 icon at the same x; neutral selection with `aria-current`; "Promotion Desk" visible; hide/show works and keeps the route; the switcher opens a pop-up with the products and "New product", closes on Escape and returns focus to its button | DOM read + click + keyboard | all true, both themes |
 | V-05 | Toolbar 52 px, one line, no overlap of its items at 1320 and 980 wide, with the menu shown and hidden; version, AI engine and Accounts groups and the automation toggle present | bounding boxes of `.topbar` children | no overlap; heights 52 |
 | V-06 | No horizontal overflow of the document or `.content`; no clipped or cut button; no button wrapped to two lines | tour `hOverflow`, `cutButtons`, `tallButtons` (textareas excluded) | 0 on every screen |
 | V-07 | Text sizes only 13, 15, 17, 22, 26 px; nothing under 13 px; body 13 px | tour `fontSizes` | set ⊆ {13,15,17,22,26} on every screen |
@@ -491,13 +511,13 @@ Measured on the packaged build of the branch with `scripts/design/tour.mjs` (72 
 | V-12 | Contrast in both themes, over each text's real stacked background (every translucent fill composited: card, table stripe, tag, tab track, selected row): text-1/text-2 ≥ 4.5:1 on surface-0/1/2/3 and field and on a tag over a striped row (dark `#b4b4ba` on `#434346` = 4.78:1); text-3 ≥ 4.5:1 on surface-0/1/2/3 and field (dark: placeholder 4.79:1, disabled value 4.86:1; light 4.59:1 on surface-2); on-accent on accent ≥ 4.5:1; every tag colour on its background ≥ 4.5:1; focus ring ≥ 3:1 against its surroundings | every text node, input value and placeholder of the rendered page (not the source) against its composited ancestors, both themes, 1320×880 and 980×640, every route of the tour | none under 4.5:1 (6 910 text nodes in the BUG-049 pass) |
 | V-13 | Themes: every screen renders fully in light and in dark with no mix (native selects and scrollbars follow `color-scheme`) | tour in both themes; native capture after switching macOS appearance | no element keeps the other theme's colours |
 | V-14 | Hover changes the background of every button variant, sidebar item, segment, list row, menu item and disclosure, without changing the label colour of primary and danger (lesson 112) | CDP hover on each variant, computed colours before/after, both themes | all change; labels kept |
-| V-15 | Focus: Tab reaches every control; each shows the 2 px `--focus` ring | Tab through Products, Accounts, Settings; computed outline | 100 % |
+| V-15 | Focus: Tab reaches every control; each shows the 2 px `--focus` ring | Tab through the product switcher, Setup, Inbox (list rows are reached with the arrow keys; the selected row is the one tab stop), Accounts, Settings; computed outline | 100 % |
 | V-16 | Disabled differs from enabled at a glance (no shadow, not faded, `--text-3` label, `--line` edge) and stays ≥ 4.5:1 on its own fill: a button label on surface-0/1, a field or pop-up value on `--surface-2` (the browser's own 70 % fade of a disabled pop-up button is switched off: it gave 2.7:1); its reason is visible beside it: a sentence next to the button, or, for a button that sits beside its own empty field ("Add" an image, "Schedule"), that field | computed styles of disabled vs enabled of each variant | distinct; reason present |
 | V-17 | Reduce motion: every `transition-duration` and `animation-duration` is 0 s; Reduce transparency: the sidebar is opaque `--sidebar` | `Emulation.setEmulatedMedia` for both features | true |
-| V-18 | Products at 980×640 with the menu shown: list and detail side by side, the tab row ends at y ≤ 310 px (measured 308 with a product that has a website, a description and a status row; the first guess of 300 was not reachable without dropping the status row), the launch path is one row, no word broken inside a URL | DOM measure on the Passport tab | all true |
-| V-19 | Launch path visible under the product header, as dots on every product row, and on the first-run Attention; counts unchanged | DOM read; existing launch-path unit tests | true |
+| V-18 | Setup at 980×640 with the menu shown (it was the Products list + detail; the list is the switcher now), the tab row ends at y ≤ 310 px (measured 308 with a product that has a website, a description and a status row; the first guess of 300 was not reachable without dropping the status row), the launch path is one row, no word broken inside a URL | DOM measure on the Passport tab | all true |
+| V-19 | Launch path visible under the product header, as dots on every product row of the switcher and on the current product's dots in the sidebar, and on the first-run Inbox; counts unchanged | DOM read; existing launch-path unit tests | true |
 | V-20 | Every empty state of §10 has a title, one sentence and the named next-step action (or says none is needed) | tour on a fresh data folder and on the seeded one | 100 % |
-| V-21 | QA-bound texts, accessible names, roles and `data-testid` of §13 unchanged. Decided exceptions after the QA walk: the send button of an edited draft reads "Save, approve and send" (was "Save and approve and send", BUG-057); the toolbar's "Write one myself" is not drawn while the empty list offers its own (BUG-057); the row of a product with no approved passport reads "Next: build the passport" (was "Next: run the analysis" / "Next: approve the passport", BUG-064); the Getting started headline names the newest product ("Launch Northwind Notes", was "Launch your first product") and its checklist puts that product's next launch-path stage between "Add a product" and "Connect an account" (BUG-058) | `grep` of each string in the renderer + both QA scenarios run | all found; scenarios pass |
+| V-21 | QA-bound texts, accessible names, roles and `data-testid` of §13 unchanged. Decided exceptions after the QA walk: the send button of an edited draft reads "Save, approve and send" (was "Save and approve and send", BUG-057); the toolbar's "Write one myself" is not drawn while the empty list offers its own (BUG-057); the row of a product with no approved passport reads "Next: build the passport" (was "Next: run the analysis" / "Next: approve the passport", BUG-064); the Getting started headline names the newest product ("Launch Northwind Notes", was "Launch your first product") and its checklist puts that product's next launch-path stage between "Add a product" and "Connect an account" (BUG-058). **Renamed by DEC-037 phase A (the element survives under a new name; the frozen scenarios are updated with the phase, §24):** "Open Products" and "Open product" are "Open Setup"; "Show on Results" is "Show on Overview"; "Open Opportunities" is "Open Feed"; "Open the Channels tab" and every "Channels tab" sentence say "Channels screen"; the Products list rows are the switcher's rows; the page titles Attention, Products, Opportunities, Publications and Results are Inbox, Setup, Feed, Posts and Overview | `grep` of each string in the renderer + both QA scenarios run | all found; scenarios pass |
 | V-22 | No new runtime or dev dependency; icons are local SVG | `git diff main -- package.json package-lock.json` | no dependency change |
 | V-23 | Web mode (`PPD_WEB_MODE=1`) renders the same layout with an opaque sidebar | open the web address in the MarkView browser tab | sidebar opaque, no transparency holes |
 | V-24 | `npm run verify` green, CI green | as DoD | green |
@@ -510,12 +530,12 @@ Both scenarios (`.markview/qa/scenarios/promotion-desk-designer-brand-launch.jso
 drive the macOS accessibility tree. The redesign changes **no visible text and no accessible name**. In particular these stay
 exactly as they are:
 
-- Shell: window title "Product Promotion Desk"; "Promotion Desk"; the seven menu labels; `aria-current` on the active item; the
-  Attention count; "Hide menu"; "Menu" / "Menu · N"; the version tag `vX.Y.Z`; "AI engine" and "Accounts" groups with their
+- Shell: window title "Product Promotion Desk"; "Promotion Desk"; the menu labels (nine since DEC-037, §24); `aria-current` on the active item; the
+  Inbox count (`attention-count`); "Hide menu"; "Menu" / "Menu · N"; the version tag `vX.Y.Z`; "AI engine" and "Accounts" groups with their
   accessible names ("AI engine: …", "Accounts: …"); "None selected" / "None connected"; "Automation running/paused";
   "Pause automation" / "Resume automation"; "Background".
-- Page titles and subtitles of all seven sections; every button, tab, field label, hint, empty-state title and body listed in
-  §10; the test ids `shell`, `sidebar`, `topbar`, `nav-*`, `attention-count`, `menu-hide`, `menu-show`,
+- Page titles and subtitles of all sections (the renamed ones are listed in V-21); every button, tab, field label, hint, empty-state title and body listed in
+  §10; the test ids `shell`, `sidebar`, `topbar`, `nav-*` (`nav-attention`, `nav-products`, `nav-opportunities` and `nav-publications` are `nav-inbox`, `nav-setup`, `nav-feed` and `nav-posts`), `attention-count`, `menu-hide`, `menu-show`,
   `app-version-header`, `accounts-summary`, `connect-account-link`, `automation-state-pill`, `automation-state`,
   `pause-toggle`, `brand-mark`, `launch-stage-*`, `launch-dots-*`, `attention-launch-path`, `approve-blocker` and every other
   `data-testid` already in the renderer.
@@ -585,6 +605,8 @@ read or stop the owner's application.
 
 Status: written while the page packages were implemented on `feat/macos-design` (commits `8c79db8`, `b14d89a` and the packages after them). The
 matrix of §10 is the target; this section records what the code does, so the sweep and the next steps read one source.
+
+> Written before DEC-037. Where a row here names Products, Attention, Opportunities, Publications or the Channels and Results tabs, read §24 for the screen it became.
 
 ### 16.1 Shared page patterns (`styles.css`, `ui.tsx`)
 
@@ -775,7 +797,8 @@ account and its "Open account" button is the filled one; the sign-in of the link
 ## 21. Open browser where a channel is chosen or shown (0.14.0)
 
 To choose a channel (a community, a group) the owner sometimes has to look at the platform, signed in as the account. One control, `OpenAccountBrowser`, is shown wherever a
-channel is chosen or shown, and it opens the account's own browser (Internal or Chrome, as the account says) with its session. It is not a new screen.
+channel is chosen or shown, and it opens a window on the account's own session (Internal or Chrome, as the account says). It is not a new screen. The window is one more window of the
+session (DEC-038): the owner may open as many as they like, the AI keeps working in a page of its own, and neither takes control from the other.
 
 **Where.** *Connect a channel* (beside the address; the one place with "Use the page I'm on"), each row of *Accounts of this product*, each *suggested channel* (in the account that
 "Use this" would use; hidden when the product has no account on that platform), the *channel card* (`channel-browse`, next to Activate, Pause and Remove), *Opportunities* and
@@ -786,11 +809,11 @@ show no such button.
 of that platform (a handle turns into its profile); on a channel, its own page. A site with no page of its own and an empty address says "Type the address of the site first." beside the
 disabled button.
 
-**States.** The button is a bezel, never filled: the step's own action keeps the one filled button of the screen. It is disabled with its reason beside it (a `Hint`, `X-reason`) while
-the AI works on the account or while the browser is open already. While the owner holds the browser the button is replaced by one block on its own row (`.open-browser-panel`): a warn note
-("the app waits while you work in it"), "Show the window" and "Done, close the window"; in Connect also "Use the page I'm on". Where several buttons belong to one account (a row of
-Accounts, the Connect form, a channel card) the block is shown once, by the one that was pressed, or by the first of them when that one is not on the screen (the owner went elsewhere and came
-back, so "Done" is always within reach); the others are off and say "This account's browser is open already." (`openMode`, `blockHolder`, `useBlockClaim`).
+**States.** The button is a bezel, never filled: the step's own action keeps the one filled button of the screen. It is a plain button that opens a window, and it is disabled only for the
+screen's own reason (a `Hint`, `X-reason` beside it: nothing to open yet). It is not disabled while the AI works on the account or while a window is open already: opening a window takes nothing from
+the AI, and pressing it again brings the window that shows the address to the front or opens one more. There is no block, no warning, no "Show the window" and no "Done" here (the window has its own
+"Close window" button); in Connect, while a window is open, "Use the page I'm on" appears beside the button. "Take control" and "Give control back to the app" are not part of this control: they
+are for the one case where the owner wants to finish the AI's own page (a captcha, a question of the AI), and live in the account's More menu.
 
 **Use the page I'm on.** Reads one thing: the address of the page in the owner's window, cut to scheme, host and path (no query, no fragment, no credentials), and fills *Channel address*.
 The field stays editable and *Connect channel* still checks the address. When something was cut (a query, a fragment) a line says so and asks the owner to check it is the page meant ("Everything
@@ -799,13 +822,13 @@ to do; a page that is not a web page and a read that failed each have their own 
 
 | Pattern | Markup | Rules |
 |---|---|---|
-| Open browser | `OpenAccountBrowser` (`X` = `connect-browse`, `account-browse-<id>`, `suggestion-browse`, `channel-browse`, `opportunities-browse`, `publications-browse`, `thread-browse-<id>`) | Bezel button, `X-reason` beside it when off, one `.open-browser-panel` row while the owner holds the browser, `X-use-page` only in Connect |
+| Open browser | `OpenAccountBrowser` (`X` = `connect-browse`, `account-browse-<id>`, `suggestion-browse`, `channel-browse`, `opportunities-browse`, `publications-browse`, `thread-browse-<id>`) | Bezel button, `X-reason` beside it when off, `X-use-page` (bezel) beside it only in Connect and only while a window is open, `X-page-note` under it |
 | Address hint | `connect-browse-hint` under the Connect row: "Opens Reddit in this account's own browser, signed in as it. Find the place there, then press "Use the page I'm on"." | One muted line, platform named |
 
 | Id | Requirement | Method | Pass |
 |---|---|---|---|
-| V-34 | The control follows the shared rules in every place it appears: controls at least 28 px, no second filled button, nothing cut or overflowing, the open block on its own row, in light and dark | the probe on an own instance (`MEASURE` and `LOOK` on Connect, Accounts of this product, suggestions, the channel card, Opportunities, Publications) | every check passes |
-| V-35 | Opening and reading are real and small: the right page opens in the right browser, the app waits while the owner holds it, "Use the page I'm on" gives the address without query or fragment and only while the window is open, nothing else is read | `browse-channels.test.ts`, `electron-browser-service.test.ts`, `chrome-browser-service.test.ts`, `routing-browser-service.test.ts` (mutation-checked, every mutant killed but one redundant guard); the probe with a local page in both browsers | every check passes |
+| V-34 | The control follows the shared rules in every place it appears: controls at least 28 px, no second filled button, nothing cut or overflowing, the button and "Use the page I'm on" on one wrapping row, in light and dark | the probe on an own instance (`MEASURE` and `LOOK` on Connect, Accounts of this product, suggestions, the channel card, Opportunities, Publications) | every check passes |
+| V-35 | Opening and reading are real and small: the right page opens in the right browser, a window of the owner's takes nothing from the AI and the AI's own page is never the owner's, "Use the page I'm on" gives the address without query or fragment and only while the window is open, nothing else is read | `browse-channels.test.ts`, `electron-browser-service.test.ts`, `chrome-browser-service.test.ts`, `routing-browser-service.test.ts` (mutation-checked, every mutant killed but one redundant guard); the probe with a local page in both browsers | every check passes |
 | V-36 | The join control and the Membership words follow the shared rules: "Let the AI join r/x" is a bezel and never the filled button, at least 28 px, with its reason beside it while off; the channel's own run is shown once, under it; Membership is the first row of the table for a platform that can tell it, with the words Member / Not joined / Banned / Needs you, and no row, no card line and no button for a platform that cannot | `renderer-logic.test.ts` (`capability-words.ts`, `join-control.ts`); the probe on an own instance (`MEASURE` and `LOOK` on the channel card, light and dark) | every check passes |
 
 ## 22. Membership and "Let the AI join" (0.15.0)
@@ -836,8 +859,8 @@ has it too). Under it one muted sentence (`channel-join-note`): "Opens this comm
 The press is the owner's approval; the core holds the AI to the one click and reads the membership itself afterwards.
 
 **Off, with the reason beside it** (`channel-join-reason`, a `Hint` in the row, as the other buttons): the core says it cannot start (no AI engine, the engine cannot be held to the browser tools
-alone, the account is not signed in, banned: `agent.canStart`); another run works on the account ("The AI is working on this account. Join when it is done."); the owner holds the browser
-("Close the browser window first (Done) so the AI can work in it."). *Open browser* is off meanwhile as it is for any AI work on the account.
+alone, the account is not signed in, banned: `agent.canStart`); another run works on the account ("The AI is working on this account. Join when it is done."); the owner took control
+of the account's browser ("You took control of this account’s browser. Give control back (Accounts, More) so the AI can work in it."; an open window of the owner's no longer stops it, DEC-038).
 
 **The run.** While the AI works on this channel (`run.kind === 'join'` and `run.channelId` is the channel's) the one run panel is shown under the button (`AgentRunPanel`, testid
 `channel-join-run`: what it is doing, the steps, Stop); a question of the AI is the global pop-up. When the run ends the panel stays with how it ended (done, needs you, could not finish) until
@@ -885,3 +908,257 @@ after 30 days; its card shows "Picture removed" where the file is gone.
 | V-38 | A pasted or dropped picture goes into the library once (same bytes, one item), into the post, into the text at the cursor and into the thumbnail strip; a file that is not a picture is ignored | the probe: synthetic paste and drop events in the real Electron renderer | each step observed |
 | V-39 | The sketch changes with the platform and never changes the post: each of the seven platforms has its own layout, the marks are gone where the platform shows none, the title is left out where there is none, the count is against the platform's limit | the probe walks the picker and reads `data-kind`, the count and the notes; the text box is read back unchanged | each platform observed |
 | V-40 | Delete of an unsent post is final and says so: asked first, the post leaves the queue, the list is *Deleted*, the card is badged *Deleted*, an edit of it is refused | the probe presses *Delete*, confirms, reads the list and the refused edit | observed |
+
+
+## 24. The product switcher, the nine sections and the Inbox (DEC-037, phase A)
+
+Status: phase A of `docs/design/ui-redesign-plan.md`. Everything above this section describes the app up to 0.20; where it names a
+section or a screen that phase A renamed, this section is the current word. It changes the structure, not the look: tokens, controls,
+the one filled button and the frozen texts of §13 keep their rules.
+
+### 24.1 The current product
+
+One product is *current* for the whole window. The sidebar's switcher chooses it; Overview, Feed, Posts, Channels, Setup and the Inbox
+show that product's work and have no product filter of their own. Accounts and Log and Settings are not per product.
+
+- **Remembered** in `localStorage` under `ppd.lastProduct` (the key the old Products page used), always inside try/catch; with no
+  storage the choice lasts until the window closes. **Fallback:** the newest product by creation time; none when there is no product.
+- **A link can name a product** with `?product=<id>` (`productHref`, `postsHref`); the shell sets it as the current product and removes it
+  from the address (no history entry), so a reload shows the product the owner chose last. `#/accounts…` keeps its own `?product=`,
+  which names the product a new-account form was opened from.
+- **A product that was just created** stays current before the list has loaded it (BUG-042, BUG-068, BUG-069).
+- The pure rules (`current-product.ts`) and the routes (`route.ts`) are tested in `src/main/renderer-logic.test.ts`.
+
+### 24.2 Switcher and sidebar
+
+Under the "Promotion Desk" row: a 28 px pop-up button with the product's name and its five launch dots (`product-switcher`,
+`product-switcher-dots`). It opens a menu (`product-switcher-list`) of the products (`product-<id>`, each with `launch-dots-<id>`, the
+current one checked) and the entry **New product** (`new-product`, a link to the form at `#/setup/new`). Arrow keys, Home and End move
+through the entries, Escape and a click outside close it and focus returns to the button.
+
+Entries, in order (V-04): Overview (`nav-overview`), Inbox (`nav-inbox`, with the count capsule `attention-count`), Feed (`nav-feed`),
+Posts (`nav-posts`), Channels (`nav-channels`), Accounts (`nav-accounts`), Setup (`nav-setup`); at the foot Log (`nav-logs`) and
+Settings (`nav-settings`).
+
+### 24.3 Routes
+
+| Screen | Route | Old addresses that redirect (with no history entry) |
+|---|---|---|
+| Overview | `#/overview` (the Results panel of the current product, interim) | `#/results`, `#/products/<id>/results` |
+| Inbox | `#/inbox` | `#/attention` |
+| Feed | `#/feed` | `#/opportunities` |
+| Posts | `#/posts` | `#/publications`, `#/publications/<productId>` (sets the product) |
+| Channels | `#/channels[?account=<id>]` | `#/products/<id>/channels[?account=<id>]` (sets the product) |
+| Accounts | `#/accounts`, `#/accounts/new`, `#/accounts/<id>` | unchanged |
+| Setup | `#/setup`, `#/setup/{sources,passport,analysis,goal}`, `#/setup/new` (the new-product form) | `#/products`, `#/products/<id>`, `#/products/<id>/{sources,passport,analysis,goal}` (set the product) |
+| Log | `#/logs` | — |
+| Settings | `#/settings` | — |
+
+An address that names no screen shows Overview. Any address may carry `?product=<id>`.
+
+### 24.4 Inbox
+
+Described in §10.1. Layout rules: the page is `Page fill` (`ui.tsx`, `.page.page-fill`): exactly as tall as the content column, so the
+list, the item and the Fix list scroll on their own and the page itself does not. At 980×640 with the menu shown the list column is
+216–300 px and the item has the rest; nothing scrolls sideways. The action bar (`inbox-bar`) is pinned under the item: Defer and Reject (or Delete)
+on the left, the one filled button (`inbox-primary`) on the right, with the reason beside a disabled one. An item that no longer needs a decision
+(sent, rejected, deferred) keeps its row, in its old place, with the note "This item no longer needs a decision." and a **Dismiss** button
+(`dismiss-card`) in the bar, until it is dismissed.
+
+The item is the same content as the collapsible `ReviewCard` of Feed and Posts: `useReviewItem` holds its state and actions and
+`ReviewIdentity`, `ReviewBody` and `ReviewActionRow` draw it, so the card and the Inbox cannot differ.
+
+### 24.5 What was renamed, for the frozen scenarios (V-21)
+
+| Was | Is |
+|---|---|
+| `nav-attention`, `nav-products`, `nav-opportunities`, `nav-publications` | `nav-inbox`, `nav-setup`, `nav-feed`, `nav-posts` (new: `nav-overview`, `nav-channels`) |
+| Titles Attention, Products, Opportunities, Publications | Inbox, Setup, Feed, Posts (the Results tab is the Overview screen; the Channels tab is the Channels screen) |
+| `product-tab-channels`, `product-tab-results` | no longer tabs: the Channels and Overview screens |
+| `new-product` (a button in the Products header) | `new-product` (the switcher's menu entry) |
+| `decision-list` and the review cards of the Attention page | `inbox-list`, `inbox-row-<id>`, `inbox-detail`; the card's own test ids stay on the item |
+| the main button's `approve` / `send` / `reconcile` on the Attention page | `inbox-primary` on the Inbox (the old name is in its `data-action`); Feed and Posts keep the old ones |
+| "Open Products", "Open product" | "Open Setup" |
+| "Show on Results" | "Show on Overview" |
+| "Open Opportunities" (`attention-next-opportunities` keeps its id) | "Open Feed" |
+| "…on the Channels tab…" | "…on the Channels screen…" |
+
+Kept: `attention-count`, `attention-empty`, `attention-start`, `attention-launch-path`, `attention-next-<id>`, `attention-resume`,
+`attention-nothing`, `problem-list`, `attention-<kind>`, `attention-link-<kind>`, `launch-stage-*`, `launch-dots-*`.
+
+New: `product-switcher`, `product-switcher-dots`, `product-switcher-list`, `product-<id>`, `nav-overview`, `nav-inbox`, `nav-feed`,
+`nav-posts`, `nav-channels`, `nav-setup`, `inbox-segment-decide`, `inbox-segment-fix`, `inbox-list`, `inbox-row-<id>`,
+`inbox-group-<id>`, `inbox-detail`, `inbox-bar`, `inbox-primary`, `inbox-elsewhere`, `add-first-product`.
+
+### 24.6 Requirements
+
+| Id | Requirement | Method | Pass |
+|---|---|---|---|
+| V-41 | The product switcher follows the shared rules: a 28 px pop-up button, a menu on `--surface-3` with `--shadow-pop`, the checked product marked, "New product" last; keyboard: Arrow keys, Home, End, Escape (focus returns to the button); the choice survives a reload and a deleted or unknown id falls back to the newest product | probe: open, choose, reload; Tab and keys; with and without products | all true |
+| V-42 | Every old address of §24.3 lands on the screen it names, sets the product it carried and leaves a canonical address; `#/accounts…` is unchanged | `renderer-logic.test.ts` (`resolveRoute`); probe: open each old hash | all true |
+| V-43 | The Inbox at 1320×880 and 980×640, light and dark: list and item side by side, each scrolling by itself, the action bar always visible, exactly one filled button (`inbox-primary`), no wrapped label, no horizontal overflow; Up/Down move the selection, Cmd+Enter presses the enabled filled button, and after an action the next waiting row is shown | tour `filledButtons`, `hOverflow`, `tallButtons`; probe with keys | all true |
+| V-44 | A screen of the current product shows no product filter; with two products, each screen shows only the current product's items, and the Inbox names where the others wait | probe with two products | all true |
+
+
+## 25. Posts: the list and the calendar (DEC-037, phase B)
+
+`#/posts`, `pages/Posts.tsx`. The current product's posts in one screen with two views, chosen by a segmented control (`posts-view`): **List** and
+**Calendar**. The page is `Page fill`: the list and the post scroll by themselves, the page does not.
+
+### 25.1 Toolbar and filters
+
+One row that wraps: the view control, **Suggest with AI** (`suggest-publication`; a button, or a menu of the product's channels while several exist and none is chosen; an AI
+helper is never filled), **Write one myself** (`write-publication`; left out while the empty state offers it, BUG-057), the state control (All, Drafts, Approved, Scheduled, Sent,
+Deleted, each with its count), the **Channel** select, a **Search** field and the **Sort** select (Updated, Planned time, Channel). All are 28 px (V-45). A post for several
+channels is one row in the least finished state of its versions; the state words are the ones of the post's own steps: Draft, Approved, Scheduled, Sent, Deleted, and the
+attention words Needs you, Failed, Result unknown replace the state while they apply.
+
+### 25.2 List view
+
+Left, a listbox (`posts-list`, rows `post-row-<id>`): the first picture as a 40 px thumbnail (an empty frame of the same size when there is none), the title, the channels joined by " · ",
+a badge (attention tone, else the state's tone) and one line of time: *Sent …*, *Planned …* or *Updated …*. The selected group opens into its versions, one line each (`post-versions`).
+Right, the selected post in full (`post-detail`): the parts of the review card, its action bar (`post-bar`) pinned to the bottom, and the one filled button of the screen is that bar's main
+action while no form is open. A settled post (sent, deleted) shows "This post was sent." or "This post was deleted. The record of it stays." in the bar. Arrow Up/Down and Home/End
+move the selection (focus on the list, or nowhere); the chosen post stays chosen while it is listed, and when it leaves the list (approved under a filter, deleted) the next row (else the one above) is chosen and kept, so a post that moves to the top later does not take the pane while something is being edited.
+
+### 25.3 Calendar view
+
+A month grid (`posts-calendar`) in the viewer's own days, weeks from Sunday. Previous and next month are icon buttons (`calendar-prev`, `calendar-next`), **Today** (`calendar-today`) is off on the current
+month. A planned post is on the day it goes out (a draft with a planned time too, as a planned entry), a sent post on the day it was sent; a day cell shows two entries (the channel) and "+N more";
+a faint line names what the content mix would prepare that day. A day is chosen by pressing it (`calendar-day-<date>`); under the grid the day's panel (`calendar-day-panel`) lists its posts with **Open**
+(shows the post in the list view) and, for a day that is not past, **Write one myself** (`calendar-write`; offered for a day that is not past and has nothing on it) which opens the new-post form with that day as the planned time (ten in the morning of that day, with the day's own offset from UTC). A planned time is applied only
+on channels the app reads; the form says so in a note after saving when a version could not be scheduled (the AI browser sends only on the owner's press), and how many versions took the time). A draft with a planned time shows "Planned …" in the list and sorts by it. When the content mix of a channel cannot be read, a hint says the faint lines are incomplete.
+
+### 25.4 Requirements
+
+| Id | Requirement | Method | Pass |
+|---|---|---|---|
+| V-45 | The Posts toolbar and both views follow the shared rules at 1320×880 and 980×640, light and dark: every control 28 px, one filled button, no wrapped label, no horizontal overflow, the list and the post scroll by themselves | the screens probe (`MEASURE` and `LOOK`) | every check passes |
+| V-46 | The filter, sort, state mapping, group state, calendar entries and month grid are right: a draft with a planned time is on the calendar, a cancelled post is not planned, weeks start on Sunday, a sent post is on the day it completed in the viewer's own day | `src/main/posts-logic.test.ts` (39 tests, mutation-checked, 0 survivors) | all true |
+| V-47 | Keyboard and selection: Up/Down/Home/End move through the rows, a day opens by Enter, the selection never points at a row that is filtered out | the probe with key events | all true |
+
+## 26. Overview (DEC-037, phase C)
+
+`#/overview`, `pages/Overview.tsx`. What happened for the current product in the last **7** or **30** days (`SegmentedControl`, `overview-period-7` / `overview-period-30`, in the screen's header). Every number is the product's own, read
+from two core queries: `overview.get` (the counts of the period in the viewer's local days) and `results.history` (the platforms' readings over the period).
+
+- **Funnel** (`funnel`, rows `funnel-<step>`; card "The last N days"): bars of the posts and replies the AI found, drafted, approved and sent, as a cohort created in the period (a send counts only when confirmed).
+- **The AI suggests** (`overview-suggestions`, each `suggestion-<id>`): at most five rules-based next steps, each one sentence and one link (Inbox, Posts, or a channel's tab). They are rules over the numbers, not an AI call.
+- **Channels** (`overview-channels`, tile `overview-channel-<id>`): one tile for each channel (`ChannelTiles`): the target, the state, what the period brought, and a small line of the main metric where the channel has two days of readings. A tile is a link to the channel's page.
+- **What went out each day** and **<metric> over time**: a column chart of the days' sends and a line chart of the main metric, one line for each channel (colours follow the channels' order, a legend always, a table view of the same numbers). A reading the platform did not give is a gap, never zero.
+- **Needs fixing**: the Fix list of the Inbox for this product, as one-line links.
+- **All metrics** (a `Disclosure`, `overview-all-metrics`): the full metrics card with **Refresh all** (`refresh-all`) in its body; goals and the conversions note below it.
+
+Charts are hand-written SVG (`charts/`): geometry in `charts/geometry.ts` (scales, nice ticks, gap-breaking line paths, daily values), drawing in `LineChart`/`ColumnChart`/`FunnelBars`, all colours tokens
+(`--chart-1…`), light and dark. The main metric is the key most channels have two days of readings for (then the most days, then the key).
+
+| Id | Requirement | Method | Pass |
+|---|---|---|---|
+| V-48 | The Overview follows the shared rules at both sizes, light and dark: 28 px controls, one filled button (none: it only reads), no overflow, no clipped legend or axis label, the tiles wrap | the screens probe | every check passes |
+| V-49 | A gap is never a zero: a day without a reading breaks the line, a metric with fewer than two days of readings draws no line, the main metric and the tile line follow the rule above, a note is given up after three failed tries | `src/main/overview-logic.test.ts` (21 tests) and `charts-logic` tests (mutation-checked, 0 survivors) | all true |
+| V-50 | Every chart has its legend, a table view of the same numbers and an accessible name; nothing is colour alone | the probe reads the table view and the legend | all true |
+
+## 27. Channels: the tiles and the channel page (DEC-037, phase C)
+
+`#/channels` is the list; `#/channels/<id>[/<tab>]` is one channel (`route.ts`: `channelHref`, `parseChannelHash`; the Status tab has no suffix). The old address `#/channels?account=<id>` still works for the list.
+
+**The list** (`channels-panel`): the tiles of §26 (`ChannelTiles`) first once the product has channels, then the Accounts card of this product (a card, not the compact row the plan sketched: it keeps "Add a new account", "Open browser" and its explanation), Connect, and, folded, **Ideas from the AI**. With no channel the cards come first and "No channels yet" follows them. With one channel that still has to be assessed or started
+the screen's one filled button is a link to its page ("Assess this channel", "Activate this channel", `open-only-channel`).
+
+**The channel page** (`ChannelPage`, `channel-detail-<id>`): a back link "All channels", the header (the target, the platform and the account, **Open browser** `channel-browse`, **Check now** `check-now` for a platform the app reads), and four tabs
+(`channel-tab-status|plan|mix|settings`): *Status* (the channel's state card with Activate, Pause or Resume, Join and Remove, then what the account can do there), *Plan*, *Content mix*, *Settings* (mode, then the settings form). A channel that
+is not there (removed, an old link) says so and links back to the list.
+
+| Id | Requirement | Method | Pass |
+|---|---|---|---|
+| V-51 | The channel list and the page follow the shared rules at both sizes, light and dark: 28 px controls, one filled button, the tab row never wraps a label, no overflow | the screens probe | every check passes |
+| V-52 | The channel address round-trips: `channelHref` and `parseChannelHash` agree for every tab and for ids that need encoding; an unknown tab falls back to Status | `renderer-logic.test.ts` | all true |
+| V-53 | "Let the AI join" is off only for the real reasons: the core says it cannot start, another run works on the account, the owner took control; an open window of the owner's never stops it (DEC-038) | `renderer-logic.test.ts` (`join-control.ts`) | all true |
+
+## 28. Feed (DEC-037 phase E, DEC-039)
+
+`#/feed`, `pages/Feed.tsx`, `pages/feed/*`. What happens in the current product's channels and what the AI proposes. It replaces the Opportunities card list; the master-detail pattern
+of §24.4 (list left, the item and its pinned action bar right) now covers the Inbox, Posts and Feed. The page is `Page fill`: the list (`clamp(232px, 34%, 340px)`) and the item scroll by themselves.
+
+**Controls** (`feed-controls`, one wrapping row of 28 px controls): source chips as a segmented control with counts (All, New posts, Comments, Replies to me, Mentions; `feed-source-<id>`), the state
+segments with counts (To decide, Sent, Skipped; `feed-state-<id>`), and the Channel pop-up (`channel-filter`, an `aria-label`, no visible label). Once a channel is chosen **Open browser**
+(`opportunities-browse`) joins the row. The counts of one control respect the other two. Header: **Check now** (`check-now`; a menu of the channels while several exist and none is chosen) and the quiet
+**Older discussions** (`feed-older`), which opens the old card on its own page ("Back to the Feed", `feed-back`). Neither is ever filled.
+
+**List.** Rows under local-day headings (Today, Yesterday, "Nov 12", with the year when it is not this year; `feed-day-<day>`). A row (`feed-row-<id>`) has three lines: a state dot, the channel and the
+time of day; who and the first line of what they wrote; and "Source · what the AI proposes" in caption text (for example "New post · Reply drafted"). The list is a listbox: Up/Down walk it (`moveSelection`);
+after an item leaves the list the selection moves to its neighbour. A sent reply is listed by the time it was confirmed; every other item by the time it was found, so rows do not move while the owner works.
+
+**Item** (`feed-detail`, action bar `feed-bar`): the parts of the review card (`useReviewItem`, `ReviewIdentity`, `ReviewBody`, `ReviewActionRow`) with a source badge. A reply to a **new post** shows the post, with no comment,
+and a note that the reply is a top-level comment and is never sent automatically (`new-post-note`). The one filled button is the selected item's main action, only while it offers one (`useMainActionOwner`); an item with no
+button (sent, sending, rejected) says so in the bar. Feed and Posts keep the old button ids (`approve`, `send`, ...); there is no ⌘↩ shortcut.
+
+**Every state is in exactly one list** (`STATE_OF`, typed so a new state cannot be forgotten): *To decide* = discovered, analyzing, draft, awaiting_approval, ready, sending, needs_user, error, deferred, unknown_result;
+*Sent* = confirmed; *Skipped* = no_reply, cancelled. The core is asked once per list (each capped at 300, newest change first) so a long history of sent replies cannot push out an item that still waits; a list that reaches
+the cap says "Only the newest 300 items of each list are shown." (`feed-capped`).
+
+**Sidebar count.** Beside "Feed" a neutral count (`feed-count`, `.count.neutral`: the quiet selection fill, never amber or red) says how many replies of the current product wait to be decided; it is not drawn for none and reads
+"300+" at the cap. The Inbox count keeps its amber and red tones.
+
+**Empty states and notes.** No channels: a filled "Connect a channel" (`opportunities-connect-channel`). No channel the app reads: a link to Posts (`feed-open-posts`). Nothing found yet. Nothing matches: "Show all"
+(`feed-clear-filters`) opens every source and channel. A channel whose `read_inbox`, `read_posts` or `read_comments` is unavailable, needs the owner or is restricted is named in a warning with the channel's own `detail` and a link
+to its page (several: to the Channels list; `feed-open-channels`); a channel the app does not read is "(not read)" in the select with a quiet line saying its posts are in Posts (`own-posts-no-check`, `feed-unread`).
+
+**Renamed ids, for the frozen scenarios.** Dropped: `filter-open`, `filter-sent`, `filter-closed`, `filter-all` and the Feed's `review-card-<id>`. Kept: `opportunity-list` (now the list itself), `opportunities-connect-channel`,
+`check-now`, `check-result`, `channel-filter`, `own-posts-no-check`, `opportunities-browse` and the ids inside the older-discussions card. New: `feed-controls`, `feed-source-<id>`, `feed-state-<id>`, `feed-day-<day>`,
+`feed-row-<id>`, `feed-detail`, `feed-bar`, `feed-notes`, `feed-reading-problems`, `feed-problem-<key>`, `feed-open-channels`, `feed-unread`, `feed-capped`, `feed-older`, `feed-older-<channelId>`, `check-now-<channelId>`,
+`feed-back`, `feed-clear-filters`, `feed-open-posts`, `new-post-note`, `feed-count`.
+
+| Id | Requirement | Method | Pass |
+|---|---|---|---|
+| V-54 | The Feed follows the shared rules at 1320×880 and 980×640, light and dark: list and item side by side, the action bar always visible, at most one filled button, no wrapped label, no horizontal overflow, the three controls in at most two lines, every control 28 px | the screens probe | every check passes |
+| V-55 | Every opportunity state is in exactly one list; the filters, counts, day grouping, "what the AI proposes" words and the selection after an item leaves are right | `src/main/feed-logic.test.ts` (33 tests; 102 mutants of `feed-filter.ts` and `labels.ts`, none surviving) | all true |
+| V-56 | A reply to a new post shows the post and not a comment, says it is a top-level comment and is never sent automatically; the sidebar count is neutral | the probe with a seeded `new_post` item; `feed-logic.test.ts` (`feedCountLabel`) | all true |
+
+## 29. Setup: the launch path as a stepper (DEC-037 phase C4)
+
+`#/setup[/<tab>]`, `pages/Setup.tsx`, `pages/setup/*`. The old Products page (a list of products beside a product with six tabs) is gone: the product is chosen in the sidebar, the new-product form is `#/setup/new`, and the
+product's preparation is one vertical **stepper** of the four steps of the launch path: Sources, Passport, Analysis, Goal (`setup-steps`, step `setup-step-<id>`, its summary line `setup-step-summary-<id>`).
+
+- A step row is a mark (done, next, waiting), the title, one summary line ("3 sources", "Approved · 24 statements", "Not analyzed yet", "2 goals") and a "Next" chip on the one step the path asks for. Only one step is open at a time; the
+  address says which (`#/setup/sources|passport|analysis|goal`), and the open step's body sits under its row. Analysis is never the "Next" one, so exactly one step is "Next".
+- `NextStage` (the filled "go to the next stage" button) stays above the stepper, so the screen has one filled button, the path's.
+- **The passport** (`passport-sections`) is a two-column grid of eight tiles (`section-<id>`: the title, a count, and the first three statements; `section-preview-<id>`), one column below 560 px of the step's width. **Edit**
+  (`edit-section-<id>`) opens that section's editor in place (the claims with their kinds and statuses, the new-statement form `add-claim-<id>`, the unknowns, Approve passport and the versions); the tile being edited spans both columns.
+  The empty-passport checklist is unchanged and keeps its own `add-claim-<id>`.
+- Removed ids: `launch-stage-*` on Setup (the Inbox's getting-started checklist keeps them), `add-claim-<id>` on a closed tile (it is in the editor).
+
+| Id | Requirement | Method | Pass |
+|---|---|---|---|
+| V-57 | Setup follows the shared rules at 1320×880 and 980×640, light and dark: the stepper rail and the two-column passport do not overflow or wrap a label, 28 px controls, exactly one filled button, a tile being edited spans both columns | the screens probe | every check passes |
+| V-58 | The step states, summary lines and the one "Next" step follow the launch stages; the passport summary (counts, first three statements, an editing tile) is right | `src/main/setup-logic.test.ts` (24 tests; 74 mutants of `setup-steps.ts` and `passport-summary.ts`, none surviving) | all true |
+
+## 30. Accounts: one grouped list and tabs (DEC-037 phase C5, DEC-038)
+
+`#/accounts`, `#/accounts/new`, `#/accounts/<id>`, `pages/Accounts.tsx`, `pages/accounts/*`. Only about accounts (REQ-014): no channels, no products.
+
+- **List** (`account-list`, a listbox with the arrow keys): a profile's row (`profile-row-<id>`) with its logins beneath, one step in with a hairline on the left (`account-row-<id>`: name, platform, sign-in state);
+  accounts with no profile under the heading "Other logins" (not a row). Selection is the neutral `--selection`. A profile row opens its detail (`ProfileDetail`). Header: **New profile** (`create-profile-form`, the form that was in
+  `ProfilesPanel`) and **Add account** (`CreateAccount`, as before). The base mailbox moved to Settings (`MailboxesCard`, a card with a bezel "Add mailbox"); the texts that said "Mailboxes tab" say "in Settings".
+- **Detail** (`account-<id>`, scrolls on its own, is a container): the account header, the platform note when the name mentions another platform (`account-platform-mismatch-<id>`), the next step (`account-next-step-<id>`) and four tabs
+  (`account-tab-<id>` with `aria-controls` and a panel `account-panel-<tab>`; Left/Right/Home/End move between them): **Sign-in**, **Role**, **Browser**, **More**. The numbered steps keep their numbers across tabs (Role 1 and Profile 2
+  in Role, steps 3 to 5 in Sign-in) so the frozen texts ("step 4", "step 5") stay true.
+- **The browser without the lock (DEC-038).** Sign-in has no holding panel, no "Show the window" and no "Done, close the window": "Open browser to sign in" and "Create account … myself" never wait for the AI, because a window of the
+  owner's takes nothing from it. After an explicit **Take control** (More tab) the sign-in says so and the saved-password sign-in, the check and the AI buttons are off; "Give control back to the app" undoes it. The signup step says
+  "close that window (“Close window” at its top)". The browser choice (Browser tab) is off with the reason from `browserSwitchReason`: the AI works on the account, control was taken, or a window is open (a switch would close it).
+
+| Id | Requirement | Method | Pass |
+|---|---|---|---|
+| V-59 | Accounts follows the shared rules at 1320×880 and 980×640, light and dark: the grouped list and the detail scroll by themselves, 28 px controls, at most one filled button, the tab row never wraps a label, no horizontal overflow | the screens probe | every check passes |
+| V-60 | Grouping is right (a profile and its logins, "Other logins" last and only when needed, a login whose profile is gone is listed without one), the rows, the shown row after a removal, the words of a profile row and an account row, the tabs, the browser-switch reason and the sign-in note after Take control follow the account's state | `src/main/accounts-logic.test.ts` (32 tests; 69 mutants of `accounts-groups.ts` and `account-browser-reason.ts`, none surviving) | all true |
+| V-61 | An open window of the owner's never disables an AI action or the sign-in buttons; only an explicit Take control does | `join-control` tests in `renderer-logic.test.ts`; `accounts-logic.test.ts` (`browserSwitchReason`, the sign-in note) | all true |
+
+## 31. Baseline of 0.21.0 (the redesign, DEC-037)
+
+Re-shot with `scripts/design/tour.mjs` from ONE own instance of the development build (own data directory, empty HOME and PATH, loopback only, demo data with `example.com` names, automation paused, nothing sent; the owner's application and data were not touched). All 86 page shots (every section and nested screen × dark/light × 1320×880/980×640) were measured and none has a sideways scroll, a cut or wrapped control, a control other than 28 px (list rows are buttons and are taller on purpose), or more than one filled button; 29 are kept in `baseline/`, the measurements of all 86 in `baseline/metrics.json`. The sidebar of the dark shots is light because the tour emulates the dark colour scheme in the page while the window's native vibrancy follows the system, which stays light; a real dark system draws both dark (the old `native-*` shots of 0.8.0 are the reference for the window itself).
+
+| Shot | What it shows |
+|---|---|
+| `baseline/dark-1320-*.png` (14) | Inbox, Overview, Posts, Feed, Channels, a channel's Status, Setup (Passport and Sources), Accounts (list, profiles, new), Log, Settings, the hidden menu |
+| `baseline/light-1320-*.png` (7) | Inbox, Overview, Posts, a channel's Status, Setup Passport, Accounts, Settings |
+| `baseline/dark-980-*.png` (6), `baseline/light-980-*.png` (2) | The minimum window: Inbox, Posts, Channels, Setup Passport, Accounts, Settings; Setup Passport and the profiles in light |
