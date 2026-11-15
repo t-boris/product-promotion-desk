@@ -19,6 +19,8 @@ import { TOOLBAR_COMMAND_ORIGIN } from './toolbar-state'
 const account = (id: string, partition = `persist:ppd-${id}`): Account => ({
   id,
   platform: 'reddit',
+  browser: 'internal',
+  signsInVia: null,
   label: `Account ${id}`,
   identity: 'natal_bot',
   partition,

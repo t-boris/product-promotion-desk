@@ -10,7 +10,7 @@ import { fakeBrowser, fakePage, loseBrowser, type FakeBrowser, type FakePage } f
 import { profileDirFor } from './chrome-launcher'
 import type { Browser, Page } from 'puppeteer-core'
 
-const account = (id: string, partition = `persist:ppd-${id}`): Account => ({ id, platform: 'facebook', label: id, identity: null, partition, status: 'login_required', createdAt: '2026-01-01T00:00:00.000Z', productId: null, role: null, loginName: null, email: null, mailboxId: null, profileId: null }) as Account
+const account = (id: string, partition = `persist:ppd-${id}`): Account => ({ id, platform: 'facebook', browser: 'chrome', signsInVia: null, label: id, identity: null, partition, status: 'login_required', createdAt: '2026-01-01T00:00:00.000Z', productId: null, role: null, loginName: null, email: null, mailboxId: null, profileId: null }) as Account
 
 let dataDir: string
 let launches: Array<{ executable: string; args: string[]; browser: FakeBrowser & Browser }>
@@ -267,6 +267,35 @@ describe('ChromeBrowserService', () => {
       await writeFile(join(dataDir, 'ppd.sqlite'), 'db')
       await expect(service.forgetAccount(account('x', 'persist:'))).rejects.toThrow('Invalid browser profile name')
       expect(existsSync(join(dataDir, 'ppd.sqlite'))).toBe(true)
+    })
+  })
+
+  describe('releaseAccount and chromeFound', () => {
+    it('closes the Chrome of the account and keeps its profile folder, then starts a new Chrome on the next use', async () => {
+      const { service } = make()
+      const fb = account('a')
+      await service.session(fb).withAgentControl('t', async (page) => page.url())
+      const profile = profileDirFor(dataDir, fb.partition)
+      await mkdir(profile, { recursive: true })
+      await writeFile(join(profile, 'Cookies'), 'x')
+      await service.releaseAccount(fb)
+      expect(launches[0].browser.closeCalls).toBe(1)
+      expect(existsSync(join(profile, 'Cookies'))).toBe(true)
+      await service.session(fb).withAgentControl('t', async (page) => page.url())
+      expect(launches).toHaveLength(2)
+    })
+
+    it('does nothing for an account that was never used', async () => {
+      const { service } = make()
+      await expect(service.releaseAccount(account('never'))).resolves.toBeUndefined()
+      expect(launches).toEqual([])
+    })
+
+    it('says whether Chrome is installed', () => {
+      const { service } = make()
+      expect(service.chromeFound()).toBe(true)
+      chrome = null
+      expect(service.chromeFound()).toBe(false)
     })
   })
 

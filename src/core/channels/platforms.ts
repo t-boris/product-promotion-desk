@@ -34,6 +34,7 @@ export function listPlatforms(connectors: ConnectorRegistry): PlatformInfo[] {
         loginUrl: p.loginUrl,
         ...(p.signupUrl ? { signupUrl: p.signupUrl } : {}),
         ...(p.signupNote ? { signupNote: p.signupNote } : {}),
+        ...(p.signsInWith ? { signsInWith: p.signsInWith } : {}),
         hint: p.hint,
         example: p.example,
         handleUrl: p.handleUrl,

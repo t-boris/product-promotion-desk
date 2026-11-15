@@ -75,6 +75,8 @@ export interface ChannelsService {
 /** Implemented by the channels module; read by the attention list: an AI working on an account that waits for the owner is something that needs them (DEC-018). */
 export interface AgentQuestions {
   questions(): AgentAsk[]
+  /** True while a mission is running on the account (the browser of an account is not changed meanwhile, DEC-026). */
+  working(accountId: Id): boolean
 }
 
 export interface CoreServices {

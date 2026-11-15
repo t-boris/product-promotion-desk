@@ -35,7 +35,9 @@ export class SignInService {
 
   /** "Sign in with saved password": always the owner's own action, so it is not held back by the hourly limit. */
   async signIn(accountId: unknown): Promise<SignInResult> {
-    return this.run(this.accounts.account(accountId))
+    const account = this.accounts.account(accountId)
+    if (account.signsInVia) throw new ApiError('signs_in_through_another', `${account.label} has no password of its own: it signs in through ${this.accounts.account(account.signsInVia).label}. Let the AI sign in, or sign in yourself in its browser.`)
+    return this.run(account)
   }
 
   /**
@@ -43,7 +45,7 @@ export class SignInService {
    * password (a lookup in the vault file) nothing here asks the keychain; a keychain that already refused the app is not asked again.
    */
   async maybeAutomatic(account: Account): Promise<void> {
-    if (!account.loginName || !this.vault.has(account) || this.core.secrets.blocked() !== null) return
+    if (account.signsInVia || !account.loginName || !this.vault.has(account) || this.core.secrets.blocked() !== null) return
     const last = this.store.lastLoginAttempt(account.id)
     if (last !== null && this.core.clock.now().getTime() - Date.parse(last) < AUTOMATIC_INTERVAL_MS) return
     try {

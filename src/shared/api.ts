@@ -13,6 +13,7 @@ import type {
   Profile,
   AccountRole,
   ProfileFields,
+  BrowserChoice,
   BrowserState,
   PageReport,
   Mailbox,
@@ -132,7 +133,7 @@ export interface ApiMethods {
   /** Every account: they are one library, not tied to a product (DEC-015). */
   'accounts.list': [void, Account[]]
   /** Creates an account with its own login and browser session. `productId` only records what it was created for. */
-  'accounts.create': [{ productId?: Id; platform: string; label: string; role?: AccountRole | null; email?: string | null; mailboxId?: Id | null; profileId?: Id | null }, Account]
+  'accounts.create': [{ productId?: Id; platform: string; label: string; role?: AccountRole | null; email?: string | null; mailboxId?: Id | null; profileId?: Id | null; signsInVia?: Id | null }, Account]
   /** Sets or clears (null) the e-mail address of an account. */
   'accounts.setEmail': [{ accountId: Id; email: string | null; mailboxId?: Id | null }, Account]
   /** An address of its own for a new account on `platform`, made from a base mailbox (an alias), different from every address in use. */
@@ -185,6 +186,12 @@ export interface ApiMethods {
   'lessons.save': [{ id: Id; rule?: string; platform?: string | null; enabled?: boolean }, AgentLesson]
   'lessons.remove': [{ id: Id }, void]
   'accounts.setProfile': [{ accountId: Id; profileId: Id | null }, Account]
+  /** Renames an account: the name the owner sees in lists and headers. Same rules as at creation. */
+  'accounts.rename': [{ accountId: Id; label: string }, Account]
+  /** Chooses the browser the account works in (DEC-026). Refused while the AI works on it or the owner holds its browser, and for Chrome when Chrome is not installed. */
+  'accounts.setBrowser': [{ accountId: Id; browser: BrowserChoice }, Account]
+  /** Changes the account this one signs in through (DEC-027): a Threads account through an Instagram account. */
+  'accounts.setSignInVia': [{ accountId: Id; viaAccountId: Id }, Account]
   'agent.answer': [{ accountId: Id; answer: string }, AgentRun | null]
   /** Every question an AI is waiting on now, for the pop-up that appears on any screen. */
   'agent.questions': [void, AgentAsk[]]

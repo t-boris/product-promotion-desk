@@ -218,15 +218,27 @@ export class ChromeBrowserService implements BrowserService, PageObserver {
    * folder of this application is ever removed.
    */
   async forgetAccount(account: Account): Promise<void> {
-    const entry = this.accounts.get(account.id)
-    entry?.session.takeControl() // nothing may start on a session that is being erased
-    if (entry) entry.control = null
-    await entry?.agent.dispose()
-    await entry?.browser?.close().catch(() => undefined)
-    this.accounts.delete(account.id)
+    this.accounts.get(account.id)?.session.takeControl() // nothing may start on a session that is being erased
+    await this.releaseAccount(account)
     if (this.options.diagnosticsDir) await forgetReports(this.options.diagnosticsDir, account.id)
     const dir = profileDirFor(this.options.dataDir, account.partition)
     if (isProfileDir(this.options.dataDir, dir)) await rm(dir, { recursive: true, force: true })
+  }
+
+  /** Whether Google Chrome is installed: what the account screen needs to offer it. */
+  chromeFound(): boolean {
+    return this.find() !== null
+  }
+
+  /** Lets go of the account's page and closes its Chrome, keeping the profile folder (the account moves to the other browser, or is being erased). */
+  async releaseAccount(account: Account): Promise<void> {
+    const entry = this.accounts.get(account.id)
+    if (!entry) return
+    entry.control = null
+    this.accounts.delete(account.id)
+    await entry.agent.dispose()
+    await entry.browser?.close().catch(() => undefined)
+    entry.browser = null
   }
 
   /** Opens the page of an account: starts Chrome when it is not running, otherwise opens a page in the running one. */

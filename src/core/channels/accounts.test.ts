@@ -81,9 +81,9 @@ describe('login hand-off (REQ-002: the person types passwords on the site)', () 
 
     it('says who holds the browser: nobody, then the person while the window is open', async () => {
       const w = await makeReadyWorld()
-      expect(await state(w)).toEqual({ holder: 'none', windowOpen: false })
+      expect(await state(w)).toEqual({ holder: 'none', windowOpen: false, chromeFound: true })
       await w.call('accounts.openBrowser', { accountId: w.account.id })
-      expect(await state(w)).toEqual({ holder: 'user', windowOpen: true })
+      expect(await state(w)).toEqual({ holder: 'user', windowOpen: true, chromeFound: true })
     })
 
     it('brings an open window to the front without opening a page again, and says so when there is none', async () => {

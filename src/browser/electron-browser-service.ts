@@ -190,6 +190,15 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
     this.accounts.get(account.id)?.userWindow?.destroy()
   }
 
+  /** Lets go of the account's windows and hidden page without erasing its session (the account moves to the other browser, DEC-026). */
+  async releaseAccount(account: Account): Promise<void> {
+    const entry = this.accounts.get(account.id)
+    if (!entry) return
+    entry.userWindow?.destroy()
+    entry.agent.dispose()
+    this.accounts.delete(account.id)
+  }
+
   /** Called when an account is deleted: closes its windows and wipes the stored session (cookies, storage). */
   async forgetAccount(account: Account): Promise<void> {
     const entry = this.accounts.get(account.id)

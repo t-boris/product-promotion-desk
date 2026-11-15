@@ -273,6 +273,10 @@ export interface BrowserService {
    * page that keeps failing is one line in the log, not hundreds.
    */
   onPageNote?: (accountId: Id, note: string) => void
+  /** Optional (DEC-026): whether the owner's Google Chrome is installed, so that it can be chosen for an account. */
+  chromeFound?(): boolean
+  /** Optional (DEC-026): lets go of the page and the window kept for an account, without erasing its session; called when the account moves to the other browser. */
+  releaseAccount?(account: Account): Promise<void>
 }
 
 /** Optional capability of a browser service (DEC-016): what an account's page shows and did, when the owner asks. */

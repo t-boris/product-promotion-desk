@@ -159,5 +159,16 @@ CREATE TABLE agent_lessons (
 );
 CREATE INDEX agent_lessons_platform ON agent_lessons(platform);
 `
+  },
+  {
+    id: 209,
+    name: 'channels: the browser an account works in, and the account it signs in through',
+    sql: `
+-- DEC-026: 'internal' (the application's own browser, the default) or 'chrome' (the owner's installed Chrome). A session lives in one of them.
+ALTER TABLE accounts ADD COLUMN browser TEXT NOT NULL DEFAULT 'internal';
+-- DEC-027: a Threads account signs in through its Instagram account. NULL: the account has credentials of its own.
+ALTER TABLE accounts ADD COLUMN via_account_id TEXT REFERENCES accounts(id);
+CREATE INDEX accounts_via ON accounts(via_account_id);
+`
   }
 ]

@@ -85,7 +85,10 @@ export const mapAccount = (r: Row): Account => ({
   email: (r.email as string | null | undefined) ?? null,
   mailboxId: (r.mailbox_id as string | null | undefined) ?? null,
   // accounts.profile_id comes with the profile migration (DEC-019).
-  profileId: (r.profile_id as string | null | undefined) ?? null
+  profileId: (r.profile_id as string | null | undefined) ?? null,
+  // accounts.browser / via_account_id come with migration 209 (DEC-026, DEC-027).
+  browser: r.browser === 'chrome' ? 'chrome' : 'internal',
+  signsInVia: (r.via_account_id as string | null | undefined) ?? null
 })
 
 export const mapMailbox = (r: Row): Mailbox => ({ id: r.id as string, address: r.address as string, kind: 'existing', createdAt: r.created_at as string })

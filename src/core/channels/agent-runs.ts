@@ -58,6 +58,7 @@ interface MissionSpec {
 const MISSIONS: Record<MissionKind, MissionSpec> = {
   signup: { startedBy: 'owner', timeoutMs: RUN_TIMEOUT_MS, opening: 'The AI is opening the registration page.', doing: 'register' },
   profile: { startedBy: 'owner', timeoutMs: RUN_TIMEOUT_MS, opening: 'The AI is opening the profile page.', doing: 'fill in the profile of' },
+  signin: { startedBy: 'owner', timeoutMs: RUN_TIMEOUT_MS, opening: 'The AI is opening the sign-in page.', doing: 'sign in to' },
   post: { startedBy: 'send_flow', timeoutMs: POST_TIMEOUT_MS, maxCalls: POST_MAX_CALLS, opening: 'The AI is opening the page to publish.', doing: 'publish for' }
 }
 
@@ -127,6 +128,11 @@ export class AgentRunService implements PostMissionService {
   }
 
   /** Every question an AI is waiting on now, for the pop-up that appears on any screen. */
+  /** True while a mission is running on the account. */
+  working(accountId: string): boolean {
+    return this.runs.get(accountId)?.run.status === 'running'
+  }
+
   questions(): AgentAsk[] {
     const asks: AgentAsk[] = []
     for (const [accountId, live] of this.runs) {
@@ -160,6 +166,7 @@ export class AgentRunService implements PostMissionService {
     const engine = await this.readyEngine(account)
 
     if (kind === 'signup') return { engine, mission: this.signUpMission(account) }
+    if (kind === 'signin') return { engine, mission: this.signInMission(account) }
     const mission = this.profileMission(account)
     return { engine, mission: async () => mission }
   }
@@ -345,6 +352,50 @@ export class AgentRunService implements PostMissionService {
     }
   }
 
+  /**
+   * Signing in to an account that has no credentials of its own (DEC-027): Threads through its Instagram account. Everything but the
+   * password is gathered here; the returned function reads the Instagram password from the vault for this one mission. The password is bound
+   * to the hosts of the Instagram account's platform: the toolbox refuses to type it on any other page, Threads' own included.
+   */
+  private signInMission(account: Account): () => Promise<Mission> {
+    if (!account.signsInVia) throw new ApiError('invalid_input', `${account.label} has credentials of its own: sign in with its saved password, or in its browser.`)
+    const via = this.accounts.account(account.signsInVia)
+    const login = via.loginName ?? via.email
+    const viaPlatform = presetFor(via.platform)?.label ?? via.platform
+    if (!login) throw new ApiError('no_email', `${via.label} has no login name or e-mail yet. ${account.label} signs in through it, so add that to ${via.label} first.`)
+    if (!this.vault.has(via)) throw new ApiError('no_password', `No password is saved for ${via.label}. ${account.label} signs in through it, so save its password first.`)
+    const target = this.accounts.signInTarget(account)
+    const viaHosts = this.accounts.signInTarget(via).hosts
+    const platform = presetFor(account.platform)?.label ?? account.platform
+    const hosts = [...new Set([...target.hosts, ...viaHosts])]
+
+    return async () => {
+      const password = await this.vault.password(via)
+      if (password === null) throw new ApiError('no_password', `No password is saved for ${via.label}. ${account.label} signs in through it, so save its password first.`)
+      return {
+        goal: `Sign in to ${platform} for the owner. ${platform} has no password of its own: it signs in through the owner's ${viaPlatform} account "${via.label}". Make sure ${platform} shows this account signed in.`,
+        facts: [
+          `${platform}'s sign-in page offers to continue with ${viaPlatform}; there is no ${platform} user name or password, and the owner is never asked for one.`,
+          `The ${viaPlatform} account to use is "${via.label}"${via.identity ? `, signed in there as ${via.identity}` : ''}. Its login and its password are given as values below.`
+        ],
+        startUrl: target.url,
+        hosts,
+        values: {
+          LOGIN: { value: login, describe: `the login of the ${viaPlatform} account (its user name or e-mail address), for ${viaPlatform}'s own sign-in page`, secret: false },
+          PASSWORD: { value: password, describe: `the password of the ${viaPlatform} account; it is typed only on ${viaPlatform} pages (${viaHosts.join(', ')})`, secret: true, hosts: viaHosts }
+        },
+        lessons: this.lessons.forPlatform(account.platform).map((l) => l.rule),
+        rules: [
+          `On ${platform} take the way that continues with ${viaPlatform} (a button like "Continue with ${viaPlatform}" or "Log in with ${viaPlatform}"). Never take a way that asks for a ${platform} user name or password of its own.`,
+          `You may go to the ${viaPlatform} sign-in pages (${viaHosts.join(', ')}) for this and nowhere else. On them sign in with {{LOGIN}} and {{PASSWORD}}, then approve what ${platform} asks, to continue as the account. If the page already offers "Continue as <name>" for the right account, use that.`,
+          `{{PASSWORD}} goes only into a password field of a ${viaPlatform} page: the application refuses it anywhere else.`,
+          'Change nothing in the account: no profile, privacy or security setting, and post nothing.',
+          `The mission is done when ${platform} shows the account signed in (its feed, its profile or its menu), not when a button was pressed.`
+        ]
+      }
+    }
+  }
+
   /** The profile of an account that is already signed in: the about-text, the place, the website and the picture (DEC-019). */
   private profileMission(account: Account): Mission {
     const profile = this.profiles.approved(account)
@@ -457,6 +508,10 @@ export class AgentRunService implements PostMissionService {
       if (kind === 'profile') {
         this.core.log.info('accounts', `The AI filled in the profile of ${account.label}.`)
         return this.finish(live, 'done', 'The profile was filled in. Open the account browser to look at it.')
+      }
+      if (kind === 'signin') {
+        this.core.log.info('accounts', `The AI signed in to ${account.label}${checked.identity ? ` as ${checked.identity}` : ''}.`)
+        return this.finish(live, 'done', checked.identity ? `Signed in as ${checked.identity}.` : 'Signed in.')
       }
       this.core.log.info('accounts', `The AI registered ${account.label}${checked.identity ? ` as ${checked.identity}` : ''}.`)
       return this.finish(live, 'done', checked.identity ? `The account was created and signed in as ${checked.identity}.` : 'The account was created and signed in.')
