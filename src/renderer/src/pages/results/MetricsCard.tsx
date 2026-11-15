@@ -1,6 +1,7 @@
 import type { ResultsView } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
 import { Badge, Button, Card, ErrorNote, formatTime, Hint } from '../../ui'
+import { OWN_POSTS_NO_METRICS } from '../channels/own-posts'
 import { metricDisplay } from './format'
 
 type ChannelResults = ResultsView['channels'][number]
@@ -11,6 +12,17 @@ export function MetricsCard({ entry }: { entry: ChannelResults }) {
   const [refresh, state] = useAction(() => call('results.refresh', { channelId: channel.id }))
   const capability = channel.capabilities.find((c) => c.key === 'metrics')
   const capturedAt = metrics[0]?.capturedAt ?? null
+
+  // A channel the app does not read has no metrics to refresh (DEC-034): one line says so, and there is no button that could only fail.
+  if (!channel.reads) {
+    return (
+      <Card title={`${channel.target} (${channel.platform})`} className="metrics-card">
+        <p className="muted metrics-empty" data-testid={`no-metrics-${channel.id}`}>
+          {OWN_POSTS_NO_METRICS}
+        </p>
+      </Card>
+    )
+  }
 
   return (
     <Card

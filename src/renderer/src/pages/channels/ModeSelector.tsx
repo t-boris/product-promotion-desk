@@ -2,10 +2,22 @@ import type { Channel, ChannelMode } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
 import { Card, ErrorNote } from '../../ui'
 import { MODE_OPTIONS, modeBlockedReason } from './model'
+import { OWN_POSTS_WHAT_IT_DOES } from './own-posts'
 
 /** How far the app goes in this channel: one of four modes, as selectable rows of one group (the chosen one is tinted). */
 export function ModeSelector({ channel }: { channel: Channel }) {
   const [setMode, state] = useAction((mode: ChannelMode) => call('channels.setMode', { channelId: channel.id, mode }))
+
+  // A channel the app does not read has no replies, so there is no mode to choose: one line says what it does (DEC-034).
+  if (!channel.reads) {
+    return (
+      <Card title="What the app does here">
+        <p className="muted" data-testid="own-posts-line">
+          {OWN_POSTS_WHAT_IT_DOES}
+        </p>
+      </Card>
+    )
+  }
 
   return (
     <Card title="What the app does here">

@@ -24,6 +24,8 @@ export interface ChannelPatch {
   status?: ChannelStatus
   statusDetail?: string
   plan?: ChannelPlan | null
+  reads?: boolean
+  target?: string
 }
 
 export class ChannelsStore {
@@ -251,6 +253,8 @@ export class ChannelsStore {
     if (patch.status !== undefined) add('status', patch.status)
     if (patch.statusDetail !== undefined) add('status_detail', patch.statusDetail.slice(0, 500))
     if (patch.plan !== undefined) add('plan_json', patch.plan === null ? null : toJson(patch.plan))
+    if (patch.reads !== undefined) add('reads', patch.reads ? 1 : 0)
+    if (patch.target !== undefined) add('target', patch.target)
     if (sets.length > 0) this.db.prepare(`UPDATE channels SET ${sets.join(', ')} WHERE id = ?`).run(...values, id)
     return this.repos.channel(id)
   }

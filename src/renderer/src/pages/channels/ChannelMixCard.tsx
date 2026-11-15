@@ -126,7 +126,7 @@ export function ChannelMixCard({ channel, blockedReason }: { channel: Channel; b
               <div className="mix-main">
                 <strong className="mix-title">{REPLIES_TITLE}</strong>
                 <span className="hint" data-testid="mix-replies-line">
-                  {repliesLine(channel.mode)}
+                  {repliesLine(channel)}
                 </span>
               </div>
             </div>

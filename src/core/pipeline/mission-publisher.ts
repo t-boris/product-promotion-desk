@@ -271,6 +271,14 @@ export class MissionPublisher {
     const { connector, ctx } = pair
     const pressed = crash ? `The AI browser pressed the control and then stopped with an error (${crash}).` : 'The AI browser pressed the control.'
     const request = { ...grant.request, attemptedAt }
+    // A channel the app does not read cannot be read back (DEC-034): say so, and leave the finding to the owner, who looks at the page.
+    if (!grant.channel.reads) {
+      return {
+        status: 'unknown',
+        error: `${pressed} The app does not read this channel, so it cannot check that the post is up. Look at the page and tell the app whether it was published.`,
+        note: outcome?.reported ? `The AI says: ${bounded(outcome.reported.reason)}` : undefined
+      }
+    }
     let ref: PublishedRef | null = null
     try {
       for (let attempt = 0; attempt < READ_BACK_TRIES && !ref; attempt++) {

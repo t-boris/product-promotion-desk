@@ -111,6 +111,7 @@ export const mapChannel = (r: Row): Channel => ({
   lastSuccessAt: (r.last_success_at as string | null) ?? null,
   nextCheckAt: (r.next_check_at as string | null) ?? null,
   plan: parseJson<ChannelPlan | null>(r.plan_json as string | null, null),
+  reads: r.reads !== 0,
   createdAt: r.created_at as string
 })
 

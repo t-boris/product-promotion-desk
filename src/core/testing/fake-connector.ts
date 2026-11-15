@@ -82,6 +82,8 @@ export class FakeConnector implements Connector {
   publishGate: Promise<void> | null = null
   /** When false, methods do not use the browser session at all. */
   useSession = true
+  /** What `readsChannel` answers: false makes every channel of this connector one for the owner's own posts (DEC-034). */
+  canRead = true
 
   private counter = 0
 
@@ -178,6 +180,10 @@ export class FakeConnector implements Connector {
       if (this.checkLoginError) throw this.checkLoginError
       return this.login
     })
+  }
+
+  readsChannel(): boolean {
+    return this.canRead
   }
 
   async assess(ctx: ConnectorContext): Promise<Capability[]> {

@@ -128,6 +128,21 @@ describe('Startup sequence after a manual launch (DEC-003, REQ-005)', () => {
     expect(h.monitor.calls).toContain(channel.id)
   })
 
+  it('resumes a channel for own posts without giving it a next check, and it says again what it is for (DEC-034)', async () => {
+    const h = makeHarness()
+    const account = seedAccount(h.core, { label: 'Expired', status: 'login_required' })
+    const channel = h.channel({ accountId: account.id, target: '@brand', reads: false, nextCheckAt: null })
+    await h.start()
+    await h.elapse(MINUTE_MS)
+    expect(h.core.repos.channel(channel.id)).toMatchObject({ status: 'needs_user', nextCheckAt: null })
+
+    h.core.db.prepare("UPDATE accounts SET status = 'ready' WHERE id = ?").run(account.id)
+    await h.elapse(30_000)
+
+    expect(h.core.repos.channel(channel.id)).toMatchObject({ status: 'active', statusDetail: 'Your own posts only.', nextCheckAt: null })
+    expect(h.monitor.calls).toEqual([])
+  })
+
   it('does not auto-resume a channel that a person must look at for another reason', async () => {
     const h = makeHarness()
     const channel = h.channel({ status: 'needs_user', statusDetail: 'Site structure changed' })

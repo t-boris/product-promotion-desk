@@ -284,6 +284,19 @@ describe('what stops the mix', () => {
     expect(mixBlocker(world.refresh())).toMatch(/restricted/)
   })
 
+  it('does not treat the mode "observe" as a reason to stop on a channel the app does not read: it has no replies to watch (DEC-034)', async () => {
+    world = makeWorld({ mode: 'observe', baselineDone: false })
+    const own = world.addChannel({ reads: false, mode: 'observe', target: '@brand' })
+    script('draft.publication', POST)
+    world.core.db.prepare('UPDATE channels SET settings_json = ? WHERE id = ?').run(toJson({ ...own.settings, mix: mix() }), own.id)
+    expect(mixBlocker(world.refresh(own))).toBeNull()
+    expect(await run()).toBe(1)
+    expect(drafts()).toHaveLength(1)
+    // The same mode on a channel the app reads still means "only watches".
+    const read = world.addChannel({ reads: true, mode: 'observe', target: 'r/read' })
+    expect(mixBlocker(world.refresh(read))).toMatch(/only watches/)
+  })
+
   it('does nothing when the account needs the owner to sign in', async () => {
     world = makeWorld({ mode: 'approval' })
     script('draft.publication', POST)

@@ -489,6 +489,7 @@ export class AccountsService {
       lastSuccessAt: null,
       nextCheckAt: null,
       plan: null,
+      reads: true,
       createdAt: this.core.clock.now().toISOString()
     }
   }

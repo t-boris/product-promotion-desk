@@ -604,6 +604,11 @@ export interface Channel {
   nextCheckAt: IsoTime | null
   /** What the AI proposed to do on this channel; null until the owner asks for it. */
   plan: ChannelPlan | null
+  /**
+   * Whether the app can read this channel at all (a connector or a site profile that reads it). A channel it cannot read is a channel for the
+   * owner's own posts: nothing is observed, no reply is prepared, it is activated without a first read (DEC-034).
+   */
+  reads: boolean
   createdAt: IsoTime
 }
 

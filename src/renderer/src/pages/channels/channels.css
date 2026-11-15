@@ -280,6 +280,10 @@ textarea.input.short {
 .cap-table td {
   overflow-wrap: anywhere;
 }
+/* The status is one or two whole words ("Needs verification", "Unavailable"): it wraps between them, never inside one. */
+.cap-table td:nth-child(2) {
+  overflow-wrap: normal;
+}
 .cap-table td.cap-detail,
 .cap-table td.cap-checked {
   color: var(--text-2);

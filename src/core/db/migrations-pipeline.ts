@@ -108,5 +108,15 @@ CREATE TABLE mix_state (
   PRIMARY KEY (channel_id, kind)
 );
 `
+  },
+  {
+    id: 306,
+    name: 'pipeline: a channel the app cannot read is a channel for own posts (DEC-034)',
+    sql: `
+-- 1 when the app can read the channel (a connector or a site profile reads it); 0 for a channel of a platform it does not read (Instagram,
+-- Facebook, Threads...): such a channel is activated without a first read, is never monitored, and takes the owner's own posts only.
+-- Decided from the connector when the channel is connected, assessed or activated; an older channel starts as 1 until then.
+ALTER TABLE channels ADD COLUMN reads INTEGER NOT NULL DEFAULT 1;
+`
   }
 ]

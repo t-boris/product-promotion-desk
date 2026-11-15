@@ -166,6 +166,36 @@ export function expandHandle(preset: PlatformPreset, input: string): string {
   return handle ? preset.handleUrl.replace('{handle}', handle) : text
 }
 
+/**
+ * First words of an address that are pages of the platform itself ("instagram.com/explore", "x.com/home", the web app of Telegram), not the page of one
+ * handle. Such an address keeps the name made from it.
+ */
+const NOT_HANDLES = new Set(['explore', 'home', 'search', 'marketplace', 'ideas', 'reels', 'reel', 'stories', 'direct', 'accounts', 'settings', 'notifications', 'messages', 'watch', 'groups', 'pages', 'hashtag', 'login', 'signup', 'about', 'help', 'share', 'events', 'friends', 'compose', 'i', 'k', 'a', 'z'])
+
+/**
+ * The handle an address of the platform stands for, written the way an owner writes it ("@yourbrand"), or null when the address is not the page
+ * of one handle on this platform (a group, a search, the home page). Only a single name after the platform's own host counts.
+ */
+export function handleOf(preset: PlatformPreset, url: string): string | null {
+  const template = preset.handleUrl
+  const at = template.indexOf('{handle}')
+  // The handle must be the last part of the address (a closing slash is allowed): a template with more after it is not a page of one handle.
+  if (at < 0 || !['', '/'].includes(template.slice(at + '{handle}'.length))) return null
+  try {
+    const page = new URL(url)
+    const base = new URL(template.slice(0, at))
+    if (!hostMatches(page.hostname, preset.hosts) || page.protocol !== base.protocol) return null
+    const prefix = base.pathname
+    if (!page.pathname.startsWith(prefix)) return null
+    const name = page.pathname.slice(prefix.length).replace(/\/+$/, '')
+    // A page such as profile.php?id=1 is a script, not a name, and "explore" is a page of the platform: they stay named by their address.
+    if (NOT_HANDLES.has(name.toLowerCase().replace(/^@/, ''))) return null
+    return /^@?[A-Za-z0-9_.]{1,60}$/.test(name) && !/\.php$/i.test(name) ? `@${name.replace(/^@/, '')}` : null
+  } catch {
+    return null
+  }
+}
+
 /** Whether a (normalized) address is on the platform's own domains. */
 export function addressOnPlatform(preset: PlatformPreset, url: string): boolean {
   try {

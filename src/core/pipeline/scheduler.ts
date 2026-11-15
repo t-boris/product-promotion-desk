@@ -11,7 +11,7 @@ import type { Core } from '../core'
 import type { RunResult } from '../runs'
 import type { DraftingService, MonitorOutcome } from '../services'
 import type { PeriodicTasks } from './scheduler-periodic'
-import { permissionProblem, reviewChannels, schedulableChannels } from './scheduler-eligibility'
+import { permissionProblem, readableChannels, reviewChannels } from './scheduler-eligibility'
 import { FAILURE_DETAIL_PREFIX, type ScheduleStore } from './scheduler-state'
 import { MINUTE_MS, backoffDelayMs, formatDuration, raceTimeout, realTimers, spreadTimes, type Timers } from './scheduler-timing'
 
@@ -210,14 +210,14 @@ export class Scheduler {
 
   /** Active channels whose time has come and that are not already running, most overdue first. */
   private dueChannels(nowMs: number): Channel[] {
-    return schedulableChannels(this.core)
+    return readableChannels(this.core)
       .filter((c) => this.dueMs(c) <= nowMs && !this.inflight.has(c.id))
       .sort((a, b) => this.dueMs(a) - this.dueMs(b) || a.createdAt.localeCompare(b.createdAt))
   }
 
   private nextDueAt(): string | null {
     if (!this.running || isPaused(this.core)) return null
-    const upcoming = schedulableChannels(this.core).filter((c) => !this.inflight.has(c.id))
+    const upcoming = readableChannels(this.core).filter((c) => !this.inflight.has(c.id))
     if (upcoming.length === 0) return null
     const now = this.nowMs()
     return new Date(Math.max(now, Math.min(...upcoming.map((c) => this.dueMs(c))))).toISOString()

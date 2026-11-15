@@ -152,8 +152,16 @@ describe('channels.setPaused', () => {
 
   it('resuming a channel that never had its baseline returns it to setup, not to active', async () => {
     world = makeWorld({ baselineDone: false })
+    world.core.db.prepare("UPDATE channels SET status = 'active' WHERE id = ?").run(world.channel.id) // started, but its first read is not stored
     await world.core.router.call('channels.setPaused', { channelId: world.channel.id, paused: true })
     const resumed = await world.core.router.call('channels.setPaused', { channelId: world.channel.id, paused: false })
     expect(resumed.status).toBe('setup')
+  })
+
+  it('a channel in setup cannot be paused: it was never started, so there is nothing to pause or to resume', async () => {
+    world = makeWorld({ baselineDone: false })
+    world.core.db.prepare("UPDATE channels SET status = 'setup' WHERE id = ?").run(world.channel.id)
+    await expect(world.core.router.call('channels.setPaused', { channelId: world.channel.id, paused: true })).rejects.toMatchObject({ code: 'invalid_state' })
+    expect(world.refresh().status).toBe('setup')
   })
 })

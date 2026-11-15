@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { deferred, FakeMetricsService, flush } from './scheduler-fakes'
+import { sendingAccounts } from './scheduler-eligibility'
 import { makeHarness } from './scheduler-harness'
 import { seedAccount } from './scheduler-seed'
 import { MINUTE_MS } from './scheduler-timing'
@@ -47,6 +48,21 @@ describe('Scheduler: running due channels (REQ-005)', () => {
     await h.elapse(MINUTE_MS)
 
     expect(h.monitor.calls).toEqual([])
+  })
+
+  it('never starts a channel the app does not read, however due it is, and leaves it with no failure and no "Next check" (DEC-034)', async () => {
+    const h = makeHarness()
+    const own = h.channel({ target: '@brand', reads: false, nextCheckAt: null })
+    const read = h.channel({ target: 'r/read' })
+
+    await h.start()
+    await h.elapse(10 * MINUTE_MS)
+
+    expect(h.monitor.calls).toEqual([read.id])
+    const after = h.core.repos.channel(own.id)
+    expect(after).toMatchObject({ status: 'active', nextCheckAt: null, lastRunAt: null, statusDetail: '' })
+    expect(monitorRuns(h).filter((r) => r.channelId === own.id)).toEqual([])
+    expect(h.automation.store.get(own.id).consecutiveFailures).toBe(0)
   })
 
   it('isolates failures: one channel throwing never stops the others', async () => {
@@ -372,6 +388,17 @@ describe('Scheduler: periodic tasks', () => {
     expect(h.core.runs.list({ limit: 50 }).filter((r) => r.kind === 'metrics')).toHaveLength(2)
   })
 
+  it('does not sweep the metrics of a channel the app does not read (DEC-034)', async () => {
+    const h = makeHarness()
+    const metrics = new FakeMetricsService()
+    h.core.services.metrics = metrics
+    h.channel({ target: '@brand', reads: false })
+    const read = h.channel({ target: 'r/read' })
+    await h.start()
+    await h.elapse(2 * MINUTE_MS)
+    expect(metrics.calls).toEqual([read.id])
+  })
+
   it('survives a failing background task without stopping the loop', async () => {
     const h = makeHarness()
     h.channel()
@@ -400,5 +427,16 @@ describe('Scheduler: periodic tasks', () => {
     expect(h.monitor.calls).toHaveLength(callsAtStop)
     expect(h.sending.sendDueCalls).toBe(dueAtStop)
     expect(automation.state().running).toBe(false)
+  })
+})
+
+describe('Scheduler: which accounts need a sign-in check at start (DEC-034)', () => {
+  it('an account whose only channel is for own posts is checked, whatever the mode of that channel; one that only watches is not', () => {
+    const h = makeHarness()
+    const poster = seedAccount(h.core, { label: 'Poster' })
+    const watcher = seedAccount(h.core, { label: 'Watcher' })
+    h.channel({ accountId: poster.id, target: '@brand', reads: false, mode: 'observe' })
+    h.channel({ accountId: watcher.id, target: 'r/watch', mode: 'observe' })
+    expect(sendingAccounts(h.core).map((a) => a.id)).toEqual([poster.id])
   })
 })

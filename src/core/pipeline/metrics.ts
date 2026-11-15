@@ -105,13 +105,16 @@ export async function refreshTracked(core: Core, channelId: Id, options: { rethr
   const service = core.services.metrics
   if (!service) throw new ApiError('not_available', 'The metrics service is not available')
   let captured: MetricSnapshot[] | null = null
-  const productId = (() => {
+  const channel = (() => {
     try {
-      return core.repos.channel(channelId).productId
+      return core.repos.channel(channelId)
     } catch {
       return null
     }
   })()
+  // A channel the app does not read has no metrics to read (DEC-034): no run is recorded, so none fails.
+  if (channel && !channel.reads) return null
+  const productId = channel?.productId ?? null
   await core.runs.track(
     'metrics',
     { channelId, productId },

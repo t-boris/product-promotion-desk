@@ -4,6 +4,7 @@
 import { ApiError } from '../../shared/api'
 import type { Channel, Id, Run } from '../../shared/types'
 import type { Core } from '../core'
+import { OWN_POSTS_DETAIL, channelReads } from '../channels/reads'
 import { buildCard } from './cards'
 import type { DraftingFlow } from './drafting'
 import { SendBlockedError } from './gate'
@@ -43,6 +44,20 @@ export function registerFlowApi({ core, store, review, monitor, drafting, sendin
     return core.repos.channel(channel.id)
   }
 
+  /**
+   * A channel the app cannot read is activated without a first read (DEC-034): there is nothing to read and no baseline to store. It is active
+   * so that the owner's own posts can go out; the monitor and the scheduler leave it alone, and no reply is ever prepared for it.
+   */
+  const activateOwnPosts = (channel: Channel): Channel => {
+    const account = core.repos.account(channel.accountId)
+    if (account.status !== 'ready') throw new ApiError('account_not_ready', `${account.label} is not signed in. Sign in first, then activate the channel.`)
+    const post = channel.capabilities.find((c) => c.key === 'publish_post')
+    if (post && (post.status === 'unavailable' || post.status === 'restricted')) {
+      throw new ApiError('publish_unavailable', `Posts cannot be made on this channel (${post.status}${post.detail ? `: ${post.detail}` : ''}).`)
+    }
+    return setChannelStatus(channel, 'active', OWN_POSTS_DETAIL)
+  }
+
   core.router.register({
     // ───────────── channel observation ─────────────
     'channels.discussions': ({ channelId }) => {
@@ -52,8 +67,15 @@ export function registerFlowApi({ core, store, review, monitor, drafting, sendin
     'channels.selectOlder': ({ channelId, discussionIds, selected }) => selectOlder(core, store, channelId, discussionIds, selected),
 
     'channels.activate': async ({ channelId }) => {
-      const channel = store.requireChannel(channelId)
+      let channel = store.requireChannel(channelId)
       if (channel.status === 'paused') throw new ApiError('channel_paused', 'The channel is paused. Resume it first.')
+      // Asked of the connector now, not read from what was stored: a site profile added or removed since changes what the app can read (DEC-034).
+      const reads = channelReads(core, channel)
+      if (reads !== channel.reads) {
+        store.updateChannel(channelId, { reads })
+        channel = store.requireChannel(channelId)
+      }
+      if (!reads) return activateOwnPosts(channel)
       const read = channel.capabilities.find((c) => c.key === 'read_comments')
       if (read && (read.status === 'unavailable' || read.status === 'restricted')) {
         throw new ApiError('read_unavailable', `Comments cannot be read on this channel (${read.status}${read.detail ? `: ${read.detail}` : ''}), so it cannot be monitored.`)
@@ -75,6 +97,7 @@ export function registerFlowApi({ core, store, review, monitor, drafting, sendin
     'channels.checkNow': async ({ channelId }) => {
       const channel = store.requireChannel(channelId)
       if (channel.status === 'paused') throw new ApiError('channel_paused', 'The channel is paused. Resume it first.')
+      if (!channel.reads) throw new ApiError('not_read', 'The app does not read this channel: it is for your own posts, so there is nothing to check.')
       await core.runs.track('monitor', { channelId, productId: channel.productId }, async () => {
         const outcome = await monitor.runChannel(channelId)
         const prepared = await drafting.processChannel(channelId)
@@ -88,8 +111,16 @@ export function registerFlowApi({ core, store, review, monitor, drafting, sendin
 
     'channels.setPaused': ({ channelId, paused }) => {
       const channel = store.requireChannel(channelId)
-      if (paused) return setChannelStatus(channel, 'paused', 'Paused by you')
-      return setChannelStatus(channel, channel.baselineDoneAt ? 'active' : 'setup', '')
+      if (paused) {
+        // Pausing is for a channel that was started. A channel in setup has nothing to pause, and "resume" must never be a way round Activate
+        // (its checks of the account and of posting), least of all for a channel the app does not read, which has no baseline to tell it apart.
+        if (channel.status === 'setup') throw new ApiError('invalid_state', 'The channel has not been activated yet, so there is nothing to pause.')
+        return setChannelStatus(channel, 'paused', 'Paused by you')
+      }
+      // "Resume" never leaves setup: that is what Activate is for, with its checks of the account and of posting. A channel the app does not read has
+      // no first read to tell a started channel from a new one, so a started one is told by having left setup.
+      const next = channel.baselineDoneAt || (channel.status !== 'setup' && !channel.reads) ? 'active' : 'setup'
+      return setChannelStatus(channel, next, next === 'active' && !channel.reads ? OWN_POSTS_DETAIL : '')
     },
 
     // ───────────── review queues ─────────────

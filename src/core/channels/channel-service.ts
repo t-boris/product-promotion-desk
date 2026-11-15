@@ -11,7 +11,8 @@ import type { AccountsService } from './accounts'
 import { blankCapabilities, blockedCapabilities, find, normalizeAssessment, summarize, withVerified } from './capabilities'
 import { browserError, found, requireText } from './errors'
 import { assertModeAllowed, modeAfterAssessment } from './mode-rules'
-import { addressOnPlatform, expandHandle, presetFor } from './presets'
+import { addressOnPlatform, expandHandle, handleOf, presetFor } from './presets'
+import { OWN_POSTS_DETAIL, channelReads, refreshReads } from './reads'
 import { applySettingsPatch } from './settings'
 import type { ChannelPatch, ChannelsStore } from './store'
 
@@ -70,22 +71,25 @@ export class ChannelService {
       throw new ApiError('platform_mismatch', `This address is not on ${preset.label} (${preset.hosts[0]}), but ${account.label} is a ${preset.label} account. Create or choose an account for the platform the address belongs to.`)
     }
 
-    if (this.store.findDuplicate(productId, account.id, normalized.target)) {
-      throw new ApiError('duplicate', `${normalized.target} is already connected for this product with ${account.label}.`)
+    // A page of one handle on a named platform is called by its handle ("@brand"), the way its owner says it, not by the address's host and path.
+    const target = (preset && handleOf(preset, normalized.url)) || normalized.target
+    if (this.store.findDuplicate(productId, account.id, target) || this.store.findDuplicate(productId, account.id, normalized.target)) {
+      throw new ApiError('duplicate', `${target} is already connected for this product with ${account.label}.`)
     }
     this.requireFreeRole(account, product)
     this.noteSharedUse(account, product)
-    const channel = this.store.insertChannel({
+    const connected = this.store.insertChannel({
       productId,
       accountId: account.id,
       platform: account.platform,
       connectorId: connector.id,
-      target: normalized.target,
+      target,
       url: normalized.url,
       settings: structuredClone(DEFAULT_CHANNEL_SETTINGS),
       capabilities: blankCapabilities(),
       statusDetail: 'Not assessed yet. Assess the channel to see what this account can do here.'
     })
+    const channel = refreshReads(this.core, this.store, connected)
     this.core.log.info('channels', `Channel connected: ${channel.target} with ${account.label}. Nothing was posted.`, channel.id)
     this.core.events.changed('channels', 'attention')
     return channel
@@ -156,11 +160,14 @@ export class ChannelService {
       return { channelId: channel.id, status: 'suspended', summary: `Needs you: ${detail}` }
     }
 
-    const patch: ChannelPatch = { capabilities }
+    // What the connector can read may have changed since the channel was connected (a site profile was added): the channel is told again.
+    const reads = channelReads(this.core, channel)
+    const patch: ChannelPatch = { capabilities, reads }
     if (channel.status === 'needs_user') {
-      // The reason it needed the person is gone; monitoring resumes if it had started, else it awaits activation.
-      patch.status = channel.baselineDoneAt ? 'active' : 'setup'
-      patch.statusDetail = ''
+      // The reason it needed the person is gone; monitoring resumes if it had started, else it awaits activation. The answer just given
+      // decides, not the stored one: a channel that is read now has no baseline yet and awaits activation, a channel that is not read never will.
+      patch.status = channel.baselineDoneAt || !reads ? 'active' : 'setup'
+      patch.statusDetail = reads ? '' : OWN_POSTS_DETAIL
     }
     if ((patch.status ?? channel.status) === 'setup') patch.statusDetail = 'Assessed. Review the settings, then activate the channel when ready.'
     const fallback = modeAfterAssessment({ mode: channel.mode, capabilities })

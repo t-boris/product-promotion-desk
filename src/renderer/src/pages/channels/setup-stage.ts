@@ -28,7 +28,8 @@ export function activateBlocker(channel: Channel): string | null {
 }
 
 export function canPause(channel: Channel): boolean {
-  return channel.status === 'active' || channel.status === 'error' || (channel.status === 'needs_user' && channel.baselineDoneAt !== null)
+  // A channel the app does not read never has a baseline: it was started once it left setup.
+  return channel.status === 'active' || channel.status === 'error' || (channel.status === 'needs_user' && (channel.baselineDoneAt !== null || !channel.reads))
 }
 
 export interface StageFacts {

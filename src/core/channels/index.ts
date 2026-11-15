@@ -14,6 +14,7 @@ import { LessonService } from './lessons'
 import { MailboxService } from './mailboxes'
 import { listPlatforms } from './platforms'
 import { PersonProfileService } from './person-profile'
+import { reconcileChannels } from './reads'
 import { ProfileService } from './profiles'
 import { GoalIdeaService } from './goal-ideas'
 import { RoleSuggestionService } from './roles'
@@ -38,6 +39,7 @@ export function register(core: Core): void {
   const store = new ChannelsStore(core.db, core.clock, core.repos)
   const accounts = new AccountsService(core, store)
   const channels = new ChannelService(core, store, accounts)
+  reconcileChannels(core, store)
   const profiles = new ProfileService(core, accounts, { draftSiteProfile })
   const suggestions = new SuggestionService(core, { suggestChannels })
   const goalIdeas = new GoalIdeaService(core, { suggestGoal })

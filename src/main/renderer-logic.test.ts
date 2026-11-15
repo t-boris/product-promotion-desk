@@ -19,6 +19,7 @@ import { deleteBlocker, nextProductStep, passportStatus, websiteHost } from '../
 import { resolveSelected } from '../renderer/src/pages/products/product-selection'
 import { isMirroredSource } from '../renderer/src/pages/products/source-view'
 import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block'
+import { OWN_POSTS_NO_CHECK, OWN_POSTS_NO_METRICS, OWN_POSTS_READING, OWN_POSTS_WHAT_IT_DOES, activateHint } from '../renderer/src/pages/channels/own-posts'
 import { activateBlocker, canActivate, canPause, neverAssessed, setupStage } from '../renderer/src/pages/channels/setup-stage'
 import { afterCreateNote, nextStep } from '../renderer/src/pages/channels/next-step'
 import { chosenVia, contactLine, eligibleVia, viaBlocker, viaOption } from '../renderer/src/pages/channels/account-link'
@@ -922,9 +923,29 @@ describe('QA clarity batch: what the screens say', () => {
   })
 })
 
+describe('a channel the app does not read (DEC-034)', () => {
+  it('says what it is for in words that never promise reading or replies', () => {
+    for (const words of [OWN_POSTS_READING, OWN_POSTS_WHAT_IT_DOES, OWN_POSTS_NO_CHECK, OWN_POSTS_NO_METRICS]) {
+      expect(words).toMatch(/^[A-Z]/)
+      expect(words).toMatch(/[.]$/)
+      expect(words).not.toMatch(/\b(baseline|Next check|Last run)\b/)
+    }
+    expect(OWN_POSTS_WHAT_IT_DOES).toMatch(/press Send/)
+    expect(OWN_POSTS_NO_CHECK).toMatch(/Publications/)
+    expect(OWN_POSTS_WHAT_IT_DOES).toMatch(/tell it whether the post is up/) // the app cannot read the page back, so the owner confirms
+    expect(OWN_POSTS_NO_METRICS).toMatch(/no metrics/)
+  })
+
+  it('tells what Activate does: a baseline where the app reads, only switching on where it does not', () => {
+    expect(activateHint({ reads: true })).toMatch(/baseline/)
+    expect(activateHint({ reads: false })).toMatch(/Nothing is read/)
+    expect(activateHint({ reads: false })).not.toMatch(/baseline/)
+  })
+})
+
 describe('Channels tab: one step at a time (DEC-023)', () => {
   const channel = (over: Partial<Channel>): Channel =>
-    ({ status: 'setup', baselineDoneAt: null, capabilities: [{ key: 'read_posts', status: 'unknown', detail: '', checkedAt: null }], ...over }) as Channel
+    ({ status: 'setup', baselineDoneAt: null, reads: true, capabilities: [{ key: 'read_posts', status: 'unknown', detail: '', checkedAt: null }], ...over }) as Channel
   const assessed = [{ key: 'read_posts', status: 'verified', detail: '', checkedAt: '2026-11-14T00:00:00.000Z' }] as Channel['capabilities']
 
   it('the Channels tab asks for one step at a time, in order', () => {
@@ -961,6 +982,9 @@ describe('Channels tab: one step at a time (DEC-023)', () => {
     expect(canPause(channel({ status: 'error' }))).toBe(true)
     expect(canPause(channel({ status: 'needs_user', baselineDoneAt: '2026-11-14T00:00:00.000Z' }))).toBe(true)
     expect(canPause(channel({ status: 'needs_user' }))).toBe(false)
+    // A channel the app does not read never has a baseline: it was started once it left setup.
+    expect(canPause(channel({ status: 'needs_user', reads: false }))).toBe(true)
+    expect(canPause(channel({ status: 'setup', reads: false }))).toBe(false)
     expect(canPause(channel({ status: 'setup' }))).toBe(false)
     expect(canPause(channel({ status: 'paused' }))).toBe(false)
   })
@@ -1903,10 +1927,16 @@ describe('the content mix card of a channel (DEC-033)', () => {
 
     it('says what the monitor does with replies in each mode, as a line and not a setting', () => {
       expect(Object.keys(REPLIES_WORDS).sort()).toEqual(['approval', 'auto', 'draft', 'observe'])
-      expect(repliesLine('observe')).toBe('Not part of the mix: the monitor handles them when someone writes to you. On this channel: it only watches, nothing is drafted.')
-      expect(repliesLine('draft')).toContain('saves reply drafts')
-      expect(repliesLine('approval')).toContain('your approval')
-      expect(repliesLine('auto')).toContain('automatic replies')
+      expect(repliesLine({ mode: 'observe', reads: true })).toBe('Not part of the mix: the monitor handles them when someone writes to you. On this channel: it only watches, nothing is drafted.')
+      expect(repliesLine({ mode: 'draft', reads: true })).toContain('saves reply drafts')
+      expect(repliesLine({ mode: 'approval', reads: true })).toContain('your approval')
+      expect(repliesLine({ mode: 'auto', reads: true })).toContain('automatic replies')
+    })
+
+    it('says there is nothing to reply to on a channel the app does not read, whatever its mode (DEC-034)', () => {
+      for (const mode of Object.keys(REPLIES_WORDS) as (keyof typeof REPLIES_WORDS)[]) {
+        expect(repliesLine({ mode, reads: false })).toBe('Not on this platform: the app does not read it, so there is nothing to reply to. The mix is only for your own posts.')
+      }
     })
 
     it('says drafts only, how many may wait, and how many wait now', () => {

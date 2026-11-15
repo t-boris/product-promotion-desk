@@ -28,9 +28,11 @@ const status = (list: Capability[], key: CapabilityKey): string | undefined => l
 describe('onboarding a subreddit end to end (REQ-002)', () => {
   it('connects, assesses by reading only, and never claims sending abilities', async () => {
     const { core, page, channel } = await onboard()
-    expect(channel).toMatchObject({ connectorId: 'reddit', target: 'r/test', status: 'setup', mode: 'observe' })
+    // A connector that has no opinion on reading (Reddit) reads, as it always did (DEC-034).
+    expect(channel).toMatchObject({ connectorId: 'reddit', target: 'r/test', status: 'setup', mode: 'observe', reads: true })
 
     const assessed = await core.router.call('channels.assess', { channelId: channel.id })
+    expect(assessed.reads).toBe(true)
     expect(page.writes).toEqual([])
     expect(status(assessed.capabilities, 'read_posts')).toBe('verified')
     expect(status(assessed.capabilities, 'read_comments')).toBe('verified')
@@ -84,8 +86,11 @@ describe('onboarding a subreddit end to end (REQ-002)', () => {
     const web = await core.router.call('accounts.create', { productId: product.id, platform: 'web', label: 'Forum account' })
     const forum = await core.router.call('channels.connect', { productId: product.id, accountId: web.id, target: 'https://forum.example.com/c/general' })
     const assessed = await core.router.call('channels.assess', { channelId: forum.id })
-    expect(assessed.capabilities.every((c) => c.status === 'needs_check')).toBe(true)
-    expect(assessed.capabilities[0].detail).toMatch(/no site profile/i)
+    expect(assessed.capabilities.some((c) => c.status === 'verified')).toBe(false)
+    expect(status(assessed.capabilities, 'read_comments')).toBe('unavailable')
+    expect(status(assessed.capabilities, 'publish_post')).toBe('needs_check')
+    expect(assessed.capabilities.find((c) => c.key === 'read_posts')?.detail).toMatch(/no site profile/i)
+    expect(assessed.reads).toBe(false)
   })
 
   it('serves a named platform (Instagram) by the universal connector and assesses it just as honestly (DEC-013)', async () => {
@@ -93,11 +98,53 @@ describe('onboarding a subreddit end to end (REQ-002)', () => {
     const product = core.repos.listProducts()[0]
     const instagram = await core.router.call('accounts.create', { productId: product.id, platform: 'instagram', label: 'Brand on Instagram' })
     const channel = await core.router.call('channels.connect', { productId: product.id, accountId: instagram.id, target: '@natalmystic' })
-    expect(channel).toMatchObject({ platform: 'instagram', connectorId: 'universal', url: 'https://www.instagram.com/natalmystic/' })
+    // The channel is called by its handle, the way its owner says it, and it is known from the start that the app does not read it (DEC-034).
+    expect(channel).toMatchObject({ platform: 'instagram', connectorId: 'universal', target: '@natalmystic', url: 'https://www.instagram.com/natalmystic/', reads: false })
     const assessed = await core.router.call('channels.assess', { channelId: channel.id })
     // Nothing is claimed for a platform whose site profile does not exist yet.
-    expect(assessed.capabilities.every((c) => c.status === 'needs_check')).toBe(true)
-    expect(assessed.capabilities[0].detail).toMatch(/no site profile/i)
+    expect(assessed.capabilities.some((c) => c.status === 'verified')).toBe(false)
+    expect(status(assessed.capabilities, 'read_comments')).toBe('unavailable')
+    expect(status(assessed.capabilities, 'publish_post')).toBe('needs_check')
+    expect(assessed.capabilities.find((c) => c.key === 'read_posts')?.detail).toMatch(/no site profile/i)
+  })
+
+  it('an assessment brings a channel the app does not read back to work after the account needed the owner, without a first read (DEC-034)', async () => {
+    const { core } = await onboard()
+    const product = core.repos.listProducts()[0]
+    const instagram = await core.router.call('accounts.create', { productId: product.id, platform: 'instagram', label: 'Brand on Instagram' })
+    const channel = await core.router.call('channels.connect', { productId: product.id, accountId: instagram.id, target: '@natalmystic' })
+    core.db.prepare("UPDATE channels SET status = 'needs_user', status_detail = 'Account needs you' WHERE id = ?").run(channel.id)
+    const assessed = await core.router.call('channels.assess', { channelId: channel.id })
+    expect(assessed).toMatchObject({ status: 'active', statusDetail: 'Your own posts only.', baselineDoneAt: null })
+  })
+
+  it('an assessment tells a channel again whether the app reads it (DEC-034)', async () => {
+    const { core } = await onboard()
+    const product = core.repos.listProducts()[0]
+    const instagram = await core.router.call('accounts.create', { productId: product.id, platform: 'instagram', label: 'Brand on Instagram' })
+    const channel = await core.router.call('channels.connect', { productId: product.id, accountId: instagram.id, target: '@natalmystic' })
+    expect(channel.reads).toBe(false)
+    core.db.prepare('UPDATE channels SET reads = 1 WHERE id = ?').run(channel.id) // as an older channel is stored
+    expect(core.repos.channel(channel.id).reads).toBe(true)
+    expect((await core.router.call('channels.assess', { channelId: channel.id })).reads).toBe(false)
+  })
+
+  it('refuses a page twice even when the older channel is still named by its address (DEC-034)', async () => {
+    const { core } = await onboard()
+    const product = core.repos.listProducts()[0]
+    const instagram = await core.router.call('accounts.create', { productId: product.id, platform: 'instagram', label: 'Brand on Instagram' })
+    const first = await core.router.call('channels.connect', { productId: product.id, accountId: instagram.id, target: '@natalmystic' })
+    core.db.prepare("UPDATE channels SET target = 'www.instagram.com/natalmystic' WHERE id = ?").run(first.id) // as it was named before handles
+    await expect(core.router.call('channels.connect', { productId: product.id, accountId: instagram.id, target: 'https://www.instagram.com/natalmystic/' })).rejects.toMatchObject({ code: 'duplicate' })
+  })
+
+  it('names a pasted Instagram address by its handle and refuses the same page twice (DEC-034)', async () => {
+    const { core } = await onboard()
+    const product = core.repos.listProducts()[0]
+    const instagram = await core.router.call('accounts.create', { productId: product.id, platform: 'instagram', label: 'Brand on Instagram' })
+    const pasted = await core.router.call('channels.connect', { productId: product.id, accountId: instagram.id, target: 'www.instagram.com/boris_chart_notebook' })
+    expect(pasted).toMatchObject({ target: '@boris_chart_notebook', url: 'https://www.instagram.com/boris_chart_notebook' })
+    await expect(core.router.call('channels.connect', { productId: product.id, accountId: instagram.id, target: '@boris_chart_notebook' })).rejects.toMatchObject({ code: 'duplicate' })
   })
 })
 

@@ -4,6 +4,7 @@ import { call, useAction, useQuery } from '../hooks'
 import { Button, EmptyState, ErrorNote, Field, Hint, Loading, Page } from '../ui'
 import { connectChannelHref } from './attention-links'
 import { OpenChannelBrowser } from './channels/OpenChannelBrowser'
+import { OWN_POSTS_NO_CHECK } from './channels/own-posts'
 import { useMainActionOwner } from './review/main-action'
 import { OlderDiscussions } from './review/OlderDiscussions'
 import { ProductFilter, useProductDirectory, useProductFilter } from './review/products'
@@ -65,7 +66,7 @@ export function OpportunitiesPage() {
               </button>
             ))}
           </div>
-          {selected && (
+          {selected?.reads && (
             <Button
               onClick={() =>
                 void checkNow(selected.id).then((run) => {
@@ -89,7 +90,8 @@ export function OpportunitiesPage() {
         )}
       </div>
 
-      {selected && <OlderDiscussions channel={selected} />}
+      {selected?.reads === false && <Hint data-testid="own-posts-no-check">{OWN_POSTS_NO_CHECK}</Hint>}
+      {selected?.reads && <OlderDiscussions channel={selected} />}
 
       <ErrorNote error={list.error} />
       {(waitingForProducts || (list.loading && !list.data)) && <Loading what="Loading" />}
