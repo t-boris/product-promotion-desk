@@ -564,6 +564,8 @@ const MAX_STEP_PREPARE = 200
 const MAX_STEP_FREQUENCY = 80
 const MAX_WATCH = 200
 const PLAN_FORMATS: PlanFormat[] = ['text', 'image', 'video', 'link', 'other']
+/** What a step can be for the content mix (DEC-033); anything else is not a kind of post the application prepares. */
+const PLAN_KINDS = ['replies', 'product_post', 'own_update', 'showcase'] as const
 
 const PLAN_SYSTEM = [
   'You help a product owner decide what to do on one online channel where the owner promotes their own product.',
@@ -603,13 +605,15 @@ function planPrompt(input: PlanInput): AiTask {
       `- "format" is one of ${PLAN_FORMATS.join(', ')}. Use only formats a post on this platform can contain ("other" is for things that are not a post, such as reading the rules or answering comments).`,
       '- "youPrepare" says what the owner must make or gather first (a photo, a short video, a text), or null when nothing. The application does not create images or video; the owner brings them.',
       '- "frequency" is a short rhythm such as "once a week", or null.',
+      `- "kind" says what the step is for the content mix: ${PLAN_KINDS.join(', ')}, or null for anything else. product_post is a post about what the product does, from the approved facts; own_update is the login's own news ("I did this"), which the owner tells the application in a note; showcase shows one concrete thing the product does; replies is answering comments. The application only prepares drafts of the three kinds of post, for the owner to read and approve.`,
+      '- "everyDays" is how often the step repeats, as a whole number of days from 1 to 90, or null when it has no rhythm.',
       '- Be honest: anything that mentions the product comes from someone connected with it and says so. No fake accounts, no pretending to be an independent customer, no bought followers, likes or reviews, no mass messages, no dodging the platform\'s limits or checks.',
       '- Do not promise results. Do not include passwords, keys or other credentials. Do not tell the owner to automate posting or replying.',
       `- "watchOut" has at most ${MAX_WATCH_OUT} short points on rules, limits and risks of this platform that the owner should check first.`,
       `- "summary" is one or two plain sentences (at most ${MAX_SUMMARY} characters) on the idea of the plan.`,
       '',
       'Answer with JSON of exactly this shape:',
-      '{"summary":"...","steps":[{"title":"...","detail":"...","format":"video","youPrepare":"a 30 second video","frequency":"once a week"}],"watchOut":["..."]}'
+      '{"summary":"...","steps":[{"title":"...","detail":"...","format":"video","youPrepare":"a 30 second video","frequency":"once a week","kind":"own_update","everyDays":7}],"watchOut":["..."]}'
     ]
       .filter((line, index, all) => line !== '' || all[index - 1] !== '')
       .join('\n')
@@ -645,7 +649,10 @@ function readPlan(raw: unknown, input: PlanInput): Parsed<PlanDraft> {
     const youPrepare = textOrNull(item.youPrepare, MAX_STEP_PREPARE)
     const frequency = textOrNull(item.frequency, MAX_STEP_FREQUENCY)
     if ([title, detail, youPrepare ?? '', frequency ?? ''].some((text) => unsafe(text) || FAKE_ENGAGEMENT.test(text))) continue
-    steps.push({ title, detail, format, youPrepare, frequency })
+    // The kind and the rhythm are lenient on purpose: a step is not lost for a kind it does not know, it just is not one the mix uses.
+    const kind = typeof item.kind === 'string' && (PLAN_KINDS as readonly string[]).includes(item.kind.trim().toLowerCase()) ? (item.kind.trim().toLowerCase() as (typeof PLAN_KINDS)[number]) : null
+    const everyDays = typeof item.everyDays === 'number' && Number.isInteger(item.everyDays) && item.everyDays >= 1 && item.everyDays <= 90 ? item.everyDays : null
+    steps.push({ title, detail, format, youPrepare, frequency, kind, everyDays })
   }
   if (steps.length === 0) return { ok: false, error: 'the plan has no usable step: each needs a title, a detail and a format this platform accepts, and no unsafe advice' }
 

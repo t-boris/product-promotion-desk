@@ -6,6 +6,7 @@ import { registerFlowApi } from './flow-api'
 import { SendGate } from './gate'
 import { Ingestor } from './ingest'
 import { LoginWatch } from './login-watch'
+import { MixFlow } from './mix'
 import { MonitorFlow } from './monitor'
 import { PostGroupsFlow } from './post-groups'
 import { PublicationsFlow } from './publications'
@@ -49,6 +50,16 @@ export function registerFlow(core: Core): void {
     'postGroups.approve': ({ id, seen }) => groups.approve(id, seen),
     'postGroups.sendAll': ({ id }) => groups.sendAll(id),
     'postGroups.remove': ({ id }) => groups.remove(id)
+  })
+  // The content mix (DEC-033): drafts only; the scheduler's mix job calls `runDue`.
+  const mix = new MixFlow(core, store, publications)
+  core.services.mix = mix
+  core.router.register({
+    'mix.get': ({ channelId }) => mix.card(channelId),
+    'mix.propose': ({ channelId }) => mix.propose(channelId),
+    'updates.add': ({ productId, text }) => mix.addNote(productId, text),
+    'updates.list': ({ productId }) => mix.listNotes(productId),
+    'updates.remove': ({ id }) => mix.removeNote(id)
   })
   const draftCheck = new DraftCheck(core, store)
   core.router.register({ 'drafts.check': (args) => draftCheck.check(args) })

@@ -2,7 +2,7 @@
 // the person can act on.
 
 import { ApiError } from '../../shared/api'
-import type { AutoCategory, ChannelLimits, ChannelSettings } from '../../shared/types'
+import type { AutoCategory, ChannelLimits, ChannelSettings, MixKind, MixSetting } from '../../shared/types'
 
 export const MIN_CHECK_INTERVAL_MIN = 5
 const MAX_CHECK_INTERVAL_MIN = 7 * 24 * 60
@@ -11,8 +11,11 @@ const MAX_STYLE = 2000
 const MAX_LIST_ITEMS = 50
 const MAX_ITEM_CHARS = 120
 export const AUTO_CATEGORIES: readonly AutoCategory[] = ['thanks', 'faq']
+export const MIX_KINDS: readonly MixKind[] = ['product_post', 'own_update', 'showcase']
+export const MIN_MIX_DAYS = 1
+export const MAX_MIX_DAYS = 90
 
-const KNOWN = ['languages', 'style', 'topics', 'queries', 'checkIntervalMin', 'limits', 'autoCategories', 'digestTime', 'notifications']
+const KNOWN = ['languages', 'style', 'topics', 'queries', 'checkIntervalMin', 'limits', 'autoCategories', 'digestTime', 'notifications', 'mix']
 
 const invalid = (message: string): ApiError => new ApiError('invalid_input', message)
 
@@ -47,6 +50,24 @@ function parseLimits(value: unknown, current: ChannelLimits): ChannelLimits {
     next[key] = n
   }
   return next
+}
+
+/** The content mix (DEC-033): each kind at most once, a whole number of days between 1 and 90; what is not listed is off. */
+export function parseMix(value: unknown): MixSetting[] {
+  if (!Array.isArray(value)) throw invalid('The content mix must be a list.')
+  const out: MixSetting[] = []
+  for (const item of value) {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) throw invalid('Each entry of the content mix must be an object.')
+    const given = item as Record<string, unknown>
+    for (const key of Object.keys(given)) if (key !== 'kind' && key !== 'enabled' && key !== 'everyDays') throw invalid(`Unknown field in the content mix: ${key}.`)
+    if (!MIX_KINDS.includes(given.kind as MixKind)) throw invalid(`"${String(given.kind)}" is not a kind of post the mix can prepare. Allowed: ${MIX_KINDS.join(', ')}.`)
+    if (out.some((entry) => entry.kind === given.kind)) throw invalid(`The kind ${String(given.kind)} is listed twice.`)
+    if (typeof given.enabled !== 'boolean') throw invalid('Each kind of the content mix must be on or off.')
+    const days = given.everyDays
+    if (!isCount(days) || days < MIN_MIX_DAYS || days > MAX_MIX_DAYS) throw invalid(`How often must be a whole number of days from ${MIN_MIX_DAYS} to ${MAX_MIX_DAYS}.`)
+    out.push({ kind: given.kind as MixKind, enabled: given.enabled, everyDays: days })
+  }
+  return out
 }
 
 /** Accepts "HH:MM" on a 24-hour clock; null clears the daily summary. */
@@ -100,5 +121,6 @@ export function applySettingsPatch(current: ChannelSettings, patch: unknown): Ch
     if (typeof given.notifications !== 'boolean') throw invalid('Notifications must be on or off.')
     next.notifications = given.notifications
   }
+  if (given.mix !== undefined) next.mix = parseMix(given.mix)
   return next
 }

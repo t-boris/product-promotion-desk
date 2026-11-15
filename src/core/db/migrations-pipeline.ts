@@ -79,5 +79,30 @@ CREATE INDEX idx_opportunities_group ON opportunities(group_id) WHERE group_id I
 -- One live version per channel in a group (a cancelled one may be made again).
 CREATE UNIQUE INDEX idx_opportunities_group_channel ON opportunities(group_id, channel_id) WHERE group_id IS NOT NULL AND state <> 'cancelled';
 `
+  },
+  {
+    id: 305,
+    name: 'pipeline: the content mix and the owner\'s notes for own updates (DEC-033)',
+    sql: `
+-- A note the owner wrote about something they did. An own-update draft is written from one unused note and from nothing else.
+CREATE TABLE product_updates (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  used_in_opportunity_id TEXT
+);
+CREATE INDEX idx_product_updates_product ON product_updates(product_id, created_at);
+
+-- When the content mix last prepared a draft of a kind on a channel, and when it last tried (a failed try is not repeated at once).
+CREATE TABLE mix_state (
+  channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  last_draft_at TEXT,
+  last_attempt_at TEXT,
+  last_error TEXT,
+  PRIMARY KEY (channel_id, kind)
+);
+`
   }
 ]

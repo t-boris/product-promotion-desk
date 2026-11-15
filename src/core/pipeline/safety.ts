@@ -127,6 +127,16 @@ export function hostOf(address: string): string | null {
   }
 }
 
+/** The hosts of the web addresses written in a text (an address with its scheme). */
+export function hostsIn(text: string): string[] {
+  const hosts: string[] = []
+  for (const match of text.matchAll(/https?:\/\/[^\s)\]>"']+/gi)) {
+    const host = hostOf(match[0])
+    if (host) hosts.push(host)
+  }
+  return hosts
+}
+
 /** Hosts a draft may link to: the product website plus any host named inside an approved claim. */
 export function allowedHostsFor(website: string | null, approved: ClaimView[]): string[] {
   const hosts = new Set<string>()

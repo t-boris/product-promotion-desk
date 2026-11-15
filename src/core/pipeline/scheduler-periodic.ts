@@ -17,6 +17,8 @@ export interface PeriodicOptions {
   metricsEveryMs: number
   /** How often due metrics and digests are looked for (they are not needed on every tick). */
   scanEveryMs: number
+  /** How often the content mix looks for a draft that is due (DEC-033). */
+  mixEveryMs: number
   /** Delay before the startup reconciliation is retried after it failed. */
   gateRetryMs: number
   /** The same failing task logs at most once per this interval. */
@@ -27,6 +29,7 @@ export const DEFAULT_PERIODIC: PeriodicOptions = {
   reconcileEveryMs: 5 * MINUTE_MS,
   metricsEveryMs: 60 * MINUTE_MS,
   scanEveryMs: MINUTE_MS,
+  mixEveryMs: 5 * MINUTE_MS,
   gateRetryMs: 30_000,
   errorLogEveryMs: 10 * MINUTE_MS
 }
@@ -38,6 +41,7 @@ export class PeriodicTasks {
   private gateRetryAtMs = 0
   private metricsScanAtMs = 0
   private digestScanAtMs = 0
+  private mixScanAtMs = 0
   private halted = false
   private readonly busy = new Set<string>()
   private readonly pending = new Set<Promise<unknown>>()
@@ -126,6 +130,15 @@ export class PeriodicTasks {
           this.reconcileDueMs = nowMs + this.options.reconcileEveryMs
           this.launch('reconcile', () => this.reconcilePeriodic(sending))
         }
+      }
+      // The content mix prepares drafts that are due. Drafts only: it never approves and never sends (DEC-033).
+      const { mix } = this.core.services
+      if (mix && nowMs >= this.mixScanAtMs) {
+        this.mixScanAtMs = nowMs + this.options.mixEveryMs
+        this.launch('mix', async () => {
+          const prepared = await mix.runDue()
+          if (prepared > 0) this.core.log.info('scheduler', `${prepared} draft(s) prepared by the content mix`)
+        })
       }
       if (metrics && nowMs >= this.metricsScanAtMs) {
         this.metricsScanAtMs = nowMs + this.options.scanEveryMs

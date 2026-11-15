@@ -44,7 +44,8 @@ function wholeNumber(text: string): number | null {
   return /^\d+$/.test(text.trim()) ? Number(text.trim()) : null
 }
 
-export type ParsedSettings = { ok: true; settings: ChannelSettings } | { ok: false; error: string }
+/** The settings this form owns: everything except the content mix, which has its own card and is never touched by this form's patch. */
+export type ParsedSettings = { ok: true; settings: Omit<ChannelSettings, 'mix'> } | { ok: false; error: string }
 
 /** Quick checks for a clear message at the field; the core validates everything again. */
 export function fromDraft(draft: SettingsDraft): ParsedSettings {
