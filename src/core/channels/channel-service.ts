@@ -3,6 +3,7 @@
 import { ApiError } from '../../shared/api'
 import type { Account, CapabilityKey, Channel, ChannelMode, ChannelSettings, Product } from '../../shared/types'
 import { DEFAULT_CHANNEL_SETTINGS } from '../../shared/types'
+import { nextCheckFor } from '../pipeline/scheduler-timing'
 import type { Core } from '../core'
 import { UNIVERSAL_CONNECTOR_ID } from '../connector-registry'
 import type { Connector, ConnectorContext, NormalizedTarget } from '../ports'
@@ -219,9 +220,20 @@ export class ChannelService {
     if (channel.mode === 'auto' && settings.autoCategories.length === 0) {
       throw new ApiError('mode_not_allowed', 'Automatic mode needs at least one automatic category. Switch to another mode first, or keep a category.')
     }
-    const updated = this.save(channel, { settings })
+    const updated = this.save(channel, { settings, ...this.rescheduleForInterval(channel, settings) })
     this.core.log.info('channels', `Settings of ${channel.target} updated.`, channel.id)
     return updated
+  }
+
+  /**
+   * A shorter interval takes effect at once: a channel on "once a day" that the owner moves to "every hour" must not wait out the day. The planned time only ever
+   * moves earlier (a longer interval keeps the time already planned and applies from the check after it), and a channel with no planned time (paused, in setup,
+   * waiting for the owner) keeps none: the scheduler and the monitor decide those.
+   */
+  private rescheduleForInterval(channel: Channel, settings: ChannelSettings): Partial<Pick<ChannelPatch, 'nextCheckAt'>> {
+    if (settings.checkIntervalMin === channel.settings.checkIntervalMin || channel.nextCheckAt === null) return {}
+    const planned = nextCheckFor({ id: channel.id, lastRunAt: channel.lastRunAt, settings }, this.core.clock.now().getTime(), this.core.scheduleJitter)
+    return planned < channel.nextCheckAt ? { nextCheckAt: planned } : {}
   }
 
   setMode(args: { channelId: string; mode: ChannelMode }): Channel {

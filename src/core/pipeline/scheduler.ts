@@ -13,7 +13,7 @@ import type { DraftingService, MonitorOutcome } from '../services'
 import type { PeriodicTasks } from './scheduler-periodic'
 import { permissionProblem, readableChannels, reviewChannels } from './scheduler-eligibility'
 import { FAILURE_DETAIL_PREFIX, type ScheduleStore } from './scheduler-state'
-import { MINUTE_MS, backoffDelayMs, formatDuration, raceTimeout, realTimers, spreadTimes, type Timers } from './scheduler-timing'
+import { MINUTE_MS, backoffDelayMs, formatDuration, nextCheckFor, raceTimeout, realTimers, spreadTimes, type Timers } from './scheduler-timing'
 
 export const PAUSE_KEY = 'automation.paused'
 
@@ -319,15 +319,16 @@ export class Scheduler {
   private applyVerdict(channel: Channel, result: CycleResult): void {
     const nowMs = this.nowMs()
     const nowIso = new Date(nowMs).toISOString()
-    const intervalMs = Math.max(1, channel.settings.checkIntervalMin) * MINUTE_MS
     const at = (ms: number): string => new Date(ms).toISOString()
+    // The same function the monitor uses, so the two writers of the next check never disagree (DEC-040).
+    const regular = nextCheckFor(channel, nowMs, this.core.scheduleJitter)
 
     switch (result.verdict) {
       case 'ok':
-        this.store.recordSuccess(channel.id, nowIso, at(nowMs + intervalMs))
+        this.store.recordSuccess(channel.id, nowIso, regular)
         break
       case 'skipped':
-        this.store.recordSkipped(channel.id, nowIso, at(nowMs + intervalMs))
+        this.store.recordSkipped(channel.id, nowIso, regular)
         break
       case 'failed': {
         const streak = this.store.recordFailure(channel.id, nowIso, result.error, (n) => {

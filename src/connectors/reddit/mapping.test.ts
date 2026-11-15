@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { commentThing, listing, moreStub, postThing, threadJson } from '../test-helpers'
-import { flattenComments, mapListing, mapMe, mapMoreChildren, mapThread } from './mapping'
+import { flattenComments, mapListing, mapListingPage, mapMe, mapMoreChildren, mapThread, toDiscussion } from './mapping'
 
 describe('Reddit listing mapping', () => {
   it('maps posts with stable fullnames, ISO timestamps and absolute permalinks', () => {
@@ -26,6 +26,47 @@ describe('Reddit listing mapping', () => {
   it('returns null for something that is not a listing', () => {
     expect(mapListing({ error: 403 })).toBeNull()
     expect(mapListing(null)).toBeNull()
+  })
+})
+
+describe('Reddit listing pages (DEC-040)', () => {
+  const withAfter = (after: unknown) => ({ kind: 'Listing', data: { after, children: [postThing({ id: 'a1' })] } })
+
+  it('returns the posts and the token of the next page', () => {
+    const page = mapListingPage(withAfter('t3_a1'))
+    expect(page?.posts.map((p) => p.fullname)).toEqual(['t3_a1'])
+    expect(page?.after).toBe('t3_a1')
+  })
+
+  it('takes a null, a missing and an empty token as the end of the listing', () => {
+    expect(mapListingPage(withAfter(null))?.after).toBeNull()
+    expect(mapListingPage(withAfter(''))?.after).toBeNull()
+    expect(mapListingPage({ kind: 'Listing', data: { children: [] } })).toEqual({ posts: [], after: null })
+    expect(mapListingPage(listing([postThing({ id: 'a1' })]))?.after).toBeNull()
+  })
+
+  it('refuses a page whose token is not a fullname: it goes into the next address, and a listing that cannot be continued is not a complete one', () => {
+    for (const bad of ['../../me', 't3_a1&limit=1', 't3_a1 b', 'a1', 't3_', 't3_abcdefghijklm', 42, true, {}]) {
+      expect(mapListingPage(withAfter(bad)), String(bad)).toBeNull()
+    }
+  })
+
+  it('returns null for something that is not a listing', () => {
+    expect(mapListingPage({ error: 403 })).toBeNull()
+    expect(mapListingPage(null)).toBeNull()
+  })
+})
+
+describe('toDiscussion: what the ingest needs to know about a post that cannot be answered', () => {
+  const post = (over: Record<string, unknown> = {}) => mapListing(listing([postThing({ id: 'a', ...over })]))![0]
+
+  it('carries a locked or an archived post as such, and leaves an ordinary one without the flags', () => {
+    expect(toDiscussion(post({ locked: true }), [])).toMatchObject({ locked: true })
+    expect(toDiscussion(post({ archived: true }), [])).toMatchObject({ archived: true })
+    const plain = toDiscussion(post(), [])
+    expect('locked' in plain).toBe(false)
+    expect('archived' in plain).toBe(false)
+    expect('incomplete' in plain).toBe(false)
   })
 })
 

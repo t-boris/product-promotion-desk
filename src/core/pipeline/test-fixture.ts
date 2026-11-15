@@ -101,13 +101,15 @@ export interface WorldOptions {
   settings?: Partial<ChannelSettings>
   capabilities?: Capability[]
   claims?: Claim[]
+  /** Check times move around the interval, as in the application (DEC-040); off unless a test asks, so times stay exact. */
+  scheduleJitter?: boolean
 }
 
 let sequence = 0
 
 export function makeWorld(options: WorldOptions = {}): World {
   const connector = new FakeConnector({ id: 'fake', platform: 'fake', identity: options.identity === null ? 'ghost' : (options.identity ?? 'brand_account') })
-  const t = makeTestCore({ connectors: [connector] })
+  const t = makeTestCore({ connectors: [connector], scheduleJitter: options.scheduleJitter })
   const core = t.core
   const knowledge = new FakeKnowledge()
   knowledge.approved = options.claims ?? [makeClaim('c1', 'Natal Mystic builds a natal chart from your birth date, time and place.'), makeClaim('c2', 'The app works on iPhone and Android.', { lineageId: 'lin-c2' })]

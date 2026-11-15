@@ -563,7 +563,10 @@ export interface ChannelSettings {
   style: string
   topics: string[]
   queries: string[]
+  /** How often the channel is looked at, in minutes (DEC-040: every 3 hours by default; each check starts a little earlier or later than that, so channels never start together). */
   checkIntervalMin: number
+  /** The one-time look-back of a channel reads this many days back (0 to 30; 0 = none). Afterwards only what is new is read. */
+  lookBackDays: number
   limits: ChannelLimits
   autoCategories: AutoCategory[]
   /** Local HH:MM for the daily summary, or null for none. */
@@ -601,6 +604,8 @@ export interface Channel {
   statusDetail: string
   /** Set when the first observation cycle stored existing comments as the baseline. */
   baselineDoneAt: IsoTime | null
+  /** When the one-time look-back (the last `settings.lookBackDays` days) was made; null until then (DEC-040). */
+  lookedBackAt: IsoTime | null
   lastRunAt: IsoTime | null
   lastSuccessAt: IsoTime | null
   nextCheckAt: IsoTime | null
@@ -614,12 +619,16 @@ export interface Channel {
   createdAt: IsoTime
 }
 
+/** Start of the status text a channel carries while its checks fail (the scheduler writes it; the watching line reads it back without repeating it). */
+export const FAILURE_DETAIL_PREFIX = 'Last check failed'
+
 export const DEFAULT_CHANNEL_SETTINGS: ChannelSettings = {
   languages: ['en'],
   style: '',
   topics: [],
   queries: [],
-  checkIntervalMin: 30,
+  checkIntervalMin: 180,
+  lookBackDays: 30,
   limits: { perHour: 2, perDay: 6 },
   autoCategories: [],
   digestTime: null,
@@ -637,6 +646,8 @@ export interface Discussion {
   title: string
   author: string
   body: string
+  /** When the post was written on the platform; null when the platform did not say (DEC-040). */
+  postedAt: IsoTime | null
   /** Older discussion explicitly selected by the user for processing. */
   selectedForProcessing: boolean
   firstSeenAt: IsoTime
@@ -968,6 +979,57 @@ export interface OpportunityCard {
   draft: Draft | null
   approval: Approval | null
   lastAction: SendAction | null
+}
+
+// ───────────── the AI triage of what a channel shows (DEC-040) ─────────────
+
+/** What the AI made of a post: worth a reply, worth noticing, or not relevant to the product's goal. */
+export type FindingLabel = 'reply' | 'notice' | 'skip'
+
+/**
+ * `pending`: found but not yet judged (the AI engine was not ready); `title`: judged by its title alone (not relevant: label `skip`; relevant: no label yet,
+ * the post waits to be opened and read); `read`: opened and read, and labelled.
+ */
+export type FindingStage = 'pending' | 'title' | 'read'
+
+/** One post of a channel that was judged once. The owner decides what to do with it; nothing here is ever sent. */
+export interface Finding {
+  id: Id
+  productId: Id
+  channelId: Id
+  /** The post's id on the platform: a post is judged once per channel. */
+  externalId: string
+  title: string
+  url: string
+  author: string
+  postedAt: IsoTime | null
+  stage: FindingStage
+  /** Null while `stage` is `pending`, and also while `stage` is `title` and the post waits to be read (it was judged relevant by its title). */
+  label: FindingLabel | null
+  /** One line: how the post relates, or does not relate, to the product's goal. Written by the AI from page text; shown as data. */
+  relation: string
+  /** Found by the look-back of a new channel, not by a later check. */
+  firstLook: boolean
+  /** The reply opportunity that was opened for it (label `reply`), when there is one. */
+  opportunityId: Id | null
+  seenAt: IsoTime | null
+  createdAt: IsoTime
+}
+
+export interface FindingCard {
+  finding: Finding
+  channelTarget: string
+  channelPlatform: string
+}
+
+export interface FindingCounts {
+  /** Findings labelled `notice` that the owner has not looked at yet. */
+  unseenNotices: number
+  notices: number
+  /** Posts judged not relevant: counted, never listed unless the owner asks. */
+  skipped: number
+  /** Posts without a label: found but not yet judged, and judged relevant by title but not yet read. */
+  pending: number
 }
 
 // ───────────── one post for several channels (DEC-032) ─────────────

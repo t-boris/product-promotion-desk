@@ -1162,3 +1162,32 @@ Re-shot with `scripts/design/tour.mjs` from ONE own instance of the development 
 | `baseline/dark-1320-*.png` (14) | Inbox, Overview, Posts, Feed, Channels, a channel's Status, Setup (Passport and Sources), Accounts (list, profiles, new), Log, Settings, the hidden menu |
 | `baseline/light-1320-*.png` (7) | Inbox, Overview, Posts, a channel's Status, Setup Passport, Accounts, Settings |
 | `baseline/dark-980-*.png` (6), `baseline/light-980-*.png` (2) | The minimum window: Inbox, Posts, Channels, Setup Passport, Accounts, Settings; Setup Passport and the profiles in light |
+
+## 32. Watching a channel on a schedule (DEC-040, 0.22.0)
+
+Where the owner sees that the app watches, what the AI judged, and how often it looks. Nothing new is filled: the one filled button of each screen is unchanged. Every control is 28 px from the tokens.
+
+**The watching line** (`watching-line.ts`, pure). One sentence in the Feed header (`feed-watching`, a `Hint` under the title): "Watching every ~3 h · last 14:05 · next ≈17:12", with several channels "Watching 2 of 3 channels · next ≈17:12". It
+says why when the app does not watch: automation paused, the channel paused, set-up unfinished, needing the owner (the channel's own words), or "Last check failed · <reason> · retrying ≈12:09" (the reason without the scheduler's own prefix, count and
+retry sentence; also for a channel that stayed `active` after a timeout). A time is shown only when the channel has one; a time that has passed reads "soon". The moment advances every 30 seconds. The same words sit in a channel's Status card (row **Watching**,
+`channel-watching`, with the how-often alone because **Last run** and **Next check** have rows of their own) and in an Overview tile (`overview-watching-<id>`, wrapping inside the tile).
+
+**Feed.** A fourth list **Noted** (`feed-state-noted`, with a neutral badge of notices not seen yet, `feed-noted-unseen`) next to To decide, Sent and Skipped; it lists the notices of the AI (`finding-row-<id>`), newest first, under the same day headings, and the item
+(`finding-detail`) shows the post, the AI's one-line note on how it relates to the goal (`finding-relation`), how far the AI looked (read, or judged by its title) and when it was found, with a **First look** marker for a post found by the first look at a channel.
+Its action bar has only **Open post** (`finding-open-post`, a link that opens the web address in the browser; an address that is not http or https shows `finding-no-address` instead) and says a notice has nothing to send. Choosing a notice marks it seen, once.
+Beside the lists a quiet line "Judged not relevant: 6 · 1 waiting for the AI · Show" (`feed-judged-count`, `feed-judged-waiting`, `feed-judged-show`) opens the posts the AI judged not relevant, read-only, with its reasons (`feed-judged-note`), and **Back to the Feed**
+returns. The counts follow the channel chosen in the pop-up. Titles, notes and addresses come from strangers and the AI: they are text, never markup.
+
+**Settings** (a channel the app reads). **Check every** is a pop-up: Every hour, Every 3 hours (the default), Once a day, Custom… (`settings-interval-choice`); the minutes field (`settings-interval`, "From 5 minutes to a week (10080).") appears only for Custom. **First look**
+(`settings-look-back`): None, 7, 14 or 30 days (a stored value of another number stays in the list); once the first look is made the pop-up is disabled and says "Done <time>. A channel looks back once, on its first check; after that only new posts are read."
+A shorter interval moves the planned check earlier at once.
+
+| Id | Requirement | Method | Pass |
+|---|---|---|---|
+| V-62 | The Feed (To decide, Noted, Judged not relevant), a channel's Settings, the channel Status card of a failing channel and the Overview follow the shared rules at 1320×880 and 980×640, light and dark: every control 28 px, no wrapped or cut label, no sideways scroll, at most one filled button | the own-instance probe (`probe-watch.mjs`, 102 checks), measured sweeps of `feed-todecide`, `feed-noted`, `feed-judged`, `settings`, `channel-failing` and `overview-failing` in both sizes and themes | all true |
+| V-63 | The watching line says what is true: how often, last, next; the reason when the app does not watch; a failing check once, with its reason and the retry time; never "Watching" for a channel whose last check failed | `src/main/watching-line.test.ts` (35 tests, mutants on the failing branch and the reason cleanup), the probe (W1, W2, T1-T3) | all true |
+| V-64 | A notice offers nothing to approve or send; a title or note with markup is shown as text; an address that is not http(s) gives no link; choosing a notice marks only it seen | the probe (N1-N8), `src/main/feed-render.test.ts`, `src/main/feed-findings.test.ts` | all true |
+| V-65 | The Settings choices store what is chosen: a preset or Custom (5 minutes to a week), a first look of 0 to 30 days, a done first look cannot be asked again, an interval change reschedules, the first check of a new channel is on every 3 hours with a 30 day look | `src/main/settings-form.test.ts`, `src/core/channels/channels.test.ts`, the probe (C1, S1-S7, R1: the planned check moved to 54.8 minutes, so the production jitter is on) | all true |
+| V-66 | The counts of findings follow the channel chosen | `src/core/pipeline/findings.test.ts`, the probe (F4) | all true |
+
+Shots of the run (own data directory, empty HOME and PATH, loopback only, demo data, automation paused, nothing sent): `feed-todecide`, `feed-noted`, `feed-judged`, `settings`, `channel-failing`, `overview-failing`, each at 1320 and 980, light and dark (24 pictures, kept with the job).

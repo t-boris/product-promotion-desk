@@ -496,6 +496,12 @@ export interface Connector {
   fetchActivity(ctx: ConnectorContext, options: { limit: number }): Promise<ActivityBatch>
   fetchThread(ctx: ConnectorContext, discussionExternalId: string): Promise<RemoteDiscussion | null>
   /**
+   * Optional (DEC-040): the posts of the channel written since `since`, newest first, at most `max`, each WITHOUT its comments (`comments` is empty): a cheap
+   * list the AI triage judges by title. Read-only. Absent means the connector cannot list a channel's posts, so no triage is made for it. A post whose
+   * `postedAt` is null is never older than `since` as far as the list can tell and is kept.
+   */
+  listPosts?(ctx: ConnectorContext, options: { since: IsoTime; max: number }): Promise<RemoteDiscussion[]>
+  /**
    * Optional (DEC-039): what is in the account's inbox that belongs to the channel (replies to the account's comments and posts, mentions of it),
    * newest first, at most `limit`. Read-only, through the account's signed-in session; it changes nothing on the platform (nothing is marked as read).
    * Absent means the platform has no inbox the app can read: the channel's `read_inbox` capability says so, and no reply or mention is collected.

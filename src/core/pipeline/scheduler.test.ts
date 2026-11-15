@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { deferred, FakeMetricsService, flush } from './scheduler-fakes'
 import { sendingAccounts } from './scheduler-eligibility'
 import { makeHarness } from './scheduler-harness'
-import { seedAccount } from './scheduler-seed'
-import { MINUTE_MS } from './scheduler-timing'
+import { seedAccount, seedChannel } from './scheduler-seed'
+import { MINUTE_MS, jitterWindowMs, nextCheckFor } from './scheduler-timing'
 
 const monitorRuns = (h: ReturnType<typeof makeHarness>) => h.core.runs.list({ limit: 100 }).filter((r) => r.kind === 'monitor')
 
@@ -438,5 +438,67 @@ describe('Scheduler: which accounts need a sign-in check at start (DEC-034)', ()
     h.channel({ accountId: poster.id, target: '@brand', reads: false, mode: 'observe' })
     h.channel({ accountId: watcher.id, target: 'r/watch', mode: 'observe' })
     expect(sendingAccounts(h.core).map((a) => a.id)).toEqual([poster.id])
+  })
+})
+
+describe('Scheduler: when a channel is next checked (DEC-040)', () => {
+  it('without jitter plans exactly the channel\'s interval, and a channel on the product default every 3 hours', async () => {
+    const h = makeHarness()
+    expect(h.core.scheduleJitter).toBe(false)
+    // Not through h.channel: the harness pins the interval at 30 minutes, and this channel keeps what the product gives it.
+    const onDefault = seedChannel(h.core, { productId: h.productId, accountId: h.account.id })
+    expect(onDefault.settings.checkIntervalMin).toBe(180)
+    await h.start()
+    expect(h.core.repos.channel(onDefault.id).nextCheckAt).toBe(new Date(h.clock.now().getTime() + 180 * MINUTE_MS).toISOString())
+  })
+
+  it('with jitter on plans the time the one function gives, a different one for each channel, inside the window', async () => {
+    const h = makeHarness({ scheduleJitter: true })
+    // Three channels: that many cycles run at once, and a fourth would wait for the next tick.
+    const channels = [0, 1, 2].map((i) => h.channel({ target: `r/jitter${i}`, settings: { checkIntervalMin: 60 } }))
+    await h.start()
+
+    const offsets = channels.map((c) => {
+      const planned = Date.parse(h.core.repos.channel(c.id).nextCheckAt!)
+      expect(h.core.repos.channel(c.id).nextCheckAt).toBe(nextCheckFor(c, h.clock.now().getTime(), true))
+      const offset = planned - (h.clock.now().getTime() + 60 * MINUTE_MS)
+      expect(Math.abs(offset)).toBeLessThanOrEqual(jitterWindowMs(60))
+      return offset
+    })
+    expect(new Set(offsets).size).toBe(channels.length)
+  })
+
+  it('moves the same channel by another offset after its next run, because the offset comes from the last run', async () => {
+    const h = makeHarness({ scheduleJitter: true })
+    const channel = h.channel({ settings: { checkIntervalMin: 60 } })
+    await h.start()
+    const firstRunAt = h.clock.now().toISOString()
+    const first = h.core.repos.channel(channel.id).nextCheckAt!
+    expect(first).toBe(nextCheckFor({ ...channel, lastRunAt: null }, Date.parse(firstRunAt), true))
+
+    // The check starts on the first tick after its time (ticks come every 15 seconds).
+    await h.elapse(Date.parse(first) - h.clock.now().getTime() + 15_000)
+
+    const second = h.core.repos.channel(channel.id)
+    expect(h.core.repos.channel(channel.id).lastRunAt).toBe(h.clock.now().toISOString())
+    expect(second.nextCheckAt).toBe(nextCheckFor({ ...channel, lastRunAt: firstRunAt }, h.clock.now().getTime(), true))
+  })
+
+  it('applies the jitter to a check that was skipped too', async () => {
+    const h = makeHarness({ scheduleJitter: true })
+    const channel = h.channel({ settings: { checkIntervalMin: 180 } })
+    h.monitor.outcome = { status: 'skipped', summary: 'Channel is paused', newOpportunities: 0 }
+    await h.start()
+    expect(h.core.repos.channel(channel.id).nextCheckAt).toBe(nextCheckFor(channel, h.clock.now().getTime(), true))
+  })
+
+  it('leaves the backoff after a failure as it is, with jitter on', async () => {
+    const h = makeHarness({ scheduleJitter: true })
+    const channel = h.channel({ settings: { checkIntervalMin: 180 } })
+    h.monitor.behaviors.set(channel.id, async () => {
+      throw new Error('net::ERR_INTERNET_DISCONNECTED')
+    })
+    await h.start()
+    expect(h.core.repos.channel(channel.id).nextCheckAt).toBe(new Date(h.clock.now().getTime() + MINUTE_MS).toISOString())
   })
 })

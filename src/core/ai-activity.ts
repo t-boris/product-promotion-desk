@@ -33,7 +33,9 @@ const TITLES: Record<string, string> = {
   'drafts.write': 'Writing a draft text',
   'drafts.improve': 'Improving a draft text',
   'draft.reply': 'Drafting a reply',
-  'draft.publication': 'Drafting a publication'
+  'draft.publication': 'Drafting a publication',
+  'triage.titles': 'Judging the titles of new posts',
+  'triage.read': 'Reading a post'
 }
 
 /** A run that corrects the answer of an earlier one ("<label>.repair") is named after it. */

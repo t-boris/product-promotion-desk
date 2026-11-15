@@ -15,7 +15,7 @@ import type {
   RemoteInboxItem,
   SendTicket
 } from '../../core/ports'
-import type { Capability, MetricReading } from '../../shared/types'
+import type { Capability, IsoTime, MetricReading } from '../../shared/types'
 import { gateProbeScript, type GateProbe } from '../page-scripts'
 import { ensureRedditOrigin, RedditApi } from './api'
 import { refusalError } from './auth'
@@ -30,8 +30,12 @@ export const REDDIT_CONNECTOR_VERSION = '1'
 /** Pause between consecutive thread reads, to stay well below Reddit's request limits. */
 const DEFAULT_PACING_MS = 400
 
+/** Posts asked for in one page of `listPosts` (Reddit's own maximum), and the most pages it reads whatever `max` and `since` say: 1000 posts. */
+const LIST_PAGE_SIZE = 100
+const LIST_MAX_PAGES = 10
+
 export interface RedditConnectorOptions extends Partial<RedditRuntime> {
-  /** Pause between thread reads while collecting activity. */
+  /** Pause between thread reads while collecting activity, and between the pages of a post list. */
   pacingMs?: number
 }
 
@@ -109,6 +113,51 @@ export class RedditConnector implements Connector {
         discussions.push(toDiscussion(post, read.comments, read.incomplete))
       }
       return { discussions, fetchedAt: ctx.clock.now().toISOString() }
+    })
+  }
+
+  /**
+   * DEC-040: the posts of the community written since `since`, newest first, at most `max` (and never more than LIST_MAX_PAGES pages of
+   * LIST_PAGE_SIZE), each WITHOUT its comments. Read-only, through the account's signed-in page; no thread is ever opened.
+   *
+   * Not probed against live Reddit: that `/new.json` pages with `after=<fullname of the last post>` as written here, that the listing is strictly
+   * newest first, and how Reddit rates a month of such reads are all unproven until the owner runs it on a real account.
+   *
+   * It stops at the first of: a post older than `since` (compared by `created_utc`; a post with no time is never older and is kept; the listing is
+   * taken as newest first, so one out-of-order post ends the read there and the posts after it are not read), `max` posts collected, no next page,
+   * the page ceiling. Removed posts are left out, as `fetchActivity` leaves them out.
+   *
+   * All or nothing: a page that cannot be read fails the whole call (through `refusalError`, so a signed-out account or a human check is told
+   * apart), also after earlier pages were read. The result cannot say that it is partial, and the posts a partial list leaves out are the OLDEST of
+   * the window: a caller that took it for the whole window would move its "last look" past them and they would never be judged. This is the same
+   * rule as `fetchActivity` (a partial read is never passed on as a whole one); the cost of a failed read is a repeat of at most 10 cheap requests.
+   */
+  async listPosts(ctx: ConnectorContext, options: { since: IsoTime; max: number }): Promise<RemoteDiscussion[]> {
+    const sub = this.subreddit(ctx)
+    if (!(options.max >= 1)) return []
+    const sinceMs = Date.parse(options.since)
+    return ctx.session.withAgentControl(`triage:${ctx.channel.id}`, async (page) => {
+      await ensureRedditOrigin(page, ctx.channel.url)
+      const api = new RedditApi(page)
+      const posts: RemoteDiscussion[] = []
+      const seen = new Set<string>()
+      let after: string | null = null
+      for (let number = 1; number <= LIST_MAX_PAGES; number += 1) {
+        if (number > 1 && this.pacingMs > 0) await this.runtime.sleep(this.pacingMs)
+        const read = await api.listingPage(sub, LIST_PAGE_SIZE, after)
+        if (!read.ok) throw await refusalError(page, api, read, `Could not read page ${number} of the posts of r/${sub}: ${read.reason}`)
+        for (const post of read.value.posts) {
+          if (post.createdAt !== null && Date.parse(post.createdAt) < sinceMs) return posts
+          if (post.removed || seen.has(post.fullname)) continue
+          seen.add(post.fullname)
+          posts.push(toDiscussion(post, [], false))
+          if (posts.length >= options.max) return posts
+        }
+        // A page with no post cannot lead anywhere: stop, whatever token it carries.
+        if (read.value.after === null || read.value.posts.length === 0) break
+        after = read.value.after
+      }
+      return posts
     })
   }
 

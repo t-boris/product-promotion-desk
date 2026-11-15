@@ -11,7 +11,35 @@
   overflow-y: auto;
 }
 
-/* ───────────── Controls: the source chips, the list segments and the channel, in one wrapping row ───────────── */
+/* ───────────── Lists: the four tabs, and the quiet line of what the AI judged not relevant at their right ───────────── */
+
+.feed-lists {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+.feed-lists .segmented {
+  align-self: center;
+}
+/* The unseen count of the Noted tab is the sidebar's quiet count (neutral, a quantity and no call to act), set after the words of the tab. */
+.feed-lists .segmented-option .count {
+  margin-left: var(--space-2);
+}
+/* "Judged not relevant: 143 · Show": a line of text with one quiet action, never a filled button; it stays on one line. */
+.feed-judged {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+  white-space: nowrap;
+}
+
+/* ───────────── Controls: the source chips and the channel, in one wrapping row ───────────── */
 
 .feed-controls {
   flex: none;
@@ -67,6 +95,75 @@
   white-space: nowrap;
   color: var(--text-2);
   font-size: var(--fs-caption);
+}
+
+/* The channels' own watching lines, under "Each channel" of the notes. */
+.feed-notes .feed-watching-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--text-2);
+}
+.feed-notes .feed-watching-list strong {
+  color: var(--text-1);
+  font-weight: var(--fw-medium);
+}
+
+/* A finding row (the Noted list, the posts the AI judged not relevant): a ring is a post the owner has seen, a filled dot one not seen yet;
+   both are neutral, like the selection. Its third line holds the First look tag and the AI's line, at one height with or without the tag. */
+.finding-row .dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--text-3);
+}
+.finding-row.unseen .dot {
+  background: var(--text-2);
+  box-shadow: none;
+}
+.finding-row .feed-row-ai {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 22px;
+}
+.finding-row .feed-row-ai .badge {
+  flex: none;
+}
+.finding-row .feed-row-relation {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A finding in full: the post, then the AI's words about it. The AI's line comes from a page the AI read, so it is plain text that wraps
+   and never runs out of the pane. */
+.finding-post {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+  min-width: 0;
+}
+.finding-post .finding-title {
+  font-size: var(--fs-title);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-title);
+  overflow-wrap: anywhere;
+}
+.finding-ai {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+.finding-ai .finding-ai-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 /* An item that answers a post: the post is what the owner answers, so it reads as the main text, not as the quiet context of a comment. */

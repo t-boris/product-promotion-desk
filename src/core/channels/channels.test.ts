@@ -6,6 +6,7 @@ import { DEFAULT_CHANNEL_SETTINGS, type Channel } from '../../shared/types'
 import { newId } from '../db/database'
 import { FakeConnector } from '../testing/fake-connector'
 import { makeTestCore } from '../testing/fakes'
+import { nextCheckFor } from '../pipeline/scheduler-timing'
 import { makeReadyWorld, type World } from './test-helpers'
 
 async function connect(w: World, target = 'r/astrology', productId = w.productId, reuseAccount = false): Promise<Channel> {
@@ -90,7 +91,7 @@ describe('channels.updateSettings', () => {
       channelId: channel.id,
       settings: { languages: ['en', 'es'], style: 'warm, short', topics: ['astrology'], queries: ['birth chart app'], checkIntervalMin: 15, limits: { perHour: 1, perDay: 3 }, digestTime: '09:00', notifications: false, autoCategories: ['thanks'] }
     })
-    expect(updated.settings).toEqual({ languages: ['en', 'es'], style: 'warm, short', topics: ['astrology'], queries: ['birth chart app'], checkIntervalMin: 15, limits: { perHour: 1, perDay: 3 }, autoCategories: ['thanks'], digestTime: '09:00', notifications: false, mix: [] })
+    expect(updated.settings).toEqual({ languages: ['en', 'es'], style: 'warm, short', topics: ['astrology'], queries: ['birth chart app'], checkIntervalMin: 15, lookBackDays: 30, limits: { perHour: 1, perDay: 3 }, autoCategories: ['thanks'], digestTime: '09:00', notifications: false, mix: [] })
     expect((await w.call('channels.list', undefined))[0].settings).toEqual(updated.settings)
   })
 
@@ -101,6 +102,65 @@ describe('channels.updateSettings', () => {
       expect(await w.refusal('channels.updateSettings', { channelId: channel.id, settings: settings as never })).toBe('invalid_input')
     }
     expect((await w.call('channels.list', undefined))[0].settings).toEqual(DEFAULT_CHANNEL_SETTINGS)
+  })
+
+  it('refuses a first look of a negative, fractional or too long number of days', async () => {
+    const w = await makeReadyWorld()
+    const channel = await connect(w)
+    for (const lookBackDays of [-1, -5, 1.5, 31]) {
+      expect(await w.refusal('channels.updateSettings', { channelId: channel.id, settings: { lookBackDays } })).toBe('invalid_input')
+    }
+    for (const lookBackDays of [0, 7, 30]) {
+      expect((await w.call('channels.updateSettings', { channelId: channel.id, settings: { lookBackDays } })).settings.lookBackDays).toBe(lookBackDays)
+    }
+  })
+
+  describe('a new interval and the planned check (DEC-040)', () => {
+    const MIN = 60_000
+    const plan = (w: World, channel: Channel, intervalMin: number, minutesFromNow: number | null, status = 'active'): string | null => {
+      const at = minutesFromNow === null ? null : new Date(w.core.clock.now().getTime() + minutesFromNow * MIN).toISOString()
+      w.core.db.prepare('UPDATE channels SET status = ?, next_check_at = ?, settings_json = json_set(settings_json, ?, ?) WHERE id = ?').run(status, at, '$.checkIntervalMin', intervalMin, channel.id)
+      return at
+    }
+    const nextCheck = (w: World, channel: Channel): string | null => (w.core.db.prepare('SELECT next_check_at AS at FROM channels WHERE id = ?').get(channel.id) as { at: string | null }).at
+    const inMinutes = (w: World, iso: string | null): number => (new Date(iso!).getTime() - w.core.clock.now().getTime()) / MIN
+
+    it('moves the planned check earlier when the interval gets shorter', async () => {
+      const w = await makeReadyWorld()
+      const channel = await connect(w)
+      plan(w, channel, 1440, 1000)
+      await w.call('channels.updateSettings', { channelId: channel.id, settings: { checkIntervalMin: 60 } })
+      expect(inMinutes(w, nextCheck(w, channel))).toBe(60)
+    })
+
+    it('keeps a planned check that is already sooner than the new interval, and one that the interval did not change', async () => {
+      const w = await makeReadyWorld()
+      const channel = await connect(w)
+      const soon = plan(w, channel, 60, 10)
+      await w.call('channels.updateSettings', { channelId: channel.id, settings: { checkIntervalMin: 1440 } })
+      expect(nextCheck(w, channel)).toBe(soon)
+      const later = plan(w, channel, 1440, 900)
+      await w.call('channels.updateSettings', { channelId: channel.id, settings: { style: 'warm' } })
+      expect(nextCheck(w, channel)).toBe(later)
+    })
+
+    it('leaves a channel with no planned check without one (paused, in setup, waiting for the owner)', async () => {
+      const w = await makeReadyWorld()
+      const channel = await connect(w)
+      plan(w, channel, 1440, null, 'paused')
+      await w.call('channels.updateSettings', { channelId: channel.id, settings: { checkIntervalMin: 60 } })
+      expect(nextCheck(w, channel)).toBeNull()
+    })
+
+    it('uses the same time the scheduler would, jitter included, and never plans sooner than a minute', async () => {
+      const w = await makeReadyWorld({ scheduleJitter: true })
+      const channel = await connect(w)
+      plan(w, channel, 1440, 1000)
+      const updated = await w.call('channels.updateSettings', { channelId: channel.id, settings: { checkIntervalMin: 60 } })
+      const planned = nextCheck(w, channel)
+      expect(planned).toBe(nextCheckFor({ id: channel.id, lastRunAt: updated.lastRunAt, settings: updated.settings }, w.core.clock.now().getTime(), true))
+      expect(Math.abs(inMinutes(w, planned) - 60)).toBeLessThanOrEqual(6)
+    })
   })
 
   it('does not let automatic categories be emptied while the channel is in automatic mode', async () => {

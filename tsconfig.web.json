@@ -5,6 +5,6 @@
     "jsx": "react-jsx",
     "types": []
   },
-  // The chart components are rendered to markup by a test that lives beside the other renderer-logic tests (vitest excludes src/renderer), so it is compiled with the renderer.
-  "include": ["src/renderer/**/*", "src/shared/**/*", "src/main/charts-render.test.ts"]
+  // The chart components and the Feed's finding views are rendered to markup by tests that live beside the other renderer-logic tests (vitest excludes src/renderer), so they are compiled with the renderer.
+  "include": ["src/renderer/**/*", "src/shared/**/*", "src/main/charts-render.test.ts", "src/main/feed-render.test.ts"]
 }

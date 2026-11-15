@@ -826,3 +826,19 @@ Owner's goal 2026-11-15: implement the plan, verify against it, apply recorded a
 **Decisions left to the owner.** DEC-023 (the macOS visual system) is still `proposed`; DEC-037 supersedes parts of it for the screens above. Accepted defaults that the owner may change: the Accounts card on the Channels list stays a card (the plan sketched a compact row); the passport's "Add statement" is in the section editor, not on a closed tile; Feed shows at most 300 items per list.
 
 **Known limits.** "Sign in with saved password" and "Check sign-in" are enabled for a moment while the account's browser state is still loading (the core refuses a click and says why); the day-to-calendar assignment of a post across a DST change uses the offset of the day, not of the instant.
+
+## 0.22.0 – 0.24.0: watching channels on a schedule, AI triage, a tab per task, a read-only browser watcher (branch `feat/watch-schedule-triage` for slice A; DEC-040/041/042; owner 2026-11-15: "да вперед"; plan file `~/.claude/plans/twinkly-pondering-hammock.md` while it lives)
+
+Owner's words, recorded in memory `ppd-monitoring-browser-walk-requirements`: every 3 hours per channel with random jitter; first look one month back, then only what is new; every post judged by title first, opened and read only when relevant, labelled reply / notice / skip with a line on the goal; reading only, sending always waits for Approve; one browser window, a tab per task; only on this Mac (web mode stays 127.0.0.1).
+
+### Slice A — 0.22.0 (DEC-040): schedule, look-back, triage, Feed (Reddit through the connector)
+- [x] Contract: migration 308 (`discussions.posted_at`, `channels.looked_back_at`, `findings`, 30 -> 180 for default rows), types (`lookBackDays`, `lookedBackAt`, `Discussion.postedAt`, `Finding*`), API `findings.list|counts|markSeen`, optional `Connector.listPosts`
+- [x] A1 schedule: one `nextCheckFor` with injectable deterministic jitter used by scheduler and monitor; `lookBackDays` validated in settings; Settings presets (1 h / 3 h / once a day) and the look-back choice; "Watching every ~3 h · last · next" line in Feed, Channel status card, Overview tile
+- [x] A2 Reddit `listPosts` (paging with `after`, since-cutoff, cap, pacing) + fake connector support
+- [x] A3 triage core: `findings` store, `triage.ts` (batch titles -> relevance, then read -> label + relation, goals in the prompt), `Ingestor` method for a triaged post (comments stored as baseline), look-back once per channel, monitor hook that never fails the cycle, `findings.*` handlers
+- [x] A4 Feed: fourth list Noted, First look marker, "Judged not relevant: N · Show", counts
+- [x] Review fixes (two independent reviews): a shorter interval reschedules; migration 308 guards invalid JSON; negative first look refused; first look disabled once done; failing line says it once; counts follow the channel; the clock ticks; locked/archived carried by the Reddit mapping; a separate listing cursor (a failed listing loses nothing); listing ceiling 1000; unreadable posts rotate and settle; unsafe AI note replaced, not fatal; dead-engine cost bounded; pass time budget
+- [ ] Verify: unit + mutants (triage never approves or sends; auto never answers a new post; reply keeps identity / one-voice rules), own-instance probe with a fake clock and the screens probe/tour, `npm run verify`, independent review, PR, CI, merge, 0.22.0, release, `deploy:local`, MarkView walkthrough
+
+### Slice B — 0.23.0 (DEC-041): a tab per task (probe first; design confirmed with the owner after it)
+### Slice C — 0.24.0 (DEC-042): the read-only browser watcher for channels with no connector

@@ -133,5 +133,56 @@ CREATE INDEX idx_opp_product_source ON opportunities(product_id, source, updated
 -- When the account's inbox was first read for this channel: that first read only stores what is there (the baseline rule), it queues nothing.
 ALTER TABLE channels ADD COLUMN inbox_baseline_done_at TEXT;
 `
+  },
+  {
+    id: 308,
+    name: 'pipeline: watching on a schedule, a look-back, and findings of the AI triage (DEC-040)',
+    sql: `
+-- When a post was written on the platform (null when the platform did not say). The look-back reads back as far as this.
+ALTER TABLE discussions ADD COLUMN posted_at TEXT;
+-- When the one-time look-back of a channel was made (the last settings.lookBackDays days). Null: not yet, so the next check makes it.
+ALTER TABLE channels ADD COLUMN looked_back_at TEXT;
+-- Up to when the posts of the channel were LISTED, whole: the moment its last fully successful listing started. Internal to the triage (not part of the
+-- shared Channel): the next listing reads from here less an hour, so a listing that failed or was interrupted leaves it alone and the posts written
+-- meanwhile are listed at the next pass. Null: not listed yet, so the next pass makes the first look (looked_back_at is only the mark that it was made).
+ALTER TABLE channels ADD COLUMN listed_through TEXT;
+-- One row per post of a channel that the AI triage judged: by its title first, then (if it was relevant) by reading it. A post is judged once.
+-- stage: 'pending' (found, not yet judged: the engine was not ready), 'title' (judged by its title alone), 'read' (opened and read).
+-- label: 'reply' (worth a reply: opportunity_id points at it), 'notice' (worth noticing), 'skip' (not relevant). It is null while the stage is 'pending',
+-- and also while the stage is 'title' and the post waits to be read (judged relevant by its title; a title judged not relevant is already 'skip').
+CREATE TABLE findings (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+  external_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  url TEXT NOT NULL,
+  author TEXT NOT NULL DEFAULT '',
+  posted_at TEXT,
+  stage TEXT NOT NULL,
+  label TEXT,
+  -- One line: how the post relates (or does not relate) to the product's goal. Written by the AI from the page; shown as data, never obeyed.
+  relation TEXT NOT NULL DEFAULT '',
+  -- 1 when the post was found by the look-back of a new channel, not by a later check.
+  first_look INTEGER NOT NULL DEFAULT 0,
+  -- How many passes the engine ANSWERED about this post and the answer could not be used even after the one repair, or the post could not be read while
+  -- others could. Internal to the store (not part of the shared Finding). A post that was not judged because the engine was not ready, used tools, timed
+  -- out, failed or the owner took the browser is not counted, nor is a pass in which the engine judged no other post, nor one in which no thread could
+  -- be read. It also orders the posts that wait to be read (the fewest failures first). At 3 the post is settled as a notice (never dropped, never a
+  -- skip or a reply): see FindingStore.recordUnusable and recordUnreadable.
+  attempts INTEGER NOT NULL DEFAULT 0,
+  opportunity_id TEXT REFERENCES opportunities(id) ON DELETE SET NULL,
+  seen_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (channel_id, external_id)
+);
+CREATE INDEX idx_findings_product ON findings(product_id, label, created_at);
+-- "Was anything judged lately?" (the engine counts as working for a day after a real judgment: FindingStore.recentJudgment).
+CREATE INDEX idx_findings_judged ON findings(updated_at) WHERE label IS NOT NULL;
+-- The default check interval is now 3 hours (it was 30 minutes): a channel still on the old default follows it; a value the owner chose stays.
+-- json_valid first: json_extract throws on a text that is not JSON, and one such row would stop the whole migration (and with it the application).
+UPDATE channels SET settings_json = json_set(settings_json, '$.checkIntervalMin', 180) WHERE json_valid(settings_json) AND json_extract(settings_json, '$.checkIntervalMin') = 30;
+`
   }
 ]

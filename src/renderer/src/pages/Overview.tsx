@@ -99,7 +99,7 @@ function OverviewBody({ product, days }: { product: Product; days: number }) {
           </div>
 
           <Card title="Channels">
-            <ChannelTiles channels={view.channels} lines={lines} days={view.days} />
+            <ChannelTiles channels={view.channels} lines={lines} days={view.days} details={channels} />
           </Card>
 
           <div className="ov-grid">

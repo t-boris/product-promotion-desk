@@ -1,8 +1,9 @@
 import type { Channel, Id } from '../../../../shared/types'
-import { Hint } from '../../ui'
+import { Hint, More } from '../../ui'
 import { channelHref } from '../../route'
 import { OWN_POSTS_NO_CHECK } from '../channels/own-posts'
-import { readingProblems, unreadChannels, type FeedSourceFilter } from './feed-filter'
+import { readingProblems, readableChannels, unreadChannels, type FeedSourceFilter } from './feed-filter'
+import { watchingLine, type WatchingContext } from './watching-line'
 import './feed.css'
 
 /** Problems shown before "and n more": the rest are on the Channels screen, where they are fixed. */
@@ -11,15 +12,19 @@ const SHOWN = 3
 /**
  * Why a source may be empty although the channel is there, said on the Feed where the owner is looking: an ability the source depends on is
  * unavailable or needs the owner (the reason is the channel's own words, from its capability), or the app does not read the channel at
- * all (DEC-034). Where it is fixed is one link away. Nothing is shown while every channel in view reads well.
+ * all (DEC-034). Where it is fixed is one link away. With several channels the app reads, each one's own watching line (how often, when
+ * last, when next, or why not: DEC-040) is one click away under "Each channel"; the header line of the Feed is the product's one line.
+ * Nothing is shown while every channel in view reads well and there is only one.
  */
-export function ReadingNotes({ channels, source, channelId }: { channels: readonly Channel[]; source: FeedSourceFilter; channelId: Id | null }) {
+export function ReadingNotes({ channels, source, channelId, watching }: { channels: readonly Channel[]; source: FeedSourceFilter; channelId: Id | null; watching: WatchingContext | null }) {
   const problems = readingProblems(channels, { source, channelId })
   const unread = unreadChannels(channels, channelId)
+  // The channel's own line is for a product that has several channels to tell apart; with one the header line says it.
+  const own = watching !== null && readableChannels(channels, null).length > 1 ? readableChannels(channels, channelId) : []
   // One channel with a problem is fixed on its own page (Status shows the abilities); several are fixed from the list.
   const problemChannels = new Set(problems.map((problem) => problem.channelId))
   const fixHref = problemChannels.size === 1 ? channelHref([...problemChannels][0]) : '#/channels'
-  if (problems.length === 0 && unread.length === 0) return null
+  if (problems.length === 0 && unread.length === 0 && own.length === 0) return null
   return (
     <div className="feed-notes" data-testid="feed-notes">
       {problems.length > 0 && (
@@ -41,6 +46,17 @@ export function ReadingNotes({ channels, source, channelId }: { channels: readon
             .
           </div>
         </div>
+      )}
+      {own.length > 0 && watching !== null && (
+        <More label="Each channel">
+          <ul className="feed-watching-list" data-testid="feed-watching-channels">
+            {own.map((channel) => (
+              <li key={channel.id} data-testid={`feed-watching-${channel.id}`}>
+                <strong>{channel.target}</strong> · {watchingLine(channel, watching).text}
+              </li>
+            ))}
+          </ul>
+        </More>
       )}
       {unread.length > 0 &&
         (channelId !== null ? (
