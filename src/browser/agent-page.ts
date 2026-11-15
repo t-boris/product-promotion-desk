@@ -117,7 +117,7 @@ export class ElectronRawPage extends ScriptedPage {
         contents.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 })
       },
       insertText: (text) => contents.insertText(text).then(() => undefined),
-      attachFile: (expression, path, what) => this.attach(contents, expression, path, what)
+      attachFile: (expression, paths, what) => this.attach(contents, expression, paths, what)
     }
   }
 
@@ -126,7 +126,7 @@ export class ElectronRawPage extends ScriptedPage {
     await putFile(this.driver(this.live()), fileInputScript(selector), path, selector)
   }
 
-  private async attach(contents: WebContents, expression: string, path: string, what: string): Promise<void> {
+  private async attach(contents: WebContents, expression: string, paths: string[], what: string): Promise<void> {
     const debuggerApi = contents.debugger
     const attachedHere = !debuggerApi.isAttached()
     if (attachedHere) debuggerApi.attach('1.3')
@@ -136,7 +136,7 @@ export class ElectronRawPage extends ScriptedPage {
       }
       const objectId = evaluated.result?.objectId
       if (!objectId) throw new Error(`Could not upload: no file input matches "${what}".`)
-      await debuggerApi.sendCommand('DOM.setFileInputFiles', { files: [path], objectId })
+      await debuggerApi.sendCommand('DOM.setFileInputFiles', { files: paths, objectId })
     } finally {
       if (attachedHere && debuggerApi.isAttached()) debuggerApi.detach()
     }

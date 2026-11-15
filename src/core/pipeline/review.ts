@@ -12,6 +12,7 @@ import type { Core } from '../core'
 import { attachmentProblem } from './attachments'
 import { normalizeDraftInput } from './draft-input'
 import { contentHash, hashedIdentity } from './hash'
+import { sendWays } from './send-ways'
 import { OTHER_LOGIN_SPEAKS_REASON, SEND_LOCKED_STATES, SPEAKING_STATES, type FlowStore } from './store'
 
 export const FACTS_CHANGED_REASON = 'Product facts changed; review again'
@@ -94,7 +95,7 @@ export class ReviewFlow implements PipelineHooks {
     // A post written in the post editor is approved only when its platform can show it and this application can send it (DEC-030).
     if (draft.markup === 'markdown') {
       const platform = this.store.requireChannel(opp.channelId).platform
-      const unfit = sendProblems(platform, renderForPlatform(draft, platform))
+      const unfit = sendProblems(platform, renderForPlatform(draft, platform), sendWays(this.core))
       if (unfit.length > 0) throw new ApiError('post_does_not_fit', unfit.join(' '))
     }
 

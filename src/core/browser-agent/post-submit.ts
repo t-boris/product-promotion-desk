@@ -9,9 +9,21 @@
 // navigation that keeps the document can all leave text in a form). The authority itself (a gate renewal, the binding of the ticket to
 // this content, account and destination, the single use) lives where the gate lives: src/core/pipeline/mission-publisher.ts.
 
+import { createHash } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
 import type { SendTicket } from '../ports'
 
-/** What the owner approved, exactly: the application types this and nothing else. */
+/** A picture the owner approved, as the mission may put it into a file input: by its name, never by a path the AI gives. */
+export interface ApprovedFile {
+  /** What the AI calls it: the one name it may pass to browser_attach. */
+  name: string
+  /** Where the copy of the library is (the AI never sees it). */
+  path: string
+  /** What the approval was bound to: the file is read again and must still hash to this before it goes into a form. */
+  sha256: string
+}
+
+/** What the owner approved, exactly: the application types this and nothing else, and puts these files into the form and nothing else. */
 export interface ApprovedContent {
   kind: 'post' | 'reply'
   title: string | null
@@ -19,6 +31,8 @@ export interface ApprovedContent {
   link: string | null
   /** Channel address for a post, comment address for a reply: where the compose page must be. */
   destination: string
+  /** The pictures of the approved post, in order (none for a reply). Each goes into the form once, by browser_attach, before browser_submit. */
+  attachments?: ApprovedFile[]
 }
 
 /** One submission: a ticket held only for the length of `PostAuthority.lease`, and the point of no return. */
@@ -132,6 +146,45 @@ export function fieldValueScript(ref: string): string {
 })()`
 }
 
+/**
+ * The files a labelled file input holds now, as the page reports them (`[{ name, size }]`), or null when the label is not a file input.
+ * A site often empties the input once it has read the files, so an empty list is not proof that nothing went in. Read-only.
+ */
+export function filesHeldScript(ref: string): string {
+  if (!REF.test(ref)) throw new Error('A file input is named by a label like e12.')
+  return `(() => {
+  /* ppd-files ${ref} */
+  const find = (root) => {
+    const hit = root.querySelector('[data-ppd-ref="${ref}"]');
+    if (hit) return hit;
+    for (const el of root.querySelectorAll('*')) if (el.shadowRoot) { const inner = find(el.shadowRoot); if (inner) return inner; }
+    return null;
+  };
+  const el = find(document);
+  if (!el || el.tagName !== 'INPUT' || el.type !== 'file') return null;
+  return Array.from(el.files || []).map((f) => ({ name: String(f.name), size: Number(f.size) }));
+})()`
+}
+
+export function parseHeldFiles(value: unknown): { name: string; size: number }[] | null {
+  if (!Array.isArray(value)) return null
+  const files: { name: string; size: number }[] = []
+  for (const item of value) {
+    if (!item || typeof item !== 'object') return null
+    const { name, size } = item as { name?: unknown; size?: unknown }
+    if (typeof name !== 'string' || typeof size !== 'number') return null
+    files.push({ name, size })
+  }
+  return files
+}
+
+/**
+ * A text that is the same for as long as this document lives and differs in the next one: a link that loads a new page, a reload, a form
+ * that posts. A change of the fragment keeps the document (and what is in its form), so it keeps the text. What the mission knows about
+ * the form (the pictures are in it) is true of one document, and is read from this, not kept as a history of calls.
+ */
+export const DOCUMENT_TOKEN_SCRIPT = '(() => /* ppd-document */ String(performance.timeOrigin))()'
+
 /** A text-entry element of the page that holds text, as the page reports it. `ref` is its label when the AI could have been shown it. */
 export interface HeldText {
   ref: string | null
@@ -202,6 +255,19 @@ export function parseHeldText(raw: unknown): HeldText[] | null {
   return held
 }
 
+/**
+ * Why an approved picture may not go into a form now, or null. The file is read again and must hash to what the approval was bound to: a
+ * file that was replaced or changed on disk since the owner approved it is not what was approved, and nothing is uploaded in its place.
+ */
+export async function approvedFileProblem(file: ApprovedFile): Promise<string | null> {
+  try {
+    const bytes = await readFile(file.path)
+    return createHash('sha256').update(bytes).digest('hex') === file.sha256 ? null : `"${file.name}" is not the picture that was approved (it changed on this computer). The owner must look at the post again.`
+  } catch {
+    return `"${file.name}" cannot be read any more. The owner must look at the post again.`
+  }
+}
+
 /** Text as a person compares it: no difference in spacing, line breaks, non-breaking spaces or zero-width characters. */
 export function normalizeText(text: string): string {
   return text
@@ -216,6 +282,21 @@ export const sameContent = (seen: unknown, expected: string): boolean => typeof 
 const hostOf = (url: string): string => new URL(url).hostname.toLowerCase().replace(/^www\./, '')
 
 const onHosts = (host: string, hosts: string[]): boolean => hosts.some((domain) => host === domain || host.endsWith(`.${domain}`))
+
+const COMPOSER_DIALOG_HOSTS = ['instagram.com', 'facebook.com', 'fb.com', 'threads.net', 'threads.com']
+
+/**
+ * Whether the platform of this destination makes a new post in a dialog over its own pages (Instagram's Create, Facebook's composer,
+ * Threads' composer), so that the form is not at an address of its own. A list of the platforms this application has recipes for, not
+ * "everything that is not Reddit": a platform nobody has looked at gets the stricter rule.
+ */
+export function usesComposerDialog(destination: string): boolean {
+  try {
+    return onHosts(hostOf(destination), COMPOSER_DIALOG_HOSTS)
+  } catch {
+    return false
+  }
+}
 
 /**
  * Whether the page the form is on is the place the content was approved for: a page of the platform whose path starts with the
@@ -233,6 +314,11 @@ export function destinationMatches(pageUrl: string, destination: string, kind: '
     const segments = (path: string): string[] => path.split('/').filter((s) => s !== '').map((s) => s.toLowerCase())
     const have = segments(page.pathname)
     const want = segments(wanted.pathname).slice(0, kind === 'reply' ? 4 : 2)
+    // A platform whose new-post form is a dialog over its own pages (Instagram's Create, Facebook's composer) has no compose address: for a post
+    // there, the front page of the site is a place of the post too. Nowhere else: Reddit's community pages are its places, not its front page.
+    if (kind === 'post' && have.length === 0 && usesComposerDialog(destination)) return true
+    // A destination with no path (the root of a site) is the root and nothing under it: the host alone is not a place.
+    if (want.length === 0 && have.length > 0) return false
     if (want.some((segment, index) => have[index] !== segment)) return false
     for (const [key, value] of wanted.searchParams) if (page.searchParams.get(key) !== value) return false
     return true
@@ -241,7 +327,7 @@ export function destinationMatches(pageUrl: string, destination: string, kind: '
   }
 }
 
-const SUBMIT_VERBS = ['post', 'reply', 'comment', 'submit', 'publish', 'save', 'send', 'add', 'answer', 'write', 'leave', 'отправить', 'опубликовать', 'ответить', 'комментировать', 'сохранить', 'добавить', 'оставить', 'написать']
+const SUBMIT_VERBS = ['post', 'reply', 'comment', 'submit', 'publish', 'save', 'send', 'add', 'answer', 'write', 'leave', 'share', 'отправить', 'опубликовать', 'ответить', 'комментировать', 'сохранить', 'добавить', 'оставить', 'написать', 'поделиться']
 const SUBMIT_NOUNS = ['comment', 'reply', 'post', 'answer', 'response', 'message', 'thread', 'topic', 'комментарий', 'ответ', 'пост', 'сообщение', 'тему']
 const SUBMIT_FILLER = ['a', 'an', 'your', 'the', 'new']
 
@@ -261,6 +347,54 @@ export function looksLikeSubmit(name: string): boolean {
   if (!verb || words.length > 4 || !SUBMIT_VERBS.includes(verb)) return false
   const nouns = rest.filter((w) => !SUBMIT_FILLER.includes(w))
   return nouns.length <= 1 && nouns.every((w) => SUBMIT_NOUNS.includes(w))
+}
+
+const PROGRESS_VERBS = ['next', 'continue', 'далее', 'дальше', 'продолжить']
+const PROGRESS_FILLER = ['step', 'шаг']
+
+/**
+ * Whether the name of a control is one that only goes on to the next step of a form that is being filled (Instagram's "Next" after a
+ * picture was chosen, a "Continue"): the whole name counts, so "Next post", "Continue reading" and "Next page of comments" are not. Once a
+ * picture is in the form, these are the only controls a post mission clicks: anything else could be the one that publishes under a name
+ * nobody has listed, and what is not recognised is left to the owner.
+ */
+export function looksLikeProgress(name: string): boolean {
+  const words = name
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter((w) => w !== '')
+  const [verb, ...rest] = words
+  return verb !== undefined && PROGRESS_VERBS.includes(verb) && words.length <= 2 && rest.every((w) => PROGRESS_FILLER.includes(w))
+}
+
+/**
+ * Whether a click on this control would open the system's file chooser: a file input itself, or a button or link whose whole name says it
+ * picks a file or a picture from the computer ("Select from computer", "Choose files", "Upload a photo"). A chooser is a window of the
+ * operating system that nobody answers and that holds the browser until a person does, so a post mission never clicks one: the picture
+ * goes into the file input by browser_attach, which needs no chooser.
+ */
+const FILE_CHOOSER_NAME = new RegExp(
+  [
+    // select / choose / browse / upload / pick / add, then what, then where from: "Select files", "Upload a photo", "Select photos and videos from your device"
+    '^(?:select|choose|browse|upload|pick|add)(?:\\s+(?:a|an|the|your|some))?\\s+(?:files?|photos?|pictures?|images?|videos?|media)(?:\\s+(?:and|or|/)\\s+(?:files?|photos?|pictures?|images?|videos?))?(?:\\s+(?:from|on)\\s+(?:your\\s+|the\\s+|this\\s+)?(?:computer|device|mac|desktop|pc))?$',
+    // "Select from computer", "Upload from your device", "Browse"
+    '^(?:browse|upload)(?:\\s+(?:from|on)\\s+(?:your\\s+|the\\s+|this\\s+)?(?:computer|device|mac|desktop|pc))?$',
+    '^(?:select|choose|pick)\\s+(?:from|on)\\s+(?:your\\s+|the\\s+|this\\s+)?(?:computer|device|mac|desktop|pc)$',
+    '^(?:выбрать|загрузить|добавить)\\s+(?:файлы?|фото|изображение|картинку|видео)(?:\\s+(?:с|на)\\s+(?:компьютер[ае]?|устройств[ае]))?$',
+    '^(?:выбрать|загрузить)\\s+(?:с|на)\\s+(?:компьютер[ае]?|устройств[ае])$'
+  ].join('|'),
+  'i'
+)
+
+export function opensFileChooser(control: { role: string; name: string }): boolean {
+  if (control.role === 'input:file') return true
+  return /^(?:button|link|input:button|menuitem)$/.test(control.role) && FILE_CHOOSER_NAME.test(control.name.replace(/\s+/g, ' ').trim())
+}
+
+/** Whether an element of the page takes a file: only a file input, and one that is not disabled. A button that opens a file chooser is not one (the chooser belongs to the person). */
+export function isAttachControl(control: { role: string; disabled?: boolean }): boolean {
+  return control.role === 'input:file' && control.disabled !== true
 }
 
 /**

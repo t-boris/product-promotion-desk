@@ -204,14 +204,14 @@ function Sketch({ rendered, kind, author, thumbs, markdown }: { rendered: Render
 export const postAsText = (rendered: { title: string | null; text: string; link: string | null }): string =>
   [rendered.title, rendered.text, rendered.link].filter((part): part is string => typeof part === 'string' && part.trim() !== '').join('\n\n')
 
-export function PostPreview({ content, channelPlatform, author }: { content: PostContent; channelPlatform: string; author: PostAuthor }) {
+export function PostPreview({ content, channelPlatform, author, aiBrowser = false }: { content: PostContent; channelPlatform: string; author: PostAuthor; /** The owner chose to publish with the AI in the account's browser (Settings): pictures then go to any platform that takes them. */ aiBrowser?: boolean }) {
   const [platform, setPlatform] = useState(channelPlatform)
   // A different channel starts at its own platform again.
   useEffect(() => setPlatform(channelPlatform), [channelPlatform])
   const choices = PREVIEW_PLATFORMS.some((p) => p.platform === channelPlatform) ? PREVIEW_PLATFORMS : [...PREVIEW_PLATFORMS, { platform: channelPlatform, label: platformLabel(channelPlatform) }]
   const kind = previewKind(platform)
   const rendered = renderForPlatform(content, platform)
-  const problems = content.markup === 'markdown' ? sendProblems(platform, rendered) : []
+  const problems = content.markup === 'markdown' ? sendProblems(platform, rendered, { aiBrowser }) : []
   const ids = rendered.attachments.map((a) => a.mediaId).filter((id): id is string => id !== undefined)
   const thumbs = useThumbs(ids, 320)
   const empty = !rendered.title && rendered.text.trim() === '' && rendered.attachments.length === 0 && !rendered.link

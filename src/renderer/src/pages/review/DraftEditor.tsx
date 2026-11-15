@@ -3,7 +3,7 @@ import type { DraftInput } from '../../../../shared/api'
 import type { Attachment, Draft, Id, PostMarkup } from '../../../../shared/types'
 import { AiTextField } from '../../assist/AiField'
 import { useAssistBlock } from '../../assist/useAssistBlock'
-import { call } from '../../hooks'
+import { call, useQuery } from '../../hooks'
 import { Badge, Button, Field } from '../../ui'
 import { fileName } from './labels'
 import { PostPictures, PostTextBox, usePostEditor } from './PostEditorParts'
@@ -70,6 +70,7 @@ interface Props {
 /** Editor for a reply or a publication. Editing never changes what was approved: saving creates a new draft. */
 export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFocus = false, ai, post }: Props) {
   const [path, setPath] = useState('')
+  const settings = useQuery('app.settings.get', undefined, ['settings'])
   const editor = usePostEditor(form, onChange, post?.productId ?? '')
   const inEditor = withTitle && post !== undefined
   // One editor per open card, so only "is an engine chosen" is asked here; the refusal after a press says why an engine cannot work.
@@ -138,7 +139,7 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
       {inEditor && post ? (
         <div className="post-pair">
           {textField}
-          <PostPreview content={previewContent} channelPlatform={post.platform} author={post.author} />
+          <PostPreview content={previewContent} channelPlatform={post.platform} author={post.author} aiBrowser={settings.data?.publishWith === 'ai_browser'} />
         </div>
       ) : (
         textField
