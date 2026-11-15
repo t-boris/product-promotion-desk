@@ -576,36 +576,65 @@ describe('page steps of the browser agent (DEC-017): real input first, a script 
 
   beforeEach(() => vi.useFakeTimers({ toFake: ['setTimeout'] }))
   afterEach(() => vi.useRealTimers())
+  // A click glides, rests and presses like a hand, so it takes most of a second of the page's time; a drop-down is two clicks.
   const settled = async <T>(pending: Promise<T>): Promise<T> => {
-    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(8_000)
     return pending
   }
 
   it('clicks with a real mouse click at the centre of the element', async () => {
     const { service } = setup()
-    const done = step(service, [{ ok: true, x: 120, y: 340, hit: true, tag: 'button' }, { ok: true }, { ok: true }], (page) => page.pageStep({ do: 'click', ref: 'e3' }, hosts))
+    // the element, the element looked at again once the pointer is on it, the watch on the page's mouse (armed right before the press), did the press arrive
+    const where = { ok: true, x: 120, y: 340, hit: true, tag: 'button' }
+    const done = step(service, [where, where, { ok: true }, { ok: true }], (page) => page.pageStep({ do: 'click', ref: 'e3' }, hosts))
     await expect(settled(done)).resolves.toEqual({ status: 'done', detail: 'Clicked e3 with a mouse click.' })
-    expect(agentContents().inputEvents.map((e) => e.type)).toEqual(['mouseMove', 'mouseDown', 'mouseUp'])
-    expect(agentContents().inputEvents[1]).toMatchObject({ x: 120, y: 340, button: 'left', clickCount: 1 })
+    // The pointer glides to the element in small moves and arrives on it, then the button goes down and up.
+    const events = agentContents().inputEvents
+    expect(events.filter((e) => e.type !== 'mouseMove').map((e) => e.type)).toEqual(['mouseDown', 'mouseUp'])
+    expect(events.filter((e) => e.type === 'mouseMove').length).toBeGreaterThan(5)
+    expect(events.filter((e) => e.type === 'mouseMove').at(-1)).toMatchObject({ x: 120, y: 340 })
+    expect(events.find((e) => e.type === 'mouseDown')).toMatchObject({ x: 120, y: 340, button: 'left', clickCount: 1 })
+    expect(events.at(-1)?.type).toBe('mouseUp')
   })
 
   it('clicks by script when the real click did not reach the tab (it is not drawn), and says so', async () => {
     const { service } = setup()
-    const done = step(service, [{ ok: true, x: 120, y: 340, hit: true }, { ok: true }, { ok: false }, { ok: true }], (page) => page.pageStep({ do: 'click', ref: 'e5' }, hosts))
+    const where = { ok: true, x: 120, y: 340, hit: true }
+    const done = step(service, [where, where, { ok: true }, { ok: false }, { ok: true }], (page) => page.pageStep({ do: 'click', ref: 'e5' }, hosts))
     const result = (await settled(done)) as { status: string; detail: string }
     expect(result.status).toBe('done')
     expect(result.detail).toMatch(/by script \(a real click does not reach a tab that is not drawn/)
-    expect(agentContents().inputEvents.map((e) => e.type)).toEqual(['mouseMove', 'mouseDown', 'mouseUp'])
+    expect(agentContents().inputEvents.filter((e) => e.type !== 'mouseMove').map((e) => e.type)).toEqual(['mouseDown', 'mouseUp'])
     expect(agentContents().scripts.some((s) => s.includes("'pointerdown'"))).toBe(true)
   })
 
   it('clicks by script when something covers the element, and says so', async () => {
     const { service } = setup()
-    const done = step(service, [{ ok: true, x: 1, y: 1, hit: false }, { ok: true }], (page) => page.pageStep({ do: 'click', ref: 'e3' }, hosts))
+    // covered: the browser's own scroll-to is tried (it moves nothing here), the element is looked at again, and the page's own event is the last resort
+    const covered = { ok: true, x: 1, y: 1, hit: false }
+    const done = step(service, [covered, { ok: true }, covered, { ok: true }], (page) => page.pageStep({ do: 'click', ref: 'e3' }, hosts))
     const result = (await settled(done)) as { status: string; detail: string }
     expect(result.status).toBe('done')
     expect(result.detail).toMatch(/by script/)
     expect(agentContents().inputEvents).toEqual([])
+  })
+
+  it('turns the wheel with Electron\'s sign: a NEGATIVE deltaY scrolls the page DOWN (measured on a real window), a notch at a time over the middle of the page', async () => {
+    const { service } = setup()
+    const probe = { ok: true, top: 0, max: 2000, inner: false, vw: 1000, vh: 700 }
+    const done = step(service, [probe, probe, { ...probe, top: 560 }], (page) => page.pageStep({ do: 'scroll', direction: 'down', amount: 'screen' }, hosts))
+    await expect(settled(done)).resolves.toEqual({ status: 'done', detail: 'It is now 28% of the way down. There is more below.' })
+    const wheels = agentContents().inputEvents.filter((e) => e.type === 'mouseWheel') as { deltaY: number; x: number; y: number }[]
+    expect(wheels.length).toBeGreaterThan(4)
+    expect(wheels.every((e) => e.deltaY < 0 && e.deltaY >= -100)).toBe(true)
+    expect(wheels.reduce((sum, e) => sum + e.deltaY, 0)).toBe(-560) // 0.8 of a 700 px window
+    expect(wheels.every((e) => e.x === 500 && e.y === 350)).toBe(true)
+    // and up is the other way
+    const up = step(service, [probe, { ...probe, top: 560 }, { ...probe, top: 280 }], (page) => page.pageStep({ do: 'scroll', direction: 'up', amount: 'half' }, hosts))
+    await settled(up)
+    const more = (agentContents().inputEvents.filter((e) => e.type === 'mouseWheel') as { deltaY: number }[]).slice(wheels.length)
+    expect(more.length).toBeGreaterThan(0)
+    expect(more.every((e) => e.deltaY > 0)).toBe(true)
   })
 
   it('refuses a disabled button without clicking', async () => {
@@ -668,8 +697,8 @@ describe('page steps of the browser agent (DEC-017): real input first, a script 
 
   it('opens a drop-down that is not a plain list, finds the option with that text and clicks it', async () => {
     const { service } = setup()
-    // locate the drop-down, "not a list", click it (the click arrives), find the option, locate it, click it (arrives).
-    const done = step(service, [located, notAList, { ok: true }, { ok: true }, { ok: true, ref: 'e41' }, located, { ok: true }, { ok: true }], (page) => page.pageStep({ do: 'select', ref: 'e5', text: 'March' }, hosts))
+    // locate the drop-down, "not a list", click it (look again, arm the watch, the click arrives), find the option, locate it, click it (arrives).
+    const done = step(service, [located, notAList, located, { ok: true }, { ok: true }, { ok: true, ref: 'e41' }, located, located, { ok: true }, { ok: true }], (page) => page.pageStep({ do: 'select', ref: 'e5', text: 'March' }, hosts))
     await expect(settled(done)).resolves.toEqual({ status: 'done', detail: 'Chose an option in e5.' })
     expect(agentContents().inputEvents.filter((e) => e.type === 'mouseDown')).toHaveLength(2)
     expect(agentContents().scripts.some((s) => s.includes('aria-controls') && s.includes('"March"'))).toBe(true)
@@ -677,19 +706,19 @@ describe('page steps of the browser agent (DEC-017): real input first, a script 
 
   it('clicks the drop-down and its option by script when real clicks do not reach the tab', async () => {
     const { service } = setup()
-    const done = step(service, [located, notAList, { ok: true }, { ok: false }, { ok: true }, { ok: true, ref: 'e41' }, located, { ok: true }, { ok: false }, { ok: true }], (page) => page.pageStep({ do: 'select', ref: 'e5', text: 'March' }, hosts))
+    const done = step(service, [located, notAList, located, { ok: true }, { ok: false }, { ok: true }, { ok: true, ref: 'e41' }, located, located, { ok: true }, { ok: false }, { ok: true }], (page) => page.pageStep({ do: 'select', ref: 'e5', text: 'March' }, hosts))
     await expect(settled(done)).resolves.toEqual({ status: 'done', detail: 'Chose an option in e5.' })
   })
 
   it('says what a drop-down offers when it has no option like that, and when it showed none', async () => {
     const { service } = setup()
-    const missing = step(service, [located, notAList, { ok: true }, { ok: true }, { ok: false, reason: 'no_such_option', options: ['January', 'February'] }], (page) => page.pageStep({ do: 'select', ref: 'e5', text: 'Smarch' }, hosts))
+    const missing = step(service, [located, notAList, located, { ok: true }, { ok: true }, { ok: false, reason: 'no_such_option', options: ['January', 'February'] }], (page) => page.pageStep({ do: 'select', ref: 'e5', text: 'Smarch' }, hosts))
     expect(await settled(missing)).toMatchObject({ status: 'refused', detail: 'e5 has no option like that. It offers: January, February.' })
   })
 
   it('says so when a drop-down showed no options after it was opened', async () => {
     const { service } = setup()
-    const none = step(service, [located, notAList, { ok: true }, { ok: true }, { ok: false, reason: 'no_options' }], (page) => page.pageStep({ do: 'select', ref: 'e5', text: 'March' }, hosts))
+    const none = step(service, [located, notAList, located, { ok: true }, { ok: true }, { ok: false, reason: 'no_options' }], (page) => page.pageStep({ do: 'select', ref: 'e5', text: 'March' }, hosts))
     expect(await settled(none)).toMatchObject({ status: 'refused', detail: 'e5 showed no options after it was opened.' })
   })
 

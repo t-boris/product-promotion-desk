@@ -131,6 +131,8 @@ export class FakeWebContents extends EventEmitter {
   }
   async executeJavaScript(script: string): Promise<unknown> {
     this.scripts.push(script)
+    // The cursor the owner watches is drawn by the application, not asked of the page's answers: it answers on its own and takes none of `results`.
+    if (script.includes('__ppdCursorAt')) return { ok: true, x: null, y: null, vw: 1000, vh: 700 }
     return this.results.length > 1 ? this.results.shift() : this.results[0]
   }
 }

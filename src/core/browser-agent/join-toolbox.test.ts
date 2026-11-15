@@ -1,4 +1,4 @@
-// DEC-029: the tools of a join mission. The AI has six tools, one allowed click (the Join button of the community, on its own page, once)
+// DEC-029: the tools of a join mission. The AI has seven tools (the mouse wheel is one), one allowed click (the Join button of the community, on its own page, once)
 // and nothing else; every other control, page, host and tool is refused by the application.
 
 import { describe, expect, it } from 'vitest'
@@ -156,7 +156,23 @@ describe('isJoinControl', () => {
 
 describe('the tools of a join mission', () => {
   it('are six: looking, opening the community, the one click, waiting, asking the owner, reporting', () => {
-    expect(setup().toolbox.tools.map((tool) => tool.name)).toEqual(['browser_snapshot', 'browser_navigate', 'browser_click', 'browser_wait_for', 'ask_owner', 'report_result'])
+    expect(setup().toolbox.tools.map((tool) => tool.name)).toEqual(['browser_snapshot', 'browser_navigate', 'browser_click', 'browser_scroll', 'browser_wait_for', 'ask_owner', 'report_result'])
+  })
+
+  it('let the AI turn the mouse wheel to find the Join button, which is neither a click nor the one press: it can be done again and again, before and after', async () => {
+    const t = setup()
+    await look(t)
+    expect((await t.toolbox.call('browser_scroll', { direction: 'down' })).isError).toBeFalsy()
+    expect((await t.toolbox.call('browser_scroll', { direction: 'down', amount: 'half' })).isError).toBeFalsy()
+    expect(t.page.steps.map((s) => s.step)).toEqual([
+      { do: 'scroll', direction: 'down', amount: 'screen' },
+      { do: 'scroll', direction: 'down', amount: 'half' }
+    ])
+    expect(t.page.steps.every((s) => s.hosts.join() === 'fake.test')).toBe(true)
+    expect((await press(t, 'e1')).text).not.toBe(JOIN_PRESSED) // the click is still the one press, taken after the scrolling
+    expect(t.page.clicked).toEqual(['e1'])
+    expect((await t.toolbox.call('browser_scroll', { direction: 'up' })).isError).toBeFalsy() // looking is free after the press too
+    expect(t.page.clicked).toEqual(['e1'])
   })
 
   it('have no way to type, choose, press a key, run a script, upload, submit, keep a lesson or record a value', () => {

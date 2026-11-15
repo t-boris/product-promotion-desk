@@ -151,10 +151,10 @@ export class PostGroupsFlow {
 
   get(id: Id): PostGroupCard {
     const { provenance: _provenance, ...group } = this.requireGroup(id)
-    const ways = sendWays(this.core)
     const versions = this.liveVersions(id).map((opp): PostVersion => {
       const card = buildCard(this.core, this.store, opp)
       const channel = this.store.requireChannel(opp.channelId)
+      const ways = sendWays(this.core, undefined, channel)
       const draft = card.draft
       const account = this.core.repos.account(channel.accountId)
       const problems: string[] = []
@@ -169,7 +169,8 @@ export class PostGroupsFlow {
         card,
         problems,
         edited: editedByHand(draft, group.master),
-        way: draft ? chooseExecutor(ways, draft, channel.platform) : 'connector'
+        // A channel no connector can post to goes out by the AI browser or not at all: the line names that way, and the problems say what stops it now.
+        way: ways.noConnector ? 'ai_browser' : draft ? chooseExecutor(ways, draft, channel.platform) : 'connector'
       }
     })
     return { group, versions }
@@ -197,7 +198,6 @@ export class PostGroupsFlow {
       attachments: input.attachments ?? [],
       markup: input.markup === 'markdown' ? 'markdown' : 'legacy'
     }
-    const ways = sendWays(this.core)
     const product = this.core.repos.product(productId)
     const options: GroupChannelOption[] = []
     for (const channel of this.core.repos.listChannels().filter((c) => c.productId === productId)) {
@@ -205,7 +205,7 @@ export class PostGroupsFlow {
       if (publish && NOT_PUBLISHABLE.includes(publish.status)) continue
       const account = this.core.repos.account(channel.accountId)
       const rendered = renderForPlatform(content, channel.platform)
-      const problems = this.fitProblems(channel.platform, content, ways)
+      const problems = this.fitProblems(channel.platform, content, sendWays(this.core, undefined, channel))
       const disclosure = disclosureProblem({ title: rendered.title, text: rendered.text, link: rendered.link }, { name: product.name, websiteUrl: product.websiteUrl })
       if (disclosure) problems.push(disclosure)
       const unavailable = this.availabilityProblem(channel, account.status)
@@ -267,7 +267,7 @@ export class PostGroupsFlow {
             // Only if the version is still the draft that was adapted: a hand edit made while the AI wrote is not replaced.
             await this.review.saveDraft(opp.id, { ...group.master, text }, { author: 'ai', expectDraftId: draft.id })
             const saved = this.core.repos.latestDraft(opp.id)
-            const problems = saved ? this.fitProblems(channel.platform, saved, sendWays(this.core)) : []
+            const problems = saved ? this.fitProblems(channel.platform, saved, sendWays(this.core, undefined, channel)) : []
             results.push({ opportunityId: opp.id, channelLabel: label, status: 'done', reason: problems.length > 0 ? `Adapted, but ${problems[0]}` : 'Adapted. Read it, then approve.' })
           } catch (error) {
             if (error instanceof ApiError && error.code === 'conflict') skip('You changed it while the AI was writing, so the AI\'s text was dropped.')

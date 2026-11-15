@@ -193,7 +193,7 @@ export class FakePage implements RawPage {
   readonly steps: { step: PageStep; hosts: string[] }[] = []
   stepAnswers: PageStepResult[] = [{ status: 'done', detail: 'ok' }]
   async pageStep(step: PageStep, hosts: string[]): Promise<PageStepResult> {
-    this.log.push(`pageStep ${step.do} ${'ref' in step ? step.ref : step.key}`)
+    this.log.push(`pageStep ${step.do} ${'ref' in step ? step.ref : 'key' in step ? step.key : `${step.direction} ${step.amount}`}`)
     this.steps.push({ step, hosts })
     return this.stepAnswers.length > 1 ? (this.stepAnswers.shift() as PageStepResult) : (this.stepAnswers[0] ?? { status: 'done', detail: 'ok' })
   }

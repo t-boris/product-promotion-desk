@@ -5,7 +5,10 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { ChannelsStore } from '../channels/store'
 import { reconcileChannels } from '../channels/reads'
 import { toJson } from '../db/database'
+import type { PostMissionOutcome, PostMissionRequest, PostMissionService } from '../browser-agent/post-submit'
+import { AI_BROWSER_BASIS } from './mission-publisher'
 import { FakeMetricsService } from './scheduler-fakes'
+import { sendWays } from './send-ways'
 import { closeWorld, makeWorld, type World } from './test-fixture'
 
 let world: World
@@ -14,6 +17,17 @@ afterEach(async () => {
 })
 
 const OWN_POSTS = 'Your own posts only.'
+
+/** A mission service whose AI is a script: it gets the request the send flow built, and answers as the service would. */
+class ScriptedMissions implements PostMissionService {
+  readonly requests: PostMissionRequest[] = []
+  constructor(private readonly script: (request: PostMissionRequest) => Promise<Partial<PostMissionOutcome> | void>) {}
+  async run(request: PostMissionRequest): Promise<PostMissionOutcome> {
+    this.requests.push(request)
+    const said = (await this.script(request)) ?? {}
+    return { ended: 'finished', committed: request.authority.committed, reported: null, humanCheck: null, warning: null, error: null, ...said }
+  }
+}
 
 /** A world whose only channel is one the app does not read, still in setup, as a freshly connected Instagram channel is. */
 function ownPostsWorld(options: { status?: 'setup' | 'active' | 'paused' } = {}): World {
@@ -153,15 +167,159 @@ describe('what is never done to a channel the app does not read', () => {
 })
 
 describe('its own posts', () => {
-  it('go through the same approval and gate and reach the platform from an active channel', async () => {
+  it('go through the same approval and gate, and the AI browser carries them: no switch in the settings, and the app cannot read the page back (DEC-035)', async () => {
     world = ownPostsWorld()
+    expect(world.core.settings.app().publishWith).toBe('connector') // never chosen: this channel has no other way
+    const missions = new ScriptedMissions(async (request) => {
+      await request.authority.lease(async (lease) => {
+        lease.commit()
+        return lease.ticket
+      })
+    })
+    world.core.services.postMissions = missions
     await world.core.router.call('channels.activate', { channelId: world.channel.id })
     const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'Hello', text: 'Our first post. I work on this product.' } })
     await world.core.router.call('opportunities.approve', { id: opportunity.id })
     const action = await world.sending.send(opportunity.id)
-    expect(action.state).toBe('confirmed')
-    expect(world.connector.published).toHaveLength(1)
-    expect(world.connector.published[0].request.destination).toBe(world.channel.url)
+    expect(missions.requests).toHaveLength(1)
+    expect(missions.requests[0]!.authority.content.destination).toBe(world.channel.url)
+    expect(world.connector.published).toHaveLength(0) // the connector cannot post here
+    // The app does not read this platform, so the post is not confirmed by the app: the owner looks and tells it.
+    expect(action.state).toBe('unknown')
+    expect(action.error).toMatch(/does not read this channel/)
+    expect(action.authorizationBasis).toContain(AI_BROWSER_BASIS)
+  })
+
+  it('are refused at the approval when the engine cannot be held to the browser tools alone, with the way out in the words', async () => {
+    world = ownPostsWorld()
+    world.core.services.postMissions = new ScriptedMissions(async () => undefined)
+    ;(world.engine as { confinesAgent: boolean }).confinesAgent = false
+    await world.core.router.call('channels.activate', { channelId: world.channel.id })
+    const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'Hello', text: 'Words.', markup: 'markdown' } })
+    await expect(world.core.router.call('opportunities.approve', { id: opportunity.id })).rejects.toMatchObject({ code: 'post_does_not_fit', message: expect.stringMatching(/choose Claude Code in Settings.*Copy post/) })
+  })
+
+  it('are refused when the engine is not selected at all', async () => {
+    world = ownPostsWorld()
+    world.core.services.postMissions = new ScriptedMissions(async () => undefined)
+    world.core.settings.updateApp({ engineId: null })
+    await world.core.router.call('channels.activate', { channelId: world.channel.id })
+    const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'Hello', text: 'Words.', markup: 'markdown' } })
+    await expect(world.core.router.call('opportunities.approve', { id: opportunity.id })).rejects.toMatchObject({ code: 'post_does_not_fit', message: expect.stringMatching(/No AI engine is selected/) })
+  })
+
+  it('say why at the approval for an older (legacy) draft too, not as the connector\'s "no site profile" after the press', async () => {
+    world = ownPostsWorld()
+    world.core.services.postMissions = new ScriptedMissions(async () => undefined)
+    ;(world.engine as { confinesAgent: boolean }).confinesAgent = false
+    await world.core.router.call('channels.activate', { channelId: world.channel.id })
+    const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'Hello', text: 'Words.', markup: 'legacy' } })
+    await expect(world.core.router.call('opportunities.approve', { id: opportunity.id })).rejects.toMatchObject({ code: 'post_does_not_fit', message: expect.stringMatching(/choose Claude Code in Settings.*Copy post/) })
+    // and with an engine that can be held to the tools, the same draft is approved
+    ;(world.engine as { confinesAgent: boolean }).confinesAgent = true
+    await expect(world.core.router.call('opportunities.approve', { id: opportunity.id })).resolves.toBeDefined()
+  })
+
+  it('are refused at the approval when the engine cannot run an agent at all, though it would confine one', async () => {
+    world = ownPostsWorld()
+    world.core.services.postMissions = new ScriptedMissions(async () => undefined)
+    const engine = world.engine as { supportsAgent: boolean; confinesAgent: boolean }
+    engine.supportsAgent = false
+    engine.confinesAgent = true
+    await world.core.router.call('channels.activate', { channelId: world.channel.id })
+    const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'Hello', text: 'Words.', markup: 'markdown' } })
+    await expect(world.core.router.call('opportunities.approve', { id: opportunity.id })).rejects.toMatchObject({ code: 'post_does_not_fit', message: expect.stringMatching(/cannot be held to the browser tools alone/) })
+  })
+
+  it('tell the screen whether the app reads the channel, so a card knows its post goes by the AI browser (DEC-035)', async () => {
+    world = ownPostsWorld({ status: 'active' })
+    const created = (await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { text: 'A post.', markup: 'markdown' } })) as { opportunity: { id: string } }
+    const cards = (await world.core.router.call('opportunities.list', {})) as unknown as { opportunity: { id: string }; channelReads: boolean }[]
+    expect(cards.find((c) => c.opportunity.id === created.opportunity.id)?.channelReads).toBe(false)
+  })
+
+  it('approve a picture for Instagram with the setting never touched: the screenshot case (DEC-035)', async () => {
+    world = ownPostsWorld({ status: 'active' })
+    world.core.db.prepare('UPDATE channels SET platform = ? WHERE id = ?').run('instagram', world.channel.id)
+    world.core.services.postMissions = new ScriptedMissions(async () => undefined)
+    expect(world.core.settings.app().publishWith).toBe('connector')
+    const header = Buffer.alloc(24)
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(header)
+    const media = (await (world.core.router.call as (m: string, a: unknown) => Promise<{ id: string; name: string; path: string }>)('media.add', { productId: world.product.id, name: 'p.png', base64: Buffer.concat([header, Buffer.from('p')]).toString('base64'), origin: 'pasted' }))
+    const { opportunity } = await world.core.router.call('publications.create', {
+      channelId: world.channel.id,
+      draft: { text: 'A caption. I work on this product.', markup: 'markdown', attachments: [{ name: media.name, path: media.path, mime: '', sha256: '', mediaId: media.id }] }
+    })
+    await expect(world.core.router.call('opportunities.approve', { id: opportunity.id })).resolves.toBeDefined()
+  })
+
+  it('are never sent by a scheduled or an automatic send: the AI browser carries only a press of the owner, and nothing else can carry them', () => {
+    world = ownPostsWorld()
+    world.core.services.postMissions = new ScriptedMissions(async () => undefined)
+    const channel = world.channel
+    expect(sendWays(world.core, undefined, channel)).toEqual({ aiBrowser: true, noConnector: true })
+    expect(sendWays(world.core, { automatic: true, approvedBy: 'user' }, channel)).toEqual({ aiBrowser: false, unattended: true, noConnector: true })
+    expect(sendWays(world.core, { automatic: false, approvedBy: 'auto_rule' }, channel)).toEqual({ aiBrowser: false, unattended: true, noConnector: true })
+    expect(sendWays(world.core, { automatic: false, approvedBy: 'user' }, channel)).toEqual({ aiBrowser: true, noConnector: true })
+    // A channel the app reads is as before: the switch decides.
+    expect(sendWays(world.core, undefined, { reads: true })).toEqual({ aiBrowser: false })
+    world.core.settings.updateApp({ publishWith: 'ai_browser' })
+    expect(sendWays(world.core, undefined, { reads: true })).toEqual({ aiBrowser: true })
+  })
+
+  it('are stopped at the press, for an older (legacy) draft too, when the engine was changed after the approval: nothing is sent and the connector is never asked', async () => {
+    world = ownPostsWorld()
+    world.core.services.postMissions = new ScriptedMissions(async () => undefined)
+    await world.core.router.call('channels.activate', { channelId: world.channel.id })
+    const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'Hello', text: 'Words.', markup: 'legacy' } })
+    await world.core.router.call('opportunities.approve', { id: opportunity.id })
+    ;(world.engine as { confinesAgent: boolean }).confinesAgent = false
+    await expect(world.sending.send(opportunity.id)).rejects.toMatchObject({ message: expect.stringMatching(/choose Claude Code in Settings/) })
+    expect(world.connector.published).toHaveLength(0)
+  })
+
+  it.each(['markdown', 'legacy'] as const)('are never sent by an automatic send or a due schedule, whatever the form of the %s draft: no mission is started, nothing is published, and the words say what to do', async (markup) => {
+    world = ownPostsWorld()
+    const missions = new ScriptedMissions(async () => undefined)
+    world.core.services.postMissions = missions
+    await world.core.router.call('channels.activate', { channelId: world.channel.id })
+    const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'Hello', text: 'Words.', markup } })
+    const approve = (): Promise<unknown> => world.core.router.call('opportunities.approve', { id: opportunity.id })
+    const sending = world.sending as unknown as { send(id: string, options: { automatic: boolean }): Promise<unknown> }
+
+    await approve()
+    await expect(sending.send(opportunity.id, { automatic: true })).rejects.toMatchObject({ message: expect.stringMatching(/scheduled or automatic send.*press Send/s) })
+    expect(missions.requests).toHaveLength(0)
+    expect(world.connector.published).toHaveLength(0)
+
+    // the scheduler: an approved publication whose time has come (set in the database: the API refuses to schedule this channel)
+    await approve()
+    world.core.db.prepare('UPDATE opportunities SET scheduled_at = ? WHERE id = ?').run(world.core.clock.now().toISOString(), opportunity.id)
+    await world.sending.sendDuePublications()
+    expect(missions.requests).toHaveLength(0)
+    expect(world.connector.published).toHaveLength(0)
+
+    // the owner's own press on a fresh approval is carried
+    world.core.db.prepare('UPDATE opportunities SET scheduled_at = NULL WHERE id = ?').run(opportunity.id)
+    await approve()
+    await expect(world.sending.send(opportunity.id)).resolves.toBeDefined()
+    expect(missions.requests).toHaveLength(1)
+  })
+
+  it('cannot be scheduled: the AI browser carries only a send the owner presses, so the time would pass and nothing would go; clearing a time is still allowed', async () => {
+    world = ownPostsWorld()
+    world.core.services.postMissions = new ScriptedMissions(async () => undefined)
+    await world.core.router.call('channels.activate', { channelId: world.channel.id })
+    const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'Hello', text: 'Words.' } })
+    await expect(world.core.router.call('publications.schedule', { id: opportunity.id, at: '2030-01-01T10:00:00.000Z' })).rejects.toMatchObject({ code: 'invalid_state', message: expect.stringMatching(/cannot be scheduled.*Press Send/s) })
+    expect(world.core.repos.opportunity(opportunity.id)?.scheduledAt ?? null).toBeNull()
+    await expect(world.core.router.call('publications.schedule', { id: opportunity.id, at: null })).resolves.toBeDefined()
+  })
+
+  it('go by the connector in a build with no AI browser, and say what is missing for a picture', () => {
+    world = ownPostsWorld()
+    world.core.services.postMissions = undefined
+    expect(sendWays(world.core, undefined, world.channel)).toEqual({ aiBrowser: false, noConnector: true })
   })
 
   it('are still refused while the channel has not been activated: that is what activating is for', async () => {

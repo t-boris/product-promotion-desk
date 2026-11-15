@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ControlledSession } from './browser-session'
 import { TakeoverError, TicketError } from './ports'
 import { FakeClock, FakePage } from './testing/fakes'
+import type { PageStep, PageStepResult } from './ports'
 import { TicketAuthority } from './tickets'
 
 function setup() {
@@ -43,6 +44,24 @@ describe('ControlledSession', () => {
     })
     await expect(result).rejects.toBeInstanceOf(TakeoverError)
     expect(page.log).toEqual(['goto https://a'])
+  })
+
+  it('hands a long page step a check that says whether the agent still holds the browser: a glide in progress stops when the owner takes over', async () => {
+    class LongStep extends FakePage {
+      checks = 0
+      override async pageStep(_step: PageStep, _hosts: string[], alive?: () => void): Promise<PageStepResult> {
+        alive?.() // the owner has not touched the browser: this is fine
+        this.checks += 1
+        session.takeControl()
+        alive?.() // now it throws
+        this.checks += 1
+        return { status: 'done', detail: 'unreachable' }
+      }
+    }
+    const page = new LongStep()
+    const session = new ControlledSession('acc', async () => page, new TicketAuthority(new FakeClock()))
+    await expect(session.withAgentControl('x', (p) => p.pageStep({ do: 'hover', ref: 'e1' }, ['fake.test']))).rejects.toBeInstanceOf(TakeoverError)
+    expect(page.checks).toBe(1)
   })
 
   it('requires a valid ticket for write actions and none for reads', async () => {

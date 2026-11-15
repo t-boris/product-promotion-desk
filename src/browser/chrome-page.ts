@@ -8,7 +8,7 @@ import type { PageStep, PageStepResult } from '../core/ports'
 import { fileInputScript } from './page-scripts'
 import { pollUntil, withTimeout } from './poll'
 import { ScriptedPage } from './script-page'
-import { putFile, runPageStep, type StepDriver } from './step-runner'
+import { holdMs, pacing, putFile, runPageStep, type StepDriver } from './step-runner'
 import { isAbortedNavigation, normalizeBrowserUrl } from './targets'
 
 const DEFAULT_LOAD_TIMEOUT_MS = 30_000
@@ -131,8 +131,8 @@ export class ChromeRawPage extends ScriptedPage {
    * One step of the browser agent (DEC-017): the logic is in step-runner.ts, shared with every other back end; this page only says how
    * a mouse press, a key, text and a file reach a Chrome page. All of it is Chrome's own input (trusted events).
    */
-  async pageStep(step: PageStep, hosts: string[]): Promise<PageStepResult> {
-    return runPageStep(this.driver(await this.live()), step, hosts)
+  async pageStep(step: PageStep, hosts: string[], alive?: () => void): Promise<PageStepResult> {
+    return runPageStep(this.driver(await this.live()), step, hosts, alive)
   }
 
   private driver(handle: ChromeHandle): StepDriver {
@@ -145,10 +145,17 @@ export class ChromeRawPage extends ScriptedPage {
       // page is hidden to the site and takes no keys.
       focus: () => handle.ensureShown(),
       pressKey: (key) => page.keyboard.press(key),
+      mouseMove: async (x, y) => page.mouse.move(x, y),
       mouseClick: async (x, y) => {
+        // The press is at the point just read, whatever the pointer did since (the Electron driver presses at the point it is given).
         await page.mouse.move(x, y)
         await page.mouse.down()
+        await pacing.sleep(holdMs())
         await page.mouse.up()
+      },
+      wheel: async (x, y, dy) => {
+        await page.mouse.move(x, y)
+        await page.mouse.wheel({ deltaY: dy })
       },
       insertText: (text) => page.keyboard.sendCharacter(text),
       attachFile: async (expression, paths, what) => {

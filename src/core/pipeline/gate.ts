@@ -10,7 +10,7 @@ import type { Core } from '../core'
 import { newId } from '../db/database'
 import { TakeoverError, type Connector, type ConnectorContext, type PublishRequest, type RemoteDiscussion, type SendTicket } from '../ports'
 import { attachmentProblem } from './attachments'
-import { renderForPlatform, sendProblems } from '../../shared/post-format'
+import { noConnectorProblem, renderForPlatform, sendProblems } from '../../shared/post-format'
 import { sendWays } from './send-ways'
 import { commentBodyHash, contentHash, hashedIdentity } from './hash'
 import { autoCategoryOf, autoRuleId } from './modes'
@@ -106,11 +106,17 @@ export class SendGate {
     if (attachments) return block('review', 'attachment_changed', attachments)
     // The same fit check the approval made, asked again at the send: what a platform can show and what this application can send are decided
     // in code, and the code may have changed since the approval (a rule of the platform, a way of publishing the application no longer has).
+    const platform = first.channel.platform
+    const approvedBy = this.core.repos.activeApproval(draft.id)?.approvedBy ?? 'user'
+    const ways = sendWays(this.core, { automatic: req.automatic ?? false, approvedBy }, first.channel)
     if (draft.markup === 'markdown') {
-      const platform = first.channel.platform
-      const approvedBy = this.core.repos.activeApproval(draft.id)?.approvedBy ?? 'user'
-      const unfit = sendProblems(platform, renderForPlatform(draft, platform), sendWays(this.core, { automatic: req.automatic ?? false, approvedBy }))
+      const unfit = sendProblems(platform, renderForPlatform(draft, platform), ways)
       if (unfit.length > 0) return block('review', 'post_does_not_fit', ...unfit)
+    } else {
+      // An older draft is judged by its connector, as before; but a channel with no connector has no other way than the AI browser, and why that
+      // cannot carry this send (the engine, a send nobody presses) is told here, not as the connector's "no site profile".
+      const stopped = noConnectorProblem(ways)
+      if (stopped) return block('review', 'post_does_not_fit', stopped)
     }
     if (first.opp.kind === 'reply') {
       const thread = await this.checkThread(first, ctx, connector)

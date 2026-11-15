@@ -6,7 +6,7 @@
 
 import { ApiError, type DraftInput } from '../../shared/api'
 import type { Approval, Draft, Id, Opportunity, OpportunityState } from '../../shared/types'
-import { renderForPlatform, sendProblems } from '../../shared/post-format'
+import { noConnectorProblem, renderForPlatform, sendProblems } from '../../shared/post-format'
 import type { PipelineHooks } from '../services'
 import type { Core } from '../core'
 import { attachmentProblem } from './attachments'
@@ -99,9 +99,15 @@ export class ReviewFlow implements PipelineHooks {
     if (problem) throw new ApiError('invalid_attachment', problem)
     // A post written in the post editor is approved only when its platform can show it and this application can send it (DEC-030).
     if (draft.markup === 'markdown') {
-      const platform = this.store.requireChannel(opp.channelId).platform
-      const unfit = sendProblems(platform, renderForPlatform(draft, platform), sendWays(this.core))
+      const channel = this.store.requireChannel(opp.channelId)
+      const platform = channel.platform
+      const unfit = sendProblems(platform, renderForPlatform(draft, platform), sendWays(this.core, undefined, channel))
       if (unfit.length > 0) throw new ApiError('post_does_not_fit', unfit.join(' '))
+    } else if (opp.kind === 'standalone') {
+      // An older post (a suggestion of the AI, a mix draft) on a channel with no connector is carried by the AI browser or by nothing:
+      // what stops that is said now, at the approval, and not as a connector's failure after the press.
+      const stopped = noConnectorProblem(sendWays(this.core, undefined, this.store.requireChannel(opp.channelId)))
+      if (stopped) throw new ApiError('post_does_not_fit', stopped)
     }
 
     this.core.db.transaction(() => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Attachment } from './types'
-import { RENDER_VERSION, pictureIdsIn, removePictures, characterCount, formOf, parseBlocks, parseInline, renderForPlatform, sendProblems, toPlainText, withoutInlinePictures, type PostContent } from './post-format'
+import { RENDER_VERSION, pictureIdsIn, removePictures, characterCount, formOf, parseBlocks, parseInline, renderForPlatform, sendProblems, toPlainText, withoutInlinePictures, type PostContent, type SendWays } from './post-format'
 
 const picture = (id: string): Attachment => ({ name: `${id}.png`, path: `/data/media/${id}.png`, mime: 'image/png', sha256: id.repeat(8), mediaId: id })
 const post = (over: Partial<PostContent> = {}): PostContent => ({ title: 'A title', text: 'Some words', link: null, attachments: [], markup: 'markdown', ...over })
@@ -353,5 +353,45 @@ describe('what a platform receives is pinned to the version of the rules', () =>
 
   it('is version 1 for this corpus', () => {
     expect(RENDER_VERSION).toBe(1)
+  })
+})
+
+describe('a channel that no connector can post to (DEC-035): the AI browser is its only way', () => {
+  const via = (content: Partial<PostContent>, platform: string, ways: SendWays) => sendProblems(platform, renderForPlatform(post(content), platform), ways).join(' ')
+
+  it('lets a picture go to Instagram, Facebook and Threads once the AI browser may carry the send, with no word about a switch in the settings', () => {
+    for (const platform of ['instagram', 'facebook', 'threads']) {
+      expect(via({ text: 'words', attachments: [picture('a')] }, platform, { aiBrowser: true, noConnector: true }), platform).toBe('')
+    }
+  })
+
+  it('says the engine is the problem, whatever the post holds, and keeps the way out in the words: Claude Code, or by hand', () => {
+    const engineProblem = 'Codex cannot be held to the browser tools alone. Choose Claude Code in Settings (AI engine), or use “Copy post” and publish it by hand.'
+    const ways = { aiBrowser: false, noConnector: true, engineProblem }
+    expect(via({ text: 'words' }, 'facebook', ways)).toBe(engineProblem)
+    expect(via({ text: 'words', attachments: [picture('a')] }, 'instagram', ways)).toBe(engineProblem) // said once
+  })
+
+  it('says a scheduled or automatic send is not carried, for a post with words alone too: nothing else can carry it', () => {
+    const away = { aiBrowser: false, noConnector: true, unattended: true }
+    expect(via({ text: 'words' }, 'facebook', away)).toMatch(/scheduled or automatic send.*press Send on it/)
+    expect(via({ text: 'words', attachments: [picture('a')] }, 'instagram', away).match(/scheduled or automatic/g)).toHaveLength(1)
+  })
+
+  it('says, without a switch to offer, that the AI browser is not in this build', () => {
+    const text = via({ text: 'words', attachments: [picture('a')] }, 'instagram', { aiBrowser: false, noConnector: true })
+    expect(text).toMatch(/only through the AI browser.*not available in this build.*Copy post/)
+    expect(text).not.toMatch(/choose it in the settings/i)
+    // a post with words alone is not stopped by it: this build's connector is asked as before
+    expect(via({ text: 'words' }, 'facebook', { aiBrowser: false, noConnector: true })).toBe('')
+  })
+
+  it('keeps the way out for Reddit: the words without the picture', () => {
+    expect(via({ title: 'T', text: 'words', attachments: [picture('a')] }, 'reddit', { aiBrowser: false })).toMatch(/or post the words without the picture\.$/)
+  })
+
+  it('does not change what a channel the app reads is told', () => {
+    expect(via({ text: 'x', attachments: [picture('a')] }, 'instagram', { aiBrowser: false })).toMatch(/choose it in the settings/)
+    expect(via({ title: 'T', text: 'words', attachments: [picture('a')] }, 'reddit', { aiBrowser: false })).toMatch(/Choose the AI browser in the settings/)
   })
 })

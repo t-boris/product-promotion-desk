@@ -451,8 +451,38 @@ export function isPublishingControl(control: { role: string; name: string; submi
 }
 
 /**
+ * What changes or shows the account's own profile (DEC-035): editing it, the profile or cover photo, an avatar, the bio, the name, the
+ * username, the phone number or e-mail, the password, the birthday, the settings. A post mission publishes the approved content and does
+ * nothing to the account itself, so none of these is pressed, chosen or given a file. Phrases, not single words, where a single word
+ * would also name a control of the post ("Add photo", "Name"): whole words, English and Russian.
+ */
+const PROFILE_PHRASES = [
+  'edit\\s+(?:your\\s+)?(?:profile|bio|name|username|intro|details|about|page|public\\s+details)',
+  '(?:change|update|add|replace|set|new|remove)\\s+(?:your\\s+|a\\s+|the\\s+|new\\s+|current\\s+)*(?:profile|avatar|bio|display\\s+name|username|phone|e\\s?mail|birthday|gender|pronouns|password|name)',
+  'profile\\s*(?:photos?|pictures?|pics?|images?|img|avatars?|settings|info|information)', '(?:photo|picture|pic|image)s?\\s+profile', 'user\\s*pics?', 'pfp', 'cover\\s+(?:photo|picture|image)', 'avatar', 'bio', 'user\\s*name', 'display\\s+name', 'phone(?:\\s+number)?', 'birthday', 'gender', 'pronouns', 'password',
+  'personal\\s+(?:info|information|details)', '(?:account\\s+)?settings',
+  'редактир\\p{L}*\\s+профил\\p{L}*', 'профил\\p{L}*\\s+(?:фото|настройк\\p{L}*)', 'фото\\s+профил\\p{L}*',
+  '(?:измен\\p{L}*|обнов\\p{L}*|добав\\p{L}*|удал\\p{L}*)\\s+(?:ваш\\p{L}*\\s+|свое\\p{L}*\\s+|нов\\p{L}*\\s+|текущ\\p{L}*\\s+)*профил\\p{L}*',
+  '(?:измен\\p{L}*|смен\\p{L}*|обнов\\p{L}*|добав\\p{L}*|удал\\p{L}*)\\s+(?:ваш\\p{L}*\\s+|свое\\p{L}*\\s+|нов\\p{L}*\\s+|текущ\\p{L}*\\s+)*(?:аватар\\p{L}*|био\\p{L}*|имя|телефон\\p{L}*|парол\\p{L}*|номер\\s+телефона)',
+  // Other languages of the sites (Spanish, Portuguese, Italian, German, French, Ukrainian): the profile, its photo, the user name, the password, the settings.
+  '(?:editar|cambiar|modificar|actualizar|modifica|cambia|aggiorna|modifier|changer|mettre\\s+à\\s+jour|bearbeiten|ändern|редагувати|змінити|оновити)\\s+(?:(?:el|la|tu|tus|su|seu|sua|o|a|il|la|le|mon|ma|votre|ton|dein|deine|dein|ваш\\p{L}*)\\s+)*(?:perfil|profilo|profil|профіл\\p{L}*|foto\\s+(?:de(?:l)?\\s+)?perfil|foto\\s+do\\s+perfil|foto\\s+del\\s+profilo|photo\\s+de\\s+profil|profilbild)',
+  'foto\\s+(?:de(?:l)?|do)\\s+perfil', 'foto\\s+del\\s+profilo', 'photo\\s+de\\s+profil', 'profilbild(?:er|ern|es|s|e)?', 'profil\\s+(?:bearbeiten|ändern)', 'imagen\\s+de\\s+perfil', 'imagem\\s+do\\s+perfil', 'immagine\\s+del\\s+profilo',
+  'nombre\\s+de\\s+usuario', 'nome\\s+(?:de\\s+)?utente', 'nome\\s+de\\s+usu[aá]rio', 'benutzername', 'nom\\s+d[\'’]utilisateur', 'contrase[nñ]a', 'senha', 'passwort', 'mot\\s+de\\s+passe', 'configuraci[oó]n', 'configura[cç][oõ]es', 'impostazioni', 'einstellungen', 'param[eè]tres',
+  'biograf[ií]a', 'biografie', 'biographie', 'пароль', 'налаштуван\\p{L}*', 'ім[\'’]я\\s+користувач\\p{L}*', 'біографі\\p{L}*', 'фото\\s+профіл\\p{L}*', 'зображен\\p{L}*\\s+профил\\p{L}*', 'изображен\\p{L}*\\s+профил\\p{L}*',
+  'аватар\\p{L}*', 'био(?:графи\\p{L}*)?', 'имя\\s+пользовател\\p{L}*', 'номер\\s+телефона', 'телефон', 'парол\\p{L}*', 'настройк\\p{L}*', '(?:день|дата)\\s+рождения'
+]
+const PROFILE_WORDS = new RegExp(`(?<![\\p{L}\\p{N}])(?:${PROFILE_PHRASES.join('|')})(?![\\p{L}\\p{N}])`, 'iu')
+
+/** Whether a name (of a control, or what stands around a file input) is about the account's own profile: a post mission neither presses it nor gives it a file. */
+export function changesProfile(text: string): boolean {
+  // The name of an input is often written the way code is (profile_pic, profile-photo, profile.photo, profilePhoto): the words are read apart before they are matched.
+  return PROFILE_WORDS.test(text.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_\-.:/]+/g, ' '))
+}
+
+/**
  * Controls whose press does something to the account that no approved content asked for: joining or leaving a community, following,
- * voting, blocking, deleting, reporting, muting, signing out, and granting a site access to the account (OAuth "Allow", "Authorize"). The
+ * voting, blocking, deleting, reporting, muting, signing out, and granting a site access to the account (OAuth "Allow", "Authorize"),
+ * and changing the profile (`changesProfile`). The
  * words are the English ones and their Russian translations; a stem catches the state forms ("Joined", "Following" are buttons that undo
  * what they say). Matched on whole words, so "Followers" and "Reportage" are not caught.
  */
@@ -469,7 +499,7 @@ const NEVER_CLICKED = new RegExp(
 
 /** Whether the name of a control says it does something other than publish the approved content (see NEVER_CLICKED): a post mission clicks none of them. */
 export function neverClicked(name: string): boolean {
-  return NEVER_CLICKED.test(name)
+  return NEVER_CLICKED.test(name) || changesProfile(name)
 }
 
 /**

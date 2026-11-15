@@ -139,8 +139,8 @@ export function SettingsPage() {
 
       <Card title="Publishing">
         <Hint>
-          Posts go out through each platform's connector. Where a connector cannot carry a post (pictures, or a platform without one: Instagram, Facebook, Threads), the AI can publish it in the account's own
-          browser instead, on your press of Send.
+          Posts go out through each platform's connector. A channel the app does not read (Instagram, Facebook, Threads) has no connector: the AI always publishes there, in the account's own browser, on your press of Send,
+          and needs Claude Code as the engine. The switch below is for the other channels, where a connector cannot carry a post (several pictures, or pictures with words on Reddit).
         </Hint>
         <ErrorNote error={updating.error} />
         <div className="group-row">

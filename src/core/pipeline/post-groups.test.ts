@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Channel, Draft, MediaItem, PostGroupCard } from '../../shared/types'
 import { adaptInstruction, editedByHand, PostGroupsFlow } from './post-groups'
-import { chooseExecutor } from './send-ways'
+import { chooseExecutor, sendWays } from './send-ways'
 import type { DraftHelp } from './draft-help'
 import type { ReviewFlow } from './review'
 import type { SendingFlow } from './sending'
@@ -614,6 +614,49 @@ describe('what a version says about how it goes out', () => {
     expect(chooseExecutor(unattended, { attachments: [], markup: 'markdown', title: null, text: 'x', link: null }, 'threads')).toBe('connector')
     expect(chooseExecutor({ aiBrowser: true }, { attachments: [], markup: 'markdown', title: null, text: 'x', link: null }, 'threads')).toBe('ai_browser')
     expect(chooseExecutor({ aiBrowser: true }, { attachments: [attach(m) as never], markup: 'legacy', title: 'T', text: '', link: null }, 'reddit')).toBe('connector')
+    // a channel no connector can post to goes by the AI browser whatever the draft holds, when it may; when it may not, there is no other way and the connector says so
+    const none = { attachments: [attach(m) as never], markup: 'legacy' as const, title: null, text: 'x', link: null }
+    expect(chooseExecutor({ aiBrowser: true, noConnector: true }, none, 'instagram')).toBe('ai_browser')
+    expect(chooseExecutor({ aiBrowser: false, noConnector: true, unattended: true }, none, 'instagram')).toBe('connector')
+  })
+
+  it('puts Instagram, Facebook and Threads on the AI browser by themselves when the app does not read them: no switch, and a picture fits (DEC-035)', async () => {
+    const { channels, flow } = setup(['reddit', 'facebook', 'instagram'])
+    expect(world.core.settings.app().publishWith).toBe('connector')
+    world.core.services.postMissions = {} as never
+    // the two that no connector can post to are not read; Reddit is
+    for (const channel of channels.slice(1)) world.core.db.prepare('UPDATE channels SET reads = 0 WHERE id = ?').run(channel.id)
+    const m = await picture('x')
+    const options = flow.channels(world.product.id, { ...MASTER, attachments: [attach(m)] })
+    expect(options.find((o) => o.platform === 'instagram')).toMatchObject({ fits: true })
+    expect(options.find((o) => o.platform === 'facebook')).toMatchObject({ fits: true })
+    // Reddit takes a picture beside words only through the AI browser, which is still the owner's switch there
+    expect(options.find((o) => o.platform === 'reddit')?.fits).toBe(false)
+    const card = await flow.create(world.product.id, channels.map((c) => c.id), { ...MASTER, attachments: [attach(m)] })
+    expect(card.versions.map((v) => v.way)).toEqual(['connector', 'ai_browser', 'ai_browser'])
+    expect(card.versions[1]?.problems).toEqual([])
+    expect(card.versions[2]?.problems).toEqual([])
+  })
+
+  it('names the AI browser as the way of a version for a channel the app does not read, even when the engine cannot carry it now, and says what stops it', async () => {
+    const { channels, flow } = setup(['facebook', 'threads'])
+    world.core.services.postMissions = {} as never
+    for (const channel of channels) world.core.db.prepare('UPDATE channels SET reads = 0 WHERE id = ?').run(channel.id)
+    const card = await flow.create(world.product.id, channels.map((c) => c.id), { ...MASTER })
+    expect(card.versions[0]).toMatchObject({ way: 'ai_browser', problems: [] })
+    ;(world.engine as { confinesAgent: boolean }).confinesAgent = false
+    const stopped = flow.get(card.group.id).versions[0]!
+    expect(stopped.way).toBe('ai_browser')
+    expect(stopped.problems.join(' ')).toMatch(/choose Claude Code in Settings/)
+  })
+
+  it('does not let the AI browser carry a send that a scheduled or automatic send would make, for a channel the app does not read', async () => {
+    const { channels } = setup(['instagram'])
+    world.core.services.postMissions = {} as never
+    world.core.db.prepare('UPDATE channels SET reads = 0 WHERE id = ?').run(channels[0]!.id)
+    const channel = world.store.requireChannel(channels[0]!.id)
+    expect(sendWays(world.core, undefined, channel)).toMatchObject({ aiBrowser: true, noConnector: true })
+    expect(sendWays(world.core, { automatic: true, approvedBy: 'user' }, channel)).toMatchObject({ aiBrowser: false, unattended: true, noConnector: true })
   })
 
   it('knows a hand edit: only a draft of the owner that is not the master', () => {

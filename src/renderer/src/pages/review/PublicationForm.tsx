@@ -12,7 +12,7 @@ import { WhereToPost, useChannelOptions } from './WhereToPost'
  * Write a post by hand for one channel, or for several (DEC-032). It is saved as a draft (a version for each channel): nothing is
  * published until it is approved. `onCreated` says which channel the post is for, so the screen can show it.
  */
-export function PublicationForm({ productId, channelId, platform, author, onCreated, onCancel }: { productId: Id; channelId: Id; platform: string; author: PostAuthor; onCreated: (channelId: Id) => void; onCancel: () => void }) {
+export function PublicationForm({ productId, channelId, platform, reads, author, onCreated, onCancel }: { productId: Id; channelId: Id; platform: string; reads: boolean; author: PostAuthor; onCreated: (channelId: Id) => void; onCancel: () => void }) {
   // The form is open on demand, so "Save as draft" is the screen's filled button while it is the form opened last.
   const saveVariant = useOpenForm()
   const [form, setForm] = useState<DraftForm>(emptyForm(true))
@@ -38,7 +38,7 @@ export function PublicationForm({ productId, channelId, platform, author, onCrea
     <Card title="New publication">
       <div className="review-body">
         <PostDrafter productId={productId} channelId={channelId} form={form} onChange={setForm} />
-        <DraftEditor form={form} onChange={setForm} withTitle disabled={creating.busy} draft={null} autoFocus ai={{ channelId }} post={{ productId, platform, author }} />
+        <DraftEditor form={form} onChange={setForm} withTitle disabled={creating.busy} draft={null} autoFocus ai={{ channelId }} post={{ productId, platform, author, reads }} />
         <WhereToPost
           heading="Where to post"
           note="Tick every channel this post should go to. Nothing is ticked for you but the channel you are on; “Suggested” only marks a channel the post fits."

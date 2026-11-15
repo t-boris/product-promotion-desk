@@ -604,6 +604,28 @@ export interface SendWays {
   aiBrowser: boolean
   /** The AI browser is chosen, and this send is one it never carries: a scheduled one, or one on an automatic approval. */
   unattended?: boolean
+  /**
+   * The channel is one the application does not read (Instagram, Facebook, Threads...): no connector can post to it, so the AI browser is its
+   * only way and needs no switch in the settings (DEC-035). Everything else about it is as for any AI-browser send.
+   */
+  noConnector?: boolean
+  /** The AI browser would carry this send, but the selected engine cannot be held to the browser tools alone: why, in words (only for a channel with no connector). */
+  engineProblem?: string
+}
+
+const UNATTENDED_MESSAGE =
+  'This is a scheduled or automatic send, and the AI browser carries only a send you press yourself: press Send on it, or use “Copy post” and publish it by hand. Nothing was sent.'
+
+/**
+ * Why a send to a channel that no connector can post to cannot go by the AI browser right now, when it is something other than the post that
+ * stops it: the selected engine (it cannot be held to the browser tools alone), or a send that is scheduled or automatic (DEC-035). It is the
+ * same for every kind of draft, an older one too: the form of the post is no part of it. Null when nothing stops it, and for a channel a
+ * connector can post to.
+ */
+export function noConnectorProblem(ways: SendWays): string | null {
+  if (!ways.noConnector || ways.aiBrowser) return null
+  if (ways.engineProblem) return ways.engineProblem
+  return ways.unattended ? UNATTENDED_MESSAGE : null
 }
 
 /**
@@ -622,12 +644,18 @@ export function sendProblems(platform: string, rendered: RenderedPost, ways: Sen
     if (rendered.link && rendered.text.trim()) problems.push('A Reddit post is a link or a text, not both: leave the link out, or the words (put the link in the words).')
     if (rendered.link && !/^https?:\/\//i.test(rendered.link)) problems.push('The link must start with http:// or https://.')
   }
+  // A channel no connector can post to has the AI browser as its only way: what stops it is said whatever the post holds (DEC-035).
+  const stopped = noConnectorProblem(ways)
+  if (stopped) problems.push(stopped)
   if (rendered.attachments.length > 0 && !ways.aiBrowser) {
     // What the connector cannot carry: more than one picture, or a picture with words, on Reddit; any picture elsewhere.
     const connectorCannot = platform === 'reddit' ? rendered.attachments.length > 1 || rendered.text.trim() !== '' || rendered.link !== null : true
-    if (connectorCannot && ways.unattended) {
+    if (ways.noConnector) {
+      // Said above when it is the engine or an unattended send; otherwise the AI browser is simply not there (a build without it).
+      if (!ways.engineProblem && !ways.unattended) problems.push(`Pictures go to ${label} only through the AI browser, and only when you press Send yourself. It is not available in this build: use “Copy post” and publish it by hand.`)
+    } else if (connectorCannot && ways.unattended) {
       // The AI browser is chosen, but this send is one it never carries: the owner presses Send, or publishes by hand.
-      problems.push('This is a scheduled or automatic send, and the AI browser carries only a send you press yourself: press Send on it, or use “Copy post” and publish it by hand. Nothing was sent.')
+      problems.push(UNATTENDED_MESSAGE)
     } else if (platform === 'reddit') {
       if (rendered.attachments.length > 1) problems.push(`From this application Reddit takes one picture as a post by itself; this post has ${rendered.attachments.length}. The AI browser can send more: choose it in the settings and press Send yourself.`)
       else if (rendered.text.trim() || rendered.link) problems.push('From this application Reddit takes a picture only as a post by itself, without text or a link. Choose the AI browser in the settings and press Send yourself, or use “Copy post” and publish it by hand, or post the words without the picture.')

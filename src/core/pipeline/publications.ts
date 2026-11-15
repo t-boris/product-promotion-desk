@@ -250,6 +250,10 @@ export class PublicationsFlow {
     if (SEND_LOCKED_STATES.includes(opp.state)) throw new ApiError('invalid_state', 'This publication has already been sent or is being sent.')
     let scheduledAt: string | null = null
     if (at !== null) {
+      // A channel the app cannot read is reached only by the AI browser, which carries a send the owner presses: a scheduled send could never go out.
+      if (!this.store.requireChannel(opp.channelId).reads) {
+        throw new ApiError('invalid_state', 'A post for this channel goes out by the AI browser, which carries only a send you press yourself, so it cannot be scheduled. Press Send on it when you want it out, or use “Copy post” and publish it by hand.')
+      }
       const time = Date.parse(at)
       if (Number.isNaN(time)) throw new ApiError('invalid_input', 'The scheduled time is not a valid date.')
       scheduledAt = new Date(time).toISOString()

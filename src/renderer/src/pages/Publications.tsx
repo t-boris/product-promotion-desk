@@ -145,6 +145,7 @@ function PublicationsScreen() {
           productId={channel.productId}
           channelId={channel.id}
           platform={channel.platform}
+          reads={channel.reads}
           author={{ name: authorName, target: channel.target }}
           onCreated={(createdFor) => {
             // A post written for one other channel is shown where it is.

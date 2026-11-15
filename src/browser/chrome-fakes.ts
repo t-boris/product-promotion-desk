@@ -95,7 +95,8 @@ export function fakePage(address = 'about:blank'): FakePage & Page {
     mouse: {
       move: async (x: number, y: number) => void emitter.input.push(`move:${x},${y}`),
       down: async () => void emitter.input.push('down'),
-      up: async () => void emitter.input.push('up')
+      up: async () => void emitter.input.push('up'),
+      wheel: async (options: { deltaY?: number }) => void emitter.input.push(`wheel:${options.deltaY ?? 0}`)
     }
   })
   return page as unknown as FakePage & Page
