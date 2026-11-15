@@ -43,6 +43,8 @@ export class PeriodicTasks {
   private digestScanAtMs = 0
   private mixScanAtMs = 0
   private halted = false
+  /** Whether automation was paused at the last tick. */
+  private pausedAtTick = false
   private readonly busy = new Set<string>()
   private readonly pending = new Set<Promise<unknown>>()
   private readonly metricsAttemptMs = new Map<string, number>()
@@ -114,6 +116,7 @@ export class PeriodicTasks {
   /** Called on every scheduler tick. Starts whatever is due and returns immediately. */
   tick(nowMs: number, paused: boolean): void {
     if (this.halted) return
+    this.pausedAtTick = paused
     if (!this.reconciled) {
       // Closed gate: only the retry may run; nothing else is scheduled until uncertain sends are reconciled.
       if (nowMs >= this.gateRetryAtMs) this.launch('reconcile-startup', () => this.attemptStartupReconcile())
@@ -133,10 +136,13 @@ export class PeriodicTasks {
       }
       // The content mix prepares drafts that are due. Drafts only: it never approves and never sends (DEC-033).
       const { mix } = this.core.services
-      if (mix && nowMs >= this.mixScanAtMs) {
+      // A clock set back leaves the next scan far away: a scan due more than one interval ahead is due now.
+      if (mix && (nowMs >= this.mixScanAtMs || this.mixScanAtMs - nowMs > this.options.mixEveryMs)) {
         this.mixScanAtMs = nowMs + this.options.mixEveryMs
         this.launch('mix', async () => {
-          const prepared = await mix.runDue()
+          // A scan takes as long as the AI takes: pausing automation, or closing the app, ends it before the next channel.
+          const prepared = await mix.runDue(() => this.halted || this.pausedAtTick)
+
           if (prepared > 0) this.core.log.info('scheduler', `${prepared} draft(s) prepared by the content mix`)
         })
       }

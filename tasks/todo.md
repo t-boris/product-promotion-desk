@@ -762,5 +762,7 @@ Design (2026-11-15, from the code map; every guard of the single-post path stays
 - Renderer: the Content mix card on the channel page (propose, edit, save, notes).
 - [x] D1 migration 305, types, settings validation, plan kind/everyDays.
 - [x] D2 `MixFlow`, `suggestUpdate`, the job, the attention ask, API; core tests (53) and mutants (killed or simplified).
-- [ ] D3 Renderer: Content mix card; measured light and dark; UI probe.
-- [ ] D4 Review by a fresh reviewer; fixes; lessons; memory; 0.19.0; PR, CI, merge, tag, release, `deploy:local`.
+- [x] D3 Renderer: Content mix card on the channel page (propose with Undo, per-kind days, notes with set-aside and used, Save mix under the one-filled-button rule); logic in `mix-card.ts` with 38 tests; own-instance probe 135 of 135 checks, light and dark, 28 px controls, one filled button in every state, no overflow at 1280/980/960.
+- [x] D4 Independent review of the core (9 findings: 8 fixed with tests, 1 pre-existing noted); mutants 0 surviving (about 120); lessons 211-215; memory; DEC-033 updated.
+- [ ] D5 0.19.0: PR, CI, merge, tag, release, `deploy:local`.
+- Not built: the optional Attention item "what did you do this week?" beyond the ask for a note (the ask is built: "Tell what is new for <channel>"). Showcase attaches no picture. Optional per plan, left for the owner to ask for.

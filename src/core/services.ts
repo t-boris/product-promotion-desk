@@ -65,7 +65,8 @@ export interface SendingService {
 /** The content mix (DEC-033): prepares the drafts that are due. It prepares drafts and nothing else: never an approval, never a send. */
 export interface MixService {
   /** Looks at every channel that may be worked on and prepares what is due. Returns how many drafts were prepared. */
-  runDue(): Promise<number>
+  /** `stop` says the scan must end now (automation was paused, the app is closing); it is asked between channels. */
+  runDue(stop?: () => boolean): Promise<number>
 }
 
 /** Platform metrics snapshots (I-8). */

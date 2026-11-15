@@ -128,10 +128,10 @@ function idsField(o: Record<string, unknown>, key: string): string[] {
   return [...ids]
 }
 
-/** An optional true/false field; anything else is an unusable answer, a missing one counts as false. */
-function booleanField(o: Record<string, unknown>, key: string): boolean {
+/** An optional true/false field; anything else is an unusable answer, a missing one counts as `whenMissing`. */
+function booleanField(o: Record<string, unknown>, key: string, whenMissing = false): boolean {
   const value = o[key]
-  if (value === undefined || value === null) return false
+  if (value === undefined || value === null) return whenMissing
   if (typeof value !== 'boolean') throw new ProposalError(`"${key}" must be true or false`)
   return value
 }
@@ -288,6 +288,7 @@ export function parseUpdateProposal(text: string): UpdateProposal {
     link: link || null,
     rationale: stringField(o, 'rationale', { required: true }),
     disclosesConnection: booleanField(o, 'disclosesConnection'),
-    addsFactsBeyondNote: booleanField(o, 'addsFactsBeyondNote')
+    // A model that does not say whether it added something is not trusted: the post is refused as if it had.
+    addsFactsBeyondNote: booleanField(o, 'addsFactsBeyondNote', true)
   }
 }

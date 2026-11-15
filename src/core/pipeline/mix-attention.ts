@@ -14,7 +14,7 @@ export function noteRequestItems(core: Core): AttentionItem[] {
     if (!entry || channel.status !== 'active' || mixBlocker(channel) !== null) continue
     if (waitingCount(core, channel.id) >= MIX_WAITING_CAP || usableNotes(core, channel.productId).length > 0) continue
     const state = core.db.prepare("SELECT last_draft_at FROM mix_state WHERE channel_id = ? AND kind = 'own_update'").get(channel.id) as { last_draft_at: string | null } | undefined
-    if (now < dueAtMs(channel.id, 'own_update', entry.everyDays, state?.last_draft_at ?? null)) continue
+    if (now < dueAtMs(channel.id, 'own_update', entry.everyDays, state?.last_draft_at ?? null, now)) continue
     items.push({
       id: `note:${channel.id}`,
       kind: 'question',

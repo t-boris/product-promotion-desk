@@ -103,6 +103,8 @@ CREATE TABLE mix_state (
   last_draft_at TEXT,
   last_attempt_at TEXT,
   last_error TEXT,
+  -- Failed tries in a row: the pause before the next one grows with it (3 hours, then 6, 12, and a day at most).
+  failures INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (channel_id, kind)
 );
 `

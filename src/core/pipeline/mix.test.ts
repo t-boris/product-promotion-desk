@@ -1,11 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Channel, ChannelPlan, MixSetting } from '../../shared/types'
 import { toJson } from '../db/database'
 import { DEFAULT_PERIODIC, PeriodicTasks } from './scheduler-periodic'
 import { RecordingSink } from './scheduler-harness'
-import { DEFAULT_EVERY_DAYS, dueAtMs, MIX_RETRY_GAP_MS, MIX_WAITING_CAP, mixBlocker, proposalFromPlan } from './mix'
+import { DEFAULT_EVERY_DAYS, dueAtMs, MIX_RETRY_GAP_MS, MIX_RETRY_MAX_MS, MIX_WAITING_CAP, mixBlocker, proposalFromPlan, retryAtMs, retryGapMs } from './mix'
 import { UPDATE_SYSTEM } from './draft-prompt'
-import { numbersNotInNote } from './update-check'
+import { addressesNotInNote, numbersNotInNote } from './update-check'
 import { closeWorld, makeClaim, makeWorld, type World } from './test-fixture'
 
 let world: World
@@ -72,17 +72,35 @@ describe('when a draft of the mix is due', () => {
 
   it('moves the due time by the same amount for the same inputs, within 10 percent', () => {
     const last = '2026-11-08T12:00:00.000Z'
-    const a = dueAtMs('ch1', 'own_update', 7, last)
-    expect(dueAtMs('ch1', 'own_update', 7, last)).toBe(a)
+    const later = Date.parse(last) + 100 * DAY
+    const a = dueAtMs('ch1', 'own_update', 7, last, later)
+    expect(dueAtMs('ch1', 'own_update', 7, last, later)).toBe(a)
     for (const kind of ['product_post', 'own_update', 'showcase'] as const) {
       for (const channel of ['a', 'b', 'c', 'd', 'e', 'f']) {
-        const at = dueAtMs(channel, kind, 10, last)
+        const at = dueAtMs(channel, kind, 10, last, later)
         expect(at).toBeGreaterThanOrEqual(Date.parse(last) + 9 * DAY - 1)
         expect(at).toBeLessThanOrEqual(Date.parse(last) + 11 * DAY + 1)
       }
     }
-    expect(new Set(['a', 'b', 'c', 'd', 'e', 'f'].map((c) => dueAtMs(c, 'showcase', 10, last))).size).toBeGreaterThan(1)
-    expect(dueAtMs('ch1', 'showcase', 30, null)).toBe(0)
+    expect(new Set(['a', 'b', 'c', 'd', 'e', 'f'].map((c) => dueAtMs(c, 'showcase', 10, last, later))).size).toBeGreaterThan(1)
+    expect(dueAtMs('ch1', 'showcase', 30, null, later)).toBe(0)
+  })
+
+  it('counts a last draft that lies in the future (the clock was set back) as now, so a kind never waits for months', () => {
+    const now = Date.parse('2026-11-15T12:00:00.000Z')
+    const future = new Date(now + 200 * DAY).toISOString()
+    const at = dueAtMs('ch1', 'own_update', 7, future, now)
+    expect(at).toBeLessThanOrEqual(now + 7.7 * DAY)
+    expect(at).toBeGreaterThanOrEqual(now + 6.3 * DAY)
+    expect(retryAtMs(future, 1, now)).toBe(now + retryGapMs(1))
+  })
+
+  it('waits longer after each failure in a row, up to a day', () => {
+    expect([1, 2, 3, 4, 5, 9].map((n) => retryGapMs(n) / 3_600_000)).toEqual([3, 6, 12, 24, 24, 24])
+    expect(retryGapMs(1)).toBe(MIX_RETRY_GAP_MS)
+    expect(retryGapMs(50)).toBe(MIX_RETRY_MAX_MS)
+    expect(retryAtMs(null, 3, 1000)).toBe(0)
+    expect(retryAtMs('2026-11-15T12:00:00.000Z', 0, Date.parse('2026-11-16T00:00:00.000Z'))).toBe(0)
   })
 
   it('prepares one draft per channel per scan, for the first kind that is due', async () => {
@@ -95,6 +113,30 @@ describe('when a draft of the mix is due', () => {
     expect(world.engine.calls).toHaveLength(2)
     expect(world.engine.calls[1].prompt).toMatch(/showcase/)
     expect(drafts()).toHaveLength(2)
+  })
+
+  it('prepares at most one draft per channel per scan when there are several channels, one for each', async () => {
+    world = makeWorld({ mode: 'approval' })
+    script('draft.publication', POST)
+    const other = world.addChannel({ target: 'r/second', mode: 'approval', settings: { mix: mix({ kind: 'product_post' }, { kind: 'showcase' }) } })
+    withMix(mix({ kind: 'product_post' }, { kind: 'showcase' }))
+    expect(await run()).toBe(2)
+    const perChannel = world.core.db.prepare("SELECT channel_id, COUNT(*) AS n FROM opportunities WHERE kind = 'standalone' GROUP BY channel_id").all() as { channel_id: string; n: number }[]
+    expect(perChannel.map((r) => r.n)).toEqual([1, 1])
+    expect(perChannel.map((r) => r.channel_id).sort()).toEqual([world.channel.id, other.id].sort())
+  })
+
+  it('serves the kind that has waited longest, so a short rhythm does not starve the others when one slot is free', async () => {
+    world = makeWorld({ mode: 'approval' })
+    script('draft.publication', POST)
+    script('draft.update', UPDATE)
+    await note()
+    withMix(mix({ kind: 'product_post', everyDays: 1 }, { kind: 'own_update', everyDays: 7 }))
+    expect(await run()).toBe(1) // never drafted, in the order of the list: the post about the product
+    world.core.db.prepare("UPDATE opportunities SET state = 'cancelled'").run() // the owner decided: the slot is free
+    world.clock.advance(2 * DAY) // the post about the product is due again; the update never was drafted
+    expect(await run()).toBe(1)
+    expect(drafts().map((d) => /Own update/.test(d.reason))).toEqual([false, true])
   })
 })
 
@@ -138,14 +180,89 @@ describe('what stops the mix', () => {
     expect(drafts()).toHaveLength(1)
   })
 
-  it('does nothing before the uncertain sends of the last run were reconciled', async () => {
+  it('does nothing before the uncertain sends of the last run were reconciled, and prepares what is due once they were', async () => {
     world = makeWorld({ mode: 'approval' })
     script('draft.publication', POST)
     withMix(mix())
     const tasks = new PeriodicTasks(world.core, DEFAULT_PERIODIC, new RecordingSink())
-    tasks.tick(world.core.clock.now().getTime(), false)
+    const start = world.core.clock.now().getTime()
+    tasks.tick(start, false) // the gate is closed: only the reconciliation starts
     await tasks.idle()
     expect(drafts()).toHaveLength(0)
+    expect(tasks.gateOpen).toBe(true)
+    tasks.tick(start + 1000, false)
+    await tasks.idle()
+    expect(drafts()).toHaveLength(1)
+  })
+
+  it('stays quiet for good while the reconciliation keeps failing', async () => {
+    world = makeWorld({ mode: 'approval' })
+    script('draft.publication', POST)
+    withMix(mix())
+    vi.spyOn(world.core.services.sending!, 'reconcileAllUnknown').mockRejectedValue(new Error('the platform is not reachable'))
+    const tasks = new PeriodicTasks(world.core, DEFAULT_PERIODIC, new RecordingSink())
+    const start = world.core.clock.now().getTime()
+    for (let i = 0; i < 6; i += 1) {
+      tasks.tick(start + i * 10 * 60_000, false)
+      await tasks.idle()
+    }
+    expect(tasks.gateOpen).toBe(false)
+    expect(drafts()).toHaveLength(0)
+    expect(world.engine.calls).toHaveLength(0)
+  })
+
+  it('looks again after the clock was set back instead of waiting for the old next scan', async () => {
+    world = makeWorld({ mode: 'approval' })
+    withMix(mix())
+    const scans = vi.spyOn(world.core.services.mix!, 'runDue').mockResolvedValue(0)
+    const tasks = new PeriodicTasks(world.core, DEFAULT_PERIODIC, new RecordingSink())
+    const start = world.core.clock.now().getTime()
+    tasks.tick(start, false)
+    await tasks.idle()
+    tasks.tick(start + 1000, false)
+    await tasks.idle()
+    expect(scans).toHaveBeenCalledTimes(1)
+    tasks.tick(start + 2000, false) // not yet the next scan
+    await tasks.idle()
+    expect(scans).toHaveBeenCalledTimes(1)
+    tasks.tick(start - 30 * DAY, false) // the clock was set back a month
+    await tasks.idle()
+    expect(scans).toHaveBeenCalledTimes(2)
+  })
+
+  for (const [what, stopIt] of [
+    ['automation is paused', (tasks: PeriodicTasks, at: number) => tasks.tick(at, true)],
+    ['the app is closing', (tasks: PeriodicTasks) => tasks.halt()]
+  ] as const) {
+    it(`ends a scan that the scheduler runs, between channels, when ${what}`, async () => {
+      world = makeWorld({ mode: 'approval' })
+      world.addChannel({ target: 'r/second', mode: 'approval', settings: { mix: mix() } })
+      withMix(mix())
+      const tasks = new PeriodicTasks(world.core, DEFAULT_PERIODIC, new RecordingSink())
+      const start = world.core.clock.now().getTime()
+      world.engine.on('draft.publication', async () => {
+        stopIt(tasks, start + 5000) // while the first channel is being written
+        return JSON.stringify(POST)
+      })
+      tasks.tick(start, false)
+      await tasks.idle()
+      tasks.tick(start + 1000, false)
+      await tasks.idle()
+      expect(world.engine.calls).toHaveLength(1)
+      expect(drafts()).toHaveLength(1)
+    })
+  }
+
+  it('ends a scan between channels when automation is paused or the app is closing', async () => {
+    world = makeWorld({ mode: 'approval' })
+    script('draft.publication', POST)
+    world.addChannel({ target: 'r/second', mode: 'approval', settings: { mix: mix() } })
+    withMix(mix())
+    expect(await world.core.services.mix!.runDue(() => true)).toBe(0)
+    expect(world.engine.calls).toHaveLength(0)
+    let asked = 0
+    expect(await world.core.services.mix!.runDue(() => (asked += 1) > 1)).toBe(1) // it may start the first channel, not the second
+    expect(drafts()).toHaveLength(1)
   })
 
   it('leaves an observe-only channel, a paused one, one that cannot publish and one that needs the owner alone', async () => {
@@ -240,6 +357,23 @@ describe('a failed try', () => {
     const after = await world.core.router.call('mix.get', { channelId: world.channel.id })
     expect(after.kinds[0]?.problem).toBeNull()
   })
+
+  it('waits twice as long after the second failure in a row, and starts again from the short wait after a success', async () => {
+    world = makeWorld({ mode: 'approval' })
+    script('draft.publication', { ...POST, text: 'Use the code SAVE and get 90% off.' })
+    withMix(mix())
+    expect(await run()).toBe(0)
+    world.clock.advance(MIX_RETRY_GAP_MS + 1000)
+    expect(await run()).toBe(0)
+    expect(world.engine.calls).toHaveLength(2)
+    world.clock.advance(MIX_RETRY_GAP_MS + 1000) // 3 hours is not enough any more
+    expect(await run()).toBe(0)
+    expect(world.engine.calls).toHaveLength(2)
+    script('draft.publication', POST)
+    world.clock.advance(MIX_RETRY_GAP_MS)
+    expect(await run()).toBe(1)
+    expect((world.core.db.prepare('SELECT failures FROM mix_state').get() as { failures: number }).failures).toBe(0)
+  })
 })
 
 describe('an own update, written from the owner\'s note only', () => {
@@ -292,7 +426,7 @@ describe('an own update, written from the owner\'s note only', () => {
     world.core.db
       .prepare(
         `INSERT INTO profiles (id, label, product_id, role_name, role_voice, platforms_json, purpose, strategy, first_name, last_name, display_name, username, birth_date, gender, place, about, website, picture_idea, reasons_json, picture_file, status, created_at, updated_at)
-         VALUES ('p1', 'Mara', ?, 'astrologer', 'Warm.', '[]', 'Show real charts to curious people', '', 'Mara', 'K', 'Mara K', 'mara', '1990-01-01', 'female', 'Lisbon', 'I read charts for fun and build tools for it.', '', '', '{}', NULL, 'ready', '2026-11-01T00:00:00.000Z', '2026-11-01T00:00:00.000Z')`
+         VALUES ('p1', 'Mara', ?, 'astrologer', 'Warm.', '[]', 'Show real charts to curious people', '', 'Mara', 'K', 'Mara K', 'mara', '1990-01-01', 'female', 'Lisbon', 'I read charts for fun and build tools for it.', '', '', '{}', NULL, 'approved', '2026-11-01T00:00:00.000Z', '2026-11-01T00:00:00.000Z')`
       )
       .run(world.product.id)
     world.core.db.prepare('UPDATE accounts SET profile_id = ? WHERE id = ?').run('p1', world.account.id)
@@ -306,20 +440,43 @@ describe('an own update, written from the owner\'s note only', () => {
     expect(prompt).toContain('Mara K')
   })
 
-  const refused: [string, Record<string, unknown>, RegExp][] = [
+  it('does not tell the AI what a profile says that the owner has not approved', async () => {
+    world = makeWorld({ mode: 'approval' })
+    world.core.db
+      .prepare(
+        `INSERT INTO profiles (id, label, product_id, role_name, role_voice, platforms_json, purpose, strategy, first_name, last_name, display_name, username, birth_date, gender, place, about, website, picture_idea, reasons_json, picture_file, status, created_at, updated_at)
+         VALUES ('p2', 'Mara', ?, 'astrologer', 'Warm.', '[]', 'A purpose nobody has read', '', 'Mara', 'K', 'Mara K', 'mara', '1990-01-01', 'female', 'Lisbon', 'A biography nobody has read.', '', '', '{}', NULL, 'proposed', '2026-11-01T00:00:00.000Z', '2026-11-01T00:00:00.000Z')`
+      )
+      .run(world.product.id)
+    world.core.db.prepare('UPDATE accounts SET profile_id = ? WHERE id = ?').run('p2', world.account.id)
+    script('draft.update', UPDATE)
+    await note()
+    withMix(mix({ kind: 'own_update' }))
+    expect(await run()).toBe(1)
+    expect(world.engine.calls[0].prompt).not.toContain('A biography nobody has read.')
+    expect(world.engine.calls[0].prompt).not.toContain('A purpose nobody has read')
+  })
+
+  const refused: [string, Record<string, unknown>, RegExp, string?][] = [
     ['a number the note does not contain', { text: 'I fixed the birth time bug that hit 1200 users.' }, /number the note does not contain \(1200\)/],
     ['an address the note does not contain', { text: 'I fixed the birth time bug, details on https://elsewhere.example.com/post.' }, /elsewhere\.example\.com/],
     ['a link the note does not contain, in the link field', { link: 'https://elsewhere.example.com' }, /elsewhere\.example\.com/],
     ['a fact the model says it added', { addsFactsBeyondNote: true }, /something the note does not/],
     ['a price', { text: 'I fixed the birth time bug. It costs $9 a month.' }, /price/],
-    ['a discount', { text: 'I fixed the birth time bug, and there is 20% off today.' }, /discount|number/],
+    ['a discount, though the note names the number', { text: 'I fixed the birth time bug, and there is 20% off today.' }, /discount/, `${NOTE}, 20 of them`],
+    ['a number written in words', { text: 'I fixed the birth time bug that hit two thousand people.' }, /numbers? the note does not contain \(two, thousand\)/],
+    ['a number written in other digits', { text: 'I fixed the birth time bug for ٣٠٠ people.' }, /number the note does not contain/],
+    ['a fraction', { text: 'I fixed the birth time bug in ½ of the charts.' }, /number the note does not contain/],
+    ['an address on the note\'s host that the note does not give', { text: `${NOTE}. See https://github.com/someone-else/malware.`, link: null }, /someone-else\/malware/, `${NOTE}, code at https://github.com/owner/repo`],
+    ['an address on the note\'s host in the link field that the note does not give', { link: 'https://github.com/someone-else/malware' }, /someone-else\/malware/, `${NOTE}, code at https://github.com/owner/repo`],
+    ['an answer that does not say whether it added anything', { addsFactsBeyondNote: undefined }, /something the note does not/],
     ['a credential', { text: 'I fixed the birth time bug. The password: hunter2 works.' }, /credential/]
   ]
-  for (const [name, bad, reason] of refused) {
+  for (const [name, bad, reason, text] of refused) {
     it(`refuses ${name}, keeps the note unused and records the failure`, async () => {
       world = makeWorld({ mode: 'approval' })
       script('draft.update', { ...UPDATE, ...bad })
-      const id = await note()
+      const id = await note(text)
       withMix(mix({ kind: 'own_update' }))
       expect(await run()).toBe(0)
       expect(drafts()).toHaveLength(0)
@@ -343,6 +500,95 @@ describe('an own update, written from the owner\'s note only', () => {
     world = makeWorld({ mode: 'approval' })
     script('draft.update', { ...UPDATE, text: 'Version 2.1 is out: details on https://github.com/owner/repo, product at https://natalmystic.com.', link: 'https://github.com/owner/repo' })
     await note('Released version 2.1, notes at https://github.com/owner/repo')
+    withMix(mix({ kind: 'own_update' }))
+    expect(await run()).toBe(1)
+  })
+
+  it('does not hold it against the note when the AI itself fails, and ends the scan: the other channels would meet the same', async () => {
+    world = makeWorld({ mode: 'approval' })
+    world.engine.on('draft.update', async () => {
+      throw new Error('the engine is not running')
+    })
+    const mine = await note()
+    world.clock.advance(1000)
+    await note('Started a newsletter') // a second note: a channel that went on would write from it
+    withMix(mix({ kind: 'own_update' }))
+    world.addChannel({ target: 'r/second', mode: 'approval', settings: { mix: mix({ kind: 'own_update' }) } })
+    world.addChannel({ target: 'r/third', mode: 'approval', settings: { mix: mix({ kind: 'own_update' }) } })
+    expect(await run()).toBe(0)
+    expect(world.engine.calls).toHaveLength(1)
+    const row = (await world.core.router.call('updates.list', { productId: world.product.id })).find((n) => n.id === mine)
+    expect(row?.failedTries).toBe(0)
+    expect(row?.usedInOpportunityId).toBeNull()
+    expect((await world.core.router.call('mix.get', { channelId: world.channel.id })).kinds.find((k) => k.kind === 'own_update')?.problem).toMatch(/last try failed/)
+  })
+
+  it('tries a note once per scan, however many channels of the product want it', async () => {
+    world = makeWorld({ mode: 'approval' })
+    script('draft.update', { ...UPDATE, text: 'I fixed it for 5000 people.' })
+    const mine = await note()
+    withMix(mix({ kind: 'own_update' }))
+    world.addChannel({ target: 'r/second', mode: 'approval', settings: { mix: mix({ kind: 'own_update' }) } })
+    world.addChannel({ target: 'r/third', mode: 'approval', settings: { mix: mix({ kind: 'own_update' }) } })
+    expect(await run()).toBe(0)
+    expect(world.engine.calls).toHaveLength(1)
+    expect((await world.core.router.call('updates.list', { productId: world.product.id })).find((n) => n.id === mine)?.failedTries).toBe(1)
+  })
+
+  it('gives the note back when its post was rejected before anything was sent, so it can be written again or removed', async () => {
+    world = makeWorld({ mode: 'approval' })
+    script('draft.update', UPDATE)
+    const mine = await note()
+    withMix(mix({ kind: 'own_update', everyDays: 1 }))
+    expect(await run()).toBe(1)
+    const used = (): Promise<string | null | undefined> => world.core.router.call('updates.list', { productId: world.product.id }).then((l) => l.find((n) => n.id === mine)?.usedInOpportunityId)
+    expect(await used()).not.toBeNull()
+    await expect(world.core.router.call('updates.remove', { id: mine })).rejects.toMatchObject({ code: 'invalid_state' })
+    await world.core.router.call('opportunities.reject', { id: drafts()[0]!.id, reason: 'The wording is poor' })
+    // the first thing that looks is the card: it counts the note as usable again
+    expect((await world.core.router.call('mix.get', { channelId: world.channel.id })).unusedUpdates).toBe(1)
+    expect(await used()).toBeNull()
+    world.clock.advance(2 * DAY)
+    expect(await run()).toBe(1) // written again from the same note
+    expect(drafts()).toHaveLength(2)
+    // and when the first thing that looks is the job
+    await world.core.router.call('opportunities.reject', { id: drafts()[1]!.id })
+    world.clock.advance(2 * DAY)
+    expect(await run()).toBe(1)
+    expect(drafts()).toHaveLength(3)
+    await world.core.router.call('opportunities.reject', { id: drafts()[2]!.id })
+    await world.core.router.call('updates.remove', { id: mine })
+    expect(await world.core.router.call('updates.list', { productId: world.product.id })).toHaveLength(0)
+  })
+
+  it('keeps the note of a post that was sent, or may have been: the news was told', async () => {
+    world = makeWorld({ mode: 'approval' })
+    script('draft.update', UPDATE)
+    const mine = await note()
+    withMix(mix({ kind: 'own_update' }))
+    expect(await run()).toBe(1)
+    const id = drafts()[0]!.id
+    for (const sent of ['confirmed', 'unknown', 'sending'] as const) {
+      world.core.db.prepare('DELETE FROM send_actions').run()
+      const draft = world.core.db.prepare('SELECT id FROM drafts WHERE opportunity_id = ?').get(id) as { id: string }
+      world.core.db.pragma('foreign_keys = OFF')
+      world.core.db
+        .prepare(`INSERT INTO send_actions (id, opportunity_id, draft_id, approval_id, content_hash, account_id, destination, state, attempted_at, authorization_basis) VALUES (?, ?, ?, 'none', 'h', ?, 'd', ?, ?, 'owner')`)
+        .run(`act-${sent}`, id, draft.id, world.account.id, sent, world.core.clock.now().toISOString())
+      world.core.db.pragma('foreign_keys = ON')
+      world.core.db.prepare("UPDATE opportunities SET state = 'cancelled' WHERE id = ?").run(id)
+      const listed = await world.core.router.call('updates.list', { productId: world.product.id })
+      expect(listed.find((n) => n.id === mine)?.usedInOpportunityId).toBe(id)
+    }
+    world.core.db.prepare("UPDATE send_actions SET state = 'failed'").run() // it never went out
+    const listed = await world.core.router.call('updates.list', { productId: world.product.id })
+    expect(listed.find((n) => n.id === mine)?.usedInOpportunityId).toBeNull()
+  })
+
+  it('lets the note\'s own bare domain through: "Launched on producthunt.com" may be repeated', async () => {
+    world = makeWorld({ mode: 'approval' })
+    script('draft.update', { ...UPDATE, text: 'I launched on producthunt.com today.' })
+    await note('Launched on producthunt.com')
     withMix(mix({ kind: 'own_update' }))
     expect(await run()).toBe(1)
   })
@@ -405,7 +651,7 @@ describe('an own update, written from the owner\'s note only', () => {
     withMix(mix({ kind: 'own_update', everyDays: 1 }))
     for (let i = 0; i < 3; i += 1) {
       expect(await run()).toBe(0)
-      world.clock.advance(MIX_RETRY_GAP_MS + 1000)
+      world.clock.advance(MIX_RETRY_MAX_MS + 1000)
     }
     expect(world.engine.calls).toHaveLength(3)
     expect((await world.core.router.call('updates.list', { productId: world.product.id })).find((n) => n.id === stuck)?.failedTries).toBe(3)
@@ -432,6 +678,32 @@ describe('numbers of a post against its note', () => {
     expect(numbersNotInNote('It takes 1,5 seconds.', 'It takes 1.5 seconds')).toEqual([])
     expect(numbersNotInNote('No numbers here.', 'Nothing')).toEqual([])
     expect(numbersNotInNote('12 and 12 and 13', 'none')).toEqual(['12', '13'])
+  })
+
+  it('reads number words, other scripts and the ways of writing a thousand', () => {
+    expect(numbersNotInNote('It reached two thousand people.', 'Fixed a bug')).toEqual(['two', 'thousand'])
+    expect(numbersNotInNote('Three bugs fixed.', 'Fixed 3 bugs')).toEqual([]) // the word is the amount of the digit
+    expect(numbersNotInNote('A dozen bugs.', 'Fixed 12 bugs')).toEqual([])
+    expect(numbersNotInNote('Fixed one bug.', 'Fixed a bug')).toEqual([]) // "one" is mostly a pronoun
+    expect(numbersNotInNote('٣٠٠ users, ½ of them, ３ days, ² and Ⅷ', 'none')).toHaveLength(5)
+    expect(numbersNotInNote('1,000 users', 'Reached 1000 users')).toEqual([])
+    expect(numbersNotInNote('1000 users', 'Reached 1,000 users')).toEqual([])
+    expect(numbersNotInNote('1 000 users', 'Reached 1000 users')).toEqual(['1', '000']) // a space is not a separator it knows: refused, never let through
+    expect(numbersNotInNote('1,500 users', 'Reached 1,000 users')).toEqual(['1.500'])
+  })
+})
+
+describe('addresses of a post against its note', () => {
+  it('lets through what the note gives, in full or below it, and what is on another host or on the product site', () => {
+    const note = 'Code at https://github.com/owner/repo, docs on docs.example.com'
+    expect(addressesNotInNote('See github.com/owner/repo and https://github.com/owner/repo/issues/3', note, null)).toEqual([])
+    expect(addressesNotInNote('See https://github.com/someone-else/malware', note, null)).toEqual(['github.com/someone-else/malware'])
+    expect(addressesNotInNote('See https://github.com/owner/repository', note, null)).toEqual(['github.com/owner/repository'])
+    expect(addressesNotInNote('See https://github.com/owner', note, null)).toEqual(['github.com/owner'])
+    expect(addressesNotInNote('See https://docs.example.com/guide', note, null)).toEqual(['docs.example.com/guide']) // the host alone allows the host alone
+    expect(addressesNotInNote('See docs.example.com', note, null)).toEqual([])
+    expect(addressesNotInNote('See https://elsewhere.example.org/x', note, null)).toEqual([]) // another host is the safety check's business
+    expect(addressesNotInNote('See https://github.com/anything', note, 'github.com')).toEqual([]) // the product's own site is allowed anywhere
   })
 })
 

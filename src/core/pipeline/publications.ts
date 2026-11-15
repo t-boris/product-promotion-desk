@@ -23,9 +23,9 @@ import {
   UPDATE_SYSTEM,
   type PublicationProposal
 } from './draft-prompt'
-import { numbersNotInNote } from './update-check'
+import { addressesNotInNote, numbersNotInNote } from './update-check'
 import { withRole } from './role'
-import { allowedHostsFor, checkDraftSafety, hostsIn } from './safety'
+import { allowedHostsFor, checkDraftSafety, hostOf, linksIn } from './safety'
 import { SEND_LOCKED_STATES, type FlowStore } from './store'
 import { errorMessage } from './util'
 
@@ -156,7 +156,7 @@ export class PublicationsFlow {
     const knowledge = loadKnowledge(this.core, channel.productId)
     const role = roleView(account)
     const profile = account.profileId
-      ? (this.core.db.prepare('SELECT display_name, about, purpose FROM profiles WHERE id = ?').get(account.profileId) as { display_name: string; about: string; purpose: string } | undefined)
+      ? (this.core.db.prepare("SELECT display_name, about, purpose FROM profiles WHERE id = ? AND status = 'approved'").get(account.profileId) as { display_name: string; about: string; purpose: string } | undefined)
       : undefined
 
     let raw: string
@@ -196,7 +196,7 @@ export class PublicationsFlow {
       usedClaimIds: [],
       approved: knowledge.approved,
       prohibited: knowledge.prohibited,
-      allowedHosts: [...allowedHostsFor(product.websiteUrl, []), ...hostsIn(note.text)]
+      allowedHosts: [...allowedHostsFor(product.websiteUrl, []), ...linksIn(note.text).hosts]
     })
     const violations = [...report.violations]
     if (proposal.addsFactsBeyondNote) violations.push('the post says it contains something the note does not')
@@ -204,6 +204,9 @@ export class PublicationsFlow {
     if (holdsCredential([proposal.title, proposal.text].join('\n'))) violations.push('it holds a credential')
     const strange = numbersNotInNote([proposal.title, proposal.text].join('\n'), note.text)
     if (strange.length > 0) violations.push(`it states ${strange.length === 1 ? 'a number' : 'numbers'} the note does not contain (${strange.slice(0, 3).join(', ')})`)
+    const siteHost = product.websiteUrl ? hostOf(product.websiteUrl) : null
+    const strayAddresses = addressesNotInNote([proposal.title, proposal.text, proposal.link ?? ''].join('\n'), note.text, siteHost)
+    if (strayAddresses.length > 0) violations.push(`it links to ${strayAddresses.slice(0, 2).join(', ')}, which is not the address the note gives`)
     if (violations.length > 0) throw new ApiError('blocked', `The post was blocked by the safety checks: ${violations.join('; ')}.`)
 
     const opp = this.core.db.transaction(() => {
