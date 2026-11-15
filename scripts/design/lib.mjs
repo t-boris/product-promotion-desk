@@ -114,9 +114,9 @@ export const LOOK = `(() => {
     contentScrollW: content ? content.scrollWidth - content.clientWidth : null,
     contentScrollH: content ? content.scrollHeight - content.clientHeight : null,
     primaries,
-    // V-18: where the product tab row ends and how many rows the launch path takes.
-    tabsBottom: document.querySelector('.split-detail .tabs') ? Math.round(document.querySelector('.split-detail .tabs').getBoundingClientRect().bottom) : null,
-    pathRows: document.querySelector('.split-detail .launch-path') ? new Set([...document.querySelectorAll('.split-detail .launch-stage')].map((e) => Math.round(e.getBoundingClientRect().top))).size : null,
+    // V-18: where the first tab row (a channel's or an account's) ends and how many rows the launch path takes, where one is shown (the Inbox checklist).
+    tabsBottom: document.querySelector('.content .tabs') ? Math.round(document.querySelector('.content .tabs').getBoundingClientRect().bottom) : null,
+    pathRows: document.querySelector('.content .launch-path') ? new Set([...document.querySelectorAll('.content .launch-stage')].map((e) => Math.round(e.getBoundingClientRect().top))).size : null,
     fontSizes: Object.fromEntries([...sizes.entries()].sort()),
     cutButtons: cut,
     underLights
