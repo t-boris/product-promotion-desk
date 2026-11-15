@@ -41,7 +41,7 @@ describe('universal connector: unknown site without a valid profile', () => {
   it('reports every capability as needs_check with guidance, never verified', async () => {
     const { connector, ctx, page } = setup({ profile: null })
     const caps = await connector.assess(ctx)
-    expect(caps).toHaveLength(8)
+    expect(caps).toHaveLength(9)
     expect(caps.every((c) => c.status === 'needs_check')).toBe(true)
     expect(caps[0].detail).toMatch(/no site profile for forum\.example\.com/i)
     expect(caps[0].detail).toMatch(/Add a validated site profile/)

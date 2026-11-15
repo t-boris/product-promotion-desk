@@ -20,6 +20,8 @@ export interface Mission {
   rules?: string[]
   /** Rules the owner taught the AI earlier (from its answers, or written by the owner): followed, and not asked about again. */
   lessons?: string[]
+  /** A join mission (DEC-029): the channel whose community is joined. It is confined to the application's tools and brief, see join.ts. */
+  join?: { channelId: string; community: string; destination: string; platform: string; accountLabel: string }
 }
 
 const oneLine = (text: string, max: number): string => {

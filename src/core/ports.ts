@@ -272,6 +272,16 @@ export interface ChannelGuide {
   hint: string
 }
 
+/**
+ * Whether the account has joined a channel (DEC-029). `member` is null when the platform did not say. `access` is how the community
+ * admits people: `private` and `restricted` ones are not joined by pressing a button.
+ */
+export interface Membership {
+  member: boolean | null
+  banned: boolean
+  access: 'open' | 'restricted' | 'private' | 'unknown'
+}
+
 export interface BrowserService {
   session(account: Account): BrowserSession
   /** Shows the account's browser to the user at `url` (login handoff) and gives them control. */
@@ -428,6 +438,8 @@ export interface Connector {
   signupUrl?(): string
   /** Optional (DEC-028): where channels of the platform are found, and what an address of one looks like. Absent when the connector knows none. */
   channelGuide?(): ChannelGuide
+  /** Optional (DEC-029): reads, without changing anything, whether the account has joined the channel. Absent when the platform has no such thing. */
+  membership?(ctx: ConnectorContext): Promise<Membership>
   checkLogin(ctx: ConnectorContext): Promise<LoginState>
   /** Inspects the channel without publishing anything. Only actually verified capabilities may be 'verified'. */
   assess(ctx: ConnectorContext): Promise<Capability[]>

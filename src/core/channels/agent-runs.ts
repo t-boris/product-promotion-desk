@@ -10,19 +10,22 @@
 
 import { statSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join as pathJoin } from 'node:path'
 import { ApiError } from '../../shared/api'
-import type { Account, Profile, AgentAsk, AgentReadiness, AgentRun, AgentTaskKind, MissionKind } from '../../shared/types'
+import type { Account, Channel, Profile, AgentAsk, AgentReadiness, AgentRun, AgentTaskKind, MissionKind } from '../../shared/types'
 import { AiError, TakeoverError, type AiEngine } from '../ports'
+import { joinMissionPrompt } from '../browser-agent/join'
 import { missionPrompt, type Mission } from '../browser-agent/mission'
 import { postMissionPrompt } from '../browser-agent/post-mission'
 import type { PostMissionOutcome, PostMissionRequest, PostMissionService } from '../browser-agent/post-submit'
 import { BrowserToolbox, type MissionStatus } from '../browser-agent/toolbox'
 import type { Core } from '../core'
+import type { Connector, Membership } from '../ports'
 import type { LessonService } from './lessons'
 import type { PersonProfileService } from './person-profile'
 import type { AccountsService } from './accounts'
-import { BROWSER_BUSY, found } from './errors'
+import type { ChannelService } from './channel-service'
+import { BROWSER_BUSY, browserError, found } from './errors'
 import { presetFor } from './presets'
 import type { VaultService } from './vault'
 
@@ -35,6 +38,16 @@ const SERVER_NAME = 'ppd'
 /** A publication is one form: a quarter of an hour and a hundred calls are generous, and the owner may need that long for a CAPTCHA. */
 const POST_TIMEOUT_MS = 15 * 60 * 1000
 const POST_MAX_CALLS = 100
+/** Joining is one press: ten minutes and forty calls are generous (a CAPTCHA, a sign-in), and the pause between actions is that of a post. */
+const JOIN_TIMEOUT_MS = 10 * 60 * 1000
+const JOIN_MAX_CALLS = 40
+/** The pause between two actions of a join, and how long the application waits before it reads the membership a second time. */
+const JOIN_MIN_GAP_MS = 2000
+const JOIN_RECHECK_MS = 2500
+const JOIN_TIMED_OUT = 'The AI did not finish in ten minutes and was stopped. Open the browser and look at where it got to.'
+const NEEDS_YOU_FIRST = (target: string): string =>
+  `The last check of ${target} says Membership needs you first (a private community needs an invitation; a sign-in or a check has to be done by a person). Look at Membership in the table, then assess the channel again.`
+const PRIVATE_COMMUNITY = (target: string): string => `${target} is private: joining needs an invitation or approval, and the AI does not ask for it. Do it yourself in the account's browser.`
 /** The least time between two actions on the page in a post mission: a person does not act in milliseconds, and a site notices. */
 const POST_MIN_GAP_MS = 2000
 
@@ -59,6 +72,7 @@ const MISSIONS: Record<MissionKind, MissionSpec> = {
   signup: { startedBy: 'owner', timeoutMs: RUN_TIMEOUT_MS, opening: 'The AI is opening the registration page.', doing: 'register' },
   profile: { startedBy: 'owner', timeoutMs: RUN_TIMEOUT_MS, opening: 'The AI is opening the profile page.', doing: 'fill in the profile of' },
   signin: { startedBy: 'owner', timeoutMs: RUN_TIMEOUT_MS, opening: 'The AI is opening the sign-in page.', doing: 'sign in to' },
+  join: { startedBy: 'owner', timeoutMs: JOIN_TIMEOUT_MS, maxCalls: JOIN_MAX_CALLS, opening: 'The AI is opening the community page.', doing: 'join a community with' },
   post: { startedBy: 'send_flow', timeoutMs: POST_TIMEOUT_MS, maxCalls: POST_MAX_CALLS, opening: 'The AI is opening the page to publish.', doing: 'publish for' }
 }
 
@@ -81,7 +95,9 @@ export class AgentRunService implements PostMissionService {
     private readonly accounts: AccountsService,
     private readonly vault: VaultService,
     private readonly profiles: PersonProfileService,
-    private readonly lessons: LessonService
+    private readonly lessons: LessonService,
+    /** Reads the channel again once the account has joined, so every row of the table is current (DEC-029). */
+    private readonly channels: Pick<ChannelService, 'assess'>
   ) {}
 
   state(accountId: unknown): AgentRun | null {
@@ -144,9 +160,9 @@ export class AgentRunService implements PostMissionService {
   }
 
   /** Whether a run can start now; the same checks as `start`, with the reason in words instead of an error, and nothing done. */
-  async canStart(args: { accountId: string; kind: AgentTaskKind }): Promise<AgentReadiness> {
+  async canStart(args: { accountId: string; kind: AgentTaskKind; channelId?: string }): Promise<AgentReadiness> {
     try {
-      await this.prerequisites(this.accounts.account(args.accountId), args.kind)
+      await this.prerequisites(this.accounts.account(args.accountId), args.kind, args.channelId)
       return { ready: true, reason: null }
     } catch (error) {
       if (error instanceof ApiError) return { ready: false, reason: error.message }
@@ -159,16 +175,60 @@ export class AgentRunService implements PostMissionService {
    * profile the owner approved (DEC-019): the AI invents no personal detail, it types the owner's decision. Nothing here asks the keychain:
    * that the password is saved is a lookup in the vault file, and `mission()` reads it, which only `start` calls (BUG-041).
    */
-  private async prerequisites(account: Account, kind: AgentTaskKind): Promise<{ engine: AiEngine; mission: () => Promise<Mission> }> {
+  private async prerequisites(account: Account, kind: AgentTaskKind, channelId?: string): Promise<{ engine: AiEngine; mission: () => Promise<Mission> }> {
     // Only a kind the owner starts: `post` is the send flow's, and anything else is not a kind at all.
     const spec = Object.hasOwn(MISSIONS, kind) ? MISSIONS[kind] : undefined
     if (!spec || spec.startedBy !== 'owner') throw new ApiError('invalid_input', 'This kind of task is not known.')
+    if (kind === 'join') return this.joinPrerequisites(account, channelId)
+    if (channelId !== undefined) throw new ApiError('invalid_input', 'Only a task of joining a community is about a channel.')
     const engine = await this.readyEngine(account)
 
     if (kind === 'signup') return { engine, mission: this.signUpMission(account) }
     if (kind === 'signin') return { engine, mission: this.signInMission(account) }
     const mission = this.profileMission(account)
     return { engine, mission: async () => mission }
+  }
+
+  /**
+   * What joining a community needs (DEC-029): a channel of this account on a platform that can say whether the account joined (so the
+   * application, not the AI, decides whether it worked), an account that is signed in, an engine that can be held to the browser tools
+   * alone, and a channel the account has not joined. `canStart` goes only by what the last assessment stored; `start` reads the
+   * community once more, in the function it gets back, and refuses a banned account and a private community there.
+   */
+  private async joinPrerequisites(account: Account, channelId: string | undefined): Promise<{ engine: AiEngine; mission: () => Promise<Mission> }> {
+    if (!channelId) throw new ApiError('invalid_input', 'Say which channel to join.')
+    const channel = found(() => this.core.repos.channel(channelId), 'The channel')
+    if (channel.accountId !== account.id) throw new ApiError('invalid_input', 'This channel belongs to another account.')
+    const connector = this.core.connectors.get(channel.connectorId)
+    if (!connector?.membership) {
+      throw new ApiError('not_supported', `${connector?.label ?? channel.platform} cannot tell whether an account has joined, so the AI is not asked to join there. Join in the account's browser yourself.`)
+    }
+    if (account.status !== 'ready') throw new ApiError('not_ready', `${account.label} is not signed in. Sign in first, then join.`)
+    const known = channel.capabilities.find((c) => c.key === 'membership')
+    if (known?.status === 'verified') throw new ApiError('already_member', `${account.label} has already joined ${channel.target}.`)
+    if (known?.status === 'restricted') throw new ApiError('cannot_join', known.detail)
+    // Membership "needs you" in the last assessment (a private community, or a sign-in or a check first): the button would only be refused later
+    if (known?.status === 'needs_user' && known.checkedAt !== null) throw new ApiError('cannot_join', NEEDS_YOU_FIRST(channel.target))
+    const engine = await this.readyEngine(account, 'join')
+    return { engine, mission: () => this.joinMission(account, channel, connector) }
+  }
+
+  /** The live check before the AI is asked to join, and the brief it gets. Throws when joining is not possible or not something a button does. */
+  private async joinMission(account: Account, channel: Channel, connector: Connector): Promise<Mission> {
+    let state: Membership
+    try {
+      state = await connector.membership!(this.core.connectorContext(channel.id).ctx)
+    } catch (error) {
+      throw browserError(error, { code: 'read_failed', message: (reason) => `Could not check whether ${account.label} has joined ${channel.target}: ${reason}` })
+    }
+    if (state.banned) throw new ApiError('cannot_join', `${account.label} is banned from ${channel.target}.`)
+    if (state.member === true) throw new ApiError('already_member', `${account.label} has already joined ${channel.target}.`)
+    if (state.access === 'private') {
+      throw new ApiError('cannot_join', PRIVATE_COMMUNITY(channel.target))
+    }
+    const platform = presetFor(account.platform)?.label ?? connector.label ?? account.platform
+    const join = { channelId: channel.id, community: channel.target.replace(/^\/?r\//i, ''), destination: channel.url, platform, accountLabel: account.label }
+    return { goal: `Join ${channel.target} on ${platform} with ${account.label}.`, facts: [], startUrl: channel.url, hosts: this.accounts.signInTarget(account).hosts, values: {}, join }
   }
 
   /**
@@ -183,7 +243,7 @@ export class AgentRunService implements PostMissionService {
    * No run going on the account, and an engine that can work the browser and is ready: what every kind of mission needs first. A mission
    * that publishes (`confined`) also needs an engine that can be held to the application's tools alone.
    */
-  private async readyEngine(account: Account, confined = false): Promise<AiEngine> {
+  private async readyEngine(account: Account, confined: false | 'publish' | 'join' = false): Promise<AiEngine> {
     this.assertIdle(account)
 
     const engine = this.core.engines.selected()
@@ -192,7 +252,9 @@ export class AgentRunService implements PostMissionService {
     if (confined && !engine.confinesAgent) {
       throw new ApiError(
         'engine_cannot_confine',
-        `${engine.label} cannot be held to the browser tools alone (it can also run commands and read files), so it is not allowed to publish for you. Choose Claude Code in Settings (AI engine), or send through the connector.`
+        confined === 'join'
+          ? `${engine.label} cannot be held to the browser tools alone (it can also run commands and read files), so it is not allowed to join a community for you. Choose Claude Code in Settings (AI engine), or join in the account's browser yourself.`
+          : `${engine.label} cannot be held to the browser tools alone (it can also run commands and read files), so it is not allowed to publish for you. Choose Claude Code in Settings (AI engine), or send through the connector.`
       )
     }
     if (!this.core.agentBridge) throw new ApiError('no_agent_bridge', 'The AI browser agent is not available in this build.')
@@ -202,9 +264,9 @@ export class AgentRunService implements PostMissionService {
   }
 
   /** Starts a mission and returns at once; it goes on in the background and is read with `state`. */
-  async start(args: { accountId: string; kind: AgentTaskKind }): Promise<AgentRun> {
+  async start(args: { accountId: string; kind: AgentTaskKind; channelId?: string }): Promise<AgentRun> {
     const account = this.accounts.account(args.accountId)
-    const { engine, mission: buildMission } = await this.prerequisites(account, args.kind)
+    const { engine, mission: buildMission } = await this.prerequisites(account, args.kind, args.channelId)
     // The one place a password is read from the keychain; a refusal stops the start before anything is recorded.
     const mission = await buildMission()
     const kind = args.kind
@@ -216,6 +278,7 @@ export class AgentRunService implements PostMissionService {
       run: {
         accountId: account.id,
         kind,
+        ...(mission.join ? { channelId: mission.join.channelId } : {}),
         status: 'running',
         summary: MISSIONS[kind].opening,
         lines: [],
@@ -246,7 +309,7 @@ export class AgentRunService implements PostMissionService {
    */
   async run(request: PostMissionRequest): Promise<PostMissionOutcome> {
     const account = this.accounts.account(request.accountId)
-    const engine = await this.readyEngine(account, true)
+    const engine = await this.readyEngine(account, 'publish')
     const spec = MISSIONS.post
     const live: Live = {
       abort: new AbortController(),
@@ -449,8 +512,9 @@ export class AgentRunService implements PostMissionService {
     const bridge = this.core.agentBridge
     if (!bridge) return this.finish(live, 'failed', 'The AI browser agent is not available in this build.')
     const session = this.core.browser.session(account)
+    const join = mission.join
     // Smaller copies of a picture, for a site that limits its size; they are removed when the mission ends.
-    const shrunkDir = join(this.core.dataDir, 'shrunk', account.id)
+    const shrunkDir = pathJoin(this.core.dataDir, 'shrunk', account.id)
     const toolbox = new BrowserToolbox({
       // Each call holds the browser only for itself, so the owner can take it between two calls.
       withPage: (work) => session.withAgentControl(`agent-${kind}`, work),
@@ -464,17 +528,32 @@ export class AgentRunService implements PostMissionService {
       remember: (rule, scope) => this.remember(account, live, rule, scope),
       shrink: this.core.imageShrinker ? (path, maxBytes) => this.core.imageShrinker!.shrink(path, maxBytes, shrunkDir) : undefined,
       report: (result) => void (live.reported = result),
-      signal: live.abort.signal
+      signal: live.abort.signal,
+      // A join mission has its own six tools, one allowed click and a pause between actions; the others are as they were.
+      ...(join ? { maxCalls: MISSIONS[kind].maxCalls, join: { community: join.community, destination: join.destination, minGapMs: JOIN_MIN_GAP_MS, now: () => this.core.clock.now().getTime() } } : {})
     })
     try {
-      const said = await this.runEngine(live, engine, toolbox, `agent.${kind}`, account.profileId ?? account.id, missionPrompt(mission, this.core.clock.now().toISOString().slice(0, 10)), MISSIONS[kind].timeoutMs)
+      const today = this.core.clock.now().toISOString().slice(0, 10)
+      // A join mission is held to the application's tools alone (Claude Code only, already checked), like a publication.
+      const said = await this.runEngine(live, engine, toolbox, `agent.${kind}`, account.profileId ?? account.id, join ? joinMissionPrompt(join, today) : missionPrompt(mission, today), MISSIONS[kind].timeoutMs, join !== undefined)
       if (live.run.status !== 'running') return // stopped by the owner while the engine was ending
       if (said.trim()) this.say(live, `The AI: ${said.trim().replace(/\s+/g, ' ').slice(0, 240)}`)
-      await this.conclude(account, live, kind)
+      if (join) await this.concludeJoin(account, live, join, toolbox.joinPressed)
+      else await this.conclude(account, live, kind)
     } catch (error) {
       if (live.run.status !== 'running') return
       if (error instanceof AiError && error.kind === 'cancelled') return this.finish(live, 'stopped', 'The AI was stopped.')
-      if (error instanceof AiError && error.kind === 'timeout') return this.finish(live, 'needs_owner', 'The AI did not finish in half an hour and was stopped. Open the browser and look at where it got to.')
+      if (error instanceof AiError && error.kind === 'timeout') {
+        if (join) {
+          // A join that was pressed may have worked before the AI ran out of time: what the account is now is for the application to read.
+          try {
+            return await this.concludeJoin(account, live, join, toolbox.joinPressed, true)
+          } catch {
+            return this.finish(live, 'needs_owner', JOIN_TIMED_OUT)
+          }
+        }
+        return this.finish(live, 'needs_owner', 'The AI did not finish in half an hour and was stopped. Open the browser and look at where it got to.')
+      }
       if (error instanceof TakeoverError || (error instanceof ApiError && error.code === 'browser_busy')) return this.finish(live, 'needs_owner', BROWSER_BUSY)
       const reason = error instanceof Error ? error.message : String(error)
       this.core.log.warn('accounts', `The AI could not ${MISSIONS[kind].doing} ${account.label}: ${reason}`)
@@ -494,6 +573,67 @@ export class AgentRunService implements PostMissionService {
       return await engine.run({ label, subject, prompt, agent: { server: SERVER_NAME, launch: opened.launch, ...(confined ? { confined: true } : {}) }, timeoutMs }, { signal: live.abort.signal })
     } finally {
       opened.close()
+    }
+  }
+
+  /**
+   * The engine of a join mission has ended. The AI's word counts for nothing here: when the join was pressed (or the AI says it is done)
+   * the application reads from Reddit whether the account is a member now, once more after a short wait when the AI says it is done (the
+   * page of the community is not instant). Only that read makes the run done, and the channel is then assessed again so that every row of
+   * its table is current. When the AI stopped for a person (a sign-in, a request to join, a gate) before anything was pressed, nothing is
+   * read: the page where the person continues is not loaded over. What the AI said is shown to the owner as the AI's, the log keeps a
+   * fixed phrase and the status.
+   */
+  private async concludeJoin(account: Account, live: Live, join: NonNullable<Mission['join']>, pressed: boolean, timedOut = false): Promise<void> {
+    const reported = live.reported
+    const says = (fallback: string): string => (reported?.reason ? `The AI says: ${reported.reason}` : fallback)
+    let state: Membership | string | null = null
+    if (pressed || reported?.status === 'done') {
+      state = await this.tryMembership(join.channelId)
+      if (typeof state !== 'string' && state.member !== true && reported?.status === 'done') {
+        await this.core.sleep(JOIN_RECHECK_MS)
+        state = await this.tryMembership(join.channelId)
+      }
+    }
+    if (live.run.status !== 'running') return
+    if (state !== null && typeof state !== 'string' && state.member === true) {
+      this.core.log.info('accounts', `The AI joined ${join.community} with ${account.label}.`)
+      this.finish(live, 'done', `Joined ${join.community}. The channel is being assessed again.`)
+      await this.assessAfterJoin(join.channelId)
+      return
+    }
+    if (reported) this.core.log.info('accounts', `The AI stopped on ${account.label} (it reported "${reported.status}").`)
+    if (reported?.status === 'needs_owner') return this.finish(live, 'needs_owner', says('The AI needs you.'))
+    if (reported?.status === 'failed') return this.finish(live, 'failed', says('The AI could not join.'))
+    if (typeof state === 'string') {
+      return this.finish(live, 'needs_owner', `The AI has finished, but the application could not check whether ${account.label} joined (${state}). Assess the channel to see.`)
+    }
+    if (timedOut) return this.finish(live, 'needs_owner', JOIN_TIMED_OUT)
+    const why = reported ? 'The AI says it is done, but Reddit does not show this account as a member yet.' : 'The AI stopped without joining.'
+    this.finish(live, 'needs_owner', `${why} Join in the account's browser, then assess the channel again.`)
+  }
+
+  /** What the account is now, or the reason it could not be read (in the connector's own safe words). */
+  private async tryMembership(channelId: string): Promise<Membership | string> {
+    try {
+      return await this.membershipOf(channelId)
+    } catch (error) {
+      return error instanceof Error ? error.message.slice(0, 160) : 'unknown error'
+    }
+  }
+
+  private async membershipOf(channelId: string): Promise<Membership> {
+    const { connector, ctx } = this.core.connectorContext(channelId)
+    if (!connector.membership) throw new ApiError('not_supported', 'This platform cannot tell whether an account has joined.')
+    return connector.membership(ctx)
+  }
+
+  /** Best effort: the join is done whether or not the assessment that follows it works (the owner can press Assess again). */
+  private async assessAfterJoin(channelId: string): Promise<void> {
+    try {
+      await this.channels.assess(channelId)
+    } catch (error) {
+      this.core.log.warn('accounts', `The community was joined, but the channel could not be assessed again: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 

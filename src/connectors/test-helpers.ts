@@ -101,7 +101,7 @@ export function threadJson(post: PostFixture, comments: unknown[]): unknown {
 export function aboutJson(over: Record<string, unknown> = {}): unknown {
   return {
     kind: 't5',
-    data: { display_name: 'test', subscribers: 1234, accounts_active: 12, subreddit_type: 'public', submission_type: 'any', user_is_banned: false, user_is_contributor: false, over18: false, ...over }
+    data: { display_name: 'test', subscribers: 1234, accounts_active: 12, subreddit_type: 'public', submission_type: 'any', user_is_banned: false, user_is_contributor: false, user_is_subscriber: true, over18: false, ...over }
   }
 }
 
@@ -110,7 +110,7 @@ export const meJson = (name: string): unknown => ({ kind: 't2', data: { name } }
 
 // ───────────────────────────── Scripted page ─────────────────────────────
 
-type Route = { status: number; json: unknown }
+type Route = { status: number; json: unknown; text?: string; type?: string }
 
 /** A page whose same-origin fetches are answered from a route table (longest matching path prefix wins). */
 export class RedditFakePage extends FakePage {
@@ -129,6 +129,12 @@ export class RedditFakePage extends FakePage {
 
   route(prefix: string, json: unknown, status = 200): this {
     this.routes.set(prefix, { status, json })
+    return this
+  }
+
+  /** An answer that is a page and not data (a block page, a challenge): no JSON, the start of its body, and its content type. */
+  routePage(prefix: string, status: number, text: string, type = 'text/html; charset=utf-8'): this {
+    this.routes.set(prefix, { status, json: null, text, type })
     return this
   }
 
@@ -160,7 +166,7 @@ export class RedditFakePage extends FakePage {
       this.fetched.push(path)
       const key = [...this.routes.keys()].filter((k) => path.startsWith(k)).sort((a, b) => b.length - a.length)[0]
       const route = key ? this.routes.get(key) : undefined
-      const result: FetchResult = route ? { status: route.status, json: route.json, text: '' } : { status: 404, json: null, text: 'no route' }
+      const result: FetchResult = route ? { status: route.status, json: route.json, text: route.text ?? '', ...(route.type ? { type: route.type } : {}) } : { status: 404, json: null, text: 'no route' }
       return result as T
     }
     if (script.includes('recaptcha')) return this.gate as T

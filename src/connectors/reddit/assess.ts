@@ -2,13 +2,13 @@
 // A capability is 'verified' only when it was actually observed; sending abilities are never verified here.
 
 import { TakeoverError, type BrowserPage, type ConnectorContext } from '../../core/ports'
-import type { Capability } from '../../shared/types'
+import type { Capability, CapabilityStatus } from '../../shared/types'
 import { CapabilityBuilder } from '../capabilities'
 import { gateProbeScript, type GateProbe } from '../page-scripts'
 import { analyzeRules, quoteRule, type RulesAnalysis } from '../rules-text'
 import { errorMessage } from '../text'
 import { RedditApi } from './api'
-import type { AboutInfo, MappedThread, RedditPost } from './mapping'
+import { membershipOf, type AboutInfo, type MappedThread, type RedditPost } from './mapping'
 import { oldSubmitUrl, oldThreadUrl, SEL } from './selectors'
 import { parseSubreddit, stripPrefix } from './target'
 
@@ -48,6 +48,37 @@ export function postingVerdicts(sub: string, about: AboutInfo | null, rules: Rul
     post = { ...post, detail: `Rules mention promotion — read them before posting: ${quoteRule(rules.promotionRules[0])}. ${post.detail}` }
   }
   return { post, reply }
+}
+
+/**
+ * What the owner is told when Reddit did not give the post list: what it said, and what else the same sign-in could read, so a refusal of
+ * one call is not taken for a broken sign-in. `member` false points at the Membership row. Pure.
+ */
+export function listingRefusal(sub: string, why: string, read: { about: boolean; rules: boolean }, member: boolean | null): string {
+  const said = `Reddit did not give the r/${sub} post list: ${why}.`
+  const others =
+    read.about && read.rules
+      ? " The community's rules and numbers were read with the same sign-in, so the sign-in works; only the post list was refused."
+      : read.about || read.rules
+        ? ' Part of the community (its rules or its numbers) was read with the same sign-in; only the post list was refused.'
+        : " The community's other pages were refused too."
+  return `${said}${others}${member === false ? ` This account has not joined r/${sub} yet (see Membership).` : ''}`
+}
+
+/** The Membership row (DEC-029): whether the account has joined, in words that say what it means for this community. Pure. */
+export function membershipRow(sub: string, about: AboutInfo | null, aboutReason: string): { status: CapabilityStatus; detail: string } {
+  if (!about) return { status: 'needs_check', detail: `Membership is not known: the community's page could not be read (${aboutReason || 'no reason given'}).` }
+  const { member, banned, access } = membershipOf(about)
+  if (banned) return { status: 'restricted', detail: `This account is banned from r/${sub}.` }
+  if (member === true) return { status: 'verified', detail: `This account is a member of r/${sub}.` }
+  if (member === null) return { status: 'needs_check', detail: `Reddit did not say whether this account is a member of r/${sub}.` }
+  if (access === 'private') {
+    return { status: 'needs_user', detail: `r/${sub} is private: joining needs an invitation or approval, and the AI does not ask for it. Do it yourself in the account's browser.` }
+  }
+  return {
+    status: 'needs_check',
+    detail: `This account has not joined r/${sub}. Reading a public community does not need it; some communities want it for posting. Join in the account's browser, or press "Let the AI join".`
+  }
 }
 
 async function attempt<T>(work: () => Promise<T>): Promise<{ ok: true; value: T } | { ok: false; reason: string }> {
@@ -92,6 +123,16 @@ export async function assessSubreddit(ctx: ConnectorContext): Promise<Capability
     const identity = await api.me()
     if (!identity) return needsUser(ctx, 'The account is not signed in to Reddit. Open the browser, sign in on the page, then assess again.')
 
+    // ── The community's own pages: its settings (and so whether the account joined) and its rules. Read first: a refused post list is
+    // explained by what else the same sign-in could read. ──
+    const about = await attempt(() => api.about(sub))
+    const rulesResult = await attempt(() => api.rules(sub))
+    const aboutInfo = about.ok && about.value.ok ? about.value.value : null
+    const rulesList = rulesResult.ok && rulesResult.value.ok ? rulesResult.value.value : null
+    const aboutWhy = about.ok && !about.value.ok ? about.value.reason : about.ok ? '' : about.reason
+    const joined = membershipRow(sub, aboutInfo, aboutWhy)
+    b.set('membership', joined.status, joined.detail)
+
     // ── Reading ──
     const listing = await attempt(() => api.listing(sub, 10))
     let posts: RedditPost[] = []
@@ -100,9 +141,10 @@ export async function assessSubreddit(ctx: ConnectorContext): Promise<Capability
       const denied = listing.ok && !listing.value.ok && [401, 403, 404].includes(listing.value.status)
       const why = listing.ok && !listing.value.ok ? listing.value.reason : listing.ok ? '' : listing.reason
       const status = denied ? 'unavailable' : 'needs_check'
-      b.set('read_posts', status, `Could not read the r/${sub} listing: ${why}.`)
-      b.set('read_comments', status, 'Comments cannot be read without reading the posts first.')
-      b.set('detect_changes', 'needs_check', 'Change detection could not be examined because the listing could not be read.')
+      b.set('read_posts', status, listingRefusal(sub, why || 'no reason given', { about: aboutInfo !== null, rules: rulesList !== null }, aboutInfo ? aboutInfo.userIsSubscriber : null))
+      // One refused call is one problem: the rows that wait for it say so, and do not say it again.
+      b.set('read_comments', status, 'Not tried: comments are found through the posts, and the post list could not be read (see Read posts).')
+      b.set('detect_changes', 'needs_check', 'Not examined: it needs the post list (see Read posts).')
     } else {
       posts = listing.value.value.filter((p) => !p.removed)
       b.set(
@@ -135,10 +177,6 @@ export async function assessSubreddit(ctx: ConnectorContext): Promise<Capability
     }
 
     // ── Rules and posting restrictions ──
-    const about = await attempt(() => api.about(sub))
-    const rulesResult = await attempt(() => api.rules(sub))
-    const aboutInfo = about.ok && about.value.ok ? about.value.value : null
-    const rulesList = rulesResult.ok && rulesResult.value.ok ? rulesResult.value.value : null
     const analysis = rulesList ? analyzeRules(rulesList) : null
     if (rulesList) {
       const notes: string[] = []

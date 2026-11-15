@@ -1,18 +1,23 @@
-import type { Channel, CapabilityStatus } from '../../../../shared/types'
+import type { CapabilityKey, CapabilityStatus, Channel, PlatformInfo } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
 import { Badge, Button, Card, ErrorNote, formatTime, useMainVariant } from '../../ui'
-import { CAPABILITY_LABEL, CAPABILITY_ORDER, CAPABILITY_STATUS_HELP, CAPABILITY_STATUS_LABEL, CAPABILITY_STATUS_TONE, SENDING_CAPABILITIES, capabilityOf, neverAssessed } from './model'
+import { CAPABILITY_LABEL, CAPABILITY_STATUS_HELP, CAPABILITY_STATUS_LABEL, CAPABILITY_STATUS_TONE, SENDING_CAPABILITIES, abilityNeedsDecision, abilityStatusLabel, capabilityOf, capabilityRows, neverAssessed } from './model'
 
 const LEGEND_ORDER: CapabilityStatus[] = ['verified', 'needs_check', 'needs_user', 'unavailable', 'restricted']
 
-/** An ability's state: a tag only where the owner may have to decide (amber), otherwise a dot and its words, so a table of eight rows stays calm. */
-function AbilityStatus({ status }: { status: CapabilityStatus }) {
-  const tone = CAPABILITY_STATUS_TONE[status]
-  if (tone === 'warn') return <Badge tone={tone}>{CAPABILITY_STATUS_LABEL[status]}</Badge>
+/**
+ * An ability's state: a tag only where the owner may have to decide (amber), otherwise a dot and its words, so a table of nine rows stays
+ * calm. Membership says "Member", "Not joined" or "Banned" (`abilityStatusLabel`); the legend below keeps the common words (no `key`).
+ */
+function AbilityStatus({ status, rowKey, checkedAt }: { status: CapabilityStatus; rowKey?: CapabilityKey; checkedAt?: string | null }) {
+  const decides = rowKey !== undefined && abilityNeedsDecision(rowKey, status, checkedAt)
+  const tone = decides ? 'warn' : CAPABILITY_STATUS_TONE[status]
+  const word = rowKey ? abilityStatusLabel(rowKey, status, checkedAt) : CAPABILITY_STATUS_LABEL[status]
+  if (tone === 'warn') return <Badge tone={tone}>{word}</Badge>
   return (
     <span className="dot-line">
       <span className={`dot ${tone}`} aria-hidden="true" />
-      {CAPABILITY_STATUS_LABEL[status]}
+      {word}
     </span>
   )
 }
@@ -21,7 +26,7 @@ function AbilityStatus({ status }: { status: CapabilityStatus }) {
  * What this account can do in this channel, as established for the current connection - never more than was verified. "Assess channel" is
  * the tab's filled button while the channel was never assessed (`filled`); "Assess again" is a bezel.
  */
-export function CapabilityCard({ channel, filled }: { channel: Channel; filled: boolean }) {
+export function CapabilityCard({ channel, filled, platform }: { channel: Channel; filled: boolean; platform?: PlatformInfo }) {
   const main = useMainVariant()
   const [assess, state] = useAction(() => call('channels.assess', { channelId: channel.id }))
   const unassessed = neverAssessed(channel)
@@ -49,14 +54,14 @@ export function CapabilityCard({ channel, filled }: { channel: Channel; filled: 
           </tr>
         </thead>
         <tbody>
-          {CAPABILITY_ORDER.map((key) => {
+          {capabilityRows(platform).map((key) => {
             const capability = capabilityOf(channel, key)
             const status = capability?.status ?? 'needs_check'
             return (
               <tr key={key} data-testid={`capability-${key}`}>
                 <td>{CAPABILITY_LABEL[key]}</td>
                 <td>
-                  <AbilityStatus status={status} />
+                  <AbilityStatus status={status} rowKey={key} checkedAt={capability?.checkedAt ?? null} />
                 </td>
                 <td className="cap-detail">{capability?.detail || '—'}</td>
                 <td className="cap-checked">{formatTime(capability?.checkedAt)}</td>

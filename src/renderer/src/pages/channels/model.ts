@@ -5,6 +5,8 @@ import type { Tone } from '../../ui'
 
 // The two rules about an address that "Open browser" needs too live in a module without components, so they are tested on their own.
 export { platformOfSuggestion, typedAddress } from './address'
+// The rows of the capability table and the words for their states (Membership included) live in a module without components.
+export { CAPABILITY_LABEL, CAPABILITY_ORDER, CAPABILITY_STATUS_LABEL, abilityStatusLabel, capabilityRows, abilityNeedsDecision, membershipWord } from './capability-words'
 
 /** The name of a platform for people: the connector's own label, from platforms.list. */
 export function platformLabel(platform: string, platforms: PlatformInfo[]): string {
@@ -77,29 +79,8 @@ export const CHANNEL_STATUS_TONE: Record<ChannelStatus, Tone> = {
   error: 'bad'
 }
 
-export const CAPABILITY_ORDER: CapabilityKey[] = ['read_posts', 'read_comments', 'detect_changes', 'rules', 'metrics', 'publish_post', 'publish_reply', 'verify_send']
-
-export const CAPABILITY_LABEL: Record<CapabilityKey, string> = {
-  read_posts: 'Read posts',
-  read_comments: 'Read comments',
-  detect_changes: 'Detect new activity',
-  rules: 'Read community rules',
-  metrics: 'Read metrics',
-  publish_post: 'Publish a post',
-  publish_reply: 'Send a reply',
-  verify_send: 'Confirm that a message was published'
-}
-
 /** The abilities that onboarding can never prove: only an actual, authorized send does. */
 export const SENDING_CAPABILITIES: CapabilityKey[] = ['publish_post', 'publish_reply', 'verify_send']
-
-export const CAPABILITY_STATUS_LABEL: Record<CapabilityStatus, string> = {
-  verified: 'Verified',
-  needs_check: 'Needs verification',
-  needs_user: 'Needs you',
-  unavailable: 'Unavailable',
-  restricted: 'Restricted by rules'
-}
 
 export const CAPABILITY_STATUS_TONE: Record<CapabilityStatus, Tone> = {
   verified: 'good',

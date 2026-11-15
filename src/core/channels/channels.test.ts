@@ -28,7 +28,7 @@ describe('channels.connect', () => {
       baselineDoneAt: null
     })
     expect(channel.settings).toEqual(DEFAULT_CHANNEL_SETTINGS)
-    expect(channel.capabilities).toHaveLength(8)
+    expect(channel.capabilities).toHaveLength(9)
     expect(channel.capabilities.every((c) => c.status === 'needs_check' && c.checkedAt === null)).toBe(true)
     expect(await w.call('channels.list', undefined)).toEqual([channel])
   })

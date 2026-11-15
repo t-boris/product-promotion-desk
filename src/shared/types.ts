@@ -314,8 +314,11 @@ export interface SignInResult {
 }
 
 /** What the browser agent can be asked to do on an account's own browser (DEC-017). More kinds follow: read, answer, set up a profile. */
-/** `signup`: create the account on the platform. `profile`: fill in the profile of an account that exists (about-text, place, website, picture). */
-export type AgentTaskKind = 'signup' | 'profile' | 'signin'
+/**
+ * `signup`: create the account on the platform. `profile`: fill in the profile of an account that exists (about-text, place, website, picture).
+ * `join` (DEC-029): press the Join control of one community, for one channel; the only click the mission may make.
+ */
+export type AgentTaskKind = 'signup' | 'profile' | 'signin' | 'join'
 /**
  * What a run of the browser agent is. The first two are started by the owner (`agent.start`); `post` is started only by the send flow,
  * for one approved publication, and cannot be started through the API.
@@ -345,6 +348,8 @@ export interface AgentAsk extends AgentQuestion {
 export interface AgentRun {
   accountId: Id
   kind: MissionKind
+  /** The channel the run is about (a `join` run), so the channel's own card can tell its run from another on the same account. */
+  channelId?: Id
   status: AgentRunStatus
   /** One sentence for the owner: what it is doing now, or why it stopped and what to do. */
   summary: string
@@ -464,6 +469,8 @@ export interface PlatformInfo {
   signupNote?: string
   /** Where channels of the platform are found and chosen (a list or a search of communities, groups, accounts), opened in the account's own browser (DEC-028); empty when the platform has none. */
   browseUrl?: string
+  /** True when the connector can tell whether the account has joined a channel, so the AI may be asked to join one (DEC-029). */
+  canJoin?: boolean
   /** The platform whose account this one signs in through (DEC-027): Threads signs in with Instagram. Such an account has no credentials of its own. */
   signsInWith?: string
   /** Named platform served by the universal connector (DEC-013): what address to give, what a post holds, what to know. */
@@ -519,6 +526,8 @@ export type CapabilityKey =
   | 'verify_send'
   | 'metrics'
   | 'rules'
+  /** Whether the account has joined the community (DEC-029). Informational: it gates nothing. */
+  | 'membership'
 
 /** needs_check: discovered, not yet confirmed. needs_user: a person must act. restricted: forbidden by rules. */
 export type CapabilityStatus = 'verified' | 'needs_check' | 'needs_user' | 'unavailable' | 'restricted'

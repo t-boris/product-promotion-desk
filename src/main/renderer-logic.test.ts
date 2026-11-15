@@ -3,7 +3,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import type { ApiEvent } from '../shared/api'
-import type { Account, AnalysisStage, AttentionItem, Channel, Claim, PlatformInfo, Product } from '../shared/types'
+import type { Account, AgentRun, AnalysisStage, AttentionItem, Channel, Claim, PlatformInfo, Product } from '../shared/types'
 import { createFanOut } from '../renderer/src/fan-out'
 import { closeForm, mainForm, openForm, type OpenFormIds } from '../renderer/src/open-forms'
 import { readMenuOpen, saveMenuOpen, type MenuStorage } from '../renderer/src/menu-state'
@@ -23,6 +23,8 @@ import { activateBlocker, canActivate, canPause, neverAssessed, setupStage } fro
 import { afterCreateNote, nextStep } from '../renderer/src/pages/channels/next-step'
 import { chosenVia, contactLine, eligibleVia, viaBlocker, viaOption } from '../renderer/src/pages/channels/account-link'
 import { ACCOUNT_NAME_LIMIT, normalizeName, renameProblem } from '../renderer/src/pages/channels/account-name'
+import { CAPABILITY_LABEL, CAPABILITY_ORDER, abilityNeedsDecision, abilityStatusLabel, capabilityRows, membershipWord } from '../renderer/src/pages/channels/capability-words'
+import { JOIN_NOTE, JOIN_OTHER_RUN, JOIN_OWNER_HOLDS, isJoinRunOf, joinButton, joinLabel } from '../renderer/src/pages/channels/join-control'
 import { approveLabels } from '../renderer/src/pages/review/approve-labels'
 import { channelLabel } from '../renderer/src/pages/review/channel-label'
 import { platformMismatch } from '../renderer/src/pages/channels/platform-hint'
@@ -1240,5 +1242,137 @@ describe('"Open browser" where channels are chosen or shown (DEC-028)', () => {
       expect(holdingNote(false)).toContain('took over')
       expect(holdingNote(false)).not.toContain('Done, close the window')
     })
+  })
+})
+
+describe('the Membership row of "What this account can do here" (DEC-029)', () => {
+  const STATUSES = ['verified', 'needs_check', 'needs_user', 'unavailable', 'restricted'] as const
+
+  it('puts Membership first, since it explains what the rows below it can read', () => {
+    expect(CAPABILITY_ORDER[0]).toBe('membership')
+    expect(CAPABILITY_LABEL.membership).toBe('Membership')
+    expect(new Set(CAPABILITY_ORDER).size).toBe(CAPABILITY_ORDER.length)
+    expect(CAPABILITY_ORDER).toHaveLength(9)
+  })
+
+  it('says Member, Not joined, Needs you, Unavailable and Banned for its states, and nothing else changes its words', () => {
+    expect(STATUSES.map((s) => abilityStatusLabel('membership', s))).toEqual(['Member', 'Not joined', 'Needs you', 'Unavailable', 'Banned'])
+    expect(STATUSES.map((s) => abilityStatusLabel('read_posts', s))).toEqual(['Verified', 'Needs verification', 'Needs you', 'Unavailable', 'Restricted by rules'])
+    for (const key of CAPABILITY_ORDER.filter((k) => k !== 'membership')) {
+      expect(abilityStatusLabel(key, 'verified')).toBe('Verified')
+      expect(abilityStatusLabel(key, 'needs_check')).toBe('Needs verification')
+    }
+  })
+
+  it('makes only "Not joined" a tag for the owner to decide on', () => {
+    expect(abilityNeedsDecision('membership', 'needs_check')).toBe(true)
+    expect(abilityNeedsDecision('membership', 'needs_check', '2026-11-15T10:00:00.000Z')).toBe(true)
+    // a row nobody checked is not an account found to be outside the community
+    expect(abilityNeedsDecision('membership', 'needs_check', null)).toBe(false)
+    expect(abilityStatusLabel('membership', 'needs_check', null)).toBe('Not checked yet')
+    expect(abilityStatusLabel('membership', 'needs_check', '2026-11-15T10:00:00.000Z')).toBe('Not joined')
+    expect(abilityStatusLabel('read_posts', 'needs_check', null)).toBe('Needs verification')
+    for (const status of ['verified', 'needs_user', 'unavailable', 'restricted'] as const) expect(abilityNeedsDecision('membership', status)).toBe(false)
+    for (const key of CAPABILITY_ORDER.filter((k) => k !== 'membership')) expect(abilityNeedsDecision(key, 'needs_check')).toBe(false)
+  })
+
+  it('shows the row only for a platform that can tell whether the account joined', () => {
+    expect(capabilityRows({ canJoin: true })).toEqual(CAPABILITY_ORDER)
+    expect(capabilityRows({ canJoin: false })).not.toContain('membership')
+    expect(capabilityRows({})).not.toContain('membership')
+    expect(capabilityRows(undefined)).not.toContain('membership')
+    expect(capabilityRows(undefined)).toEqual(CAPABILITY_ORDER.filter((k) => k !== 'membership'))
+  })
+
+  it('says "Not checked yet" for a channel that was never assessed, and the word of the state otherwise', () => {
+    expect(membershipWord(undefined)).toBe('Not checked yet')
+    expect(membershipWord({ status: 'needs_check', checkedAt: null })).toBe('Not checked yet')
+    expect(membershipWord({ status: 'needs_check', checkedAt: '2026-11-15T10:00:00.000Z' })).toBe('Not joined')
+    expect(membershipWord({ status: 'verified', checkedAt: '2026-11-15T10:00:00.000Z' })).toBe('Member')
+    expect(membershipWord({ status: 'restricted', checkedAt: '2026-11-15T10:00:00.000Z' })).toBe('Banned')
+  })
+})
+
+describe('"Let the AI join" on the channel card (DEC-029)', () => {
+  const run = (over: Partial<AgentRun> = {}): AgentRun => ({
+    accountId: 'a1',
+    kind: 'join',
+    channelId: 'c1',
+    status: 'running',
+    summary: 'The AI is opening the community page.',
+    lines: [],
+    typed: [],
+    question: null,
+    learned: [],
+    startedAt: '2026-11-15T10:00:00.000Z',
+    finishedAt: null,
+    ...over
+  })
+  const base = { platformCanJoin: true, membershipStatus: 'needs_check' as const, readiness: { ready: true, reason: null }, run: null, channelId: 'c1', ownerHolds: false }
+
+  it('names the community the way the card does, once', () => {
+    expect(joinLabel('r/astrology')).toBe('Let the AI join r/astrology')
+    expect(joinLabel('  r/astrology ')).toBe('Let the AI join r/astrology')
+    expect(joinLabel('r/astrology')).not.toContain('r/r/')
+  })
+
+  it('says what it does, and that the app never joins on its own', () => {
+    expect(JOIN_NOTE).toContain('presses Join, nothing else')
+    expect(JOIN_NOTE).toContain('You can stop it any time')
+    expect(JOIN_NOTE).toContain('never joins on its own')
+  })
+
+  it('is on, with no reason, for an account that has not joined and can start', () => {
+    expect(joinButton(base)).toEqual({ show: true, enabled: true, reason: null, runPanel: false })
+  })
+
+  it('is on for a channel that was never assessed (its membership is not known yet), and while the readiness is still loading', () => {
+    expect(joinButton({ ...base, membershipStatus: undefined }).show).toBe(true)
+    expect(joinButton({ ...base, membershipStatus: null }).show).toBe(true)
+    expect(joinButton({ ...base, readiness: undefined })).toMatchObject({ show: true, enabled: true, reason: null })
+  })
+
+  it('is not there for a platform that cannot tell whether the account joined, nor for a member', () => {
+    expect(joinButton({ ...base, platformCanJoin: false })).toEqual({ show: false, enabled: false, reason: null, runPanel: false })
+    expect(joinButton({ ...base, membershipStatus: 'verified' })).toEqual({ show: false, enabled: false, reason: null, runPanel: false })
+  })
+
+  it('is there, off, with the reason the core gives for a banned account or one that cannot start', () => {
+    const banned = joinButton({ ...base, membershipStatus: 'restricted', readiness: { ready: false, reason: 'Boris is banned from r/x.' } })
+    expect(banned).toEqual({ show: true, enabled: false, reason: 'Boris is banned from r/x.', runPanel: false })
+    expect(joinButton({ ...base, readiness: { ready: false, reason: 'No AI engine is selected.' } }).reason).toBe('No AI engine is selected.')
+  })
+
+  it('is off while the owner holds the browser of the account, and says to close the window first', () => {
+    expect(joinButton({ ...base, ownerHolds: true })).toEqual({ show: true, enabled: false, reason: JOIN_OWNER_HOLDS, runPanel: false })
+    expect(JOIN_OWNER_HOLDS).toContain('Done')
+  })
+
+  it('is off while another run works on the account, with that as the reason', () => {
+    const other = run({ kind: 'profile', channelId: undefined })
+    expect(joinButton({ ...base, run: other })).toEqual({ show: true, enabled: false, reason: JOIN_OTHER_RUN, runPanel: false })
+    const elsewhere = run({ channelId: 'c2' })
+    expect(joinButton({ ...base, run: elsewhere })).toEqual({ show: true, enabled: false, reason: JOIN_OTHER_RUN, runPanel: false })
+  })
+
+  it('shows the run of this channel in a panel instead of a reason, off while it works', () => {
+    expect(joinButton({ ...base, run: run() })).toEqual({ show: true, enabled: false, reason: null, runPanel: true })
+  })
+
+  it('keeps how the run of the channel ended on the screen after the button went (the channel was assessed again and the account is a member)', () => {
+    const done = run({ status: 'done', summary: 'Joined r/astrology.', finishedAt: '2026-11-15T10:01:00.000Z' })
+    expect(joinButton({ ...base, membershipStatus: 'verified', run: done })).toEqual({ show: false, enabled: false, reason: null, runPanel: true })
+    // and a finished run that did not join leaves the button on, ready to be pressed again
+    const needsYou = run({ status: 'needs_owner', summary: 'The community asks for a request to join.' })
+    expect(joinButton({ ...base, run: needsYou })).toEqual({ show: true, enabled: true, reason: null, runPanel: true })
+  })
+
+  it('does not show a run panel on a platform that cannot join, and does not take the run of another channel or another kind for its own', () => {
+    expect(joinButton({ ...base, platformCanJoin: false, run: run() }).runPanel).toBe(false)
+    expect(isJoinRunOf(run(), 'c1')).toBe(true)
+    expect(isJoinRunOf(run({ channelId: 'c2' }), 'c1')).toBe(false)
+    expect(isJoinRunOf(run({ kind: 'signin' }), 'c1')).toBe(false)
+    expect(isJoinRunOf(null, 'c1')).toBe(false)
+    expect(isJoinRunOf(undefined, 'c1')).toBe(false)
   })
 })

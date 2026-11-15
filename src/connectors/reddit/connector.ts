@@ -5,6 +5,7 @@ import type {
   Connector,
   ConnectorContext,
   LoginState,
+  Membership,
   NormalizedTarget,
   PublishedRef,
   PublishOutcome,
@@ -18,7 +19,7 @@ import { gateProbeScript, type GateProbe } from '../page-scripts'
 import { ensureRedditOrigin, RedditApi } from './api'
 import { refusalError } from './auth'
 import { assessSubreddit } from './assess'
-import { toDiscussion, REDDIT_ORIGIN, type RedditPost } from './mapping'
+import { membershipOf, toDiscussion, REDDIT_ORIGIN, type RedditPost } from './mapping'
 import { collectMetrics } from './metrics'
 import { DEFAULT_RUNTIME, findOwnPublication, publishToReddit, type RedditRuntime } from './publish'
 import { isRedditAddress, normalizeRedditTarget, parseSubreddit } from './target'
@@ -150,6 +151,18 @@ export class RedditConnector implements Connector {
     return ctx.session.withAgentControl(`metrics:${ctx.channel.id}`, async (page) => {
       await ensureRedditOrigin(page, ctx.channel.url)
       return collectMetrics(new RedditApi(page), sub, ctx.account.identity)
+    })
+  }
+
+  /** Whether the account has joined the community, read from the community's own page with the account's cookies; nothing is changed (DEC-029). */
+  async membership(ctx: ConnectorContext): Promise<Membership> {
+    const sub = this.subreddit(ctx)
+    return ctx.session.withAgentControl(`membership:${ctx.channel.id}`, async (page) => {
+      await ensureRedditOrigin(page, ctx.channel.url)
+      const api = new RedditApi(page)
+      const about = await api.about(sub)
+      if (!about.ok) throw await refusalError(page, api, about, `Could not read r/${sub}: ${about.reason}`)
+      return membershipOf(about.value)
     })
   }
 

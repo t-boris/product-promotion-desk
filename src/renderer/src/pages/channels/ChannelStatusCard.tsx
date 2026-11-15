@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import type { Account, Channel, Product } from '../../../../shared/types'
+import type { Account, Channel, PlatformInfo, Product } from '../../../../shared/types'
 import { call, useAction, useQuery } from '../../hooks'
 import { Badge, Button, Card, ConfirmAction, ErrorNote, formatTime, Hint, useMainVariant } from '../../ui'
-import { CHANNEL_STATUS_LABEL, CHANNEL_STATUS_TONE, nextCheckText } from './model'
+import { JoinChannel } from './JoinChannel'
+import { CHANNEL_STATUS_LABEL, CHANNEL_STATUS_TONE, capabilityOf, membershipWord, nextCheckText } from './model'
 import { OpenAccountBrowser } from './OpenAccountBrowser'
 import { activateBlocker, canActivate, canPause } from './setup-stage'
 
@@ -10,7 +11,7 @@ import { activateBlocker, canActivate, canPause } from './setup-stage'
  * Status, last run and next check, plus Activate / Pause and removal. "Activate" is the tab's filled button only at its stage (`filled`:
  * the channel was assessed and is still to be started); "Pause", "Resume" and "Pause this channel instead" are never filled.
  */
-export function ChannelStatusCard({ channel, product, account, accountLabel, filled, onRemoved }: { channel: Channel; product: Product | undefined; account: Account | undefined; accountLabel: string; filled: boolean; onRemoved: () => void }) {
+export function ChannelStatusCard({ channel, product, account, platform, accountLabel, filled, onRemoved }: { channel: Channel; product: Product | undefined; account: Account | undefined; platform?: PlatformInfo; accountLabel: string; filled: boolean; onRemoved: () => void }) {
   const main = useMainVariant()
   const runs = useQuery('runs.list', { channelId: channel.id, limit: 1 }, ['logs', 'channels'])
   const lastRun = runs.data?.[0]
@@ -45,6 +46,13 @@ export function ChannelStatusCard({ channel, product, account, accountLabel, fil
         <dd>{product?.name ?? 'Unknown product'}</dd>
         <dt>Account</dt>
         <dd>{accountLabel}</dd>
+        {/* Whether the account joined (DEC-029): only where the platform can tell. */}
+        {platform?.canJoin && (
+          <>
+            <dt>Membership</dt>
+            <dd data-testid="channel-membership">{membershipWord(capabilityOf(channel, 'membership'))}</dd>
+          </>
+        )}
         <dt>Address</dt>
         <dd className="small">{channel.url}</dd>
         <dt>Status</dt>
@@ -98,6 +106,8 @@ export function ChannelStatusCard({ channel, product, account, accountLabel, fil
         )}
         {/* The channel's own page in the browser of its account, to look around signed in as it (DEC-028). */}
         {account && <OpenAccountBrowser key={account.id} account={account} open={() => call('accounts.openBrowser', { accountId: account.id, url: channel.url })} testId="channel-browse" />}
+        {/* Joins the community with the account, on the owner's press and nothing else (DEC-029); only where the platform can tell it worked. */}
+        {account && <JoinChannel key={`${account.id}:${channel.id}`} channel={channel} account={account} canJoin={platform?.canJoin === true} />}
         <span className="sep" />
         <ConfirmAction
           label="Remove"

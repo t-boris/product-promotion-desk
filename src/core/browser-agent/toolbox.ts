@@ -11,6 +11,7 @@
 import { TakeoverError, type BrowserPage, type PageStep } from '../ports'
 import type { McpTool, McpToolHost, McpToolResult } from '../mcp/protocol'
 import { changesPostSettings, communitiesShown, communityOf, destinationMatches, fieldValueScript, formTextScript, isPublishingControl, looksLikeSubmit, neverClicked, onComposePage, composePageOf, parseHeldText, replyTarget, platformWarning, sameContent, type HeldText, type PostSetup, type SubmitLease } from './post-submit'
+import { isJoinControl, joinNamesCommunity, JOIN_AMBIGUOUS, JOIN_CHANGED, JOIN_CLICK_ONLY, JOIN_INSTRUCTIONS, JOIN_PRESSED, JOIN_WRONG_PAGE, type JoinSetup } from './join'
 import { parseSnapshot, renderElements, snapshotScript, type PageSnapshot, type SnapshotElement } from './snapshot'
 
 export interface TaskValue {
@@ -70,6 +71,11 @@ export interface ToolboxDeps {
    * toolbox is the one the sign-up and profile missions use, unchanged.
    */
   post?: PostSetup
+  /**
+   * Makes this a join mission (DEC-029): six tools, no typing, no key presses, no scripts, no upload, no submit; a click is accepted only on
+   * the Join button of the community, on the community's own page, once. Never together with `post`.
+   */
+  join?: JoinSetup
 }
 
 const DEFAULT_MAX_CALLS = 250
@@ -173,6 +179,25 @@ const postTools = (): McpTool[] => [
   tool('report_result', 'Say how the mission ended: done (you called browser_submit and the page shows the text), needs_owner (a person must continue) or failed. This is a note for the owner: the application checks on its own whether the text is on the site. Call it once, last.', { status: { type: 'string', enum: ['done', 'needs_owner', 'failed'] }, reason: { type: 'string', description: 'One short sentence, in plain words' } }, ['status', 'reason'])
 ]
 
+const joinTools = (join: JoinSetup): McpTool[] => [
+  TOOLS[0] as McpTool,
+  TOOLS[1] as McpTool,
+  tool(
+    'browser_click',
+    `Press the Join button of ${join.community}, like a person with the mouse. This is the only click this mission accepts, and only once: any other control is refused.`,
+    { ref },
+    ['ref']
+  ),
+  TOOLS.find((t) => t.name === 'browser_wait_for') as McpTool,
+  TOOLS.find((t) => t.name === 'ask_owner') as McpTool,
+  tool(
+    'report_result',
+    'Say how the mission ended: done (the page shows the account as a member now, or it was one already), needs_owner (a person must continue: a sign-in, a request to join, a gate) or failed. This is a note for the owner: the application reads the membership itself. Call it once, last.',
+    { status: { type: 'string', enum: ['done', 'needs_owner', 'failed'] }, reason: { type: 'string', description: 'One short sentence for the owner.' } },
+    ['status']
+  )
+]
+
 const SUBMITTED =
   'The approved content was submitted: the control was pressed, and nothing more may be clicked, chosen or opened in this mission. Look at the page once (browser_snapshot or browser_wait_for), then call report_result. The application checks by itself that the text is on the site.'
 const STOPPED = 'The owner stopped this task. Stop now and do not call any tool.'
@@ -228,6 +253,8 @@ export class BrowserToolbox implements McpToolHost {
   private calls = 0
   /** Post missions: when the last action on the page ended (for the pause between actions). */
   private lastActionAt: number | null = null
+  /** Join missions: the Join button was pressed. Nothing more is clicked or opened after it. */
+  private joined = false
   private humanCheckSeen: string | null = null
   private warningSeen: string | null = null
   private last: PageSnapshot | null = null
@@ -242,8 +269,9 @@ export class BrowserToolbox implements McpToolHost {
   constructor(private readonly deps: ToolboxDeps) {
     const names = Object.keys(deps.files ?? {})
     const withUpload = names.length > 0 ? [...TOOLS.slice(0, 4), uploadTool(names), ...TOOLS.slice(4)] : TOOLS
-    this.tools = deps.post ? postTools() : deps.remember ? withUpload : withUpload.filter((t) => t.name !== 'remember_lesson')
-    this.instructions = deps.post ? POST_INSTRUCTIONS : INSTRUCTIONS
+    if (deps.post && deps.join) throw new Error('A mission is a post or a join, never both.')
+    this.tools = deps.join ? joinTools(deps.join) : deps.post ? postTools() : deps.remember ? withUpload : withUpload.filter((t) => t.name !== 'remember_lesson')
+    this.instructions = deps.join ? JOIN_INSTRUCTIONS : deps.post ? POST_INSTRUCTIONS : INSTRUCTIONS
     this.maxCalls = deps.maxCalls ?? DEFAULT_MAX_CALLS
     this.askWaitMs = deps.askWaitMs ?? DEFAULT_ASK_WAIT_MS
   }
@@ -254,7 +282,7 @@ export class BrowserToolbox implements McpToolHost {
     this.calls += 1
     if (this.calls > this.maxCalls) return fail(`This mission used all ${this.maxCalls} tool calls. Call report_result now.`)
     // A post mission has a smaller set of tools, and the set is kept here as well as in the list the AI is shown.
-    if (this.deps.post && !this.tools.some((t) => t.name === name)) return fail(`There is no tool called "${name}" in this mission.`)
+    if ((this.deps.post || this.deps.join) && !this.tools.some((t) => t.name === name)) return fail(`There is no tool called "${name}" in this mission.`)
     try {
       switch (name) {
         case 'browser_snapshot':
@@ -359,6 +387,10 @@ export class BrowserToolbox implements McpToolHost {
         )
       }
     }
+    // A join mission opens the community's own pages and nothing else, for the same reason.
+    if (this.deps.join && !destinationMatches(url, this.deps.join.destination, 'post', this.deps.hosts)) {
+      return fail(`A join mission opens only the pages of ${this.deps.join.community}, and ${displayAddress(url)} is not one of them.`)
+    }
     return this.acting(async (page) => {
       await page.goto(url)
       this.deps.say(`Opened ${displayAddress(url)}`)
@@ -389,14 +421,15 @@ export class BrowserToolbox implements McpToolHost {
 
   /** Waits so that two actions on the page are at least `minGapMs` apart (post missions only). */
   private async pace(): Promise<void> {
-    const post = this.deps.post
-    if (!post || this.lastActionAt === null) return
-    const wait = post.minGapMs - ((post.now ?? Date.now)() - this.lastActionAt)
+    const timing = this.deps.post ?? this.deps.join
+    if (!timing || this.lastActionAt === null) return
+    const wait = timing.minGapMs - ((timing.now ?? Date.now)() - this.lastActionAt)
     if (wait > 0) await this.deps.sleep(wait)
   }
 
   private touched(): void {
-    if (this.deps.post) this.lastActionAt = (this.deps.post.now ?? Date.now)()
+    const timing = this.deps.post ?? this.deps.join
+    if (timing) this.lastActionAt = (timing.now ?? Date.now)()
   }
 
   /** Why nothing more is done in this mission (the owner pressed Stop, or the application ended it), in words for the AI, or null. */
@@ -408,7 +441,7 @@ export class BrowserToolbox implements McpToolHost {
 
   /** What a post mission refuses to do on the page now, in words for the AI, or null. */
   private refusalNow(): string | null {
-    return this.overNow() ?? (this.deps.post?.authority.committed ? SUBMITTED : null)
+    return this.overNow() ?? (this.deps.post?.authority.committed ? SUBMITTED : this.joined ? JOIN_PRESSED : null)
   }
 
   /**
@@ -453,6 +486,39 @@ export class BrowserToolbox implements McpToolHost {
     if (clicked.some((e) => isPublishingControl(e))) return fail(PUBLISHING_CONTROL)
     if (clicked.some((e) => neverClicked(e.name))) return fail(NOT_PUBLISHED_HERE)
     if (clicked.some((e) => changesPostSettings(e))) return fail(POST_SETTING_CONTROL)
+    return null
+  }
+
+  /**
+   * The one click a join mission makes (DEC-029): on the Join button of the community, on the community's own page, judged on a fresh look
+   * and on what the AI was shown (so a page that renumbered its controls cannot turn a Join into "Leave", or a "Leave" into a Join).
+   * Everything else, a link, a field, "Joined", "Follow", "Join the conversation", "Join Reddit", is refused: this is an allowlist of one.
+   * LIVE ACCEPTANCE: the name and the role Reddit's real Join control has in the snapshot are those the connector's pages suggest; if the
+   * real control is named otherwise it is refused, and the AI reports needs_owner: nothing is pressed that is not recognised. Null when
+   * the click may go on.
+   */
+  private async joinClickProblem(page: BrowserPage, reference: string): Promise<McpToolResult | null> {
+    const join = this.deps.join
+    if (!join) return null
+    const now = await this.observe(page)
+    if (!now) return fail('The page shows nothing usable yet. Wait a moment and look again.')
+    if (!hostAllowed(now.url, this.deps.hosts)) return fail(`The page is not on the platform (${this.deps.hosts.join(', ')}). Use browser_navigate to go back.`)
+    if (!destinationMatches(now.url, join.destination, 'post', this.deps.hosts)) return fail(JOIN_WRONG_PAGE(join.community))
+    if (now.humanCheck) return fail(`Human check on the page: ${now.humanCheck}. Only a person can do it: use ask_owner.`)
+    const fresh = now.elements.find((e) => e.ref === reference)
+    if (!fresh) return fail(`${reference} is not on the page now: the page changed since it was shown. Look at the page again (browser_snapshot) and use a ref from it.`)
+    const shown = this.shown?.elements.find((e) => e.ref === reference)
+    if (!shown) return fail(`${reference} was not shown to you by browser_snapshot. Look at the page (browser_snapshot) and use a ref from it.`)
+    if (!isJoinControl(fresh, join.community) || !isJoinControl(shown, join.community)) return fail(JOIN_CLICK_ONLY)
+    // the control the AI chose is the control that was shown to it: a page that renames or replaces it in between is looked at again
+    if (fresh.name !== shown.name || fresh.role !== shown.role) return fail(JOIN_CHANGED(reference))
+    // a bare "Join" is not bound to a community: when the page has several controls that pass, only the one named after this community
+    // may be pressed, and when none is, nothing is (a sidebar's "Join" for another community looks exactly like the header's)
+    const candidates = now.elements.filter((e) => isJoinControl(e, join.community))
+    if (candidates.length > 1) {
+      const named = candidates.filter((e) => joinNamesCommunity(e, join.community))
+      if (named.length !== 1 || named[0]?.ref !== reference) return fail(JOIN_AMBIGUOUS(join.community))
+    }
     return null
   }
 
@@ -521,10 +587,17 @@ export class BrowserToolbox implements McpToolHost {
     return this.acting(async (page) => {
       const publisher = await this.postClickProblem(page, reference)
       if (publisher) return publisher
+      // A join mission never types, so no form holds text of its own making, and a page often has a search box with the community in it:
+      // the held-text check is for the mission that publishes. What may be pressed is decided by `joinClickProblem` alone.
+      const joinProblem = await this.joinClickProblem(page, reference)
+      if (joinProblem) return joinProblem
       const hands = await this.handsOff(page)
       if (hands) return hands
       const label = this.labelOf(reference)
       const role = this.roleOf(reference)
+      // The one press of a join mission is used up when it is attempted, not when it is known to have worked: a press that failed after
+      // the mouse went down is not tried again by the AI, and the application reads the membership itself.
+      if (this.deps.join) this.joined = true
       const result = await this.stepOn(page, { do: 'click', ref: reference }, `Clicked "${label}"`, true)
       this.touched()
       if (!result.isError) {
@@ -641,6 +714,11 @@ export class BrowserToolbox implements McpToolHost {
   }
 
   // ───────────────────────── publishing (post missions) ─────────────────────────
+
+  /** Whether the one press of a join mission was tried: the page may have changed, so what the account is now is for the application to read. */
+  get joinPressed(): boolean {
+    return this.joined
+  }
 
   /** What the page showed that matters to the send flow after the mission: a human check, a warning of the site. */
   get observed(): { humanCheck: string | null; warning: string | null } {

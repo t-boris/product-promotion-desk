@@ -38,13 +38,54 @@ export type ApiOutcome<T> = { ok: true; value: T } | { ok: false; status: number
 const USERNAME = /^[A-Za-z0-9_-]{3,20}$/
 const POST_ID = /^[a-z0-9]{1,12}$/i
 
-function failure(res: FetchResult): { ok: false; status: number; reason: string } {
+/** Longest stretch of a site's own words that is shown: it ends up in the owner's table, the log and, for a refused ability, a prompt. */
+const MAX_WORDS = 100
+
+/**
+ * Plain words and nothing else: letters, digits, spaces and a few marks. A handle after u/ or @, an e-mail, an address and a long token are
+ * dropped before anything is shown. A bare word that is somebody's name cannot be told from any other word: Reddit's reasons are codes and
+ * sentences, not an echo of the account, and what is kept is cut short.
+ */
+export function plainWords(text: string): string {
+  return text
+    .replace(/https?:\/\/\S+/gi, ' ')
+    .replace(/(?<![\p{L}\p{N}])(?:u|user)\/[\w-]+/giu, ' ')
+    .replace(/\S+@\S+/g, ' ')
+    .replace(/@[\w.-]+/g, ' ')
+    .replace(/\b[\w-]{24,}\b/g, ' ')
+    .replace(/[^\p{L}\p{N} .,:;'"()_/-]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, MAX_WORDS)
+    .trim()
+}
+
+/** What a page that is not data says it is, by words that only such a page uses. Fixed phrases: the page's own text is never passed on. */
+const KNOWN_PAGES: [RegExp, string][] = [
+  [/blocked by network security|whoa there,? pardner|you['’]ve been blocked|request blocked|access denied by/i, 'a network-security block page'],
+  [/verify you are (?:a )?human|just a moment|attention required|checking your browser|captcha/i, 'a human-check page'],
+  [/too many requests|rate limit/i, 'a "too many requests" page'],
+  [/<title>[^<]*\b(?:log ?in|sign ?in)\b/i, 'a sign-in page']
+]
+
+/**
+ * What Reddit itself said about a refusal, in safe words, or '' when it said nothing. A JSON answer: its `reason`, else its `message`, as
+ * plain words. Anything else (a page): a fixed phrase for a known kind of page, else that it was a page and not data. Never raw text.
+ */
+export function refusalWords(res: FetchResult): string {
   const json = asRecord(res.json)
-  const reason = str(json?.reason) || str(json?.message)
+  if (json) return plainWords(str(json.reason) || str(json.message))
+  const page = KNOWN_PAGES.find(([pattern]) => pattern.test(res.text))
+  if (page) return page[1]
+  return /html/i.test(res.type ?? '') || /^\s*</.test(res.text) ? 'an HTML page instead of data, with no reason given' : ''
+}
+
+function failure(res: FetchResult): { ok: false; status: number; reason: string } {
+  const words = refusalWords(res)
   let text: string
-  if (res.status === 0) text = res.text || 'network error'
+  if (res.status === 0) text = plainWords(res.text) || 'network error'
   else if (res.status === 404) text = 'not found'
-  else if (res.status === 401 || res.status === 403) text = reason ? `access denied (${reason})` : 'access denied'
+  else if (res.status === 401 || res.status === 403) text = words ? `access denied (${words}), HTTP ${res.status}` : `access denied, HTTP ${res.status}`
   else if (res.status === 429) text = 'rate limited by Reddit'
   else if (res.status >= 500) text = 'Reddit server error'
   else text = `unexpected response (HTTP ${res.status})`
