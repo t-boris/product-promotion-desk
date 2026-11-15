@@ -494,6 +494,7 @@ export class AccountsService {
       nextCheckAt: null,
       plan: null,
       reads: true,
+      watchedInBrowser: false,
       createdAt: this.core.clock.now().toISOString()
     }
   }
