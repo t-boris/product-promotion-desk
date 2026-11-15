@@ -56,6 +56,9 @@ import type {
   LogEvent,
   LogLevel,
   OpportunityCard,
+  FindingCard,
+  FindingCounts,
+  FindingLabel,
   OpportunityKind,
   OpportunitySource,
   OpportunityState,
@@ -287,6 +290,14 @@ export interface ApiMethods {
    * `source: 'new_post'`, `'comment'`, `'reply_to_me'` and `'mention'`. Every filter is optional and they combine.
    */
   'opportunities.list': [{ channelId?: Id; productId?: Id; kind?: OpportunityKind; source?: OpportunitySource; states?: OpportunityState[] }, OpportunityCard[]]
+  /**
+   * What the AI judged of a channel's posts (DEC-040), newest first, at most `limit` (default 100, at most 300). `labels` keeps the given labels (all when
+   * absent; a pending finding has no label and is listed only when `labels` is absent). Read-only.
+   */
+  'findings.list': [{ productId: Id; channelId?: Id; labels?: FindingLabel[]; limit?: number }, FindingCard[]]
+  'findings.counts': [{ productId: Id }, FindingCounts]
+  /** The owner looked at these findings: they stop counting as unseen. */
+  'findings.markSeen': [{ ids: Id[] }, void]
   'opportunities.get': [{ id: Id }, OpportunityCard]
   'opportunities.prepareDraft': [{ id: Id }, OpportunityCard]
   'opportunities.saveDraft': [{ id: Id; draft: DraftInput }, OpportunityCard]

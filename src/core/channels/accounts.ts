@@ -488,6 +488,7 @@ export class AccountsService {
       status: 'setup',
       statusDetail: '',
       baselineDoneAt: null,
+      lookedBackAt: null,
       lastRunAt: null,
       lastSuccessAt: null,
       nextCheckAt: null,

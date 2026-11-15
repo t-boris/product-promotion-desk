@@ -5,6 +5,8 @@ import { ApiError } from '../../shared/api'
 import type { AutoCategory, ChannelLimits, ChannelSettings, MixKind, MixSetting } from '../../shared/types'
 
 export const MIN_CHECK_INTERVAL_MIN = 5
+/** The one-time look-back reads at most a month back (DEC-040). */
+export const MAX_LOOK_BACK_DAYS = 30
 const MAX_CHECK_INTERVAL_MIN = 7 * 24 * 60
 const MAX_LIMIT = 1000
 const MAX_STYLE = 2000
@@ -15,7 +17,7 @@ export const MIX_KINDS: readonly MixKind[] = ['product_post', 'own_update', 'sho
 export const MIN_MIX_DAYS = 1
 export const MAX_MIX_DAYS = 90
 
-const KNOWN = ['languages', 'style', 'topics', 'queries', 'checkIntervalMin', 'limits', 'autoCategories', 'digestTime', 'notifications', 'mix']
+const KNOWN = ['languages', 'style', 'topics', 'queries', 'checkIntervalMin', 'lookBackDays', 'limits', 'autoCategories', 'digestTime', 'notifications', 'mix']
 
 const invalid = (message: string): ApiError => new ApiError('invalid_input', message)
 
@@ -105,6 +107,11 @@ export function applySettingsPatch(current: ChannelSettings, patch: unknown): Ch
     if (!isCount(n) || n < MIN_CHECK_INTERVAL_MIN) throw invalid(`Check no more often than every ${MIN_CHECK_INTERVAL_MIN} minutes.`)
     if (n > MAX_CHECK_INTERVAL_MIN) throw invalid('Check at least once a week.')
     next.checkIntervalMin = n
+  }
+  if (given.lookBackDays !== undefined) {
+    const n = given.lookBackDays
+    if (!isCount(n) || n > MAX_LOOK_BACK_DAYS) throw invalid(`The first look goes back a whole number of days, 0 to ${MAX_LOOK_BACK_DAYS}.`)
+    next.lookBackDays = n
   }
   if (given.limits !== undefined) next.limits = parseLimits(given.limits, current.limits)
   if (given.autoCategories !== undefined) {

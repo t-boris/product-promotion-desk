@@ -8,6 +8,7 @@ export interface SettingsDraft {
   topics: string
   queries: string
   checkIntervalMin: string
+  lookBackDays: string
   perHour: string
   perDay: string
   thanks: boolean
@@ -30,6 +31,7 @@ export function toDraft(settings: ChannelSettings): SettingsDraft {
     topics: settings.topics.join('\n'),
     queries: settings.queries.join('\n'),
     checkIntervalMin: String(settings.checkIntervalMin),
+    lookBackDays: String(settings.lookBackDays),
     perHour: String(settings.limits.perHour),
     perDay: String(settings.limits.perDay),
     thanks: settings.autoCategories.includes('thanks'),
@@ -51,6 +53,8 @@ export type ParsedSettings = { ok: true; settings: Omit<ChannelSettings, 'mix'> 
 export function fromDraft(draft: SettingsDraft): ParsedSettings {
   const interval = wholeNumber(draft.checkIntervalMin)
   if (interval === null || interval < 5) return { ok: false, error: 'Check interval must be a whole number of at least 5 minutes.' }
+  const lookBackDays = wholeNumber(draft.lookBackDays)
+  if (lookBackDays === null || lookBackDays > 30) return { ok: false, error: 'The first look goes back a whole number of days, 0 to 30.' }
   const perHour = wholeNumber(draft.perHour)
   const perDay = wholeNumber(draft.perDay)
   if (perHour === null || perDay === null) return { ok: false, error: 'Limits must be whole numbers, zero or more.' }
@@ -66,6 +70,7 @@ export function fromDraft(draft: SettingsDraft): ParsedSettings {
       topics: splitList(draft.topics),
       queries: splitList(draft.queries),
       checkIntervalMin: interval,
+      lookBackDays,
       limits: { perHour, perDay },
       autoCategories,
       digestTime: draft.digestOn ? draft.digestTime : null,

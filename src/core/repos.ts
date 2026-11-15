@@ -107,6 +107,7 @@ export const mapChannel = (r: Row): Channel => ({
   status: r.status as Channel['status'],
   statusDetail: r.status_detail as string,
   baselineDoneAt: (r.baseline_done_at as string | null) ?? null,
+  lookedBackAt: (r.looked_back_at as string | null) ?? null,
   lastRunAt: (r.last_run_at as string | null) ?? null,
   lastSuccessAt: (r.last_success_at as string | null) ?? null,
   nextCheckAt: (r.next_check_at as string | null) ?? null,
@@ -123,6 +124,7 @@ export const mapDiscussion = (r: Row): Discussion => ({
   title: r.title as string,
   author: r.author as string,
   body: r.body as string,
+  postedAt: (r.posted_at as string | null) ?? null,
   selectedForProcessing: r.selected === 1,
   firstSeenAt: r.first_seen_at as string,
   lastSeenAt: r.last_seen_at as string

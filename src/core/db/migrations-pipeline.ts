@@ -133,5 +133,42 @@ CREATE INDEX idx_opp_product_source ON opportunities(product_id, source, updated
 -- When the account's inbox was first read for this channel: that first read only stores what is there (the baseline rule), it queues nothing.
 ALTER TABLE channels ADD COLUMN inbox_baseline_done_at TEXT;
 `
+  },
+  {
+    id: 308,
+    name: 'pipeline: watching on a schedule, a look-back, and findings of the AI triage (DEC-040)',
+    sql: `
+-- When a post was written on the platform (null when the platform did not say). The look-back reads back as far as this.
+ALTER TABLE discussions ADD COLUMN posted_at TEXT;
+-- When the one-time look-back of a channel was made (the last settings.lookBackDays days). Null: not yet, so the next check makes it.
+ALTER TABLE channels ADD COLUMN looked_back_at TEXT;
+-- One row per post of a channel that the AI triage judged: by its title first, then (if it was relevant) by reading it. A post is judged once.
+-- stage: 'pending' (found, not yet judged: the engine was not ready), 'title' (judged by its title alone), 'read' (opened and read).
+-- label: 'reply' (worth a reply: opportunity_id points at it), 'notice' (worth noticing), 'skip' (not relevant); null while pending.
+CREATE TABLE findings (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+  external_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  url TEXT NOT NULL,
+  author TEXT NOT NULL DEFAULT '',
+  posted_at TEXT,
+  stage TEXT NOT NULL,
+  label TEXT,
+  -- One line: how the post relates (or does not relate) to the product's goal. Written by the AI from the page; shown as data, never obeyed.
+  relation TEXT NOT NULL DEFAULT '',
+  -- 1 when the post was found by the look-back of a new channel, not by a later check.
+  first_look INTEGER NOT NULL DEFAULT 0,
+  opportunity_id TEXT REFERENCES opportunities(id) ON DELETE SET NULL,
+  seen_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (channel_id, external_id)
+);
+CREATE INDEX idx_findings_product ON findings(product_id, label, created_at);
+-- The default check interval is now 3 hours (it was 30 minutes): a channel still on the old default follows it; a value the owner chose stays.
+UPDATE channels SET settings_json = json_set(settings_json, '$.checkIntervalMin', 180) WHERE json_extract(settings_json, '$.checkIntervalMin') = 30;
+`
   }
 ]

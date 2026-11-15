@@ -90,7 +90,7 @@ describe('channels.updateSettings', () => {
       channelId: channel.id,
       settings: { languages: ['en', 'es'], style: 'warm, short', topics: ['astrology'], queries: ['birth chart app'], checkIntervalMin: 15, limits: { perHour: 1, perDay: 3 }, digestTime: '09:00', notifications: false, autoCategories: ['thanks'] }
     })
-    expect(updated.settings).toEqual({ languages: ['en', 'es'], style: 'warm, short', topics: ['astrology'], queries: ['birth chart app'], checkIntervalMin: 15, limits: { perHour: 1, perDay: 3 }, autoCategories: ['thanks'], digestTime: '09:00', notifications: false, mix: [] })
+    expect(updated.settings).toEqual({ languages: ['en', 'es'], style: 'warm, short', topics: ['astrology'], queries: ['birth chart app'], checkIntervalMin: 15, lookBackDays: 30, limits: { perHour: 1, perDay: 3 }, autoCategories: ['thanks'], digestTime: '09:00', notifications: false, mix: [] })
     expect((await w.call('channels.list', undefined))[0].settings).toEqual(updated.settings)
   })
 
