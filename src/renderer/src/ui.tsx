@@ -199,8 +199,8 @@ export function SegmentedControl<T extends string>({
   describedBy
 }: {
   label: string
-  /** An option can be off on its own (`disabled`), or the whole group can (`disabled` below): the reason is said beside the control. */
-  options: { value: T; label: string; disabled?: boolean }[]
+  /** An option can be off on its own (`disabled`), or the whole group can (`disabled` below): the reason is said beside the control. A label is words, or words with a count capsule (the Feed's Noted tab). */
+  options: { value: T; label: ReactNode; disabled?: boolean }[]
   value: T
   onChange: (value: T) => void
   name: string

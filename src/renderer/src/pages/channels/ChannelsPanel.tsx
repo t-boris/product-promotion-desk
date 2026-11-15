@@ -105,7 +105,7 @@ export function ChannelsPanel({ productId }: { productId: string }) {
       {route.channelId === null && channelList.length > 0 && (
         <>
           <ErrorNote error={tiles.error} />
-          {tiles.view ? <ChannelTiles channels={tiles.view.channels} lines={tiles.lines} days={tiles.view.days} /> : tiles.error ? null : <Loading what="Loading channels" />}
+          {tiles.view ? <ChannelTiles channels={tiles.view.channels} lines={tiles.lines} days={tiles.view.days} details={tiles.channels} /> : tiles.error ? null : <Loading what="Loading channels" />}
           {/* With one channel that is still to be assessed or started, its page is the next step: the link is the screen's filled button. */}
           {filledStage && (filledStage === 'assess' || filledStage === 'activate') && channelList.length === 1 && (
             <div className="row">

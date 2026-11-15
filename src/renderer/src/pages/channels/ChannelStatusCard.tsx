@@ -2,6 +2,8 @@ import { useState } from 'react'
 import type { Account, Channel, PlatformInfo, Product } from '../../../../shared/types'
 import { call, useAction, useQuery } from '../../hooks'
 import { Badge, Button, Card, ConfirmAction, ErrorNote, formatTime, Hint, useMainVariant } from '../../ui'
+import { useWatchingContext } from '../feed/useWatching'
+import { watchingLine } from '../feed/watching-line'
 import { JoinChannel } from './JoinChannel'
 import { CHANNEL_STATUS_LABEL, CHANNEL_STATUS_TONE, capabilityOf, membershipWord, nextCheckText } from './model'
 import { OWN_POSTS_READING, activateHint } from './own-posts'
@@ -15,6 +17,9 @@ export function ChannelStatusCard({ channel, product, account, platform, account
   const main = useMainVariant()
   const runs = useQuery('runs.list', { channelId: channel.id, limit: 1 }, ['logs', 'channels'])
   const lastRun = runs.data?.[0]
+  // How often the channel is looked at, or why it is not (DEC-040). The last and the next check are the rows below; this is the rest of the line.
+  const watchingContext = useWatchingContext()
+  const watching = watchingContext ? watchingLine(channel, watchingContext) : null
   // A channel with send history cannot be removed (that history prevents sending the same thing twice); the reason is
   // shown here, and pausing is offered instead.
   const [refusal, setRefusal] = useState<string | null>(null)
@@ -77,6 +82,14 @@ export function ChannelStatusCard({ channel, product, account, platform, account
             <dd>{formatTime(channel.lastSuccessAt)}</dd>
             <dt>Next check</dt>
             <dd data-testid="channel-next-check">{nextCheckText(channel, formatTime)}</dd>
+            {watching && (
+              <>
+                <dt>Watching</dt>
+                <dd data-testid="channel-watching" data-watching={watching.watching}>
+                  {watching.schedule}
+                </dd>
+              </>
+            )}
           </>
         ) : (
           <>

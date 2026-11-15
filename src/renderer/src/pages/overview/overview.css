@@ -60,6 +60,11 @@
   color: var(--text-2);
   font-size: var(--fs-caption);
 }
+/* The watching line carries the channel's own words (a failure, what it needs from the owner): long text wraps inside the tile and never widens it. */
+.ov-tile-when {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .ov-tile-metric {
   display: flex;
   align-items: center;

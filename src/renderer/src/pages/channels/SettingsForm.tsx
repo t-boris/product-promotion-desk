@@ -4,24 +4,33 @@ import { AiField } from '../../assist/AiField'
 import { useAssistBlock } from '../../assist/useAssistBlock'
 import { call, useAction } from '../../hooks'
 import { Button, Card, ErrorNote, Field, useOpenForm } from '../../ui'
+import { clockTime } from '../feed/watching-line'
+import { CUSTOM_INTERVAL, CUSTOM_INTERVAL_HINT, INTERVAL_HINT, LOOK_BACK_HINT, intervalChoice, intervalChoices, isIntervalPreset, lookBackChoices, lookBackDoneHint } from './check-schedule'
 import { fromDraft, toDraft, type SettingsDraft } from './form'
 
 /**
- * Language, style, topics, queries, interval, limits, automatic categories (a channel the app does not read has no interval, topics, queries or automatic
- * replies), daily summary and notifications. "Save settings" is the filled
+ * Language, style, topics, queries, how often to check and how far back the first look goes (a preset or a number of minutes; DEC-040), limits, automatic
+ * categories (a channel the app does not read has no interval, first look, topics, queries or automatic replies), daily summary and notifications. "Save settings" is the filled
  * button only while the form has unsaved changes (then the setup stage's own button steps back to a bezel, see `useOpenForm`). The AI can
  * write or improve the style, the topics and the queries; numbers and switches that decide what goes out stay the owner's choice.
  */
 export function SettingsForm({ channel }: { channel: Channel }) {
   const initial = toDraft(channel.settings)
+  const lookedBackAt = channel.lookedBackAt
   const [draft, setDraft] = useState<SettingsDraft>(initial)
   const [formError, setFormError] = useState<string | null>(null)
   const [save, state] = useAction((settings: Partial<Channel['settings']>) => call('channels.updateSettings', { channelId: channel.id, settings }))
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial)
   const saveVariant = useOpenForm(dirty)
   const set = <K extends keyof SettingsDraft>(key: K, value: SettingsDraft[K]): void => setDraft((d) => ({ ...d, [key]: value }))
+  // "Custom…" is the owner's choice and stays while they type, even when the minutes typed equal a preset. A stored value that is no preset starts as Custom.
+  const [customInterval, setCustomInterval] = useState(!isIntervalPreset(initial.checkIntervalMin))
+  const pickInterval = (value: string): void => {
+    setCustomInterval(value === CUSTOM_INTERVAL)
+    if (value !== CUSTOM_INTERVAL) set('checkIntervalMin', value)
+  }
   const { blocked } = useAssistBlock({ productId: channel.productId })
-  // What only matters when the app reads the channel (how often, what to watch, which replies may go out by themselves) is left out of a channel
+  // What only matters when the app reads the channel (how often, how far back the first look goes, what to watch, which replies may go out by themselves) is left out of a channel
   // it does not read (DEC-034); the values stay in the draft, so saving never drops them.
   const reads = channel.reads
   /** What is written in the other text fields of the form, so the AI fits the field into the channel's settings. */
@@ -53,8 +62,30 @@ export function SettingsForm({ channel }: { channel: Channel }) {
           <input className="input" value={draft.languages} onChange={(e) => set('languages', e.target.value)} data-testid="settings-languages" />
         </Field>
         {reads && (
-          <Field label="Check every (minutes)" hint="At least 5.">
+          <Field label="Check every" hint={INTERVAL_HINT}>
+            <select className="input" value={intervalChoice(draft.checkIntervalMin, customInterval)} onChange={(e) => pickInterval(e.target.value)} data-testid="settings-interval-choice">
+              {intervalChoices().map((choice) => (
+                <option key={choice.value} value={choice.value}>
+                  {choice.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        {reads && intervalChoice(draft.checkIntervalMin, customInterval) === CUSTOM_INTERVAL && (
+          <Field label="Custom (minutes)" hint={CUSTOM_INTERVAL_HINT}>
             <input className="input" inputMode="numeric" value={draft.checkIntervalMin} onChange={(e) => set('checkIntervalMin', e.target.value)} data-testid="settings-interval" />
+          </Field>
+        )}
+        {reads && (
+          <Field label="First look" hint={lookedBackAt ? lookBackDoneHint(clockTime(lookedBackAt, { now: new Date() })) : LOOK_BACK_HINT}>
+            <select className="input" value={draft.lookBackDays} onChange={(e) => set('lookBackDays', e.target.value)} disabled={lookedBackAt !== null} data-testid="settings-look-back">
+              {lookBackChoices(initial.lookBackDays).map((choice) => (
+                <option key={choice.value} value={choice.value}>
+                  {choice.label}
+                </option>
+              ))}
+            </select>
           </Field>
         )}
         <div className="wide">
@@ -112,7 +143,13 @@ export function SettingsForm({ channel }: { channel: Channel }) {
           {state.busy ? 'Saving…' : 'Save settings'}
         </Button>
         {dirty && (
-          <Button onClick={() => setDraft(initial)} data-testid="settings-reset">
+          <Button
+            onClick={() => {
+              setDraft(initial)
+              setCustomInterval(!isIntervalPreset(initial.checkIntervalMin))
+            }}
+            data-testid="settings-reset"
+          >
             Discard changes
           </Button>
         )}

@@ -287,9 +287,10 @@ export function dayLabel(day: string, today: string): string {
 
 /**
  * The rows under their local day, in the order they were given: a day is a run of neighbours, so the order of the list is the order the
- * arrow keys walk. `offsetMinutes` is the viewer's offset from UTC, east positive, as the Overview and the calendar take it.
+ * arrow keys walk. `offsetMinutes` is the viewer's offset from UTC, east positive, as the Overview and the calendar take it. Any row with an
+ * id and a moment is grouped: the opportunities and the findings of the Noted list (finding-rows.ts) are listed by the same function.
  */
-export function groupByDay(rows: readonly FeedRow[], today: string, offsetMinutes: number): FeedDay[] {
+export function groupByDay(rows: readonly { id: Id; at: IsoTime }[], today: string, offsetMinutes: number): FeedDay[] {
   const days: FeedDay[] = []
   for (const row of rows) {
     const day = Number.isNaN(Date.parse(row.at)) ? '' : localDay(row.at, offsetMinutes)

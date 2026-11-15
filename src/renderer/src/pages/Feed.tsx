@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { localDay } from '../../../shared/local-day'
 import type { Channel, Id, Product } from '../../../shared/types'
 import { call, useAction, useQuery } from '../hooks'
@@ -11,8 +11,13 @@ import { ChannelAction } from './feed/ChannelAction'
 import { FeedDetail } from './feed/FeedDetail'
 import { FeedList } from './feed/FeedList'
 import { ReadingNotes } from './feed/ReadingNotes'
-import { FEED_SOURCES, FEED_STATES, buildFeedRows, emptyKind, groupByDay, readableChannels, sourceCounts, stateCounts, visibleRows, widestFilter, type FeedSourceFilter, type FeedState } from './feed/feed-filter'
+import { FEED_SOURCES, buildFeedRows, emptyKind, groupByDay, readableChannels, sourceCounts, stateCounts, visibleRows, widestFilter, type FeedRow, type FeedSourceFilter } from './feed/feed-filter'
+import { FEED_TABS, isFindingRow, judgedLine, notedCount, notedEmptyKind, opportunityListOf, unseenNoticeCount, visibleFindings, type FeedTab, type ListedRow } from './feed/finding-rows'
+import { FindingDetail } from './feed/FindingDetail'
 import { useFeedCards } from './feed/useFeedCards'
+import { useFindings, useMarkSeenOnShow } from './feed/useFindings'
+import { useWatchingContext } from './feed/useWatching'
+import { productWatching } from './feed/watching-line'
 import { selectionAfterDismiss } from './inbox/inbox-groups'
 import { SELECTION_KEYS, selectionAfterKey, type SelectionKey } from '../list-selection'
 import { useListSelection } from '../use-list-selection'
@@ -23,6 +28,7 @@ import './review/review.css'
 import './feed/feed.css'
 
 const NO_CHANNELS: Channel[] = []
+const NO_ROWS: FeedRow[] = []
 
 /** True while the key goes to a field the owner is typing in: the arrow keys then belong to the caret. */
 function isEditable(target: EventTarget | null): boolean {
@@ -52,39 +58,56 @@ export function FeedPage() {
 }
 
 /**
- * What happens in the current product's channels (DEC-037 phase E, DEC-039): new posts that match the channel's topics, comments, replies
- * to the account and mentions, each with what the AI proposes. Chips choose the source, the segments the list (To decide, Sent, Skipped), a
+ * What happens in the current product's channels (DEC-037 phase E, DEC-039, DEC-040): new posts, comments, replies to the account and
+ * mentions, each with what the AI proposes, and what the AI noticed in the posts it judged. A line under the header says how the channels
+ * are watched (how often, when last, when next, or why not). The segments choose the list (To decide, Noted, Sent, Skipped); beside them
+ * the number of posts judged not relevant opens them, read-only, to check the AI. Chips choose the source (of the opportunity lists), a
  * pop-up the channel; the items are listed under the day they were found, with the selected one in full beside the list and its buttons
- * pinned under it, as in the Inbox. An item that needs a decision is the same object in the Inbox. "Check now" and the older discussions
- * of a channel stay in the header; the screen's one filled button is the selected item's main action.
+ * pinned under it, as in the Inbox. An item that needs a decision is the same object in the Inbox. A notice (Noted) is not an item to
+ * decide: it has nothing to approve or send, and selecting it marks it seen. "Check now" and the older discussions of a channel stay in
+ * the header; the screen's one filled button is the selected item's main action.
  */
 function FeedScreen({ product }: { product: Product }) {
   const channelsQuery = useQuery('channels.list', { productId: product.id }, ['channels', 'products'])
   const channels = channelsQuery.data ?? NO_CHANNELS
   const feed = useFeedCards(product.id)
   const rows = useMemo(() => buildFeedRows(feed.cards), [feed.cards])
-  const rowsById = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows])
 
   const [source, setSource] = useState<FeedSourceFilter>('all')
-  const [state, setState] = useState<FeedState>('decide')
+  const [tab, setTab] = useState<FeedTab>('decide')
   const [chosenChannel, setChosenChannel] = useState<Id | ''>('')
   const [olderFor, setOlderFor] = useState<Id | null>(null)
-  const [lastRun, setLastRun] = useState<string | null>(null)
+  // The posts the AI judged not relevant, listed read-only in place of the Feed's lists (asked for only now).
+  const [auditing, setAuditing] = useState(false)
+  const watching = useWatchingContext()
 
   // A channel that left the product is no filter any more.
   const channelId: Id | null = chosenChannel !== '' && channels.some((c) => c.id === chosenChannel) ? chosenChannel : null
-  const visible = useMemo(() => visibleRows(rows, { source, state, channelId }), [rows, source, state, channelId])
-  const sources = useMemo(() => sourceCounts(rows, { state, channelId }), [rows, state, channelId])
+  const findings = useFindings(product.id, { skipped: auditing, channelId })
+  // Noted lists findings, not opportunities: the three lists of opportunities (and the source chips, which are theirs) do not apply to it.
+  const list = opportunityListOf(tab)
+  const visible = useMemo(() => (list === null ? NO_ROWS : visibleRows(rows, { source, state: list, channelId })), [rows, source, list, channelId])
+  const sources = useMemo(() => sourceCounts(rows, { state: list ?? 'decide', channelId }), [rows, list, channelId])
   const states = useMemo(() => stateCounts(rows, { source, channelId }), [rows, source, channelId])
+  const notices = useMemo(() => visibleFindings(findings.notices, channelId), [findings.notices, channelId])
+  const noted = notedCount(findings.counts, findings.notices, channelId)
+  const unseen = unseenNoticeCount(findings.counts, findings.notices, channelId)
+
+  // What the list shows: the posts judged not relevant while the owner checks them, else the Noted notices, else the opportunities of the list.
+  const listed: readonly ListedRow[] = auditing ? findings.skipped : list === null ? notices : visible
+  const listedById = useMemo(() => new Map<string, ListedRow>(listed.map((row) => [row.id, row])), [listed])
 
   const offset = localOffsetMinutes()
   const today = localDay(new Date(), offset)
-  const days = useMemo(() => groupByDay(visible, today, offset), [visible, today, offset])
+  const days = useMemo(() => groupByDay(listed, today, offset), [listed, today, offset])
 
-  // The row shown: the chosen one while it is listed; when it leaves the list (sent, rejected) the one that took its place.
-  const order = useMemo(() => visible.map((row) => row.id), [visible])
+  // The row shown: the chosen one while it is listed; when it leaves the list (sent, rejected) the one that took its place. A finding and an
+  // opportunity are told apart by the row, not by the selection: the same hook and keys walk either list.
+  const order = useMemo(() => listed.map((row) => row.id), [listed])
   const [selectedId, setChosen] = useListSelection(order, selectionAfterDismiss)
-  const selected = selectedId !== null ? rowsById.get(selectedId) : undefined
+  const selected = selectedId !== null ? listedById.get(selectedId) : undefined
+  // A notice that is shown is a notice the owner has seen: asked of the core once.
+  useMarkSeenOnShow(selected !== undefined && isFindingRow(selected) ? selected : undefined, findings.markSeen)
 
   // The one filled button belongs to the selected item while it offers a main action.
   const main = useMainActionOwner(selectedId ? [selectedId] : [])
@@ -94,8 +117,8 @@ function FeedScreen({ product }: { product: Product }) {
   const viewingOlder = olderChannel !== undefined
 
   // The arrow keys walk the list; a focused field, button or link of the item keeps its own keys.
-  const latest = useRef({ visible, selectedId })
-  latest.current = { visible, selectedId }
+  const latest = useRef({ listed, selectedId })
+  latest.current = { listed, selectedId }
   const listing = !viewingOlder
   useEffect(() => {
     if (!listing) return
@@ -103,7 +126,7 @@ function FeedScreen({ product }: { product: Product }) {
       if (!SELECTION_KEYS.includes(event.key) || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || isEditable(event.target)) return
       const target = event.target as HTMLElement
       if (target !== document.body && !target.closest('.feed-list')) return
-      const next = selectionAfterKey(latest.current.visible.map((row) => row.id), latest.current.selectedId, event.key as SelectionKey)
+      const next = selectionAfterKey(latest.current.listed.map((row) => row.id), latest.current.selectedId, event.key as SelectionKey)
       if (next === null) return
       event.preventDefault()
       setChosen(next)
@@ -112,22 +135,42 @@ function FeedScreen({ product }: { product: Product }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [listing])
 
+  // The result of a check is the line under the header: it says when the channel was last looked at and when it is next.
   const [checkNow, checking] = useAction(async (id: Id) => call('channels.checkNow', { channelId: id }))
-  const check = (id: Id): void => {
-    void checkNow(id).then((run) => {
-      if (run) setLastRun(`${run.status}: ${run.summary}`)
-    })
-  }
+  const check = (id: Id): void => void checkNow(id)
   const showAll = (): void => {
+    setChosenChannel('')
+    if (list === null) return
     const widest = widestFilter(rows)
     setSource(widest.source)
-    setState(widest.state)
-    setChosenChannel('')
+    setTab(widest.state)
+  }
+  const backToFeed = (): void => {
+    setOlderFor(null)
+    setAuditing(false)
   }
 
-  const loading = (channelsQuery.loading && channelsQuery.data === undefined) || feed.loading
-  const empty = loading || channelsQuery.data === undefined ? null : emptyKind(channels, rows, visible)
-  const error = channelsQuery.error ?? feed.error
+  const waiting = auditing ? findings.loadingSkipped : list === null ? findings.loading : feed.loading
+  const loading = (channelsQuery.loading && channelsQuery.data === undefined) || waiting
+  const ready = !loading && channelsQuery.data !== undefined
+  const empty = !ready || auditing ? null : list === null ? notedEmptyKind(channels, findings.notices, notices) : emptyKind(channels, rows, visible)
+  const error = channelsQuery.error ?? feed.error ?? findings.error
+  const summary = watching !== null && channelsQuery.data !== undefined ? productWatching(channels, watching) : null
+  const judged = judgedLine(findings.counts)
+  const tabLabel = (id: FeedTab, label: string): ReactNode => {
+    if (id !== 'noted') return `${label} ${states[id]}`
+    return (
+      <>
+        {label} {noted}
+        {unseen > 0 && (
+          <span className="count neutral" title={`${unseen} not seen yet`} data-testid="feed-noted-unseen">
+            <span aria-hidden="true">{unseen}</span>
+            <span className="sr-only">{`${unseen} not seen yet`}</span>
+          </span>
+        )}
+      </>
+    )
+  }
 
   return (
     <Page
@@ -135,8 +178,8 @@ function FeedScreen({ product }: { product: Product }) {
       subtitle={`${product.name} · What happens in your channels, and what the AI proposes`}
       fill
       actions={
-        viewingOlder ? (
-          <Button onClick={() => setOlderFor(null)} data-testid="feed-back">
+        viewingOlder || auditing ? (
+          <Button onClick={backToFeed} data-testid="feed-back">
             Back to the Feed
           </Button>
         ) : (
@@ -157,47 +200,79 @@ function FeedScreen({ product }: { product: Product }) {
 
       {!viewingOlder && (
         <>
-          {lastRun && (
-            <Hint data-testid="check-result">
-              Last check: {lastRun}
+          {/* How the channels are watched: how often, when last, when next, or why not (DEC-040). It stays under the header whatever list is open. */}
+          {summary && (
+            <Hint data-testid="feed-watching" data-watching={summary.watching}>
+              {summary.text}
             </Hint>
           )}
 
-          {channelsQuery.data !== undefined && channels.length > 0 && (
-            <div className="feed-controls" data-testid="feed-controls">
-              <SegmentedControl<FeedSourceFilter>
-                label="Source"
-                name="feed-source"
-                testIdPrefix="feed-source-"
-                value={source}
-                onChange={setSource}
-                options={FEED_SOURCES.map((s) => ({ value: s.id, label: `${s.label} ${sources[s.id]}` }))}
-              />
-              <SegmentedControl<FeedState>
-                label="State"
-                name="feed-state"
-                testIdPrefix="feed-state-"
-                value={state}
-                onChange={setState}
-                options={FEED_STATES.map((s) => ({ value: s.id, label: `${s.label} ${states[s.id]}` }))}
-              />
-              <select className="input feed-channel" aria-label="Channel" value={channelId ?? ''} onChange={(e) => setChosenChannel(e.target.value)} data-testid="channel-filter">
-                <option value="">All channels</option>
-                {channels.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.target}
-                    {c.reads ? '' : ' (not read)'}
-                  </option>
-                ))}
-              </select>
-              {/* The chosen channel's page in the browser of its account, to look around signed in as it (DEC-028). It sits in this row, which wraps: a sentence of it takes a line. */}
-              {channelId !== null && <OpenChannelBrowser channelId={channelId} testId="opportunities-browse" />}
-            </div>
+          {auditing && (
+            <Hint data-testid="feed-judged-note">Posts the AI judged not relevant to your goals, with its reason, so you can check its judgement. Nothing here is sent.</Hint>
           )}
 
-          {channelsQuery.data !== undefined && <ReadingNotes channels={channels} source={source} channelId={channelId} />}
+          {!auditing && channelsQuery.data !== undefined && channels.length > 0 && (
+            <>
+              <div className="feed-lists" data-testid="feed-lists">
+                <SegmentedControl<FeedTab>
+                  label="State"
+                  name="feed-state"
+                  testIdPrefix="feed-state-"
+                  value={tab}
+                  onChange={setTab}
+                  options={FEED_TABS.map((t) => ({ value: t.id, label: tabLabel(t.id, t.label) }))}
+                />
+                {judged && (
+                  <span className="feed-judged" data-testid="feed-judged">
+                    <span data-testid="feed-judged-count">{judged.text}</span>
+                    {judged.waiting !== null && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <span title="The AI judges posts when its engine is ready (Settings); a post waits until then" data-testid="feed-judged-waiting">
+                          {judged.waiting}
+                        </span>
+                      </>
+                    )}
+                    {judged.canShow && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <Button variant="quiet" className="accent" onClick={() => setAuditing(true)} aria-label="Show the posts judged not relevant" data-testid="feed-judged-show">
+                          Show
+                        </Button>
+                      </>
+                    )}
+                  </span>
+                )}
+              </div>
+              <div className="feed-controls" data-testid="feed-controls">
+                {list !== null && (
+                  <SegmentedControl<FeedSourceFilter>
+                    label="Source"
+                    name="feed-source"
+                    testIdPrefix="feed-source-"
+                    value={source}
+                    onChange={setSource}
+                    options={FEED_SOURCES.map((s) => ({ value: s.id, label: `${s.label} ${sources[s.id]}` }))}
+                  />
+                )}
+                <select className="input feed-channel" aria-label="Channel" value={channelId ?? ''} onChange={(e) => setChosenChannel(e.target.value)} data-testid="channel-filter">
+                  <option value="">All channels</option>
+                  {channels.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.target}
+                      {c.reads ? '' : ' (not read)'}
+                    </option>
+                  ))}
+                </select>
+                {/* The chosen channel's page in the browser of its account, to look around signed in as it (DEC-028). It sits in this row, which wraps: a sentence of it takes a line. */}
+                {channelId !== null && <OpenChannelBrowser channelId={channelId} testId="opportunities-browse" />}
+              </div>
+            </>
+          )}
 
-          {feed.capped && <Hint data-testid="feed-capped">Only the newest 300 items of each list are shown.</Hint>}
+          {!auditing && channelsQuery.data !== undefined && <ReadingNotes channels={channels} source={list === null ? 'new_post' : source} channelId={channelId} watching={watching} />}
+
+          {(feed.capped || findings.capped) && <Hint data-testid="feed-capped">Only the newest 300 items of each list are shown.</Hint>}
 
           {loading && <Loading what="Loading" />}
 
@@ -233,7 +308,13 @@ function FeedScreen({ product }: { product: Product }) {
 
           {empty === 'nothing_found' && (
             <EmptyState fill art="inbox" title="Nothing found yet">
-              New posts that match your topics, new comments, replies to you and mentions show up here. A new channel starts with a first look that only records what already exists, so only what happens after it is listed. Press Check now to look again.
+              New posts the AI finds worth a reply, new comments, replies to you and mentions show up here. A new channel starts with a first look at the posts of the last days (Settings, First look); after that only what is new is read. Press Check now to look again.
+            </EmptyState>
+          )}
+
+          {empty === 'nothing_noted' && (
+            <EmptyState fill art="inbox" title="Nothing noted yet">
+              The AI looks at every post of your channels when it checks them. A post that is worth knowing about, but not worth a reply, is listed here. A post worth a reply is in To decide. Press Check now to look again.
             </EmptyState>
           )}
 
@@ -248,15 +329,26 @@ function FeedScreen({ product }: { product: Product }) {
                 </Button>
               }
             >
-              Nothing fits the source, the channel and the list you chose.
+              {list === null ? 'Nothing was noted in the channel you chose.' : 'Nothing fits the source, the channel and the list you chose.'}
             </EmptyState>
           )}
 
-          {empty === null && !loading && visible.length > 0 && (
+          {auditing && ready && listed.length === 0 && (
+            <EmptyState fill art="inbox" title="Nothing judged not relevant">
+              Posts the AI judges not relevant to your goals are counted and listed here. There are none now.
+            </EmptyState>
+          )}
+
+          {empty === null && ready && listed.length > 0 && (
             <div className="feed-split">
-              <FeedList days={days} rows={rowsById} selectedId={selectedId} onSelect={setChosen} />
+              <FeedList days={days} rows={listedById} selectedId={selectedId} onSelect={setChosen} label={auditing ? 'Posts judged not relevant' : list === null ? 'Noted posts' : undefined} />
               <div className="inbox-detail-pane">
-                {selected && <FeedDetail key={selected.id} card={selected.card} primaryAction={main.isOwner(selected.id)} onMainAction={main.offer} />}
+                {selected &&
+                  (isFindingRow(selected) ? (
+                    <FindingDetail key={selected.id} row={selected} />
+                  ) : (
+                    <FeedDetail key={selected.id} card={selected.card} primaryAction={main.isOwner(selected.id)} onMainAction={main.offer} />
+                  ))}
               </div>
             </div>
           )}
