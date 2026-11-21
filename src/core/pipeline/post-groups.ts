@@ -76,6 +76,7 @@ const sameMaster = (draft: Draft, master: PostMaster): boolean =>
   draft.text === master.text &&
   draft.link === master.link &&
   draft.markup === master.markup &&
+  draft.postType === (master.postType ?? 'article') &&
   JSON.stringify(draft.attachments.map((a) => a.sha256)) === JSON.stringify(master.attachments.map((a) => a.sha256))
 
 /** The owner changed this version by hand: the latest draft is theirs and is not the master any more. */
@@ -117,6 +118,11 @@ export class PostGroupsFlow {
     const content = await normalizeDraftInput(input, { productId, media: this.core.services.media! })
     if (!content.text && !content.link && content.attachments.length === 0) throw new ApiError('invalid_input', 'A post needs text, a link or a picture.')
     const master: PostMaster = { title: content.title, text: content.text, link: content.link, attachments: content.attachments, markup: content.markup ?? 'legacy' }
+    // A quick post's group carries its type and card, so every version is a quick post with the same picture (DEC-046).
+    if (content.postType === 'quick') {
+      master.postType = 'quick'
+      master.card = content.card ?? null
+    }
     const id = this.core.db.transaction(() => {
       const group = this.insertGroup(productId, master, OWN_WORDS)
       for (const channel of channels) this.addVersion(group, channel)
@@ -139,6 +145,10 @@ export class PostGroupsFlow {
       if (opp.groupId) group = this.requireGroup(opp.groupId)
       else {
         const master: PostMaster = { title: draft.title, text: draft.text, link: draft.link, attachments: draft.attachments, markup: draft.markup }
+        if (draft.postType === 'quick') {
+          master.postType = 'quick'
+          master.card = draft.card
+        }
         const provenance: Provenance = { knowledgeVersionId: draft.knowledgeVersionId, usedClaimLineageIds: draft.usedClaimLineageIds, rationale: draft.rationale, author: draft.author }
         group = this.insertGroup(opp.productId, master, provenance)
         this.store.updateOpportunity(opp.id, { groupId: group.id })

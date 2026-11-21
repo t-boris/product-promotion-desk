@@ -3,6 +3,7 @@
 
 import { ApiError } from '../../shared/api'
 import { renderForPlatform } from '../../shared/post-format'
+import type { PostType, QuickCard } from '../../shared/quick-post'
 import type {
   Account,
   Approval,
@@ -79,6 +80,10 @@ export interface DraftContent {
   attachments: Attachment[]
   /** Left out, the draft is `legacy`: the text is sent as it is written. */
   markup?: PostMarkup
+  /** Left out, the draft is an `article` (DEC-046). */
+  postType?: PostType
+  /** The template card of a quick post; left out or null: the picture is not a card. */
+  card?: QuickCard | null
 }
 
 export interface DraftMeta {
@@ -490,8 +495,8 @@ export class FlowStore {
     const id = newId()
     this.db
       .prepare(
-        `INSERT INTO drafts (id, opportunity_id, title, text, link, attachments_json, markup, knowledge_version_id, used_claims_json, rationale, author, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO drafts (id, opportunity_id, title, text, link, attachments_json, markup, post_type, card_json, knowledge_version_id, used_claims_json, rationale, author, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         id,
@@ -501,6 +506,8 @@ export class FlowStore {
         content.link,
         toJson(content.attachments),
         content.markup ?? 'legacy',
+        content.postType === 'quick' ? 'quick' : 'article',
+        content.postType === 'quick' && content.card ? toJson(content.card) : null,
         meta.knowledgeVersionId,
         toJson(meta.usedClaimLineageIds),
         meta.rationale,

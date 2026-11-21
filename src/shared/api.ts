@@ -81,6 +81,7 @@ import type {
   AnalysisStage,
   OverviewView
 } from './types'
+import type { PostType, QuickCard } from './quick-post'
 
 export interface SourcePreview {
   /** Paths/URLs the AI will be allowed to read. */
@@ -105,6 +106,13 @@ export interface DraftInput {
   attachments?: Attachment[]
   /** `markdown` for a post written in the post editor; left out, the draft is `legacy` (the text is sent as it is written). */
   markup?: PostMarkup
+  /**
+   * `quick` for a post written in the quick-post composer (one picture, a caption in `text`, no title; DEC-046), `article` for the long form. Left out on
+   * a draft that replaces an earlier one, it keeps that draft's type (editing never changes the type); on a first draft it is `article`.
+   */
+  postType?: PostType
+  /** The template card parameters of a quick post whose picture is a card; null when it is not. Left out on a replacing draft, the earlier draft's card stays. */
+  card?: QuickCard | null
 }
 
 /** method → [arguments, result]. Every handler is implemented in src/core/api/*. */

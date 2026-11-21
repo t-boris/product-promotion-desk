@@ -687,9 +687,12 @@ describe('what a version says about how it goes out', () => {
 
   it('knows a hand edit: only a draft of the owner that is not the master', () => {
     const master = { title: 'T', text: 'A', link: null, attachments: [], markup: 'markdown' as const }
-    const draft = { ...master, author: 'user' } as unknown as Draft
+    const draft = { ...master, postType: 'article', author: 'user' } as unknown as Draft
     expect(editedByHand(draft, master)).toBe(false)
     expect(editedByHand({ ...draft, text: 'B' } as Draft, master)).toBe(true)
+    // The type is part of what the master is (DEC-046): a version turned into a quick post by hand is an edit, and a master of a group made before the type existed is an article.
+    expect(editedByHand({ ...draft, postType: 'quick' } as Draft, master)).toBe(true)
+    expect(editedByHand({ ...draft, postType: 'quick' } as Draft, { ...master, postType: 'quick' })).toBe(false)
     expect(editedByHand({ ...draft, text: 'B', author: 'ai' } as Draft, master)).toBe(false)
     expect(editedByHand(null, master)).toBe(false)
   })

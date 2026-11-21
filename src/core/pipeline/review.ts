@@ -10,7 +10,7 @@ import { noConnectorProblem, renderForPlatform, sendProblems } from '../../share
 import type { PipelineHooks } from '../services'
 import type { Core } from '../core'
 import { attachmentProblem } from './attachments'
-import { normalizeDraftInput } from './draft-input'
+import { inheritPostType, normalizeDraftInput } from './draft-input'
 import { contentHash, hashedIdentity } from './hash'
 import { sendWays } from './send-ways'
 import { OTHER_LOGIN_SPEAKS_REASON, SEND_LOCKED_STATES, SPEAKING_STATES, type FlowStore } from './store'
@@ -70,7 +70,7 @@ export class ReviewFlow implements PipelineHooks {
       if (options.expectDraftId !== undefined && previous?.id !== options.expectDraftId) throw new ApiError('conflict', 'The draft changed while this text was being written.')
       // A draft that is already in review keeps its place; one that is not must not start a second voice.
       if (!SPEAKING_STATES.includes(current.state) && this.store.otherLoginSpeakingFor(current)) throw new ApiError('invalid_state', OTHER_LOGIN_SPEAKS_REASON)
-      this.store.insertDraft(id, content, {
+      this.store.insertDraft(id, inheritPostType(content, previous), {
         knowledgeVersionId: previous?.knowledgeVersionId ?? null,
         usedClaimLineageIds: previous?.usedClaimLineageIds ?? [],
         rationale: previous?.rationale ?? '',

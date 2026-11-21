@@ -79,7 +79,7 @@ export class MediaService {
     const productId = this.product(args.productId)
     if (typeof args.base64 !== 'string' || args.base64 === '') throw new ApiError('invalid_attachment', 'The picture is empty.')
     if (args.base64.length > Math.ceil((ATTACHMENT_MAX_BYTES * 4) / 3) + 8) throw new ApiError('invalid_attachment', `The picture is larger than ${Math.round(ATTACHMENT_MAX_BYTES / 1024 / 1024)} MB.`)
-    if (args.origin !== 'pasted' && args.origin !== 'dropped' && args.origin !== 'picked') throw new ApiError('invalid_input', 'Say where the picture came from.')
+    if (args.origin !== 'pasted' && args.origin !== 'dropped' && args.origin !== 'picked' && args.origin !== 'card') throw new ApiError('invalid_input', 'Say where the picture came from.')
     const bytes = Buffer.from(args.base64, 'base64')
     const mime = sniffMime(bytes.subarray(0, 16))
     if (!mime) throw new ApiError('invalid_attachment', 'This is not a PNG, JPEG, GIF or WebP picture.')

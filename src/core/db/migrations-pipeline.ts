@@ -184,5 +184,17 @@ CREATE INDEX idx_findings_judged ON findings(updated_at) WHERE label IS NOT NULL
 -- json_valid first: json_extract throws on a text that is not JSON, and one such row would stop the whole migration (and with it the application).
 UPDATE channels SET settings_json = json_set(settings_json, '$.checkIntervalMin', 180) WHERE json_valid(settings_json) AND json_extract(settings_json, '$.checkIntervalMin') = 30;
 `
+  },
+  {
+    id: 309,
+    name: 'pipeline: the post type and the template card of a quick post (DEC-046)',
+    sql: `
+-- 'article': the long form (title, Markdown text); every draft that exists now. 'quick': one picture plus a caption in the text, with no title (DEC-046).
+-- Screens choose their layout by this column, never by guessing from an empty title.
+ALTER TABLE drafts ADD COLUMN post_type TEXT NOT NULL DEFAULT 'article';
+-- The template card parameters of a quick post (style, colour, shape, headline, whether the owner edited the headline), so a saved card can be changed
+-- and drawn again (REQ-003). Null when the picture is not a card, and for every article.
+ALTER TABLE drafts ADD COLUMN card_json TEXT;
+`
   }
 ]

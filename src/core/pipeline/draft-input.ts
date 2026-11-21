@@ -8,6 +8,7 @@
 import { ApiError } from '../../shared/api'
 import type { DraftInput } from '../../shared/api'
 import { pictureIdsIn } from '../../shared/post-format'
+import { parseQuickCard, type PostType, type QuickCard } from '../../shared/quick-post'
 import type { Attachment, Id } from '../../shared/types'
 import type { MediaService } from '../media/service'
 import { ATTACHMENT_MAX_COUNT, validateAttachments } from './attachments'
@@ -47,7 +48,19 @@ export async function normalizeDraftInput(input: DraftInput, ctx: DraftInputCont
   const text = (input.text ?? '').trim()
   const title = (input.title ?? '').trim() || null
   const link = (input.link ?? '').trim() || null
-  const markup = input.markup === 'markdown' ? 'markdown' : 'legacy'
+  if (input.postType !== undefined && input.postType !== 'article' && input.postType !== 'quick') throw new ApiError('invalid_input', 'The post type must be "article" or "quick".')
+  const postType: PostType | undefined = input.postType
+  // A quick post is a caption and one picture, with no title and no marks of its own: the caption is sent as it is written (DEC-046).
+  const markup = postType === 'quick' ? 'legacy' : input.markup === 'markdown' ? 'markdown' : 'legacy'
+  if (postType === 'quick' && title) throw new ApiError('invalid_input', 'A quick post has no title: the caption is the text.')
+  if (input.card !== undefined && input.card !== null && postType !== 'quick') throw new ApiError('invalid_input', 'Card parameters belong to a quick post.')
+  let card: QuickCard | null | undefined
+  if (input.card === undefined) card = undefined
+  else if (input.card === null) card = null
+  else {
+    card = parseQuickCard(input.card)
+    if (!card) throw new ApiError('invalid_input', 'The card parameters are not valid (style, colour, shape and a headline of at most 140 characters).')
+  }
   if (text.length > MAX_TEXT_LENGTH) throw new ApiError('invalid_input', `The text is longer than ${MAX_TEXT_LENGTH} characters.`)
   if (title && title.length > MAX_TITLE_LENGTH) throw new ApiError('invalid_input', `The title is longer than ${MAX_TITLE_LENGTH} characters.`)
   if (link && !isHttpUrl(link)) throw new ApiError('invalid_input', 'The link must be a full http(s) address.')
@@ -72,5 +85,33 @@ export async function normalizeDraftInput(input: DraftInput, ctx: DraftInputCont
       if (!attachments.some((a) => a.mediaId === id)) throw new ApiError('invalid_input', 'A picture in the text is not one of the draft\'s pictures. Add it again from the library, or take it out of the text.')
     }
   }
-  return { title, text, link, attachments: markup === 'markdown' ? orderAttachments(text, attachments) : attachments, markup }
+  const content: DraftContent = { title, text, link, attachments: markup === 'markdown' ? orderAttachments(text, attachments) : attachments, markup }
+  if (postType !== undefined) content.postType = postType
+  if (card !== undefined) content.card = card
+  if (postType === 'quick') assertQuickPost(content)
+  return content
+}
+
+/**
+ * What makes a draft a quick post (DEC-046): exactly one picture, no title, and no marks of its own. Stated once, so the first save, an edit that
+ * keeps the type and a group's versions all hold to it.
+ */
+export function assertQuickPost(content: DraftContent): void {
+  if (content.title) throw new ApiError('invalid_input', 'A quick post has no title: the caption is the text.')
+  if (content.attachments.length !== 1) throw new ApiError('invalid_input', 'A quick post is one picture and a caption: it needs exactly one picture.')
+}
+
+/**
+ * A draft that replaces another keeps its post type and card unless the caller says otherwise (editing never changes the type, DEC-046). The type
+ * stored is always explicit; this only chooses it when the input did not.
+ */
+export function inheritPostType(content: DraftContent, previous: { postType: PostType; card: QuickCard | null } | null): DraftContent {
+  const postType = content.postType ?? previous?.postType ?? 'article'
+  const next: DraftContent = { ...content, postType }
+  if (postType === 'quick') {
+    next.markup = 'legacy'
+    if (content.card === undefined) next.card = previous?.postType === 'quick' ? previous.card : null
+    assertQuickPost(next)
+  } else next.card = null
+  return next
 }

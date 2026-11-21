@@ -19,6 +19,7 @@ import type {
   Run,
   SendAction
 } from '../shared/types'
+import { parseQuickCard } from '../shared/quick-post'
 import { BROWSER_WATCH_PLATFORMS, DEFAULT_CHANNEL_SETTINGS } from '../shared/types'
 import { parseJson, type Db } from './db/database'
 
@@ -194,6 +195,8 @@ export const mapDraft = (r: Row): Draft => ({
   link: (r.link as string | null) ?? null,
   attachments: parseJson(r.attachments_json as string, []),
   markup: (r.markup as Draft['markup'] | undefined) ?? 'legacy',
+  postType: r.post_type === 'quick' ? 'quick' : 'article',
+  card: r.post_type === 'quick' && typeof r.card_json === 'string' ? parseQuickCard(parseJson<unknown>(r.card_json, null)) : null,
   knowledgeVersionId: (r.knowledge_version_id as string | null) ?? null,
   usedClaimLineageIds: parseJson(r.used_claims_json as string, []),
   rationale: r.rationale as string,

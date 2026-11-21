@@ -1,6 +1,8 @@
 // Domain types shared by the core, the main process and the UI.
 // Everything here is plain serializable data (it crosses IPC / HTTP boundaries).
 
+import type { PostType, QuickCard } from './quick-post'
+
 export type Id = string
 export type IsoTime = string
 
@@ -783,7 +785,8 @@ export interface Attachment {
 
 // ───────────────────────────── Pictures and the post editor (DEC-030) ─────────────────────────────
 
-export type MediaOrigin = 'picked' | 'pasted' | 'dropped' | 'generated'
+/** `card`: the template card of a quick post, drawn by the application (DEC-045). */
+export type MediaOrigin = 'picked' | 'pasted' | 'dropped' | 'generated' | 'card'
 
 /** The shape of a picture the AI makes: a square one, a wide one (landscape) or a tall one (portrait). */
 export type MediaShape = 'square' | 'wide' | 'tall'
@@ -822,6 +825,13 @@ export interface Draft {
   attachments: Attachment[]
   /** How the text is marked up (see `PostMarkup`); part of what an approval binds when it is `markdown`. */
   markup: PostMarkup
+  /**
+   * `article` (every draft before DEC-046) or `quick` (one picture plus a caption; the caption is in `text`, the title is empty). Screens choose their
+   * layout by this field, never by guessing from an empty title.
+   */
+  postType: PostType
+  /** The template card of a quick post (DEC-046): what is needed to draw it again. Null when the picture is an illustration or the owner's file, and for an article. */
+  card: QuickCard | null
   /** Passport version used to prepare the draft. */
   knowledgeVersionId: Id | null
   /** Lineage ids of the approved claims the draft relies on; a change to any of them forces re-review. */
@@ -1051,6 +1061,9 @@ export interface PostMaster {
   link: string | null
   attachments: Attachment[]
   markup: PostMarkup
+  /** Left out in a group made before DEC-046: `article`. */
+  postType?: PostType
+  card?: QuickCard | null
 }
 
 /** A wrapper around ordinary posts: each version is a standalone opportunity of one channel with its own drafts, approval, send and failure. */
