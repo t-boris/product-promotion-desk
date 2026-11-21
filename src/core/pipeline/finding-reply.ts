@@ -3,7 +3,7 @@
 // finally agree on is theirs. Nothing is stored and nothing is sent from here.
 //
 // It is the same help as "Write it / Improve it" of a draft (draft-help.ts): the same rules for the AI (approved facts only, nothing prohibited, no promise,
-// links only to the product's own site, the connection to the product said when it is named, the voice of the account), the same checks of the answer, the same
+// links only to the product's own site, the voice of the account), the same checks of the answer, the same
 // refusal when the product knowledge changed while the AI wrote. Only the discussion is made from what the AI saw in the browser instead of a stored thread.
 
 import { ApiError } from '../../shared/api'

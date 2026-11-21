@@ -49,11 +49,6 @@ export function heldFor(held: Held | null, input: DraftInput): Held | null {
   return held !== null && held.fingerprint === fingerprint(input) ? held : null
 }
 
-/** "Approve anyway" is offered unless a finding blocks: the approval itself refuses that one, so a button for it would only fail. */
-export function mayApproveAnyway(held: Pick<Held, 'findings'>): boolean {
-  return !held.findings.some((f) => f.blocks)
-}
-
 export function approveAnywayLabel(which: Approving): string {
   return which === 'approve_send' ? 'Approve and send anyway' : 'Approve anyway'
 }
@@ -66,6 +61,5 @@ export function countLabel(findings: DraftFinding[]): string {
 /** The sentence under the title: what the panel is, and that nothing is approved yet. */
 export function introLine(held: Pick<Held, 'findings' | 'error'>): string {
   if (held.error !== null) return `The text could not be checked (${held.error}). Nothing is approved yet; you can still approve it.`
-  if (!mayApproveAnyway(held)) return 'Something here has to be fixed before the text can be approved. Nothing is approved yet.'
   return "Your text breaks rules the AI's own drafts must follow. Nothing is approved yet."
 }

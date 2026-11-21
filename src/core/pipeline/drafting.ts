@@ -16,8 +16,6 @@ import type { DraftingService } from '../services'
 import { buildReplyContext, contextIsCurrent, loadKnowledge, type Knowledge, type ReplyContext } from './context'
 import { withRole } from './role'
 import { buildReplyPrompt, parseReplyProposal, REPLY_LABEL, REPLY_SYSTEM, type ReplyProposal } from './draft-prompt'
-import { DISCLOSURE_REASON, mentionsProduct } from './auto-guard'
-import { disclosureProblem } from './disclosure'
 import { SendBlockedError } from './gate'
 import { autoEligibility, TOOL_FREE_REQUIRED_REASON } from './modes'
 import { NEW_POST_NEVER_AUTO_REASON } from './reply-target'
@@ -268,28 +266,19 @@ export class DraftingFlow implements DraftingService {
             reply: proposal.reply,
             usedClaimIds: proposal.usedClaimIds,
             approved: knowledge.approved,
-            engineToolFree,
-            productName: ctx.product.name,
-            productWebsite: ctx.product.website,
-            disclosesConnection: proposal.disclosesConnection
+            engineToolFree
           })
         : null
     // Safe defaults: a draft in 'draft' mode stays a draft; everything else waits for approval.
     const mode = explicit ? (channel.mode === 'draft' || channel.mode === 'observe' ? 'draft' : 'approval') : channel.mode
     const target: OpportunityState = mode === 'draft' ? 'draft' : 'awaiting_approval'
-    const verbatim = [TOOL_FREE_REQUIRED_REASON, DISCLOSURE_REASON, NEW_POST_NEVER_AUTO_REASON]
-    // The owner is reminded of the missing disclosure whatever the mode: editing the text is theirs to do before approving.
-    const undisclosed =
-      (mentionsProduct(proposal.reply, ctx.product.name) && !proposal.disclosesConnection) ||
-      disclosureProblem({ text: proposal.reply }, { name: ctx.product.name, websiteUrl: ctx.product.website }) !== null
+    const verbatim = [TOOL_FREE_REQUIRED_REASON, NEW_POST_NEVER_AUTO_REASON]
     const reason =
       eligibility && !eligibility.eligible
         ? verbatim.includes(eligibility.why)
           ? eligibility.why
           : `Waiting for your approval, not sent automatically: ${eligibility.why}.`
-        : undisclosed
-          ? DISCLOSURE_REASON
-          : ''
+        : ''
 
     const saved = this.core.db.transaction(() => {
       // Another login may have started speaking here while the AI was working: nothing is saved for this one.

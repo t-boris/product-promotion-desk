@@ -132,15 +132,15 @@ describe('drafting the reply to a new post', () => {
     expect(world.core.repos.latestDraft(opp.id)).toBeNull()
   })
 
-  it('applies the disclosure rule as it does to any reply: naming the product without saying who writes is held back', async () => {
+  it('asks nothing about the connection when the reply names the product, as for any reply', async () => {
     world = makeWorld(ABOUT_CHARTS)
     const opp = await foundPost()
-    world.engine.on('draft.reply', reply({ reply: 'Natal Mystic builds a natal chart from your birth date, time and place.', usedClaimIds: ['c1'], disclosesConnection: false }))
+    world.engine.on('draft.reply', reply({ reply: 'Natal Mystic builds a natal chart from your birth date, time and place.', usedClaimIds: ['c1'] }))
 
     await world.drafting.processChannel(world.channel.id)
 
-    expect(world.opportunity(opp.id).reason).toMatch(/connect|disclos|work on/i)
-    await expect(world.core.router.call('opportunities.approve', { id: opp.id })).rejects.toThrow()
+    expect(world.opportunity(opp.id).reason).not.toMatch(/connect|disclos|work on/i)
+    expect((await world.core.router.call('opportunities.approve', { id: opp.id })).opportunity.state).toBe('ready')
   })
 
   it('shows the owner the post as the card\'s discussion, with no comment', async () => {
@@ -358,9 +358,7 @@ describe('automatic mode never answers a new post (DEC-039)', () => {
       reply: 'Glad you like it!',
       usedClaimIds: [],
       approved: [],
-      engineToolFree: true,
-      productName: 'Natal Mystic',
-      disclosesConnection: false
+      engineToolFree: true
     }
     expect(autoEligibility({ ...base, source: 'comment' })).toMatchObject({ eligible: true })
     expect(autoEligibility({ ...base, source: 'new_post' })).toEqual({ eligible: false, why: NEW_POST_NEVER_AUTO_REASON })

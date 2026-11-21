@@ -7,7 +7,7 @@ import { DraftEditor } from './DraftEditor'
 import { ReviewButtons } from './ReviewButtons'
 import { ScheduleControl } from './ScheduleControl'
 import { ThreadView } from './ThreadView'
-import { CATEGORY_LABEL, DECISION_LABEL, DISCLOSURE_HINT, KIND_LABEL, STATE_LABEL, STATE_TONE, isUndisclosed } from './labels'
+import { CATEGORY_LABEL, DECISION_LABEL, KIND_LABEL, STATE_LABEL, STATE_TONE } from './labels'
 import { QuickComposer } from './quick/QuickComposer'
 import { QUICK_SLOTS } from './quick/quick-slots'
 import { removalWords } from './removal-words'
@@ -46,7 +46,7 @@ export function ReviewBody({ item, notes }: { item: ReviewItem; /** What the own
   const { standalone, locked, working, actions } = item
   return (
     <>
-      {(opp.reason || item.hint || isUndisclosed(opp.reason)) && (
+      {(opp.reason || item.hint) && (
         <div className="review-state">
           {opp.reason && (
             <div data-testid="state-reason">
@@ -56,11 +56,6 @@ export function ReviewBody({ item, notes }: { item: ReviewItem; /** What the own
           {item.hint && (
             <div className="muted small" data-testid={item.conflict ? 'login-conflict-hint' : 'state-hint'}>
               {item.hint}
-            </div>
-          )}
-          {isUndisclosed(opp.reason) && (
-            <div className="muted small" data-testid="disclosure-hint">
-              {DISCLOSURE_HINT}
             </div>
           )}
         </div>

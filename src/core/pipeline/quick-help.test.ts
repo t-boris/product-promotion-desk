@@ -18,7 +18,7 @@ afterEach(async () => {
 })
 
 const BORING = 'Your birth date, time and place are all it takes to read your chart. ✨ #astrology'
-const json = (o: Record<string, unknown>): string => JSON.stringify({ usedClaimIds: ['c1'], statesProductFacts: true, disclosesConnection: false, ...o })
+const json = (o: Record<string, unknown>): string => JSON.stringify({ usedClaimIds: ['c1'], statesProductFacts: true, ...o })
 
 /** A world with an Instagram channel the app does not read, the way the quick-post composer meets it. */
 function setup(over: { claims?: ReturnType<typeof makeClaim>[]; settings?: Partial<Channel['settings']>; platform?: string } = {}): Channel {
@@ -234,7 +234,7 @@ describe('quick.caption', () => {
     it('never repeats what the product knowledge prohibits', async () => {
       const channel = setup()
       world.knowledge.prohibited = [makeClaim('p1', 'Natal Mystic predicts your future with certainty', { status: 'rejected' })]
-      expect(await blocked(channel, { caption: 'Natal Mystic predicts your future with certainty. I work on it.', disclosesConnection: true })).toContain('prohibited statement')
+      expect(await blocked(channel, { caption: 'Natal Mystic predicts your future with certainty.' })).toContain('prohibited statement')
     })
 
     it('links only to the product\'s own address, and adds none where the platform does not show it', async () => {
@@ -247,16 +247,15 @@ describe('quick.caption', () => {
 
     it('keeps a link the owner wrote, even where the platform does not show it: it is the owner\'s', async () => {
       const channel = setup()
-      // a text that points to the product's website says who is speaking, as a text that names the product does
-      world.engine.on('quick.caption', json({ caption: `${BORING} natalmystic.com. I work on it.`, disclosesConnection: true }))
+      world.engine.on('quick.caption', json({ caption: `${BORING} natalmystic.com.` }))
       expect((await call<{ caption: string }>('quick.caption', captionArgs(channel, { caption: 'Read it at natalmystic.com' }))).caption).toContain('natalmystic.com')
     })
 
-    it('says who is speaking when it names the product, in the author\'s own words, and refuses a text that does not', async () => {
+    it('hands over a caption that names the product as it is: nothing is asked about the author\'s connection', async () => {
       const channel = setup()
-      expect(await blocked(channel, { caption: 'Natal Mystic reads your chart in a minute.' })).toContain('names the product without saying that the author is connected with it')
-      world.engine.on('quick.caption', json({ caption: 'Natal Mystic reads your chart in a minute. I work on it.', disclosesConnection: true }))
-      expect(await call('quick.caption', captionArgs(channel))).toEqual({ caption: 'Natal Mystic reads your chart in a minute. I work on it.' })
+      world.engine.on('quick.caption', json({ caption: 'Natal Mystic reads your chart in a minute.' }))
+      expect(await call('quick.caption', captionArgs(channel))).toEqual({ caption: 'Natal Mystic reads your chart in a minute.' })
+      expect(world.engine.calls).toHaveLength(1)
     })
 
     it('holds no credential, and is a caption at all', async () => {
@@ -357,7 +356,7 @@ describe('quick.picture', () => {
     expect(await failing({ description: 'x'.repeat(601) }, { kind: 'illustration' })).toContain('the description is 601 characters; at most 600')
   })
 
-  it('does not need the author\'s connection on a card: the caption carries who is speaking', async () => {
+  it('hands over the headline of a card that names the product as it is', async () => {
     const channel = setup()
     world.engine.on('quick.picture', json({ headline: 'Natal Mystic reads your chart', style: 'bold', colour: 'indigo', why: 'Names it.' }))
     expect(await call('quick.picture', pictureArgs(channel))).toMatchObject({ headline: 'Natal Mystic reads your chart' })
@@ -468,7 +467,7 @@ describe('quick.assess: the marketer', () => {
       'quick.assess',
       verdict({
         suggestions: [
-          { kind: 'caption', caption: 'Read your chart in a minute. Try it free today. #astrology', why: 'Says what to do.', usedClaimIds: ['g1', 'c1'], statesProductFacts: true, disclosesConnection: false },
+          { kind: 'caption', caption: 'Read your chart in a minute. Try it free today. #astrology', why: 'Says what to do.', usedClaimIds: ['g1', 'c1'], statesProductFacts: true },
           { kind: 'headline', headline: 'Read your chart tonight', why: 'Shorter.', usedClaimIds: ['c1'], statesProductFacts: true }
         ]
       })
@@ -493,11 +492,10 @@ describe('quick.assess: the marketer', () => {
       }
       throw new Error('handed over')
     }
-    const caption = { kind: 'caption', why: 'x', usedClaimIds: ['c1'], statesProductFacts: true, disclosesConnection: false }
+    const caption = { kind: 'caption', why: 'x', usedClaimIds: ['c1'], statesProductFacts: true }
     expect(await failing({ ...caption, caption: 'Only $5 a month' })).toContain('a price')
     expect(await failing({ ...caption, caption: 'x'.repeat(2201) })).toContain('Instagram takes at most 2200')
     expect(await failing({ ...caption, caption: '**Bold**' })).toContain('Markdown or HTML marks')
-    expect(await failing({ ...caption, caption: 'Natal Mystic is here.' })).toContain('without saying that the author is connected')
     expect(await failing({ kind: 'headline', headline: 'Free for everyone', why: 'x', usedClaimIds: ['c1'], statesProductFacts: true })).toContain('free')
     expect(await failing({ kind: 'headline', headline: 'natalmystic.com', why: 'x', usedClaimIds: ['c1'], statesProductFacts: true })).toContain('a card shows no link')
     // a headline can only be suggested for a card

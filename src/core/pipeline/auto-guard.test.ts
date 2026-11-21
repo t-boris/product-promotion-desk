@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_CHANNEL_SETTINGS, type Channel, type ChannelMode } from '../../shared/types'
-import { asksQuestion, autoReplyProblem, DISCLOSURE_REASON, hasLinkLike, hasNumberOrCurrency } from './auto-guard'
+import { asksQuestion, autoReplyProblem, hasLinkLike, hasNumberOrCurrency } from './auto-guard'
 import type { ClaimView } from './context'
 import { autoEligibility, TOOL_FREE_REQUIRED_REASON } from './modes'
 import { verifiedCapabilities } from './test-fixture'
@@ -28,8 +28,6 @@ function eligible(over: Partial<Parameters<typeof autoEligibility>[0]> = {}) {
     usedClaimIds: ['c2'],
     approved: APPROVED,
     engineToolFree: true,
-    productName: 'Natal Mystic',
-    disclosesConnection: false,
     ...over
   })
 }
@@ -156,14 +154,9 @@ describe('automatic eligibility: the label of the AI is not enough (REQ-003 crit
     expect(eligible({ channel: channel('approval') }).eligible).toBe(false)
   })
 
-  it('needs the model\'s flag AND a text that says the connection: the flag alone does not pass, and neither does the text alone', () => {
+  it('does not ask for a statement of the connection: a reply that names the product is judged like any other', () => {
     const named = { category: 'thanks' as const, usedClaimIds: [], commentBody: 'Thanks, great app!' }
-    // The model vouches, but the text does not say it.
-    expect(eligible({ ...named, reply: 'Glad you like Natal Mystic, enjoy!', disclosesConnection: true })).toEqual({ eligible: false, why: DISCLOSURE_REASON })
-    // The text says it, but the model did not vouch.
-    expect(eligible({ ...named, reply: 'Glad you like Natal Mystic, I work on it!', disclosesConnection: false })).toEqual({ eligible: false, why: DISCLOSURE_REASON })
-    // Both agree.
-    expect(eligible({ ...named, reply: 'Glad you like Natal Mystic, I work on it!', disclosesConnection: true }).eligible).toBe(true)
+    expect(eligible({ ...named, reply: 'Glad you like Natal Mystic, enjoy!' }).eligible).toBe(true)
   })
 
   it('exposes the same verdict as the direct check', () => {

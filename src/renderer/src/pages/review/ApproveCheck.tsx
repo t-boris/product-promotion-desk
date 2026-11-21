@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { Badge, Button } from '../../ui'
-import { approveAnywayLabel, countLabel, introLine, mayApproveAnyway, type Held } from './approve-check'
+import { approveAnywayLabel, countLabel, introLine, type Held } from './approve-check'
 
 interface Props {
   held: Held
@@ -18,7 +18,7 @@ interface Props {
 /**
  * The panel that stands between a click on Approve and the approval, for a text the owner wrote: one row for each rule the text breaks
  * (the rule, the words it is about, why), and two buttons. Nothing is approved while it is shown. "Edit the text" is the way back and
- * has the focus; "Approve anyway" approves as before, and is not offered while a finding blocks (the approval would refuse it).
+ * has the focus; "Approve anyway" approves as before.
  */
 export function ApproveCheck({ held, onEdit, onApprove, busy, editVariant, side }: Props) {
   const root = useRef<HTMLDivElement>(null)
@@ -39,10 +39,9 @@ export function ApproveCheck({ held, onEdit, onApprove, busy, editVariant, side 
       {held.findings.length > 0 && (
         <ul className="check-list">
           {held.findings.map((finding, i) => (
-            <li key={`${finding.rule}-${i}`} data-testid="approve-check-item" data-rule={finding.rule} data-blocks={finding.blocks}>
+            <li key={`${finding.rule}-${i}`} data-testid="approve-check-item" data-rule={finding.rule}>
               <span className="check-rule">
                 {finding.title}
-                {finding.blocks && <Badge tone="bad">Must be fixed</Badge>}
               </span>
               {finding.quote && <q>{finding.quote}</q>}
               <span className="muted small">{finding.why}</span>
@@ -52,11 +51,9 @@ export function ApproveCheck({ held, onEdit, onApprove, busy, editVariant, side 
       )}
       <div className="review-actions">
         <div className="review-actions-main">
-          {mayApproveAnyway(held) && (
-            <Button onClick={onApprove} disabled={busy} data-testid="approve-check-anyway">
-              {approveAnywayLabel(held.which)}
-            </Button>
-          )}
+          <Button onClick={onApprove} disabled={busy} data-testid="approve-check-anyway">
+            {approveAnywayLabel(held.which)}
+          </Button>
           <Button variant={editVariant} onClick={onEdit} disabled={busy} data-testid="approve-check-edit">
             Edit the text
           </Button>

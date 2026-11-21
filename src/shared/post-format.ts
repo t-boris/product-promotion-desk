@@ -650,8 +650,7 @@ export interface RenderedPost {
   text: string
   link: string | null
   /**
-   * The link as the post shows it: the draft's link where it stands in the text (DEC-036), null where the platform leaves it out. What the
-   * disclosure of the author's connection is read with, together with the text: "I work on it" is about the product the link names.
+   * The link as the post shows it: the draft's link where it stands in the text (DEC-036), null where the platform leaves it out.
    */
   shownLink: string | null
   attachments: Attachment[]

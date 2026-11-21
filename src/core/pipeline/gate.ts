@@ -169,7 +169,7 @@ export class SendGate {
    * does not last a mission that opens a browser, composes and waits for the owner's CAPTCHA, and a longer-lived one would outlive the
    * owner's withdrawal of the approval. So the mission asks again at the moment it is about to submit, and this re-checks what can change
    * without leaving the page: the attempt is still this one and still open, the approval is still the very one the attempt was reserved
-   * with and still matches the content, account and destination, the disclosure, the single-login rule, the account and channel, the
+   * with and still matches the content, account and destination, the single-login rule, the account and channel, the
    * owner's hold on the browser and the account's limits (without counting this attempt against itself). The live thread is not read
    * again: that navigates away from the form the mission has filled. Fails closed on anything it cannot confirm.
    */
@@ -245,10 +245,6 @@ export class SendGate {
       }
       return block('review', 'approval_stale', 'The text, attachments, account or destination changed after approval. Review and approve again.')
     }
-
-    // An approval given before the disclosure check existed, or one that slipped past it, cannot carry an undisclosed text out.
-    const undisclosed = this.store.disclosureProblemOf(opp, draft)
-    if (undisclosed) return block('review', 'disclosure_missing', undisclosed)
 
     if (approval.approvedBy === 'auto_rule') {
       // Whatever approved it, a reply to a new post is the owner's to send (DEC-039): an automatic approval of one is never honoured.

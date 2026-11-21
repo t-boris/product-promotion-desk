@@ -30,7 +30,6 @@ import type {
 import { newId, toJson } from '../db/database'
 import type { Core } from '../core'
 import { buildCard } from './cards'
-import { disclosureProblem } from './disclosure'
 import { normalizeDraftInput } from './draft-input'
 import type { DraftHelp } from './draft-help'
 import { SendBlockedError } from './gate'
@@ -176,8 +175,6 @@ export class PostGroupsFlow {
       const problems: string[] = []
       if (draft) {
         problems.push(...this.fitProblems(channel.platform, draft, ways))
-        const disclosure = this.store.disclosureProblemOf(opp, draft)
-        if (disclosure) problems.push(disclosure)
       }
       const unavailable = this.availabilityProblem(channel, account.status)
       if (unavailable) problems.push(unavailable)
@@ -204,7 +201,7 @@ export class PostGroupsFlow {
   /**
    * Every channel of the product that could carry a post, and whether this post fits it as it is. The app suggests those that fit and are not
    * chosen yet; it chooses nothing. A rule, not the AI: the limits of a platform are facts, and a post that does not fit says what is wrong.
-   * It judges what the approval judges (the platform's limits and pictures, the rule that a post naming the product says who is speaking).
+   * It judges what the approval judges (the platform's limits and pictures).
    */
   channels(productId: Id, input: DraftInput, chosen: Id[] = []): GroupChannelOption[] {
     const content: PostContent = {
@@ -215,7 +212,6 @@ export class PostGroupsFlow {
       markup: input.markup === 'markdown' ? 'markdown' : 'legacy',
       ...(input.postType === 'quick' ? { postType: 'quick' as const } : {})
     }
-    const product = this.core.repos.product(productId)
     const options: GroupChannelOption[] = []
     for (const channel of this.core.repos.listChannels().filter((c) => c.productId === productId)) {
       const publish = channel.capabilities.find((c) => c.key === 'publish_post')
@@ -223,8 +219,6 @@ export class PostGroupsFlow {
       const account = this.core.repos.account(channel.accountId)
       const rendered = renderForPlatform(content, channel.platform)
       const problems = this.fitProblems(channel.platform, content, sendWays(this.core, undefined, channel))
-      const disclosure = disclosureProblem({ title: rendered.title, text: rendered.text, link: rendered.shownLink }, { name: product.name, websiteUrl: product.websiteUrl })
-      if (disclosure) problems.push(disclosure)
       const unavailable = this.availabilityProblem(channel, account.status)
       const fits = problems.length === 0 && unavailable === null
       options.push({
@@ -323,7 +317,7 @@ export class PostGroupsFlow {
         else if (seen[opp.id] === undefined) skip('It was not shown to you: read it, then approve.')
         else if (seen[opp.id] !== draft.id) skip('It changed after you looked at it: read it again, then approve.')
         else {
-          // The approval is the single post's: its checks, its hash, its refusals (the platform's limits, the disclosure, a picture that is gone).
+          // The approval is the single post's: its checks, its hash, its refusals (the platform's limits, a picture that is gone).
           try {
             await this.review.approve(opp.id)
             results.push({ opportunityId: opp.id, channelLabel: label, status: 'done', reason: 'Approved.' })

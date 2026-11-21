@@ -42,11 +42,10 @@ Rules
 - Look at context.ownReplies: do not repeat what the account already said in this thread.
 - Where it comes from: context.source is absent for a reply to a comment of a discussion the account follows. "reply_to_me": somebody replied to the account's own comment or post; "mention": somebody named the account. Answer both like any comment. "new_post": nobody wrote to the account. The "comment" is a NEW POST by someone else (its title and text), not a reply to us, and context.parentChain is empty. First judge whether an answer is worth giving at all: use decision "ignore" with the reason in "rationale" when the post does not need what the approved claims can honestly offer, when it is about something else, or when joining in would be an uninvited advertisement. When you do reply, the reply is a top-level comment on the post: answer what its author asks or shows, never write as if they had addressed the account, and do not open with the product.
 - Voice: when context.role is present, write as that role: use the way of writing described in context.role.voice and stay within what that voice allows you to talk about. context.channel.style still applies. The role never overrides any rule above: approved claims only, nothing prohibited, no promises.
-- Disclosure: when the reply mentions the product (context.product.name) or its website, include one short phrase saying that the author is connected with it (for example "I work on it"), worded in the voice of context.role when there is one. Never present the author as an independent user, customer or bystander. A reply that does not mention the product needs no such phrase.
+- Do not claim to be an independent user and do not deny a connection with the product; say nothing about a connection unless the owner's own text does.
 
 Answer with exactly one JSON object and nothing else:
-{"category":"product_question|thanks|purchase_interest|complaint|criticism|irrelevant|spam","decision":"reply|ask_user|handoff|ignore","reply":"the reply text, or an empty string","rationale":"why this decision and reply, one or two sentences","usedClaimIds":["ids of the approved claims the reply relies on"],"disclosesConnection":true or false}
-"disclosesConnection" is true only when the reply mentions the product and contains the short phrase that states the author's connection to it; it is false when the reply does not mention the product or has no such phrase.`
+{"category":"product_question|thanks|purchase_interest|complaint|criticism|irrelevant|spam","decision":"reply|ask_user|handoff|ignore","reply":"the reply text, or an empty string","rationale":"why this decision and reply, one or two sentences","usedClaimIds":["ids of the approved claims the reply relies on"]}`
 
 const claimPayload = (c: ClaimView): { id: string; text: string; section: string; availability: string } => ({
   id: c.id,
@@ -77,8 +76,6 @@ export interface ReplyProposal {
   reply: string
   rationale: string
   usedClaimIds: string[]
-  /** The model says the reply mentions the product and states the author's connection to it. */
-  disclosesConnection: boolean
 }
 
 function extractJson(text: string): unknown {
@@ -151,8 +148,7 @@ export function parseReplyProposal(text: string): ReplyProposal {
     decision: decision as OpportunityDecision,
     reply: stringField(o, 'reply', { required: replying, max: MAX_REPLY_CHARS }),
     rationale: stringField(o, 'rationale', { required: replying }),
-    usedClaimIds: idsField(o, 'usedClaimIds'),
-    disclosesConnection: booleanField(o, 'disclosesConnection')
+    usedClaimIds: idsField(o, 'usedClaimIds')
   }
 }
 
@@ -170,11 +166,10 @@ Rules
 - Add a link only if it is context.product.website and the community allows it. Never add any other link. When context.channel.linkRule is present, follow it.
 - Capabilities listed in context.channel.limits are not usable.
 - Voice: when context.role is present, write as that role: use the way of writing described in context.role.voice and stay within what that voice allows you to talk about. context.channel.style still applies. The role never overrides any rule above: approved claims only, nothing prohibited, no promises.
-- Disclosure: when the post mentions the product (context.product.name) or its website, include one short phrase saying that the author is connected with it (for example "I work on it"), worded in the voice of context.role when there is one. Never present the author as an independent user, customer or bystander.
+- Do not claim to be an independent user and do not deny a connection with the product; say nothing about a connection unless the owner's own text does.
 
 Answer with exactly one JSON object and nothing else:
-{"topic":"the topic in a few words","title":"post title","text":"post body","link":"product website or an empty string","rationale":"why this topic fits this community","usedClaimIds":["ids of the approved claims the post relies on"],"disclosesConnection":true or false}
-"disclosesConnection" is true only when the post mentions the product and contains the short phrase that states the author's connection to it; it is false when the post does not mention the product or has no such phrase.`
+{"topic":"the topic in a few words","title":"post title","text":"post body","link":"product website or an empty string","rationale":"why this topic fits this community","usedClaimIds":["ids of the approved claims the post relies on"]}`
 
 export interface PublicationInputs {
   channel: ChannelView
@@ -211,7 +206,6 @@ export interface PublicationProposal {
   link: string | null
   rationale: string
   usedClaimIds: string[]
-  disclosesConnection: boolean
 }
 
 export function parsePublicationProposal(text: string): PublicationProposal {
@@ -223,8 +217,7 @@ export function parsePublicationProposal(text: string): PublicationProposal {
     text: stringField(o, 'text', { required: true, max: MAX_POST_CHARS }),
     link: link || null,
     rationale: stringField(o, 'rationale', { required: true }),
-    usedClaimIds: idsField(o, 'usedClaimIds'),
-    disclosesConnection: booleanField(o, 'disclosesConnection')
+    usedClaimIds: idsField(o, 'usedClaimIds')
   }
 }
 
@@ -241,12 +234,12 @@ Rules
 - Write as the person of context.persona and context.role: their way of writing, in the first person, and nothing that person would not say. Write in the first of context.channel.languages and follow context.channel.style. Short and plain; no hype, no clickbait.
 - Do not repeat context.previousPosts.
 - The link is empty unless the note itself contains an address, and then it is that address. When context.channel.linkRule is present, it comes first: follow it.
-- Disclosure: when the post mentions the product (context.product.name) or its website, include one short phrase saying that the author is connected with it (for example "I work on it"), worded in the person's voice. Never present the author as an independent user, customer or bystander.
+- Do not claim to be an independent user and do not deny a connection with the product; say nothing about a connection unless the owner's own text does.
 - If the note says too little to write a post, still write the shortest honest one; never fill the gap with invented detail.
 
 Answer with exactly one JSON object and nothing else:
-{"title":"post title","text":"post body","link":"an address from the note, or an empty string","rationale":"which words of the note the post rests on","disclosesConnection":true or false,"addsFactsBeyondNote":true or false}
-"disclosesConnection" is true only when the post mentions the product and contains the short phrase that states the author's connection to it. "addsFactsBeyondNote" is true when anything in the post is not in the note; be strict: it must be false.`
+{"title":"post title","text":"post body","link":"an address from the note, or an empty string","rationale":"which words of the note the post rests on","addsFactsBeyondNote":true or false}
+"addsFactsBeyondNote" is true when anything in the post is not in the note; be strict: it must be false.`
 
 export interface UpdateInputs {
   channel: ChannelView
@@ -277,7 +270,6 @@ export interface UpdateProposal {
   text: string
   link: string | null
   rationale: string
-  disclosesConnection: boolean
   /** The model itself says the post contains something the note does not: the post is refused. */
   addsFactsBeyondNote: boolean
 }
@@ -290,7 +282,6 @@ export function parseUpdateProposal(text: string): UpdateProposal {
     text: stringField(o, 'text', { required: true, max: MAX_POST_CHARS }),
     link: link || null,
     rationale: stringField(o, 'rationale', { required: true }),
-    disclosesConnection: booleanField(o, 'disclosesConnection'),
     // A model that does not say whether it added something is not trusted: the post is refused as if it had.
     addsFactsBeyondNote: booleanField(o, 'addsFactsBeyondNote', true)
   }

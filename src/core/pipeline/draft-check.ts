@@ -1,11 +1,10 @@
 // "Check before you approve" (drafts.check): the rules an AI draft passes, read against a text the owner wrote, before it is approved.
 //
 // The owner's own text is not checked on save and the approval refuses only what the gate already refuses (an empty reply, an image that
-// cannot be read, another login speaking, and the connection to the product). This reads the text against the product knowledge and says,
-// in the owner's words, which rule it breaks and which words it is about: a prohibited statement, a link that is not the product's own
-// address (however it is written), a price, a discount or "free" no approved fact backs, something that looks like a password or a key,
-// and the connection to the product. Only the connection can stop an approval (it is decided in code at the approval and at the send), so
-// only its finding is marked as blocking; the others are advice the owner may set aside with "Approve anyway".
+// cannot be read, another login speaking). This reads the text against the product knowledge and says, in the owner's words, which rule it
+// breaks and which words it is about: a prohibited statement, a link that is not the product's own address (however it is written), a price,
+// a discount or "free" no approved fact backs, something that looks like a password or a key. Nothing here stops an approval: every
+// finding is advice the owner may set aside with "Approve anyway".
 //
 // Local and quick: no engine, nothing stored, and the text is never logged. An AI draft is not read again here (it passed these checks
 // when it was written); the screen asks only for a text the owner wrote or changed.
@@ -17,7 +16,6 @@ import { holdsCredential, isRecord } from '../assist/kit'
 import { requireText } from '../channels/errors'
 import type { Core } from '../core'
 import { loadKnowledge } from './context'
-import { disclosureVerdict } from './disclosure'
 import { MAX_TEXT_LENGTH, MAX_TITLE_LENGTH } from './draft-input'
 import { forChecks } from './draft-help'
 import { allowedHostsFor, checkDraftSafety, type FindingRule } from './safety'
@@ -57,18 +55,6 @@ export class DraftCheck {
 
     const findings: DraftFinding[] = []
 
-    // The connection to the product: the rule the approval itself enforces, read the same way, on the text as it is.
-    const verdict = disclosureVerdict(content, { name: product.name, websiteUrl: product.websiteUrl })
-    if (verdict) {
-      findings.push({
-        rule: verdict.kind === 'denies' ? 'connection_denied' : 'connection_unsaid',
-        title: verdict.kind === 'denies' ? 'The text denies a connection with the product' : 'The connection to the product is not said',
-        quote: null,
-        why: verdict.message,
-        blocks: true
-      })
-    }
-
     // The rules of an AI draft, on the text as the checks read it (invisible characters out, look-alike forms folded).
     const report = checkDraftSafety({
       mode: 'owner',
@@ -82,7 +68,7 @@ export class DraftCheck {
     })
     for (const finding of report.findings) {
       if (!SHOWN.has(finding.rule)) continue
-      findings.push({ rule: finding.rule as DraftFinding['rule'], title: finding.title, quote: finding.quote, why: finding.why, blocks: false })
+      findings.push({ rule: finding.rule as DraftFinding['rule'], title: finding.title, quote: finding.quote, why: finding.why })
     }
 
     if (holdsCredential(forChecks([content.title, content.text].join('\n')))) {
@@ -90,8 +76,7 @@ export class DraftCheck {
         rule: 'credential',
         title: 'Something that looks like a password or a key',
         quote: null,
-        why: 'A reply or a post is public. Take it out before you approve.',
-        blocks: false
+        why: 'A reply or a post is public. Take it out before you approve.'
       })
     }
     return { findings }

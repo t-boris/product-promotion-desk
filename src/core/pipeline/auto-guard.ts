@@ -88,18 +88,3 @@ export function autoReplyProblem(input: AutoReplyCheck): string | null {
   return unsupportedAnswer(reply, comment, input.claims)
 }
 
-/** Shown when a reply names the product without the model vouching that it states the author's connection. */
-export const DISCLOSURE_REASON = 'The reply mentions the product; check that it says you are connected with it'
-export const POST_DISCLOSURE_NOTE = 'The post mentions the product; check that it says you are connected with it'
-
-const squash = (text: string): string => text.trim().replace(/\s+/g, ' ').toLowerCase()
-
-/**
- * Whether the text names the product (case-insensitive, whitespace-insensitive, a plain substring). An automatic reply that
- * names the product needs BOTH the model's explicit `disclosesConnection` flag and a text that itself states the connection
- * (disclosure.ts, which every approval and the gate also apply): without either it waits for the owner.
- */
-export function mentionsProduct(text: string, productName: string): boolean {
-  const name = squash(productName)
-  return name !== '' && squash(text).includes(name)
-}

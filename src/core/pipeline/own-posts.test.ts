@@ -355,13 +355,12 @@ describe('its own posts', () => {
       expect(missions.requests).toHaveLength(0)
     })
 
-    it('reads the disclosure as before the link moved: "it" in "I work on it" is the product the link names, wherever the link stands in the post', async () => {
-      // the link is the last paragraph of a Facebook post, after the statement; a post approved for Facebook with this text must not be refused for it
+    it('puts the link of a Facebook post last, after the text, wherever the owner wrote it', async () => {
       const content = await sendWithLink('facebook', 'markdown')
       expect(content.text).toMatch(/I work on it\.\n\nhttps:\/\/natalmystic\.com$/)
     })
 
-    it('judges a post by what it will show: Instagram leaves the link out, so a caption that does not name the product needs no disclosure, and Facebook shows the link, so it does', async () => {
+    it('approves a caption with a link on Facebook as it is, with nothing said about who writes; Instagram, which leaves the link out, still asks for its picture', async () => {
       const draft = async (platform: string) => {
         world = ownPostsWorld({ status: 'active' })
         world.core.db.prepare('UPDATE channels SET platform = ? WHERE id = ?').run(platform, world.channel.id)
@@ -369,7 +368,7 @@ describe('its own posts', () => {
         const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { text: 'A caption without a name.', link: LINK, markup: 'markdown' } })
         return world.core.router.call('opportunities.approve', { id: opportunity.id })
       }
-      await expect(draft('facebook')).rejects.toMatchObject({ code: 'disclosure_missing' })
+      expect((await draft('facebook')).opportunity.state).toBe('ready')
       // (no picture: Instagram would also say that it needs one, which is not what is asked here)
       await expect(draft('instagram')).rejects.toMatchObject({ code: 'post_does_not_fit', message: expect.stringMatching(/needs a picture/) })
     })

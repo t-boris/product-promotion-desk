@@ -14,8 +14,8 @@ afterEach(async () => {
 })
 
 const DAY = 86_400_000
-const POST = { topic: 'Charts', title: 'How charts work', text: 'A natal chart is built from your birth date, time and place.', link: '', rationale: 'from c1', usedClaimIds: ['c1'], disclosesConnection: false }
-const UPDATE = { title: 'The birth time bug is fixed', text: 'I fixed the bug that put the birth time in the wrong place.', link: '', rationale: 'from the note', disclosesConnection: false, addsFactsBeyondNote: false }
+const POST = { topic: 'Charts', title: 'How charts work', text: 'A natal chart is built from your birth date, time and place.', link: '', rationale: 'from c1', usedClaimIds: ['c1'] }
+const UPDATE = { title: 'The birth time bug is fixed', text: 'I fixed the bug that put the birth time in the wrong place.', link: '', rationale: 'from the note', addsFactsBeyondNote: false }
 const NOTE = 'Fixed the bug that put the birth time in the wrong place'
 
 const mix = (...entries: Partial<MixSetting>[]): MixSetting[] => (entries.length > 0 ? entries : [{}]).map((e) => ({ kind: 'product_post', enabled: true, everyDays: 7, ...e }))
@@ -625,16 +625,16 @@ describe('an own update, written from the owner\'s note only', () => {
     expect(await run()).toBe(1)
   })
 
-  it('says that the author is connected, in the card, when the post names the product without it (as for any post), and the approval still refuses it', async () => {
+  it('adds no reminder about the connection when the post names the product, and the owner approves it as it is', async () => {
     world = makeWorld({ mode: 'approval' })
-    script('draft.update', { ...UPDATE, text: 'Natal Mystic now keeps the birth time where it belongs.', disclosesConnection: false })
+    script('draft.update', { ...UPDATE, text: 'Natal Mystic now keeps the birth time where it belongs.' })
     await note()
     withMix(mix({ kind: 'own_update' }))
     expect(await run()).toBe(1)
     const [opp] = drafts()
-    expect(opp.reason).toMatch(/connected|connection/i)
-    await expect(world.core.router.call('opportunities.approve', { id: opp.id })).rejects.toMatchObject({ code: expect.any(String) })
-    expect(count('approvals')).toBe(0)
+    expect(opp.reason).not.toMatch(/connected|connection/i)
+    expect((await world.core.router.call('opportunities.approve', { id: opp.id })).opportunity.state).toBe('ready')
+    expect(count('approvals')).toBe(1)
   })
 
   it('does not write from a note of another product, nor from a note that was used already, when asked directly', async () => {

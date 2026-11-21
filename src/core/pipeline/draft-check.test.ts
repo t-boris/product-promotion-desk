@@ -28,7 +28,6 @@ const counts = (): string =>
   JSON.stringify(['opportunities', 'drafts', 'approvals', 'comments', 'discussions', 'send_actions'].map((table) => world.core.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()))
 
 const PLAIN = 'Thanks for asking! Give it your birth date, time and place and it builds the chart.'
-const CONNECTED = 'Disclosure: I work on Natal Mystic.'
 
 describe('drafts.check: what is found', () => {
   it('finds nothing in a plain text', async () => {
@@ -47,13 +46,12 @@ describe('drafts.check: what is found', () => {
     ['a password', 'My password: hunter22 if you want to look.', 'credential', /^$/, /public/]
   ]
   for (const [name, text, rule, quote, why] of cases) {
-    it(`names ${name}, the words it is about and why, and does not block`, async () => {
+    it(`names ${name}, the words it is about and why`, async () => {
       world = makeWorld({ mode: 'draft' })
       const opp = await world.newOpportunity()
       const { findings } = await check(opp.id, { text })
       const found = findings.find((f) => f.rule === rule)
       expect(found, JSON.stringify(findings)).toBeDefined()
-      expect(found?.blocks).toBe(false)
       expect(found?.title.length).toBeGreaterThan(5)
       expect(found?.quote ?? '').toMatch(quote)
       expect(found?.why).toMatch(why)
@@ -75,7 +73,7 @@ describe('drafts.check: what is found', () => {
     const opp = await world.newOpportunity()
     const { findings } = await check(opp.id, { text: 'Yes, and the readings are guaranteed accurate, every time.' })
     expect(findings).toEqual([
-      { rule: 'prohibited', title: 'A statement your product knowledge prohibits', quote: 'The readings are guaranteed accurate', why: expect.stringContaining('never be made'), blocks: false }
+      { rule: 'prohibited', title: 'A statement your product knowledge prohibits', quote: 'The readings are guaranteed accurate', why: expect.stringContaining('never be made') }
     ])
   })
 
@@ -84,9 +82,8 @@ describe('drafts.check: what is found', () => {
     const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'Free for a month', text: PLAIN } })
     expect((await check(opportunity.id)).findings.map((f) => f.rule)).toEqual(['free'])
     expect(await rulesOf(PLAIN, { title: 'A chart', link: 'https://shady.pl/x' })).toEqual(['link'])
-    // The product's own address names the product, so the connection has to be said beside it.
-    expect(await rulesOf(`${CONNECTED} ${PLAIN}`, { title: 'A chart', link: 'natalmystic.com/pricing' })).toEqual([])
-    expect(await rulesOf(PLAIN, { title: 'A chart', link: 'natalmystic.com/pricing' })).toEqual(['connection_unsaid'])
+    // The product's own address is allowed, and nothing has to be said beside it.
+    expect(await rulesOf(PLAIN, { title: 'A chart', link: 'natalmystic.com/pricing' })).toEqual([])
   })
 
   it('reads the text without its invisible characters and with look-alike forms folded', async () => {
@@ -105,12 +102,12 @@ describe('drafts.check: what is found', () => {
       mode: 'draft',
       claims: [makeClaim('c1', 'Natal Mystic costs $9 a month.'), makeClaim('c2', 'The first chart is free.'), makeClaim('c3', 'Docs live at docs.natalmystic.io/start.'), makeClaim('c5', 'It has a Windows build.', { unconfirmedAvailability: true })]
     })
-    expect(await rulesOf(`${CONNECTED} It is $9 a month, and the first chart is free.`)).toEqual([])
-    expect(await rulesOf(`${CONNECTED} See natalmystic.com/pricing and docs.natalmystic.io/start`)).toEqual([])
+    expect(await rulesOf('It is $9 a month, and the first chart is free.')).toEqual([])
+    expect(await rulesOf('See natalmystic.com/pricing and docs.natalmystic.io/start')).toEqual([])
     // The owner's text cites nothing, so the rules about citing facts are not theirs: an unconfirmed capability in the knowledge says nothing.
     expect(await rulesOf('It also runs on Windows.')).toEqual([])
     // A price that no approved fact names is still found.
-    expect(await rulesOf(`${CONNECTED} It is $12 a month.`)).toEqual(['price'])
+    expect(await rulesOf('It is $12 a month.')).toEqual(['price'])
   })
 
   it('does not mistake a file name or an abbreviation for a link', async () => {
@@ -119,47 +116,15 @@ describe('drafts.check: what is found', () => {
   })
 })
 
-describe('drafts.check: the connection to the product', () => {
-  it('blocks a text that names the product and does not say the connection, and puts it first', async () => {
+describe('drafts.check: nothing asks for a connection to the product', () => {
+  it('finds nothing in a text that names the product, or its address, without saying who the author is', async () => {
     world = makeWorld({ mode: 'draft' })
-    const opp = await world.newOpportunity()
-    const { findings } = await check(opp.id, { text: "Natal Mystic is great and it's free for a month." })
-    expect(findings.map((f) => [f.rule, f.blocks])).toEqual([
-      ['connection_unsaid', true],
-      ['free', false]
-    ])
-    expect(findings[0].title).toBe('The connection to the product is not said')
-    expect(findings[0].why).toContain('does not say that you are connected')
+    expect(await rulesOf('Natal Mystic builds a chart from a birth date.')).toEqual([])
+    expect(await rulesOf(PLAIN, { link: 'https://natalmystic.com' })).toEqual([])
+    expect(await rulesOf('Not affiliated with Natal Mystic, just a happy user.')).toEqual([])
   })
 
-  it('reads a post where the platform has no link field as the platform shows it: the link at the end of the text is the product\'s own link, so "it" in "I work on it" is the product (DEC-036)', async () => {
-    world = makeWorld({ mode: 'draft' })
-    const opp = await world.newOpportunity()
-    world.core.db.prepare('UPDATE channels SET platform = ? WHERE id = ?').run('facebook', world.channel.id)
-    const link = 'https://natalmystic.com'
-    expect((await check(opp.id, { text: 'I work on it.', link })).findings).toEqual([])
-    // what Instagram leaves out is not read: a caption that does not name the product needs no statement, whatever its link
-    world.core.db.prepare('UPDATE channels SET platform = ? WHERE id = ?').run('instagram', world.channel.id)
-    expect((await check(opp.id, { text: PLAIN, link })).findings).toEqual([])
-    // and a caption that does name it still needs one
-    expect((await check(opp.id, { text: 'Natal Mystic is great.', link })).findings.map((f) => f.rule)).toEqual(['connection_unsaid'])
-  })
-
-  it('blocks a text that denies a connection', async () => {
-    world = makeWorld({ mode: 'draft' })
-    const opp = await world.newOpportunity()
-    const { findings } = await check(opp.id, { text: 'Not affiliated with Natal Mystic, just a happy user.' })
-    expect(findings.map((f) => [f.rule, f.blocks])).toEqual([['connection_denied', true]])
-    expect(findings[0].title).toBe('The text denies a connection with the product')
-  })
-
-  it('finds nothing when the connection is said, or the product is not named', async () => {
-    world = makeWorld({ mode: 'draft' })
-    expect(await rulesOf(`${CONNECTED} It builds a chart from a birth date.`)).toEqual([])
-    expect(await rulesOf(PLAIN)).toEqual([])
-  })
-
-  it('blocks exactly what the approval refuses: a blocking finding is refused by approve, the others are approved as before', async () => {
+  it('stops no approval: the findings are advice, and approve takes the text as it is', async () => {
     world = makeWorld({ mode: 'draft' })
     const save = async (text: string): Promise<Opportunity> => {
       const opp = await world.newOpportunity()
@@ -174,12 +139,12 @@ describe('drafts.check: the connection to the product', () => {
       }
       return 'approved'
     }
-    const unsaid = await save('Natal Mystic builds a chart from a birth date.')
-    expect((await check(unsaid.id)).findings.map((f) => f.blocks)).toEqual([true])
-    expect(await approveCode(unsaid)).toBe('disclosure_missing')
+    const named = await save('Natal Mystic builds a chart from a birth date.')
+    expect((await check(named.id)).findings).toEqual([])
+    expect(await approveCode(named)).toBe('approved')
 
     const advice = await save('Give it your birth date, it is free for a month.')
-    expect((await check(advice.id)).findings.map((f) => [f.rule, f.blocks])).toEqual([['free', false]])
+    expect((await check(advice.id)).findings.map((f) => f.rule)).toEqual(['free'])
     expect(await approveCode(advice)).toBe('approved')
   })
 })

@@ -12,7 +12,7 @@ afterEach(async () => {
   await closeWorld(world)
 })
 
-const answer = (o: Record<string, unknown>): string => JSON.stringify({ usedClaimIds: ['c1'], statesProductFacts: true, disclosesConnection: false, ...o })
+const answer = (o: Record<string, unknown>): string => JSON.stringify({ usedClaimIds: ['c1'], statesProductFacts: true, ...o })
 const GOOD = 'It builds a natal chart from your birth date, time and place.'
 const block = (prompt: string, tag: string): string => prompt.slice(prompt.indexOf(`<${tag}>\n`) + tag.length + 3, prompt.indexOf(`\n</${tag}>`))
 

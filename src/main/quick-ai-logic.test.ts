@@ -240,7 +240,7 @@ describe('what the interface asks, the core takes', () => {
     await closeWorld(world)
   })
 
-  const json = (o: Record<string, unknown>): string => JSON.stringify({ usedClaimIds: ['c1'], statesProductFacts: true, disclosesConnection: false, ...o })
+  const json = (o: Record<string, unknown>): string => JSON.stringify({ usedClaimIds: ['c1'], statesProductFacts: true, ...o })
 
   it('answers every question the interface builds, for every kind of picture and every platform it offers', async () => {
     world = makeWorld()

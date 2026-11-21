@@ -8,8 +8,6 @@ import type { Id, IsoTime, Opportunity } from '../../shared/types'
 import type { Core } from '../core'
 import { holdsCredential } from '../assist/kit'
 import { AiError } from '../ports'
-import { mentionsProduct, POST_DISCLOSURE_NOTE } from './auto-guard'
-import { disclosureProblem } from './disclosure'
 import { loadKnowledge, postChannelView, roleView } from './context'
 import { normalizeDraftInput, isHttpUrl } from './draft-input'
 import {
@@ -117,12 +115,8 @@ export class PublicationsFlow {
     }
 
     const opp = this.core.db.transaction(() => {
-      // Posts always wait for the owner; if the post names the product without the model vouching for a disclosure,
-      // the owner is told to check it while editing.
-      const undisclosed =
-        (mentionsProduct(`${proposal.title} ${proposal.text}`, product.name) && !proposal.disclosesConnection) ||
-        disclosureProblem({ title: proposal.title, text: proposal.text, link: proposal.link }, { name: product.name, websiteUrl: product.websiteUrl }) !== null
-      const created = this.store.createStandalone(channel, 'draft', `${options.origin ? `${options.origin}. ` : ''}Suggested topic: ${proposal.topic}${undisclosed ? `. ${POST_DISCLOSURE_NOTE}` : ''}`)
+      // Posts always wait for the owner.
+      const created = this.store.createStandalone(channel, 'draft', `${options.origin ? `${options.origin}. ` : ''}Suggested topic: ${proposal.topic}`)
       this.store.insertDraft(
         created.id,
         { title: proposal.title, text: proposal.text, link: proposal.link, attachments: [] },
@@ -210,13 +204,10 @@ export class PublicationsFlow {
     if (violations.length > 0) throw new ApiError('blocked', `The post was blocked by the safety checks: ${violations.join('; ')}.`)
 
     const opp = this.core.db.transaction(() => {
-      const undisclosed =
-        (mentionsProduct(`${proposal.title} ${proposal.text}`, product.name) && !proposal.disclosesConnection) ||
-        disclosureProblem({ title: proposal.title, text: proposal.text, link: proposal.link }, { name: product.name, websiteUrl: product.websiteUrl }) !== null
       const created = this.store.createStandalone(
         channel,
         'draft',
-        `${options.origin ? `${options.origin}. ` : ''}Own update, from your note: "${note.text.replace(/\s+/g, ' ').slice(0, 80)}"${undisclosed ? `. ${POST_DISCLOSURE_NOTE}` : ''}`
+        `${options.origin ? `${options.origin}. ` : ''}Own update, from your note: "${note.text.replace(/\s+/g, ' ').slice(0, 80)}"`
       )
       // The note is used by this post and by no other: a note used meanwhile (a second press) stops this one.
       const taken = this.core.db.prepare('UPDATE product_updates SET used_in_opportunity_id = ? WHERE id = ? AND used_in_opportunity_id IS NULL').run(created.id, note.id)

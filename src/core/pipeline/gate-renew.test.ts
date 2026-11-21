@@ -139,16 +139,6 @@ describe('renewing the ticket of a running attempt', () => {
     expect(gate().renewTicket(grant, false).allowed).toBe(true)
   })
 
-  it('applies the disclosure check again, so a change of the product between the approval and the submit cannot carry an undisclosed text out', async () => {
-    world = makeWorld()
-    const { grant } = await running({ text: 'Thanks for asking! It uses your birth date, time and place.' })
-    expect(gate().renewTicket(grant, false).allowed).toBe(true)
-
-    // The product is renamed to a word the approved text happens to use: the text now names it without disclosing the connection.
-    world.core.db.prepare('UPDATE products SET name = ? WHERE id = ?').run('birth date', grant.opportunity.productId)
-    expect(denied(gate().renewTicket(grant, false))).toMatchObject({ effect: 'review', code: 'disclosure_missing' })
-  })
-
   it('applies the rule for replies approved by the owner: they are never renewed for an automatic send', async () => {
     world = makeWorld()
     const { grant } = await running()

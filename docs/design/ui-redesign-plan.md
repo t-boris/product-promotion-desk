@@ -176,7 +176,7 @@ Target: the owner's windows and the AI's page are independent pages of the same 
 
 ## 6. What does not change
 
-Approval hashing and the send gate, the mission toolbox, connectors' publishing, content-mix rules, the disclosure rule, the Log and Settings screens (apart from the mailbox moving in), the visual tokens.
+Approval hashing and the send gate, the mission toolbox, connectors' publishing, content-mix rules, the Log and Settings screens (apart from the mailbox moving in), the visual tokens.
 
 ## 7. Costs and risks
 

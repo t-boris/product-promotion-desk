@@ -1,10 +1,9 @@
-// Login roles and disclosed affiliation in AI drafts (DEC-010, REQ-010).
+// Login roles in AI drafts (DEC-010, REQ-010). The rule that a text naming the product must say the author is connected with it was removed (owner, 2026-11-21).
 
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Opportunity } from '../../shared/types'
-import { DISCLOSURE_REASON, mentionsProduct } from './auto-guard'
 import { channelView, postChannelView } from './context'
-import { PUBLICATION_SYSTEM, ProposalError, REPLY_SYSTEM, UPDATE_SYSTEM, parsePublicationProposal, parseReplyProposal } from './draft-prompt'
+import { PUBLICATION_SYSTEM, REPLY_SYSTEM, UPDATE_SYSTEM, parsePublicationProposal, parseReplyProposal } from './draft-prompt'
 import { closeWorld, makeWorld, type World, type WorldOptions } from './test-fixture'
 
 let world: World
@@ -165,63 +164,26 @@ describe('the link of a post where the platform has no field for it (DEC-036): t
   })
 })
 
-describe('disclosure of the author\'s connection to the product (DEC-010)', () => {
-  it('requires the model to state the connection in a short phrase, in the role\'s voice, and forbids posing as an independent user', () => {
-    for (const system of [REPLY_SYSTEM, PUBLICATION_SYSTEM]) {
-      expect(system).toContain('mentions the product')
-      expect(system).toContain('one short phrase')
-      expect(system).toContain('I work on it')
-      expect(system).toContain('worded in the voice of context.role')
-      expect(system).toContain('Never present the author as an independent user')
-      expect(system).toContain('"disclosesConnection":true or false')
+describe('no statement of the author\'s connection to the product is asked for (owner, 2026-11-21)', () => {
+  it('tells the model neither to claim independence nor to deny the connection, and has no disclosure flag in its answer', () => {
+    for (const system of [REPLY_SYSTEM, PUBLICATION_SYSTEM, UPDATE_SYSTEM]) {
+      expect(system).toContain('Do not claim to be an independent user and do not deny a connection with the product')
+      expect(system).not.toContain('disclosesConnection')
+      expect(system).not.toContain('I work on it')
     }
   })
 
-  it('parses the explicit flag; a missing one counts as not disclosed and a non-boolean is unusable', () => {
+  it('reads an answer with or without the old flag: it is no longer part of a proposal', () => {
     const base = { category: 'thanks', decision: 'reply', reply: 'Thanks!', rationale: 'r', usedClaimIds: [] }
-    expect(parseReplyProposal(JSON.stringify({ ...base, disclosesConnection: true })).disclosesConnection).toBe(true)
-    expect(parseReplyProposal(JSON.stringify({ ...base, disclosesConnection: false })).disclosesConnection).toBe(false)
-    expect(parseReplyProposal(JSON.stringify(base)).disclosesConnection).toBe(false)
-    expect(() => parseReplyProposal(JSON.stringify({ ...base, disclosesConnection: 'yes' }))).toThrow(ProposalError)
-    const post = { topic: 't', title: 'T', text: 'x', link: '', rationale: 'r', usedClaimIds: [] }
-    expect(parsePublicationProposal(JSON.stringify({ ...post, disclosesConnection: true })).disclosesConnection).toBe(true)
-    expect(parsePublicationProposal(JSON.stringify(post)).disclosesConnection).toBe(false)
+    expect(parseReplyProposal(JSON.stringify(base))).toEqual(base)
+    expect(parseReplyProposal(JSON.stringify({ ...base }))).toEqual(base)
+    const post = { topic: 't', title: 'T', text: 'x', link: null, rationale: 'r', usedClaimIds: [] }
+    expect(parsePublicationProposal(JSON.stringify({ ...post, link: '' }))).toEqual(post)
   })
 
-  it('finds the product name case-insensitively and ignores spacing', () => {
-    expect(mentionsProduct('I work on NATAL  Mystic myself', 'Natal Mystic')).toBe(true)
-    expect(mentionsProduct('natal mystic is great', ' Natal Mystic ')).toBe(true)
-    expect(mentionsProduct('It works on iPhone and Android.', 'Natal Mystic')).toBe(false)
-    expect(mentionsProduct('anything', '')).toBe(false)
-  })
-
-  it('does not send a reply that names the product unless the model says it states the connection', async () => {
+  it('sends a reply that names the product automatically, with nothing said about the connection', async () => {
     world = makeWorld(AUTO)
-    world.engine.on('draft.reply', thanks('Glad you like Natal Mystic, enjoy!'))
-    const opp = await discovered('Thanks, great app!')
-
-    await world.drafting.processChannel(world.channel.id)
-
-    expect(publishCalls()).toBe(0)
-    const after = world.opportunity(opp.id)
-    expect(after.state).toBe('awaiting_approval')
-    expect(after.reason).toBe('The reply mentions the product; check that it says you are connected with it')
-    expect(after.reason).toBe(DISCLOSURE_REASON)
-    expect(world.card(opp.id).approval).toBeNull()
-  })
-
-  it('is case-insensitive about the name, and a flag of false does not help', async () => {
-    world = makeWorld(AUTO)
-    world.engine.on('draft.reply', thanks('Glad you like NATAL MYSTIC, enjoy!', { disclosesConnection: false }))
-    const opp = await discovered('Thanks, great app!')
-    await world.drafting.processChannel(world.channel.id)
-    expect(publishCalls()).toBe(0)
-    expect(world.opportunity(opp.id).reason).toBe(DISCLOSURE_REASON)
-  })
-
-  it('sends it automatically when the model vouches for the disclosure and the reply names the product', async () => {
-    world = makeWorld(AUTO)
-    world.engine.on('draft.reply', thanks('Glad you like Natal Mystic, I work on it!', { disclosesConnection: true }))
+    world.engine.on('draft.reply', thanks('Glad you like NATAL MYSTIC, enjoy!'))
     const opp = await discovered('Thanks, great app!')
 
     await world.drafting.processChannel(world.channel.id)
@@ -230,24 +192,16 @@ describe('disclosure of the author\'s connection to the product (DEC-010)', () =
     expect(publishCalls()).toBe(1)
   })
 
-  it('does not hold a reply that never names the product', async () => {
-    world = makeWorld(AUTO)
-    world.engine.on('draft.reply', thanks('Glad you like it, enjoy!'))
-    const opp = await discovered('Thanks, great app!')
-    await world.drafting.processChannel(world.channel.id)
-    expect(world.opportunity(opp.id).state).toBe('confirmed')
-  })
-
-  it('also stops a factual answer that names the product without a disclosure', async () => {
+  it('does not hold a factual answer that names the product either', async () => {
     world = makeWorld(AUTO)
     world.engine.on('draft.reply', reply({ reply: 'Natal Mystic works on iPhone and Android.', usedClaimIds: ['c2'] }))
     const opp = await discovered('Does it work on Android?')
     await world.drafting.processChannel(world.channel.id)
-    expect(publishCalls()).toBe(0)
-    expect(world.opportunity(opp.id).reason).toBe(DISCLOSURE_REASON)
+    expect(world.opportunity(opp.id).state).toBe('confirmed')
+    expect(world.opportunity(opp.id).reason).toBe('')
   })
 
-  it('reminds the owner in the approval queue as well, and the owner can still edit and approve', async () => {
+  it('adds no reminder in the approval queue, and the owner approves the text as it is', async () => {
     world = makeWorld({ mode: 'approval' })
     world.engine.on('draft.reply', reply({ reply: 'Natal Mystic builds a natal chart from your birth date, time and place.' }))
     const opp = await discovered()
@@ -255,33 +209,15 @@ describe('disclosure of the author\'s connection to the product (DEC-010)', () =
     await world.drafting.processChannel(world.channel.id)
 
     expect(world.opportunity(opp.id).state).toBe('awaiting_approval')
-    expect(world.opportunity(opp.id).reason).toBe(DISCLOSURE_REASON)
-    await world.core.router.call('opportunities.saveDraft', { id: opp.id, draft: { text: 'I work on Natal Mystic: it builds a natal chart from your birth date, time and place.' } })
+    expect(world.opportunity(opp.id).reason).toBe('')
     expect((await world.core.router.call('opportunities.approve', { id: opp.id })).opportunity.state).toBe('ready')
   })
 
-  it('adds no reminder to a reply that does not name the product, or one that is disclosed', async () => {
-    world = makeWorld({ mode: 'approval' })
-    world.engine.on('draft.reply', reply({ reply: 'I work on Natal Mystic; it builds a natal chart from your birth data.', disclosesConnection: true }))
-    const disclosed = await discovered()
-    await world.drafting.processChannel(world.channel.id)
-    expect(world.opportunity(disclosed.id).reason).toBe('')
-
-    world.engine.on('draft.reply', reply())
-    const plain = await world.newOpportunity({ body: 'Another question?', commentId: 'other' })
-    await world.drafting.processChannel(world.channel.id)
-    expect(world.opportunity(plain.id).reason).toBe('')
-  })
-
-  it('reminds the owner when a suggested post names the product without a disclosure', async () => {
+  it('adds no reminder to a suggested post that names the product', async () => {
     world = makeWorld({ mode: 'approval' })
     const post = { topic: 'Charts', title: 'Natal Mystic charts', text: 'Natal Mystic builds a natal chart from your birth date, time and place.', link: '', rationale: 'from c1', usedClaimIds: ['c1'] }
     world.engine.on('draft.publication', JSON.stringify(post))
-    const undisclosed = await world.core.router.call('publications.suggest', { channelId: world.channel.id })
-    expect(undisclosed.opportunity.reason).toBe('Suggested topic: Charts. The post mentions the product; check that it says you are connected with it')
-
-    world.engine.on('draft.publication', JSON.stringify({ ...post, title: 'Why I built charts', text: 'I work on Natal Mystic. It builds a natal chart from your birth date, time and place.', disclosesConnection: true }))
-    const disclosed = await world.core.router.call('publications.suggest', { channelId: world.channel.id })
-    expect(disclosed.opportunity.reason).toBe('Suggested topic: Charts')
+    const suggested = await world.core.router.call('publications.suggest', { channelId: world.channel.id })
+    expect(suggested.opportunity.reason).toBe('Suggested topic: Charts')
   })
 })

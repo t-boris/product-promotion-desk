@@ -123,9 +123,6 @@ export class ReviewFlow implements PipelineHooks {
       if (this.store.otherLoginSpeakingFor(current)) throw new ApiError('invalid_state', OTHER_LOGIN_SPEAKS_REASON)
       const latest = this.core.repos.latestDraft(id)
       if (!latest || latest.id !== draft.id) throw new ApiError('conflict', 'The draft changed while you were approving. Review it again.')
-      // A text that mentions the product must say the author is connected with it (DEC-010): decided in code, for the owner's own text too.
-      const undisclosed = this.store.disclosureProblemOf(current, latest)
-      if (undisclosed) throw new ApiError('disclosure_missing', undisclosed)
       const { hash, accountId, identity, destination } = this.currentHash(current, latest)
       const existing = this.core.repos.activeApproval(latest.id)
       const reusable = existing && existing.approvedBy === 'user' && existing.contentHash === hash && existing.accountId === accountId && existing.destination === destination
@@ -149,9 +146,6 @@ export class ReviewFlow implements PipelineHooks {
   createAutoApproval(id: Id, draft: Draft, ruleId: string): Approval {
     return this.core.db.transaction(() => {
       const opp = this.store.requireOpportunity(id)
-      // The same hard check as the owner's approval: no rule approves a text that names the product without disclosing the connection.
-      const undisclosed = this.store.disclosureProblemOf(opp, draft)
-      if (undisclosed) throw new ApiError('disclosure_missing', undisclosed)
       const { hash, accountId, identity, destination } = this.currentHash(opp, draft)
       this.store.invalidateApprovals(id, 'Superseded by an automatic approval')
       const approval = this.store.insertApproval({ draftId: draft.id, contentHash: hash, accountId, identity, destination, approvedBy: 'auto_rule', ruleId })

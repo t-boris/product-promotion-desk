@@ -201,7 +201,7 @@ describe('which channels the post fits', () => {
     expect(world.core.db.prepare('SELECT COUNT(*) AS n FROM opportunities').get()).toMatchObject({ n: 0 })
   })
 
-  it('tells what the approval would refuse for an older post too, and a post that names the product without saying who speaks', async () => {
+  it('tells what the approval would refuse for an older post too, and has nothing to say about a post that names the product', async () => {
     const { channels, flow } = setup(['reddit', 'threads'])
     const legacy = flow.channels(world.product.id, { text: 'x'.repeat(520) })
     expect(legacy.find((o) => o.platform === 'threads')).toMatchObject({ fits: false })
@@ -209,25 +209,19 @@ describe('which channels the post fits', () => {
     expect(legacy.find((o) => o.platform === 'reddit')?.fits).toBe(true)
     const card = await flow.create(world.product.id, channels.map((c) => c.id), { text: 'x'.repeat(520) })
     expect(card.versions[1]?.problems.join(' ')).toMatch(/longer than Threads takes/)
-    // the product is named and nobody says who is speaking: approval refuses it on every channel, and so is it said here
+    // the product is named and nobody says who is speaking: that is not a reason for any channel to refuse it
     const named = flow.channels(world.product.id, { title: 'T', text: 'Natal Mystic builds your chart.', markup: 'markdown' })
-    expect(named.every((o) => !o.fits)).toBe(true)
-    expect(named[0]?.reason).toMatch(/connect/i)
-    const approved = await flow.approve(
-      (await flow.create(world.product.id, channels.map((c) => c.id), { title: 'T', text: 'Natal Mystic builds your chart.', markup: 'markdown' })).group.id,
-      {}
-    )
-    expect(approved.results.every((r) => r.status === 'skipped')).toBe(true)
+    expect(named.every((o) => o.fits)).toBe(true)
+    expect(named.map((o) => o.reason).join(' ')).not.toMatch(/connect/i)
   })
 
-  it('reads a version as its platform shows it: a link at the end of a Threads post does not take the statement of who speaks away (DEC-036)', async () => {
+  it('reads a version as its platform shows it, and asks for no statement of who speaks (DEC-036)', async () => {
     const { flow } = setup(['reddit', 'threads', 'instagram'])
     const said = flow.channels(world.product.id, { title: 'T', text: 'I work on it.', link: 'https://natalmystic.com', markup: 'markdown' })
     expect(said.find((o) => o.platform === 'threads')).toMatchObject({ fits: true })
-    // with no statement, the link at the end of a Threads post names the product, and Instagram, which leaves the link out, names nothing: only the missing picture is said
+    // with no statement the post fits all the same; Instagram, which leaves the link out, says only that a picture is missing
     const silent = flow.channels(world.product.id, { title: 'T', text: 'Charts are fun.', link: 'https://natalmystic.com', markup: 'markdown' })
-    expect(silent.find((o) => o.platform === 'threads')).toMatchObject({ fits: false })
-    expect(silent.find((o) => o.platform === 'threads')?.reason).toMatch(/connect/i)
+    expect(silent.find((o) => o.platform === 'threads')).toMatchObject({ fits: true })
     expect(silent.find((o) => o.platform === 'instagram')).toMatchObject({ fits: false })
     expect(silent.find((o) => o.platform === 'instagram')?.reason).toMatch(/needs a picture/)
   })

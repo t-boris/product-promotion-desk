@@ -28,7 +28,7 @@ const feed = {
 }
 
 const stored = (): string => JSON.stringify(['opportunities', 'drafts', 'approvals', 'comments', 'discussions', 'send_actions', 'findings', 'media'].map((table) => world.core.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()))
-const json = (o: Record<string, unknown>): string => JSON.stringify({ usedClaimIds: ['c1'], statesProductFacts: true, disclosesConnection: false, ...o })
+const json = (o: Record<string, unknown>): string => JSON.stringify({ usedClaimIds: ['c1'], statesProductFacts: true, ...o })
 
 function setup() {
   world = makeWorld()

@@ -7,7 +7,7 @@ import { answerFate, canApply, canUndo, fieldAction, ideaButtonLabel, rememberSh
 import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block'
 import { around, fieldsFromIdea, hasText } from '../renderer/src/pages/products/goal-ideas'
 import { applySiteProposal, proposalFits, siteProposalNote } from '../renderer/src/pages/products/site-proposal'
-import { approveAnywayLabel, checkForm, countLabel, fingerprint, heldFor, introLine, mayApproveAnyway, needsCheck, type Held } from '../renderer/src/pages/review/approve-check'
+import { approveAnywayLabel, checkForm, countLabel, fingerprint, heldFor, introLine, needsCheck, type Held } from '../renderer/src/pages/review/approve-check'
 import { canApplyPost, postAnswerFate, postFormEmpty, postUndoable, showPostHelper } from '../renderer/src/pages/review/post-draft'
 
 const READY = { id: 'claude', ready: true, detail: 'ok', label: 'Claude Code' }
@@ -49,7 +49,7 @@ describe('answerFate: an answer that arrives after the owner moved on', () => {
   })
 
   it('drops an answer checked against another field or another channel that has changed since (the title answer read the old text, the text answer the old title)', () => {
-    expect(answerFate(asked, { ...now, around: '["ch1","text without the disclosure"]' })).toBe('draft_changed')
+    expect(answerFate(asked, { ...now, around: '["ch1","a text"]' })).toBe('draft_changed')
     expect(answerFate(asked, { ...now, around: '["ch2","I work on Natal Mystic."]' })).toBe('draft_changed')
   })
 
@@ -223,8 +223,8 @@ describe('"Draft with AI" for a new publication', () => {
 })
 
 describe('the check before an approval', () => {
-  const finding = (blocks: boolean) => ({ rule: blocks ? ('connection_unsaid' as const) : ('free' as const), title: 'A rule', quote: null, why: 'Why', blocks })
-  const held = (over: Partial<Held> = {}): Held => ({ which: 'approve', findings: [finding(false)], error: null, fingerprint: fingerprint({ text: 'Hello' }), ...over })
+  const finding = () => ({ rule: 'free' as const, title: 'A rule', quote: null, why: 'Why' })
+  const held = (over: Partial<Held> = {}): Held => ({ which: 'approve', findings: [finding()], error: null, fingerprint: fingerprint({ text: 'Hello' }), ...over })
 
   it('reads a text the owner wrote or changed, and leaves an AI draft they left alone', () => {
     expect(needsCheck(null, false)).toBe(false)
@@ -262,20 +262,16 @@ describe('the check before an approval', () => {
     expect(heldFor(null, { text: 'Hello' })).toBeNull()
   })
 
-  it('offers "Approve anyway" unless a finding blocks, and says what was pressed', () => {
-    expect(mayApproveAnyway({ findings: [] })).toBe(true)
-    expect(mayApproveAnyway({ findings: [finding(false), finding(false)] })).toBe(true)
-    expect(mayApproveAnyway({ findings: [finding(false), finding(true)] })).toBe(false)
+  it('says what "Approve anyway" will do, in the words of the button that was pressed', () => {
     expect(approveAnywayLabel('approve')).toBe('Approve anyway')
     expect(approveAnywayLabel('approve_send')).toBe('Approve and send anyway')
   })
 
   it('counts the findings and introduces the panel in the words of its case', () => {
-    expect(countLabel([finding(false)])).toBe('1 thing')
-    expect(countLabel([finding(false), finding(false), finding(true)])).toBe('3 things')
-    expect(introLine({ findings: [finding(false)], error: null })).toBe("Your text breaks rules the AI's own drafts must follow. Nothing is approved yet.")
-    expect(introLine({ findings: [finding(true)], error: null })).toBe('Something here has to be fixed before the text can be approved. Nothing is approved yet.')
+    expect(countLabel([finding()])).toBe('1 thing')
+    expect(countLabel([finding(), finding(), finding()])).toBe('3 things')
+    expect(introLine({ findings: [finding()], error: null })).toBe("Your text breaks rules the AI's own drafts must follow. Nothing is approved yet.")
     expect(introLine({ findings: [], error: 'The engine is gone' })).toBe('The text could not be checked (The engine is gone). Nothing is approved yet; you can still approve it.')
-    expect(introLine({ findings: [finding(true)], error: 'x' })).toContain('could not be checked')
+    expect(introLine({ findings: [finding()], error: 'x' })).toContain('could not be checked')
   })
 })

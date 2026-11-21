@@ -7,7 +7,7 @@
 //  - A mission exists only for a gate grant (`GateGrant` comes from `SendGate.authorize` and nowhere else) and only for the attempt the
 //    flow has reserved. There is no other caller.
 //  - The AI never holds a ticket. The authority below asks the gate for a fresh single-use ticket at the moment of the submit (a renewal
-//    re-checks the approval, the disclosure, the limits, the owner's hold on the browser...), checks that the ticket is bound to exactly the
+//    re-checks the approval, the limits, the owner's hold on the browser...), checks that the ticket is bound to exactly the
 //    content the mission will type, this account and this destination, hands it to the one submit step, and revokes it when the step ends.
 //    It never gives a second ticket after the press.
 //  - `confirmed` is the application's own reading of the site (`Connector.findPublished`), never the AI's report. A press whose result the

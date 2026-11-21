@@ -2,7 +2,7 @@
 // opportunity/draft/approval/action tables goes through here so the other flow modules stay free of SQL.
 
 import { ApiError } from '../../shared/api'
-import { renderForPlatform, siteLinkFor } from '../../shared/post-format'
+import { siteLinkFor } from '../../shared/post-format'
 import type { PostType, QuickCard } from '../../shared/quick-post'
 import type {
   Account,
@@ -30,7 +30,6 @@ import type {
 import type { Core } from '../core'
 import { newId, toJson, type Db } from '../db/database'
 import { mapAccount, mapAction, mapApproval, mapComment, mapDiscussion, mapOpportunity } from '../repos'
-import { disclosureProblem } from './disclosure'
 import { commentBodyHash } from './hash'
 import { isPostTarget, parentOf } from './reply-target'
 
@@ -264,17 +263,6 @@ export class FlowStore {
     }
     if (isPostTarget(opp)) return this.postOf(opp)?.url || opp.destination
     return channel.url
-  }
-
-  /**
-   * Why `draft` must not be approved or sent for lack of a disclosure of the author's connection to the product (DEC-010), or null.
-   * Decided from the text itself, whoever wrote it (see disclosure.ts); a text that does not mention the product is never touched.
-   */
-  disclosureProblemOf(opp: Opportunity, draft: Draft): string | null {
-    const product = this.core.repos.product(opp.productId)
-    // What is judged is what the platform will show: a link in a Markdown text shows its words and its address, not its marks (DEC-030).
-    const shown = renderForPlatform(draft, this.requireChannel(opp.channelId).platform)
-    return disclosureProblem({ title: shown.title, text: shown.text, link: shown.shownLink }, { name: product.name, websiteUrl: product.websiteUrl })
   }
 
   list(filter: OpportunityFilter = {}): Opportunity[] {

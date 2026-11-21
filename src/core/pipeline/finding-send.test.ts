@@ -246,15 +246,13 @@ describe('Send refuses before anything is made', () => {
     expect(opportunities()).toEqual([])
   })
 
-  it('a text that names the product and does not say the author is connected with it: the owner\'s press does not waive the rule', async () => {
+  it('a text that names the product goes out like any other: nothing is asked about the author\'s connection to it', async () => {
     const { missions, findingId } = setup()
     const name = world.core.repos.product(world.product.id).name
     const result = await send(findingId, null, `Try ${name}, it draws charts.`)
-    expect(result.state).toBe('refused')
-    expect(result.message).toMatch(/connect|disclos|affiliat/i)
-    expect(missions.requests).toHaveLength(0)
-    // nothing is left behind by a refusal: the opportunity made for it is gone
-    expect(opportunities()).toEqual([])
+    expect(result.state).toBe('unknown')
+    expect(result.message).not.toMatch(/connect|disclos|affiliat/i)
+    expect(missions.requests).toHaveLength(1)
   })
 
   it('a send when there is no AI browser in the build: the connector never carries it', async () => {

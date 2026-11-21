@@ -85,15 +85,13 @@ export interface DraftHelpResult {
 
 /** One thing the owner's own text breaks: what the panel before an approval lists. */
 export interface DraftFinding {
-  rule: 'prohibited' | 'price' | 'discount' | 'free' | 'link' | 'unsafe_link' | 'credential' | 'connection_denied' | 'connection_unsaid'
+  rule: 'prohibited' | 'price' | 'discount' | 'free' | 'link' | 'unsafe_link' | 'credential'
   /** The rule, in words. */
   title: string
   /** The words of the text it is about, or what the rule is about; null when there are none to show. */
   quote: string | null
   /** Why it is a problem. */
   why: string
-  /** True when approving is refused until it is fixed (the connection to the product, decided in code); false when the owner may approve anyway. */
-  blocks: boolean
 }
 
 /** What a check of the owner's text found, the findings that block first. An empty list means nothing was found. */

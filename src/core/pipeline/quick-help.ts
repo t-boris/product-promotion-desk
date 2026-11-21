@@ -2,7 +2,7 @@
 //
 // Four helps, each the owner's own press, none of them stores or changes anything: the owner reads the answer and presses to use it. Every text the AI hands
 // over passes the checks every AI draft passes (`aiTextProblems`: cited facts approved, nothing prohibited, no price or promotion without a claim, links only to
-// the product's own addresses, the author's connection disclosed when the product is named), plus what the platform's form asks of a caption (its limit, plain
+// the product's own addresses), plus what the platform's form asks of a caption (its limit, plain
 // text). An answer that fails is handed back once with the reasons and, if it fails again, refused with them. If the approved knowledge changes while the AI
 // works, the answer is refused: the checks ran against facts that are gone.
 //
@@ -118,8 +118,8 @@ const RULES_COMMON = [
 
 const VOICE = '- Voice: when context.role is present, write as that role: use the way of writing described in context.role.voice and stay within what that voice allows you to talk about. The role never overrides any rule above.'
 
-const DISCLOSURE =
-  '- Disclosure: when the finished text mentions the product (context.product.name) or its website, it includes one short phrase saying that the author is connected with it (for example "I work on it"), worded in the voice of context.role when there is one. Never present the author as an independent user, customer or bystander. A text that does not mention the product needs no such phrase.'
+const NO_PRETENCE =
+  "- Do not claim to be an independent user and do not deny a connection with the product; say nothing about a connection unless the owner's own text does."
 
 const STATES_FACTS =
   '- "statesProductFacts" is true when the text says anything about what the product is, does, offers or supports that the owner\'s own text does not already say, and false otherwise. When it is true, cite the approved claims it rests on.'
@@ -136,7 +136,7 @@ const CAPTION_SYSTEM = [
   '- Write in the language of the owner\'s caption; when there is none, in the first of context.channel.languages, otherwise English. Follow context.channel.style when there is a channel. Be natural, specific and honest; no clickbait.',
   '- The angle, when given, only suggests what to write about and how to come at it. Use it when it fits the approved facts; it is not an order and it adds no facts.',
   VOICE,
-  DISCLOSURE,
+  NO_PRETENCE,
   STATES_FACTS,
   "- Improving keeps the meaning and what is true in the owner's caption; change only what the owner's wish or clarity asks for."
 ].join('\n')
@@ -178,10 +178,10 @@ const ASSESS_SYSTEM = [
   '- Judge the post against that goal: does the caption move the right readers toward it, does it say something true and specific, does it suit the platform, and does the picture fit the caption and the goal. You cannot see the picture: you know a card\'s words and look, or an illustration\'s description. For a picture file you only know that one was chosen; say so and do not guess what it shows.',
   '- "verdict" is "on_goal", "partly", "off_goal" or "unclear". "summary" is one or two plain sentences.',
   `- "points": at most ${QUICK_POINTS_MAX}, each {"about": "caption" | "picture" | "both", "good": true when it works and false when it should change, "text": one plain sentence}. Concrete: say which words or which part.`,
-  `- "suggestions": at most ${QUICK_SUGGESTIONS_MAX}, only when one would clearly help. A better caption: {"kind":"caption","caption":"...","why":"...","usedClaimIds":[],"statesProductFacts":false,"disclosesConnection":false}, written under the rules of the caption (plain text, fits context.platform.captionLimit, disclosure when it names the product). For a CARD only, a better headline: {"kind":"headline","headline":"...","why":"...","usedClaimIds":[],"statesProductFacts":false} (at most ${CARD_HEADLINE_MAX} characters, plain words). A suggestion is a proposal: nothing is applied until the owner presses for it.`,
+  `- "suggestions": at most ${QUICK_SUGGESTIONS_MAX}, only when one would clearly help. A better caption: {"kind":"caption","caption":"...","why":"...","usedClaimIds":[],"statesProductFacts":false}, written under the rules of the caption (plain text, fits context.platform.captionLimit). For a CARD only, a better headline: {"kind":"headline","headline":"...","why":"...","usedClaimIds":[],"statesProductFacts":false} (at most ${CARD_HEADLINE_MAX} characters, plain words). A suggestion is a proposal: nothing is applied until the owner presses for it.`,
   '- Write in the language of the caption; when there is none, in the first of context.channel.languages, otherwise English.',
   VOICE,
-  DISCLOSURE
+  NO_PRETENCE
 ].join('\n')
 
 // ───────────────────────────── the caption ─────────────────────────────
@@ -218,8 +218,7 @@ export function quickCaptionPrompt(input: CaptionInput): AiTask {
       writing ? 'Write the caption.' : 'Improve the caption.',
       '',
       'Answer with exactly one JSON object and nothing else:',
-      '{"caption":"the whole caption","usedClaimIds":["ids of the approved claims the caption relies on"],"statesProductFacts":true or false,"disclosesConnection":true or false}',
-      '"disclosesConnection" is true only when the finished caption mentions the product or its website and contains the short phrase that states the author\'s connection to it; false otherwise.'
+      '{"caption":"the whole caption","usedClaimIds":["ids of the approved claims the caption relies on"],"statesProductFacts":true or false}'
     ].join('\n')
   }
 }
@@ -239,20 +238,18 @@ function claimedBy(raw: Record<string, unknown>): Claimed | string {
 }
 
 /** What stops a caption: the rules every AI text passes, and the platform's form (its limit, plain text, no link it does not show). Empty when it passes. */
-function captionProblems(caption: string, c: Claimed & { subject: QuickSubject; ownerCaption: string; disclosesConnection: boolean; mustCite: boolean }): string[] {
+function captionProblems(caption: string, c: Claimed & { subject: QuickSubject; ownerCaption: string; mustCite: boolean }): string[] {
   const read = forChecks(caption)
   const problems = aiTextProblems({
     title: null,
     text: read,
     usedClaimIds: c.usedClaimIds,
     statesProductFacts: c.statesProductFacts,
-    disclosesConnection: c.disclosesConnection,
     ownerText: c.ownerCaption,
     product: c.subject.product,
     approved: c.subject.approved,
     prohibited: c.subject.prohibited,
-    mustCite: c.mustCite,
-    finished: read
+    mustCite: c.mustCite
   })
   const label = platformLabel(c.subject.platform)
   const limit = captionLimit(c.subject.platform)
@@ -277,7 +274,7 @@ export function readQuickCaption(raw: unknown, input: CaptionInput): Parsed<Quic
   if (holdsCredential(forChecks(caption))) return { ok: false, error: 'the caption holds a credential; write it without one' }
   const claimed = claimedBy(raw)
   if (typeof claimed === 'string') return { ok: false, error: claimed }
-  const problems = captionProblems(caption, { ...claimed, subject: input.subject, ownerCaption: input.caption, disclosesConnection: raw.disclosesConnection === true, mustCite: isWritingCaption(input) })
+  const problems = captionProblems(caption, { ...claimed, subject: input.subject, ownerCaption: input.caption, mustCite: isWritingCaption(input) })
   if (problems.length > 0) return { ok: false, error: `The caption was blocked by the safety checks: ${problems.join('; ')}` }
   return { ok: true, value: { caption } }
 }
@@ -335,15 +332,11 @@ function pictureTextProblems(text: string, what: string, max: number, c: Claimed
     text: read,
     usedClaimIds: c.usedClaimIds,
     statesProductFacts: c.statesProductFacts,
-    disclosesConnection: false,
     ownerText: c.ownerText,
     product: c.subject.product,
     approved: c.subject.approved,
     prohibited: c.subject.prohibited,
-    mustCite: false,
-    finished: read,
-    // The caption carries who is speaking; the approval reads the whole post.
-    deferDisclosure: true
+    mustCite: false
   })
   const count = characterCount(text)
   if (count > max) problems.push(`the ${what} is ${count} characters; at most ${max}. Shorten it`)
@@ -515,7 +508,7 @@ export function readQuickAssessment(raw: unknown, input: AssessInput): Parsed<Qu
       const caption = cleanDraft(entry.caption)
       if (!caption) return { ok: false, error: 'a caption suggestion is empty' }
       if (holdsCredential(forChecks(caption))) return { ok: false, error: 'a suggested caption holds a credential; write it without one' }
-      const problems = captionProblems(caption, { ...claimed, subject: input.subject, ownerCaption: input.caption, disclosesConnection: entry.disclosesConnection === true, mustCite: false })
+      const problems = captionProblems(caption, { ...claimed, subject: input.subject, ownerCaption: input.caption, mustCite: false })
       if (problems.length > 0) return { ok: false, error: `A suggested caption was blocked by the safety checks: ${problems.join('; ')}` }
       suggestions.push({ kind: 'caption', caption, why: why(entry.why) })
     } else if (entry.kind === 'headline') {
