@@ -15,6 +15,12 @@ const MAX_OPTIONS = 40
 const MAX_TEXT = 2500
 const MAX_ALERTS = 8
 const MAX_HREF = 500
+/** The pictures of a page that are listed: only the ones big enough to be a picture of a post (not an avatar or an icon), the ones on the screen first. */
+const MAX_PICTURES = 12
+const MIN_PICTURE_WIDTH = 120
+const MIN_PICTURE_HEIGHT = 90
+const MAX_PICTURE_URL = 600
+const MAX_PICTURE_ALT = 120
 
 export interface SnapshotElement {
   /** "e12": the label the page carries in data-ppd-ref. */
@@ -45,6 +51,16 @@ export interface SnapshotElement {
   near?: string
 }
 
+/** A picture the page shows: where the site has it (an https address) and what the page says it shows. Only the watch and research missions are shown these. */
+export interface SnapshotPicture {
+  src: string
+  alt: string
+  width: number
+  height: number
+  /** The picture is not on the screen now (above or below the part of the page that shows). */
+  offscreen?: boolean
+}
+
 export interface PageSnapshot {
   url: string
   title: string
@@ -54,6 +70,8 @@ export interface PageSnapshot {
   /** A visible human check (CAPTCHA) on the page, described; empty when there is none. */
   humanCheck: string
   elements: SnapshotElement[]
+  /** The pictures the page shows, the ones on the screen first. Absent when there are none (or the page did not say). */
+  pictures?: SnapshotPicture[]
   /** How far the page is scrolled (the document, not a box inside it): where the screen is on it. Absent when the page did not say. */
   scroll?: { top: number; max: number }
 }
@@ -164,6 +182,20 @@ export function snapshotScript(): string {
   }
   window.__ppdRefCounter = counter;
 
+  // The pictures a person sees on the page (a post's own pictures, not avatars or icons): where the site has them, so the application can keep a copy.
+  const pictures = [];
+  const pictureUrls = new Set();
+  for (const img of all('img', document)) {
+    if (pictures.length >= ${MAX_PICTURES}) break;
+    const r = img.getBoundingClientRect();
+    if (r.width < ${MIN_PICTURE_WIDTH} || r.height < ${MIN_PICTURE_HEIGHT} || !shown(img)) continue;
+    const src = img.currentSrc || img.src || '';
+    if (!/^https:\\/\\//i.test(src) || src.length > ${MAX_PICTURE_URL} || pictureUrls.has(src)) continue;
+    pictureUrls.add(src);
+    pictures.push({ src: src, alt: clean(img.alt || img.getAttribute('aria-label') || '', ${MAX_PICTURE_ALT}), width: Math.round(img.naturalWidth || r.width), height: Math.round(img.naturalHeight || r.height), offscreen: !onScreen(img) });
+  }
+  pictures.sort((a, b) => Number(a.offscreen) - Number(b.offscreen));
+
   const seen = new Set();
   const alerts = [];
   for (const el of all('[role=alert],[role=status],[aria-live=assertive],[aria-live=polite],[data-error],[class*=error i],[id*=error i]', document)) {
@@ -188,7 +220,7 @@ export function snapshotScript(): string {
   const text = clean(document.body ? document.body.innerText : '', ${MAX_TEXT});
   if (humanCheck === '' && text.length < 600 && /verify you are (a )?human|are you a robot|not a robot|security check/i.test(text)) humanCheck = 'the page asks to prove you are human';
   const doc = document.scrollingElement || document.documentElement || { scrollTop: 0, scrollHeight: 0 };
-  return { url: location.href, title: clean(document.title, 120), text: text, alerts: alerts, humanCheck: humanCheck, elements: elements, scroll: { top: Math.round(doc.scrollTop), max: Math.max(0, Math.round(doc.scrollHeight - window.innerHeight)) } };
+  return { url: location.href, title: clean(document.title, 120), text: text, alerts: alerts, humanCheck: humanCheck, elements: elements, pictures: pictures, scroll: { top: Math.round(doc.scrollTop), max: Math.max(0, Math.round(doc.scrollHeight - window.innerHeight)) } };
 })()`
 }
 
@@ -237,6 +269,7 @@ export function parseSnapshot(raw: unknown): PageSnapshot | null {
     if (e.offscreen === true) element.offscreen = true
     elements.push(element)
   }
+  const pictures = picturesOf(page.pictures)
   return {
     url: str(page.url, 300),
     title: str(page.title, 120),
@@ -244,8 +277,32 @@ export function parseSnapshot(raw: unknown): PageSnapshot | null {
     alerts: Array.isArray(page.alerts) ? page.alerts.slice(0, MAX_ALERTS).map((a) => str(a, 200)).filter((a) => a !== '') : [],
     humanCheck: str(page.humanCheck, 120),
     elements,
+    ...(pictures.length > 0 ? { pictures } : {}),
     ...scrollOf(page.scroll)
   }
+}
+
+/** The pictures the page listed, checked: an https address of a sane length, a size, at most `MAX_PICTURES`. The page is untrusted, so anything odd is dropped. */
+function picturesOf(raw: unknown): SnapshotPicture[] {
+  if (!Array.isArray(raw)) return []
+  const pictures: SnapshotPicture[] = []
+  for (const entry of raw) {
+    if (pictures.length >= MAX_PICTURES) break
+    if (typeof entry !== 'object' || entry === null) continue
+    const p = entry as Record<string, unknown>
+    if (typeof p.src !== 'string' || !p.src.startsWith('https://') || p.src.length > MAX_PICTURE_URL || /\s/.test(p.src)) continue
+    const width = typeof p.width === 'number' && Number.isFinite(p.width) ? Math.max(0, Math.round(p.width)) : 0
+    const height = typeof p.height === 'number' && Number.isFinite(p.height) ? Math.max(0, Math.round(p.height)) : 0
+    pictures.push({ src: p.src, alt: str(p.alt, MAX_PICTURE_ALT), width, height, ...(p.offscreen === true ? { offscreen: true } : {}) })
+  }
+  return pictures
+}
+
+/** The pictures as one line each, for the AI: `[p1] 640×480 "what it shows" https://…`. Only a mission that looks at posts is shown them. */
+export function renderPictures(snapshot: PageSnapshot): string {
+  const pictures = snapshot.pictures ?? []
+  if (pictures.length === 0) return ''
+  return pictures.map((p, i) => `[p${i + 1}] ${p.width}×${p.height}${p.alt ? ` "${p.alt}"` : ''} ${p.src}${p.offscreen ? ' (off screen)' : ''}`).join('\n')
 }
 
 /**

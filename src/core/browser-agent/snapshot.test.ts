@@ -1,6 +1,6 @@
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
-import { describeScroll, parseSnapshot, renderElements, snapshotScript, type PageSnapshot } from './snapshot'
+import { describeScroll, parseSnapshot, renderElements, renderPictures, snapshotScript, type PageSnapshot } from './snapshot'
 
 // A tiny DOM, enough to run the real script and see what it reports.
 interface NodeSpec {
@@ -406,3 +406,40 @@ describe('what stands around a file input', () => {
     expect(parsed?.elements[1]?.near).toBeUndefined()
   })
 })
+
+describe('the pictures of a page', () => {
+  const base = { url: 'https://www.reddit.com/r/x/comments/1', title: 'T', text: 'x', alerts: [], humanCheck: '', elements: [{ ref: 'e1', role: 'link', name: 'A' }] }
+
+  it('are parsed with their address, what they show and their size, and only https addresses are kept', () => {
+    const parsed = parseSnapshot({
+      ...base,
+      pictures: [
+        { src: 'https://i.redd.it/a.png', alt: '  A   chart ', width: 640.4, height: 480, offscreen: true },
+        { src: 'http://i.redd.it/plain.png', alt: '', width: 300, height: 300 },
+        { src: 'https://i.redd.it/with space.png', alt: '', width: 300, height: 300 },
+        { src: 'javascript:alert(1)', alt: '', width: 300, height: 300 },
+        { src: 42, alt: '', width: 300, height: 300 },
+        null
+      ]
+    })
+    expect(parsed?.pictures).toEqual([{ src: 'https://i.redd.it/a.png', alt: 'A chart', width: 640, height: 480, offscreen: true }])
+  })
+
+  it('are left out of a snapshot that has none, so a page without pictures reads as it always did', () => {
+    expect(parseSnapshot({ ...base })).not.toHaveProperty('pictures')
+    expect(parseSnapshot({ ...base, pictures: [] })).not.toHaveProperty('pictures')
+    expect(parseSnapshot({ ...base, pictures: 'many' })).not.toHaveProperty('pictures')
+  })
+
+  it('are at most twelve', () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({ src: `https://i.redd.it/${i}.png`, alt: '', width: 300, height: 300 }))
+    expect(parseSnapshot({ ...base, pictures: many })?.pictures).toHaveLength(12)
+  })
+
+  it('are listed one per line for the AI, with the ones off the screen marked', () => {
+    const snapshot = parseSnapshot({ ...base, pictures: [{ src: 'https://i.redd.it/a.png', alt: 'A chart', width: 640, height: 480 }, { src: 'https://i.redd.it/b.png', alt: '', width: 300, height: 200, offscreen: true }] })
+    expect(renderPictures(snapshot as NonNullable<typeof snapshot>)).toBe('[p1] 640×480 "A chart" https://i.redd.it/a.png\n[p2] 300×200 https://i.redd.it/b.png (off screen)')
+    expect(renderPictures({ ...(snapshot as NonNullable<typeof snapshot>), pictures: undefined })).toBe('')
+  })
+})
+

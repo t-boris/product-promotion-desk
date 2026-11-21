@@ -67,6 +67,9 @@ function card(seed: Seed): FindingCard {
       seenAt: seed.seenAt === undefined ? null : seed.seenAt,
       starredAt: seed.starredAt === undefined ? null : seed.starredAt,
       own: seed.own ?? false,
+      analysis: '',
+      topics: [],
+      readAt: null,
       createdAt: seed.createdAt ?? '2026-11-15T08:00:00.000Z'
     },
     channelTarget: seed.target ?? 'r/alpha',

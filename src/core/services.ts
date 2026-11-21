@@ -6,6 +6,7 @@ import type { PostMissionService } from './browser-agent/post-submit'
 import type { WatchMissionService } from './browser-agent/watch'
 import type { ResearchMissionService } from './browser-agent/research'
 import type { MediaService } from './media/service'
+import type { DownloadDeps } from './pipeline/picture-download'
 
 /** Implemented by the passports module (I-1); consumed by drafting and sending (I-5, I-6). */
 export interface KnowledgeProvider {
@@ -106,6 +107,8 @@ export interface CoreServices {
   watchMissions?: WatchMissionService
   /** Implemented by the channels module; the quick-post helper has the AI search a platform for trends, in the account's browser, on the owner's press (REQ-004). */
   researchMissions?: ResearchMissionService
+  /** How a picture of a post is fetched (the network and the name lookup); absent means the real ones. A seam for tests: nothing sets it in the application. */
+  pictureDeps?: DownloadDeps
   channels?: ChannelsService
   knowledge?: KnowledgeProvider
   pipeline?: PipelineHooks

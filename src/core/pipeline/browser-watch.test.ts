@@ -33,7 +33,7 @@ class ScriptedWatch implements WatchMissionService {
 }
 
 const done = (over: Partial<WatchOutcome> = {}): WatchOutcome => ({ ended: 'finished', reported: { status: 'done', reason: 'Looked at it all.' }, humanCheck: null, error: null, said: '', outOfCalls: false, ...over })
-const item = (n: number | string, over: Partial<WatchItem> = {}): WatchItem => ({ url: `https://www.instagram.com/p/P${n}`, title: `Post ${n}`, author: 'someone', label: 'notice', relation: 'Astrology fans talk about birth charts.', about: '', thread: '', replyTo: '', comment: '', comments: [], ...over })
+const item = (n: number | string, over: Partial<WatchItem> = {}): WatchItem => ({ url: `https://www.instagram.com/p/P${n}`, title: `Post ${n}`, author: 'someone', label: 'notice', relation: 'Astrology fans talk about birth charts.', about: '', thread: '', replyTo: '', comment: '', comments: [], analysis: '', topics: [], images: [], own: false, ...over })
 
 interface Watched {
   w: World
@@ -124,8 +124,12 @@ describe('a channel the app only watches in the browser: a whole look', () => {
       x.w.clock.advance(4 * 60 * MINUTE)
       await check(x)
       const brief = (x.ai.requests[1] as WatchMissionRequest).brief
-      expect(brief.places.at(-1)).toEqual({ label: 'A post you called worth a reply before, not read yet: Post 1', url: 'https://www.instagram.com/p/P1' })
-      expect(brief.known).toEqual(['https://www.instagram.com/p/P2'])
+      // the one called worth a reply comes first, then the one found in the last two days that was not read either: both are sent to be read, none is "judged"
+      expect(brief.places.slice(-2)).toEqual([
+        { label: 'A post noted before, not read yet: Post 1', url: 'https://www.instagram.com/p/P1' },
+        { label: 'A post noted before, not read yet: Post 2', url: 'https://www.instagram.com/p/P2' }
+      ])
+      expect(brief.known).toEqual([])
     })
 
     it('keep their verdict and get what the AI read when it records them again, once', async () => {
@@ -184,7 +188,7 @@ describe('a channel the app only watches in the browser: a whole look', () => {
       await check(x)
       x.w.clock.advance(4 * 60 * MINUTE)
       await check(x)
-      const read = (x.ai.requests[1] as WatchMissionRequest).brief.places.filter((p) => p.label.startsWith('A post you called'))
+      const read = (x.ai.requests[1] as WatchMissionRequest).brief.places.filter((p) => p.label.startsWith('A post noted before'))
       expect(read).toHaveLength(8)
     })
   })
@@ -239,7 +243,9 @@ describe('a channel the app only watches in the browser: a whole look', () => {
     expect(second.brief.firstLook).toBe(false)
     // from the last whole look, less an hour of overlap
     expect(Date.parse(second.brief.since)).toBe(Date.parse(firstCursor) - 60 * MINUTE)
-    expect(new Set(second.brief.known)).toEqual(new Set(['https://www.instagram.com/p/P1', 'https://www.instagram.com/p/P2']))
+    // P2 was judged not relevant: known. P1 was noted a few hours ago and not read: it is sent to be read, so it is a place of the brief, not "judged"
+    expect(new Set(second.brief.known)).toEqual(new Set(['https://www.instagram.com/p/P2']))
+    expect(second.brief.places.map((place) => place.url)).toContain('https://www.instagram.com/p/P1')
     expect(rows(x).map((r) => [r.external_id.slice(-2), r.first_look])).toEqual([['P1', 1], ['P2', 1], ['P3', 0]])
     // the one-time look-back was made once
     expect(channelOf(x).lookedBackAt).toBe(lookedBack)
@@ -247,7 +253,7 @@ describe('a channel the app only watches in the browser: a whole look', () => {
     nothingToAct(x)
   })
 
-  it('never records the account\'s own posts, whatever the AI says, and counts nothing for them', async () => {
+  it('records the account\'s own posts too, marked as its own, so the Feed lists them first', async () => {
     const x = watched()
     x.ai.script = (request) => {
       request.record([item(1, { author: 'brand_account' }), item(2, { author: 'Brand_Account' }), item(3)])
@@ -256,8 +262,12 @@ describe('a channel the app only watches in the browser: a whole look', () => {
 
     const outcome = await check(x)
 
-    expect(outcome.summary).toBe('Watched in the browser: 1 noted, 0 judged not relevant, 0 already known')
-    expect(rows(x).map((r) => r.external_id.slice(-2))).toEqual(['P3'])
+    expect(outcome.summary).toBe('Watched in the browser: 3 noted, 0 judged not relevant, 0 already known')
+    expect(rows(x).map((r) => r.external_id.slice(-2))).toEqual(['P1', 'P2', 'P3'])
+    const own = x.w.core.db.prepare('SELECT external_id AS id, is_own AS own FROM findings WHERE channel_id = ? ORDER BY external_id').all(x.channelId) as { id: string; own: number }[]
+    expect(own.map((r) => [r.id.slice(-2), r.own])).toEqual([['P1', 1], ['P2', 1], ['P3', 0]])
+    // an own post is a finding to read: nothing is drafted, approved or sent for it
+    nothingToAct(x)
   })
 
   it('starts from now, without a look, when the owner asked for no look-back', async () => {

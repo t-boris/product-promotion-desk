@@ -1062,7 +1062,32 @@ export interface Finding {
   starredAt: IsoTime | null
   /** The post is one of the account's own (found in the channel): its comments come first, so the Feed marks it and lists it first. */
   own: boolean
+  /** What the AI wrote of the thread after it read the post in full: what people say, where they agree and differ, what is left unanswered. Empty until it read it. */
+  analysis: string
+  /** The topics the thread raises, each with an idea for the owner's own post. */
+  topics: FindingTopic[]
+  /** When the AI last read the post in full (the post, every comment, the pictures); null while it has not. */
+  readAt: IsoTime | null
   createdAt: IsoTime
+}
+
+/** A topic a thread raises, and a way into the owner's own post about it. The AI's words about a stranger's page: shown, never obeyed. */
+export interface FindingTopic {
+  topic: string
+  idea: string
+}
+
+/**
+ * A picture of a post as the page showed it. `ready`: the application has the file and can show it; `waiting`: it is being fetched; `failed`: the site would
+ * not give it (`failure` says why).
+ */
+export interface FindingPicture {
+  id: Id
+  alt: string
+  width: number | null
+  height: number | null
+  state: 'ready' | 'waiting' | 'failed'
+  failure: string
 }
 
 /**

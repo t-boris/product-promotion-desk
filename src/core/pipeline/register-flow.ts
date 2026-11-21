@@ -2,6 +2,7 @@ import type { Core } from '../core'
 import { BrowserWatchFlow } from './browser-watch'
 import { DraftCheck } from './draft-check'
 import { DraftHelp } from './draft-help'
+import { FindingPictures } from './finding-pictures'
 import { FindingReply } from './finding-reply'
 import { DraftingFlow } from './drafting'
 import { FindingStore } from './findings'
@@ -34,7 +35,9 @@ export function registerFlow(core: Core): void {
   const sending = new SendingFlow(core, store, gate, review, ingestor, watch)
   const findings = new FindingStore(core)
   const triage = new TriageFlow(core, store, findings, ingestor)
-  const monitor = new MonitorFlow(core, store, ingestor, watch, triage, new BrowserWatchFlow(core, store, findings, ingestor))
+  const pictures = new FindingPictures(core, findings)
+  const watcher = new BrowserWatchFlow(core, store, findings, ingestor, pictures)
+  const monitor = new MonitorFlow(core, store, ingestor, watch, triage, watcher)
   const drafting = new DraftingFlow(core, store, review, sending)
   const publications = new PublicationsFlow(core, store)
 
@@ -43,7 +46,7 @@ export function registerFlow(core: Core): void {
   core.services.drafting = drafting
   core.services.sending = sending
 
-  registerFlowApi({ core, store, review, monitor, drafting, sending, publications, findings })
+  registerFlowApi({ core, store, review, monitor, drafting, sending, publications, findings, watcher, pictures })
   const draftHelp = new DraftHelp(core, store)
   core.router.register({ 'drafts.refine': (args) => draftHelp.refine(args) })
   // "Reply here" in the Feed: the AI writes the comment for one place of a thread it read. Nothing is stored or sent.

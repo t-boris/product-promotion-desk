@@ -12,6 +12,7 @@ import type {
   Discussion,
   Draft,
   Finding,
+  FindingTopic,
   Mailbox,
   Opportunity,
   PassportVersion,
@@ -155,8 +156,23 @@ export const mapFinding = (r: Row): Finding => ({
   seenAt: (r.seen_at as string | null) ?? null,
   starredAt: (r.starred_at as string | null) ?? null,
   own: r.is_own === 1,
+  analysis: (r.analysis as string | null) ?? '',
+  topics: parseTopics(r.topics_json),
+  readAt: (r.read_at as string | null) ?? null,
   createdAt: r.created_at as string
 })
+
+/** The topics of a finding as stored: a list of { topic, idea }; anything else is nothing. */
+function parseTopics(raw: unknown): FindingTopic[] {
+  if (typeof raw !== 'string' || raw === '') return []
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.flatMap((entry) => (typeof entry === 'object' && entry !== null && typeof (entry as FindingTopic).topic === 'string' ? [{ topic: (entry as FindingTopic).topic, idea: typeof (entry as FindingTopic).idea === 'string' ? (entry as FindingTopic).idea : '' }] : []))
+  } catch {
+    return []
+  }
+}
 
 export const mapComment = (r: Row): Comment => ({
   id: r.id as string,

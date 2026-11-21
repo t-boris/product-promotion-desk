@@ -37,9 +37,10 @@ class ListPage extends FakePage {
     { ref: 'e11', role: 'link', name: 'Mail', href: 'mailto:a@b.c' }
   ]
   humanCheck = ''
+  pictures: { src: string; alt: string; width: number; height: number; offscreen?: boolean }[] = []
   override async read<T>(script: string): Promise<T> {
     this.log.push(`read ${script.slice(0, 40)}`)
-    if (script.includes('agent-snapshot')) return { url: this.currentUrl, title: 'Page', text: 'Some posts', alerts: [], humanCheck: this.humanCheck, elements: this.items.map((i) => ({ ...i })) } as T
+    if (script.includes('agent-snapshot')) return { url: this.currentUrl, title: 'Page', text: 'Some posts', alerts: [], humanCheck: this.humanCheck, elements: this.items.map((i) => ({ ...i })), pictures: this.pictures } as T
     return undefined as T
   }
   override async pageStep(step: PageStep, hosts: string[]): Promise<PageStepResult> {
@@ -370,7 +371,7 @@ describe('watch_record', () => {
     const result = await record(t, [post({ url: 'https://www.instagram.com/p/Abc123/?igsh=xyz#c1' })])
     expect(result.isError).toBeFalsy()
     expect(result.text).toMatch(/Recorded 1 post\./)
-    expect(t.recorded).toEqual([{ url: 'https://www.instagram.com/p/Abc123', title: 'A post about natal charts', author: 'someone', label: 'notice', relation: 'Astrology fans talk about birth charts.', about: '', thread: '', replyTo: '', comment: '', comments: [] }])
+    expect(t.recorded).toEqual([{ url: 'https://www.instagram.com/p/Abc123', title: 'A post about natal charts', author: 'someone', label: 'notice', relation: 'Astrology fans talk about birth charts.', about: '', thread: '', replyTo: '', comment: '', comments: [], analysis: '', topics: [], images: [], own: false }])
     expect(t.page.log).toEqual([])
   })
 
@@ -459,13 +460,13 @@ describe('watch_record', () => {
       expect(t.recorded[1].comments).toEqual([])
     })
 
-    it('keeps nothing of the four for a notice or a skip, whatever the AI gave', async () => {
+    it('keeps whom to answer and the comment only for a reply: a notice keeps what it read, a skip keeps nothing', async () => {
       const t = setup()
       const comments = [{ author: 'a', text: 'b', depth: 0 }]
       await record(t, [post({ ...READ, comments }), post({ url: 'https://www.instagram.com/p/Skip/', label: 'skip', relation: 'Cooking.', ...READ, comments })])
-      expect(t.recorded.map((i) => [i.about, i.thread, i.replyTo, i.comment, i.comments])).toEqual([
-        ['', '', '', '', []],
-        ['', '', '', '', []]
+      expect(t.recorded.map((i) => [i.about !== '', i.thread !== '', i.replyTo, i.comment, i.comments.length])).toEqual([
+        [true, true, '', '', 1],
+        [false, false, '', '', 0]
       ])
     })
   })
@@ -624,3 +625,79 @@ describe('what the owner can do meanwhile', () => {
     expect(t.reports).toEqual([{ status: 'needs_owner', reason: 'A sign-in page stopped me.' }])
   })
 })
+
+describe('what a post read in full carries: the analysis, the topics and the pictures', () => {
+  const shown = [{ src: 'https://i.redd.it/chart.png', alt: 'A natal chart wheel', width: 640, height: 480 }, { src: 'https://i.redd.it/second.jpg', alt: '', width: 300, height: 200, offscreen: true }]
+  const full = (over: Record<string, unknown> = {}) => post({ ...READ, label: 'notice', analysis: 'People recommend free sites; nobody explained the houses.', topics: [{ topic: 'What houses mean', idea: 'A short post on the twelve houses.' }], images: [{ url: 'https://i.redd.it/chart.png', alt: 'A natal chart wheel' }], comments: [{ author: 'a', text: 'b', depth: 0 }], ...over })
+
+  it('lists the pictures of the page under the elements, one per line, the ones on the screen first', async () => {
+    const t = setup()
+    t.page.pictures = shown
+    const out = await look(t)
+    expect(out.text).toContain('Pictures on the page (addresses of the pictures, to name in watch_record as images):')
+    expect(out.text).toContain('[p1] 640×480 "A natal chart wheel" https://i.redd.it/chart.png')
+    expect(out.text).toContain('[p2] 300×200 https://i.redd.it/second.jpg (off screen)')
+  })
+
+  it('lists nothing of the kind for a page that shows no picture', async () => {
+    const t = setup()
+    expect((await look(t)).text).not.toContain('Pictures on the page')
+  })
+
+  it('keeps the analysis, the topics, the comments and the pictures the page showed, for a notice that carries what it read', async () => {
+    const t = setup()
+    t.page.pictures = shown
+    await look(t)
+    await record(t, [full()])
+    expect(t.recorded[0]).toMatchObject({
+      label: 'notice',
+      analysis: 'People recommend free sites; nobody explained the houses.',
+      topics: [{ topic: 'What houses mean', idea: 'A short post on the twelve houses.' }],
+      images: [{ url: 'https://i.redd.it/chart.png', alt: 'A natal chart wheel' }],
+      comments: [{ author: 'a', text: 'b', depth: 0, url: '' }]
+    })
+  })
+
+  it('keeps no picture the AI was not shown: an address it made up, one it saw in another look, one that is not https', async () => {
+    const t = setup()
+    t.page.pictures = shown
+    await look(t)
+    await record(t, [full({ images: [{ url: 'https://evil.example/tracker.png' }, { url: 'http://i.redd.it/plain.png' }, { url: 'https://i.redd.it/chart.png' }, 'https://i.redd.it/chart.png', 'https://i.redd.it/second.jpg'] })])
+    expect(t.recorded[0].images.map((i) => i.url)).toEqual(['https://i.redd.it/chart.png', 'https://i.redd.it/second.jpg'])
+    const none = setup()
+    await record(none, [full()])
+    expect(none.recorded[0].images).toEqual([])
+  })
+
+  it('keeps at most four pictures and five topics, and leaves out a topic that holds a link or a promise of results', async () => {
+    const t = setup()
+    t.page.pictures = Array.from({ length: 6 }, (_, i) => ({ src: `https://i.redd.it/${i}.png`, alt: '', width: 300, height: 300 }))
+    await look(t)
+    const topics = [...Array.from({ length: 6 }, (_, i) => ({ topic: `Topic ${i}`, idea: 'An idea.' })), { topic: 'Visit https://evil.example now', idea: 'x' }]
+    await record(t, [full({ images: t.page.pictures.map((p) => ({ url: p.src })), topics })])
+    expect(t.recorded[0].images).toHaveLength(4)
+    expect(t.recorded[0].topics.map((x) => x.topic)).toEqual(['Topic 0', 'Topic 1', 'Topic 2', 'Topic 3', 'Topic 4'])
+    const bad = setup()
+    await record(bad, [full({ topics: [{ topic: 'We guarantee viral results', idea: 'x' }, { topic: 'Fine topic', idea: 'Fine idea.' }] })])
+    expect(bad.recorded[0].topics).toEqual([{ topic: 'Fine topic', idea: 'Fine idea.' }])
+  })
+
+  it('keeps nothing of what was read for a skip, and no analysis for a post that gave no summary of it', async () => {
+    const t = setup()
+    t.page.pictures = shown
+    await look(t)
+    await record(t, [full({ label: 'skip', relation: 'Cooking.' }), full({ url: 'https://www.instagram.com/p/NoAbout/', about: '', thread: '' })])
+    expect(t.recorded[0]).toMatchObject({ analysis: '', topics: [], images: [], comments: [] })
+    expect(t.recorded[1]).toMatchObject({ analysis: '', topics: [], images: [], comments: [] })
+  })
+
+  it('tells the AI what the recorder refused, and fails the call when that was all there was', async () => {
+    const t = setup({
+      watch: { places: [LIST], record: () => ({ stored: 0, known: 0, refused: ['Read the post first.'] }), maxFindings: 60, minGapMs: 2000, now: () => 10_000 }
+    })
+    const out = await record(t, [post()])
+    expect(out.isError).toBe(true)
+    expect(out.text).toContain('Read the post first.')
+  })
+})
+

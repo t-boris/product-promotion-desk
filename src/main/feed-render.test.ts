@@ -47,6 +47,9 @@ function finding(over: Partial<Finding> = {}): FindingCard {
       seenAt: null,
       starredAt: null,
       own: false,
+      analysis: '',
+      topics: [],
+      readAt: null,
       createdAt: '2026-11-15T08:00:00.000Z',
       ...over
     },
@@ -399,6 +402,44 @@ describe('FindingStream: the Noted posts as cards', () => {
 
   it('has no Worth a reply list of its own: the card names the feed Noted posts', () => {
     expect(stream([finding()])).toContain('aria-label="Noted posts"')
+  })
+
+  it('has a Check with AI button on every post: a post not read in full says so, and the button asks to read it', () => {
+    const unread = stream([finding()])
+    expect(unread).toContain('data-testid="stream-check-ai"')
+    expect(unread).toContain('Check with AI')
+    expect(unread).toContain('data-testid="stream-unread"')
+    expect(unread).toContain('has not read this post in full yet')
+    expect(unread).not.toContain('Check again with AI')
+    expect(unread).not.toContain('data-testid="stream-insights"')
+  })
+
+  it('shows what the AI read: what the thread says and the topics it raises, each with an idea for the owner\'s own post, as text', () => {
+    const out = stream([
+      finding({
+        about: 'The author asks for a chart tool.',
+        thread: 'Two people name apps.',
+        analysis: 'People recommend free sites. <b>Nobody</b> explained the houses.',
+        topics: [
+          { topic: 'What houses mean', idea: 'A short post on the twelve houses.' },
+          { topic: 'Free chart sites', idea: '' }
+        ],
+        readAt: '2026-11-15T09:00:00.000Z'
+      })
+    ])
+    expect(out).toContain('data-testid="stream-analysis"')
+    expect(out).toContain('What the thread says')
+    expect(out).toContain('People recommend free sites. &lt;b&gt;Nobody&lt;/b&gt; explained the houses.')
+    expect(out).not.toContain('<b>Nobody</b>')
+    expect(out.match(/data-testid="stream-topic"/g)).toHaveLength(2)
+    expect(out).toContain('Idea for your post: A short post on the twelve houses.')
+    expect(out.match(/Idea for your post/g)).toHaveLength(1)
+    expect(out).toContain('Check again with AI')
+    expect(out).not.toContain('data-testid="stream-unread"')
+  })
+
+  it('shows no analysis block for a post read with nothing to say about it', () => {
+    expect(stream([finding({ about: 'It asks.', thread: 'Nothing.', readAt: '2026-11-15T09:00:00.000Z' })])).not.toContain('data-testid="stream-insights"')
   })
 })
 

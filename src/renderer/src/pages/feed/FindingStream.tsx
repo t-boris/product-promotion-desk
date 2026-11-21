@@ -2,11 +2,13 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { WATCH_REPLY_PREFIX } from '../../../../shared/finding-reply'
 import { platformLabel } from '../../../../shared/post-format'
 import type { Id } from '../../../../shared/types'
+import { AiProgressPanel } from '../../AiProgress'
 import { call, useAction, useQuery } from '../../hooks'
-import { Badge, Button, ErrorNote, formatTime } from '../../ui'
+import { Badge, Button, ErrorNote, Hint, formatTime } from '../../ui'
 import { OpenChannelBrowser } from '../channels/OpenChannelBrowser'
 import { FIRST_LOOK, type FindingRow } from './finding-rows'
 import { ThreadTree } from './FindingThread'
+import { PostPictures, ThreadInsights } from './PostReading'
 import { ReplyComposer } from './ReplyComposer'
 import type { Place } from './reply-composer'
 
@@ -24,7 +26,14 @@ function StreamCard({ row, onSeen, onStar }: { row: FindingRow; onSeen: (id: Id)
   const comments = thread.data ?? []
   const [place, setPlace] = useState<Place | null>(null)
   const read = finding.about.trim() !== ''
-  const [checkNow, checking] = useAction(() => call('channels.checkNow', { channelId: finding.channelId }))
+  // "Check with AI": the AI opens this one post in the channel's account and reads it in full. It resolves when the AI is done; the card reloads by itself.
+  const [readNow, reading] = useAction(() => call('findings.readNow', { id: finding.id }))
+  const [readResult, setReadResult] = useState<{ state: 'read' | 'unavailable' | 'failed' | 'stopped'; message: string } | null>(null)
+  const checkWithAi = async (): Promise<void> => {
+    setReadResult(null)
+    const result = await readNow()
+    if (result) setReadResult(result)
+  }
 
   // A post the owner has had on screen is a post the owner has seen.
   const card = useRef<HTMLElement>(null)
@@ -70,20 +79,27 @@ function StreamCard({ row, onSeen, onStar }: { row: FindingRow; onSeen: (id: Id)
       <p className="stream-brief" data-testid="stream-brief">
         {read ? finding.about : brief(finding.relation).trim() || 'The AI gave no reason.'}
       </p>
+      <PostPictures findingId={finding.id} />
       {read ? (
-        <div className="stream-thread" data-testid="stream-thread">
-          {finding.thread.trim() !== '' && <p className="muted small stream-thread-summary">{finding.thread}</p>}
-          <ThreadTree comments={comments} onReply={(position) => setPlace(position)} active={typeof place === 'number' ? place : undefined} />
-        </div>
+        <>
+          <ThreadInsights finding={finding} />
+          <div className="stream-thread" data-testid="stream-thread">
+            {finding.thread.trim() !== '' && comments.length === 0 && <p className="muted small stream-thread-summary">{finding.thread}</p>}
+            <ThreadTree comments={comments} onReply={(position) => setPlace(position)} active={typeof place === 'number' ? place : undefined} />
+          </div>
+        </>
       ) : (
-        <div className="stream-unread" data-testid="stream-unread">
-          <span className="muted small">The AI has not opened this post to read its thread yet. It reads a few posts like this at every check of the channel.</span>
-          <Button variant="secondary" onClick={() => void checkNow()} disabled={checking.busy} data-testid="stream-check-channel">
-            {checking.busy ? 'Checking…' : 'Check this channel now'}
-          </Button>
-          <ErrorNote error={checking.error} />
-        </div>
+        <p className="muted small stream-unread" data-testid="stream-unread">
+          The AI has not read this post in full yet: its thread, its pictures and what it is about. Press Check with AI to read it now; the AI also reads the recent ones at every check of the channel.
+        </p>
       )}
+      {reading.busy && <AiProgressPanel />}
+      {readResult && (
+        <Hint tone={readResult.state === 'read' || readResult.state === 'stopped' ? undefined : 'warn'} data-testid="stream-read-result" data-state={readResult.state}>
+          {readResult.message}
+        </Hint>
+      )}
+      <ErrorNote error={reading.error} />
       {place !== null && read && <ReplyComposer key={String(place)} finding={finding} place={place} comments={comments} onClose={() => setPlace(null)} />}
       <footer className="stream-foot">
         {read && (
@@ -91,6 +107,9 @@ function StreamCard({ row, onSeen, onStar }: { row: FindingRow; onSeen: (id: Id)
             Reply to the post
           </Button>
         )}
+        <Button variant={read ? 'quiet' : 'secondary'} onClick={() => void checkWithAi()} disabled={reading.busy} data-testid="stream-check-ai">
+          {reading.busy ? 'Reading…' : read ? 'Check again with AI' : 'Check with AI'}
+        </Button>
         <OpenChannelBrowser channelId={finding.channelId} url={finding.url} label="Open post" testId="stream-open-post" fallbackUrl={finding.url} />
       </footer>
     </article>

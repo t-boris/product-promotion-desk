@@ -7,7 +7,9 @@ import type { Core } from '../core'
 import { requireText } from '../channels/errors'
 import { channelReads } from '../channels/reads'
 import { buildCard } from './cards'
+import type { BrowserWatchFlow } from './browser-watch'
 import type { DraftingFlow } from './drafting'
+import type { FindingPictures } from './finding-pictures'
 import { checkIds, checkLabels, type FindingStore } from './findings'
 import { SendBlockedError } from './gate'
 import type { MonitorFlow } from './monitor'
@@ -26,9 +28,11 @@ export interface FlowServices {
   sending: SendingFlow
   publications: PublicationsFlow
   findings: FindingStore
+  watcher: BrowserWatchFlow
+  pictures: FindingPictures
 }
 
-export function registerFlowApi({ core, store, review, monitor, drafting, sending, publications, findings }: FlowServices): void {
+export function registerFlowApi({ core, store, review, monitor, drafting, sending, publications, findings, watcher, pictures }: FlowServices): void {
   const card = (id: Id) => buildCard(core, store, store.requireOpportunity(id))
 
   /** A blocked send becomes a readable API error carrying the gate's reasons. */
@@ -179,6 +183,10 @@ export function registerFlowApi({ core, store, review, monitor, drafting, sendin
     'findings.markSeen': ({ ids }) => {
       if (findings.markSeen(checkIds(ids)) > 0) findings.notify()
     },
+    'findings.pictures': ({ id }) => findings.pictures(requireText(id, 'The post')),
+    'findings.picture': ({ id, side }) => pictures.dataUrl(requireText(id, 'The picture'), side),
+    // "Check with AI" on a post: the AI opens it in the account's browser and reads it in full. Nothing is replied to, sent or approved.
+    'findings.readNow': ({ id }) => watcher.readPost(findings.get(requireText(id, 'The post'))),
     'findings.setStarred': ({ id, starred }) => {
       if (typeof starred !== 'boolean') throw new ApiError('invalid_input', 'Say whether the post is starred.')
       findings.setStarred(requireText(id, 'The post'), starred)

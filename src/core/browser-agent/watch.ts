@@ -6,10 +6,10 @@
 // no question to the owner), what a recorded post must look like, and the shapes the monitor's watch flow and the AI agent service pass between them.
 // The barrier is the toolbox, not the brief (watch-mission.ts): the brief is a courtesy to the model.
 
-import type { FindingLabel } from '../../shared/types'
+import type { FindingLabel, FindingTopic } from '../../shared/types'
 import { isRecord, oneLine } from '../assist/kit'
 import { hostMatches } from '../channels/presets'
-import { MAX_RELATION_CHARS, cleanText, safeLine } from '../pipeline/triage-prompt'
+import { MAX_RELATION_CHARS, NOTE_LEFT_OUT, cleanText, safeLine } from '../pipeline/triage-prompt'
 import { WATCH_REPLY_PREFIX } from '../../shared/finding-reply'
 
 /** A check is one visit to the channel's pages: twenty minutes and a hundred and twenty calls are generous, and nobody is asked anything. */
@@ -38,10 +38,12 @@ export const WATCH_RETRY_MIN = 5
 export const WATCH_TOOL_NAMES = ['browser_snapshot', 'browser_scroll', 'watch_open', 'watch_back', 'watch_record', 'report_result'] as const
 
 export { WATCH_REPLY_PREFIX }
-/** How many posts a look is sent back to read: the ones it called worth a reply before it read threads. A few at a time, so a look still has its calls for the new posts. */
+/** How many posts a look is sent back to read in full: the ones noted before and not read. A few at a time, so a look still has its calls for the new posts. */
 export const WATCH_UNREAD_LIMIT = 8
-/** What a place of the brief that is such a post starts with. */
-export const TO_READ_LABEL = 'A post you called worth a reply before, not read yet'
+/** How many looks are sent to read the same post before it is left for the owner's "Check with AI". */
+export const WATCH_READ_TRIES = 3
+/** What a place of the brief that is such a post starts with: a post noted before (worth a reply, starred, or found in the last day or two) that nobody has read in full. */
+export const TO_READ_LABEL = 'A post noted before, not read yet'
 export const WATCH_SKIP_RELATION = 'Not relevant to the product\'s goals.'
 const MAX_TITLE = 200
 /** What the AI may say of a post worth a reply (characters): the post, the thread, whom to answer, and the comment (which keeps its paragraphs). */
@@ -49,6 +51,19 @@ export const WATCH_ABOUT_MAX = 500
 export const WATCH_THREAD_MAX = 700
 export const WATCH_REPLY_TO_MAX = 250
 export const WATCH_COMMENT_MAX = 1500
+/** What the AI may say of a thread it read in full: the analysis (characters), how many topics it names, how long a topic and the idea for the owner's post are. */
+export const WATCH_ANALYSIS_MAX = 900
+export const WATCH_TOPICS_MAX = 5
+export const WATCH_TOPIC_MAX = 90
+export const WATCH_IDEA_MAX = 220
+/** The pictures kept for a post: how many, how long the address and the description of each. The addresses must be ones the AI was shown on the page. */
+export const WATCH_IMAGES_MAX = 4
+export const WATCH_IMAGE_URL_MAX = 600
+export const WATCH_IMAGE_ALT_MAX = 120
+/** How many tool calls the AI has to read one post (the post, every comment, the pictures) when the owner asks for it. */
+export const READ_POST_MAX_CALLS = 40
+/** How many posts of the last day a scheduled look reads in full, besides the ones it is sent back to (the call allowance is the real limit). */
+export const WATCH_READ_LIMIT = 10
 /** The thread kept for a post worth a reply: how many comments, how long each is (characters), how deep, how long an author's name. */
 export const WATCH_THREAD_ITEMS_MAX = 25
 export const WATCH_THREAD_TEXT_MAX = 400
@@ -72,8 +87,22 @@ export interface WatchItem {
   thread: string
   replyTo: string
   comment: string
-  /** The comments of the thread as the AI saw them, in reading order: the owner picks one to answer. Only for a post called `reply`; empty otherwise. */
+  /** The comments of the thread as the AI saw them, in reading order: the owner picks one to answer. Only for a post the AI read in full; empty otherwise. */
   comments: WatchComment[]
+  /** After the AI read the post in full: what people say under it, where they agree and differ, what is left unanswered. Empty when it did not read it. */
+  analysis: string
+  /** The topics the thread raises, each with an idea for the owner's own post. */
+  topics: FindingTopic[]
+  /** The pictures of the post, as the page showed them (addresses that were listed in a snapshot the AI got). */
+  images: WatchPicture[]
+  /** The post is one of the account's own: set by the application from the author and the account's identity, never by the AI. */
+  own: boolean
+}
+
+/** One picture of a post: where the page has it, and what the page says it shows. */
+export interface WatchPicture {
+  url: string
+  alt: string
 }
 
 /** One comment under a post, as the AI saw it. Plain text of a stranger: shown, never obeyed. */
@@ -90,6 +119,8 @@ export interface WatchRecorded {
   stored: number
   /** Posts of the channel that had a finding already (counted, never stored twice). */
   known: number
+  /** What the recorder did not accept, for the AI to read (a post that is not the one it was sent to read, for instance). */
+  refused?: string[]
 }
 
 /** What the toolbox is held to in a watch mission. */
@@ -121,6 +152,11 @@ export interface WatchBrief {
   languages: string[]
   /** The pages, in the order of `WatchSetup.places`. */
   places: { label: string; url: string }[]
+  /**
+   * `look`: go through the channel's pages and judge the posts (the usual check). `read`: the owner asked for one post to be read in full: `places` holds
+   * that post alone, and the AI records that one post with everything it read. Absent means `look`.
+   */
+  mode?: 'look' | 'read'
   /** The first check of the channel: it looks back `lookBackDays` days. */
   firstLook: boolean
   lookBackDays: number
@@ -232,13 +268,48 @@ export function readThreadComments(raw: unknown, hosts: string[]): WatchComment[
   return comments
 }
 
+/** The topics a thread raises, each with an idea for the owner's own post: at most `WATCH_TOPICS_MAX`, plain lines; one that holds an address or reads as an instruction is left out. */
+export function readTopics(raw: unknown): FindingTopic[] {
+  if (!Array.isArray(raw)) return []
+  const topics: FindingTopic[] = []
+  for (const entry of raw) {
+    if (topics.length >= WATCH_TOPICS_MAX) break
+    if (!isRecord(entry)) continue
+    const topic = safeLine(entry.topic, WATCH_TOPIC_MAX, true)
+    const idea = safeLine(entry.idea, WATCH_IDEA_MAX, false)
+    if (topic === null || topic === NOTE_LEFT_OUT || idea === null || idea === NOTE_LEFT_OUT) continue
+    topics.push({ topic, idea })
+  }
+  return topics
+}
+
+/**
+ * The pictures of a post: at most `WATCH_IMAGES_MAX`, each an https address that a snapshot the AI got listed (`shown`), so that an address a page made the AI
+ * invent, or one from a comment, is never fetched. A picture is given as an address or as an object with the address and what it shows.
+ */
+export function readImages(raw: unknown, shown: ReadonlySet<string>): WatchPicture[] {
+  if (!Array.isArray(raw)) return []
+  const pictures: WatchPicture[] = []
+  const seen = new Set<string>()
+  for (const entry of raw) {
+    if (pictures.length >= WATCH_IMAGES_MAX) break
+    const url = typeof entry === 'string' ? entry.trim() : isRecord(entry) && typeof entry.url === 'string' ? entry.url.trim() : ''
+    if (url === '' || url.length > WATCH_IMAGE_URL_MAX || !url.startsWith('https://') || !shown.has(url) || seen.has(url)) continue
+    seen.add(url)
+    const alt = isRecord(entry) && typeof entry.alt === 'string' ? oneLine(cleanText(entry.alt).replace(ADDRESS, ''), WATCH_IMAGE_ALT_MAX) : ''
+    pictures.push({ url, alt })
+  }
+  return pictures
+}
+
 /**
  * The posts the AI says it looked at: at most `WATCH_MAX_ITEMS_PER_CALL`, each one a page of the platform with a title as seen, a label and one plain
  * line on how it relates to the goals. A line that holds an address or reads as an instruction is replaced by the fixed neutral sentence, exactly as
  * the triage does it (`safeLine`). `reply` is stored as a `notice` that says so. A post that cannot be read is refused with its reason and the
- * others stand. `error` only when the call as a whole is not a list of posts.
+ * others stand. `error` only when the call as a whole is not a list of posts. A post the AI opened and read in full (a `reply`, or a notice that carries
+ * `about`) also keeps what it read: the thread's comments, the analysis, the topics and the pictures (`shown` are the picture addresses it was shown).
  */
-export function readWatchItems(raw: unknown, hosts: string[]): { items: WatchItem[]; refused: string[] } | { error: string } {
+export function readWatchItems(raw: unknown, hosts: string[], shown: ReadonlySet<string> = new Set()): { items: WatchItem[]; refused: string[] } | { error: string } {
   if (!Array.isArray(raw) || raw.length === 0) return { error: `items must be a list of 1 to ${WATCH_MAX_ITEMS_PER_CALL} posts, each with url, title, label and relation.` }
   if (raw.length > WATCH_MAX_ITEMS_PER_CALL) return { error: `At most ${WATCH_MAX_ITEMS_PER_CALL} posts in one call; send the rest in the next one.` }
   const items: WatchItem[] = []
@@ -256,17 +327,36 @@ export function readWatchItems(raw: unknown, hosts: string[]): { items: WatchIte
     const said = label === 'skip' && (entry.relation === undefined || entry.relation === '') ? WATCH_SKIP_RELATION : safeLine(entry.relation, MAX_RELATION_CHARS, true)
     if (said === null) return void refused.push(`${at}: relation must be one plain line on how the post relates to the goals.`)
     const reply = label === 'reply'
+    const full = label !== 'skip'
     // A post worth a reply is one the AI opened and read: it must say what it read, or the owner is shown a verdict with nothing behind it.
-    const about = reply ? safeLine(entry.about, WATCH_ABOUT_MAX, true) : ''
-    const thread = reply ? safeLine(entry.thread, WATCH_THREAD_MAX, true) : ''
+    const about = reply ? safeLine(entry.about, WATCH_ABOUT_MAX, true) : full ? safeLine(entry.about, WATCH_ABOUT_MAX, false) : ''
+    const thread = reply ? safeLine(entry.thread, WATCH_THREAD_MAX, true) : full ? safeLine(entry.thread, WATCH_THREAD_MAX, false) : ''
     const replyTo = reply ? safeLine(entry.reply_to ?? entry.replyTo, WATCH_REPLY_TO_MAX, true) : ''
     const comment = reply ? commentText(entry.comment) : ''
     if (reply && (about === null || thread === null || replyTo === null || comment === null)) {
       return void refused.push(
-        `${at}: a post worth a reply must be opened and its thread read first. Open it with watch_open, read the post and what is said under it, then record it again with about (what the post says), thread (what is said under it), reply_to (whom to answer) and comment (the comment you would leave), each as plain text.`
+        `${at}: a post worth a reply must be opened and its thread read first. Open it with watch_open, read the post and what is said under it, then record it again with about (what the post says), thread (what is said under it), reply_to (whom to answer) and comment (the comment the owner could leave).`
       )
     }
-    items.push({ url, title, author, label: label === 'skip' ? 'skip' : 'notice', relation: reply ? `${WATCH_REPLY_PREFIX}${said}` : said, about: about ?? '', thread: thread ?? '', replyTo: replyTo ?? '', comment: comment ?? '', comments: reply ? readThreadComments(entry.comments, hosts) : [] })
+    if (full && (about === null || thread === null)) return void refused.push(`${at}: about and thread, when given, must be plain text.`)
+    const read = full && (about ?? '') !== ''
+    const analysis = read ? safeLine(entry.analysis, WATCH_ANALYSIS_MAX, false) : ''
+    items.push({
+      url,
+      title,
+      author,
+      label: label === 'skip' ? 'skip' : 'notice',
+      relation: reply ? `${WATCH_REPLY_PREFIX}${said}` : said,
+      about: about ?? '',
+      thread: thread ?? '',
+      replyTo: replyTo ?? '',
+      comment: comment ?? '',
+      comments: read ? readThreadComments(entry.comments, hosts) : [],
+      analysis: analysis ?? '',
+      topics: read ? readTopics(entry.topics) : [],
+      images: read ? readImages(entry.images, shown) : [],
+      own: false
+    })
   })
   return { items, refused }
 }

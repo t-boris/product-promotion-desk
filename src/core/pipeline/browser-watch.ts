@@ -7,13 +7,14 @@
 // finding (a notice or a skip), and `reply` is only ever a notice that says so. There is no opportunity in this file.
 
 import { ApiError } from '../../shared/api'
-import type { Account, Channel } from '../../shared/types'
-import { TO_READ_LABEL, WATCH_FIRST_LOOK_MAX_CALLS, WATCH_KNOWN_LIMIT, WATCH_MAX_CALLS, WATCH_MAX_POSTS, WATCH_TIMEOUT_MS, WATCH_UNREAD_LIMIT, type WatchBrief, type WatchItem, type WatchOutcome, type WatchRecorded } from '../browser-agent/watch'
+import type { Account, Channel, Finding, Id } from '../../shared/types'
+import { READ_POST_MAX_CALLS, TO_READ_LABEL, WATCH_FIRST_LOOK_MAX_CALLS, WATCH_KNOWN_LIMIT, WATCH_MAX_CALLS, WATCH_MAX_POSTS, WATCH_TIMEOUT_MS, WATCH_UNREAD_LIMIT, type WatchBrief, type WatchItem, type WatchOutcome, type WatchRecorded } from '../browser-agent/watch'
 import { MAX_LOOK_BACK_DAYS } from '../channels/settings'
 import { webPlaces } from '../channels/web-places'
 import { platformLabel } from '../../shared/post-format'
 import type { Core } from '../core'
 import type { FindingStore } from './findings'
+import type { FindingPictures } from './finding-pictures'
 import type { Ingestor } from './ingest'
 import type { FlowStore } from './store'
 import { OVERLAP_MS } from './triage'
@@ -38,12 +39,25 @@ const NOT_STARTED = new Set(['agent_running', 'not_ready', 'no_engine', 'engine_
 
 const deferred = (reason: string, soon = true): WatchResult => ({ status: 'deferred', reason, soon })
 
+/** What the owner's "Check with AI" on one post came to: the card shows the message. `unavailable` and `stopped` are nobody's failure. */
+export interface ReadResult {
+  state: 'read' | 'unavailable' | 'failed' | 'stopped'
+  message: string
+}
+
+/** How far back a post that was found and not read is still sent back to be read by a look (found in the last two days). */
+const UNREAD_RECENT_MS = 2 * DAY_MS
+
 export class BrowserWatchFlow {
+  /** The posts being read now for the owner: a second press on the same post is answered, not started. */
+  private readonly reading = new Set<Id>()
+
   constructor(
     private readonly core: Core,
     private readonly store: FlowStore,
     private readonly findings: FindingStore,
-    private readonly ingestor: Ingestor
+    private readonly ingestor: Ingestor,
+    private readonly pictures: FindingPictures
   ) {}
 
   /** One look at the channel. Never throws for what it can name: the monitor turns the result into the channel's state. */
@@ -73,9 +87,9 @@ export class BrowserWatchFlow {
       let stored = 0
       let known = 0
       this.core.db.transaction(() => {
-        for (const item of items) {
-          // The account's own posts are not what it watches for, whatever the AI says.
-          if (isOwn({ author: item.author, externalId: item.url })) continue
+        for (const found of items) {
+          // The account's own posts are recorded too, marked: the owner answers the comments under them before anything else.
+          const item = isOwn({ author: found.author, externalId: found.url }) ? { ...found, own: true } : found
           if (this.findings.addWatched(channel.productId, channel.id, item, firstLook)) {
             stored += 1
             if (item.label === 'skip') tally.skipped += 1
@@ -95,10 +109,76 @@ export class BrowserWatchFlow {
       this.core.log.error('monitor', `The look at the channel stopped unexpectedly: ${errorMessage(error)}`, channel.id)
       return { status: 'failed', reason: `The look at the channel stopped unexpectedly: ${errorMessage(error)}` }
     }
-    // Whatever the look came to, what it recorded stands and the Feed shows it.
+    // Whatever the look came to, what it recorded stands and the Feed shows it. The pictures it named are fetched in the background and show up when they are here.
     this.findings.pruneSkipped()
     if (tally.noted + tally.skipped > 0) this.findings.notify()
+    void this.pictures.fetchWaiting()
     return this.result(channel, outcome, startedAt.toISOString(), tally)
+  }
+
+  /**
+   * The owner pressed "Check with AI" on a post: the AI opens it in the channel's account, reads it in full (the post, the comments, the pictures) and what it
+   * read is kept on the post. Nothing else changes: the verdict stays (a post the AI now calls worth a reply is one, and starts starred), nothing is replied
+   * to, sent or approved. Never throws for what it can name: the card shows the message.
+   */
+  async readPost(finding: Finding): Promise<ReadResult> {
+    const missions = this.core.services.watchMissions
+    if (!missions) return { state: 'unavailable', message: 'The AI browser is not available in this version.' }
+    if (this.reading.has(finding.id)) return { state: 'unavailable', message: 'The AI is reading this post already.' }
+    const channel = this.core.repos.channel(finding.channelId)
+    if (channel.status === 'paused') return { state: 'unavailable', message: 'This channel is paused. Resume it to let the AI read its posts.' }
+    const account = this.core.repos.account(channel.accountId)
+    const site = webPlaces(channel)
+    if (!/^https?:\/\//i.test(finding.url)) return { state: 'unavailable', message: 'This post has no address the AI can open.' }
+    this.reading.add(finding.id)
+    try {
+      const ready = await missions.watchReady(account.id)
+      if (!ready.ready) return { state: 'unavailable', message: ready.reason ?? 'The AI cannot work in this account now.' }
+      const isOwn = this.ingestor.ownPostTest(channel, account)
+      let applied = 0
+      const record = (items: WatchItem[]): WatchRecorded => {
+        const refused: string[] = []
+        for (const found of items) {
+          if (applied > 0) {
+            refused.push('This check is about one post and it is recorded: call report_result.')
+            break
+          }
+          if (found.about === '') {
+            refused.push('Read the post first, then record it again with about, thread, analysis, topics, images and comments.')
+            continue
+          }
+          const item = finding.own || isOwn({ author: finding.author, externalId: finding.externalId }) ? { ...found, own: true } : found
+          if (this.findings.applyRead(finding.id, item)) applied += 1
+        }
+        return { stored: applied, known: 0, refused }
+      }
+      const base = this.brief(channel, account, false, 1, this.core.clock.now().getTime(), false)
+      const brief: WatchBrief = { ...base, mode: 'read', places: [{ label: `The post to read: ${finding.title}`, url: finding.url }], known: [], maxPosts: 1, maxCalls: READ_POST_MAX_CALLS }
+      let outcome: WatchOutcome
+      try {
+        outcome = await missions.watch({ accountId: account.id, channelId: channel.id, hosts: site.hosts, brief, record })
+      } catch (error) {
+        if (error instanceof ApiError && NOT_STARTED.has(error.code)) return { state: 'unavailable', message: error.message }
+        this.core.log.error('monitor', `The reading of a post stopped unexpectedly: ${errorMessage(error)}`, channel.id)
+        return { state: 'failed', message: `The reading stopped unexpectedly: ${errorMessage(error)}` }
+      }
+      if (applied > 0) {
+        await this.pictures.fetchWaiting()
+        this.findings.notify()
+        return { state: 'read', message: 'The AI read the post: the thread, the analysis, the topics and the pictures are on the card.' }
+      }
+      const { reported } = outcome
+      if (outcome.ended === 'busy') return { state: 'unavailable', message: 'The browser was in use (another task of the account, or you), so the post was not read. Try again in a moment.' }
+      if (outcome.ended === 'stopped') return { state: 'stopped', message: 'You stopped the AI.' }
+      if (outcome.ended === 'timeout') return { state: 'failed', message: `The AI did not finish in ${WATCH_TIMEOUT_MS / MINUTE_MS} minutes and was stopped.` }
+      if (outcome.ended === 'error') return { state: 'failed', message: `The AI stopped because of an error: ${outcome.error ?? 'unknown error'}` }
+      if (outcome.humanCheck) return { state: 'failed', message: `The site shows a human check (${outcome.humanCheck}): solve it in the account's browser, then try again.` }
+      if (reported?.status === 'needs_owner') return { state: 'failed', message: `The AI needs you: ${reported.reason || 'the site asks for something only a person can do.'}` }
+      if (reported?.status === 'failed') return { state: 'failed', message: `The AI could not read the post: ${reported.reason || 'it gave no reason.'}` }
+      return { state: 'failed', message: `The AI did not save what it read${outcome.said ? ` (its last words: "${outcome.said}")` : ''}.` }
+    } finally {
+      this.reading.delete(finding.id)
+    }
   }
 
   private result(channel: Channel, outcome: WatchOutcome, startedAt: string, tally: { noted: number; skipped: number; known: number }): WatchResult {
@@ -131,14 +211,17 @@ export class BrowserWatchFlow {
   }
 
   /** What the AI is told: the owner's product and goals, the channel's newest posts (or its own page), how far back, and what was judged. */
-  private brief(channel: Channel, account: Account, firstLook: boolean, lookBackDays: number, since: number): WatchBrief {
+  private brief(channel: Channel, account: Account, firstLook: boolean, lookBackDays: number, since: number, withUnread = true): WatchBrief {
     const product = this.core.repos.product(channel.productId)
     const site = webPlaces(channel)
     // The owner asked for one thing: what was posted in the channel since the last look (30 days the first time). So the AI goes through the channel itself,
     // the newest posts first where the site has such a page (a Reddit community's own page shows its best posts, not what was written since the last look),
     // and never searches: the channel's queries only tell it what the owner follows, and "Look around" is where the owner asks for a search.
     // After them, the posts the AI called worth a reply before it read threads: it is sent to read them, a few at a time (see `FindingStore.unreadReplies`).
-    const toRead = this.findings.unreadReplies(channel.id, WATCH_UNREAD_LIMIT).map((post) => ({ label: `${TO_READ_LABEL}: ${post.title}`, url: post.url }))
+    const recent = new Date(this.core.clock.now().getTime() - UNREAD_RECENT_MS).toISOString()
+    const unread = withUnread ? this.findings.unreadPosts(channel.id, WATCH_UNREAD_LIMIT, recent) : []
+    this.findings.markOffered(channel.id, unread.map((post) => post.url))
+    const toRead = unread.map((post) => ({ label: `${TO_READ_LABEL}: ${post.title}`, url: post.url }))
     const places = [...(site.newest ? [{ label: `The newest posts of ${channel.target}`, url: site.newest }] : []), { label: `The channel's own page, ${channel.target}`, url: channel.url }, ...toRead]
     const queries = channel.settings.queries.filter((q) => q.trim() !== '')
     return {
@@ -156,7 +239,7 @@ export class BrowserWatchFlow {
       firstLook,
       lookBackDays,
       since: new Date(since).toISOString(),
-      known: this.findings.recentUrls(channel.id, WATCH_KNOWN_LIMIT),
+      known: this.findings.recentUrls(channel.id, WATCH_KNOWN_LIMIT, recent),
       maxPosts: WATCH_MAX_POSTS,
       maxCalls: firstLook ? WATCH_FIRST_LOOK_MAX_CALLS : WATCH_MAX_CALLS
     }

@@ -248,5 +248,39 @@ ALTER TABLE findings ADD COLUMN is_own INTEGER NOT NULL DEFAULT 0;
 -- What the AI called worth a reply before there was a star is starred now, so the owner loses none of them with the Worth a reply list.
 UPDATE findings SET starred_at = created_at WHERE label = 'notice' AND relation LIKE 'Worth a reply: %';
 `
+  },
+  {
+    id: 314,
+    name: 'pipeline: a post the AI read keeps the analysis of its thread, the topics it raises and its pictures',
+    sql: `
+-- What the AI wrote after it opened a post and read it in full: the analysis of the thread (what people say, where they agree and differ, what is left
+-- unanswered) and the topics it raises, each with an idea for the owner's own post (a JSON list of { topic, idea }). Plain text of the AI about a stranger's
+-- page: shown, never obeyed. \`read_at\` is when the AI last read the post in full (null: it has not).
+ALTER TABLE findings ADD COLUMN analysis TEXT NOT NULL DEFAULT '';
+ALTER TABLE findings ADD COLUMN topics_json TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE findings ADD COLUMN read_at TEXT;
+-- How many times a look was sent to read a post it had noted and not read: a post that was offered \`WATCH_READ_TRIES\` times and still is not read (it is gone, or
+-- the site will not show it) is left for the owner's "Check with AI" instead of costing every look its calls.
+ALTER TABLE findings ADD COLUMN read_tries INTEGER NOT NULL DEFAULT 0;
+-- Every post that was read before this (it has a summary of the post) was read at the time it was judged.
+UPDATE findings SET read_at = updated_at WHERE about <> '';
+-- The pictures of a post, as the page showed them. The file is kept in the application's own folder of post pictures (never in the owner's picture library:
+-- these are strangers' pictures, not material for the owner's posts); it stays empty while the picture waits to be fetched, and \`failure\` says why it could not be.
+CREATE TABLE finding_images (
+  id TEXT PRIMARY KEY,
+  finding_id TEXT NOT NULL REFERENCES findings(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  source_url TEXT NOT NULL,
+  alt TEXT NOT NULL DEFAULT '',
+  file TEXT,
+  mime TEXT,
+  bytes INTEGER,
+  width INTEGER,
+  height INTEGER,
+  failure TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  UNIQUE (finding_id, position)
+);
+`
   }
 ]

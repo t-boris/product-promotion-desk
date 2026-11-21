@@ -3,13 +3,13 @@
 // `opportunity_id`, set when a post was worth a reply and its ordinary `new_post` opportunity was opened (or was there already).
 
 import { ApiError } from '../../shared/api'
-import type { Finding, FindingCard, FindingComment, FindingCounts, FindingLabel, Id } from '../../shared/types'
+import type { Finding, FindingCard, FindingComment, FindingCounts, FindingLabel, FindingPicture, Id } from '../../shared/types'
 import type { Core } from '../core'
 import { newId, type Db } from '../db/database'
 import { mapFinding } from '../repos'
 import { oneLine } from '../assist/kit'
 import type { RemoteDiscussion } from '../ports'
-import { WATCH_REPLY_PREFIX, type WatchComment, type WatchItem } from '../browser-agent/watch'
+import { WATCH_IMAGES_MAX, WATCH_READ_TRIES, WATCH_REPLY_PREFIX, type WatchComment, type WatchItem, type WatchPicture } from '../browser-agent/watch'
 
 type Row = Record<string, unknown>
 type Bindable = string | number | null
@@ -93,8 +93,8 @@ export class FindingStore {
       const id = newId()
       const info = this.db
         .prepare(
-          `INSERT INTO findings (id, product_id, channel_id, external_id, title, url, author, posted_at, stage, label, relation, about, thread, reply_to, suggested_comment, first_look, opportunity_id, seen_at, starred_at, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
+          `INSERT INTO findings (id, product_id, channel_id, external_id, title, url, author, posted_at, stage, label, relation, about, thread, reply_to, suggested_comment, analysis, topics_json, read_at, is_own, first_look, opportunity_id, seen_at, starred_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
            ON CONFLICT (channel_id, external_id) DO NOTHING`
         )
         .run(
@@ -112,6 +112,10 @@ export class FindingStore {
           item.thread,
           item.replyTo,
           item.comment,
+          item.analysis,
+          JSON.stringify(item.topics),
+          item.about === '' ? null : now,
+          item.own ? 1 : 0,
           firstLook ? 1 : 0,
           // A post the AI calls worth a reply starts starred: the owner's first filter ("Starred") is the posts the AI would answer.
           item.relation.startsWith(WATCH_REPLY_PREFIX) ? now : null,
@@ -120,18 +124,90 @@ export class FindingStore {
         )
       if (info.changes === 1) {
         this.saveThread(id, item.comments, now)
+        this.savePictures(id, item.images, now)
         return true
       }
-      // A post called worth a reply before the AI read threads has a verdict and nothing behind it: when the AI now read it, what it read is kept (the verdict stays).
+      // A post found before the AI read it has a verdict and nothing behind it: when the AI now read it, what it read is kept (the verdict stays).
       if (item.about === '') return false
-      const unread = this.db
-        .prepare(`SELECT id FROM findings WHERE channel_id = ? AND external_id = ? AND about = '' AND relation LIKE '${WATCH_REPLY_PREFIX}%'`)
-        .get(channelId, item.url) as { id: Id } | undefined
+      const unread = this.db.prepare(`SELECT id FROM findings WHERE channel_id = ? AND external_id = ? AND about = ''`).get(channelId, item.url) as { id: Id } | undefined
       if (!unread) return false
-      this.db.prepare('UPDATE findings SET about = ?, thread = ?, reply_to = ?, suggested_comment = ?, updated_at = ? WHERE id = ?').run(item.about, item.thread, item.replyTo, item.comment, now, unread.id)
-      this.saveThread(unread.id, item.comments, now)
+      this.applyRead(unread.id, item, now)
       return true
     })()
+  }
+
+  /**
+   * What the AI read in a post it opened: the summary, the thread, the analysis, the topics, the comments and the pictures. The verdict stays as it was, except
+   * that a post the AI now calls worth a reply is one (and starts starred). A re-read replaces the comments; a picture that is kept already stays and the
+   * new ones are added. Returns whether a post of that id was there.
+   */
+  applyRead(id: Id, item: WatchItem, now = this.now()): boolean {
+    return this.db.transaction((): boolean => {
+      const row = this.db.prepare('SELECT relation FROM findings WHERE id = ?').get(id) as { relation: string } | undefined
+      if (!row) return false
+      const becomesReply = item.relation.startsWith(WATCH_REPLY_PREFIX) && !row.relation.startsWith(WATCH_REPLY_PREFIX)
+      this.db
+        .prepare(
+          `UPDATE findings SET about = ?, thread = ?, reply_to = ?, suggested_comment = ?, analysis = ?, topics_json = ?, read_at = ?, updated_at = ?,
+                 relation = CASE WHEN ? THEN ? ELSE relation END, starred_at = CASE WHEN ? THEN COALESCE(starred_at, ?) ELSE starred_at END,
+                 is_own = CASE WHEN ? THEN 1 ELSE is_own END
+           WHERE id = ?`
+        )
+        .run(item.about, item.thread, item.replyTo, item.comment, item.analysis, JSON.stringify(item.topics), now, now, becomesReply ? 1 : 0, item.relation, becomesReply ? 1 : 0, now, item.own ? 1 : 0, id)
+      this.db.prepare('DELETE FROM finding_comments WHERE finding_id = ?').run(id)
+      this.saveThread(id, item.comments, now)
+      this.savePictures(id, item.images, now)
+      return true
+    })()
+  }
+
+  /** The pictures of a post, as the page showed them, waiting to be fetched. An address kept already is not added again; at most `WATCH_IMAGES_MAX` in all. */
+  private savePictures(findingId: Id, images: WatchPicture[], now: string): void {
+    if (images.length === 0) return
+    const have = this.db.prepare('SELECT source_url AS url FROM finding_images WHERE finding_id = ? ORDER BY position').all(findingId) as { url: string }[]
+    const known = new Set(have.map((row) => row.url))
+    let position = have.length
+    const insert = this.db.prepare('INSERT INTO finding_images (id, finding_id, position, source_url, alt, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    for (const image of images) {
+      if (position >= WATCH_IMAGES_MAX) break
+      if (known.has(image.url)) continue
+      known.add(image.url)
+      insert.run(newId(), findingId, position++, image.url, image.alt, now)
+    }
+  }
+
+  /** The pictures of a post in the order the page showed them: what the owner sees of each (the file itself is asked for apart). */
+  pictures(findingId: Id): FindingPicture[] {
+    const rows = this.db.prepare('SELECT id, alt, file, width, height, failure FROM finding_images WHERE finding_id = ? ORDER BY position').all(findingId) as Row[]
+    return rows.map((row) => ({
+      id: row.id as string,
+      alt: row.alt as string,
+      width: (row.width as number | null) ?? null,
+      height: (row.height as number | null) ?? null,
+      state: row.file ? 'ready' : row.failure ? 'failed' : 'waiting',
+      failure: row.failure as string
+    }))
+  }
+
+  /** The stored file of one picture, or null while it has none (or the picture is not there). */
+  pictureFile(id: Id): { file: string; mime: string } | null {
+    const row = this.db.prepare('SELECT file, mime FROM finding_images WHERE id = ?').get(id) as { file: string | null; mime: string | null } | undefined
+    return row && row.file && row.mime ? { file: row.file, mime: row.mime } : null
+  }
+
+  /** The pictures that wait to be fetched (no file, no failure), the oldest first. */
+  waitingPictures(limit: number): { id: Id; url: string }[] {
+    return this.db.prepare(`SELECT id, source_url AS url FROM finding_images WHERE file IS NULL AND failure = '' ORDER BY created_at, position LIMIT ?`).all(limit) as { id: Id; url: string }[]
+  }
+
+  /** The application has the file of a picture. */
+  setPictureFile(id: Id, picture: { file: string; mime: string; bytes: number; width: number | null; height: number | null }): void {
+    this.db.prepare('UPDATE finding_images SET file = ?, mime = ?, bytes = ?, width = ?, height = ?, failure = ? WHERE id = ?').run(picture.file, picture.mime, picture.bytes, picture.width, picture.height, '', id)
+  }
+
+  /** The site would not give a picture, or what came was not one: the reason, in words for the owner. */
+  failPicture(id: Id, failure: string): void {
+    this.db.prepare('UPDATE finding_images SET failure = ? WHERE id = ?').run(oneLine(failure, 200) || 'The picture could not be fetched.', id)
   }
 
   private saveThread(findingId: Id, comments: WatchComment[], now: string): void {
@@ -151,21 +227,41 @@ export class FindingStore {
     return this.db.prepare('SELECT position, depth, author, text, url FROM finding_comments WHERE finding_id = ? ORDER BY position').all(findingId) as FindingComment[]
   }
 
-  /** Posts the AI called worth a reply before it read threads: a verdict with nothing behind it. The newest first; the AI is sent back to read them. */
-  unreadReplies(channelId: Id, limit: number): { url: string; title: string }[] {
+  /**
+   * Posts the AI noted and has not read: a verdict with nothing behind it. The AI is sent back to read them, a few at a time: first the ones it called worth a reply
+   * and the ones the owner starred, then the ones found since `since` (the last day or two); the newest first. A post found long ago that nobody starred stays as
+   * it is until the owner asks for it to be read.
+   */
+  unreadPosts(channelId: Id, limit: number, since: string): { url: string; title: string }[] {
     const rows = this.db
-      .prepare(`SELECT external_id AS url, title FROM findings WHERE channel_id = ? AND about = '' AND relation LIKE '${WATCH_REPLY_PREFIX}%' ORDER BY created_at DESC, rowid DESC LIMIT ?`)
-      .all(channelId, limit) as { url: string; title: string }[]
+      .prepare(
+        `SELECT external_id AS url, title FROM findings
+          WHERE channel_id = ? AND label = 'notice' AND about = '' AND read_tries < ${WATCH_READ_TRIES} AND (relation LIKE '${WATCH_REPLY_PREFIX}%' OR starred_at IS NOT NULL OR created_at >= ?)
+          ORDER BY (is_own = 1) DESC, (relation LIKE '${WATCH_REPLY_PREFIX}%' OR starred_at IS NOT NULL) DESC, created_at DESC, rowid DESC LIMIT ?`
+      )
+      .all(channelId, since, limit) as { url: string; title: string }[]
     return rows
   }
 
-  /** The addresses of the channel's most recent findings (the ones a look in the browser is told it judged already), newest first. */
-  recentUrls(channelId: Id, limit: number): string[] {
-    // A post that waits to be read (see `unreadReplies`) is not "judged": the look is sent to it by name.
+  /**
+   * The addresses of the channel's most recent findings (the ones a look in the browser is told it judged already), newest first. A post that waits to be read
+   * (see `unreadPosts`, with the same `since`) is not "judged": the look is sent to it by name.
+   */
+  recentUrls(channelId: Id, limit: number, since: string): string[] {
     const rows = this.db
-      .prepare(`SELECT external_id AS id FROM findings WHERE channel_id = ? AND NOT (about = '' AND relation LIKE '${WATCH_REPLY_PREFIX}%') ORDER BY created_at DESC, rowid DESC LIMIT ?`)
-      .all(channelId, limit) as { id: string }[]
+      .prepare(
+        `SELECT external_id AS id FROM findings
+          WHERE channel_id = ? AND NOT (label = 'notice' AND about = '' AND read_tries < ${WATCH_READ_TRIES} AND (relation LIKE '${WATCH_REPLY_PREFIX}%' OR starred_at IS NOT NULL OR created_at >= ?))
+          ORDER BY created_at DESC, rowid DESC LIMIT ?`
+      )
+      .all(channelId, since, limit) as { id: string }[]
     return rows.map((row) => row.id)
+  }
+
+  /** A look was told to read these posts: each one has been offered once more (see `WATCH_READ_TRIES`). */
+  markOffered(channelId: Id, urls: string[]): void {
+    const bump = this.db.prepare('UPDATE findings SET read_tries = read_tries + 1 WHERE channel_id = ? AND external_id = ?')
+    for (const url of urls) bump.run(channelId, url)
   }
 
   /** Whether this post of the channel has a finding already, whatever its stage. */

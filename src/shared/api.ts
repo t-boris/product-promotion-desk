@@ -59,6 +59,7 @@ import type {
   OpportunityCard,
   FindingCard,
   FindingComment,
+  FindingPicture,
   FindingCounts,
   FindingLabel,
   OpportunityKind,
@@ -319,6 +320,12 @@ export interface ApiMethods {
   /** The owner looked at these findings: they stop counting as unseen. */
   'findings.markSeen': [{ ids: Id[] }, void]
   'findings.setStarred': [{ id: Id; starred: boolean }, void]
+  /** The pictures the AI named for a post, in the order the page showed them. */
+  'findings.pictures': [{ id: Id }, FindingPicture[]]
+  /** One picture of a post as a data address, its longest side at most `side` pixels; null while the file is not there. */
+  'findings.picture': [{ id: Id; side?: number }, { dataUrl: string } | null]
+  /** "Check with AI": the AI opens one post in its account's browser and reads it in full (the post, the comments, the pictures). Resolves when it is over. */
+  'findings.readNow': [{ id: Id }, { state: 'read' | 'unavailable' | 'failed' | 'stopped'; message: string }]
   /** The comments under a post the AI read and judged worth a reply, in reading order (at most 25); empty for a post nobody read. Read-only. */
   'findings.thread': [{ id: Id }, FindingComment[]]
   /**
