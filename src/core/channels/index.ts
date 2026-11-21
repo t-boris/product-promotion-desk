@@ -57,6 +57,7 @@ export function register(core: Core): void {
   core.services.agent = agent
   core.services.postMissions = agent
   core.services.watchMissions = agent
+  core.services.researchMissions = agent
   core.services.channels = {
     markCapabilityVerified: (channelId, key, detail) => channels.markCapabilityVerified(channelId, key, detail),
     preparePlan: (channelId) => plans.prepare({ channelId })

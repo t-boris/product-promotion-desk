@@ -331,10 +331,10 @@ export interface SignInResult {
 export type AgentTaskKind = 'signup' | 'profile' | 'signin' | 'join'
 /**
  * What a run of the browser agent is. The first four are started by the owner (`agent.start`); `post` is started only by the send flow,
- * for one approved publication, and `watch` (DEC-042) only by the monitor, to look at a channel the app has no connector for. Neither can be
- * started through the API.
+ * for one approved publication, `watch` (DEC-042) only by the monitor, to look at a channel the app has no connector for, and `research` (REQ-004) only by
+ * the quick-post helper, to search a platform for what its people talk about. None of the three can be started through the API.
  */
-export type MissionKind = AgentTaskKind | 'post' | 'watch'
+export type MissionKind = AgentTaskKind | 'post' | 'watch' | 'research'
 export type AgentRunStatus = 'running' | 'done' | 'needs_owner' | 'failed' | 'stopped'
 
 /** Whether the browser agent can start on an account now, and if not, the one thing to do first, in plain words. */

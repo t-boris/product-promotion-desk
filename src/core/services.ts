@@ -4,6 +4,7 @@
 import type { AgentAsk, CapabilityKey, Channel, Claim, Id, MetricSnapshot, SendAction } from '../shared/types'
 import type { PostMissionService } from './browser-agent/post-submit'
 import type { WatchMissionService } from './browser-agent/watch'
+import type { ResearchMissionService } from './browser-agent/research'
 import type { MediaService } from './media/service'
 
 /** Implemented by the passports module (I-1); consumed by drafting and sending (I-5, I-6). */
@@ -103,6 +104,8 @@ export interface CoreServices {
   postMissions?: PostMissionService
   /** Implemented by the channels module; the monitor's watch flow has the AI look at a channel the app has no connector for, in the account's browser (DEC-042). */
   watchMissions?: WatchMissionService
+  /** Implemented by the channels module; the quick-post helper has the AI search a platform for trends, in the account's browser, on the owner's press (REQ-004). */
+  researchMissions?: ResearchMissionService
   channels?: ChannelsService
   knowledge?: KnowledgeProvider
   pipeline?: PipelineHooks

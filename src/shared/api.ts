@@ -82,6 +82,7 @@ import type {
   OverviewView
 } from './types'
 import type { PostType, QuickCard } from './quick-post'
+import type { QuickAssessArgs, QuickAssessment, QuickCaptionArgs, QuickCaptionResult, QuickPictureArgs, QuickPictureResult, QuickTrendsArgs, QuickTrendsResult } from './quick-ai'
 
 export interface SourcePreview {
   /** Paths/URLs the AI will be allowed to read. */
@@ -333,6 +334,25 @@ export interface ApiMethods {
    * (suggest_failed). Like the AI drafts, it works with any ready engine.
    */
   'drafts.refine': [{ field: DraftHelpField; opportunityId?: Id; channelId?: Id; form: { title: string; text: string }; instruction?: string; about?: string }, DraftHelpResult]
+  /**
+   * The AI in the quick-post composer (REQ-004). Four helps, each the owner's own press, none of them stores or changes anything: the owner reads the
+   * answer and presses to use it. All of them stand on the approved product knowledge; with none approved, no_knowledge. engine_unavailable like every AI
+   * help; invalid_input for a malformed call, a platform that is not one of the quick ones, or a caption too long to be read whole (never cut);
+   * suggest_failed when the AI's answer is blocked by the safety checks after one repair, or when the product knowledge changed while it worked.
+   * `quick.caption` writes (empty caption) or improves the caption for the platform's form; `quick.picture` proposes a card's headline, style and colour or
+   * an illustration's description; `quick.assess` is the marketer, which judges the caption and the picture against the goal the approved knowledge states.
+   */
+  'quick.caption': [QuickCaptionArgs, QuickCaptionResult]
+  'quick.picture': [QuickPictureArgs, QuickPictureResult]
+  'quick.assess': [QuickAssessArgs, QuickAssessment]
+  /**
+   * The trend analyst: only when the owner asks. The AI looks at the platform's own search pages for the channel's topics in the channel's account's
+   * browser (the AI browser, read-only: it opens pages and reads them, and clicks, types, replies, follows and posts nothing) and proposes an angle from
+   * what it saw. The progress is the run of the AI browser (`ai.activity`, subject `quickTrendsSubject(channelId)`). A search that cannot run or finds
+   * nothing is a state with a message, never an error: the owner can write and make the picture all the same. engine_unavailable and no_knowledge as for
+   * every help; invalid_input for a channel that is not a quick one or is not the product's.
+   */
+  'quick.trends': [QuickTrendsArgs, QuickTrendsResult]
   'publications.suggest': [{ channelId: Id }, OpportunityCard]
   'publications.create': [{ channelId: Id; draft: DraftInput }, OpportunityCard]
 

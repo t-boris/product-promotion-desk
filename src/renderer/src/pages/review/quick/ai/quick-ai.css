@@ -1,0 +1,136 @@
+/* The AI helps of the quick-post composer (REQ-004): beside the caption, under the picture, and the two panels under the preview (what is talked about
+   now, and the marketer's reading). Only tokens of the visual system are used. An AI control is never the filled button: every button here is the
+   secondary or the quiet one, and the filled button of the form is the screen's Save. Everything a stranger wrote (a topic found on the platform) wraps
+   instead of widening the panel. */
+
+/* ───────────── beside the caption's label ───────────── */
+/* The root takes no box of its own: its button sits in the caption's head beside the label, and what it has to say (the wish, the hints, the undo)
+   takes the full row below. The head wraps for it; it stays one row when there is nothing to say. */
+.quick-composer .quick-caption-field .field-head {
+  flex-wrap: wrap;
+}
+.quick-ai-caption {
+  display: contents;
+}
+.quick-ai-caption .quick-ai-more {
+  flex: 1 0 100%;
+}
+
+.quick-ai-more {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.quick-ai-more:empty {
+  display: none;
+}
+
+/* ───────────── under the picture ───────────── */
+.quick-ai-picture {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.quick-ai-picture .quick-ai-more {
+  align-self: stretch;
+}
+
+/* ───────────── the two panels under the preview ───────────── */
+.quick-ai-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+.quick-ai-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  min-height: var(--control-h);
+}
+.quick-ai-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* what is talked about now */
+.quick-trends-result,
+.quick-angle,
+.quick-reading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.quick-topics {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.quick-topics li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+}
+.quick-angle .input {
+  resize: vertical;
+}
+
+/* the marketer's reading */
+.quick-verdict {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+}
+.quick-points,
+.quick-basis {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.quick-points li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  overflow-wrap: anywhere;
+}
+.quick-basis li {
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.quick-suggestion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  min-width: 0;
+}
+.quick-suggestion-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

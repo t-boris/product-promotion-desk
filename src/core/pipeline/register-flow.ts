@@ -12,6 +12,7 @@ import { MixFlow } from './mix'
 import { MonitorFlow } from './monitor'
 import { PostGroupsFlow } from './post-groups'
 import { PublicationsFlow } from './publications'
+import { QuickHelp } from './quick-help'
 import { ReviewFlow } from './review'
 import { SendingFlow } from './sending'
 import { FlowStore } from './store'
@@ -21,7 +22,7 @@ import { TriageFlow } from './triage'
  * Registers the discussion → draft → approval → sending flow (I-4, I-5, I-6): the monitor, drafting, review,
  * gate and sending services (attached to `core.services`) and the opportunities.*, publications.*,
  * channels.discussions, channels.selectOlder, channels.activate, channels.checkNow and channels.setPaused handlers,
- * and drafts.refine (the AI writes or improves the text of a draft; nothing is saved).
+ * and drafts.refine (the AI writes or improves the text of a draft; nothing is saved), and quick.* (the AI in the quick-post composer).
  */
 export function registerFlow(core: Core): void {
   const store = new FlowStore(core)
@@ -44,6 +45,14 @@ export function registerFlow(core: Core): void {
   registerFlowApi({ core, store, review, monitor, drafting, sending, publications, findings })
   const draftHelp = new DraftHelp(core, store)
   core.router.register({ 'drafts.refine': (args) => draftHelp.refine(args) })
+  // The AI in the quick-post composer (REQ-004): the caption, the picture, the search for trends and the marketer. Nothing is stored.
+  const quickHelp = new QuickHelp(core)
+  core.router.register({
+    'quick.caption': (args) => quickHelp.caption(args),
+    'quick.picture': (args) => quickHelp.picture(args),
+    'quick.assess': (args) => quickHelp.assess(args),
+    'quick.trends': (args) => quickHelp.trends(args)
+  })
   const groups = new PostGroupsFlow(core, store, review, sending, draftHelp)
   core.router.register({
     'postGroups.create': ({ productId, channelIds, draft }) => groups.create(productId, channelIds, draft),

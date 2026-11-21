@@ -165,7 +165,7 @@ export function draftHelpPrompt(input: DraftHelpInput): AiTask {
 }
 
 /** Whether the text names the product or points to its website: either one calls for saying who the author is. */
-function namesProduct(text: string, product: ProductView): boolean {
+export function namesProduct(text: string, product: ProductView): boolean {
   if (mentionsProduct(text, product.name)) return true
   const host = product.website ? hostOf(product.website) : null
   return host !== null && text.toLowerCase().includes(host)
@@ -175,7 +175,7 @@ function namesProduct(text: string, product: ProductView): boolean {
  * What the AI was given and what the checks read, as one comparable string: if it differs when the answer arrives, the checks ran against
  * facts that are gone (a fact withdrawn, a statement prohibited, the product renamed or moved to another website).
  */
-const knowledgeKey = (k: ReturnType<typeof loadKnowledge>, product: { name: string; websiteUrl: string | null }): string =>
+export const knowledgeKey = (k: ReturnType<typeof loadKnowledge>, product: { name: string; websiteUrl: string | null }): string =>
   JSON.stringify([k.versionId, k.approved.map((c) => [c.id, c.text, c.unconfirmedAvailability]), k.prohibited, product.name, product.websiteUrl])
 
 /**
@@ -189,9 +189,59 @@ export function forChecks(text: string): string {
 }
 
 /** A draft text: markdown and links stay; carriage returns and control characters go. */
-function cleanDraft(raw: string): string {
+export function cleanDraft(raw: string): string {
   // eslint-disable-next-line no-control-regex
   return raw.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]+/g, ' ').trim()
+}
+
+/** What an AI text is judged on, as the checks read it (invisible characters taken out, look-alike forms folded: see `forChecks`). */
+export interface AiTextCheck {
+  /** What the AI wrote: its title (null when it wrote none) and its text. */
+  title: string | null
+  text: string
+  usedClaimIds: string[]
+  /** The AI says the text states facts about the product that the owner's own text does not state. */
+  statesProductFacts: boolean
+  /** The AI says the finished text mentions the product and states the author's connection to it. */
+  disclosesConnection: boolean
+  /** The owner's own text beside the AI's: the links in it are the owner's, not the AI's. */
+  ownerText: string
+  product: ProductView
+  approved: ClaimView[]
+  prohibited: string[]
+  /** The text is written from nothing: it stands on approved facts and must cite at least one. */
+  mustCite: boolean
+  /** The finished text as the disclosure rule reads it (the owner's text with the AI's change), read as the checks read it. */
+  finished: string
+  /** The text cannot carry the author's connection yet (a heading, with the text still to come). */
+  deferDisclosure?: boolean
+}
+
+/**
+ * Every rule an AI text passes before the owner is shown it, in one place for every AI help that writes: the cited facts are approved, nothing prohibited
+ * is repeated, no price, discount or free offer lacks an approved claim, links go only to the product's own addresses (and the owner's own), a text that
+ * states facts cites them, and a text that names the product says who is speaking. The problems, in words, to hand back to the engine; empty when it passes.
+ */
+export function aiTextProblems(check: AiTextCheck): string[] {
+  const report = checkDraftSafety({
+    text: check.text,
+    title: check.title,
+    link: null,
+    usedClaimIds: check.usedClaimIds,
+    approved: check.approved,
+    prohibited: check.prohibited,
+    // Improving the owner's text keeps the owner's own links: a link they wrote is not one the AI invented.
+    allowedHosts: [...allowedHostsFor(check.product.website, check.approved), ...hostsIn(check.ownerText)]
+  })
+  const problems = [...report.violations]
+  if (report.usedClaims.length === 0) {
+    if (check.mustCite) problems.push('a post written from nothing must cite at least one approved fact')
+    else if (check.statesProductFacts) problems.push("the text states facts about the product that the owner's draft does not state, but cites no approved fact")
+  }
+  if (!check.deferDisclosure && namesProduct(check.finished, check.product) && !check.disclosesConnection) {
+    problems.push('the draft names the product without saying that the author is connected with it')
+  }
+  return problems
 }
 
 /**
@@ -226,31 +276,25 @@ export function readDraftAnswer(raw: unknown, input: DraftHelpInput): Parsed<Dra
   // reply). Whether the field was empty or not decides nothing: a one-word draft is not a licence to add facts.
   if (typeof raw.statesProductFacts !== 'boolean') return { ok: false, error: '"statesProductFacts" must be true or false' }
   const usedClaimIds = Array.isArray(raw.usedClaimIds) ? raw.usedClaimIds.filter((id): id is string => typeof id === 'string') : []
-  const report = checkDraftSafety({
-    text: read.text,
+  const finished = forChecks([result.title ?? input.form.title, result.text ?? input.form.text].join('\n'))
+  const problems = aiTextProblems({
     title: read.title,
-    link: null,
+    text: read.text,
     usedClaimIds,
+    statesProductFacts: raw.statesProductFacts,
+    disclosesConnection: raw.disclosesConnection === true,
+    ownerText: `${input.form.title}\n${input.form.text}`,
+    product: subject.product,
     approved: subject.approved,
     prohibited: subject.prohibited,
-    // Improving the owner's text keeps the owner's own links: a link they wrote is not one the AI invented.
-    allowedHosts: [...allowedHostsFor(subject.product.website, subject.approved), ...hostsIn(`${input.form.title}\n${input.form.text}`)]
+    // A post written from nothing stands on approved facts, as the AI's own posts do; any other text that states facts the owner's draft does not
+    // state must cite them.
+    mustCite: subject.kind === 'post' && isWriting(input) && field !== 'title',
+    finished,
+    // A title written while the text is still empty cannot carry the connection (a heading is no place for "I work on it", and there is no text yet to
+    // say it in): the text help that follows reads the title and the text together and says it there, and the approval checks it again.
+    deferDisclosure: field === 'title' && input.form.text.trim() === ''
   })
-  const problems = [...report.violations]
-  // A post written from nothing stands on approved facts, as the AI's own posts do; any other text that states facts the owner's draft does not
-  // state must cite them.
-  const postFromNothing = subject.kind === 'post' && isWriting(input) && field !== 'title'
-  if (report.usedClaims.length === 0) {
-    if (postFromNothing) problems.push('a post written from nothing must cite at least one approved fact')
-    else if (raw.statesProductFacts === true) problems.push("the text states facts about the product that the owner's draft does not state, but cites no approved fact")
-  }
-  const finished = forChecks([result.title ?? input.form.title, result.text ?? input.form.text].join('\n'))
-  // A title written while the text is still empty cannot carry the connection (a heading is no place for "I work on it", and there is no text yet to
-  // say it in): the text help that follows reads the title and the text together and says it there, and the approval checks it again.
-  const deferDisclosure = field === 'title' && input.form.text.trim() === ''
-  if (!deferDisclosure && namesProduct(finished, subject.product) && raw.disclosesConnection !== true) {
-    problems.push('the draft names the product without saying that the author is connected with it')
-  }
   if (problems.length > 0) return { ok: false, error: `The text was blocked by the safety checks: ${problems.join('; ')}` }
   return { ok: true, value: result }
 }
@@ -266,7 +310,7 @@ export interface DraftHelper {
 }
 
 /** A line the owner typed (a wish, what a post is about): one line, never cut (a cut wish can lose its restriction); too long is refused. */
-function ownerLine(value: unknown, max: number, what: string): string {
+export function ownerLine(value: unknown, max: number, what: string): string {
   if (value === undefined || value === null) return ''
   if (typeof value !== 'string') throw new ApiError('invalid_input', `${what} must be text.`)
   const line = collapseWhitespace(value)
