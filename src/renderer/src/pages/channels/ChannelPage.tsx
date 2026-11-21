@@ -104,8 +104,9 @@ export function ChannelPage({
         {tab === 'status' && (
           <>
             <ChannelStatusCard channel={channel} product={products.find((p) => p.id === channel.productId)} account={account} platform={platform} accountLabel={account?.label ?? 'Unknown account'} filled={stage === 'activate'} onRemoved={onRemoved} />
-            <CapabilityCard channel={channel} filled={stage === 'assess'} platform={platform} />
+            {/* Right under the status, above the long table of abilities: it is what the owner reaches for when they come to read the place. */}
             <LookAroundCard channel={channel} />
+            <CapabilityCard channel={channel} filled={stage === 'assess'} platform={platform} />
           </>
         )}
         {tab === 'plan' && <ChannelPlanCard channel={channel} platforms={platforms} blockedReason={planBlockedReason} />}
