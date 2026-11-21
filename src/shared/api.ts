@@ -318,6 +318,7 @@ export interface ApiMethods {
   'findings.counts': [{ productId: Id; /** Only the findings of this channel; every channel of the product when absent. */ channelId?: Id }, FindingCounts]
   /** The owner looked at these findings: they stop counting as unseen. */
   'findings.markSeen': [{ ids: Id[] }, void]
+  'findings.setStarred': [{ id: Id; starred: boolean }, void]
   /** The comments under a post the AI read and judged worth a reply, in reading order (at most 25); empty for a post nobody read. Read-only. */
   'findings.thread': [{ id: Id }, FindingComment[]]
   /**

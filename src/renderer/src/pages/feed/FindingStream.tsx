@@ -14,11 +14,11 @@ import type { Place } from './reply-composer'
 const brief = (relation: string): string => (relation.startsWith(WATCH_REPLY_PREFIX) ? relation.slice(WATCH_REPLY_PREFIX.length) : relation)
 
 /**
- * One post of the "Worth a reply" stream: the post in brief, the thread under it, and the places to answer. The AI read the post in the account's browser;
+ * One post of the stream: the post in brief, the thread under it, and the places to answer. The AI read the post in the account's browser;
  * what it saw is shown as plain text. "Reply here" (on the post or on any comment) opens the reply window under the post. A post the AI has not read yet
  * says so and offers to look at its channel now.
  */
-function StreamCard({ row, onSeen }: { row: FindingRow; onSeen: (id: Id) => void }) {
+function StreamCard({ row, onSeen, onStar }: { row: FindingRow; onSeen: (id: Id) => void; onStar: (id: Id, starred: boolean) => void }) {
   const { finding, channelTarget, channelPlatform } = row.card
   const thread = useQuery('findings.thread', { id: finding.id }, ['opportunities'])
   const comments = thread.data ?? []
@@ -43,13 +43,26 @@ function StreamCard({ row, onSeen }: { row: FindingRow; onSeen: (id: Id) => void
   }, [row.unseen, finding.id, onSeen])
 
   return (
-    <article className="stream-card" ref={card} data-testid="stream-card" data-unseen={row.unseen ? 'true' : 'false'} data-read={read ? 'true' : 'false'}>
+    <article className="stream-card" ref={card} data-testid="stream-card" data-unseen={row.unseen ? 'true' : 'false'} data-read={read ? 'true' : 'false'} data-own={row.own ? 'true' : 'false'}>
       <header className="stream-head">
         <strong data-testid="stream-channel">{channelTarget}</strong>
         <span className="muted small">{platformLabel(channelPlatform)}</span>
         {finding.author && <span className="muted small">by {finding.author}</span>}
         {finding.firstLook && <Badge>{FIRST_LOOK}</Badge>}
+        {row.own && <Badge tone="good">Your post</Badge>}
+        {row.worthReply && <Badge tone="info">The AI would answer it</Badge>}
         <span className="stream-when muted small">{formatTime(finding.createdAt)}</span>
+        <button
+          type="button"
+          className={`star${row.starred ? ' on' : ''}`}
+          aria-pressed={row.starred}
+          aria-label={row.starred ? 'Take the star off this post' : 'Star this post'}
+          title={row.starred ? 'Starred: click to take the star off' : 'Star this post to find it again'}
+          onClick={() => onStar(finding.id, !row.starred)}
+          data-testid="stream-star"
+        >
+          <span aria-hidden="true">{row.starred ? '★' : '☆'}</span>
+        </button>
       </header>
       <h3 className="stream-title" data-testid="stream-title">
         {finding.title.trim() || 'Untitled post'}
@@ -85,11 +98,24 @@ function StreamCard({ row, onSeen }: { row: FindingRow; onSeen: (id: Id) => void
 }
 
 /**
- * The "Worth a reply" list as a real feed (owner, 2026-11-21): each post in brief with its thread under it, and the owner picks any place, post or comment,
- * to answer. The rows are already filtered, sorted and cut to a page by the screen; `footer` is its "Show more". The posts shown are marked seen, in one
- * batch a moment after they come on screen.
+ * The Noted list as a real feed (owner, 2026-11-21): each post in brief with its thread under it, a star on it, and the owner picks any place, post or
+ * comment, to answer. The rows are already filtered, sorted and cut to a page by the screen; `footer` is its "Show more". The posts shown are marked seen,
+ * in one batch a moment after they come on screen.
  */
-export function FindingStream({ rows, footer, markSeen }: { rows: readonly FindingRow[]; footer?: ReactNode; markSeen: (ids: Id[]) => Promise<void> }) {
+export function FindingStream({
+  rows,
+  footer,
+  markSeen,
+  setStarred,
+  label = 'Noted posts'
+}: {
+  rows: readonly FindingRow[]
+  footer?: ReactNode
+  markSeen: (ids: Id[]) => Promise<void>
+  setStarred: (id: Id, starred: boolean) => Promise<void>
+  /** What a screen reader calls the feed. */
+  label?: string
+}) {
   const waiting = useRef(new Set<Id>())
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latest = useRef(markSeen)
@@ -107,9 +133,9 @@ export function FindingStream({ rows, footer, markSeen }: { rows: readonly Findi
   useEffect(() => () => (timer.current !== null ? clearTimeout(timer.current) : undefined), [])
 
   return (
-    <div className="stream" data-testid="finding-stream" role="feed" aria-label="Posts worth a reply">
+    <div className="stream" data-testid="finding-stream" role="feed" aria-label={label}>
       {rows.map((row) => (
-        <StreamCard key={row.id} row={row} onSeen={onSeen} />
+        <StreamCard key={row.id} row={row} onSeen={onSeen} onStar={(id, starred) => void setStarred(id, starred)} />
       ))}
       {footer}
     </div>

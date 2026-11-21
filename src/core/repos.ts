@@ -153,6 +153,8 @@ export const mapFinding = (r: Row): Finding => ({
   firstLook: r.first_look === 1,
   opportunityId: (r.opportunity_id as string | null) ?? null,
   seenAt: (r.seen_at as string | null) ?? null,
+  starredAt: (r.starred_at as string | null) ?? null,
+  own: r.is_own === 1,
   createdAt: r.created_at as string
 })
 

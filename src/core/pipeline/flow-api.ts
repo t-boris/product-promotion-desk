@@ -179,6 +179,11 @@ export function registerFlowApi({ core, store, review, monitor, drafting, sendin
     'findings.markSeen': ({ ids }) => {
       if (findings.markSeen(checkIds(ids)) > 0) findings.notify()
     },
+    'findings.setStarred': ({ id, starred }) => {
+      if (typeof starred !== 'boolean') throw new ApiError('invalid_input', 'Say whether the post is starred.')
+      findings.setStarred(requireText(id, 'The post'), starred)
+      findings.notify()
+    },
 
     // ───────────── standalone publications ─────────────
     'publications.suggest': async ({ channelId }) => card((await publications.suggest(channelId)).id),

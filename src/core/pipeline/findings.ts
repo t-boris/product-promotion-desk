@@ -93,8 +93,8 @@ export class FindingStore {
       const id = newId()
       const info = this.db
         .prepare(
-          `INSERT INTO findings (id, product_id, channel_id, external_id, title, url, author, posted_at, stage, label, relation, about, thread, reply_to, suggested_comment, first_look, opportunity_id, seen_at, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+          `INSERT INTO findings (id, product_id, channel_id, external_id, title, url, author, posted_at, stage, label, relation, about, thread, reply_to, suggested_comment, first_look, opportunity_id, seen_at, starred_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
            ON CONFLICT (channel_id, external_id) DO NOTHING`
         )
         .run(
@@ -113,6 +113,8 @@ export class FindingStore {
           item.replyTo,
           item.comment,
           firstLook ? 1 : 0,
+          // A post the AI calls worth a reply starts starred: the owner's first filter ("Starred") is the posts the AI would answer.
+          item.relation.startsWith(WATCH_REPLY_PREFIX) ? now : null,
           now,
           now
         )
@@ -326,6 +328,12 @@ export class FindingStore {
       )
       .get(productId, channelId ?? null, channelId ?? null) as { unseen: number; notices: number; skipped: number; pending: number }
     return { unseenNotices: row.unseen, notices: row.notices, skipped: row.skipped, pending: row.pending }
+  }
+
+  /** Stars a post or takes the star off. Refused when there is no such post. `updated_at` stays: a star is the owner's mark, not the AI's judgment. */
+  setStarred(id: Id, starred: boolean): void {
+    const changed = this.db.prepare('UPDATE findings SET starred_at = ? WHERE id = ?').run(starred ? this.now() : null, id).changes
+    if (changed === 0) throw new ApiError('not_found', 'The post was not found. It may have been removed.')
   }
 
   /**

@@ -235,5 +235,18 @@ CREATE TABLE finding_comments (
   UNIQUE (finding_id, position)
 );
 `
+  },
+  {
+    id: 313,
+    name: 'pipeline: the owner can star a post of the Feed, and the posts the AI called worth a reply start starred',
+    sql: `
+-- The owner's own mark on a post (a star): null when there is none. It is a filter of the one list of posts, not a place of its own.
+ALTER TABLE findings ADD COLUMN starred_at TEXT;
+-- A post of the account itself (the owner's own post, found in the channel): its comments are what the owner wants answered first, so the Feed marks it and lists it first.
+-- Nothing records one yet; the watch of the comments under our own posts does (it is built after the thread analysis).
+ALTER TABLE findings ADD COLUMN is_own INTEGER NOT NULL DEFAULT 0;
+-- What the AI called worth a reply before there was a star is starred now, so the owner loses none of them with the Worth a reply list.
+UPDATE findings SET starred_at = created_at WHERE label = 'notice' AND relation LIKE 'Worth a reply: %';
+`
   }
 ]

@@ -26,6 +26,8 @@ export interface Findings {
   capped: boolean
   /** Marks the findings seen, then reloads what counts them. Never throws: a failure is `error`. */
   markSeen: (ids: Id[]) => Promise<void>
+  /** Stars a post or takes its star off, then reloads the notices. Never throws: a failure is `error`. */
+  setStarred: (id: Id, starred: boolean) => Promise<void>
 }
 
 const NO_CARDS: FindingCard[] = []
@@ -60,6 +62,19 @@ export function useFindings(productId: Id, options: { skipped: boolean; channelI
     [reloadNotices, reloadCounts]
   )
 
+  const setStarred = useCallback(
+    async (id: Id, starred: boolean): Promise<void> => {
+      try {
+        await call('findings.setStarred', { id, starred })
+        setMarkError(null)
+        reloadNotices()
+      } catch (e) {
+        setMarkError(e instanceof Error ? e.message : String(e))
+      }
+    },
+    [reloadNotices]
+  )
+
   return {
     notices: noticeRows,
     skipped: skippedRows,
@@ -68,7 +83,8 @@ export function useFindings(productId: Id, options: { skipped: boolean; channelI
     loadingSkipped: options.skipped && skipped.loading && skipped.data === undefined,
     error: notices.error ?? counts.error ?? skipped.error ?? markError,
     capped: (notices.data?.length ?? 0) >= FEED_LIMIT || (skipped.data?.length ?? 0) >= FEED_LIMIT,
-    markSeen
+    markSeen,
+    setStarred
   }
 }
 

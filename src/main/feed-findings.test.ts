@@ -20,14 +20,12 @@ import {
   notedCount,
   notedEmptyKind,
   opportunityListOf,
-  replyEmptyKind,
-  replyRows,
   unseenNoticeCount,
   unseenToMark,
   visibleFindings,
   type FindingRow
 } from '../renderer/src/pages/feed/finding-rows'
-import { STREAM_SORTS, searchStream, sortStream } from '../renderer/src/pages/feed/stream-filter'
+import { STREAM_FILTERS, STREAM_SORTS, filterStream, searchStream, sortStream, streamCounts, visibleFilters } from '../renderer/src/pages/feed/stream-filter'
 import { selectionAfterDismiss } from '../renderer/src/pages/inbox/inbox-groups'
 
 interface Seed {
@@ -42,6 +40,8 @@ interface Seed {
   postedAt?: string | null
   createdAt?: string
   seenAt?: string | null
+  starredAt?: string | null
+  own?: boolean
 }
 
 function card(seed: Seed): FindingCard {
@@ -65,6 +65,8 @@ function card(seed: Seed): FindingCard {
       firstLook: seed.firstLook ?? false,
       opportunityId: null,
       seenAt: seed.seenAt === undefined ? null : seed.seenAt,
+      starredAt: seed.starredAt === undefined ? null : seed.starredAt,
+      own: seed.own ?? false,
       createdAt: seed.createdAt ?? '2026-11-15T08:00:00.000Z'
     },
     channelTarget: seed.target ?? 'r/alpha',
@@ -77,21 +79,20 @@ const ids = (rows: readonly { id: string }[]): string[] => rows.map((row) => row
 const counts = (over: Partial<FindingCounts> = {}): FindingCounts => ({ unseenNotices: 0, notices: 0, skipped: 0, pending: 0, ...over })
 
 describe('the tabs', () => {
-  it('are Worth a reply, the three lists of opportunities and Noted, in the order the owner reads them', () => {
-    expect(FEED_TABS.map((tab) => tab.id)).toEqual(['reply', 'decide', 'noted', 'sent', 'skipped'])
-    expect(FEED_TABS.map((tab) => tab.label)).toEqual(['Worth a reply', 'To decide', 'Noted', 'Sent', 'Skipped'])
+  it('are the three lists of opportunities and Noted, in the order the owner reads them: there is no list of its own for posts worth a reply', () => {
+    expect(FEED_TABS.map((tab) => tab.id)).toEqual(['decide', 'noted', 'sent', 'skipped'])
+    expect(FEED_TABS.map((tab) => tab.label)).toEqual(['To decide', 'Noted', 'Sent', 'Skipped'])
   })
 
   it('leave Noted out of the lists of opportunities: no opportunity state is ever Noted', () => {
     expect(FEED_STATES.map((state) => state.id)).toEqual(['decide', 'sent', 'skipped'])
-    expect(FEED_TABS.filter((tab) => tab.id !== 'noted' && tab.id !== 'reply').map((tab) => tab.id)).toEqual(FEED_STATES.map((state) => state.id))
+    expect(FEED_TABS.filter((tab) => tab.id !== 'noted').map((tab) => tab.id)).toEqual(FEED_STATES.map((state) => state.id))
     const every: OpportunityState[] = ['discovered', 'analyzing', 'draft', 'awaiting_approval', 'ready', 'sending', 'confirmed', 'no_reply', 'deferred', 'cancelled', 'needs_user', 'error', 'unknown_result']
     const listed = FEED_STATES.flatMap((state) => statesOf(state.id))
     expect([...listed].sort()).toEqual([...every].sort())
   })
 
-  it('say which opportunity list a tab shows, and none for Noted and Worth a reply', () => {
-    expect(opportunityListOf('reply')).toBeNull()
+  it('say which opportunity list a tab shows, and none for Noted', () => {
     expect(opportunityListOf('decide')).toBe('decide')
     expect(opportunityListOf('sent')).toBe('sent')
     expect(opportunityListOf('skipped')).toBe('skipped')
@@ -269,8 +270,8 @@ describe('the words of a finding', () => {
     expect(FIRST_LOOK).toBe('First look')
   })
 
-  it('says in the bar that a notice has nothing to send, and where a reply is', () => {
-    expect(findingBarNote('notice')).toBe('A notice has nothing to send. A post worth a reply is also in Worth a reply, with its thread.')
+  it('says in the bar that a notice has nothing to send, and what the owner can do with it', () => {
+    expect(findingBarNote('notice')).toBe('A notice has nothing to send. Star it to find it again, or answer it from here.')
     expect(findingBarNote('skip')).toBe('The AI judged this post not relevant. Nothing is proposed for it.')
   })
 })
@@ -369,19 +370,53 @@ describe('findings and opportunities in the same selection logic', () => {
   })
 })
 
-describe('Worth a reply', () => {
+describe('a post worth a reply, starred and own posts', () => {
   const asked = 'Worth a reply: asks for a tool like ours.'
-  it('lists the notices whose note says they are worth a reply, and no other', () => {
-    const rows = [rowOf({ id: 'a', relation: asked }), rowOf({ id: 'b', relation: 'Relates to the goal.' }), rowOf({ id: 'c', relation: asked })]
-    expect(ids(replyRows(rows))).toEqual(['a', 'c'])
-    expect(ids(replyRows([]))).toEqual([])
+  it('is a tag on the post, not a list: the row says the AI would answer it', () => {
+    expect(rowOf({ id: 'a', relation: asked }).worthReply).toBe(true)
+    expect(rowOf({ id: 'b', relation: 'Relates to the goal.' }).worthReply).toBe(false)
   })
 
-  it('says nothing is worth a reply where the Noted list says nothing is noted, and keeps every other reason', () => {
-    expect(replyEmptyKind('nothing_noted')).toBe('nothing_reply')
-    expect(replyEmptyKind('no_channels')).toBe('no_channels')
-    expect(replyEmptyKind('no_match')).toBe('no_match')
-    expect(replyEmptyKind(null)).toBeNull()
+  it('carries the owner\'s star and whether the post is the account\'s own', () => {
+    expect(rowOf({ id: 'a', starredAt: '2026-11-15T09:00:00.000Z' }).starred).toBe(true)
+    expect(rowOf({ id: 'b' }).starred).toBe(false)
+    expect(rowOf({ id: 'c', own: true }).own).toBe(true)
+    expect(rowOf({ id: 'd' }).own).toBe(false)
+  })
+})
+
+describe('the stream: filters', () => {
+  const rows = [
+    rowOf({ id: 'a', starredAt: '2026-11-15T09:00:00.000Z', seenAt: '2026-11-15T10:00:00.000Z' }),
+    rowOf({ id: 'b' }),
+    rowOf({ id: 'c', own: true, seenAt: '2026-11-15T10:00:00.000Z' }),
+    rowOf({ id: 'd', starredAt: '2026-11-15T09:30:00.000Z' })
+  ]
+
+  it('keeps every post, the starred ones, the own ones or the ones not seen yet, in the order given', () => {
+    expect(ids(filterStream(rows, 'all'))).toEqual(['a', 'b', 'c', 'd'])
+    expect(ids(filterStream(rows, 'starred'))).toEqual(['a', 'd'])
+    expect(ids(filterStream(rows, 'own'))).toEqual(['c'])
+    expect(ids(filterStream(rows, 'unseen'))).toEqual(['b', 'd'])
+  })
+
+  it('counts what each filter keeps: the number written on its button', () => {
+    expect(streamCounts(rows)).toEqual({ all: 4, own: 1, starred: 2, unseen: 2 })
+    expect(streamCounts([])).toEqual({ all: 0, own: 0, starred: 0, unseen: 0 })
+  })
+
+  it('offers the filters the screen lists, and "Your posts" only while there are some (or while it is the one chosen)', () => {
+    expect(STREAM_FILTERS.map((f) => f.id)).toEqual(['all', 'own', 'starred', 'unseen'])
+    expect(visibleFilters(streamCounts(rows), 'all').map((f) => f.id)).toEqual(['all', 'own', 'starred', 'unseen'])
+    const none = streamCounts([rowOf({ id: 'x' })])
+    expect(visibleFilters(none, 'all').map((f) => f.id)).toEqual(['all', 'starred', 'unseen'])
+    expect(visibleFilters(none, 'own').map((f) => f.id)).toEqual(['all', 'own', 'starred', 'unseen'])
+  })
+
+  it('does not change the list it is given', () => {
+    const before = ids(rows)
+    filterStream(rows, 'starred')
+    expect(ids(rows)).toEqual(before)
   })
 })
 
@@ -402,6 +437,12 @@ describe('the stream: search and sort', () => {
 
   it('offers the sorts the screen lists, each once', () => {
     expect(STREAM_SORTS.map((sort) => sort.id)).toEqual(['newest', 'oldest', 'unseen', 'channel'])
+  })
+
+  it('lists the account\'s own posts first, whatever the order: their comments are answered before anything else', () => {
+    const withOwn = [...rows, rowOf({ id: 'mine', own: true, target: 'r/zeta', postedAt: '2026-11-01T08:00:00.000Z', seenAt: '2026-11-02T08:00:00.000Z' })]
+    for (const sort of STREAM_SORTS) expect(sortStream(withOwn, sort.id)[0].id).toBe('mine')
+    expect(ids(sortStream(withOwn, 'newest'))).toEqual(['mine', 'new', 'mid', 'old'])
   })
 
   it('does not change the list it is given', () => {

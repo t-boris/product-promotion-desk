@@ -12,8 +12,8 @@ import { FeedDetail } from './feed/FeedDetail'
 import { FeedList } from './feed/FeedList'
 import { ReadingNotes } from './feed/ReadingNotes'
 import { FEED_SOURCES, buildFeedRows, channelOptionLabel, emptyKind, groupByDay, nothingFoundWords, readableChannels, sourceCounts, stateCounts, visibleRows, watchedChannels, widestFilter, type FeedRow, type FeedSourceFilter } from './feed/feed-filter'
-import { FEED_TABS, isFindingRow, judgedLine, notedCount, notedEmptyKind, opportunityListOf, replyEmptyKind, replyRows, unseenNoticeCount, visibleFindings, type FeedTab, type ListedRow, type NotedEmpty } from './feed/finding-rows'
-import { STREAM_SORTS, searchStream, sortStream, type StreamSort } from './feed/stream-filter'
+import { FEED_TABS, isFindingRow, judgedLine, notedCount, notedEmptyKind, opportunityListOf, unseenNoticeCount, visibleFindings, type FeedTab, type ListedRow, type NotedEmpty } from './feed/finding-rows'
+import { STREAM_SORTS, filterStream, searchStream, sortStream, streamCounts, visibleFilters, type StreamFilter, type StreamSort } from './feed/stream-filter'
 import { FindingStream } from './feed/FindingStream'
 import { usePaging } from '../list-paging'
 import { ShowMore } from './ShowMore'
@@ -79,9 +79,10 @@ function FeedScreen({ product }: { product: Product }) {
   const rows = useMemo(() => buildFeedRows(feed.cards), [feed.cards])
 
   const [source, setSource] = useState<FeedSourceFilter>('all')
-  // The tab the owner chose; until they choose one, the Feed opens on "Worth a reply" when it has posts, else on "To decide" as it always did.
+  // The tab the owner chose; until they choose one, the Feed opens on "To decide", or on Noted when nothing waits to be decided and posts were noted.
   const [picked, setTab] = useState<FeedTab | null>(null)
   const [search, setSearch] = useState('')
+  const [starFilter, setStarFilter] = useState<StreamFilter>('all')
   const [sort, setSort] = useState<StreamSort>('newest')
   const [chosenChannel, setChosenChannel] = useState<Id | ''>('')
   const [olderFor, setOlderFor] = useState<Id | null>(null)
@@ -94,11 +95,10 @@ function FeedScreen({ product }: { product: Product }) {
   const findings = useFindings(product.id, { skipped: auditing, channelId })
   const states = useMemo(() => stateCounts(rows, { source, channelId }), [rows, source, channelId])
   const notices = useMemo(() => visibleFindings(findings.notices, channelId), [findings.notices, channelId])
-  const replies = useMemo(() => replyRows(notices), [notices])
-  const allReplies = useMemo(() => replyRows(findings.notices), [findings.notices])
-  const defaultTab: FeedTab = replies.length > 0 ? 'reply' : 'decide'
+  const defaultTab: FeedTab = states.decide === 0 && notices.length > 0 ? 'noted' : 'decide'
   const tab: FeedTab = picked ?? defaultTab
-  // Noted and Worth a reply list findings, not opportunities: the three lists of opportunities (and the source chips, which are theirs) do not apply to them.
+  // Noted lists findings, not opportunities: the three lists of opportunities (and the source chips, which are theirs) do not apply to it.
+  const filterCounts = useMemo(() => streamCounts(notices), [notices])
   const list = opportunityListOf(tab)
   const visible = useMemo(() => (list === null ? NO_ROWS : visibleRows(rows, { source, state: list, channelId })), [rows, source, list, channelId])
   const sources = useMemo(() => sourceCounts(rows, { state: list ?? 'decide', channelId }), [rows, list, channelId])
@@ -107,13 +107,13 @@ function FeedScreen({ product }: { product: Product }) {
 
   // The findings of the tab, searched and sorted as the owner asked, a page at a time; the opportunity lists are paged too. A new tab, channel, search or
   // sort starts again from the top.
-  const findingRows = useMemo(() => sortStream(searchStream(tab === 'reply' ? replies : notices, search), sort), [tab, replies, notices, search, sort])
-  const pagedFindings = usePaging(findingRows, `${tab}|${channelId}|${search}|${sort}`)
+  const findingRows = useMemo(() => sortStream(searchStream(filterStream(notices, starFilter), search), sort), [notices, starFilter, search, sort])
+  const pagedFindings = usePaging(findingRows, `${tab}|${channelId}|${starFilter}|${search}|${sort}`)
   const pagedOpportunities = usePaging(visible, `${tab}|${source}|${channelId}`)
 
-  // What the list shows: the posts judged not relevant while the owner checks them, else the Noted notices, else the opportunities of the list. The stream
-  // of "Worth a reply" has no selected row: it is its own list of cards.
-  const listed: readonly ListedRow[] = auditing ? findings.skipped : tab === 'reply' ? NO_LISTED : list === null ? pagedFindings.visible : pagedOpportunities.visible
+  // What the list shows: the posts judged not relevant while the owner checks them (a list with a pane), else the opportunities of the list. The Noted posts
+  // are a stream of cards, each with its thread, and have no selected row.
+  const listed: readonly ListedRow[] = auditing ? findings.skipped : list === null ? NO_LISTED : pagedOpportunities.visible
   const listedById = useMemo(() => new Map<string, ListedRow>(listed.map((row) => [row.id, row])), [listed])
 
   const offset = localOffsetMinutes()
@@ -161,7 +161,11 @@ function FeedScreen({ product }: { product: Product }) {
   const check = (id: Id): void => void checkNow(id)
   const showAll = (): void => {
     setChosenChannel('')
-    if (list === null) return
+    if (list === null) {
+      setSearch('')
+      setStarFilter('all')
+      return
+    }
     const widest = widestFilter(rows)
     setSource(widest.source)
     setTab(widest.state)
@@ -174,25 +178,11 @@ function FeedScreen({ product }: { product: Product }) {
   const waiting = auditing ? findings.loadingSkipped : list === null ? findings.loading : feed.loading
   const loading = (channelsQuery.loading && channelsQuery.data === undefined) || waiting
   const ready = !loading && channelsQuery.data !== undefined
-  const empty: NotedEmpty | null = !ready || auditing ? null : tab === 'reply' ? replyEmptyKind(notedEmptyKind(channels, allReplies, findingRows)) : list === null ? notedEmptyKind(channels, findings.notices, findingRows) : emptyKind(channels, rows, visible)
+  const empty: NotedEmpty | null = !ready || auditing ? null : list === null ? notedEmptyKind(channels, findings.notices, findingRows) : emptyKind(channels, rows, visible)
   const error = channelsQuery.error ?? feed.error ?? findings.error
   const summary = watching !== null && channelsQuery.data !== undefined ? productWatching(channels, watching) : null
   const judged = judgedLine(findings.counts)
   const tabLabel = (id: FeedTab, label: string): ReactNode => {
-    if (id === 'reply') {
-      const unseenReplies = replies.filter((row) => row.unseen).length
-      return (
-        <>
-          {label} {replies.length}
-          {unseenReplies > 0 && (
-            <span className="count neutral" title={`${unseenReplies} not seen yet`} data-testid="feed-reply-unseen">
-              <span aria-hidden="true">{unseenReplies}</span>
-              <span className="sr-only">{`${unseenReplies} not seen yet`}</span>
-            </span>
-          )}
-        </>
-      )
-    }
     if (id !== 'noted') return `${label} ${states[id]}`
     return (
       <>
@@ -292,6 +282,14 @@ function FeedScreen({ product }: { product: Product }) {
                 )}
                 {list === null && (
                   <>
+                    <SegmentedControl<StreamFilter>
+                      label="Show"
+                      name="feed-filter"
+                      testIdPrefix="feed-filter-"
+                      value={starFilter}
+                      onChange={setStarFilter}
+                      options={visibleFilters(filterCounts, starFilter).map((f) => ({ value: f.id, label: `${f.label} ${filterCounts[f.id]}` }))}
+                    />
                     <input
                       className="input feed-search"
                       type="search"
@@ -366,15 +364,9 @@ function FeedScreen({ product }: { product: Product }) {
             </EmptyState>
           )}
 
-          {empty === 'nothing_reply' && (
-            <EmptyState fill art="inbox" title="Nothing worth a reply yet">
-              When the AI looks at your channels and finds a post you could answer, it opens the post, reads what is said under it and lists it here with the thread and a comment to start from. Press Check now to look.
-            </EmptyState>
-          )}
-
           {empty === 'nothing_noted' && (
             <EmptyState fill art="inbox" title="Nothing noted yet">
-              The AI looks at every post of your channels when it checks them. A post that is worth knowing about, but not worth a reply, is listed here. A post worth a reply is also in Worth a reply, with its thread. Press Check now to look again.
+              The AI looks at every post of your channels when it checks them. A post that is worth knowing about, or worth a reply, is listed here with what is said under it. Press Check now to look again.
             </EmptyState>
           )}
 
@@ -399,31 +391,26 @@ function FeedScreen({ product }: { product: Product }) {
             </EmptyState>
           )}
 
-          {!auditing && tab === 'reply' && empty === null && ready && findingRows.length > 0 && (
-            <div className="feed-scroll" data-testid="feed-reply-scroll">
+          {!auditing && list === null && empty === null && ready && findingRows.length > 0 && (
+            <div className="feed-scroll" data-testid="feed-noted-scroll">
               <FindingStream
                 rows={pagedFindings.visible}
                 markSeen={findings.markSeen}
+                setStarred={findings.setStarred}
                 footer={<ShowMore hidden={pagedFindings.hidden} total={pagedFindings.total} onMore={pagedFindings.more} testId="feed-show-more" />}
               />
             </div>
           )}
 
-          {tab !== 'reply' && empty === null && ready && listed.length > 0 && (
+          {(auditing || list !== null) && empty === null && ready && listed.length > 0 && (
             <div className="feed-split">
               <FeedList
                 days={days}
                 rows={listedById}
                 selectedId={selectedId}
                 onSelect={setChosen}
-                label={auditing ? 'Posts judged not relevant' : list === null ? 'Noted posts' : undefined}
-                footer={
-                  auditing ? undefined : list === null ? (
-                    <ShowMore hidden={pagedFindings.hidden} total={pagedFindings.total} onMore={pagedFindings.more} testId="feed-show-more" />
-                  ) : (
-                    <ShowMore hidden={pagedOpportunities.hidden} total={pagedOpportunities.total} onMore={pagedOpportunities.more} testId="feed-show-more" />
-                  )
-                }
+                label={auditing ? 'Posts judged not relevant' : undefined}
+                footer={auditing ? undefined : <ShowMore hidden={pagedOpportunities.hidden} total={pagedOpportunities.total} onMore={pagedOpportunities.more} testId="feed-show-more" />}
               />
               <div className="inbox-detail-pane">
                 {selected &&

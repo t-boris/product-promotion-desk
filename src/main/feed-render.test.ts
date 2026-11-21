@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Channel, Finding, FindingCard, OpportunityCard } from '../shared/types'
 import { FeedList } from '../renderer/src/pages/feed/FeedList'
 import { FindingDetail } from '../renderer/src/pages/feed/FindingDetail'
+import { FindingStream } from '../renderer/src/pages/feed/FindingStream'
 import { ThreadTree } from '../renderer/src/pages/feed/FindingThread'
 import { ReadingNotes } from '../renderer/src/pages/feed/ReadingNotes'
 import { BROWSER_WATCH_NOTE, OWN_POSTS_NO_CHECK } from '../renderer/src/pages/channels/own-posts'
@@ -44,6 +45,8 @@ function finding(over: Partial<Finding> = {}): FindingCard {
       firstLook: false,
       opportunityId: null,
       seenAt: null,
+      starredAt: null,
+      own: false,
       createdAt: '2026-11-15T08:00:00.000Z',
       ...over
     },
@@ -94,7 +97,7 @@ describe('FindingDetail', () => {
     expect(out).not.toContain('<button')
     expect(out).not.toContain('<textarea')
     expect(out).not.toMatch(/Approve|Send|Save|Skip|Reject/)
-    expect(out).toContain('A notice has nothing to send. A post worth a reply is also in Worth a reply, with its thread.')
+    expect(out).toContain('A notice has nothing to send. Star it to find it again, or answer it from here.')
     expect(out.match(/<a /g)).toHaveLength(1)
   })
 
@@ -368,3 +371,34 @@ describe('ReadingNotes: the channels\' own watching lines', () => {
     })
   })
 })
+
+describe('FindingStream: the Noted posts as cards', () => {
+  const stream = (cards: FindingCard[]): string =>
+    html(createElement(FindingStream, { rows: cards.map(findingRowOf), markSeen: async () => {}, setStarred: async () => {} }))
+
+  it('puts a star on every post: empty while the post is not starred, filled and pressed when it is', () => {
+    const plain = stream([finding()])
+    expect(plain).toContain('data-testid="stream-star"')
+    expect(plain).toContain('aria-pressed="false"')
+    expect(plain).toContain('aria-label="Star this post"')
+    const starred = stream([finding({ starredAt: '2026-11-15T09:00:00.000Z' })])
+    expect(starred).toContain('aria-pressed="true"')
+    expect(starred).toContain('aria-label="Take the star off this post"')
+  })
+
+  it('says the AI would answer a post it called worth a reply, and says nothing of it for a post it only noted', () => {
+    expect(stream([finding({ relation: 'Worth a reply: asks for a tool like ours.' })])).toContain('The AI would answer it')
+    expect(stream([finding({ relation: 'Relates to the goal.' })])).not.toContain('The AI would answer it')
+  })
+
+  it('marks the account\'s own post, and only that one', () => {
+    const out = stream([finding({ id: 'own', own: true }), finding({ id: 'other' })])
+    expect(out.match(/data-own="true"/g)).toHaveLength(1)
+    expect(out.match(/Your post/g)).toHaveLength(1)
+  })
+
+  it('has no Worth a reply list of its own: the card names the feed Noted posts', () => {
+    expect(stream([finding()])).toContain('aria-label="Noted posts"')
+  })
+})
+

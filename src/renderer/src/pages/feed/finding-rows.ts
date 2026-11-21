@@ -13,25 +13,19 @@ import { isWatchable, type ReadingWays } from './watching-line'
 // ───────────── The tabs ─────────────
 
 /** What the Feed's tabs choose: the three lists of opportunities, or the notices the AI found worth a look. */
-export type FeedTab = FeedState | 'noted' | 'reply'
+export type FeedTab = FeedState | 'noted'
 
 /** The tabs in the order they are shown. */
 export const FEED_TABS: readonly { id: FeedTab; label: string }[] = [
-  { id: 'reply', label: 'Worth a reply' },
   { id: 'decide', label: 'To decide' },
   { id: 'noted', label: 'Noted' },
   { id: 'sent', label: 'Sent' },
   { id: 'skipped', label: 'Skipped' }
 ]
 
-/** The opportunity list a tab shows; null for Noted and Worth a reply, whose rows are findings. */
+/** The opportunity list a tab shows; null for Noted, whose rows are findings. */
 export function opportunityListOf(tab: FeedTab): FeedState | null {
-  return tab === 'noted' || tab === 'reply' ? null : tab
-}
-
-/** The findings the AI judged worth a reply: the notices that say so (the stream of posts with their threads). */
-export function replyRows(rows: readonly FindingRow[]): FindingRow[] {
-  return rows.filter((row) => isReplyNote(row.card.finding.relation))
+  return tab === 'noted' ? null : tab
 }
 
 // ───────────── Words ─────────────
@@ -51,7 +45,7 @@ export const FIRST_LOOK = 'First look'
 
 /** What the action bar says in place of buttons: a finding has nothing to approve or send. */
 export function findingBarNote(label: FindingLabel | null): string {
-  return label === 'skip' ? 'The AI judged this post not relevant. Nothing is proposed for it.' : 'A notice has nothing to send. A post worth a reply is also in Worth a reply, with its thread.'
+  return label === 'skip' ? 'The AI judged this post not relevant. Nothing is proposed for it.' : 'A notice has nothing to send. Star it to find it again, or answer it from here.'
 }
 
 // ───────────── Rows ─────────────
@@ -71,6 +65,12 @@ export interface FindingRow {
   firstLook: boolean
   /** The owner has not looked at it yet. */
   unseen: boolean
+  /** The owner's star on the post (the AI starts the posts it calls worth a reply starred). */
+  starred: boolean
+  /** The AI called the post worth a reply (its note says so): a tag on the post, not a list of its own. */
+  worthReply: boolean
+  /** One of the account's own posts: marked, and listed before every other. */
+  own: boolean
   label: FindingLabel | null
   /** The moment the row is listed under: when the post was written, else when the AI found it. Neither changes, so a row never moves. */
   at: IsoTime
@@ -95,6 +95,9 @@ export function findingRowOf(card: FindingCard): FindingRow {
     relation: rowExcerpt(finding.relation, LINE_LIMIT * 2),
     firstLook: finding.firstLook,
     unseen: finding.seenAt === null,
+    starred: finding.starredAt !== null,
+    worthReply: isReplyNote(finding.relation),
+    own: finding.own,
     label: finding.label,
     at: finding.postedAt ?? finding.createdAt
   }
@@ -161,10 +164,7 @@ export function unseenToMark(selected: FindingRow | undefined, already: Readonly
 // ───────────── Empty ─────────────
 
 /** Why the Noted list shows nothing, when it does not: the Feed's own reasons, or that the AI has found nothing worth noting yet. */
-export type NotedEmpty = FeedEmpty | 'nothing_noted' | 'nothing_reply'
-
-/** The same reasons for the Worth a reply list: where the Noted list would say the AI has noted nothing, this one says nothing is worth a reply yet. */
-export const replyEmptyKind = (kind: NotedEmpty | null): NotedEmpty | null => (kind === 'nothing_noted' ? 'nothing_reply' : kind)
+export type NotedEmpty = FeedEmpty | 'nothing_noted'
 
 export function notedEmptyKind(channels: readonly ReadingWays[], all: readonly FindingRow[], visible: readonly FindingRow[]): NotedEmpty | null {
   if (channels.length === 0) return 'no_channels'

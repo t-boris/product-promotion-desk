@@ -221,6 +221,12 @@
 .stream-card[data-unseen='true'] {
   border-left: 3px solid var(--accent);
 }
+/* One of the account's own posts: the comments under it come first, so the card stands out from the rest. */
+.stream-card[data-own='true'] {
+  background: var(--surface-2);
+  border-color: var(--good, var(--accent));
+  box-shadow: 0 0 0 1px var(--good, var(--accent));
+}
 .stream-head {
   display: flex;
   flex-wrap: wrap;
@@ -301,3 +307,32 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* The star of a post: the owner's own mark, at the end of the card's first line. */
+.star {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-h);
+  height: var(--control-h);
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-2);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.star:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.star.on {
+  color: var(--warn, #e0a800);
+}
+.star:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+

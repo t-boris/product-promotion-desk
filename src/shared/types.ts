@@ -1058,6 +1058,10 @@ export interface Finding {
   /** The reply opportunity that was opened for it (label `reply`), when there is one. */
   opportunityId: Id | null
   seenAt: IsoTime | null
+  /** When the owner starred the post (the AI starts the posts it calls worth a reply starred); null when it is not starred. */
+  starredAt: IsoTime | null
+  /** The post is one of the account's own (found in the channel): its comments come first, so the Feed marks it and lists it first. */
+  own: boolean
   createdAt: IsoTime
 }
 
