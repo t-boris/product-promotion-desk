@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { judgedForFit, parseBlocks, platformLabel, renderForPlatform, sendProblems, type Block, type Inline, type PostContent, type RenderedPost } from '../../../../shared/post-format'
-import { PREVIEW_PLATFORMS, counterFor, fold, initialOf, previewKind, sketchNote, visiblePictures, whereLine, type PreviewKind } from '../../../../shared/post-preview'
+import { PREVIEW_PLATFORMS, counterFor, fold, initialOf, previewKind, sketchNote, sketchNoteLook, visiblePictures, whereLine, type PreviewKind } from '../../../../shared/post-preview'
 import type { CardShape } from '../../../../shared/quick-post'
 import { CopyButton } from '../channels/CopyButton'
 import { previewPlatformOf } from './quick/preview-model'
@@ -219,6 +219,7 @@ export function PostPreview({
   aiBrowser = false,
   noConnector = false,
   platforms,
+  ticked,
   livePicture,
   pictureShape
 }: {
@@ -234,6 +235,8 @@ export function PostPreview({
    * no other, and the sketch's note speaks of the platform shown, since each of them is a place the post is going.
    */
   platforms?: readonly string[]
+  /** Of `platforms`, the ones the post goes to; the others are only a look (they are marked "not selected"). All of them when absent. */
+  ticked?: readonly string[]
   /** The first picture of the post without a library id, drawn from what is on the screen (the card of a quick post that is not saved yet). */
   livePicture?: LivePicture
   /** The shape of the picture when it is known (the card's): the sketch gives the picture that shape instead of its own. */
@@ -244,7 +247,7 @@ export function PostPreview({
   useEffect(() => setPicked(channelPlatform), [channelPlatform])
   const platform = platforms ? (previewPlatformOf(picked, platforms) ?? channelPlatform) : picked
   const choices = platforms
-    ? platforms.map((p) => ({ platform: p, label: platformLabel(p) }))
+    ? platforms.map((p) => ({ platform: p, label: `${platformLabel(p)}${ticked && !ticked.includes(p) ? ' (not selected)' : ''}` }))
     : PREVIEW_PLATFORMS.some((p) => p.platform === channelPlatform)
       ? PREVIEW_PLATFORMS
       : [...PREVIEW_PLATFORMS, { platform: channelPlatform, label: platformLabel(channelPlatform) }]
@@ -280,7 +283,7 @@ export function PostPreview({
       <div className={`pv pv-${kind}`} data-testid="preview-sketch" data-kind={kind}>
         {empty ? <div className="muted small">Nothing to show yet.</div> : <Sketch rendered={rendered} kind={kind} author={author} thumbs={thumbs} markdown={markdown} live={livePicture} />}
       </div>
-      <div className="muted small">{sketchNote(platform, platforms ? platform : channelPlatform)}</div>
+      <div className="muted small">{platforms && ticked && !ticked.includes(platform) ? sketchNoteLook(platform) : sketchNote(platform, platforms ? platform : channelPlatform)}</div>
       {!empty && (
         <div className="post-preview-copy">
           <CopyButton text={postAsText(rendered)} label="Copy post" testId="copy-post" />

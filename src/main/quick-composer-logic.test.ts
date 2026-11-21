@@ -52,7 +52,8 @@ import { CARD_PALETTES, contrastRatio, leastContrast } from '../renderer/src/pag
 import { STYLE_SPECS, fontOf, layoutCard, withEllipsis, wrapLines, type Measure } from '../renderer/src/pages/review/quick/card-layout'
 import { drawCard, type CardContext, type CardGradient } from '../renderer/src/pages/review/quick/draw-card'
 import { MADE_PIXELS, factsOfCard, factsOfMedia, pictureCheck, shapeHint } from '../renderer/src/pages/review/quick/picture-check'
-import { previewContent, previewPlatformOf } from '../renderer/src/pages/review/quick/preview-model'
+import { previewChoices, previewContent, previewPlatformOf } from '../renderer/src/pages/review/quick/preview-model'
+import { sketchNote, sketchNoteLook } from '../shared/post-preview'
 import { savePlan, saveReason } from '../renderer/src/pages/review/quick/save-plan'
 
 // ───────────────────────────── the ticked channels decide the kind ─────────────────────────────
@@ -971,3 +972,28 @@ describe('the preview offers each platform once', () => {
     expect(distinctPlatforms(['instagram', 'instagram', 'threads'])).toEqual(['instagram', 'threads'])
   })
 })
+
+describe('the preview also looks at the product\'s other channels of the same kind', () => {
+  it('lists the platforms the post goes to first and the other connected ones after them, each once', () => {
+    expect(previewChoices(['instagram'], ['instagram', 'threads'])).toEqual([
+      { platform: 'instagram', ticked: true },
+      { platform: 'threads', ticked: false }
+    ])
+    expect(previewChoices(['threads', 'instagram', 'threads'], ['instagram', 'threads', 'facebook', 'facebook'])).toEqual([
+      { platform: 'threads', ticked: true },
+      { platform: 'instagram', ticked: true },
+      { platform: 'facebook', ticked: false }
+    ])
+  })
+
+  it('offers only what is ticked when nothing else is connected, and nothing when nothing is ticked and nothing is connected', () => {
+    expect(previewChoices(['instagram'], [])).toEqual([{ platform: 'instagram', ticked: true }])
+    expect(previewChoices([], [])).toEqual([])
+  })
+
+  it('says of a platform the post does not go to that it is only a look', () => {
+    expect(sketchNoteLook('threads')).toContain('only a look, nothing is sent there')
+    expect(sketchNote('instagram', 'instagram')).not.toContain('only a look')
+  })
+})
+

@@ -6,7 +6,7 @@ import { Badge } from '../../../ui'
 import { PostPreview, type PostAuthor } from '../PostPreview'
 import { CaptionField } from './CaptionField'
 import { PictureSlot } from './PictureSlot'
-import { previewContent } from './preview-model'
+import { previewChoices, previewContent } from './preview-model'
 import { distinctPlatforms } from './kinds'
 import { tightestLimit } from './limits'
 import { drawnCard, followCaption, isCardPicture, withAngle, withCaption, withHeadline, withIllustrationWish, withLook, type QuickForm } from './quick-form'
@@ -58,6 +58,7 @@ export function QuickComposer({
   form,
   onChange,
   platforms,
+  lookAlso = [],
   author,
   reads = false,
   disabled,
@@ -73,6 +74,8 @@ export function QuickComposer({
   onChange: Dispatch<SetStateAction<QuickForm>>
   /** The platform of each channel the post goes to, in the order they were ticked. */
   platforms: readonly string[]
+  /** The platforms of the product's other connected channels of the same kind: the preview can look at the post as them too, nothing is sent there. */
+  lookAlso?: readonly string[]
   /** Who speaks and where: the sketch names them. */
   author: PostAuthor
   /** The application reads the channel (a connector can post to it). The channels of a quick post are not read, so this is false unless a connector exists. */
@@ -130,7 +133,8 @@ export function QuickComposer({
             <PostPreview
               content={content}
               channelPlatform={platforms[0]}
-              platforms={distinctPlatforms(platforms)}
+              platforms={previewChoices(platforms, lookAlso).map((c) => c.platform)}
+              ticked={distinctPlatforms(platforms)}
               author={author}
               aiBrowser={settings.data?.publishWith === 'ai_browser' || !reads}
               noConnector={!reads}

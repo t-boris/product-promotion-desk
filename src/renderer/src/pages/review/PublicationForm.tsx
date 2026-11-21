@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { siteLinkFor } from '../../../../shared/post-format'
+import { postTypeOfPlatform } from '../../../../shared/quick-post'
 import type { GroupChannelOption, Id, IsoTime } from '../../../../shared/types'
 import { call, useAction, useQuery } from '../../hooks'
 import { Button, Card, ErrorNote, useOpenForm } from '../../ui'
@@ -40,6 +41,8 @@ export function PublicationForm({ productId, channelId, platform, reads, author,
   const own = { channelId, platform }
   const platforms = chosenPlatforms(known, chosen, own)
   const kind = kindOfChannels(platforms)
+  // The preview can also look at the post as the product's other connected channels of the same kind (nothing is sent to them): Threads next to Instagram.
+  const lookAlso = [...new Set([own.platform, ...(known ?? []).map((row) => row.platform)])].filter((p) => postTypeOfPlatform(p) === kind)
   // A new picture post ends with the product's site, as the core writes it into the first draft (DEC-044): the preview and the limits count it already.
   const product = products.data?.find((p) => p.id === productId)
   const siteLink = product && platforms.length > 0 ? siteLinkFor(platforms[0]!, product) : null
@@ -82,7 +85,7 @@ export function PublicationForm({ productId, channelId, platform, reads, author,
     <Card title="New publication">
       <div className="review-body">
         {kind === 'quick' ? (
-          <QuickComposer {...QUICK_SLOTS} productId={productId} channelId={chosen[0] ?? null} form={quick} onChange={setQuick} platforms={platforms} author={author} disabled={creating.busy} autoFocus={picked === null} />
+          <QuickComposer {...QUICK_SLOTS} productId={productId} channelId={chosen[0] ?? null} form={quick} onChange={setQuick} platforms={platforms} lookAlso={lookAlso} author={author} disabled={creating.busy} autoFocus={picked === null} />
         ) : (
           <>
             <PostDrafter productId={productId} channelId={channelId} form={form} onChange={setForm} />

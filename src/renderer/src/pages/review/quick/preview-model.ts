@@ -27,3 +27,14 @@ export const cardAltText = (form: QuickForm): string => {
   const headline = drawnCard(form).headline.trim()
   return headline === '' ? 'The card, with no headline yet' : `The card: ${headline}`
 }
+
+/**
+ * The platforms the preview offers: the ones the post goes to (the channels ticked) first, then the platforms of the product's other connected channels
+ * of the same kind, each once. The others are only a look at how the post would read there: ticking a channel is what sends it somewhere.
+ */
+export function previewChoices(ticked: readonly string[], alsoConnected: readonly string[]): { platform: string; ticked: boolean }[] {
+  const chosen = [...new Set(ticked)]
+  const others = [...new Set(alsoConnected)].filter((p) => !chosen.includes(p))
+  return [...chosen.map((platform) => ({ platform, ticked: true })), ...others.map((platform) => ({ platform, ticked: false }))]
+}
+

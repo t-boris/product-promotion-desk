@@ -55,6 +55,9 @@ export function whereLine(kind: PreviewKind, target: string, author: string): st
 }
 
 /** What the sketch says about itself, once: it is a sketch, and for a platform other than the channel's, whose it is. */
+/** The note under a sketch of a platform the post does not go to: it is only a look. */
+export const sketchNoteLook = (platform: string): string => `How the same post would read on ${platformLabel(platform)}. You have not chosen a ${platformLabel(platform)} channel for it: this is only a look, nothing is sent there.`
+
 export function sketchNote(platform: string, channelPlatform: string): string {
   return platform === channelPlatform
     ? `A sketch of how ${platformLabel(platform)} lays the post out, made from the words that will be sent.`
