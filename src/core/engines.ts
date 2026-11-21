@@ -60,6 +60,45 @@ class TrackedEngine implements AiEngine {
   }
 }
 
+/**
+ * An engine that is asked for the model the owner chose for it in Settings, unless the task names one (a model is tried that way before it is kept). With no
+ * model chosen the task goes through as it is, and the engine uses its own default.
+ */
+class ModelledEngine implements AiEngine {
+  constructor(
+    private readonly inner: AiEngine,
+    private readonly settings: SettingsStore
+  ) {}
+
+  get id(): AiEngine['id'] {
+    return this.inner.id
+  }
+  get label(): string {
+    return this.inner.label
+  }
+  get toolFree(): boolean {
+    return this.inner.toolFree
+  }
+  get supportsAgent(): boolean | undefined {
+    return this.inner.supportsAgent
+  }
+  get confinesAgent(): boolean | undefined {
+    return this.inner.confinesAgent
+  }
+  get makesImages(): boolean | undefined {
+    return this.inner.makesImages
+  }
+
+  check(): ReturnType<AiEngine['check']> {
+    return this.inner.check()
+  }
+
+  run(task: AiTask, options?: AiRunOptions): Promise<string> {
+    const chosen = this.settings.app().models[this.inner.id]
+    return this.inner.run(task.model === undefined && chosen ? { ...task, model: chosen } : task, options)
+  }
+}
+
 /** Holds the installed AI engines and the user's selection. Product data never depends on which one is selected. */
 export class EngineRegistry {
   private readonly engines = new Map<EngineId, AiEngine>()
@@ -69,7 +108,10 @@ export class EngineRegistry {
     private readonly settings: SettingsStore,
     activity?: AiActivity
   ) {
-    for (const engine of engines) this.engines.set(engine.id, activity ? new TrackedEngine(engine, activity) : engine)
+    for (const engine of engines) {
+      const modelled = new ModelledEngine(engine, settings)
+      this.engines.set(engine.id, activity ? new TrackedEngine(modelled, activity) : modelled)
+    }
   }
 
   all(): AiEngine[] {

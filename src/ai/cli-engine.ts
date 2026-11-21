@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 import { AiError, type AiEngine, type AiRunOptions, type AiTask } from '../core/ports'
+import { parseModelName } from '../shared/engine-model'
 import type { EngineId, EngineStatus } from '../shared/types'
 import { defaultSearchDirs, findExecutable, isExecutableFile } from './locate'
 import { runProcess, type ProcessResult } from './process'
@@ -64,6 +65,14 @@ export abstract class CliEngine implements AiEngine {
 
   /** Arguments that make the CLI print its answer as text and hold no ability to act. */
   protected abstract buildArgs(task: AiTask, cwd: string): string[]
+  /**
+   * `--model <name>` when the task names a model (both CLIs take this flag), nothing otherwise. A name that is not a plain model name is not passed at all:
+   * it comes from a setting the application checked, and what is handed to a command line is checked again here.
+   */
+  protected modelArgs(task: AiTask): string[] {
+    const name = parseModelName(task.model)
+    return name ? ['--model', name] : []
+  }
   /** What is written to the CLI's stdin. */
   protected buildInput(task: AiTask): string {
     return task.prompt

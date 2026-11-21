@@ -1,6 +1,7 @@
 import { ApiError } from '../../shared/api'
 import { APP_NAME } from '../../shared/app-name'
 import type { AppSettings } from '../../shared/types'
+import { parseModelName } from '../../shared/engine-model'
 import { isThemeChoice } from '../../shared/themes'
 import { parseWebPort } from '../../shared/web-port'
 import type { Core } from '../core'
@@ -18,11 +19,16 @@ function checkedPatch(patch: Partial<AppSettings>): Partial<AppSettings> {
   if (patch.animatedBackground !== undefined && typeof patch.animatedBackground !== 'boolean') {
     throw new ApiError('invalid_input', 'The animated background is either on or off.')
   }
+  // A model is kept only after the engine has taken it: it goes through `engines.setModel`, never through the settings as a whole.
+  if (patch.models !== undefined) throw new ApiError('invalid_input', 'Choose the model in the engine\'s own card: the name is tried before it is kept.')
   if (patch.webMode?.port === undefined) return patch
   const port = parseWebPort(String(patch.webMode.port))
   if (!port.ok) throw new ApiError('invalid_input', port.message)
   return { ...patch, webMode: { ...patch.webMode, port: port.port } }
 }
+
+/** How long the one short question that tries a model may take. */
+const MODEL_TRY_MS = 90_000
 
 /** Application-level handlers: info, settings, AI engines, logs (I-2). */
 export function register(core: Core): void {
@@ -53,6 +59,27 @@ export function register(core: Core): void {
       if (!status.installed) throw new ApiError('engine_unavailable', status.detail)
       const next = core.settings.updateApp({ engineId: id })
       core.log.info('engines', `AI engine selected: ${engine.label}`)
+      core.events.changed('settings')
+      return next
+    },
+    'engines.setModel': async ({ id, model }) => {
+      const engine = core.engines.get(id)
+      if (!engine) throw new ApiError('not_found', `Unknown AI engine: ${id}`)
+      const name = parseModelName(model)
+      if (name === null) throw new ApiError('invalid_input', 'A model name has letters, digits and . _ : / [ ] - only, and starts with a letter or a digit.')
+      if (name !== '') {
+        const status = await engine.check()
+        if (!status.installed) throw new ApiError('engine_unavailable', status.detail)
+        // One short question with this model: an unknown name would make every later run of the engine fail without saying why.
+        try {
+          await engine.run({ label: 'engines.model', title: 'Trying the model', prompt: 'Reply with the single word: ok', model: name, timeoutMs: MODEL_TRY_MS })
+        } catch (error) {
+          const why = error instanceof Error ? error.message.replace(/\s+/g, ' ').trim().slice(0, 300) : String(error)
+          throw new ApiError('invalid_model', `${engine.label} did not take the model "${name}": ${why || 'it gave no reason'}`)
+        }
+      }
+      const next = core.settings.updateApp({ models: { ...core.settings.app().models, [id]: name } })
+      core.log.info('engines', name ? `${engine.label} will use the model ${name}` : `${engine.label} will use its own default model`)
       core.events.changed('settings')
       return next
     },

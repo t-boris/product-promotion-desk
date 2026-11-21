@@ -130,6 +130,8 @@ export interface ApiMethods {
   'engines.list': [void, EngineStatus[]]
   'engines.check': [{ id: EngineId }, EngineStatus]
   'engines.select': [{ id: EngineId }, AppSettings]
+  /** The model an engine is asked for: empty for the engine's own default. The name is tried with one short question before it is kept. */
+  'engines.setModel': [{ id: EngineId; model: string }, AppSettings]
 
   // products and passports (REQ-001)
   'products.list': [void, Product[]]

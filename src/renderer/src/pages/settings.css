@@ -40,6 +40,20 @@
   color: var(--text-2);
   overflow-wrap: anywhere;
 }
+/* The model of an engine: the label, the name and the button on one line, what is in use under it. */
+.engine-model {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+.engine-model-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 /* The engine in use: a green check and the words, as tall as the button it replaces. */
 .engine-in-use {
   flex: none;

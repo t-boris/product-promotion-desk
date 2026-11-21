@@ -44,7 +44,7 @@ export class ClaudeCodeEngine extends CliEngine {
   protected buildArgs(task: AiTask): string[] {
     if (task.agent) {
       const config = { mcpServers: { [task.agent.server]: { command: task.agent.launch.command, args: task.agent.launch.args, env: task.agent.launch.env } } }
-      const args = ['-p', '--output-format', 'text', ...this.accessFlags(task.agent), '--disable-slash-commands', '--no-session-persistence']
+      const args = ['-p', '--output-format', 'text', ...this.modelArgs(task), ...this.accessFlags(task.agent), '--disable-slash-commands', '--no-session-persistence']
       if (task.system) args.push('--system-prompt', task.system)
       return [...args, '--strict-mcp-config', '--mcp-config', JSON.stringify(config)]
     }
@@ -52,6 +52,7 @@ export class ClaudeCodeEngine extends CliEngine {
       '-p',
       '--output-format',
       'text',
+      ...this.modelArgs(task),
       '--tools',
       '',
       '--permission-mode',

@@ -957,6 +957,11 @@ export type PublishWith = 'connector' | 'ai_browser'
 
 export interface AppSettings {
   engineId: EngineId | null
+  /**
+   * The model each AI engine is asked for (`--model`), by the name the engine knows it. Empty means the engine's own default, which is what it
+   * used before the owner could choose. Set only through `engines.setModel`, which tries the name before it keeps it.
+   */
+  models: Record<EngineId, string>
   notifications: boolean
   webMode: { enabled: boolean; port: number }
   /**

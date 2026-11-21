@@ -5,6 +5,7 @@ import { parseJson, toJson, type Db } from './db/database'
 
 export const DEFAULT_SETTINGS: AppSettings = {
   engineId: null,
+  models: { claude: '', codex: '' },
   notifications: true,
   webMode: { enabled: false, port: DEFAULT_WEB_PORT },
   publishWith: 'connector',
@@ -33,6 +34,7 @@ export class SettingsStore {
       ...DEFAULT_SETTINGS,
       ...stored,
       webMode: { ...DEFAULT_SETTINGS.webMode, ...(stored.webMode ?? {}) },
+      models: { ...DEFAULT_SETTINGS.models, ...(stored.models ?? {}) },
       // An older database has neither, and a stored value that is not a known choice reads as the default, so a bad value can never blank the page.
       ...appearanceOf(stored)
     }
@@ -42,7 +44,8 @@ export class SettingsStore {
     const merged: AppSettings = {
       ...this.app(),
       ...patch,
-      webMode: { ...this.app().webMode, ...(patch.webMode ?? {}) }
+      webMode: { ...this.app().webMode, ...(patch.webMode ?? {}) },
+      models: { ...this.app().models, ...(patch.models ?? {}) }
     }
     // What is stored is always a theme the application has and a real on/off (the API refuses anything else before it gets here).
     const next: AppSettings = { ...merged, ...appearanceOf(merged) }

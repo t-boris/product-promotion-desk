@@ -40,3 +40,26 @@ export function engineChoiceVariant(engineId: string, recommendedId: string | nu
   if (engineId !== recommendedId) return 'ghost'
   return anySelected ? 'secondary' : 'primary'
 }
+
+/** What the model field of an engine shows and does: what is saved, what is typed, and whether pressing the button would change anything. */
+export interface ModelFieldView {
+  /** What the input holds. */
+  value: string
+  /** The name to try and keep when the button is pressed (trimmed; empty means the engine's own default). */
+  name: string
+  /** The button has something to do: the typed name is not the one in use. */
+  changed: boolean
+  /** One line under the field: what is in use now. */
+  inUse: string
+}
+
+export function modelFieldView(saved: string, draft: string | null): ModelFieldView {
+  const value = draft ?? saved
+  const name = value.trim()
+  return {
+    value,
+    name,
+    changed: name !== saved,
+    inUse: saved ? `Asked for the model ${saved}.` : "The engine's own default model is used."
+  }
+}

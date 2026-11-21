@@ -49,9 +49,10 @@ export class CodexEngine extends CliEngine {
 
   protected buildArgs(task: AiTask, cwd: string): string[] {
     if (task.agent?.confined) throw new AiError('unavailable', 'Codex cannot be held to the browser tools alone (it can also run commands and read files), so it does not publish for you.')
-    if (task.agent) return this.agentArgs(task.agent, cwd)
+    if (task.agent) return this.agentArgs(task.agent, cwd, this.modelArgs(task))
     return [
       'exec',
+      ...this.modelArgs(task),
       '--sandbox',
       // Making a picture needs to write the file in its folder; everything else may only read.
       task.makeFiles ? 'workspace-write' : 'read-only',
@@ -67,13 +68,14 @@ export class CodexEngine extends CliEngine {
     ]
   }
 
-  private agentArgs(agent: NonNullable<AiTask['agent']>, cwd: string): string[] {
+  private agentArgs(agent: NonNullable<AiTask['agent']>, cwd: string, model: string[]): string[] {
     // TOML basic strings are JSON strings for everything that can appear in a path, an argument or an environment value.
     const toml = (text: string): string => JSON.stringify(text)
     const env = Object.entries(agent.launch.env).map(([key, value]) => `${key}=${toml(value)}`).join(',')
     const server = `mcp_servers.${agent.server}`
     return [
       'exec',
+      ...model,
       '--dangerously-bypass-approvals-and-sandbox',
       '--ignore-user-config',
       '--ignore-rules',

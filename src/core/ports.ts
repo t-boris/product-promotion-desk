@@ -63,6 +63,8 @@ export interface AiTask {
    * made with the engine's own image tool. Only an engine with `makesImages` accepts it.
    */
   makeFiles?: { dir: string }
+  /** The model the engine is asked for, by the name it knows it. Without it the engine uses the model chosen for it in Settings, or its own default. */
+  model?: string
 }
 
 export type AiErrorKind = 'unavailable' | 'failed' | 'cancelled' | 'timeout' | 'invalid_output'

@@ -7,6 +7,7 @@ import { Badge, Button, Card, EmptyState, ErrorNote, Hint, Loading, More, Page, 
 import { AppearanceCard } from './AppearanceCard'
 import { MailboxesCard } from './channels/MailboxesCard'
 import { engineChoiceVariant, recommendedEngineId, splitEngineDetail } from './engine-detail'
+import { EngineModelField } from './EngineModelField'
 import { LessonsCard } from './LessonsCard'
 import './settings.css'
 
@@ -104,6 +105,7 @@ export function SettingsPage() {
                   {!engine.ready && detail.summary && <div className="hint">{detail.summary}</div>}
                   {detail.writing && <div className={`hint${detail.limits ? ' warn' : ''}`}>{detail.writing}</div>}
                   {detail.missions && <div className="hint">{detail.missions}</div>}
+                  <EngineModelField engine={engine.id} label={engine.label} saved={current?.models?.[engine.id] ?? ''} installed={engine.installed} />
                   {engine.path && (
                     <More label="Details">
                       <div className="mono engine-location" data-testid={`engine-path-${engine.id}`}>

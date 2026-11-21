@@ -354,6 +354,46 @@ describe('Codex run', () => {
   })
 })
 
+describe('the model an engine is asked for', () => {
+  const argvOf = (): string[] => read('argv').split('\n').filter(Boolean)
+
+  it('Claude Code gets --model in a text run and in a mission, and none when no model is named', async () => {
+    const engine = new ClaudeCodeEngine({ searchPaths: [binDir], env: env('ok') })
+    await engine.run({ label: 't', prompt: 'hi', model: 'opus' })
+    expect(argvOf().join('')).toContain('[--model][opus]')
+    await engine.run({ label: 'agent', prompt: 'go', model: 'claude-sonnet-5-5', agent: { server: 'ppd', launch: LAUNCH } })
+    expect(argvOf().join('')).toContain('[--model][claude-sonnet-5-5]')
+    await engine.run({ label: 'agent', prompt: 'go', model: 'opus', agent: { server: 'ppd', launch: LAUNCH, confined: true } })
+    expect(argvOf().join('')).toContain('[--model][opus]')
+    await engine.run({ label: 't', prompt: 'hi' })
+    expect(argvOf().join('')).not.toContain('--model')
+    await engine.run({ label: 't', prompt: 'hi', model: '' })
+    expect(argvOf().join('')).not.toContain('--model')
+  })
+
+  it('Codex gets --model right after exec in a text run, a picture run and a mission, and none when no model is named', async () => {
+    const engine = new CodexEngine({ searchPaths: [binDir], env: env('ok') })
+    await engine.run({ label: 't', prompt: 'hi', model: 'gpt-5.5' })
+    expect(argvOf().slice(0, 3)).toEqual(['[exec]', '[--model]', '[gpt-5.5]'])
+    await engine.run({ label: 'agent', prompt: 'go', model: 'gpt-5.5', agent: { server: 'ppd', launch: LAUNCH } })
+    expect(argvOf().slice(0, 3)).toEqual(['[exec]', '[--model]', '[gpt-5.5]'])
+    await engine.run({ label: 't', prompt: 'hi' })
+    expect(argvOf().join('')).not.toContain('--model')
+  })
+
+  it('never hands a name that could be read as another option or a command to the engine', async () => {
+    for (const model of ['--dangerously-bypass-approvals-and-sandbox', 'a b', '$(whoami)']) {
+      const claude = new ClaudeCodeEngine({ searchPaths: [binDir], env: env('ok') })
+      await claude.run({ label: 't', prompt: 'hi', model })
+      expect(argvOf().join('')).not.toContain('--model')
+      const codex = new CodexEngine({ searchPaths: [binDir], env: env('ok') })
+      await codex.run({ label: 't', prompt: 'hi', model })
+      expect(argvOf().join('')).not.toContain('--model')
+      expect(argvOf().join(' ')).not.toMatch(/dangerously|whoami/)
+    }
+  })
+})
+
 describe('Codex isolation', () => {
   it('starts in a fresh empty temp directory, hands the same folder to --cd, and removes it afterwards', async () => {
     const engine = new CodexEngine({ searchPaths: [binDir], env: env('ok') })
