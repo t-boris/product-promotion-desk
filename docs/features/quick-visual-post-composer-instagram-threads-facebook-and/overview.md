@@ -2,7 +2,7 @@
 type: feature
 id: quick-visual-post-composer-instagram-threads-facebook-and
 title: Quick visual post composer (Instagram / Threads / Facebook) and a more colourful UI
-status: active
+status: resolved
 owner: Boris Tsekinovsky
 created: 2026-11-21
 provenance: Created from the feature intake
