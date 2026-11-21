@@ -137,6 +137,26 @@ describe('Check with AI on a post', () => {
     expect(await world.core.router.call('findings.picture', { id: 'no-such-picture' })).toBeNull()
   })
 
+  it('shows a picture the image tools of the system cannot read (a webp, which Reddit serves) as the file itself', async () => {
+    const { ai, id } = setup()
+    ;(world.core as { mediaTools: unknown }).mediaTools = {
+      pick: async () => [],
+      reveal: () => undefined,
+      thumbnail: async () => {
+        throw new Error('The picture could not be read.')
+      }
+    }
+    ai.script = (request) => {
+      request.record([read()])
+      return finished()
+    }
+    await readNow(id)
+    const [picture] = await world.core.router.call('findings.pictures', { id })
+    expect(picture.state).toBe('ready')
+    const shown = await world.core.router.call('findings.picture', { id: picture.id })
+    expect(shown?.dataUrl).toMatch(/^data:image\/png;base64,/)
+  })
+
   it('says why a picture could not be had, and the card still has everything else', async () => {
     const { ai, id } = setup()
     world.core.services.pictureDeps = { lookup: async () => ['93.184.216.34'], fetch: async () => new Response('no', { status: 403 }) }

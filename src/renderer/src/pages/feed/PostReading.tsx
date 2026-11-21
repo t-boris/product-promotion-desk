@@ -11,6 +11,13 @@ function PostPicture({ picture }: { picture: FindingPicture }) {
       </div>
     )
   }
+  if (picture.state === 'ready' && shown.data === null) {
+    return (
+      <div className="stream-picture missing muted small" data-testid="stream-picture-unreadable">
+        A picture of the post is saved on this computer but could not be shown.
+      </div>
+    )
+  }
   if (picture.state === 'waiting' || !shown.data) {
     return (
       <div className="stream-picture missing muted small" data-testid="stream-picture-waiting">

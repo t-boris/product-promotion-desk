@@ -19,7 +19,8 @@ const THUMB_MIN = 96
 const THUMB_MAX = 1200
 /** A picture of more pixels than this is not kept: a small file can unpack into gigabytes of memory when it is shown. */
 const MAX_PIXELS = 80_000_000
-const WHOLE_FILE_MAX = 1_500_000
+/** The largest file shown whole, as it is: the screen's own image tools cannot read every kind of picture (a webp), and the page can. */
+const WHOLE_FILE_MAX = 4_000_000
 
 export class FindingPictures {
   private running: Promise<number> | null = null
@@ -96,8 +97,15 @@ export class FindingPictures {
     if (!stored) return null
     const path = join(this.folder(), stored.file)
     const wanted = Math.min(THUMB_MAX, Math.max(THUMB_MIN, Math.round(typeof side === 'number' && Number.isFinite(side) ? side : THUMB_DEFAULT)))
+    // A smaller copy first; a kind of picture the image tools of the system cannot read (a webp, which is what Reddit serves) is shown as the file itself.
+    if (this.core.mediaTools) {
+      try {
+        return { dataUrl: await this.core.mediaTools.thumbnail(path, wanted) }
+      } catch {
+        // falls through to the whole file
+      }
+    }
     try {
-      if (this.core.mediaTools) return { dataUrl: await this.core.mediaTools.thumbnail(path, wanted) }
       const bytes = await readFile(path)
       return bytes.length > WHOLE_FILE_MAX ? null : { dataUrl: `data:${stored.mime};base64,${bytes.toString('base64')}` }
     } catch {
