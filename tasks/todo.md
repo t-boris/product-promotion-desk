@@ -865,3 +865,18 @@ Shared contract committed first, then engineers on disjoint files (lesson 259): 
 - [x] I-7 AI help: separate caption and picture actions, trend analyst through the AI browser on request (failure handled), marketer against the goal from approved knowledge, Undo, never overwrites without the owner's action
 - [x] I-8 themes: >= 2 dark + 2 light, Settings, kept, animated background off by default and off under reduce motion, contrast test per theme, `visual-system.md` updated
 - [ ] Verify: `npm run verify`, own-instance probe / screens, version 0.24.0, `deploy:local`, MarkView walkthrough, spec statuses (REQ-006 was approved by someone else during the work and is left as found; DEC-048 and DEC-049 stay `proposed`: accepting them is the owner's; Q-008 is open)
+
+## 0.24.1: any selected AI engine may work the browser (DEC-043 over DEC-024 and DEC-042)
+
+Owner 2026-11-20, after Codex was refused at sending a quick post to Instagram ("Codex cannot be held to the browser tools alone, so it is not allowed to publish for you"): chose "Let Codex publish", then "Any selected AI agent could be used". This lifts the B1 rule of 2026-11-14 (Codex refused in post missions).
+
+- [x] `AiTask.agent.quiet` (new): errors carry no engine or system text, for every engine; `confined` is given only to an engine that `confinesAgent`
+- [x] `AgentRunService.readyEngine` no longer refuses an engine that cannot be confined; `runEngine` sets `quiet` for post, join, watch and research and `confined` where the engine can
+- [x] `sendWays`: only an engine that cannot work the browser stops an AI-browser send; the three "could not start" code lists lose `engine_cannot_confine`
+- [x] Settings: the hint says either engine may do it and that Codex can also run commands and read files; the warning shows only when no engine is selected
+- [x] Tests rewritten to the new rule (13), adapter tests added (quiet errors for both engines, Codex quiet run with the owner's access, Codex still refuses a confined run); `npm run verify`: 5469 tests green
+- [x] DEC-043 recorded as `proposed` in `product-promotion-desk` (accepting is the owner's)
+- [ ] Commit, push, CI, version 0.24.1, `deploy:local`, relaunch
+
+Review: the change removes a safety boundary the owner set; the risk (a prompt-injected page steering Codex, which can run commands and read files) is accepted by the owner and written in DEC-043 and in the Settings text. Unproven live: a real send to Instagram/Threads/Facebook with Codex.
+

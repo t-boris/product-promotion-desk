@@ -664,16 +664,18 @@ describe('what a version says about how it goes out', () => {
     expect(card.versions[2]?.problems).toEqual([])
   })
 
-  it('names the AI browser as the way of a version for a channel the app does not read, even when the engine cannot carry it now, and says what stops it', async () => {
+  it('names the AI browser as the way of a version for a channel the app does not read, even when the engine cannot carry it now (it cannot work the browser), and says what stops it; one that cannot be held to the tools carries it', async () => {
     const { channels, flow } = setup(['facebook', 'threads'])
     world.core.services.postMissions = {} as never
     for (const channel of channels) world.core.db.prepare('UPDATE channels SET reads = 0 WHERE id = ?').run(channel.id)
     const card = await flow.create(world.product.id, channels.map((c) => c.id), { ...MASTER })
     expect(card.versions[0]).toMatchObject({ way: 'ai_browser', problems: [] })
     ;(world.engine as { confinesAgent: boolean }).confinesAgent = false
+    expect(flow.get(card.group.id).versions[0]).toMatchObject({ way: 'ai_browser', problems: [] })
+    ;(world.engine as { supportsAgent: boolean }).supportsAgent = false
     const stopped = flow.get(card.group.id).versions[0]!
     expect(stopped.way).toBe('ai_browser')
-    expect(stopped.problems.join(' ')).toMatch(/choose Claude Code in Settings/)
+    expect(stopped.problems.join(' ')).toMatch(/choose Claude Code or Codex in Settings/)
   })
 
   it('does not let the AI browser carry a send that a scheduled or automatic send would make, for a channel the app does not read', async () => {

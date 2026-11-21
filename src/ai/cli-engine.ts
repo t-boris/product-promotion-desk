@@ -193,8 +193,8 @@ export abstract class CliEngine implements AiEngine {
 
   /** Turns the process result into the answer text, or into the AiError that describes the failure. */
   protected interpret(result: ProcessResult, task: AiTask): string {
-    // A confined run (the post mission) puts nothing the engine or the system printed into an error: only fixed words and the exit code.
-    const confined = task.agent?.confined === true
+    // A confined or quiet run (the post, join, watch and research missions) puts nothing the engine or the system printed into an error: only fixed words and the exit code.
+    const confined = task.agent?.confined === true || task.agent?.quiet === true
     switch (result.outcome) {
       case 'spawn_error': {
         const code = result.spawnError?.code

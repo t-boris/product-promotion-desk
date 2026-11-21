@@ -125,13 +125,16 @@ describe('what a join needs', () => {
     expect(await j.w.refusal('agent.start', { accountId: j.w.account.id, kind: 'join', channelId: j.channelId })).toBe('not_ready')
   })
 
-  it('refuses an engine that cannot be held to the application\'s tools, with words for joining, not for publishing', async () => {
+  it('lets an engine that cannot be held to the application\'s tools join (any selected engine that can work the browser may), and the run is quiet, not confined', async () => {
     const j = await ready()
     j.w.t.engine.confinesAgent = false
-    expect(await j.w.refusal('agent.start', { accountId: j.w.account.id, kind: 'join', channelId: j.channelId })).toBe('engine_cannot_confine')
-    const ready2 = await canStart(j)
-    expect(ready2.reason).toMatch(/join a community for you/)
-    expect(ready2.reason).not.toMatch(/publish/)
+    expect(await canStart(j)).toEqual({ ready: true, reason: null })
+    joinsAndReports(j)
+    await start(j)
+    expect(await finished(j)).toMatchObject({ kind: 'join', status: 'done' })
+    const agent = j.w.t.engine.calls.at(-1)?.agent
+    expect(agent).toMatchObject({ quiet: true })
+    expect(agent?.confined).toBeUndefined()
   })
 
   it('refuses without an engine, and one that cannot work the browser', async () => {

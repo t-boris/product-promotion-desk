@@ -103,7 +103,7 @@ export class FakeEngine implements AiEngine {
   toolFree = true
   /** Tests flip this to prove that an agent mission is refused for an engine that cannot run one. */
   supportsAgent = true
-  /** Tests flip this to prove that a post mission is refused for an engine that cannot be held to the application's tools. */
+  /** Tests flip this to prove that a mission runs an engine that cannot be held to the application's tools without asking it to be (it is quiet, not confined). */
   confinesAgent = true
   /** Tests flip this to prove that a picture is refused for an engine that cannot make one. */
   makesImages = true

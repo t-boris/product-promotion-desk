@@ -30,8 +30,8 @@ export type WatchResult =
   /** The look did not run: nothing failed. `soon`: it is tried again in a few minutes; otherwise at the channel's next regular check. */
   | { status: 'deferred'; reason: string; soon: boolean }
 
-/** The ways a look cannot even start that are not the channel's fault: the account is busy or signed out, the engine is not ready or cannot be confined. */
-const NOT_STARTED = new Set(['agent_running', 'not_ready', 'no_engine', 'engine_cannot_drive', 'engine_cannot_confine', 'engine_unavailable', 'no_agent_bridge', 'browser_busy'])
+/** The ways a look cannot even start that are not the channel's fault: the account is busy or signed out, the engine is not ready or cannot work the browser. */
+const NOT_STARTED = new Set(['agent_running', 'not_ready', 'no_engine', 'engine_cannot_drive', 'engine_unavailable', 'no_agent_bridge', 'browser_busy'])
 
 const deferred = (reason: string, soon = true): WatchResult => ({ status: 'deferred', reason, soon })
 

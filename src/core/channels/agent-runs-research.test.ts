@@ -87,18 +87,15 @@ describe('what a research mission needs', () => {
     expect(x.w.t.bridge.opened).toEqual([])
   })
 
-  it('needs an engine that can be held to the browser tools alone (Codex cannot), says so in words for reading, and starts nothing', async () => {
+  it('searches with an engine that cannot be held to the browser tools alone (Codex): any selected engine may, and the run is quiet, not confined', async () => {
     const x = await ready()
     x.w.t.engine.confinesAgent = false
-    const readiness = await service(x.w).researchReady(x.w.account.id)
-    expect(readiness.ready).toBe(false)
-    expect(readiness.reason).toContain('Fake engine cannot be held to the browser tools alone')
-    expect(readiness.reason).toContain('not allowed to read pages of strangers')
-    expect(readiness.reason).toContain('the trends are not searched')
-    await expect(research(x)).rejects.toMatchObject({ code: 'engine_cannot_confine' })
-    expect(x.w.t.engine.calls).toEqual([])
-    expect(x.w.t.bridge.opened).toEqual([])
-    expect(await state(x.w)).toBeNull()
+    expect(await service(x.w).researchReady(x.w.account.id)).toEqual({ ready: true, reason: null })
+    asTheAI(x.w, async () => undefined)
+    await research(x)
+    const agent = x.w.t.engine.calls.find((c) => c.label === 'agent.research')?.agent
+    expect(agent).toMatchObject({ quiet: true })
+    expect(agent?.confined).toBeUndefined()
   })
 
   it('needs an engine that can work the browser, an installed one and a selected one', async () => {

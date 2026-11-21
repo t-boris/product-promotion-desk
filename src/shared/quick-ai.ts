@@ -114,7 +114,7 @@ export interface QuickAngle {
 /**
  * `ready`: the search ran and found topics; `angle` is null when the AI could not form one from them (the owner reads the topics and writes their own).
  * Every other state is a message in words, and the owner can write the caption and make the picture all the same:
- * `unavailable` (the search could not start: no account's browser, an engine that cannot be held to the browser tools, a browser in use),
+ * `unavailable` (the search could not start: no account's browser, an engine that cannot work the browser, a browser in use),
  * `needs_owner` (a sign-in or a check stopped it), `failed` (it found nothing, or broke), `stopped` (the owner stopped it).
  */
 export type QuickTrendsResult =

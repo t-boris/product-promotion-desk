@@ -19,7 +19,9 @@ import { CliEngine, type CliEngineOptions } from './cli-engine'
  * Codex cannot be held to the application's tools (`confinesAgent` is not set): `codex exec --help` (0.169) has no switch that removes the shell
  * or the file tools. `--sandbox` limits what a command may change, not what it may run or read; `--ask-for-approval` is not an `exec` option;
  * `--dangerously-bypass-approvals-and-sandbox` is what lets MCP tools run in `exec` mode at all (checked against 0.167); `-c`/`--disable` take
- * feature names, and `codex features list` has none for the shell. So a confined run (the post mission) is refused, never run with full access.
+ * feature names, and `codex features list` has none for the shell. So a confined run is refused here, never run with full access instead. The application
+ * does not ask for one: the owner decided on 2026-11-20 that any selected engine may work the browser, and it gives Codex a quiet run (nothing the
+ * engine printed goes into an error message) with the access of every agent mission.
  *
  * A picture (`task.makeFiles`, DEC-019) runs in the folder named by the caller with `--sandbox workspace-write`: Codex's own image tool
  * (`codex features list`: image_generation, stable) makes the file and writes it there. Checked once with the real CLI (a 1254x1254 PNG in 13k tokens).

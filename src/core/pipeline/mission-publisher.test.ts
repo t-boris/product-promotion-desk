@@ -724,12 +724,12 @@ describe('what a mission that did not press leaves behind', () => {
     expect(missions.requests).toHaveLength(2)
   })
 
-  it('tells the owner where they send that this engine is not allowed to publish, keeps the approval, and presses nothing', async () => {
+  it('tells the owner where they send that this engine cannot work the browser, keeps the approval, and presses nothing', async () => {
     world = makeWorld()
     const opp = await world.readyReply()
-    const words = 'Codex cannot be held to the browser tools alone (it can also run commands and read files), so it is not allowed to publish for you. Choose Claude Code in Settings (AI engine), or send through the connector.'
+    const words = 'Codex cannot work the browser. Choose Claude Code or Codex in Settings (AI engine).'
     const missions = useMissions(async () => {
-      throw new ApiError('engine_cannot_confine', words)
+      throw new ApiError('engine_cannot_drive', words)
     })
 
     const action = await sending().send(opp.id)

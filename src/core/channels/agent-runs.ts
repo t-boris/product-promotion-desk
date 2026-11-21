@@ -217,8 +217,8 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
 
   /**
    * What joining a community needs (DEC-029): a channel of this account on a platform that can say whether the account joined (so the
-   * application, not the AI, decides whether it worked), an account that is signed in, an engine that can be held to the browser tools
-   * alone, and a channel the account has not joined. `canStart` goes only by what the last assessment stored; `start` reads the
+   * application, not the AI, decides whether it worked), an account that is signed in, an engine that can work the browser,
+   * and a channel the account has not joined. `canStart` goes only by what the last assessment stored; `start` reads the
    * community once more, in the function it gets back, and refuses a banned account and a private community there.
    */
   private async joinPrerequisites(account: Account, channelId: string | undefined): Promise<{ engine: AiEngine; mission: () => Promise<Mission> }> {
@@ -235,7 +235,7 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
     if (known?.status === 'restricted') throw new ApiError('cannot_join', known.detail)
     // Membership "needs you" in the last assessment (a private community, or a sign-in or a check first): the button would only be refused later
     if (known?.status === 'needs_user' && known.checkedAt !== null) throw new ApiError('cannot_join', NEEDS_YOU_FIRST(channel.target))
-    const engine = await this.readyEngine(account, 'join')
+    const engine = await this.readyEngine(account)
     return { engine, mission: () => this.joinMission(account, channel, connector) }
   }
 
@@ -266,24 +266,17 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
   }
 
   /**
-   * No run going on the account, and an engine that can work the browser and is ready: what every kind of mission needs first. A mission
-   * that publishes (`confined`) also needs an engine that can be held to the application's tools alone.
+   * No run going on the account, and an engine that can work the browser and is ready: what every kind of mission needs first. Any selected
+   * engine that can work the browser may do it, publishing included (the owner's decision of 2026-11-20, which replaced the refusal of an engine
+   * that cannot be held to the application's tools): `runEngine` holds the engine to the tools when it can be, and what the send needs stays
+   * the same for every engine (the send ticket, the content checked against the approval, the owner's own press).
    */
-  private async readyEngine(account: Account, confined: false | 'publish' | 'join' | 'watch' | 'research' = false): Promise<AiEngine> {
+  private async readyEngine(account: Account): Promise<AiEngine> {
     this.assertIdle(account)
 
     const engine = this.core.engines.selected()
     if (!engine) throw new ApiError('no_engine', 'No AI engine is selected. Choose Claude Code or Codex in Settings.')
     if (!engine.supportsAgent) throw new ApiError('engine_cannot_drive', `${engine.label} cannot work the browser. Choose Claude Code or Codex in Settings (AI engine).`)
-    if (confined && !engine.confinesAgent) {
-      const refused = {
-        join: 'it is not allowed to join a community for you. Choose Claude Code in Settings (AI engine), or join in the account\'s browser yourself.',
-        watch: 'it is not allowed to read pages of strangers for you, so this channel is not watched. Choose Claude Code in Settings (AI engine).',
-        research: 'it is not allowed to read pages of strangers for you, so the trends are not searched. Choose Claude Code in Settings (AI engine).',
-        publish: 'it is not allowed to publish for you. Choose Claude Code in Settings (AI engine), or send through the connector.'
-      }
-      throw new ApiError('engine_cannot_confine', `${engine.label} cannot be held to the browser tools alone (it can also run commands and read files), so ${refused[confined]}`)
-    }
     if (!this.core.agentBridge) throw new ApiError('no_agent_bridge', 'The AI browser agent is not available in this build.')
     const status = await engine.check()
     if (!status.installed || !status.ready) throw new ApiError('engine_unavailable', status.detail || `${engine.label} is not available.`)
@@ -336,7 +329,7 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
    */
   async run(request: PostMissionRequest): Promise<PostMissionOutcome> {
     const account = this.accounts.account(request.accountId)
-    const engine = await this.readyEngine(account, 'publish')
+    const engine = await this.readyEngine(account)
     const spec = MISSIONS.post
     const live: Live = {
       abort: new AbortController(),
@@ -403,10 +396,10 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
     return { ended, committed, reported, humanCheck: observed.humanCheck, warning: observed.warning, error }
   }
 
-  /** What a look at a channel needs (DEC-042): an account that is signed in, no run going on it, and an engine that can be held to the application's tools alone. */
+  /** What a look at a channel needs (DEC-042): an account that is signed in, no run going on it, and an engine that can work the browser. */
   private async watchPrerequisites(account: Account): Promise<AiEngine> {
     if (account.status !== 'ready') throw new ApiError('not_ready', `${account.label} is not signed in, so its channels are not watched. Sign in first.`)
-    return this.readyEngine(account, 'watch')
+    return this.readyEngine(account)
   }
 
   async watchReady(accountId: string): Promise<AgentReadiness> {
@@ -416,7 +409,7 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
   /**
    * One look at one channel, worked by the AI in the account's browser (DEC-042). Only the monitor's watch flow calls this. The AI only reads: its toolbox
    * has no tool that clicks, types or runs a script, and the posts it records go to the flow's own recorder as findings. Like `run` it resolves when
-   * the mission is over. It throws (an ApiError) when the check cannot start: the account is busy, signed out or has no engine that can be confined.
+   * the mission is over. It throws (an ApiError) when the check cannot start: the account is busy, signed out or has no engine that can work the browser.
    * Whether the check counts as made is the flow's decision: what the AI said is only a note.
    */
   async watch(request: WatchMissionRequest): Promise<WatchOutcome> {
@@ -426,10 +419,10 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
     return this.look('watch', account, engine, { channelId: request.channelId, subject: account.profileId ?? account.id, hosts: request.hosts, prompt: watchMissionPrompt(request.brief, this.core.clock.now()), setup })
   }
 
-  /** What a search for trends needs (REQ-004): an account that is signed in, no run going on it, and an engine that can be held to the application's tools alone. */
+  /** What a search for trends needs (REQ-004): an account that is signed in, no run going on it, and an engine that can work the browser. */
   private async researchPrerequisites(account: Account): Promise<AiEngine> {
     if (account.status !== 'ready') throw new ApiError('not_ready', `${account.label} is not signed in, so its browser cannot search for trends. Sign in first.`)
-    return this.readyEngine(account, 'research')
+    return this.readyEngine(account)
   }
 
   async researchReady(accountId: string): Promise<AgentReadiness> {
@@ -685,7 +678,7 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
     })
     try {
       const today = this.core.clock.now().toISOString().slice(0, 10)
-      // A join mission is held to the application's tools alone (Claude Code only, already checked), like a publication.
+      // A join mission is quiet for every engine, and held to the application's tools alone when the engine can be, like a publication.
       const said = await this.runEngine(live, engine, toolbox, `agent.${kind}`, account.profileId ?? account.id, join ? joinMissionPrompt(join, today) : missionPrompt(mission, today), MISSIONS[kind].timeoutMs, join !== undefined)
       if (live.run.status !== 'running') return // stopped by the owner while the engine was ending
       if (said.trim()) this.say(live, `The AI: ${said.trim().replace(/\s+/g, ' ').slice(0, 240)}`)
@@ -715,13 +708,16 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
     }
   }
 
-  /** Offers the toolbox to the engine, lets the engine work the mission, and closes the tools again, however it ends. Resolves with what the engine said last. */
-  private async runEngine(live: Live, engine: AiEngine, toolbox: BrowserToolbox, label: string, subject: string, prompt: string, timeoutMs: number, confined = false): Promise<string> {
+  /**
+   * Offers the toolbox to the engine, lets the engine work the mission, and closes the tools again, however it ends. Resolves with what the engine said last.
+   * A mission that publishes or reads pages of strangers (`strangers`) is quiet for every engine, and held to the application's tools alone when the engine can be.
+   */
+  private async runEngine(live: Live, engine: AiEngine, toolbox: BrowserToolbox, label: string, subject: string, prompt: string, timeoutMs: number, strangers = false): Promise<string> {
     const bridge = this.core.agentBridge
     if (!bridge) throw new ApiError('no_agent_bridge', 'The AI browser agent is not available in this build.')
     const opened = await bridge.open(toolbox)
     try {
-      return await engine.run({ label, subject, prompt, agent: { server: SERVER_NAME, launch: opened.launch, ...(confined ? { confined: true } : {}) }, timeoutMs }, { signal: live.abort.signal })
+      return await engine.run({ label, subject, prompt, agent: { server: SERVER_NAME, launch: opened.launch, ...(strangers ? { quiet: true } : {}), ...(strangers && engine.confinesAgent === true ? { confined: true } : {}) }, timeoutMs }, { signal: live.abort.signal })
     } finally {
       opened.close()
     }

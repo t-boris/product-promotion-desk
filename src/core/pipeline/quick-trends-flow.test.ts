@@ -97,11 +97,11 @@ describe('quick.trends, through the real AI agent service', () => {
     expect(await world.core.router.call('agent.state', { accountId: world.account.id })).toMatchObject({ kind: 'research', status: 'done' })
   })
 
-  it('is a message when the engine cannot be held to the browser tools (Codex): the composer goes on, and no browser was opened', async () => {
+  it('is a message when the engine cannot work the browser at all: the composer goes on, and no browser was opened', async () => {
     const { channel, page } = setup()
-    world.engine.confinesAgent = false
+    world.engine.supportsAgent = false
     const result = (await world.core.router.call('quick.trends', { productId: world.product.id, channelId: channel.id })) as QuickTrendsResult
-    expect(result).toMatchObject({ state: 'unavailable', message: expect.stringContaining('cannot be held to the browser tools alone') })
+    expect(result).toMatchObject({ state: 'unavailable', message: expect.stringContaining('cannot work the browser') })
     expect(world.bridge.opened).toEqual([])
     expect(page.log).toEqual([])
     expect(world.engine.calls).toEqual([])

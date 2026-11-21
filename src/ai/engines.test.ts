@@ -471,6 +471,35 @@ describe('a confined run (the post mission) puts nothing the engine printed into
     const unconfined = await new ClaudeCodeEngine({ searchPaths: [binDir], env: env('fail') }).run({ ...task, agent: { ...task.agent, confined: undefined } }).catch((e: unknown) => e)
     expect((unconfined as AiError).message).toBe('Claude Code exited with code 2: something broke')
   })
+
+  it('does the same for a quiet run: an engine that cannot be held to the tools (Codex) still puts nothing it printed into an error', async () => {
+    const quiet = { label: 'agent.post', prompt: 'x', agent: { server: 'ppd', launch: LAUNCH, quiet: true } }
+    const codex = await new CodexEngine({ searchPaths: [binDir], env: env('fail') }).run(quiet).catch((e: unknown) => e)
+    expect(codex).toBeInstanceOf(AiError)
+    expect((codex as AiError).message).toBe('Codex exited with code 2.')
+    const claude = await new ClaudeCodeEngine({ searchPaths: [binDir], env: env('fail') }).run(quiet).catch((e: unknown) => e)
+    expect((claude as AiError).message).toBe('Claude Code exited with code 2.')
+  })
+})
+
+describe('a quiet run that is not confined (any selected engine may work the browser for the owner)', () => {
+  const quiet = { label: 'agent.post', prompt: 'post it', agent: { server: 'ppd', launch: LAUNCH, quiet: true } }
+
+  it('starts Codex with the access the owner decided on for agent missions: the post is not refused', async () => {
+    await new CodexEngine({ searchPaths: [binDir], env: env('ok') }).run(quiet)
+    expect(read('argv')).toContain('[--dangerously-bypass-approvals-and-sandbox]')
+  })
+
+  it('starts Claude Code with that access too, when it was not asked to be confined', async () => {
+    await new ClaudeCodeEngine({ searchPaths: [binDir], env: env('ok') }).run(quiet)
+    expect(read('argv')).toContain('--dangerously-skip-permissions')
+    expect(read('argv')).not.toContain('--allowedTools')
+  })
+
+  it('still refuses to run Codex confined: confinement is never claimed for an engine that cannot give it', async () => {
+    const error = await new CodexEngine({ searchPaths: [binDir], env: env('ok') }).run({ ...quiet, agent: { ...quiet.agent, confined: true } }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(AiError)
+  })
 })
 
 describe('timeout and cancellation', () => {

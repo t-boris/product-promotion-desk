@@ -161,10 +161,10 @@ export function SettingsPage() {
         <More label="What the AI may and may not do">
           <Hint>
             It types only the post you approved, puts in only the pictures you approved, and presses only the button that publishes, and only when you press Send; you watch it in the account's browser window and can stop it.
-            A scheduled send never uses it. It needs Claude Code as the engine: Codex cannot be confined to this.
+            A scheduled send never uses it. Either engine may do it. Claude Code is held to the application's browser tools alone; Codex cannot be held that way, so while it works it could also run commands and read files on this Mac. Choose Claude Code if that matters to you.
           </Hint>
         </More>
-        {publishWithAi && current?.engineId !== 'claude' && <div className="hint warn">Claude Code is not the selected engine, so the AI cannot publish yet: select Claude Code above, or a send will stop and tell you.</div>}
+        {publishWithAi && !current?.engineId && <div className="hint warn">No AI engine is selected, so the AI cannot publish yet: select Claude Code or Codex above, or a send will stop and tell you.</div>}
       </Card>
 
       <MailboxesCard mailboxes={mailboxes.data ?? []} />

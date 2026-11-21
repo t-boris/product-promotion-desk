@@ -191,13 +191,13 @@ describe('its own posts', () => {
     expect(action.authorizationBasis).toContain(AI_BROWSER_BASIS)
   })
 
-  it('are refused at the approval when the engine cannot be held to the browser tools alone, with the way out in the words', async () => {
+  it('are approved when the engine cannot be held to the browser tools alone (Codex): any selected engine that can work the browser may publish', async () => {
     world = ownPostsWorld()
     world.core.services.postMissions = new ScriptedMissions(async () => undefined)
     ;(world.engine as { confinesAgent: boolean }).confinesAgent = false
     await world.core.router.call('channels.activate', { channelId: world.channel.id })
     const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'Hello', text: 'Words.', markup: 'markdown' } })
-    await expect(world.core.router.call('opportunities.approve', { id: opportunity.id })).rejects.toMatchObject({ code: 'post_does_not_fit', message: expect.stringMatching(/choose Claude Code in Settings.*Copy post/) })
+    await expect(world.core.router.call('opportunities.approve', { id: opportunity.id })).resolves.toBeDefined()
   })
 
   it('are refused when the engine is not selected at all', async () => {
@@ -212,16 +212,16 @@ describe('its own posts', () => {
   it('say why at the approval for an older (legacy) draft too, not as the connector\'s "no site profile" after the press', async () => {
     world = ownPostsWorld()
     world.core.services.postMissions = new ScriptedMissions(async () => undefined)
-    ;(world.engine as { confinesAgent: boolean }).confinesAgent = false
+    ;(world.engine as { supportsAgent: boolean }).supportsAgent = false
     await world.core.router.call('channels.activate', { channelId: world.channel.id })
     const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'Hello', text: 'Words.', markup: 'legacy' } })
-    await expect(world.core.router.call('opportunities.approve', { id: opportunity.id })).rejects.toMatchObject({ code: 'post_does_not_fit', message: expect.stringMatching(/choose Claude Code in Settings.*Copy post/) })
-    // and with an engine that can be held to the tools, the same draft is approved
-    ;(world.engine as { confinesAgent: boolean }).confinesAgent = true
+    await expect(world.core.router.call('opportunities.approve', { id: opportunity.id })).rejects.toMatchObject({ code: 'post_does_not_fit', message: expect.stringMatching(/choose Claude Code or Codex in Settings.*Copy post/) })
+    // and with an engine that can work the browser, the same draft is approved
+    ;(world.engine as { supportsAgent: boolean }).supportsAgent = true
     await expect(world.core.router.call('opportunities.approve', { id: opportunity.id })).resolves.toBeDefined()
   })
 
-  it('are refused at the approval when the engine cannot run an agent at all, though it would confine one', async () => {
+  it('are refused at the approval when the engine cannot run an agent at all', async () => {
     world = ownPostsWorld()
     world.core.services.postMissions = new ScriptedMissions(async () => undefined)
     const engine = world.engine as { supportsAgent: boolean; confinesAgent: boolean }
@@ -229,7 +229,7 @@ describe('its own posts', () => {
     engine.confinesAgent = true
     await world.core.router.call('channels.activate', { channelId: world.channel.id })
     const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'Hello', text: 'Words.', markup: 'markdown' } })
-    await expect(world.core.router.call('opportunities.approve', { id: opportunity.id })).rejects.toMatchObject({ code: 'post_does_not_fit', message: expect.stringMatching(/cannot be held to the browser tools alone/) })
+    await expect(world.core.router.call('opportunities.approve', { id: opportunity.id })).rejects.toMatchObject({ code: 'post_does_not_fit', message: expect.stringMatching(/cannot work the browser/) })
   })
 
   it('tell the screen whether the app reads the channel, so a card knows its post goes by the AI browser (DEC-035)', async () => {
@@ -391,8 +391,8 @@ describe('its own posts', () => {
     await world.core.router.call('channels.activate', { channelId: world.channel.id })
     const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'Hello', text: 'Words.', markup: 'legacy' } })
     await world.core.router.call('opportunities.approve', { id: opportunity.id })
-    ;(world.engine as { confinesAgent: boolean }).confinesAgent = false
-    await expect(world.sending.send(opportunity.id)).rejects.toMatchObject({ message: expect.stringMatching(/choose Claude Code in Settings/) })
+    ;(world.engine as { supportsAgent: boolean }).supportsAgent = false
+    await expect(world.sending.send(opportunity.id)).rejects.toMatchObject({ message: expect.stringMatching(/choose Claude Code or Codex in Settings/) })
     expect(world.connector.published).toHaveLength(0)
   })
 

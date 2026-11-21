@@ -36,7 +36,7 @@ export const READ_BACK_TRIES = 4
 export const READ_BACK_DELAY_MS = 2000
 
 /** What the mission service refuses with before anything was started: the AI browser cannot be used right now, and nothing happened. */
-const NOT_STARTED_CODES = ['agent_running', 'no_engine', 'engine_cannot_drive', 'engine_cannot_confine', 'engine_unavailable', 'no_agent_bridge']
+const NOT_STARTED_CODES = ['agent_running', 'no_engine', 'engine_cannot_drive', 'engine_unavailable', 'no_agent_bridge']
 
 export type { Executor }
 

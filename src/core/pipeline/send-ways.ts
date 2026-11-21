@@ -13,7 +13,7 @@ export type Executor = 'connector' | 'ai_browser'
  * (Instagram, Facebook, Threads...: no connector can post to it, so there is nothing to choose, DEC-035), the build has it, and the send is the
  * owner's own press on an approval the owner gave themselves: a scheduled send, or one on an automatic approval, never drives a browser.
  * Without `send` (the approval, before anyone presses anything) the question is whether it could, if the owner presses Send. For a channel with
- * no connector the engine is asked too: Claude Code is the one that can be held to the browser tools alone, and the owner is told so at the approval.
+ * no connector the engine is asked too: any engine that can work the browser may carry the send (the owner's decision of 2026-11-20), and the owner is told at the approval when the selected one cannot.
  */
 export function sendWays(core: Core, send?: { automatic: boolean; approvedBy: string }, channel?: Pick<Channel, 'reads'>): SendWays {
   const noConnector = channel !== undefined && !channel.reads
@@ -24,8 +24,8 @@ export function sendWays(core: Core, send?: { automatic: boolean; approvedBy: st
   if (noConnector) {
     const engine = core.engines.selected()
     if (!engine) return { aiBrowser: false, noConnector: true, engineProblem: 'No AI engine is selected. The AI works the browser for this channel: choose Claude Code in Settings (AI engine), or use “Copy post” and publish it by hand.' }
-    if (!engine.supportsAgent || !engine.confinesAgent) {
-      return { aiBrowser: false, noConnector: true, engineProblem: `${engine.label} cannot be held to the browser tools alone, so it is not allowed to publish for you. The AI works the browser for this channel: choose Claude Code in Settings (AI engine), or use “Copy post” and publish it by hand.` }
+    if (!engine.supportsAgent) {
+      return { aiBrowser: false, noConnector: true, engineProblem: `${engine.label} cannot work the browser. The AI works the browser for this channel: choose Claude Code or Codex in Settings (AI engine), or use “Copy post” and publish it by hand.` }
     }
   }
   return { aiBrowser: true, ...only }

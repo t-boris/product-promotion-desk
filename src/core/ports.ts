@@ -48,9 +48,15 @@ export interface AiTask {
      * The post mission (B1): the engine has no power but the tools of this MCP server (no shell, no files, no web of its own), and nothing it
      * prints on a failure is put into an error message (a failure says only that the engine failed and its exit code): what an engine prints
      * can echo the pages it worked on, and an error message reaches the log and the owner's lists. An engine that cannot be held to the
-     * tools (`confinesAgent` is not true) refuses such a run. Without it the run has full access, as in DEC-018.
+     * tools (`confinesAgent` is not true) is never given `confined`: it refuses it, and the application does not ask (the owner decided on
+     * 2026-11-20 that any selected agent may work the browser). Without it the run has full access, as in DEC-018.
      */
     confined?: boolean
+    /**
+     * The mission works pages of strangers or publishes (post, join, watch, research): nothing the engine or the system printed is put into an
+     * error message, whatever the engine can be held to. Set for every such mission, so a run with full access leaks no page text either.
+     */
+    quiet?: boolean
   }
   /**
    * The engine may create files in this folder and nowhere else (the sandbox allows writing in it): the pictures of account profiles (DEC-019),

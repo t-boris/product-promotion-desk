@@ -715,7 +715,7 @@ export interface SendWays {
    * only way and needs no switch in the settings (DEC-035). Everything else about it is as for any AI-browser send.
    */
   noConnector?: boolean
-  /** The AI browser would carry this send, but the selected engine cannot be held to the browser tools alone: why, in words (only for a channel with no connector). */
+  /** The AI browser would carry this send, but the selected engine cannot work the browser: why, in words (only for a channel with no connector). */
   engineProblem?: string
 }
 
@@ -724,7 +724,7 @@ const UNATTENDED_MESSAGE =
 
 /**
  * Why a send to a channel that no connector can post to cannot go by the AI browser right now, when it is something other than the post that
- * stops it: the selected engine (it cannot be held to the browser tools alone), or a send that is scheduled or automatic (DEC-035). It is the
+ * stops it: the selected engine (it cannot work the browser), or a send that is scheduled or automatic (DEC-035). It is the
  * same for every kind of draft, an older one too: the form of the post is no part of it. Null when nothing stops it, and for a channel a
  * connector can post to.
  */

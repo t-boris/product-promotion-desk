@@ -283,21 +283,21 @@ describe('a look that was not whole', () => {
     unmoved(x)
   })
 
-  it('is deferred, not failed, when the AI service says it cannot start (no engine that can be confined, signed out, not installed)', async () => {
+  it('is deferred, not failed, when the AI service says it cannot start (no engine that can work the browser, signed out, not installed)', async () => {
     const x = watched()
-    x.ai.readiness = { ready: false, reason: 'Fake engine cannot be held to the browser tools alone, so it is not allowed to read pages of strangers for you.' }
+    x.ai.readiness = { ready: false, reason: 'Fake engine cannot work the browser. Choose Claude Code or Codex in Settings (AI engine).' }
 
     const outcome = await check(x)
 
     expect(outcome.status).toBe('skipped')
-    expect(outcome.summary).toContain('cannot be held to the browser tools alone')
+    expect(outcome.summary).toContain('cannot work the browser')
     expect(x.ai.requests).toEqual([])
     expect(channelOf(x)).toMatchObject({ status: 'active', nextCheckAt: new Date(x.w.clock.now().getTime() + WATCH_RETRY_MIN * MINUTE).toISOString() })
     unmoved(x)
     nothingToAct(x)
   })
 
-  it.each(['agent_running', 'not_ready', 'engine_cannot_confine', 'browser_busy'])('is deferred when the service refuses to start with %s after it said it was ready', async (code) => {
+  it.each(['agent_running', 'not_ready', 'engine_cannot_drive', 'browser_busy'])('is deferred when the service refuses to start with %s after it said it was ready', async (code) => {
     const x = watched()
     x.ai.script = () => {
       throw new ApiError(code as never, 'Another task is working in this account.')

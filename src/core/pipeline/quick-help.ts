@@ -553,8 +553,8 @@ export const realQuickHelper: QuickHelper = {
 
 // ───────────────────────────── the service ─────────────────────────────
 
-/** The ways a search cannot even start that are not the page's fault: the account is busy or signed out, the engine is not ready or cannot be confined. */
-const NOT_STARTED = new Set(['agent_running', 'not_ready', 'no_engine', 'engine_cannot_drive', 'engine_cannot_confine', 'engine_unavailable', 'no_agent_bridge', 'browser_busy'])
+/** The ways a search cannot even start that are not the page's fault: the account is busy or signed out, the engine is not ready or cannot work the browser. */
+const NOT_STARTED = new Set(['agent_running', 'not_ready', 'no_engine', 'engine_cannot_drive', 'engine_unavailable', 'no_agent_bridge', 'browser_busy'])
 
 interface Prepared {
   engine: AiEngine

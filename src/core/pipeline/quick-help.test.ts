@@ -631,7 +631,7 @@ describe('quick.trends: the search', () => {
 
   it('treats a search that could not start as unavailable, whichever reason the service gives', async () => {
     const { channel, ai } = searching()
-    for (const code of ['agent_running', 'not_ready', 'engine_cannot_confine', 'browser_busy']) {
+    for (const code of ['agent_running', 'not_ready', 'engine_cannot_drive', 'browser_busy']) {
       ai.script = () => {
         throw new ApiError(code as never, `Reason: ${code}`)
       }
