@@ -122,6 +122,128 @@
   }
 }
 
+/* ───────────── Appearance: the theme picker (visual-system.md §33.2) ─────────────
+   A group of radio cards. The radio itself is hidden like a switch's checkbox and its card shows the state: a ring in the accent text
+   colour for the chosen one, the shared focus ring for the keyboard. Each swatch carries its own data-theme, so it paints that theme's
+   tokens whatever the page is using. The card, its name and its note use the page's tokens. */
+
+.card .rows > .theme-block {
+  padding-bottom: var(--space-4);
+}
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+.theme-option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  cursor: default;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.theme-option:hover {
+  border-color: var(--line-strong);
+}
+.theme-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.theme-option:has(input:checked) {
+  border-color: var(--accent-on-tint);
+  box-shadow: 0 0 0 1px var(--accent-on-tint);
+}
+.theme-option:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.theme-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.theme-check {
+  display: none;
+  flex: none;
+  color: var(--accent-on-tint);
+}
+.theme-option:has(input:checked) .theme-check {
+  display: inline-flex;
+}
+.theme-name {
+  font-weight: var(--fw-semibold);
+}
+.theme-note {
+  color: var(--text-2);
+}
+
+/* The miniature: the sidebar on the left, the page with one card (two lines of text) and the accent on the right. */
+.theme-swatch {
+  display: grid;
+  grid-template-columns: 24% minmax(0, 1fr);
+  height: 60px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-0);
+}
+.theme-swatch-side {
+  background: var(--sidebar-solid);
+  border-right: 1px solid var(--line);
+}
+.theme-swatch-page {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  min-width: 0;
+}
+.theme-swatch-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 5px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--space-1);
+  background: var(--surface-1);
+}
+.theme-swatch-bar {
+  width: 72%;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--text-2);
+}
+.theme-swatch-bar.short {
+  width: 42%;
+  background: var(--line-strong);
+}
+.theme-swatch-accent {
+  width: 36px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+/* "Follow macOS": the light look with the dark one laid over its lower-right half. */
+.theme-split {
+  position: relative;
+  display: block;
+}
+.theme-split-dark {
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}
+
 /* ───────────── Local web access and About: label-left rows ───────────── */
 
 .group-row .port-input {

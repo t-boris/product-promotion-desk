@@ -4,6 +4,7 @@ import { parseWebPort, usablePort } from '../../../shared/web-port'
 import { call, useAction, useQuery } from '../hooks'
 import { Icon } from '../icons'
 import { Badge, Button, Card, EmptyState, ErrorNote, Hint, Loading, More, Page, Switch } from '../ui'
+import { AppearanceCard } from './AppearanceCard'
 import { MailboxesCard } from './channels/MailboxesCard'
 import { engineChoiceVariant, recommendedEngineId, splitEngineDetail } from './engine-detail'
 import { LessonsCard } from './LessonsCard'
@@ -62,7 +63,7 @@ export function SettingsPage() {
   }
 
   return (
-    <Page title="Settings" subtitle="AI engine, notifications, publishing, base mailbox, local web access and version">
+    <Page title="Settings" subtitle="AI engine, notifications, appearance, publishing, base mailbox, local web access and version">
       <Card
         title="AI engine"
         actions={
@@ -139,6 +140,8 @@ export function SettingsPage() {
           />
         </div>
       </Card>
+
+      <AppearanceCard />
 
       <Card title="Publishing">
         <Hint>

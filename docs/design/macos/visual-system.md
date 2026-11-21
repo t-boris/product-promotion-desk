@@ -12,6 +12,7 @@ This document is the contract for the implementation and verification steps. It 
 - the token table (§5), the type scale (§6) and the component table with sizes and states (§7);
 - the baseline screenshots of 0.8.0 (`baseline/0.8.0/`) and the target mock (`mock.html`, `target/`) (§2, §3);
 - numbered, measurable requirements (§12) and the texts the two QA scenarios depend on (§13).
+- the themes (§33, REQ-005): the six palettes with their measured contrast, the animated background, and where a theme is chosen and applied.
 
 ---
 
@@ -178,8 +179,10 @@ The content column (`.main`) always paints `--surface-0`.
 
 ## 5. Tokens
 
-All values live in `:root` (light) and `@media (prefers-color-scheme: dark)` of `styles.css`. Names in **bold** are new; the
-others keep their DEC-022 names with new values. Contrast ratios are computed (WCAG formula) for the pairs that carry text, over the
+All values live in the token block at the top of `styles.css`. Since themes (§33) that block is arranged by scheme (light or dark: text,
+the colours that carry a meaning, the neutral fills, shadows) and by palette (backgrounds, surfaces, the sidebar, the field, the accent); the
+two columns of the table below are the Daylight and Graphite palettes, which "Follow macOS" shows and which are the application's look
+without a chosen theme. Names in **bold** are new; the others keep their DEC-022 names with new values. Contrast ratios are computed (WCAG formula) for the pairs that carry text, over the
 background the text really sits on: a translucent fill (`--hover-fill` stripe, `--segment-track` tag, `--accent-tint`) is stacked on
 its card first, so a figure for a token pair alone is not enough (BUG-049, lesson 114).
 
@@ -442,6 +445,7 @@ split, no sideways scroll.
 | Screen / state | Target pattern | Filled | Empty state → next step |
 |---|---|---|---|
 | AI engine | Group box; one row per engine (name, version, tags, two `--text-2` lines, Details disclosure; "In use" check or "Use this engine") | "Use this engine" only when recommended and none is selected | "No AI engines found" |
+| Appearance (`AppearanceCard`, §33) | Group box: a radio group of seven cards, "Follow macOS" and the six themes, each with a miniature painted in its own tokens and a one-line note; the chosen card has a ring in `--accent-on-tint` and a check; below, a hairline and the **Animated background** switch (disabled and explained under Reduce motion) | none | — |
 | Notifications, local web access | Group boxes with label-left rows and switches; Port field (1024–65535, applied on blur or Enter; a refused port shows its reason under the label in `--error` and the switch stays off, BUG-044) | none | — |
 | What the AI learned (`LessonsCard`) | Group box: add row (field + pop-up + "Add the rule" secondary), saved rules as rows | none | "Nothing learned yet." |
 | About | Group box of label/value rows | none | — |
@@ -1191,3 +1195,122 @@ A shorter interval moves the planned check earlier at once.
 | V-66 | The counts of findings follow the channel chosen | `src/core/pipeline/findings.test.ts`, the probe (F4) | all true |
 
 Shots of the run (own data directory, empty HOME and PATH, loopback only, demo data, automation paused, nothing sent): `feed-todecide`, `feed-noted`, `feed-judged`, `settings`, `channel-failing`, `overview-failing`, each at 1320 and 980, light and dark (24 pictures, kept with the job).
+
+## 33. Themes (REQ-005, DEC-036, DEC-047)
+
+The owner chooses how the application looks. **A theme changes backgrounds, surfaces and the accent colour, and nothing else** (DEC-047). Every rule of this document stays: red is a failure, amber is "decide or fix", green is done, blue is information, an AI control is never filled, there is one filled accent button per screen, the accent is used for the one main action, selection, focus, links and sidebar icons only. No theme adds a place that uses the accent, and the quick-post composer does not widen it.
+
+### 33.1 The themes
+
+"Follow macOS" is the default and shows Daylight in a light appearance and Graphite in a dark one: those two palettes are the application's colours before themes, token for token (`themes.test.ts` holds the values), so nothing changes for an owner who chooses nothing. An explicit theme looks the same whatever macOS is set to.
+
+| Theme | Side | Character | Accent (hue) |
+|---|---|---|---|
+| **Daylight** | light | neutral white and cool grey, the look of 0.23 | system indigo `#5856d6` (241°) |
+| **Lagoon** | light | a pale aqua page, a deeper aqua sidebar, white cards | deep teal `#09747a` (183°) |
+| **Orchid** | light | a pale lilac page and sidebar, soft white cards | purple `#7e22ce` (272°) |
+| **Graphite** | dark | neutral graphite, the dark look of 0.23 | system indigo `#5e5ce6` (241°) |
+| **Midnight** | dark | deep navy ink, blue-grey lines | cyan `#0e7490` (193°), text `#67d4ee` |
+| **Aubergine** | dark | deep plum, violet-grey lines | fuchsia `#a21caf` (295°), text `#f0abfc` |
+
+The accent hues keep away from the colours that carry a meaning: no accent or accent text is closer than 19° in hue to the red, amber, green or blue of its scheme (the shipped indigo is 19.9° from the information blue; Lagoon is 37° from the green, Midnight 28° from the blue).
+
+### 33.2 What a theme sets, and what it cannot
+
+Colour is set in three layers (the comment on top of the token block in `styles.css` says the same):
+
+1. **The scheme** (light or dark), the same in every theme of that side: `--text-1`, `--text-2`, `--text-3`, `--on-accent`, `--success`/`-bg`, `--attention`/`-bg`, `--on-attention`, `--error`/`-bg`, `--on-error`, `--info`/`-bg`, `--selection`, `--hover-fill`, `--press-fill`, `--segment-track`, `--shadow-*`, `--scrim`, `--glyph-updown`, and the chart series `--series-1..4` (moved here from `charts.css`, so a chart follows the theme's side). These are the values of §5.1.
+2. **The palette** of the theme, the only colours it chooses: `--surface-0..3`, `--sidebar-solid` (and `--sidebar-native`, below), `--field`, `--field-border`, `--bezel`, `--line`, `--line-strong`, `--segment-thumb`, `--accent`, `--accent-tint`, `--accent-on-tint`, `--focus`, and the two colours of the animated background `--drift-a`, `--drift-b`.
+3. **Mixes** of the two, made with `color-mix()` at the root (`--bezel-hover`, `--bezel-press`, `--accent-hover`, `--accent-press`), so a theme changes the faces of a button in its states with the rest.
+
+`themes.test.ts` reads `styles.css` as a browser does for the root element (the real cascade, specificity and order, media conditions) and fails when a theme rule declares a scheme token, when a scheme rule declares one theme, when a theme is missing a token, when two themes share a page colour or an accent, when "Follow macOS" is not Daylight or Graphite token for token, when a theme's colours change with macOS, or when a stylesheet other than `styles.css` sets a theme or scheme token or asks for `prefers-color-scheme`.
+
+**Palettes** (the values are the file's; `§5.1` holds the Daylight and Graphite columns):
+
+| Token | Daylight | Lagoon | Orchid | Graphite | Midnight | Aubergine |
+|---|---|---|---|---|---|---|
+| `--surface-0` page, toolbar | `#f5f5f7` | `#e8f4f5` | `#f5eefa` | `#1e1e20` | `#0e1526` | `#1a1022` |
+| `--surface-1` group boxes | `#ffffff` | `#fafdfd` | `#fffcff` | `#28282b` | `#172036` | `#261834` |
+| `--surface-2` wells | `#f0f0f2` | `#e9f3f4` | `#f5eff9` | `#313135` | `#1d2944` | `#2f1f3f` |
+| `--surface-3` menus, sheets | `#ffffff` | `#ffffff` | `#ffffff` | `#2c2c2f` | `#1b2740` | `#2b1c3a` |
+| `--sidebar-solid` | `#e8e8ed` | `#d3e9eb` | `#ece2f5` | `#252528` | `#121b30` | `#1f1429` |
+| `--field` | `#ffffff` | `#ffffff` | `#ffffff` | `#323236` | `#1f2b47` | `#33234a` |
+| `--field-border` | `#a8a8ae` | `#86aaae` | `#a48bb8` | `#636369` | `#55678f` | `#7a5f94` |
+| `--bezel` | `#ffffff` | `#ffffff` | `#ffffff` | `#3a3a3e` | `#263453` | `#402b57` |
+| `--line` | `#e3e3e8` | `#cde2e4` | `#e4d6ee` | `#38383c` | `#26324d` | `#35244a` |
+| `--line-strong` | `#c7c7cc` | `#b0cdd0` | `#cdb9dc` | `#4b4b50` | `#3a4a6c` | `#4d3668` |
+| `--segment-thumb` | `#ffffff` | `#ffffff` | `#ffffff` | `#545458` | `#3d4e75` | `#5a3f78` |
+| `--accent` | `#5856d6` | `#09747a` | `#7e22ce` | `#5e5ce6` | `#0e7490` | `#a21caf` |
+| `--accent-tint` | `rgb(88 86 214 / 12%)` | `rgb(9 116 122 / 12%)` | `rgb(126 34 206 / 11%)` | `rgb(94 92 230 / 26%)` | `rgb(14 116 144 / 30%)` | `rgb(192 38 211 / 26%)` |
+| `--accent-on-tint` accent text | `#4e4cc8` | `#076269` | `#6d1fb4` | `#a5a3ff` | `#67d4ee` | `#f0abfc` |
+| `--focus` | `#5856d6` | `#09747a` | `#7e22ce` | `#a5a3ff` | `#67d4ee` | `#f0abfc` |
+| `--drift-a` (§33.5) | `rgb(255 255 255 / 75%)` | `rgb(255 255 255 / 75%)` | `rgb(255 255 255 / 75%)` | `rgb(94 92 230 / 12%)` | `rgb(34 211 238 / 12%)` | `rgb(217 70 239 / 14%)` |
+| `--drift-b` (§33.5) | `rgb(236 238 255 / 70%)` | `rgb(214 247 244 / 70%)` | `rgb(250 238 253 / 70%)` | `rgb(10 132 255 / 8%)` | `rgb(99 102 241 / 14%)` | `rgb(139 92 246 / 14%)` |
+
+The scheme's `--text-3` (`#6c6c71` light, `#9e9ea4` dark) is shared by all themes of its side and needs 4.5:1 on every surface, the neutral tag, the stripe and the tab track included. That puts a light surface at a relative luminance of about 0.85 or more (Daylight's `--surface-2`, `#f0f0f2`, gives 4.59:1) and a dark one at about 0.037 or less. It is the reason the light themes are pale and the dark ones deep, and it keeps a "very bright" theme out (the trade-off DEC-047 names): a theme that wants a stronger page colour has to wait for its own text colours, which DEC-047 does not allow.
+
+### 33.3 Contrast, measured in every theme
+
+`src/main/themes.test.ts` measures **125 pairs in each of the six themes and under both macOS appearances** of "Follow macOS" (`theme-pairs.ts` lists them; `theme-css.ts` resolves `var()` and `color-mix()` and `theme-contrast.ts` composites the stack as the browser paints it: the opaque base first, each translucent fill over it, lesson 114). A failing pair fails the build. The limits are this document's own: **4.5:1** for text of any kind (text, secondary text, placeholders, accent text, a label on the accent, a tag's colour on its background), **3:1** for the focus ring, **2:1** for the edge of a field, **4.5:1 for a pointer-over state** of the new themes and **4.0:1** for the shipped Daylight and Graphite (below). The least ratio of each group (two decimals, WCAG formula):
+
+| Pair (number of pairs) | Daylight | Lagoon | Orchid | Graphite | Midnight | Aubergine |
+|---|---|---|---|---|---|---|
+| `--text-1` on `--surface-0..3`, `--field` (5) | 14.79 | 14.90 | 14.82 | 11.44 | 12.59 | 12.72 |
+| `--text-2` on the same (5) | 5.58 | 5.62 | 5.59 | 6.19 | 6.81 | 6.88 |
+| `--text-3` on the same (5) | 4.59 | 4.62 | 4.60 | 4.79 | 5.27 | 5.32 |
+| accent text on the same (5) | 5.78 | 6.28 | 7.38 | 5.64 | 8.18 | 8.06 |
+| accent text on its tint, over surface-0 and surface-1 (2) | 5.14 | 5.38 | 6.20 | 5.08 | 7.03 | 7.25 |
+| `--text-1` and `--text-2` on stacked fills: striped row, neutral tag, tag on a striped row, tab track, selected row (14) | 4.96 | 4.81 | 4.69 | 4.78 | 5.33 | 5.51 |
+| status text (red, amber, green, blue) on the same surfaces (20) | 5.11 | 5.15 | 5.12 | 5.59 | 6.15 | 6.22 |
+| status text on its own background, tag and note (4) | 5.19 | 5.19 | 5.19 | 6.72 | 6.72 | 6.72 |
+| label on the accent: filled button, switch knob, menu highlight (1) | 5.65 | 5.54 | 6.98 | 5.06 | 5.36 | 6.32 |
+| label on the accent under the pointer (1) | 4.81 | 4.74 | 6.06 | 4.36 | 4.60 | 5.58 |
+| sidebar, opaque colour: text, secondary text, accent text, also on hover and selection (8) | 4.62 | 4.56 | 4.60 | 4.95 | 7.06 | 7.31 |
+| bezel button: text, accent label, danger label (3) | 6.57 | 6.57 | 6.57 | 4.96 | 5.42 | 5.41 |
+| bezel button under the pointer, the same three (3) | 5.96 | 5.96 | 5.96 | 4.30 | 4.70 | 4.70 |
+| focus ring against surfaces and the sidebar (min 3) (6) | 4.63 | 4.39 | 5.57 | 5.64 | 8.18 | 8.06 |
+| edge of a field against the field and the page (min 2) (2) | 2.17 | 2.23 | 2.66 | 2.14 | 2.49 | 2.63 |
+| text and accent and status text on the page under the animated background, every way the two glows can lie (§33.5) (36) | 4.61 | 4.61 | 4.64 | 5.11 | 4.62 | 4.96 |
+
+Rendered, not only computed: the same pages were opened in headless Chrome (the production build of this branch, a real core with an in-memory database, loopback web access), each theme under a light and a dark macOS appearance, and **Chrome's resolved colour of 39 tokens agreed with the test's resolver within one channel step in all 12 cases**; 310 text nodes of the nine screens (empty-state data) measured at least 4.96:1 in every theme. These are scratch checks, not part of the build.
+
+**What was already below the limit before themes, and is not changed (the default must look as it did).** The pointer-over faces of the shipped dark look: the label on a hovered filled button is 4.36:1, an accent label on a hovered bezel 4.34:1 and a danger label 4.30:1; under a pressed bezel (a state that lasts as long as the click) 3.75:1 and 3.72:1. They are held at 4.0:1 for Daylight and Graphite and are not asserted for a pressed state in any theme (the new dark themes are 4.06:1 and 4.07:1 for a danger label under a pressed bezel; every rest and hover state of a new theme is at least 4.5:1). Raising the shipped values is a change of the default look and belongs to a bug of its own.
+
+### 33.4 Where a theme is chosen, stored and applied
+
+- **Chosen** in Settings, group **Appearance** (`AppearanceCard.tsx`, `settings.css`; §10.7): a radio group (`role="radiogroup"`, native radios, arrow keys, the shared focus ring on the card, `data-testid="theme-picker"` and `theme-option-<system|daylight|lagoon|orchid|graphite|midnight|aubergine>`), seven cards of one size, each with a miniature painted with that theme's own tokens (a `data-theme` on the miniature alone), its name and a line of character; "Follow macOS" shows the light look with the dark one on its lower-right half. The chosen card has a 1 px ring and a check in `--accent-on-tint` (selection is an accent use). No filled button: the choice is the control.
+- **Stored** in the settings of the core (SQLite), through the existing `app.settings.get` and `app.settings.update`: `AppSettings.theme` (`'system'` or one of the six ids, default `'system'`) and `AppSettings.animatedBackground` (default `false`). An update with another theme, or a value that is not a boolean, is refused with `invalid_input` and nothing of the request is stored; a stored value that is not a known choice reads as the default, so a damaged row can never blank the page. Older databases have neither value and read as the defaults.
+- **Applied** by `data-theme="<id>"` on `<html>` (absent for "Follow macOS", where the stylesheet follows macOS by itself, with no script involved) and `data-animated="on"` (§33.5). A choice shows at once (`theme.ts` previews it, saves it, and puts back what the core stores if the save is refused) and is the same in every window: every window follows `changed: settings`, also the local web access.
+- **At start, without a flash.** The page cannot wait for the core, so the last confirmed value is kept in the browser's own storage (`localStorage`, key `ppd-appearance`, a hint, never the truth) and `public/theme-boot.js`, a classic script in `<head>` that runs before anything is painted, puts it on the page; `theme.ts` then asks the core and follows it (the core wins when they differ). Storage that is blocked or a damaged hint leave the page on "Follow macOS", still. `theme-boot.test.ts` holds the script equal to the shared rules (`src/shared/themes.ts`) for every hint it can meet.
+- **The window's own material.** `nativeTheme.themeSource` is `system` for "Follow macOS" and `light` or `dark` for a theme of that side (`native-theme.ts`, set before the first window is made and again on every change), so the vibrancy of the sidebar, the traffic-light buttons, the menus and the pop-up lists match the page; a dark theme on a Mac in a light appearance would otherwise put light text on a light material. Daylight and Graphite keep the translucent sidebar (the material is unknowable, so its contrast is the shipped one); every other theme paints an **opaque sidebar of its own** (`--sidebar-native: var(--sidebar-solid)`, which `html[data-chrome='native']` uses instead of `transparent`), so its contrast is the measured one. `color-scheme` is set to the theme's side on the page, so native controls and scrollbars follow it. Reduce transparency still makes the sidebar opaque.
+
+### 33.5 The animated background
+
+An option, **off by default**, never needed: every screen is complete without it. Its switch is the last row of the Appearance group, **Animated background** (`data-testid="animated-background-switch"`).
+
+- **Off by default.** `AppSettings.animatedBackground` is `false`; the stylesheet draws and moves nothing unless `html[data-animated='on']`, and nothing but `theme.ts` and `theme-boot.js` sets that attribute, and only when the setting is on and macOS is not asked to reduce motion.
+- **Reduce motion.** When macOS's "Reduce motion" is on, the attribute is removed, the switch is **disabled and says why** ("Not running, because "Reduce motion" is on in macOS (System Settings, Accessibility, Display). Your choice is kept and applies when it is turned off.") and keeps the stored choice, which applies again when "Reduce motion" is turned off (the page follows the change at once). The stylesheet has its own backstop: under `@media (prefers-reduced-motion: reduce)` the layer is `display: none` with `animation: none`, even if the attribute were set.
+- **How it is drawn.** One pseudo-element of the content column (`html[data-animated='on'] .main::before`), under everything the column holds: two radial gradients of the theme's `--drift-a` and `--drift-b`, moved by `transform` only (`translate3d`, `rotate`, `scale`; a compositor animation, no layout and no repaint of the page) over 90 s, alternating. `pointer-events: none`, `z-index: -1`, `will-change: transform` only while it runs, the column clips it (`overflow: clip`), so it never reaches the sidebar; the toolbar lets it show through. Cards, panels and fields keep their opaque surfaces, so only the page itself shows it.
+- **Text on it still passes.** The drift colours are low-alpha tints (dark themes) or lighter highlights (light themes: a darker wash would pull `--text-3` under 4.5:1), and the test measures `--text-1`, `--text-2`, `--text-3`, accent text, red, amber, green and blue on `--surface-0` under each glow and both stacked, and `--text-2` on the tab track over them: the last row of §33.3.
+- **Verified:** in headless Chrome the layer has `content: ""`, `pointer-events: none`, `z-index: -1`, the `ppd-drift` animation is running (`document.getAnimations()`), and with "Reduce motion" emulated the attribute is gone, no animation exists, and with the attribute forced on the layer is `display: none`.
+
+### 33.6 Requirements
+
+| Id | Requirement | Method | Pass |
+|---|---|---|---|
+| V-67 | At least two light and two dark themes with palettes of their own (no two share a page colour or an accent), chosen in Settings and kept; the default, "Follow macOS", is Daylight in a light appearance and Graphite in a dark one, token for token | `src/main/themes.test.ts`, `src/shared/themes.test.ts`, `src/core/settings.test.ts`; headless Chrome: 12 theme × appearance cases | all true |
+| V-68 | A theme sets only backgrounds, surfaces and the accent: text, red, amber, green, blue, the neutral fills, shadows and the chart series are identical in every theme of a side; a theme's colours do not change with macOS; no stylesheet outside `styles.css` sets a theme or scheme token | `themes.test.ts` (palette and scheme token lists, cascade) with mutants (a theme that sets `--error`, `--text-1`, loses its scheme, leaves the dark scheme list) | all killed |
+| V-69 | Contrast in every theme and under both macOS appearances: the 125 pairs of §33.3 at 4.5:1 (text), 3:1 (focus), 2:1 (field edge), pointer-over states 4.5:1 for the new themes and 4.0:1 for the shipped two, with every translucent fill stacked | `themes.test.ts`, `theme-pairs.ts`; mutants: a paler accent text, a darker light surface, a lighter dark surface, a brighter accent, the old Midnight bezel each fail it | all true |
+| V-70 | The animated background is off by default, never runs under Reduce motion, takes no pointer, moves by `transform` only and uses the theme's drift colours; its switch is disabled and explained under Reduce motion | `themes.test.ts` (the layer is only under `data-animated='on'`, the reduced-motion backstop, `pointer-events`, keyframes properties, no colour literal), `src/shared/themes.test.ts` (`animationStateOf`), headless Chrome | all true; mutants: animation on by default, backstop removed, layer takes the pointer, drift animates a layout property, Reduce motion ignored in the shared rule and in the boot script |
+| V-71 | The setting is validated and kept: a theme the application does not have, or an animated background that is not a boolean, is refused and nothing of the request is stored; a stored bad value reads as the default; older databases read as the defaults; a change reaches every window | `src/core/settings.test.ts` (6 tests), headless Chrome (a second window follows the first) | all true |
+| V-72 | The page starts in the chosen theme before the first paint, and in "Follow macOS", still, when the hint is missing, damaged or unreadable; the core wins over a stale hint | `src/main/theme-boot.test.ts` (6 tests: the script equals the shared rules for every hint), headless Chrome (`data-theme` set 7.7 ms into the load, first paint at 28 ms) | all true |
+| V-73 | The application's own appearance follows the theme's side (`system` for "Follow macOS"), from before the first window, and again on every change; nothing is written when it is unchanged | `src/main/native-theme.test.ts` (5 tests) | all true |
+| V-74 | The Appearance group has the controls standard: native radios with arrow keys and a visible focus ring, one card size, no filled button, `data-testid`s, a switch of the shared kind | headless Chrome (focus stays on the radio group across two arrow presses, ring 2 px solid), the screenshots | all true |
+
+### 33.7 What is not proven, and how to prove it
+
+- **The window material** (vibrancy of the sidebar, the traffic lights, native menus and pop-up lists) under each theme on a real Mac in a light and a dark appearance: headless Chrome has no vibrancy, and `nativeTheme.themeSource` is tested against a fake. Run the packaged build once, choose each theme with the Mac in light and in dark, and look at the sidebar of Daylight and Graphite (they keep the translucent material) and at the title bar.
+- **The first paint inside Electron** with a stored theme: in Chrome the boot script ran before the first paint; Electron's window shows before the page is loaded, so one frame in the window's own colour is possible and is not controlled by this change.
+- **A native pop-up list** (the `<select>` of a pop-up button) in a theme whose side differs from macOS: `color-scheme` and `nativeTheme.themeSource` ask for the theme's side, but the list is drawn by macOS.
+- **Every text node of every screen with real data** in each theme (V-12 style, `scripts/design/tour.mjs`): the table above measures the token pairs and the 310 text nodes of the empty-state screens only. The tour emulates the colour scheme of macOS, which does not apply to an explicit theme; run it once per theme after choosing it in Settings.
+- **`nativeTheme.themeSource` also sets `prefers-color-scheme` for the browser windows of the accounts**: a site that answers that query shows its dark or light version to match the chosen theme.

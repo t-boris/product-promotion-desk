@@ -2,6 +2,7 @@
 // Everything here is plain serializable data (it crosses IPC / HTTP boundaries).
 
 import type { PostType, QuickCard } from './quick-post'
+import type { ThemeChoice } from './themes'
 
 export type Id = string
 export type IsoTime = string
@@ -964,6 +965,10 @@ export interface AppSettings {
    * connector. The approval, the send ticket and the limits are the same either way.
    */
   publishWith: PublishWith
+  /** The look of the application (visual-system.md §33): `system` follows macOS (light Daylight, dark Graphite); anything else is a theme of its own. */
+  theme: ThemeChoice
+  /** A slow glow behind the pages. Off unless the owner turns it on, and never while macOS asks for less motion. */
+  animatedBackground: boolean
 }
 
 export interface AppInfo {

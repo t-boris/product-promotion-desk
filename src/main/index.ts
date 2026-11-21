@@ -1,6 +1,6 @@
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { BrowserWindow, Menu, app, clipboard, ipcMain, powerMonitor, safeStorage, shell } from 'electron'
+import { BrowserWindow, Menu, app, clipboard, ipcMain, nativeTheme, powerMonitor, safeStorage, shell } from 'electron'
 import { ApiError, IPC_EVENT, IPC_INVOKE, type ApiEvent, type ApiMethod } from '../shared/api'
 import { APP_NAME } from '../shared/app-name'
 import { createEngines } from '../ai'
@@ -16,6 +16,7 @@ import { installLifecycle } from './lifecycle'
 import { McpGateway } from './mcp-gateway'
 import { ElectronImageShrinker } from './image-shrinker'
 import { ElectronMediaTools } from './media-tools'
+import { followTheme } from './native-theme'
 import { createNotificationSink } from './notifications'
 import { createTray } from './tray'
 import { FileVault, TimedClipboard } from './vault'
@@ -95,6 +96,10 @@ async function start(): Promise<void> {
       if (!win.isDestroyed()) win.webContents.send(IPC_EVENT, event)
     }
   })
+
+  // The application's appearance (the window material, the menus, the pop-up lists) follows the theme the owner chose, from before the first
+  // window is made (visual-system.md §33.4).
+  followTheme(nativeTheme, core)
 
   const webMode = new WebModeController(core, join(app.getAppPath(), 'out', 'renderer'))
   await webMode.reconcile()

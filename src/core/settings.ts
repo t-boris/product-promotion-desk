@@ -1,4 +1,5 @@
 import type { AppSettings } from '../shared/types'
+import { DEFAULT_THEME, appearanceOf } from '../shared/themes'
 import { DEFAULT_WEB_PORT } from '../shared/web-port'
 import { parseJson, toJson, type Db } from './db/database'
 
@@ -6,7 +7,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   engineId: null,
   notifications: true,
   webMode: { enabled: false, port: DEFAULT_WEB_PORT },
-  publishWith: 'connector'
+  publishWith: 'connector',
+  theme: DEFAULT_THEME,
+  animatedBackground: false
 }
 
 /** Key/value settings persisted in SQLite. Also used for small pieces of runtime state (e.g. pause flag). */
@@ -29,16 +32,20 @@ export class SettingsStore {
     return {
       ...DEFAULT_SETTINGS,
       ...stored,
-      webMode: { ...DEFAULT_SETTINGS.webMode, ...(stored.webMode ?? {}) }
+      webMode: { ...DEFAULT_SETTINGS.webMode, ...(stored.webMode ?? {}) },
+      // An older database has neither, and a stored value that is not a known choice reads as the default, so a bad value can never blank the page.
+      ...appearanceOf(stored)
     }
   }
 
   updateApp(patch: Partial<AppSettings>): AppSettings {
-    const next: AppSettings = {
+    const merged: AppSettings = {
       ...this.app(),
       ...patch,
       webMode: { ...this.app().webMode, ...(patch.webMode ?? {}) }
     }
+    // What is stored is always a theme the application has and a real on/off (the API refuses anything else before it gets here).
+    const next: AppSettings = { ...merged, ...appearanceOf(merged) }
     this.setRaw('app', next)
     return next
   }

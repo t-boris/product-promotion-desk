@@ -1,6 +1,7 @@
 import { ApiError } from '../../shared/api'
 import { APP_NAME } from '../../shared/app-name'
 import type { AppSettings } from '../../shared/types'
+import { isThemeChoice } from '../../shared/themes'
 import { parseWebPort } from '../../shared/web-port'
 import type { Core } from '../core'
 
@@ -9,6 +10,13 @@ function checkedPatch(patch: Partial<AppSettings>): Partial<AppSettings> {
   // Who publishes is a choice of two: anything else is refused, never stored, so an unknown value can never read as "the AI browser".
   if (patch.publishWith !== undefined && patch.publishWith !== 'connector' && patch.publishWith !== 'ai_browser') {
     throw new ApiError('invalid_input', 'Publishing is done either by the connector or by the AI browser.')
+  }
+  // The look is one of the themes the application has, and the animated background a plain on/off: anything else is refused and never stored (visual-system.md §33).
+  if (patch.theme !== undefined && !isThemeChoice(patch.theme)) {
+    throw new ApiError('invalid_input', 'Choose "Follow macOS" or one of the themes the application has.')
+  }
+  if (patch.animatedBackground !== undefined && typeof patch.animatedBackground !== 'boolean') {
+    throw new ApiError('invalid_input', 'The animated background is either on or off.')
   }
   if (patch.webMode?.port === undefined) return patch
   const port = parseWebPort(String(patch.webMode.port))

@@ -1,62 +1,19 @@
+/* Design tokens: the macOS visual system (docs/design/macos/visual-system.md §5, DEC-023) and its themes (§33, DEC-036, DEC-047). This
+   block is the only place with colour values and pixel sizes of text; every other rule uses these names. The names of the earlier
+   vocabulary (BUG-011) are kept, with new values, and the oldest names are aliases further down.
+
+   Colour is set in three layers, and a theme touches only the third:
+     1. the scheme (light or dark): text, the colours that carry a meaning (green done, amber decide, red failure, blue information),
+        the neutral fills (hover, pressed, selection, the segmented track), shadows and the chart series. The same in every theme of
+        a scheme, so red, amber and green read the same wherever the owner is.
+     2. the palette of the theme: the backgrounds and surfaces, the sidebar, the field and bezel, the lines, the raised thumb and the
+        accent with its tint, its text and its focus ring. The only colours a theme chooses.
+     3. mixes of the two (the faces of a button in its states), made with color-mix() below.
+   An html element without data-theme follows macOS: Daylight in a light appearance, Graphite in a dark one (the look of 0.23). A
+   theme the owner picks sets data-theme on html (theme.ts); the same attribute on a swatch in Settings paints that theme's tokens
+   on the swatch alone. Every theme appears in the light or the dark scheme rule and in a palette rule; themes.test.ts reads this
+   file and holds the two lists, the palettes and the contrast of every pair the design document names. */
 :root {
-  /* Design tokens: the macOS visual system (docs/design/macos/visual-system.md §5, DEC-023). This block is the only place with
-     colour values and pixel sizes of text; every other rule uses these names. Light values here, dark values in the media block
-     below. The names of the earlier vocabulary (BUG-011) are kept, with new values, and the oldest names are aliases further down. */
-  /* Surfaces: the window and toolbar, group boxes and list panels, wells (read-only text, previews), and anything that floats. */
-  --surface-0: #f5f5f7;
-  --surface-1: #ffffff;
-  --surface-2: #f0f0f2;
-  --surface-3: #ffffff;
-  /* The opaque sidebar colour. In the Electron window the sidebar shows the window's own material instead (see --sidebar below). */
-  --sidebar-solid: #e8e8ed;
-  --field: #ffffff;
-  --field-border: #a8a8ae;
-  --bezel: #ffffff;
-  /* Lines and text. --text-2 is secondary text and --text-3 disabled labels and placeholders; both stay at 4.5:1 or more on the
-     surface they sit on, stacked fills included (the info tag on a striped table row, the disabled field, the placeholder). */
-  --line: #e3e3e8;
-  --line-strong: #c7c7cc;
-  --text-1: #1d1d1f;
-  --text-2: #5f5f64;
-  --text-3: #6c6c71;
-  /* One accent: the system indigo. It means the one main action, selection, focus, links and the sidebar icons. */
-  --accent: #5856d6;
-  --on-accent: #ffffff;
-  --accent-tint: rgb(88 86 214 / 12%);
-  /* Accent text: links, sidebar icons, quiet buttons and text on the tint, at least 4.5:1 in both themes. */
-  --accent-on-tint: #4e4cc8;
-  --focus: #5856d6;
-  /* Fills that sit over any surface: neutral selection, hover, pressed, the segmented track and its raised thumb. */
-  --selection: rgb(0 0 0 / 7%);
-  --hover-fill: rgb(0 0 0 / 4.5%);
-  --press-fill: rgb(0 0 0 / 9%);
-  --segment-track: rgb(0 0 0 / 5.5%);
-  --segment-thumb: #ffffff;
-  /* Colour with meaning: green is done or healthy, amber needs your attention or decision, red is an error or a failure
-     only, blue is neutral information. */
-  --success: #17733f;
-  --success-bg: #e3f5eb;
-  --attention: #8a5c00;
-  --attention-bg: #fdf1d6;
-  --on-attention: #ffffff;
-  --error: #b42318;
-  --error-bg: #fde8e6;
-  --on-error: #ffffff;
-  --info: #2457c5;
-  --info-bg: #e5edfd;
-  /* Faces of a button in its states, made from the tokens above so a theme changes them with the rest. */
-  --bezel-hover: color-mix(in srgb, var(--bezel), var(--text-1) 5%);
-  --bezel-press: color-mix(in srgb, var(--bezel), var(--text-1) 10%);
-  --accent-hover: color-mix(in srgb, var(--accent), var(--on-accent) 8%);
-  --accent-press: color-mix(in srgb, var(--accent) 92%, rgb(0 0 0));
-  /* Elevation: a bezel button and the raised thumb of a segment or switch are lightly lifted; menus, popovers and sheets float. */
-  --shadow-control: 0 0.5px 1px rgb(0 0 0 / 12%);
-  --shadow-thumb: 0 1px 2px rgb(0 0 0 / 14%), 0 0 0 0.5px rgb(0 0 0 / 6%);
-  --shadow-pop: 0 0 0 0.5px rgb(0 0 0 / 12%), 0 10px 30px rgb(0 0 0 / 16%), 0 2px 6px rgb(0 0 0 / 8%);
-  /* The veil behind a sheet. */
-  --scrim: rgb(0 0 0 / 20%);
-  /* The up/down chevron of a pop-up button (a CSS background cannot take currentColor, so each theme has its own). */
-  --glyph-updown: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%235f5f64' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M5.5 6.25 8 3.75l2.5 2.5M5.5 9.75 8 12.25l2.5-2.5'/></svg>");
   /* A 4px spacing grid: every padding, gap and margin comes from here; --icon-gap is the one half step, between a glyph and its label. */
   --space-1: 4px;
   --space-2: 8px;
@@ -100,6 +57,12 @@
   --fw-medium: 500;
   --fw-semibold: 600;
 
+  /* Faces of a button in its states, made from the tokens of the scheme and the palette so a theme changes them with the rest. */
+  --bezel-hover: color-mix(in srgb, var(--bezel), var(--text-1) 5%);
+  --bezel-press: color-mix(in srgb, var(--bezel), var(--text-1) 10%);
+  --accent-hover: color-mix(in srgb, var(--accent), var(--on-accent) 8%);
+  --accent-press: color-mix(in srgb, var(--accent) 92%, rgb(0 0 0));
+
   /* The earlier names, kept as aliases of the vocabulary above. */
   --bg: var(--surface-0);
   --panel: var(--surface-1);
@@ -124,36 +87,72 @@
   --font: -apple-system, BlinkMacSystemFont, system-ui, 'Helvetica Neue', sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, monospace;
   /* The sidebar: opaque by default (the local web access in a browser); transparent in the Electron window, where the window's
-     vibrancy material shows through it (html[data-chrome='native'] below). */
+     vibrancy material shows through it (html[data-chrome='native'] below). A theme with a colour of its own for the sidebar says
+     so with --sidebar-native in its palette. */
   --sidebar: var(--sidebar-solid);
+  --sidebar-native: transparent;
+  /* Follows macOS until a theme says which of the two it is (the scheme rules below). */
   color-scheme: light dark;
 }
 
+/* ───────────── The scheme: light ───────────── */
+
+:root:not([data-theme]),
+[data-theme='daylight'],
+[data-theme='lagoon'],
+[data-theme='orchid'] {
+  /* Lines and text. --text-2 is secondary text and --text-3 disabled labels and placeholders; both stay at 4.5:1 or more on the
+     surface they sit on, stacked fills included (the info tag on a striped table row, the disabled field, the placeholder). */
+  --text-1: #1d1d1f;
+  --text-2: #5f5f64;
+  --text-3: #6c6c71;
+  /* The label on the accent, in every theme. */
+  --on-accent: #ffffff;
+  /* Fills that sit over any surface: neutral selection, hover, pressed and the segmented track. */
+  --selection: rgb(0 0 0 / 7%);
+  --hover-fill: rgb(0 0 0 / 4.5%);
+  --press-fill: rgb(0 0 0 / 9%);
+  --segment-track: rgb(0 0 0 / 5.5%);
+  /* Colour with meaning: green is done or healthy, amber needs your attention or decision, red is an error or a failure
+     only, blue is neutral information. */
+  --success: #17733f;
+  --success-bg: #e3f5eb;
+  --attention: #8a5c00;
+  --attention-bg: #fdf1d6;
+  --on-attention: #ffffff;
+  --error: #b42318;
+  --error-bg: #fde8e6;
+  --on-error: #ffffff;
+  --info: #2457c5;
+  --info-bg: #e5edfd;
+  /* Elevation: a bezel button and the raised thumb of a segment or switch are lightly lifted; menus, popovers and sheets float. */
+  --shadow-control: 0 0.5px 1px rgb(0 0 0 / 12%);
+  --shadow-thumb: 0 1px 2px rgb(0 0 0 / 14%), 0 0 0 0.5px rgb(0 0 0 / 6%);
+  --shadow-pop: 0 0 0 0.5px rgb(0 0 0 / 12%), 0 10px 30px rgb(0 0 0 / 16%), 0 2px 6px rgb(0 0 0 / 8%);
+  /* The veil behind a sheet. */
+  --scrim: rgb(0 0 0 / 20%);
+  /* The up/down chevron of a pop-up button (a CSS background cannot take currentColor, so each scheme has its own): the colour of --text-2. */
+  --glyph-updown: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%235f5f64' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M5.5 6.25 8 3.75l2.5 2.5M5.5 9.75 8 12.25l2.5-2.5'/></svg>");
+  /* The series of the charts (charts.css), checked against a white surface: slots 3 and 4 sit under 3:1, so a chart that uses them
+     always has its legend and its table view. */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+}
+
+/* ───────────── The scheme: dark ───────────── */
+
 @media (prefers-color-scheme: dark) {
-  :root {
-    --surface-0: #1e1e20;
-    --surface-1: #28282b;
-    --surface-2: #313135;
-    --surface-3: #2c2c2f;
-    --sidebar-solid: #252528;
-    --field: #323236;
-    --field-border: #636369;
-    --bezel: #3a3a3e;
-    --line: #38383c;
-    --line-strong: #4b4b50;
+  :root:not([data-theme]) {
     --text-1: #f2f2f7;
     --text-2: #b4b4ba;
     --text-3: #9e9ea4;
-    --accent: #5e5ce6;
     --on-accent: #ffffff;
-    --accent-tint: rgb(94 92 230 / 26%);
-    --accent-on-tint: #a5a3ff;
-    --focus: #a5a3ff;
     --selection: rgb(255 255 255 / 10%);
     --hover-fill: rgb(255 255 255 / 6%);
     --press-fill: rgb(255 255 255 / 12%);
     --segment-track: rgb(255 255 255 / 7%);
-    --segment-thumb: #545458;
     --success: #5fd39a;
     --success-bg: #173326;
     --attention: #f2c14e;
@@ -169,13 +168,219 @@
     --shadow-pop: 0 0 0 0.5px rgb(255 255 255 / 10%), 0 12px 32px rgb(0 0 0 / 50%);
     --scrim: rgb(0 0 0 / 40%);
     --glyph-updown: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23b4b4ba' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M5.5 6.25 8 3.75l2.5 2.5M5.5 9.75 8 12.25l2.5-2.5'/></svg>");
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
   }
 }
+[data-theme='graphite'],
+[data-theme='midnight'],
+[data-theme='aubergine'] {
+  --text-1: #f2f2f7;
+  --text-2: #b4b4ba;
+  --text-3: #9e9ea4;
+  --on-accent: #ffffff;
+  --selection: rgb(255 255 255 / 10%);
+  --hover-fill: rgb(255 255 255 / 6%);
+  --press-fill: rgb(255 255 255 / 12%);
+  --segment-track: rgb(255 255 255 / 7%);
+  --success: #5fd39a;
+  --success-bg: #173326;
+  --attention: #f2c14e;
+  --attention-bg: #3a2f12;
+  --on-attention: #241a00;
+  --error: #ff8a80;
+  --error-bg: #3d1b19;
+  --on-error: #2b0d0b;
+  --info: #8ab0ff;
+  --info-bg: #172544;
+  --shadow-control: 0 0.5px 1px rgb(0 0 0 / 40%), inset 0 0.5px 0 rgb(255 255 255 / 8%);
+  --shadow-thumb: 0 1px 2px rgb(0 0 0 / 40%);
+  --shadow-pop: 0 0 0 0.5px rgb(255 255 255 / 10%), 0 12px 32px rgb(0 0 0 / 50%);
+  --scrim: rgb(0 0 0 / 40%);
+  --glyph-updown: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23b4b4ba' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M5.5 6.25 8 3.75l2.5 2.5M5.5 9.75 8 12.25l2.5-2.5'/></svg>");
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+}
+/* A theme names its scheme to the page, so native controls, scrollbars and pop-up lists follow the theme and not only macOS. */
+[data-theme='daylight'],
+[data-theme='lagoon'],
+[data-theme='orchid'] {
+  color-scheme: light;
+}
+[data-theme='graphite'],
+[data-theme='midnight'],
+[data-theme='aubergine'] {
+  color-scheme: dark;
+}
 
-/* Inside the Electron window the sidebar is the window's own material (main.tsx sets data-chrome before the first render). In a
-   browser tab, and while the system asks for less transparency, it is opaque. The content column always paints --surface-0. */
+/* ───────────── The palettes: the only colours a theme chooses (visual-system.md §33) ───────────── */
+
+/* Daylight: neutral white and cool grey, the system indigo. Light macOS shows it, and it is what the app looked like before themes. */
+:root:not([data-theme]),
+[data-theme='daylight'] {
+  /* Surfaces: the window and toolbar, group boxes and list panels, wells (read-only text, previews), and anything that floats. */
+  --surface-0: #f5f5f7;
+  --surface-1: #ffffff;
+  --surface-2: #f0f0f2;
+  --surface-3: #ffffff;
+  /* The opaque sidebar colour. In the Electron window the sidebar shows the window's own material instead (see --sidebar above). */
+  --sidebar-solid: #e8e8ed;
+  --field: #ffffff;
+  --field-border: #a8a8ae;
+  --bezel: #ffffff;
+  --line: #e3e3e8;
+  --line-strong: #c7c7cc;
+  --segment-thumb: #ffffff;
+  /* One accent: the system indigo. It means the one main action, selection, focus, links and the sidebar icons. */
+  --accent: #5856d6;
+  --accent-tint: rgb(88 86 214 / 12%);
+  /* Accent text: links, sidebar icons, quiet buttons and text on the tint, at least 4.5:1 in every theme. */
+  --accent-on-tint: #4e4cc8;
+  --focus: #5856d6;
+  /* The colours of the animated background (off unless the owner turns it on): a soft white light and a pale indigo one. */
+  --drift-a: rgb(255 255 255 / 75%);
+  --drift-b: rgb(236 238 255 / 70%);
+}
+
+/* Graphite: neutral graphite with the system indigo. Dark macOS shows it, and it is the dark look of the app before themes. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --surface-0: #1e1e20;
+    --surface-1: #28282b;
+    --surface-2: #313135;
+    --surface-3: #2c2c2f;
+    --sidebar-solid: #252528;
+    --field: #323236;
+    --field-border: #636369;
+    --bezel: #3a3a3e;
+    --line: #38383c;
+    --line-strong: #4b4b50;
+    --segment-thumb: #545458;
+    --accent: #5e5ce6;
+    --accent-tint: rgb(94 92 230 / 26%);
+    --accent-on-tint: #a5a3ff;
+    --focus: #a5a3ff;
+    --drift-a: rgb(94 92 230 / 12%);
+    --drift-b: rgb(10 132 255 / 8%);
+  }
+}
+[data-theme='graphite'] {
+  --surface-0: #1e1e20;
+  --surface-1: #28282b;
+  --surface-2: #313135;
+  --surface-3: #2c2c2f;
+  --sidebar-solid: #252528;
+  --field: #323236;
+  --field-border: #636369;
+  --bezel: #3a3a3e;
+  --line: #38383c;
+  --line-strong: #4b4b50;
+  --segment-thumb: #545458;
+  --accent: #5e5ce6;
+  --accent-tint: rgb(94 92 230 / 26%);
+  --accent-on-tint: #a5a3ff;
+  --focus: #a5a3ff;
+  --drift-a: rgb(94 92 230 / 12%);
+  --drift-b: rgb(10 132 255 / 8%);
+}
+
+/* Lagoon: a pale aqua page, a deeper aqua sidebar, white cards and a deep teal accent. */
+[data-theme='lagoon'] {
+  --surface-0: #e8f4f5;
+  --surface-1: #fafdfd;
+  --surface-2: #e9f3f4;
+  --surface-3: #ffffff;
+  --sidebar-solid: #d3e9eb;
+  --sidebar-native: var(--sidebar-solid);
+  --field: #ffffff;
+  --field-border: #86aaae;
+  --bezel: #ffffff;
+  --line: #cde2e4;
+  --line-strong: #b0cdd0;
+  --segment-thumb: #ffffff;
+  --accent: #09747a;
+  --accent-tint: rgb(9 116 122 / 12%);
+  --accent-on-tint: #076269;
+  --focus: #09747a;
+  --drift-a: rgb(255 255 255 / 75%);
+  --drift-b: rgb(214 247 244 / 70%);
+}
+
+/* Orchid: a pale lilac page, a deeper lilac sidebar, soft white cards and a purple accent. */
+[data-theme='orchid'] {
+  --surface-0: #f5eefa;
+  --surface-1: #fffcff;
+  --surface-2: #f5eff9;
+  --surface-3: #ffffff;
+  --sidebar-solid: #ece2f5;
+  --sidebar-native: var(--sidebar-solid);
+  --field: #ffffff;
+  --field-border: #a48bb8;
+  --bezel: #ffffff;
+  --line: #e4d6ee;
+  --line-strong: #cdb9dc;
+  --segment-thumb: #ffffff;
+  --accent: #7e22ce;
+  --accent-tint: rgb(126 34 206 / 11%);
+  --accent-on-tint: #6d1fb4;
+  --focus: #7e22ce;
+  --drift-a: rgb(255 255 255 / 75%);
+  --drift-b: rgb(250 238 253 / 70%);
+}
+
+/* Midnight: deep navy ink with a cyan accent. */
+[data-theme='midnight'] {
+  --surface-0: #0e1526;
+  --surface-1: #172036;
+  --surface-2: #1d2944;
+  --surface-3: #1b2740;
+  --sidebar-solid: #121b30;
+  --sidebar-native: var(--sidebar-solid);
+  --field: #1f2b47;
+  --field-border: #55678f;
+  --bezel: #263453;
+  --line: #26324d;
+  --line-strong: #3a4a6c;
+  --segment-thumb: #3d4e75;
+  --accent: #0e7490;
+  --accent-tint: rgb(14 116 144 / 30%);
+  --accent-on-tint: #67d4ee;
+  --focus: #67d4ee;
+  --drift-a: rgb(34 211 238 / 12%);
+  --drift-b: rgb(99 102 241 / 14%);
+}
+
+/* Aubergine: deep plum with a fuchsia accent. */
+[data-theme='aubergine'] {
+  --surface-0: #1a1022;
+  --surface-1: #261834;
+  --surface-2: #2f1f3f;
+  --surface-3: #2b1c3a;
+  --sidebar-solid: #1f1429;
+  --sidebar-native: var(--sidebar-solid);
+  --field: #33234a;
+  --field-border: #7a5f94;
+  --bezel: #402b57;
+  --line: #35244a;
+  --line-strong: #4d3668;
+  --segment-thumb: #5a3f78;
+  --accent: #a21caf;
+  --accent-tint: rgb(192 38 211 / 26%);
+  --accent-on-tint: #f0abfc;
+  --focus: #f0abfc;
+  --drift-a: rgb(217 70 239 / 14%);
+  --drift-b: rgb(139 92 246 / 14%);
+}
+
+/* Inside the Electron window the sidebar is the window's own material (main.tsx sets data-chrome before the first render), unless the theme
+   paints a sidebar of its own (--sidebar-native). In a browser tab, and while the system asks for less transparency, it is opaque. The
+   content column always paints --surface-0. */
 html[data-chrome='native'] {
-  --sidebar: transparent;
+  --sidebar: var(--sidebar-native);
 }
 @media (prefers-reduced-transparency: reduce) {
   html[data-chrome='native'] {
@@ -226,6 +431,49 @@ html[data-chrome='native'] {
 .disclosure[open] > .disclosure-body,
 .more[open] > :not(summary) {
   animation: ppd-fade-in var(--dur-base) var(--ease-out);
+}
+
+/* ───────────── The animated background (visual-system.md §33.3) ─────────────
+   Optional and off by default. Nothing here applies unless the owner turned it on in Settings AND macOS is not asked to reduce motion:
+   theme.ts then sets data-animated="on" on html, and the media query below stops the animation even if that attribute were ever set
+   anyway. The layer is one pseudo-element of the content column, under everything the column holds (cards and panels are opaque, so only
+   the page itself shows it): a soft glow of the theme's two drift colours that moves by `transform` only, which the compositor does
+   without layout or repaint. It takes no pointer events and never carries content. The column clips it, so it never reaches the sidebar. */
+html[data-animated='on'] .main {
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+}
+html[data-animated='on'] .main::before {
+  content: '';
+  position: absolute;
+  inset: -20%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 24% 30%, var(--drift-a) 0, transparent 46%),
+    radial-gradient(circle at 76% 70%, var(--drift-b) 0, transparent 52%);
+  will-change: transform;
+  animation: ppd-drift 90s ease-in-out infinite alternate;
+}
+/* The toolbar lets the glow run under it; its text is held to the same contrast as the page's. */
+html[data-animated='on'] .topbar {
+  background: transparent;
+}
+@keyframes ppd-drift {
+  from {
+    transform: translate3d(-4%, -3%, 0) rotate(0deg) scale(1);
+  }
+  to {
+    transform: translate3d(5%, 4%, 0) rotate(8deg) scale(1.12);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-animated='on'] .main::before {
+    display: none;
+    animation: none;
+    will-change: auto;
+  }
 }
 
 * {

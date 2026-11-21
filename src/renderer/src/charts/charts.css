@@ -1,21 +1,9 @@
-/* The Overview charts (DEC-037, phase C). Series colours are validated against the app's surfaces in both modes (skill dataviz,
-   scripts/validate_palette.js): light on #ffffff, dark on #28282b. In light mode slots 3 and 4 sit under 3:1, so a chart that uses
-   them always has its legend and its table view. */
+/* The Overview charts (DEC-037, phase C). The series colours (--series-1 to --series-4) are colours of the scheme, not of a theme, so
+   they live with the other scheme tokens in styles.css and follow the theme's light or dark side (visual-system.md §33): validated
+   against the app's surfaces in both modes (skill dataviz, scripts/validate_palette.js), light on #ffffff, dark on #28282b. In light
+   mode slots 3 and 4 sit under 3:1, so a chart that uses them always has its legend and its table view. */
 :root {
-  --series-1: #2a78d6;
-  --series-2: #eb6834;
-  --series-3: #1baf7a;
-  --series-4: #eda100;
   --chart-h: 180px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --series-1: #3987e5;
-    --series-2: #d95926;
-    --series-3: #199e70;
-    --series-4: #c98500;
-  }
 }
 
 .chart {
