@@ -8,7 +8,7 @@ import { FakeClock, FakePage } from '../testing/fakes'
 import { TicketAuthority } from '../tickets'
 import { BrowserToolbox, type Rhythm, type ToolboxDeps } from './toolbox'
 import { NOTE_LEFT_OUT } from '../pipeline/triage-prompt'
-import { WATCH_COMMENT_MAX, WATCH_MAX_ITEMS_PER_CALL, WATCH_REPLY_PREFIX, WATCH_SKIP_RELATION, WATCH_TOOL_NAMES, canonicalWatchUrl, openProblem, readWatchItems, type WatchItem } from './watch'
+import { WATCH_COMMENT_DEPTH_MAX, WATCH_COMMENT_MAX, WATCH_MAX_ITEMS_PER_CALL, WATCH_THREAD_ITEMS_MAX, WATCH_THREAD_TEXT_MAX, WATCH_REPLY_PREFIX, WATCH_SKIP_RELATION, WATCH_TOOL_NAMES, canonicalWatchUrl, openProblem, readWatchItems, type WatchItem } from './watch'
 
 interface Item {
   ref: string
@@ -370,7 +370,7 @@ describe('watch_record', () => {
     const result = await record(t, [post({ url: 'https://www.instagram.com/p/Abc123/?igsh=xyz#c1' })])
     expect(result.isError).toBeFalsy()
     expect(result.text).toMatch(/Recorded 1 post\./)
-    expect(t.recorded).toEqual([{ url: 'https://www.instagram.com/p/Abc123', title: 'A post about natal charts', author: 'someone', label: 'notice', relation: 'Astrology fans talk about birth charts.', about: '', thread: '', replyTo: '', comment: '' }])
+    expect(t.recorded).toEqual([{ url: 'https://www.instagram.com/p/Abc123', title: 'A post about natal charts', author: 'someone', label: 'notice', relation: 'Astrology fans talk about birth charts.', about: '', thread: '', replyTo: '', comment: '', comments: [] }])
     expect(t.page.log).toEqual([])
   })
 
@@ -428,12 +428,44 @@ describe('watch_record', () => {
       expect(t.recorded[0].thread).toBe(NOTE_LEFT_OUT)
     })
 
+    it('keeps the comments of the thread as the AI saw them: plain, short, in order, with their depth and address', async () => {
+      const t = setup()
+      const comments = [
+        { author: 'anna', text: 'Try https://astro.com/chart it is free', depth: 0, url: 'https://www.instagram.com/p/Abc123/c/111/?x=1' },
+        { author: 'author', text: 'thanks,\u200b but what do houses mean?\n  \n', depth: 1, url: 'https://evil.example/c/2' },
+        { author: '', text: 'x'.repeat(900), depth: 9 },
+        { author: 'bob', text: '   ', depth: 0 },
+        { text: 'no author given', depth: -3 },
+        'not a comment',
+        { author: 'carl', text: 42 }
+      ]
+      await record(t, [post({ label: 'reply', relation: 'Asks.', ...READ, comments })])
+      expect(t.recorded[0].comments).toEqual([
+        { author: 'anna', text: 'Try [link] it is free', depth: 0, url: 'https://www.instagram.com/p/Abc123/c/111' },
+        { author: 'author', text: 'thanks, but what do houses mean?', depth: 1, url: '' },
+        { author: '', text: expect.stringMatching(/^x+…$/), depth: WATCH_COMMENT_DEPTH_MAX, url: '' },
+        { author: '', text: 'no author given', depth: 0, url: '' }
+      ])
+      // a long comment is cut to the limit, ending in the mark of a cut
+      expect(t.recorded[0].comments[2].text).toHaveLength(WATCH_THREAD_TEXT_MAX)
+    })
+
+    it('keeps at most 25 comments, and none when they are not a list', async () => {
+      const t = setup()
+      const many = Array.from({ length: 40 }, (_, i) => ({ author: `u${i}`, text: `comment ${i}`, depth: 0 }))
+      await record(t, [post({ label: 'reply', relation: 'Asks.', ...READ, comments: many }), post({ url: 'https://www.instagram.com/p/Two/', label: 'reply', relation: 'Asks.', ...READ, comments: 'many' })])
+      expect(t.recorded[0].comments).toHaveLength(WATCH_THREAD_ITEMS_MAX)
+      expect(t.recorded[0].comments[24].text).toBe('comment 24')
+      expect(t.recorded[1].comments).toEqual([])
+    })
+
     it('keeps nothing of the four for a notice or a skip, whatever the AI gave', async () => {
       const t = setup()
-      await record(t, [post({ ...READ }), post({ url: 'https://www.instagram.com/p/Skip/', label: 'skip', relation: 'Cooking.', ...READ })])
-      expect(t.recorded.map((i) => [i.about, i.thread, i.replyTo, i.comment])).toEqual([
-        ['', '', '', ''],
-        ['', '', '', '']
+      const comments = [{ author: 'a', text: 'b', depth: 0 }]
+      await record(t, [post({ ...READ, comments }), post({ url: 'https://www.instagram.com/p/Skip/', label: 'skip', relation: 'Cooking.', ...READ, comments })])
+      expect(t.recorded.map((i) => [i.about, i.thread, i.replyTo, i.comment, i.comments])).toEqual([
+        ['', '', '', '', []],
+        ['', '', '', '', []]
       ])
     })
   })

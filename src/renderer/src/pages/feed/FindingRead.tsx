@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Finding } from '../../../../shared/types'
 import { Button } from '../../ui'
+import { FindingThread } from './FindingThread'
 
 /**
  * What the AI read in a post it called worth a reply (it opened the post and read what is said under it): what the post says, what the thread says,
@@ -29,6 +30,7 @@ export function FindingRead({ finding }: { finding: Finding }) {
       <div className="finding-ai" data-testid="finding-thread">
         <span className="muted small">What is said under it</span>
         <p className="finding-ai-text">{finding.thread}</p>
+        <FindingThread findingId={finding.id} />
       </div>
       <div className="finding-ai" data-testid="finding-reply-to">
         <span className="muted small">Whom to answer</span>

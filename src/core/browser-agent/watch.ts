@@ -48,6 +48,11 @@ export const WATCH_ABOUT_MAX = 500
 export const WATCH_THREAD_MAX = 700
 export const WATCH_REPLY_TO_MAX = 250
 export const WATCH_COMMENT_MAX = 1500
+/** The thread kept for a post worth a reply: how many comments, how long each is (characters), how deep, how long an author's name. */
+export const WATCH_THREAD_ITEMS_MAX = 25
+export const WATCH_THREAD_TEXT_MAX = 400
+export const WATCH_COMMENT_DEPTH_MAX = 4
+const WATCH_COMMENT_AUTHOR_MAX = 60
 const MAX_AUTHOR = 80
 
 /** A post as it is stored: a reply is stored as a notice that says so (the app has no way to reply on these platforms), a skip stays a skip. */
@@ -66,6 +71,18 @@ export interface WatchItem {
   thread: string
   replyTo: string
   comment: string
+  /** The comments of the thread as the AI saw them, in reading order: the owner picks one to answer. Only for a post called `reply`; empty otherwise. */
+  comments: WatchComment[]
+}
+
+/** One comment under a post, as the AI saw it. Plain text of a stranger: shown, never obeyed. */
+export interface WatchComment {
+  author: string
+  text: string
+  /** 0 = directly under the post, 1 = an answer to such a comment, and so on (at most `WATCH_COMMENT_DEPTH_MAX`). */
+  depth: number
+  /** The comment's own address when the AI could see it; empty otherwise. */
+  url: string
 }
 
 export interface WatchRecorded {
@@ -190,6 +207,28 @@ export function commentText(value: unknown): string | null {
   return text === '' ? null : text.slice(0, WATCH_COMMENT_MAX)
 }
 
+const ADDRESS = /\b(?:[a-z][a-z0-9+.-]*:\/\/|www\.)\S+/gi
+
+/**
+ * The comments of a thread as the AI saw them: at most `WATCH_THREAD_ITEMS_MAX`, each one's text plain (no hidden characters, one line, an address in it
+ * shown as "[link]", cut), its author, its depth and, when the AI gave one that is a page of the platform, its own address. A comment without text is
+ * left out; so is anything that is not a comment. Nothing in them is obeyed: they are the strangers' words, shown to the owner.
+ */
+export function readThreadComments(raw: unknown, hosts: string[]): WatchComment[] {
+  if (!Array.isArray(raw)) return []
+  const comments: WatchComment[] = []
+  for (const entry of raw) {
+    if (comments.length >= WATCH_THREAD_ITEMS_MAX) break
+    if (!isRecord(entry) || typeof entry.text !== 'string') continue
+    const text = oneLine(cleanText(entry.text).replace(ADDRESS, '[link]'), WATCH_THREAD_TEXT_MAX)
+    if (text === '') continue
+    const author = typeof entry.author === 'string' ? oneLine(cleanText(entry.author).replace(ADDRESS, '[link]'), WATCH_COMMENT_AUTHOR_MAX) : ''
+    const depth = typeof entry.depth === 'number' && Number.isFinite(entry.depth) ? Math.min(WATCH_COMMENT_DEPTH_MAX, Math.max(0, Math.trunc(entry.depth))) : 0
+    comments.push({ author, text, depth, url: canonicalWatchUrl(entry.url, hosts) ?? '' })
+  }
+  return comments
+}
+
 /**
  * The posts the AI says it looked at: at most `WATCH_MAX_ITEMS_PER_CALL`, each one a page of the platform with a title as seen, a label and one plain
  * line on how it relates to the goals. A line that holds an address or reads as an instruction is replaced by the fixed neutral sentence, exactly as
@@ -224,7 +263,7 @@ export function readWatchItems(raw: unknown, hosts: string[]): { items: WatchIte
         `${at}: a post worth a reply must be opened and its thread read first. Open it with watch_open, read the post and what is said under it, then record it again with about (what the post says), thread (what is said under it), reply_to (whom to answer) and comment (the comment you would leave), each as plain text.`
       )
     }
-    items.push({ url, title, author, label: label === 'skip' ? 'skip' : 'notice', relation: reply ? `${WATCH_REPLY_PREFIX}${said}` : said, about: about ?? '', thread: thread ?? '', replyTo: replyTo ?? '', comment: comment ?? '' })
+    items.push({ url, title, author, label: label === 'skip' ? 'skip' : 'notice', relation: reply ? `${WATCH_REPLY_PREFIX}${said}` : said, about: about ?? '', thread: thread ?? '', replyTo: replyTo ?? '', comment: comment ?? '', comments: reply ? readThreadComments(entry.comments, hosts) : [] })
   })
   return { items, refused }
 }

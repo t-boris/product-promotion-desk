@@ -160,6 +160,25 @@
   border-radius: var(--radius-md);
   background: var(--surface-2);
 }
+.finding-thread {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.finding-thread-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.finding-thread-text {
+  white-space: pre-wrap;
+}
 .finding-ai .finding-ai-text {
   margin: 0;
   white-space: pre-wrap;

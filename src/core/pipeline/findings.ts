@@ -3,13 +3,13 @@
 // `opportunity_id`, set when a post was worth a reply and its ordinary `new_post` opportunity was opened (or was there already).
 
 import { ApiError } from '../../shared/api'
-import type { Finding, FindingCard, FindingCounts, FindingLabel, Id } from '../../shared/types'
+import type { Finding, FindingCard, FindingComment, FindingCounts, FindingLabel, Id } from '../../shared/types'
 import type { Core } from '../core'
 import { newId, type Db } from '../db/database'
 import { mapFinding } from '../repos'
 import { oneLine } from '../assist/kit'
 import type { RemoteDiscussion } from '../ports'
-import { WATCH_REPLY_PREFIX } from '../browser-agent/watch'
+import { WATCH_REPLY_PREFIX, type WatchComment, type WatchItem } from '../browser-agent/watch'
 
 type Row = Record<string, unknown>
 type Bindable = string | number | null
@@ -87,47 +87,59 @@ export class FindingStore {
    * as the triage's own are. A post of the channel that has a finding keeps it. Returns whether a row was added. No opportunity, no draft: the finding
    * carries none.
    */
-  addWatched(
-    productId: Id,
-    channelId: Id,
-    item: { url: string; title: string; author: string; label: 'notice' | 'skip'; relation: string; about: string; thread: string; replyTo: string; comment: string },
-    firstLook: boolean
-  ): boolean {
-    const now = this.now()
-    const info = this.db
-      .prepare(
-        `INSERT INTO findings (id, product_id, channel_id, external_id, title, url, author, posted_at, stage, label, relation, about, thread, reply_to, suggested_comment, first_look, opportunity_id, seen_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
-         ON CONFLICT (channel_id, external_id) DO NOTHING`
-      )
-      .run(
-        newId(),
-        productId,
-        channelId,
-        item.url,
-        oneLine(item.title, MAX_STORED_TITLE),
-        item.url,
-        oneLine(item.author, MAX_STORED_AUTHOR),
-        item.label === 'skip' ? 'title' : 'read',
-        item.label,
-        item.relation,
-        item.about,
-        item.thread,
-        item.replyTo,
-        item.comment,
-        firstLook ? 1 : 0,
-        now,
-        now
-      )
-    if (info.changes === 1) return true
-    // A post called worth a reply before the AI read threads has a verdict and nothing behind it: when the AI now read it, what it read is kept (the verdict stays).
-    if (item.about !== '') {
-      const upgraded = this.db
-        .prepare(`UPDATE findings SET about = ?, thread = ?, reply_to = ?, suggested_comment = ?, updated_at = ? WHERE channel_id = ? AND external_id = ? AND about = '' AND relation LIKE '${WATCH_REPLY_PREFIX}%'`)
-        .run(item.about, item.thread, item.replyTo, item.comment, now, channelId, item.url)
-      return upgraded.changes === 1
-    }
-    return false
+  addWatched(productId: Id, channelId: Id, item: WatchItem, firstLook: boolean): boolean {
+    return this.db.transaction((): boolean => {
+      const now = this.now()
+      const id = newId()
+      const info = this.db
+        .prepare(
+          `INSERT INTO findings (id, product_id, channel_id, external_id, title, url, author, posted_at, stage, label, relation, about, thread, reply_to, suggested_comment, first_look, opportunity_id, seen_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+           ON CONFLICT (channel_id, external_id) DO NOTHING`
+        )
+        .run(
+          id,
+          productId,
+          channelId,
+          item.url,
+          oneLine(item.title, MAX_STORED_TITLE),
+          item.url,
+          oneLine(item.author, MAX_STORED_AUTHOR),
+          item.label === 'skip' ? 'title' : 'read',
+          item.label,
+          item.relation,
+          item.about,
+          item.thread,
+          item.replyTo,
+          item.comment,
+          firstLook ? 1 : 0,
+          now,
+          now
+        )
+      if (info.changes === 1) {
+        this.saveThread(id, item.comments, now)
+        return true
+      }
+      // A post called worth a reply before the AI read threads has a verdict and nothing behind it: when the AI now read it, what it read is kept (the verdict stays).
+      if (item.about === '') return false
+      const unread = this.db
+        .prepare(`SELECT id FROM findings WHERE channel_id = ? AND external_id = ? AND about = '' AND relation LIKE '${WATCH_REPLY_PREFIX}%'`)
+        .get(channelId, item.url) as { id: Id } | undefined
+      if (!unread) return false
+      this.db.prepare('UPDATE findings SET about = ?, thread = ?, reply_to = ?, suggested_comment = ?, updated_at = ? WHERE id = ?').run(item.about, item.thread, item.replyTo, item.comment, now, unread.id)
+      this.saveThread(unread.id, item.comments, now)
+      return true
+    })()
+  }
+
+  private saveThread(findingId: Id, comments: WatchComment[], now: string): void {
+    const insert = this.db.prepare('INSERT INTO finding_comments (id, finding_id, position, depth, author, text, url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    comments.forEach((c, position) => insert.run(newId(), findingId, position, c.depth, c.author, c.text, c.url, now))
+  }
+
+  /** The comments the AI read under a post worth a reply, in reading order; none for a post nobody read. */
+  thread(findingId: Id): FindingComment[] {
+    return this.db.prepare('SELECT position, depth, author, text, url FROM finding_comments WHERE finding_id = ? ORDER BY position').all(findingId) as FindingComment[]
   }
 
   /** Posts the AI called worth a reply before it read threads: a verdict with nothing behind it. The newest first; the AI is sent back to read them. */

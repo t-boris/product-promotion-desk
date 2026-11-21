@@ -20,7 +20,7 @@ class Looking implements WatchMissionService {
   }
   async watch(request: WatchMissionRequest): Promise<WatchOutcome> {
     this.requests.push(request)
-    request.record([{ url: 'https://www.instagram.com/p/Abc', title: 'A post about charts', author: 'someone', label: 'notice', relation: 'Astrology fans talk about birth charts.', about: '', thread: '', replyTo: '', comment: '' }])
+    request.record([{ url: 'https://www.instagram.com/p/Abc', title: 'A post about charts', author: 'someone', label: 'notice', relation: 'Astrology fans talk about birth charts.', about: '', thread: '', replyTo: '', comment: '', comments: [] }])
     return { ended: 'finished', reported: { status: 'done', reason: 'ok' }, humanCheck: null, error: null, said: '', outOfCalls: false }
   }
 }

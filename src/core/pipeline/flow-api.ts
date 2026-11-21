@@ -175,6 +175,7 @@ export function registerFlowApi({ core, store, review, monitor, drafting, sendin
     // Ids are global: marking a finding seen needs no product, and an id that is not a finding is ignored.
     'findings.list': ({ productId, channelId, labels, limit }) => findings.list({ productId: requireText(productId, 'The product'), channelId: channelId || undefined, labels: checkLabels(labels), limit }),
     'findings.counts': ({ productId, channelId }) => findings.counts(requireText(productId, 'The product'), channelId || undefined),
+    'findings.thread': ({ id }) => findings.thread(requireText(id, 'The finding')),
     'findings.markSeen': ({ ids }) => {
       if (findings.markSeen(checkIds(ids)) > 0) findings.notify()
     },

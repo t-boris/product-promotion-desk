@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Channel, Finding, FindingCard, OpportunityCard } from '../shared/types'
 import { FeedList } from '../renderer/src/pages/feed/FeedList'
 import { FindingDetail } from '../renderer/src/pages/feed/FindingDetail'
+import { ThreadTree } from '../renderer/src/pages/feed/FindingThread'
 import { ReadingNotes } from '../renderer/src/pages/feed/ReadingNotes'
 import { BROWSER_WATCH_NOTE, OWN_POSTS_NO_CHECK } from '../renderer/src/pages/channels/own-posts'
 import { buildFeedRows } from '../renderer/src/pages/feed/feed-filter'
@@ -112,6 +113,25 @@ describe('FindingDetail', () => {
     expect(out).toContain('data-testid="finding-comment-copy"')
     // nothing posts or sends from here: the only buttons are the copy of the text and the opening of the post
     expect(out).not.toMatch(/Approve|Send|Post it|Reject/)
+  })
+
+  it('shows the comments of a thread under the post, each as plain text and indented by its depth, and nothing for an empty thread', () => {
+    expect(html(createElement(ThreadTree, { comments: [] }))).toBe('')
+    const out = html(
+      createElement(ThreadTree, {
+        comments: [
+          { position: 0, depth: 0, author: 'anna', text: 'Try a free chart', url: '' },
+          { position: 1, depth: 1, author: '', text: '<img src=x onerror=alert(1)>', url: '' }
+        ]
+      })
+    )
+    expect(out).toContain('data-testid="finding-thread-list"')
+    expect(out).toContain('anna')
+    expect(out).toContain('Try a free chart')
+    expect(out).toContain('Someone')
+    expect(out).toContain('data-depth="1"')
+    expect(out).not.toContain('<img')
+    expect(out).toContain('&lt;img')
   })
 
   it('shows the AI\'s words as text, never as markup', () => {

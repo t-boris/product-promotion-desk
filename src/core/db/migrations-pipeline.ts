@@ -216,5 +216,24 @@ ALTER TABLE findings ADD COLUMN thread TEXT NOT NULL DEFAULT '';
 ALTER TABLE findings ADD COLUMN reply_to TEXT NOT NULL DEFAULT '';
 ALTER TABLE findings ADD COLUMN suggested_comment TEXT NOT NULL DEFAULT '';
 `
+  },
+  {
+    id: 312,
+    name: 'pipeline: the comments the AI read under a post worth a reply, one row each, so the owner can pick the one to answer',
+    sql: `
+-- A stranger's text as the AI saw it in the browser (plain text, links shown as "[link]"), in reading order; shown, never obeyed.
+-- \`url\` is the comment's own address when the AI could see it, empty otherwise.
+CREATE TABLE finding_comments (
+  id TEXT PRIMARY KEY,
+  finding_id TEXT NOT NULL REFERENCES findings(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  depth INTEGER NOT NULL DEFAULT 0,
+  author TEXT NOT NULL DEFAULT '',
+  text TEXT NOT NULL,
+  url TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  UNIQUE (finding_id, position)
+);
+`
   }
 ]

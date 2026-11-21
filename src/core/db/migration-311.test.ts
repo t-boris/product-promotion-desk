@@ -37,6 +37,21 @@ describe('migration 311: what the AI read in a post worth a reply', () => {
     expect(db.prepare('SELECT about, thread, reply_to, suggested_comment FROM findings WHERE id = ?').get(finding)).toEqual({ about: 'a', thread: 't', reply_to: 'r', suggested_comment: 'c' })
   })
 
+  it('312: keeps the comments of a thread under the finding, in order, and drops them with it', () => {
+    const { db, finding } = olderDatabase()
+    migrate(db)
+    const insert = db.prepare("INSERT INTO finding_comments (id, finding_id, position, depth, author, text, url, created_at) VALUES (?, ?, ?, ?, ?, ?, '', ?)")
+    insert.run(newId(), finding, 1, 1, 'b', 'second', NOW)
+    insert.run(newId(), finding, 0, 0, 'a', 'first', NOW)
+    expect(db.prepare('SELECT position, text FROM finding_comments WHERE finding_id = ? ORDER BY position').all(finding)).toEqual([
+      { position: 0, text: 'first' },
+      { position: 1, text: 'second' }
+    ])
+    expect(() => insert.run(newId(), finding, 1, 0, 'c', 'twice at one place', NOW)).toThrow()
+    db.prepare('DELETE FROM findings WHERE id = ?').run(finding)
+    expect(db.prepare('SELECT COUNT(*) AS n FROM finding_comments').get()).toEqual({ n: 0 })
+  })
+
   it('is recorded once, and running the migrations again changes nothing', () => {
     const { db } = olderDatabase()
     migrate(db)

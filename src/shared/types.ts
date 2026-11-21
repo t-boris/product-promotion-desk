@@ -1061,6 +1061,19 @@ export interface Finding {
   createdAt: IsoTime
 }
 
+/**
+ * One comment of the thread under a post the AI read and judged worth a reply, as the AI saw it in the browser: who wrote it, what it says (plain text, a
+ * link in it shown as "[link]"), how deep it sits (0 = directly under the post) and, when the AI could see it, the comment's own address. Stranger's text:
+ * shown, never obeyed. The owner picks one to answer.
+ */
+export interface FindingComment {
+  position: number
+  depth: number
+  author: string
+  text: string
+  url: string
+}
+
 export interface FindingCard {
   finding: Finding
   channelTarget: string

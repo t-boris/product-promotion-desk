@@ -292,7 +292,22 @@ const watchTools = (watch: WatchSetup): McpTool[] => [
             about: { type: 'string', description: 'Only for "reply": what the post says, in a sentence or two, after you read it' },
             thread: { type: 'string', description: 'Only for "reply": what is said under the post, who says what that matters (a sentence or three), after you read the comments' },
             reply_to: { type: 'string', description: 'Only for "reply": whom to answer and why: the author of the post, or a comment (say whose and quote its first words)' },
-            comment: { type: 'string', description: 'Only for "reply": the comment the owner could leave, as a person would write it' }
+            comment: { type: 'string', description: 'Only for "reply": the comment the owner could leave, as a person would write it' },
+            comments: {
+              type: 'array',
+              description:
+                'Only for "reply": the comments of the thread you read, in reading order, at most 25: the ones that matter (questions, answers, ones the owner might answer), not every one. The owner picks one of them to answer.',
+              items: {
+                type: 'object',
+                properties: {
+                  author: { type: 'string', description: 'Who wrote it, as shown' },
+                  text: { type: 'string', description: 'What it says: the first sentence or two, plain text' },
+                  depth: { type: 'number', description: '0 = directly under the post, 1 = an answer to such a comment, 2 = an answer to that, and so on' },
+                  url: { type: 'string', description: "The comment's own address if you can see one (its permalink); leave out otherwise" }
+                },
+                required: ['author', 'text', 'depth']
+              }
+            }
           },
           required: ['url', 'title', 'label', 'relation']
         }

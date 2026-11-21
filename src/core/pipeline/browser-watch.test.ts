@@ -33,7 +33,7 @@ class ScriptedWatch implements WatchMissionService {
 }
 
 const done = (over: Partial<WatchOutcome> = {}): WatchOutcome => ({ ended: 'finished', reported: { status: 'done', reason: 'Looked at it all.' }, humanCheck: null, error: null, said: '', outOfCalls: false, ...over })
-const item = (n: number | string, over: Partial<WatchItem> = {}): WatchItem => ({ url: `https://www.instagram.com/p/P${n}`, title: `Post ${n}`, author: 'someone', label: 'notice', relation: 'Astrology fans talk about birth charts.', about: '', thread: '', replyTo: '', comment: '', ...over })
+const item = (n: number | string, over: Partial<WatchItem> = {}): WatchItem => ({ url: `https://www.instagram.com/p/P${n}`, title: `Post ${n}`, author: 'someone', label: 'notice', relation: 'Astrology fans talk about birth charts.', about: '', thread: '', replyTo: '', comment: '', comments: [], ...over })
 
 interface Watched {
   w: World
@@ -149,6 +149,30 @@ describe('a channel the app only watches in the browser: a whole look', () => {
       await check(x)
       // an Instagram channel has one place (its own page): once the post is read nothing more is sent to it
       expect((x.ai.requests.at(-1) as WatchMissionRequest).brief.places).toHaveLength(1)
+    })
+
+    it('get their comments when the AI reads them, and the thread is answered by findings.thread', async () => {
+      const x = watched()
+      x.ai.script = (request) => {
+        request.record([item(1, { relation: REPLY })])
+        return done()
+      }
+      await check(x)
+      const id = (x.w.core.db.prepare('SELECT id FROM findings WHERE channel_id = ?').get(x.channelId) as { id: string }).id
+      expect(await x.w.core.router.call('findings.thread', { id })).toEqual([])
+      x.w.clock.advance(4 * 60 * MINUTE)
+      x.ai.script = (request) => {
+        request.record([item(1, { ...READ, comments: [{ author: 'anna', text: 'Try a free chart', depth: 0, url: '' }, { author: 'author', text: 'Thanks', depth: 1, url: '' }] })])
+        // read again in the same look: known, the comments are not stored twice
+        request.record([item(1, { ...READ, comments: [{ author: 'zed', text: 'Again', depth: 0, url: '' }] })])
+        return done()
+      }
+      await check(x)
+      expect(await x.w.core.router.call('findings.thread', { id })).toEqual([
+        { position: 0, depth: 0, author: 'anna', text: 'Try a free chart', url: '' },
+        { position: 1, depth: 1, author: 'author', text: 'Thanks', url: '' }
+      ])
+      await expect(x.w.core.router.call('findings.thread', { id: ' ' })).rejects.toMatchObject({ code: 'invalid_input' })
     })
 
     it('are at most eight per look, the newest first', async () => {
