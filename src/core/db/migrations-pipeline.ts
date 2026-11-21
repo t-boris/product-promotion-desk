@@ -282,5 +282,16 @@ CREATE TABLE finding_images (
   UNIQUE (finding_id, position)
 );
 `
+  },
+  {
+    id: 315,
+    name: 'pipeline: a reply the owner sends from a post of the Feed remembers the post it came from',
+    sql: `
+-- The owner writes a comment under a post (or under a comment) of the Feed and presses Send: the application then makes the same opportunity, draft and approval a
+-- reply has always had, so the gate, the limits and the rule about an unknown result hold for it too. \`finding_id\` says which post of the Feed it answers: the
+-- channel of such a post is one the application does not read, so the gate does not ask the platform for the thread, and the result is left for the owner to confirm.
+ALTER TABLE opportunities ADD COLUMN finding_id TEXT REFERENCES findings(id) ON DELETE SET NULL;
+CREATE INDEX idx_opp_finding ON opportunities(finding_id) WHERE finding_id IS NOT NULL;
+`
   }
 ]

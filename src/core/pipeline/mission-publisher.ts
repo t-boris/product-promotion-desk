@@ -327,8 +327,9 @@ export class MissionPublisher {
     const { connector, ctx } = pair
     const pressed = crash ? `The AI browser pressed the control and then stopped with an error (${crash}).` : 'The AI browser pressed the control.'
     const request = { ...grant.request, attemptedAt }
-    // A channel the app does not read cannot be read back (DEC-034): say so, and leave the finding to the owner, who looks at the page.
-    if (!grant.channel.reads) {
+    // A channel the app does not read cannot be read back (DEC-034): say so, and leave the finding to the owner, who looks at the page. The same for the owner's
+    // own answer from a post of the Feed: it is made on a page the application cannot read, whatever the channel's connector can do.
+    if (!grant.channel.reads || grant.opportunity.findingId !== null) {
       return {
         status: 'unknown',
         error: `${pressed} The app does not read this channel, so it cannot check that the post is up. Look at the page and tell the app whether it was published.`,

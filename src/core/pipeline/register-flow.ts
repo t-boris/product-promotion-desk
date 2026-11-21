@@ -1,9 +1,11 @@
+import { requireText } from '../channels/errors'
 import type { Core } from '../core'
 import { BrowserWatchFlow } from './browser-watch'
 import { DraftCheck } from './draft-check'
 import { DraftHelp } from './draft-help'
 import { FindingPictures } from './finding-pictures'
 import { FindingReply } from './finding-reply'
+import { FindingSend } from './finding-send'
 import { DraftingFlow } from './drafting'
 import { FindingStore } from './findings'
 import { registerFlowApi } from './flow-api'
@@ -52,6 +54,12 @@ export function registerFlow(core: Core): void {
   // "Reply here" in the Feed: the AI writes the comment for one place of a thread it read. Nothing is stored or sent.
   const findingReply = new FindingReply(core, findings)
   core.router.register({ 'findings.writeReply': (args) => findingReply.write(args) })
+  // Send in the same window: the owner's own text is put under the post or under the comment by the AI in the account's browser, on the owner's press.
+  const findingSend = new FindingSend(core, store, findings, review)
+  core.router.register({
+    'findings.send': ({ id, place, text }) => findingSend.send({ id: requireText(id, 'The post'), place: place ?? null, text }),
+    'findings.replies': ({ id }) => findingSend.replies(requireText(id, 'The post'))
+  })
   // The AI in the quick-post composer (REQ-004): the caption, the picture, the search for trends and the marketer. Nothing is stored.
   const quickHelp = new QuickHelp(core)
   core.router.register({

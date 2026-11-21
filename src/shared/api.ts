@@ -103,6 +103,46 @@ export interface ClaimInput {
   sources?: ClaimSourceRef[]
 }
 
+/** The comment of a thread the owner answers, named by what it is (its author and its text): positions move when the post is read again. */
+export interface FindingPlace {
+  position: number
+  author: string
+  text: string
+}
+
+/**
+ * How a press of Send ended: `sent` (confirmed), `unknown` (it may be there: the owner looks at the post and says), `failed` (it was not posted, with why),
+ * `held` (nothing was posted; the AI browser could not be used now, press again) and `refused` (nothing was posted; something stops it, with what).
+ */
+export type FindingSendState = 'sent' | 'unknown' | 'failed' | 'held' | 'refused'
+
+export interface FindingSendResult {
+  state: FindingSendState
+  message: string
+  /** The opportunity that carries this answer (it holds the draft, the approval and the attempt); null when nothing was made. */
+  opportunityId: Id | null
+  /** Where the comment is, when the application knows. */
+  url: string
+}
+
+/** One place of a post that was answered from the Feed: `position` null is the post itself. */
+export interface FindingReplyPlace {
+  position: number | null
+  opportunityId: Id
+  state: OpportunityState
+  reason: string
+  text: string
+  url: string
+}
+
+export interface FindingReplies {
+  /** The account that would speak. */
+  accountLabel: string
+  /** Why nothing can be sent from this post now; an empty text when something can. */
+  blocked: string
+  places: FindingReplyPlace[]
+}
+
 export interface DraftInput {
   title?: string | null
   text: string
@@ -333,6 +373,13 @@ export interface ApiMethods {
    * comment (see findings.thread) or null for the post itself. Checked like every AI draft; nothing is stored or sent. Refused for a post the AI has not read.
    */
   'findings.writeReply': [{ id: Id; place: number | null; current?: string; instruction?: string }, { text: string }]
+  /**
+   * Send in the reply window: the AI puts the owner's own text, exactly as written, under the post (`place` null) or under one comment of its thread, in the
+   * account's browser. The owner's press is the approval. It resolves when the send is over; `refused` and `held` mean nothing was posted.
+   */
+  'findings.send': [{ id: Id; place: FindingPlace | null; text: string }, FindingSendResult]
+  /** What was sent from this post before, place by place, the account that sends, and why a send is not possible now (an empty text when it is). */
+  'findings.replies': [{ id: Id }, FindingReplies]
   'opportunities.get': [{ id: Id }, OpportunityCard]
   'opportunities.prepareDraft': [{ id: Id }, OpportunityCard]
   'opportunities.saveDraft': [{ id: Id; draft: DraftInput }, OpportunityCard]

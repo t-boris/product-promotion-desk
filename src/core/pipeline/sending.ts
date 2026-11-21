@@ -370,6 +370,13 @@ export class SendingFlow implements SendingService {
 
   private async checkPlatform(action: SendAction): Promise<{ action: SendAction; status: 'ok' | 'failed' | 'suspended'; summary: string }> {
     const opp = this.store.requireOpportunity(action.opportunityId)
+    // The owner's own answer from a post of the Feed was made on a page the application cannot read: nothing here can find it, so it stays unknown until the
+    // owner looks at the page and says (resolveUnknown). The wait of ten minutes never turns "cannot look" into "not published".
+    if (opp.findingId !== null) {
+      const summary = 'This answer was made on a page the application cannot read, so it cannot be looked for. Look at the post and say whether it is there.'
+      this.store.updateOpportunity(opp.id, { reason: `${summary} No new attempt is possible until it is resolved.` })
+      return { action, status: 'ok', summary }
+    }
     const draft = this.core.repos.draft(action.draftId)
     // The comment the reply answers, or the post itself for a reply to a new post (DEC-039): both are what the platform shows it under.
     const parent = this.store.replyParentOf(opp)

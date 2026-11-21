@@ -206,6 +206,7 @@ export const mapOpportunity = (r: Row): Opportunity => ({
   reason: r.reason as string,
   scheduledAt: (r.scheduled_at as string | null) ?? null,
   groupId: (r.group_id as string | null) ?? null,
+  findingId: (r.finding_id as string | null) ?? null,
   createdAt: r.created_at as string,
   updatedAt: r.updated_at as string
 })

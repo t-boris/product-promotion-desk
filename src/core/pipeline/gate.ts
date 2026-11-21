@@ -82,6 +82,9 @@ const DAY_MS = 24 * HOUR_MS
 
 const block = (effect: GateEffect, code: string, ...reasons: string[]): GateBlock => ({ allowed: false, effect, code, reasons })
 
+const FINDING_NEEDS_AI_BROWSER_CODE = 'no_ai_browser'
+const FINDING_NEEDS_AI_BROWSER_REASON = 'This comment is put under the post by the AI in the account\'s browser, and that is not available now: choose an AI engine that can work the browser in Settings.'
+
 export class SendGate {
   constructor(
     private readonly core: Core,
@@ -112,6 +115,9 @@ export class SendGate {
     const platform = first.channel.platform
     const approvedBy = this.core.repos.activeApproval(draft.id)?.approvedBy ?? 'user'
     const ways = sendWays(this.core, { automatic: req.automatic ?? false, approvedBy }, first.channel)
+    // The owner's own answer from a post of the Feed is put there by the AI in the account's browser and by nothing else: a connector would send it without
+    // having read the page it answers.
+    if (first.opp.findingId !== null && !ways.aiBrowser) return block('hold', FINDING_NEEDS_AI_BROWSER_CODE, FINDING_NEEDS_AI_BROWSER_REASON)
     if (judgedForFit(draft)) {
       const unfit = sendFitProblems(this.core, draft, platform, ways)
       if (unfit.length > 0) return block('review', 'post_does_not_fit', ...unfit)
@@ -124,7 +130,9 @@ export class SendGate {
       const stopped = noConnectorProblem(ways)
       if (stopped) return block('review', 'post_does_not_fit', stopped)
     }
-    if (first.opp.kind === 'reply') {
+    // The owner's own answer from a post of the Feed is to a page the application cannot read (that is what made the post a Feed post): there is no thread to
+    // ask the platform for. Everything else that stands between the owner and the send is checked as for any reply.
+    if (first.opp.kind === 'reply' && first.opp.findingId === null) {
       const thread = await this.checkThread(first, ctx, connector)
       if (thread) return thread
     }
@@ -284,7 +292,9 @@ export class SendGate {
     if (channel.status === 'paused') reasons.push('The channel is paused.')
     if (channel.status === 'setup') reasons.push('The channel has not been activated yet.')
     const capability = channel.capabilities.find((c) => c.key === publishCapability(opp))
-    if (capability && (capability.status === 'unavailable' || capability.status === 'restricted' || capability.status === 'needs_user')) {
+    // A channel the application does not read says "unavailable" about replying: no connector can reply there. The AI browser can, and it is the owner's press that asks for it.
+    const unreachable = capability?.status === 'unavailable' && opp.findingId !== null
+    if (capability && !unreachable && (capability.status === 'unavailable' || capability.status === 'restricted' || capability.status === 'needs_user')) {
       reasons.push(`${capability.key.replace('_', ' ')} is ${capability.status.replace('_', ' ')} on this channel${capability.detail ? `: ${capability.detail}` : '.'}`)
     }
     if (req.automatic && this.core.settings.getRaw('automation.paused', false)) {

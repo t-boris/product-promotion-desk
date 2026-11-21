@@ -5,10 +5,11 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import type { Channel, Finding, FindingCard, OpportunityCard } from '../shared/types'
+import type { Channel, Finding, FindingCard, FindingComment, OpportunityCard } from '../shared/types'
 import { FeedList } from '../renderer/src/pages/feed/FeedList'
 import { FindingDetail } from '../renderer/src/pages/feed/FindingDetail'
 import { FindingStream } from '../renderer/src/pages/feed/FindingStream'
+import { ReplyComposer } from '../renderer/src/pages/feed/ReplyComposer'
 import { ThreadTree } from '../renderer/src/pages/feed/FindingThread'
 import { ReadingNotes } from '../renderer/src/pages/feed/ReadingNotes'
 import { BROWSER_WATCH_NOTE, OWN_POSTS_NO_CHECK } from '../renderer/src/pages/channels/own-posts'
@@ -443,3 +444,26 @@ describe('FindingStream: the Noted posts as cards', () => {
   })
 })
 
+describe('ReplyComposer: Send under a post', () => {
+  const composer = (place: 'post' | number, comments: FindingComment[] = []): string =>
+    html(createElement(ReplyComposer, { finding: finding({ about: 'It asks.', readAt: '2026-11-15T09:00:00.000Z' }).finding, place, comments, onClose: () => {} }))
+
+  it('has a primary Send button next to Copy', () => {
+    const out = composer('post')
+    expect(out).toContain('data-testid="reply-send"')
+    expect(out).toMatch(/data-testid="reply-send"[^>]*btn-primary/)
+    expect(out).toContain('data-testid="reply-copy"')
+  })
+
+  it('keeps Send shut while there is no text, and says why', () => {
+    const out = composer('post')
+    expect(out).toMatch(/disabled=""\s+data-testid="reply-send"/)
+    expect(out).toContain('Write the comment first.')
+  })
+
+  it('shows no result and no "is it there" question before anything was sent', () => {
+    const out = composer(0, [{ position: 0, depth: 0, author: 'anna', text: 'Try a free chart site', url: 'https://www.reddit.com/r/x/comments/1/comment/2' }])
+    expect(out).not.toContain('data-testid="reply-send-result"')
+    expect(out).not.toContain('data-testid="reply-resolve"')
+  })
+})

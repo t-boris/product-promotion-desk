@@ -17,6 +17,7 @@ import type {
   CommentCategory,
   Discussion,
   Draft,
+  Finding,
   Id,
   Opportunity,
   OpportunityDecision,
@@ -30,6 +31,7 @@ import type { Core } from '../core'
 import { newId, toJson, type Db } from '../db/database'
 import { mapAccount, mapAction, mapApproval, mapComment, mapDiscussion, mapOpportunity } from '../repos'
 import { disclosureProblem } from './disclosure'
+import { commentBodyHash } from './hash'
 import { isPostTarget, parentOf } from './reply-target'
 
 type Row = Record<string, unknown>
@@ -360,6 +362,59 @@ export class FlowStore {
     })
   }
 
+  // ───────────── the owner's reply from a post of the Feed ─────────────
+
+  /**
+   * The stored record of the post of a finding the owner answers: the gate, the approval and the mission read the post and its comments from these tables, so
+   * the owner's own comment goes through exactly the path every reply has. One per finding, made at the first answer; the post's summary is its text.
+   */
+  findingDiscussion(finding: Finding): Discussion {
+    const existing = this.discussionByExternalId(finding.channelId, finding.externalId)
+    if (existing) return existing
+    const now = this.now()
+    this.db
+      .prepare(
+        `INSERT INTO discussions (id, channel_id, external_id, url, title, author, body, selected, first_seen_at, last_seen_at, posted_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`
+      )
+      .run(newId(), finding.channelId, finding.externalId, finding.url, finding.title, finding.author, finding.about, now, now, finding.postedAt)
+    return this.discussionByExternalId(finding.channelId, finding.externalId) as Discussion
+  }
+
+  /**
+   * The stored record of one comment of a finding's thread. The thread of a finding is read again and again and its positions move, so the place is the
+   * comment itself (its author and text, `fingerprint`), not its position. Not a baseline comment: nothing is ever made of it but the owner's answer.
+   */
+  findingComment(finding: Finding, discussion: Discussion, comment: { author: string; text: string; url: string }, fingerprint: string): Comment {
+    const externalId = `${finding.externalId}#c:${fingerprint}`
+    const now = this.now()
+    this.db
+      .prepare(
+        `INSERT INTO comments (id, discussion_id, channel_id, external_id, parent_external_id, author, body, url, posted_at, baseline, is_own, content_hash, first_seen_at, last_seen_at)
+         VALUES (?, ?, ?, ?, NULL, ?, ?, ?, NULL, 0, 0, ?, ?, ?)
+         ON CONFLICT (channel_id, external_id) DO UPDATE SET url = CASE WHEN excluded.url <> '' THEN excluded.url ELSE comments.url END, last_seen_at = excluded.last_seen_at`
+      )
+      .run(newId(), discussion.id, finding.channelId, externalId, comment.author, comment.text, comment.url, commentBodyHash(comment.text), now, now)
+    return this.commentByExternalId(finding.channelId, externalId) as Comment
+  }
+
+  /** The opportunity of an answer the owner sends from a post of the Feed: to the post (`comment` null) or under one comment of its thread. It starts as a draft. */
+  createFindingReply(channel: Channel, finding: Finding, discussion: Discussion, comment: Comment | null, destination: string): Opportunity {
+    return this.insertOpportunity({
+      channelId: channel.id,
+      productId: channel.productId,
+      kind: 'reply',
+      source: comment ? 'comment' : 'new_post',
+      state: 'draft',
+      commentId: comment?.id ?? null,
+      discussionId: discussion.id,
+      destination,
+      reason: '',
+      scheduledAt: null,
+      findingId: finding.id
+    })
+  }
+
   /** `groupId`: the post group this is one version of (DEC-032); a post of one channel has none. */
   createStandalone(channel: Channel, state: OpportunityState, reason: string, groupId: Id | null = null): Opportunity {
     return this.insertOpportunity({
@@ -388,15 +443,16 @@ export class FlowStore {
     reason: string
     scheduledAt: string | null
     groupId?: Id | null
+    findingId?: Id | null
   }): Opportunity {
     const id = newId()
     const now = this.now()
     this.db
       .prepare(
-        `INSERT INTO opportunities (id, channel_id, product_id, kind, source, state, comment_id, discussion_id, category, decision, destination, reason, scheduled_at, group_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO opportunities (id, channel_id, product_id, kind, source, state, comment_id, discussion_id, category, decision, destination, reason, scheduled_at, group_id, finding_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(id, p.channelId, p.productId, p.kind, p.source ?? 'comment', p.state, p.commentId, p.discussionId, p.destination, p.reason, p.scheduledAt, p.groupId ?? null, now, now)
+      .run(id, p.channelId, p.productId, p.kind, p.source ?? 'comment', p.state, p.commentId, p.discussionId, p.destination, p.reason, p.scheduledAt, p.groupId ?? null, p.findingId ?? null, now, now)
     return this.requireOpportunity(id)
   }
 

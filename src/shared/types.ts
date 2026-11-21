@@ -747,6 +747,8 @@ export interface Opportunity {
   scheduledAt: IsoTime | null
   /** The post group this is one version of (one post for several channels), or null. Nothing but the group view reads it. */
   groupId: Id | null
+  /** The post of the Feed this reply was written under (the owner's own comment, sent with the Send button); null for every other opportunity. */
+  findingId: Id | null
   createdAt: IsoTime
   updatedAt: IsoTime
 }
