@@ -86,7 +86,7 @@ export const CAPABILITY_STATUS_TONE: Record<CapabilityStatus, Tone> = {
   verified: 'good',
   needs_check: 'info',
   needs_user: 'warn',
-  // The platform does not offer it: a plain fact. Restricted by the community's rules: amber, the owner may decide.
+  // The platform does not offer it: a plain fact. Restricted by the community itself (banned, not approved): amber, the owner may decide.
   unavailable: 'neutral',
   restricted: 'warn'
 }
@@ -96,7 +96,7 @@ export const CAPABILITY_STATUS_HELP: Record<CapabilityStatus, string> = {
   needs_check: 'Looks possible, but is not confirmed yet.',
   needs_user: 'A person has to act first, for example sign in or solve a check.',
   unavailable: 'The platform does not offer this here.',
-  restricted: 'Technically possible, but the community rules forbid it.'
+  restricted: 'Technically possible, but the community does not allow this account to do it (it is banned or not approved).'
 }
 
 export function capabilityOf(channel: Channel, key: CapabilityKey): Capability | undefined {
@@ -121,7 +121,7 @@ export const MODE_OPTIONS: { id: ChannelMode; label: string; summary: string }[]
 export function modeBlockedReason(channel: Channel, mode: ChannelMode): string | null {
   if (mode === 'observe' || mode === 'draft') return null
   const reply = capabilityOf(channel, 'publish_reply')
-  if (reply?.status === 'restricted') return 'Replying is forbidden by the community rules here.'
+  if (reply?.status === 'restricted') return 'Replying is not allowed by the community here.'
   if (reply?.status === 'unavailable') return 'Replying is not possible here.'
   if (mode === 'auto' && channel.settings.autoCategories.length === 0) return 'Choose at least one automatic category in the settings first.'
   return null

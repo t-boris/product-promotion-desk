@@ -5,7 +5,6 @@ import { TakeoverError, type BrowserPage, type ConnectorContext } from '../../co
 import type { Capability, CapabilityStatus } from '../../shared/types'
 import { CapabilityBuilder } from '../capabilities'
 import { gateProbeScript, type GateProbe } from '../page-scripts'
-import { analyzeRules, quoteRule, type RulesAnalysis } from '../rules-text'
 import { errorMessage } from '../text'
 import { RedditApi } from './api'
 import { membershipOf, type AboutInfo, type MappedThread, type RedditPost } from './mapping'
@@ -17,14 +16,17 @@ export interface Verdict {
   detail: string
 }
 
-/** What the community settings and rules allow, before looking at any page. Pure. */
-export function postingVerdicts(sub: string, about: AboutInfo | null, rules: RulesAnalysis | null): { post: Verdict; reply: Verdict } {
+/**
+ * What the community's settings allow, before looking at any page. Pure. Only what the site itself enforces restricts anything: a banned account, an archived
+ * community, a community only approved users post in. What a community's rules text says is never read for a restriction or a warning (DEC-050).
+ */
+export function postingVerdicts(sub: string, about: AboutInfo | null): { post: Verdict; reply: Verdict } {
   const pending = (what: string): Verdict => ({
     status: 'needs_check',
     detail: `No restriction found for ${what}. It is confirmed by the first authorized send, never by a test message.`
   })
   let post = pending('posting')
-  let reply = pending('replying')
+  const reply = pending('replying')
 
   if (about?.subredditType === 'archived') {
     const archived: Verdict = { status: 'unavailable', detail: `r/${sub} is archived and read-only.` }
@@ -40,28 +42,18 @@ export function postingVerdicts(sub: string, about: AboutInfo | null, rules: Rul
   if (about && about.submissionType === 'link' && post.status === 'needs_check') {
     post = { status: 'needs_check', detail: `r/${sub} accepts link posts only. ${post.detail}` }
   }
-  if (rules?.automationForbidden) {
-    const why = `Community rules appear to forbid automation or AI-generated content — ${quoteRule(rules.automationForbidden)}`
-    post = { status: 'restricted', detail: why }
-    reply = { status: 'restricted', detail: why }
-  } else if (rules && rules.promotionRules.length > 0 && post.status === 'needs_check') {
-    post = { ...post, detail: `Rules mention promotion — read them before posting: ${quoteRule(rules.promotionRules[0])}. ${post.detail}` }
-  }
   return { post, reply }
 }
 
 /**
- * What the owner is told when Reddit did not give the post list: what it said, and what else the same sign-in could read, so a refusal of
- * one call is not taken for a broken sign-in. `member` false points at the Membership row. Pure.
+ * What the owner is told when Reddit did not give the post list: what it said, and whether the community's settings page could be read with the same sign-in,
+ * so a refusal of one call is not taken for a broken sign-in. `member` false points at the Membership row. Pure.
  */
-export function listingRefusal(sub: string, why: string, read: { about: boolean; rules: boolean }, member: boolean | null): string {
+export function listingRefusal(sub: string, why: string, read: { about: boolean }, member: boolean | null): string {
   const said = `Reddit did not give the r/${sub} post list: ${why}.`
-  const others =
-    read.about && read.rules
-      ? " The community's rules and numbers were read with the same sign-in, so the sign-in works; only the post list was refused."
-      : read.about || read.rules
-        ? ' Part of the community (its rules or its numbers) was read with the same sign-in; only the post list was refused.'
-        : " The community's other pages were refused too."
+  const others = read.about
+    ? " The community's own page and numbers were read with the same sign-in, so the sign-in works; only the post list was refused."
+    : " The community's other pages were refused too."
   return `${said}${others}${member === false ? ` This account has not joined r/${sub} yet (see Membership).` : ''}`
 }
 
@@ -123,12 +115,10 @@ export async function assessSubreddit(ctx: ConnectorContext): Promise<Capability
     const identity = await api.me()
     if (!identity) return needsUser(ctx, 'The account is not signed in to Reddit. Open the browser, sign in on the page, then assess again.')
 
-    // ── The community's own pages: its settings (and so whether the account joined) and its rules. Read first: a refused post list is
+    // ── The community's own page: its settings (and so whether the account joined). Read first: a refused post list is
     // explained by what else the same sign-in could read. ──
     const about = await attempt(() => api.about(sub))
-    const rulesResult = await attempt(() => api.rules(sub))
     const aboutInfo = about.ok && about.value.ok ? about.value.value : null
-    const rulesList = rulesResult.ok && rulesResult.value.ok ? rulesResult.value.value : null
     const aboutWhy = about.ok && !about.value.ok ? about.value.reason : about.ok ? '' : about.reason
     const joined = membershipRow(sub, aboutInfo, aboutWhy)
     b.set('membership', joined.status, joined.detail)
@@ -141,7 +131,7 @@ export async function assessSubreddit(ctx: ConnectorContext): Promise<Capability
       const denied = listing.ok && !listing.value.ok && [401, 403, 404].includes(listing.value.status)
       const why = listing.ok && !listing.value.ok ? listing.value.reason : listing.ok ? '' : listing.reason
       const status = denied ? 'unavailable' : 'needs_check'
-      b.set('read_posts', status, listingRefusal(sub, why || 'no reason given', { about: aboutInfo !== null, rules: rulesList !== null }, aboutInfo ? aboutInfo.userIsSubscriber : null))
+      b.set('read_posts', status, listingRefusal(sub, why || 'no reason given', { about: aboutInfo !== null }, aboutInfo ? aboutInfo.userIsSubscriber : null))
       // One refused call is one problem: the rows that wait for it say so, and do not say it again.
       b.set('read_comments', status, 'Not tried: comments are found through the posts, and the post list could not be read (see Read posts).')
       b.set('detect_changes', 'needs_check', 'Not examined: it needs the post list (see Read posts).')
@@ -176,18 +166,8 @@ export async function assessSubreddit(ctx: ConnectorContext): Promise<Capability
       }
     }
 
-    // ── Rules and posting restrictions ──
-    const analysis = rulesList ? analyzeRules(rulesList) : null
-    if (rulesList) {
-      const notes: string[] = []
-      if (analysis?.automationForbidden) notes.push(`automation/AI rule found — ${quoteRule(analysis.automationForbidden)}`)
-      if (analysis && analysis.promotionRules.length > 0) notes.push(`${analysis.promotionRules.length} rule(s) mention promotion`)
-      b.set('rules', 'verified', `Read ${rulesList.length} community rules${notes.length ? ` (${notes.join('; ')})` : '; none about automation was found'}. Automatic reading is a heuristic: read the rules yourself too.`)
-    } else {
-      const why = rulesResult.ok && !rulesResult.value.ok ? rulesResult.value.reason : rulesResult.ok ? '' : rulesResult.reason
-      b.set('rules', 'needs_check', `The community rules could not be read (${why}). Read them manually before enabling sending.`)
-    }
-    const verdicts = postingVerdicts(sub, aboutInfo, analysis)
+    // ── Posting restrictions: only what the site itself enforces ──
+    const verdicts = postingVerdicts(sub, aboutInfo)
 
     // ── Own history (verification path) ──
     const ownPosts = await attempt(() => api.ownSubmitted(identity, 5))

@@ -5,7 +5,7 @@
 // attempt - and only then issues a ticket. Connectors and the browser service refuse write actions without a
 // ticket, so neither an AI instruction nor a buggy caller can publish around this gate.
 
-import type { Account, Approval, Channel, Comment, Discussion, Draft, Id, Opportunity } from '../../shared/types'
+import type { Account, Approval, Capability, Channel, Comment, Discussion, Draft, Id, Opportunity } from '../../shared/types'
 import type { Core } from '../core'
 import { newId } from '../db/database'
 import { TakeoverError, type Connector, type ConnectorContext, type PublishRequest, type RemoteDiscussion, type SendTicket } from '../ports'
@@ -83,10 +83,9 @@ const DAY_MS = 24 * HOUR_MS
 const block = (effect: GateEffect, code: string, ...reasons: string[]): GateBlock => ({ allowed: false, effect, code, reasons })
 
 const FINDING_NEEDS_AI_BROWSER_CODE = 'no_ai_browser'
-/** The block code when the community's own rules are the only thing in the way: the owner may let that through with "Send anyway". */
-export const CHANNEL_RESTRICTED_CODE = 'channel_restricted'
-/** What is said when the community's own rules forbid replying: a short line, then the community's own words. */
-export const communityRulesReason = (detail: string): string => `The community's rules do not allow this${detail.trim() ? `: ${detail.trim()}` : '.'}`
+/** Why a capability that cannot be used stops a send, in words: which ability, what state, and what the channel's own record says about it. */
+export const capabilityBlockReason = (capability: Pick<Capability, 'key' | 'status' | 'detail'>): string =>
+  `${capability.key.replace('_', ' ')} is ${capability.status.replace('_', ' ')} on this channel${capability.detail ? `: ${capability.detail}` : '.'}`
 const FINDING_NEEDS_AI_BROWSER_REASON = 'This comment is put under the post by the AI in the account\'s browser, and that is not available now: choose an AI engine that can work the browser in Settings.'
 
 export class SendGate {
@@ -289,27 +288,14 @@ export class SendGate {
   private checkAvailability(s: Snapshot, req: GateRequest, ctx: ConnectorContext): GateBlock | null {
     const { opp, channel, account } = s
     const reasons: string[] = []
-    // The community's own rules forbid what is sent: the owner may knowingly let that through with their own approval ("Send anyway"). It is read from the
-    // active approval of the draft as it stands, so it holds through the whole send and dies with the approval when the text changes. An automatic approval
-    // never carries it. Nothing else is let through by it.
-    const approval = s.draft ? this.core.repos.activeApproval(s.draft.id) : null
-    const rulesAcknowledged = approval !== null && approval.approvedBy === 'user' && approval.acknowledged.includes('community_rules')
-    let ruleReasons = 0
     if (account.status !== 'ready') reasons.push(`Account "${account.label}" is not available (${account.status.replace('_', ' ')}).`)
     if (channel.status === 'paused') reasons.push('The channel is paused.')
     if (channel.status === 'setup') reasons.push('The channel has not been activated yet.')
     const capability = channel.capabilities.find((c) => c.key === publishCapability(opp))
     // A channel the application does not read says "unavailable" about replying: no connector can reply there. The AI browser can, and it is the owner's press that asks for it.
     const unreachable = capability?.status === 'unavailable' && opp.findingId !== null
-    if (capability && !unreachable && capability.status === 'restricted' && opp.findingId !== null) {
-      // The owner's own answer from a post of the Feed: the community's words are the reason, and the owner reads them in the reply window next to "Send anyway".
-      // Everything else that is restricted is told as it always was.
-      if (!rulesAcknowledged) {
-        reasons.push(communityRulesReason(capability.detail))
-        ruleReasons++
-      }
-    } else if (capability && !unreachable && (capability.status === 'unavailable' || capability.status === 'restricted' || capability.status === 'needs_user')) {
-      reasons.push(`${capability.key.replace('_', ' ')} is ${capability.status.replace('_', ' ')} on this channel${capability.detail ? `: ${capability.detail}` : '.'}`)
+    if (capability && !unreachable && (capability.status === 'unavailable' || capability.status === 'restricted' || capability.status === 'needs_user')) {
+      reasons.push(capabilityBlockReason(capability))
     }
     if (req.automatic && this.core.settings.getRaw('automation.paused', false)) {
       reasons.push('Automation is paused, so automatic sends are suspended. Sending manually is still possible.')
@@ -317,8 +303,7 @@ export class SendGate {
     if (ctx.session.control().holder === 'user') {
       reasons.push('The account browser is under your control. Hand it back so the application can send.')
     }
-    // `channel_restricted` only when the community's rules are the whole reason: then "Send anyway" is a way through; with any other reason it is not.
-    return reasons.length > 0 ? block('hold', ruleReasons === reasons.length ? CHANNEL_RESTRICTED_CODE : 'unavailable', ...reasons) : null
+    return reasons.length > 0 ? block('hold', 'unavailable', ...reasons) : null
   }
 
   // ───────────── (c) the live thread ─────────────

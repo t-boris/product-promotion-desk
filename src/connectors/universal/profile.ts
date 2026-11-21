@@ -80,8 +80,6 @@ export interface SiteProfile {
   ownContent?: { url: string; reader: ItemReader }
   publish?: { post?: PublishFlow; reply?: PublishFlow }
   metrics?: MetricSpec[]
-  rulesUrl?: string
-  rulesSelector?: string
 }
 
 /** Names usable inside `{{ }}` placeholders. */

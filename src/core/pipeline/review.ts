@@ -5,7 +5,7 @@
 // recomputes that hash from the current records at send time.
 
 import { ApiError, type DraftInput } from '../../shared/api'
-import type { Acknowledgement, Approval, Draft, Id, Opportunity, OpportunityState } from '../../shared/types'
+import type { Approval, Draft, Id, Opportunity, OpportunityState } from '../../shared/types'
 import { judgedForFit, noConnectorProblem, renderForPlatform } from '../../shared/post-format'
 import type { PipelineHooks } from '../services'
 import type { Core } from '../core'
@@ -88,11 +88,8 @@ export class ReviewFlow implements PipelineHooks {
     return this.store.requireOpportunity(id)
   }
 
-  /**
-   * The owner approves the latest draft exactly as it is now. `acknowledge` is what the owner knowingly lets through with this approval ("Send anyway":
-   * the community's own rules forbid it); it is kept on the approval and so dies with it when the text changes.
-   */
-  async approve(id: Id, options: { acknowledge?: Acknowledgement[] } = {}): Promise<Opportunity> {
+  /** The owner approves the latest draft exactly as it is now. */
+  async approve(id: Id): Promise<Opportunity> {
     const opp = this.store.requireOpportunity(id)
     if (!APPROVABLE.includes(opp.state)) throw new ApiError('invalid_state', `This item cannot be approved while it is "${opp.state}".`)
     const draft = this.core.repos.latestDraft(id)
@@ -128,18 +125,10 @@ export class ReviewFlow implements PipelineHooks {
       if (!latest || latest.id !== draft.id) throw new ApiError('conflict', 'The draft changed while you were approving. Review it again.')
       const { hash, accountId, identity, destination } = this.currentHash(current, latest)
       const existing = this.core.repos.activeApproval(latest.id)
-      const acknowledged = [...new Set(options.acknowledge ?? [])].sort()
-      const reusable =
-        existing &&
-        existing.approvedBy === 'user' &&
-        existing.contentHash === hash &&
-        existing.accountId === accountId &&
-        existing.destination === destination &&
-        // An approval that let more or less through is another approval: pressing Send anyway after a plain approval makes a new one.
-        JSON.stringify([...existing.acknowledged].sort()) === JSON.stringify(acknowledged)
+      const reusable = existing && existing.approvedBy === 'user' && existing.contentHash === hash && existing.accountId === accountId && existing.destination === destination
       if (!reusable) {
         if (existing) this.store.invalidateApprovals(id, 'Superseded by a new approval')
-        this.store.insertApproval({ draftId: latest.id, contentHash: hash, accountId, identity, destination, approvedBy: 'user', ruleId: null, acknowledged })
+        this.store.insertApproval({ draftId: latest.id, contentHash: hash, accountId, identity, destination, approvedBy: 'user', ruleId: null })
       }
       // Approving never publishes by itself. A publication whose planned time is already behind us is not picked
       // up by the scheduler either (it only sends what was approved before its time): the owner presses Send.

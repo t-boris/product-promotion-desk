@@ -331,6 +331,7 @@ CREATE TABLE feed_analyses (
     sql: `
 -- What the owner knowingly let through when they gave this approval, as a JSON list of names (today only 'community_rules': the community's own rules forbid
 -- what is sent, and the owner pressed Send anyway). It belongs to the approval, so it dies with it: a changed text needs a new approval, and a new press.
+-- DEC-050 removed "Send anyway" (0.38.1): nothing reads or writes this column any more. It stays, with its default, because an applied migration is never edited.
 ALTER TABLE approvals ADD COLUMN acknowledged_json TEXT NOT NULL DEFAULT '[]';
 `
   },
@@ -381,6 +382,42 @@ CREATE TABLE finding_tags (
   PRIMARY KEY (finding_id, tag_id)
 );
 CREATE INDEX idx_finding_tags_tag ON finding_tags (tag_id);
+`
+  },
+  {
+    id: 320,
+    name: 'pipeline: what a community\'s rules text said about AI or promotion is forgotten (DEC-050)',
+    sql: `
+-- Until 0.38.0 the application read a community's rules and kept what it thought of them in the channel's capabilities: an AI/automation ban as a restriction of
+-- publish_post and publish_reply, a note about promotion in the detail of publish_post, and a 'rules' capability of its own. DEC-050 removed all of it: the
+-- rules text restricts nothing and warns about nothing. This rewrites what is already stored so it does not go on saying it.
+--   - the 'rules' capability is dropped (the key does not exist any more);
+--   - a restriction that only said "the rules appear to forbid automation or AI-generated content" goes back to needs_check (what a channel never assessed says);
+--   - a detail that carries the promotion note (the form check put its own sentence before it) says "Not checked yet." and keeps its status.
+-- A restriction the site itself enforces (banned, only approved users) has other words and is not touched. Only the channels that carry any of it are rewritten.
+UPDATE channels
+SET capabilities_json = (
+  SELECT json_group_array(json(
+    CASE
+      WHEN json_extract(e.value, '$.status') = 'restricted'
+        AND json_extract(e.value, '$.key') IN ('publish_post', 'publish_reply')
+        AND json_extract(e.value, '$.detail') LIKE '%Community rules appear to forbid automation or AI-generated content%'
+        THEN json_set(e.value, '$.status', 'needs_check', '$.detail', 'Not checked yet.')
+      WHEN json_extract(e.value, '$.detail') LIKE '%Rules mention promotion%'
+        THEN json_set(e.value, '$.detail', 'Not checked yet.')
+      ELSE e.value
+    END
+  ))
+  FROM json_each(channels.capabilities_json) AS e
+  WHERE json_extract(e.value, '$.key') IS NOT 'rules'
+)
+WHERE json_valid(capabilities_json)
+  AND json_type(capabilities_json) = 'array'
+  AND (
+    capabilities_json LIKE '%"rules"%'
+    OR capabilities_json LIKE '%Community rules appear to forbid automation%'
+    OR capabilities_json LIKE '%Rules mention promotion%'
+  );
 `
   }
 ]

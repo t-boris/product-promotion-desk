@@ -14,7 +14,7 @@ import {
   sendLine,
   sendNote,
   storedText,
-  wayOut,
+  byHand,
   whenWords,
   withRound,
   type Round
@@ -203,9 +203,9 @@ describe('sendLine for a schedule', () => {
     expect(sendLine(result('scheduled', 'The comment is scheduled.', { at: at(21, 19).toISOString() }), now, 'schedule')).toEqual({ tone: 'good', text: 'Scheduled for today 7:00 pm.' })
   })
 
-  it('says a hold for the community\'s rules without "try again": the way through is the button beside it', () => {
-    expect(sendLine(result('held', 'The community\'s rules do not allow this: no AI.', { code: 'channel_restricted' }), now, 'send')).toEqual({ tone: 'warn', text: 'Not posted. The community\'s rules do not allow this: no AI.' })
-    expect(sendLine(result('refused', 'The community\'s rules do not allow this: no AI.', { code: 'channel_restricted' }), now, 'schedule')).toEqual({ tone: 'warn', text: 'Not scheduled. The community\'s rules do not allow this: no AI.' })
+  it('says a refusal of a schedule with its reason and no "try again", and a hold of a press with the way to press again', () => {
+    expect(sendLine(result('refused', 'This account is banned from r/test.'), now, 'schedule')).toEqual({ tone: 'warn', text: 'Not scheduled. This account is banned from r/test.' })
+    expect(sendLine(result('held', 'This account is banned from r/test.'), now, 'send')).toEqual({ tone: 'warn', text: 'Not posted yet. This account is banned from r/test. Press Send now to try again.' })
   })
 
   it('says "not scheduled" when a schedule was refused, and still tells a press of Send as before', () => {
@@ -215,25 +215,20 @@ describe('sendLine for a schedule', () => {
   })
 })
 
-describe('wayOut: what the owner can do about a press that did not go through', () => {
-  const result = (state: FindingSendResult['state'], code?: 'channel_restricted'): FindingSendResult => ({ state, message: 'm', opportunityId: null, url: '', ...(code ? { code } : {}) })
+describe('byHand: the way to do it by hand after a press that did not go through', () => {
+  const result = (state: FindingSendResult['state']): FindingSendResult => ({ state, message: 'm', opportunityId: null, url: '' })
 
-  it('offers Send anyway when the community\'s own rules are the reason, held or refused', () => {
-    expect(wayOut(result('held', 'channel_restricted'))).toBe('anyway')
-    expect(wayOut(result('refused', 'channel_restricted'))).toBe('anyway')
-  })
-
-  it('offers copying and the post for any other refusal, hold or failure', () => {
-    expect(wayOut(result('held'))).toBe('by-hand')
-    expect(wayOut(result('refused'))).toBe('by-hand')
-    expect(wayOut(result('failed'))).toBe('by-hand')
+  it('offers copying and the post for a hold, a refusal or a failure', () => {
+    expect(byHand(result('held'))).toBe(true)
+    expect(byHand(result('refused'))).toBe(true)
+    expect(byHand(result('failed'))).toBe(true)
   })
 
   it('offers nothing after a press that went through, or an unknown result, or no press', () => {
-    expect(wayOut(result('sent'))).toBeNull()
-    expect(wayOut(result('scheduled'))).toBeNull()
-    expect(wayOut(result('unknown'))).toBeNull()
-    expect(wayOut(null)).toBeNull()
+    expect(byHand(result('sent'))).toBe(false)
+    expect(byHand(result('scheduled'))).toBe(false)
+    expect(byHand(result('unknown'))).toBe(false)
+    expect(byHand(null)).toBe(false)
   })
 })
 

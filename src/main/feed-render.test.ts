@@ -14,7 +14,6 @@ import { FullReply } from '../renderer/src/pages/feed/FullReply'
 import { ReplyActions } from '../renderer/src/pages/feed/ReplyActions'
 import { ReplyComposer } from '../renderer/src/pages/feed/ReplyComposer'
 import { ScheduleMenu } from '../renderer/src/pages/feed/ScheduleMenu'
-import type { WayOut } from '../renderer/src/pages/feed/reply-composer'
 import { ThreadTree } from '../renderer/src/pages/feed/FindingThread'
 import { ReadingNotes } from '../renderer/src/pages/feed/ReadingNotes'
 import { BROWSER_WATCH_NOTE, OWN_POSTS_NO_CHECK } from '../renderer/src/pages/channels/own-posts'
@@ -616,10 +615,10 @@ describe('the card of the analysis of the Feed', () => {
 })
 
 describe('ReplyActions: what the window offers beside the text', () => {
-  const actions = (over: { way?: WayOut | null; plannedLine?: string | null; working?: boolean; stopped?: string; posting?: boolean; copyDisabled?: boolean } = {}): string =>
+  const actions = (over: { byHand?: boolean; plannedLine?: string | null; working?: boolean; stopped?: string; posting?: boolean; copyDisabled?: boolean } = {}): string =>
     html(
       createElement(ReplyActions, {
-        way: over.way ?? null,
+        byHand: over.byHand ?? false,
         plannedLine: over.plannedLine ?? null,
         working: over.working ?? false,
         stopped: over.stopped ?? '',
@@ -629,7 +628,6 @@ describe('ReplyActions: what the window offers beside the text', () => {
         onCancelPlan: () => {},
         onEditFull: () => {},
         onCopy: () => {},
-        onBack: () => {},
         copyDisabled: over.copyDisabled ?? false,
         openPost: createElement('a', { 'data-testid': 'reply-open-post' }, 'Open post')
       })
@@ -638,25 +636,17 @@ describe('ReplyActions: what the window offers beside the text', () => {
   it('offers Send now, Schedule, Edit in full and Copy, and nothing about a refusal, when nothing went wrong', () => {
     const out = actions()
     for (const id of ['reply-send', 'reply-schedule', 'reply-edit-full', 'reply-copy']) expect(out).toContain(`data-testid="${id}"`)
-    for (const id of ['reply-send-anyway', 'reply-schedule-anyway', 'reply-open-post', 'reply-back', 'reply-scheduled']) expect(out).not.toContain(`data-testid="${id}"`)
+    for (const id of ['reply-open-post', 'reply-back', 'reply-scheduled']) expect(out).not.toContain(`data-testid="${id}"`)
     expect(out).toContain('Send now')
-    expect(out).not.toContain('Send anyway')
   })
 
-  it('offers Send anyway and Schedule anyway beside Copy and the post when the community\'s own rules are in the way, and no Edit in full', () => {
-    const out = actions({ way: 'anyway' })
-    for (const id of ['reply-send-anyway', 'reply-schedule-anyway', 'reply-copy', 'reply-open-post', 'reply-back']) expect(out).toContain(`data-testid="${id}"`)
-    expect(out).toContain('Send anyway')
-    expect(out).toContain('Schedule anyway')
-    for (const id of ['reply-send"', 'reply-schedule"', 'reply-edit-full']) expect(out).not.toContain(`data-testid="${id}`)
-    expect(out).toMatch(/data-testid="reply-send-anyway"[^>]*btn-primary/)
-  })
-
-  it('offers the same buttons and the post to open for any other refusal, and never Send anyway', () => {
-    const out = actions({ way: 'by-hand' })
+  it('offers the same buttons and the post to open after a press that did not go through, and never a "Send anyway" (DEC-050)', () => {
+    const out = actions({ byHand: true })
     for (const id of ['reply-send', 'reply-schedule', 'reply-edit-full', 'reply-copy', 'reply-open-post']) expect(out).toContain(`data-testid="${id}"`)
-    expect(out).not.toContain('Send anyway')
-    expect(out).not.toContain('data-testid="reply-back"')
+    for (const out2 of [out, actions()]) {
+      expect(out2).not.toMatch(/anyway/i)
+      expect(out2).not.toContain('data-testid="reply-back"')
+    }
   })
 
   it('says when the comment is planned, with Change and Cancel, keeps Send now, and puts the Schedule menu away', () => {

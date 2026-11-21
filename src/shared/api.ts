@@ -121,14 +121,9 @@ export interface FindingPlace {
  */
 export type FindingSendState = 'sent' | 'unknown' | 'failed' | 'held' | 'refused' | 'scheduled'
 
-/** Why a send was held that the owner may knowingly let through: the community's own rules forbid it (the reply window offers "Send anyway"). */
-export type FindingSendCode = 'channel_restricted'
-
 export interface FindingSendResult {
   state: FindingSendState
   message: string
-  /** Set when the owner has a way through that is theirs to take (see `FindingSendCode`). */
-  code?: FindingSendCode
   /** The time a scheduled answer goes out (ISO), for `scheduled`. */
   at?: string
   /** The opportunity that carries this answer (it holds the draft, the approval and the attempt); null when nothing was made. */
@@ -391,9 +386,9 @@ export interface ApiMethods {
    * Send in the reply window: the AI puts the owner's own text, exactly as written, under the post (`place` null) or under one comment of its thread, in the
    * account's browser. The owner's press is the approval. It resolves when the send is over; `refused` and `held` mean nothing was posted.
    */
-  'findings.send': [{ id: Id; place: FindingPlace | null; text: string; anyway?: boolean }, FindingSendResult]
-  /** Approves exactly this text for this place and puts it on a schedule: the AI browser sends it at `at` (ISO, in the future, within 30 days). `anyway`: knowingly past the community's rules. */
-  'findings.schedule': [{ id: Id; place: FindingPlace | null; text: string; at: string; anyway?: boolean }, FindingSendResult]
+  'findings.send': [{ id: Id; place: FindingPlace | null; text: string }, FindingSendResult]
+  /** Approves exactly this text for this place and puts it on a schedule: the AI browser sends it at `at` (ISO, in the future, within 30 days). */
+  'findings.schedule': [{ id: Id; place: FindingPlace | null; text: string; at: string }, FindingSendResult]
   /** Takes a scheduled answer off its schedule and withdraws its approval: it is a draft of the reply window again. */
   'findings.unschedule': [{ opportunityId: Id }, { ok: true }]
   /** "Edit in full": keeps this text as the draft of this place WITHOUT approving or sending it, and says which item holds it (the full card is shown for it). */

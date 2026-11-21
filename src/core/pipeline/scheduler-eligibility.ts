@@ -30,7 +30,7 @@ export function permissionProblem(channel: Channel, account: Account | undefined
   }
   const required: CapabilityKey[] = channel.mode === 'auto' ? [...MONITORING_CAPABILITIES, 'publish_reply'] : MONITORING_CAPABILITIES
   const restricted = channel.capabilities.find((c) => c.status === 'restricted' && required.includes(c.key))
-  if (restricted) return `The platform restricts "${restricted.key}" for this channel; review its rules before resuming`
+  if (restricted) return `The platform restricts "${restricted.key}" for this channel; check the channel on the Channels screen before resuming`
   return null
 }
 

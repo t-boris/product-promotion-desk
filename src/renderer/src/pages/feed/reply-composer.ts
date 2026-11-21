@@ -138,23 +138,15 @@ export function sendLine(result: FindingSendResult, now: Date = new Date(), doin
     case 'failed':
       return { tone: 'bad', text: `${not} ${result.message}` }
     case 'held':
-      // The community's rules are not a thing that passes: the way through is the owner's "Send anyway", which is beside this line.
-      return { tone: 'warn', text: doing === 'schedule' || result.code === 'channel_restricted' ? `${not} ${result.message}` : `Not posted yet. ${result.message} Press Send now to try again.` }
+      return { tone: 'warn', text: doing === 'schedule' ? `${not} ${result.message}` : `Not posted yet. ${result.message} Press Send now to try again.` }
     case 'refused':
       return { tone: 'warn', text: `${not} ${result.message}` }
   }
 }
 
-/**
- * What the owner can do about a press that did not go through, beside the sentence that says why. `anyway`: the community's own rules are the reason, and
- * the owner may knowingly let them through. `by-hand`: something else is in the way; the comment can be copied and the post opened. Nothing for the rest.
- */
-export type WayOut = 'anyway' | 'by-hand'
-
-export function wayOut(result: FindingSendResult | null): WayOut | null {
-  if (!result) return null
-  if (result.state !== 'held' && result.state !== 'refused' && result.state !== 'failed') return null
-  return result.code === 'channel_restricted' ? 'anyway' : 'by-hand'
+/** A press did not go through (held, refused or failed): the comment can be copied and the post opened, to do it by hand. Nothing for any other ending. */
+export function byHand(result: FindingSendResult | null): boolean {
+  return result !== null && (result.state === 'held' || result.state === 'refused' || result.state === 'failed')
 }
 
 /** The states in which a place's stored text is still the owner's to use again when the window is opened anew (it was kept, edited in full, or planned). */

@@ -9,11 +9,11 @@ export const MODES: readonly ChannelMode[] = ['observe', 'draft', 'approval', 'a
 
 const SENDING_MODES: readonly ChannelMode[] = ['approval', 'auto']
 
-/** The reply ability is known to be impossible (platform) or forbidden (rules). */
+/** The reply ability is known to be impossible (platform) or not allowed to this account (banned, not approved). */
 export function replyBlocked(channel: Pick<Channel, 'capabilities'>): string | null {
   const reply = find(channel.capabilities, 'publish_reply')
   if (reply?.status === 'unavailable' || reply?.status === 'restricted') {
-    const why = reply.status === 'restricted' ? 'forbidden by the community rules' : 'not possible here'
+    const why = reply.status === 'restricted' ? 'not allowed by the community' : 'not possible here'
     return `Replying is ${why}${reply.detail ? `: ${reply.detail}` : '.'}`
   }
   return null

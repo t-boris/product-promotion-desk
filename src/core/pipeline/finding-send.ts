@@ -15,7 +15,7 @@ import { COMMENT_SCHEDULE_MAX_DAYS } from '../../shared/finding-reply'
 import { noConnectorProblem } from '../../shared/post-format'
 import type { Channel, Finding, FindingComment, Id, Opportunity } from '../../shared/types'
 import type { Core } from '../core'
-import { CHANNEL_RESTRICTED_CODE, communityRulesReason, SendBlockedError } from './gate'
+import { capabilityBlockReason, SendBlockedError } from './gate'
 import type { FindingStore } from './findings'
 import { missionHosts } from './mission-publisher'
 import type { ReviewFlow } from './review'
@@ -93,11 +93,11 @@ export class FindingSend {
 
   /**
    * The owner's press: put this text under the post (`place` null) or under one comment of its thread, as the account of the channel. Resolves when the send is
-   * over. `anyway`: the owner knowingly lets the community's own rules through with this approval ("Send anyway"); it is kept on the approval only.
+   * over. What a community's rules text says never stops the press and is never warned about (DEC-050).
    */
-  async send(args: { id: Id; place: FindingPlace | null; text: string; anyway?: boolean }): Promise<FindingSendResult> {
+  async send(args: { id: Id; place: FindingPlace | null; text: string }): Promise<FindingSendResult> {
     const finding = this.findings.get(args.id)
-    return this.locks.run(finding.id, () => this.sendLocked(finding, args.place, args.text, args.anyway === true))
+    return this.locks.run(finding.id, () => this.sendLocked(finding, args.place, args.text))
   }
 
   /**
@@ -105,9 +105,9 @@ export class FindingSend {
    * (`Sending.sendDuePublications`), by the AI browser, with everything a press has: the gate, the limits, the rule about an unknown result. Pressing it again
    * with another time moves it.
    */
-  async schedule(args: { id: Id; place: FindingPlace | null; text: string; at: string; anyway?: boolean }): Promise<FindingSendResult> {
+  async schedule(args: { id: Id; place: FindingPlace | null; text: string; at: string }): Promise<FindingSendResult> {
     const finding = this.findings.get(args.id)
-    return this.locks.run(finding.id, () => this.scheduleLocked(finding, args.place, args.text, args.at, args.anyway === true))
+    return this.locks.run(finding.id, () => this.scheduleLocked(finding, args.place, args.text, args.at))
   }
 
   /** Takes an answer off its schedule and withdraws its approval: it is a draft of the reply window again. */
@@ -126,14 +126,14 @@ export class FindingSend {
   async saveDraft(args: { id: Id; place: FindingPlace | null; text: string }): Promise<{ opportunityId: Id }> {
     const finding = this.findings.get(args.id)
     return this.locks.run(finding.id, async () => {
-      const prepared = await this.prepare(finding, args.place, args.text, { approve: false, anyway: false })
+      const prepared = await this.prepare(finding, args.place, args.text, { approve: false })
       if ('stop' in prepared) throw new ApiError('invalid_state', prepared.stop.message)
       return { opportunityId: prepared.opp.id }
     })
   }
 
-  private async sendLocked(finding: Finding, place: FindingPlace | null, rawText: string, anyway: boolean): Promise<FindingSendResult> {
-    const prepared = await this.prepare(finding, place, rawText, { approve: true, anyway })
+  private async sendLocked(finding: Finding, place: FindingPlace | null, rawText: string): Promise<FindingSendResult> {
+    const prepared = await this.prepare(finding, place, rawText, { approve: true })
     if ('stop' in prepared) return prepared.stop
     const { opp } = prepared
     // Send now replaces a schedule: if this press is held, the answer must not go out by itself later behind the owner's back.
@@ -153,29 +153,28 @@ export class FindingSend {
       if (error instanceof SendBlockedError) {
         const message = error.block.reasons.join(' ')
         // `hold`: nothing changes and the approval stays, the owner may press Send again. The others took the approval away or ended the item.
-        const code = error.block.code === CHANNEL_RESTRICTED_CODE ? { code: 'channel_restricted' as const } : {}
-        return { state: error.block.effect === 'hold' ? 'held' : 'refused', message, opportunityId: opp.id, url: '', ...code }
+        return { state: error.block.effect === 'hold' ? 'held' : 'refused', message, opportunityId: opp.id, url: '' }
       }
       throw error
     }
   }
 
-  private async scheduleLocked(finding: Finding, place: FindingPlace | null, rawText: string, rawAt: string, anyway: boolean): Promise<FindingSendResult> {
+  private async scheduleLocked(finding: Finding, place: FindingPlace | null, rawText: string, rawAt: string): Promise<FindingSendResult> {
     const at = this.plannedTime(rawAt)
-    // The community's own rules are told now, not when the time comes: a comment that would be held then is refused here, with the same way out as a press of Send now.
-    const restriction = this.communityRestriction(this.store.requireChannel(finding.channelId))
-    if (restriction !== null && !anyway) return { state: 'refused', message: restriction, opportunityId: null, url: '', code: 'channel_restricted' }
-    const prepared = await this.prepare(finding, place, rawText, { approve: true, anyway })
+    // What the site itself does not allow this account (it is banned there) is told now, not when the time comes: the send would be held then.
+    const restriction = this.restriction(this.store.requireChannel(finding.channelId))
+    if (restriction !== null) return refused(restriction)
+    const prepared = await this.prepare(finding, place, rawText, { approve: true })
     if ('stop' in prepared) return prepared.stop
     this.store.updateOpportunity(prepared.opp.id, { scheduledAt: at })
     this.store.notify()
     return { state: 'scheduled', message: 'The comment is scheduled.', opportunityId: prepared.opp.id, url: '', at }
   }
 
-  /** The community's own words when its rules forbid a reply (the owner may let that through knowingly); null when they do not. */
-  private communityRestriction(channel: Channel): string | null {
+  /** The sentence for a reply the site itself does not allow this account (banned); null when nothing of the kind is known. */
+  private restriction(channel: Channel): string | null {
     const capability = channel.capabilities.find((c) => c.key === 'publish_reply')
-    return capability?.status === 'restricted' ? communityRulesReason(capability.detail) : null
+    return capability?.status === 'restricted' ? capabilityBlockReason(capability) : null
   }
 
   /** The planned time as an ISO string: a real time, after now, and not more than 30 days away. */
@@ -193,7 +192,7 @@ export class FindingSend {
    * draft and the owner's approval of exactly this text (unless `approve` is off: "Edit in full" only keeps the draft). Either a sentence that says why not,
    * as a result, or the item.
    */
-  private async prepare(finding: Finding, place: FindingPlace | null, rawText: string, options: { approve: boolean; anyway: boolean }): Promise<{ opp: Opportunity } | { stop: FindingSendResult }> {
+  private async prepare(finding: Finding, place: FindingPlace | null, rawText: string, options: { approve: boolean }): Promise<{ opp: Opportunity } | { stop: FindingSendResult }> {
     if (typeof rawText !== 'string') throw new ApiError('invalid_input', 'The comment must be text.')
     const text = rawText.trim()
     if (text === '') throw new ApiError('invalid_input', 'The comment is empty.')
@@ -220,7 +219,7 @@ export class FindingSend {
       const latest = this.core.repos.latestDraft(opp.id)
       if (!latest || latest.text.trim() !== text) await this.review.saveDraft(opp.id, { text }, { author: 'user' })
       // The owner's press is the approval of exactly this text, for this account and this place.
-      if (options.approve) await this.review.approve(opp.id, { acknowledge: options.anyway ? ['community_rules'] : [] })
+      if (options.approve) await this.review.approve(opp.id)
     } catch (error) {
       if (created) this.core.db.prepare('DELETE FROM opportunities WHERE id = ?').run(opp.id)
       if (error instanceof ApiError) return { stop: refused(error.message) }

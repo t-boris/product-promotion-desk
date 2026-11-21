@@ -22,7 +22,6 @@ import { CapabilityBuilder } from '../capabilities'
 import { CaptchaRequiredError, LoginRequiredError } from '../errors'
 import { gateProbeScript, sessionProbeScript, type GateProbe, type SessionProbe } from '../page-scripts'
 import { createdMs, earliestCreation } from '../reconcile'
-import { analyzeRules, quoteRule } from '../rules-text'
 import { comparableText, errorMessage, sameText } from '../text'
 import { describeProfileFormat, summarizeProfile } from './format'
 import { hostBelongsTo, matchGlob, matchesAnyGlob } from './glob'
@@ -301,27 +300,6 @@ export class UniversalConnector implements Connector {
           : 'Unique ids and timestamps were not observed for both discussions and comments yet.'
       )
 
-      // Rules.
-      let automationForbidden = false
-      let automationDetail = ''
-      if (profile.rulesUrl && profile.rulesSelector) {
-        try {
-          await page.goto(profile.rulesUrl, { timeoutMs: 30_000 })
-          const text = await page.read<string | null>(elementTextScript(profile.rulesSelector))
-          if (text) {
-            const analysis = analyzeRules([{ name: 'Community rules', text }])
-            automationForbidden = analysis.automationForbidden !== null
-            automationDetail = analysis.automationForbidden ? quoteRule(analysis.automationForbidden) : ''
-            b.set('rules', 'verified', automationForbidden ? `Rules appear to forbid automation — ${automationDetail}` : 'Rules were read; no automation ban was found. Read them yourself too.')
-          } else b.set('rules', 'needs_check', 'The rules element was not found on the page.')
-        } catch (error) {
-          if (error instanceof TakeoverError) throw error
-          b.set('rules', 'needs_check', `Rules could not be read: ${errorMessage(error)}.`)
-        }
-      } else {
-        b.set('rules', 'needs_check', 'The profile does not say where the rules are. Read the community rules manually before enabling sending.')
-      }
-
       // Sending abilities are never verified here (no ticket exists during an assessment).
       const sample: PlaceholderValues = {
         channelUrl: ctx.channel.url,
@@ -335,7 +313,6 @@ export class UniversalConnector implements Connector {
         ['publish_reply', profile.publish?.reply, 'reply']
       ] as const) {
         if (!flow) b.set(key, 'unavailable', `The site profile defines no steps for publishing a ${label}.`)
-        else if (automationForbidden) b.set(key, 'restricted', `Community rules appear to forbid automation — ${automationDetail}`)
         else b.set(key, 'needs_check', await this.probeFlow(page, profile, flow, sample, label))
       }
 

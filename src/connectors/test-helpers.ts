@@ -105,7 +105,6 @@ export function aboutJson(over: Record<string, unknown> = {}): unknown {
   }
 }
 
-export const rulesJson = (rules: { short_name: string; description: string }[]): unknown => ({ rules, site_rules: [] })
 export const meJson = (name: string): unknown => ({ kind: 't2', data: { name } })
 
 // ───────────────────────────── Scripted page ─────────────────────────────
@@ -225,7 +224,6 @@ export function routeHealthyReddit(page: RedditFakePage, identity = 'natal_bot')
     )
     .route('/r/test/comments/p1.json', threadJson({ id: 'p1', title: 'Thread one', numComments: 2 }, [commentThing({ id: 'c1', replies: [commentThing({ id: 'c2', parent: 't1_c1' })] })]))
     .route('/r/test/about.json', aboutJson())
-    .route('/r/test/about/rules.json', rulesJson([{ short_name: 'Be civil', description: 'No personal attacks.' }]))
     .route('/user/natal_bot/submitted.json', listing([postThing({ id: 'mine1', author: 'natal_bot', score: 7, numComments: 3 })]))
     .route('/user/natal_bot/comments.json', listing([commentThing({ id: 'mc1', author: 'natal_bot', score: 4 })]))
   page.selectors = new Set(['form#newlink', 'div.commentarea form.usertext textarea[name="text"]'])

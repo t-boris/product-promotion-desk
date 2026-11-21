@@ -15,7 +15,6 @@ const KEY_TABLE: Record<CapabilityKey, null> = {
   publish_reply: null,
   verify_send: null,
   metrics: null,
-  rules: null,
   membership: null,
   read_inbox: null
 }
@@ -112,7 +111,7 @@ export function summarize(capabilities: Capability[]): string {
   if (counts.verified) parts.push(`${counts.verified} verified`)
   if (counts.needs_check) parts.push(`${counts.needs_check} need checking`)
   if (counts.needs_user) parts.push(`${counts.needs_user} need you`)
-  if (counts.restricted) parts.push(`${counts.restricted} restricted by rules`)
+  if (counts.restricted) parts.push(`${counts.restricted} restricted`)
   if (counts.unavailable) parts.push(`${counts.unavailable} unavailable`)
   return parts.join(', ')
 }

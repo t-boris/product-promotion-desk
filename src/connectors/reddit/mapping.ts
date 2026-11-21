@@ -251,17 +251,6 @@ export function membershipOf(about: AboutInfo): Membership {
   return { member: about.userIsSubscriber, banned: about.userIsBanned, access: accessOf(about.subredditType) }
 }
 
-export function mapRules(json: unknown): { name: string; text: string }[] | null {
-  const rules = asRecord(json)?.rules
-  if (!Array.isArray(rules)) return null
-  return rules.flatMap((rule) => {
-    const r = asRecord(rule)
-    if (!r) return []
-    const name = str(r.short_name) || str(r.violation_reason)
-    return name || str(r.description) ? [{ name, text: str(r.description) }] : []
-  })
-}
-
 /** Username from /api/me.json (`{data:{name}}`) or /api/v1/me (`{name}`); null when logged out. */
 export function mapMe(json: unknown): string | null {
   const root = asRecord(json)

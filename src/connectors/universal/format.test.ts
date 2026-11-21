@@ -11,7 +11,7 @@ describe('the format description given to the AI', () => {
 
   it('names every field the validator accepts at the top level and in readers, flows, steps and verification', () => {
     const fields = [
-      'schema', 'name', 'host', 'channelUrls', 'discussionUrls', 'loginUrl', 'login', 'discussions', 'comments', 'ownContent', 'publish', 'metrics', 'rulesUrl', 'rulesSelector',
+      'schema', 'name', 'host', 'channelUrls', 'discussionUrls', 'loginUrl', 'login', 'discussions', 'comments', 'ownContent', 'publish', 'metrics',
       'loggedInSelector', 'identitySelector', 'captchaSelector',
       'containerSelector', 'itemSelector', 'id', 'title', 'author', 'body', 'permalink', 'time', 'parentId',
       'steps', 'verify', 'urlGlob', 'textIncludes', 'errorSelector', 'timeoutMs', 'key', 'label', 'selector', 'attr'
@@ -70,19 +70,18 @@ describe('the summary the owner reviews', () => {
     expect(all).toMatch(/Success is recognized when the address becomes https:\/\/forum\.example\.com\/t\/\{id\} and the page shows "\{\{title\}\}"; a rejection is recognized by "\.alert-error"/)
     expect(all).toMatch(/Metrics: Members/)
     expect(all).toMatch(/Looks up the account's own posts at https:\/\/forum\.example\.com\/u\/\{\{identity\}\}\/posts/)
-    expect(all).toMatch(/Community rules are read from https:\/\/forum\.example\.com\/rules/)
   })
 
   it('says plainly what the profile cannot do', () => {
     const bare: Record<string, unknown> = { ...validProfileDefinition(), login: { loggedInSelector: '#me' } }
-    for (const key of ['publish', 'metrics', 'ownContent', 'rulesUrl', 'rulesSelector']) delete bare[key]
+    for (const key of ['publish', 'metrics', 'ownContent']) delete bare[key]
     const minimal = validateProfile(bare).profile!
     const all = summarizeProfile(minimal).join('\n')
     expect(all).toMatch(/the account name is not read; a human check is not recognized/)
     expect(all).toMatch(/Cannot publish anything/)
     expect(all).toMatch(/No metrics are read/)
     expect(all).toMatch(/No page with the account's own posts/)
-    expect(all).toMatch(/No rules page is described/)
+    expect(all).not.toMatch(/rules/i)
     const replyOnly = validProfileDefinition()
     delete (replyOnly.publish as Record<string, unknown>).post
     expect(summarizeProfile(validateProfile(replyOnly).profile!).join('\n')).toMatch(/Cannot publish new posts/)

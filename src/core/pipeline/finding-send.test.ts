@@ -80,10 +80,10 @@ function setup(script: ScriptedMissions['script'] = presses, capabilities?: Capa
 }
 
 const place = (index: number) => ({ position: index, author: COMMENTS[index].author, text: COMMENTS[index].text })
-const send = (findingId: string, where: ReturnType<typeof place> | null, text: string, anyway?: boolean): Promise<FindingSendResult> =>
-  world.core.router.call('findings.send', { id: findingId, place: where, text, ...(anyway === undefined ? {} : { anyway }) })
-const schedule = (findingId: string, where: ReturnType<typeof place> | null, text: string, at: string, anyway?: boolean): Promise<FindingSendResult> =>
-  world.core.router.call('findings.schedule', { id: findingId, place: where, text, at, ...(anyway === undefined ? {} : { anyway }) })
+const send = (findingId: string, where: ReturnType<typeof place> | null, text: string): Promise<FindingSendResult> =>
+  world.core.router.call('findings.send', { id: findingId, place: where, text })
+const schedule = (findingId: string, where: ReturnType<typeof place> | null, text: string, at: string): Promise<FindingSendResult> =>
+  world.core.router.call('findings.schedule', { id: findingId, place: where, text, at })
 /** A time this far from now, as the planned time of a comment. */
 const inMinutes = (minutes: number): string => new Date(world.clock.now().getTime() + minutes * 60_000).toISOString()
 /** A reply of the Inbox, on a channel the application reads: not an answer from the Feed. */
@@ -91,10 +91,10 @@ async function inboxReply() {
   world.connector.canRead = true
   return world.readyReply({ channel: world.addChannel({ target: 'r/inbox', status: 'active' }) })
 }
-/** The channel's replying is forbidden by the community's own rules, in its own words. */
-const COMMUNITY_WORDS = 'Rule 3: no comments from accounts younger than 30 days.'
-const restricted = (status: 'restricted' | 'needs_user' = 'restricted'): Capability[] => verifiedCapabilities().map((c) => (c.key === 'publish_reply' ? { ...c, status, detail: COMMUNITY_WORDS } : c))
-const approvals = () => world.core.db.prepare('SELECT approved_by AS by, acknowledged_json AS acknowledged, invalidated_at AS invalidated FROM approvals ORDER BY rowid').all() as { by: string; acknowledged: string; invalidated: string | null }[]
+/** Replying is something the site itself does not allow this account (it is banned there): the one kind of restriction that can still reach the window. */
+const SITE_WORDS = 'This account is banned from r/test.'
+const restricted = (status: 'restricted' | 'needs_user' = 'restricted'): Capability[] => verifiedCapabilities().map((c) => (c.key === 'publish_reply' ? { ...c, status, detail: SITE_WORDS } : c))
+const approvals = () => world.core.db.prepare('SELECT approved_by AS by, invalidated_at AS invalidated FROM approvals ORDER BY rowid').all() as { by: string; invalidated: string | null }[]
 const opportunities = () => world.core.db.prepare('SELECT * FROM opportunities').all() as Record<string, unknown>[]
 const actions = () => world.core.db.prepare('SELECT state, destination FROM send_actions').all() as { state: string; destination: string }[]
 
@@ -317,62 +317,43 @@ describe('what was sent from a post', () => {
   })
 })
 
-describe('Send anyway: the owner lets the community\'s own rules through, for this text only', () => {
-  it('holds a comment the community forbids, says so in the community\'s own words, and keeps the owner\'s approval of exactly that text', async () => {
+describe('What the site itself does not allow is the only thing that holds a press (DEC-050: no rules text, no "Send anyway")', () => {
+  it('holds a comment the site does not allow this account, says so in the capability\'s own words, and keeps the owner\'s approval of exactly that text', async () => {
     const { missions, findingId } = setup(presses, restricted())
     const result = await send(findingId, null, 'A comment.')
-    expect(result).toMatchObject({ state: 'held', code: 'channel_restricted', message: expect.stringContaining(COMMUNITY_WORDS) })
+    expect(result).toMatchObject({ state: 'held', message: expect.stringContaining(SITE_WORDS) })
+    expect(result).not.toHaveProperty('code')
     expect(missions.requests).toHaveLength(0)
     expect(actions()).toEqual([])
-    expect(approvals()).toEqual([{ by: 'user', acknowledged: '[]', invalidated: null }])
+    expect(approvals()).toEqual([{ by: 'user', invalidated: null }])
   })
 
-  it('sends it on "Send anyway", with an approval that says what the owner let through', async () => {
+  it('has no way through: pressing again, or asking the same thing another way, holds it again, for a capability that needs the owner too', async () => {
+    for (const status of ['restricted', 'needs_user'] as const) {
+      const { missions, findingId } = setup(presses, restricted(status))
+      const first = await send(findingId, null, 'A comment.')
+      expect(first.state).toBe('held')
+      // the shared API takes no word that lets it through any more: an extra field is not read
+      const second = await world.core.router.call('findings.send', { id: findingId, place: null, text: 'A comment.', anyway: true } as never)
+      expect(second.state).toBe('held')
+      expect(missions.requests).toHaveLength(0)
+    }
+  })
+
+  it('goes through once the site lets the account in again: the same approval is sent, nothing else changed', async () => {
     const { missions, findingId } = setup(presses, restricted())
     await send(findingId, null, 'A comment.')
-    const result = await send(findingId, null, 'A comment.', true)
+    world.core.db.prepare('UPDATE channels SET capabilities_json = ? WHERE id = ?').run(JSON.stringify(verifiedCapabilities()), world.channel.id)
+    const result = await send(findingId, null, 'A comment.')
     expect(result.state).toBe('unknown')
     expect(missions.requests).toHaveLength(1)
-    const rows = approvals()
-    // the plain approval was replaced by the one that carries the owner's word
-    expect(rows.map((r) => [r.acknowledged, r.invalidated === null])).toEqual([['[]', false], ['["community_rules"]', true]])
   })
 
-  it('lets nothing else through: a capability that needs the owner holds with no way out, and anyway changes nothing', async () => {
-    const { missions, findingId } = setup(presses, restricted('needs_user'))
-    const first = await send(findingId, null, 'A comment.')
-    expect(first.state).toBe('held')
-    expect(first.code).toBeUndefined()
-    const second = await send(findingId, null, 'A comment.', true)
-    expect(second.state).toBe('held')
-    expect(second.code).toBeUndefined()
-    expect(missions.requests).toHaveLength(0)
-  })
-
-  it('dies with the text: after an edit the old "anyway" is gone and the new text is held again', async () => {
-    const { missions, findingId } = setup(presses, restricted())
-    await schedule(findingId, null, 'First words.', inMinutes(60), true)
-    expect(approvals()).toEqual([{ by: 'user', acknowledged: '["community_rules"]', invalidated: null }])
-    await world.core.router.call('findings.saveDraft', { id: findingId, place: null, text: 'Other words.' })
-    expect(approvals()[0].invalidated).not.toBeNull()
-    expect(await send(findingId, null, 'Other words.')).toMatchObject({ state: 'held', code: 'channel_restricted' })
-    expect(missions.requests).toHaveLength(0)
-  })
-
-  it('is never carried by an approval an automatic rule made: the store keeps nothing of it, and the gate sends such an approval back', async () => {
-    const { findingId } = setup(presses, restricted())
-    await send(findingId, null, 'A comment.')
-    const [opp] = opportunities()
-    const draft = world.core.repos.latestDraft(opp.id as string)!
-    // the store: a rule's approval is made with nothing let through, whatever it was asked to keep
-    world.core.db.prepare('UPDATE approvals SET invalidated_at = ?').run(world.clock.now().toISOString())
-    const made = world.store.insertApproval({ draftId: draft.id, contentHash: 'h', accountId: world.account.id, identity: null, destination: POST, approvedBy: 'auto_rule', ruleId: 'r1', acknowledged: ['community_rules'] })
-    expect(made.acknowledged).toEqual([])
-    // the gate: an approval made by a rule is not the owner's press, whatever its row says; it is sent back before the community's rules are even asked about
-    world.core.db.prepare('DELETE FROM approvals WHERE id = ?').run(made.id)
-    await send(findingId, null, 'A comment.')
-    world.core.db.prepare("UPDATE approvals SET approved_by = 'auto_rule', rule_id = 'r1', acknowledged_json = '[\"community_rules\"]' WHERE invalidated_at IS NULL").run()
-    await expect(world.sending.send(opp.id as string)).rejects.toMatchObject({ block: { effect: 'review', code: 'auto_rule_refused' } })
+  it('never reads what a community\'s rules say: a channel whose stored record still carries rules words about AI or promotion is judged by its status alone', async () => {
+    const { missions, findingId } = setup(presses, verifiedCapabilities().map((c) => (c.key === 'publish_reply' ? { ...c, status: 'needs_check' as const, detail: 'Rules mention promotion: no AI generated content.' } : c)))
+    const result = await send(findingId, null, 'A comment.')
+    expect(result.state).toBe('unknown')
+    expect(missions.requests).toHaveLength(1)
   })
 })
 
@@ -384,7 +365,7 @@ describe('Schedule: the owner\'s press made ahead of time', () => {
     expect(result).toMatchObject({ state: 'scheduled', at, url: '' })
     expect(missions.requests).toHaveLength(0)
     expect(opportunities()).toMatchObject([{ kind: 'reply', state: 'ready', scheduled_at: at, finding_id: findingId }])
-    expect(approvals()).toEqual([{ by: 'user', acknowledged: '[]', invalidated: null }])
+    expect(approvals()).toEqual([{ by: 'user', invalidated: null }])
     const replies = await world.core.router.call('findings.replies', { id: findingId })
     expect(replies.places).toMatchObject([{ position: null, state: 'ready', text: 'Houses split the sky.', scheduledAt: at }])
   })
@@ -416,12 +397,13 @@ describe('Schedule: the owner\'s press made ahead of time', () => {
     expect(await schedule(findingId, place(0), 'Words.', inMinutes(60))).toMatchObject({ state: 'refused', message: expect.stringMatching(/already sent/) })
   })
 
-  it('refuses a community that forbids replying at once, with the way out, and makes nothing; "anyway" plans it', async () => {
+  it('refuses a reply the site does not allow this account at once, says why, and makes nothing', async () => {
     const { findingId } = setup(presses, restricted())
-    expect(await schedule(findingId, null, 'Words.', inMinutes(60))).toMatchObject({ state: 'refused', code: 'channel_restricted', message: expect.stringContaining(COMMUNITY_WORDS) })
+    const result = await schedule(findingId, null, 'Words.', inMinutes(60))
+    expect(result).toMatchObject({ state: 'refused', message: expect.stringContaining(SITE_WORDS) })
+    expect(result).not.toHaveProperty('code')
     expect(opportunities()).toEqual([])
-    expect(await schedule(findingId, null, 'Words.', inMinutes(60), true)).toMatchObject({ state: 'scheduled' })
-    expect(approvals()).toEqual([{ by: 'user', acknowledged: '["community_rules"]', invalidated: null }])
+    expect(approvals()).toEqual([])
   })
 
   it('is replaced by Send now: the press goes out and the plan is gone, so the comment does not go out a second time', async () => {
@@ -506,14 +488,6 @@ describe('The scheduler sends the owner\'s scheduled comments from the Feed, and
     world.clock.advance(11 * 60_000)
     expect(await world.sending.sendDuePublications()).toBe(1)
     expect(missions.requests[0].authority.content).toMatchObject({ destination: COMMENT_URL })
-  })
-
-  it('sends a comment planned "anyway" in a community that forbids it, because the owner said so for this text', async () => {
-    const { missions, findingId } = setup(presses, restricted())
-    await schedule(findingId, null, 'Words.', inMinutes(10), true)
-    world.clock.advance(11 * 60_000)
-    expect(await world.sending.sendDuePublications()).toBe(1)
-    expect(missions.requests).toHaveLength(1)
   })
 
   it('does nothing while automation is paused, and sends once it is not', async () => {

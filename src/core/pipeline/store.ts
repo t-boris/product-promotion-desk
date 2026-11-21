@@ -6,7 +6,6 @@ import { siteLinkFor } from '../../shared/post-format'
 import type { PostType, QuickCard } from '../../shared/quick-post'
 import type {
   Account,
-  Acknowledgement,
   Approval,
   Attachment,
   Capability,
@@ -592,17 +591,14 @@ export class FlowStore {
     destination: string
     approvedBy: Approval['approvedBy']
     ruleId: string | null
-    /** What the owner knowingly let through; kept only for the owner's own approval. */
-    acknowledged?: Acknowledgement[]
   }): Approval {
     const id = newId()
-    const acknowledged = p.approvedBy === 'user' ? [...new Set(p.acknowledged ?? [])] : []
     this.db
       .prepare(
-        `INSERT INTO approvals (id, draft_id, content_hash, account_id, signed_in_identity, destination, approved_by, rule_id, approved_at, invalidated_at, invalid_reason, acknowledged_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)`
+        `INSERT INTO approvals (id, draft_id, content_hash, account_id, signed_in_identity, destination, approved_by, rule_id, approved_at, invalidated_at, invalid_reason)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)`
       )
-      .run(id, p.draftId, p.contentHash, p.accountId, p.identity, p.destination, p.approvedBy, p.ruleId, this.now(), toJson(acknowledged))
+      .run(id, p.draftId, p.contentHash, p.accountId, p.identity, p.destination, p.approvedBy, p.ruleId, this.now())
     const row = this.db.prepare('SELECT * FROM approvals WHERE id = ?').get(id) as Row
     return mapApproval(row)
   }

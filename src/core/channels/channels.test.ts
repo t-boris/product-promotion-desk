@@ -29,7 +29,7 @@ describe('channels.connect', () => {
       baselineDoneAt: null
     })
     expect(channel.settings).toEqual(DEFAULT_CHANNEL_SETTINGS)
-    expect(channel.capabilities).toHaveLength(10)
+    expect(channel.capabilities).toHaveLength(9)
     expect(channel.capabilities.every((c) => c.status === 'needs_check' && c.checkedAt === null)).toBe(true)
     expect(await w.call('channels.list', undefined)).toEqual([channel])
   })
@@ -214,8 +214,8 @@ describe('channels.setMode (REQ-003)', () => {
     const channel = await connect(w)
     w.core.db
       .prepare('UPDATE channels SET capabilities_json = ? WHERE id = ?')
-      .run(JSON.stringify([{ key: 'publish_reply', status: 'restricted', detail: 'The rules ban automated replies.', checkedAt: null }]), channel.id)
-    await expect(w.call('channels.setMode', { channelId: channel.id, mode: 'approval' })).rejects.toThrow(/forbidden by the community rules: The rules ban automated replies/)
+      .run(JSON.stringify([{ key: 'publish_reply', status: 'restricted', detail: 'This account is banned from r/test.', checkedAt: null }]), channel.id)
+    await expect(w.call('channels.setMode', { channelId: channel.id, mode: 'approval' })).rejects.toThrow(/not allowed by the community: This account is banned from r\/test/)
   })
 
   it('allows approval mode where replying still needs checking, and requires categories for automatic mode', async () => {

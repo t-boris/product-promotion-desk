@@ -2,10 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { makeTestCore } from '../../core/testing/fakes'
 import { TakeoverError } from '../../core/ports'
 import type { Capability, CapabilityKey } from '../../shared/types'
-import { aboutJson, listing, postThing, routeHealthyReddit, rulesJson, seedChannel } from '../test-helpers'
+import { aboutJson, listing, postThing, routeHealthyReddit, seedChannel } from '../test-helpers'
 import { RedditConnector } from './connector'
 import { postingVerdicts } from './assess'
-import { analyzeRules } from '../rules-text'
 
 const connector = new RedditConnector({ sleep: async () => undefined, pacingMs: 0 })
 
@@ -25,14 +24,14 @@ describe('Reddit assessment (REQ-002)', () => {
     expect(caps.read_posts.status).toBe('verified')
     expect(caps.read_comments.status).toBe('verified')
     expect(caps.detect_changes.status).toBe('verified')
-    expect(caps.rules.status).toBe('verified')
     expect(caps.verify_send.status).toBe('verified')
     expect(caps.metrics.status).toBe('verified')
     // Honesty rule: reaching the form is not proof that a send works.
     expect(caps.publish_post.status).toBe('needs_check')
     expect(caps.publish_reply.status).toBe('needs_check')
     expect(caps.publish_post.detail).toMatch(/first authorized send/)
-    expect(Object.keys(caps)).toHaveLength(10)
+    expect(Object.keys(caps)).toHaveLength(9)
+    expect(Object.keys(caps)).not.toContain('rules')
   })
 
   it('never types, clicks or uploads anything: no test publication (REQ-002)', async () => {
@@ -54,7 +53,7 @@ describe('Reddit assessment (REQ-002)', () => {
     const { ctx, page } = setup()
     page.route('/api/me.json', {}, 200)
     const caps = await connector.assess(ctx)
-    expect(caps).toHaveLength(10)
+    expect(caps).toHaveLength(9)
     expect(caps.every((c) => c.status === 'needs_user')).toBe(true)
     expect(caps[0].detail).toMatch(/sign in/i)
   })
@@ -66,13 +65,14 @@ describe('Reddit assessment (REQ-002)', () => {
     expect(caps.every((c) => c.status === 'needs_user' && /CAPTCHA/.test(c.detail))).toBe(true)
   })
 
-  it('marks sending as restricted when the rules forbid automation, but keeps reading verified', async () => {
+  it('does not read a community\'s rules: a rules page that forbids bots and promotion changes nothing (DEC-050)', async () => {
     const { ctx, page } = setup()
-    page.route('/r/test/about/rules.json', rulesJson([{ short_name: 'No bots', description: 'Bots and automated posting are not allowed here.' }]))
+    page.route('/r/test/about/rules.json', { rules: [{ short_name: 'No bots', description: 'Bots, AI-generated content and automated posting are not allowed here. No self-promotion.' }], site_rules: [] })
     const caps = byKey(await connector.assess(ctx))
-    expect(caps.publish_post.status).toBe('restricted')
-    expect(caps.publish_reply.status).toBe('restricted')
-    expect(caps.publish_reply.detail).toMatch(/No bots/)
+    expect(caps.publish_post.status).toBe('needs_check')
+    expect(caps.publish_reply.status).toBe('needs_check')
+    expect(caps.publish_reply.detail).not.toMatch(/No bots|rules|promotion/i)
+    expect(caps.publish_post.detail).not.toMatch(/No bots|rules|promotion/i)
     expect(caps.read_posts.status).toBe('verified')
   })
 
@@ -146,23 +146,16 @@ describe('posting verdicts (pure)', () => {
   }
 
   it('treats an archived community as read-only', () => {
-    const v = postingVerdicts('test', about({ subreddit_type: 'archived' }), null)
+    const v = postingVerdicts('test', about({ subreddit_type: 'archived' }))
     expect(v.post.status).toBe('unavailable')
     expect(v.reply.status).toBe('unavailable')
   })
 
   it('restricts a banned account and a restricted community for posts only', () => {
-    expect(postingVerdicts('test', about({ user_is_banned: true }), null).reply.status).toBe('restricted')
-    const restricted = postingVerdicts('test', about({ subreddit_type: 'restricted' }), null)
+    expect(postingVerdicts('test', about({ user_is_banned: true })).reply.status).toBe('restricted')
+    const restricted = postingVerdicts('test', about({ subreddit_type: 'restricted' }))
     expect(restricted.post.status).toBe('restricted')
     expect(restricted.reply.status).toBe('needs_check')
-    expect(postingVerdicts('test', about({ subreddit_type: 'restricted', user_is_contributor: true }), null).post.status).toBe('needs_check')
-  })
-
-  it('warns about promotion rules without restricting', () => {
-    const analysis = analyzeRules([{ name: 'No self-promotion', text: 'Do not advertise.' }])
-    const v = postingVerdicts('test', about({}), analysis)
-    expect(v.post.status).toBe('needs_check')
-    expect(v.post.detail).toMatch(/No self-promotion/)
+    expect(postingVerdicts('test', about({ subreddit_type: 'restricted', user_is_contributor: true })).post.status).toBe('needs_check')
   })
 })

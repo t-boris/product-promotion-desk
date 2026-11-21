@@ -122,36 +122,57 @@ export class CodexEngine extends CliEngine {
     ]
   }
 
-  /** Codex has no separate system-prompt flag in exec mode, so the system text leads the prompt. */
   /**
    * `codex exec` prints its banner and then the whole prompt to stderr before it works; showing those lines would put the prompt on the
    * screen. Only what comes after the prompt is progress: its own messages ("codex"), the commands it runs ("exec") and what they say.
+   * The transcript is made of sections, each opened by a line of its own ("codex", "exec", "thinking", "mcp ...", "web search: ..."). The answer is printed
+   * into it too, as pretty-printed JSON over many lines (and so is what a tool returns): a line that opens one (`{`, `[` or a code fence) is the start of
+   * data, not of words, and everything up to the next section line is left out. The caller reads the answer from stdout.
    */
   protected override progressSink(forward: (line: string) => void): (line: string) => void {
-    let mode: 'banner' | 'prompt' | 'work' | 'done' = 'banner'
-    return (raw) => {
-      const line = raw.trim()
-      if (mode === 'done') return
-      if (mode === 'banner') {
-        if (line === 'user') mode = 'prompt'
-        return
-      }
-      if (/^tokens used$/i.test(line)) {
-        mode = 'done'
-        return
-      }
-      if (mode === 'prompt') {
-        if (!/^(codex|exec|thinking|tool|mcp\b.*|web search\b.*)$/i.test(line)) return
-        mode = 'work'
-      }
-      // The answer itself (JSON) is not progress; it is read by the caller.
-      // "web search:" with no query is only the start of a search; the line that names what is searched for is the progress.
-      if (line === '' || line.startsWith('{') || /^(codex|thinking|tool)$/i.test(line) || /^web search:?$/i.test(line)) return
-      forward(line.slice(0, 200))
-    }
+    return codexProgress(forward)
   }
 
   protected override buildInput(task: AiTask): string {
     return task.system ? `${task.system}\n\n${task.prompt}` : task.prompt
+  }
+}
+
+/** The line that opens a section of the transcript `codex exec` prints to stderr: its own words ("codex"), a command ("exec"), a tool call, a search. */
+const SECTION_LINE = /^(codex|exec|thinking|tool|mcp\b.*|web search\b.*)$/i
+
+/**
+ * What reaches the progress panel from the stderr of `codex exec`, one line at a time: the lines a person means to read (what Codex says, the commands and
+ * tools it runs, the searches it makes). Not the banner and the prompt that come before the work, not what comes after "tokens used", and not data: the
+ * answer (JSON over many lines) and what a tool returns are in the transcript too, and a fragment of them (`},`, `"title": ...`) says nothing to the owner.
+ * A line that opens data (`{`, `[` or a code fence) starts a stretch that runs to the next section line. Pure: the lines go to `forward`.
+ */
+export function codexProgress(forward: (line: string) => void): (line: string) => void {
+  let mode: 'banner' | 'prompt' | 'work' | 'done' = 'banner'
+  let data = false
+  return (raw) => {
+    const line = raw.trim()
+    if (mode === 'done') return
+    if (mode === 'banner') {
+      if (line === 'user') mode = 'prompt'
+      return
+    }
+    if (/^tokens used$/i.test(line)) {
+      mode = 'done'
+      return
+    }
+    if (mode === 'prompt') {
+      if (!SECTION_LINE.test(line)) return
+      mode = 'work'
+    }
+    if (SECTION_LINE.test(line)) data = false
+    else if (data) return
+    if (/^[{[]/.test(line) || line.startsWith('```')) {
+      data = true
+      return
+    }
+    // "web search:" with no query is only the start of a search; the line that names what is searched for is the progress.
+    if (line === '' || /^(codex|thinking|tool)$/i.test(line) || /^web search:?$/i.test(line)) return
+    forward(line.slice(0, 200))
   }
 }

@@ -68,8 +68,8 @@ export function registerFlow(core: Core): void {
   // Send in the same window: the owner's own text is put under the post or under the comment by the AI in the account's browser, on the owner's press.
   const findingSend = new FindingSend(core, store, findings, review)
   core.router.register({
-    'findings.send': ({ id, place, text, anyway }) => findingSend.send({ id: requireText(id, 'The post'), place: place ?? null, text, anyway: anyway === true }),
-    'findings.schedule': ({ id, place, text, at, anyway }) => findingSend.schedule({ id: requireText(id, 'The post'), place: place ?? null, text, at, anyway: anyway === true }),
+    'findings.send': ({ id, place, text }) => findingSend.send({ id: requireText(id, 'The post'), place: place ?? null, text }),
+    'findings.schedule': ({ id, place, text, at }) => findingSend.schedule({ id: requireText(id, 'The post'), place: place ?? null, text, at }),
     'findings.unschedule': ({ opportunityId }) => {
       findingSend.unschedule(requireText(opportunityId, 'The answer'))
       return { ok: true as const }

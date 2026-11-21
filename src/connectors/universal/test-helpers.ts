@@ -70,8 +70,6 @@ export function validProfileDefinition(over: Record<string, unknown> = {}): Reco
       }
     },
     metrics: [{ key: 'members', label: 'Members', selector: '.member-count' }],
-    rulesUrl: 'https://forum.example.com/rules',
-    rulesSelector: 'div.rules',
     ...over
   }
 }
@@ -180,7 +178,6 @@ export function armForum(page: SiteFakePage): void {
   })
   page.at('https://forum.example.com/t/2', thread('t2'))
   page.at('https://forum.example.com/t/1', { ...thread('t1'), items: { 'div.post': [] } })
-  page.at('https://forum.example.com/rules', { selectors: new Set(['div.rules']), texts: { 'div.rules': 'Be kind. Share your own work only on Fridays.' } })
   page.at('https://forum.example.com/u/natal/posts', {
     selectors: new Set(['div.mine', 'div.post']),
     items: { 'div.post': [item({ id: 'mine-1', body: 'My earlier reply', permalink: 'https://forum.example.com/t/2#9', time: '2026-11-08T12:00:00Z', parentId: 't2-p1' })] }

@@ -85,7 +85,7 @@ export class RedditConnector implements Connector {
 
   /**
    * DEC-045: Reddit refuses the post list of a community to a client that is not its own application (HTTP 403 with a page instead of data), while the
-   * community's rules and numbers are still given. When the assessment found the list refused, the app cannot read the community itself, and the AI
+   * community's own page and numbers are still given. When the assessment found the list refused, the app cannot read the community itself, and the AI
    * watches it in the account's browser like a person. A list that was never tried, or failed in a way that may pass (a limit, a network error), does
    * not change what the app does: the community stays read through Reddit until an assessment says it cannot be.
    */

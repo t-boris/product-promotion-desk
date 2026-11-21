@@ -55,9 +55,9 @@ describe('site profile validator: acceptance', () => {
     expect(result.profile?.publish?.reply?.steps).toHaveLength(5)
   })
 
-  it('accepts a minimal read-only profile (no publishing, metrics or rules)', () => {
+  it('accepts a minimal read-only profile (no publishing, metrics or own content)', () => {
     const result = withPath((e) => {
-      for (const key of ['publish', 'metrics', 'ownContent', 'rulesUrl', 'rulesSelector']) e.del(key)
+      for (const key of ['publish', 'metrics', 'ownContent']) e.del(key)
     })
     expect(result.valid).toBe(true)
     expect(result.profile?.publish).toBeUndefined()
@@ -89,7 +89,7 @@ describe('site profile validator: no code is ever accepted (SRC-001)', () => {
     ['eval( in a value', (e) => e.set('publish.post.steps.3.value', 'eval(document.cookie)')],
     ['a <script> tag in a value', (e) => e.set('publish.post.steps.3.value', '<script>alert(1)</script>')],
     ['a template literal', (e) => e.set('name', 'x ${process.env.SECRET}')],
-    ['document.cookie', (e) => e.set('rulesSelector', 'document.cookie')],
+    ['document.cookie', (e) => e.set('login.loggedInSelector', 'document.cookie')],
     ['new Function', (e) => e.set('name', 'new Function("x")')],
     ['a data:text/html URL', (e) => e.set('loginUrl', 'data:text/html,<b>x')]
   ])('rejects %s', (_label, mutate) => {

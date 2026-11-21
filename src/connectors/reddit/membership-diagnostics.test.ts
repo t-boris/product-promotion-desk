@@ -55,18 +55,17 @@ describe('what Reddit said about a refusal', () => {
 })
 
 describe('the listing refusal (pure)', () => {
-  it('does not blame the sign-in when the rules and the numbers of the same community were read', () => {
-    const text = listingRefusal('astrology', 'access denied (private), HTTP 403', { about: true, rules: true }, true)
+  it('does not blame the sign-in when the page and the numbers of the same community were read', () => {
+    const text = listingRefusal('astrology', 'access denied (private), HTTP 403', { about: true }, true)
     expect(text).toContain('Reddit did not give the r/astrology post list: access denied (private), HTTP 403.')
     expect(text).toMatch(/same sign-in, so the sign-in works; only the post list was refused/)
     expect(text).not.toMatch(/not joined/)
   })
 
   it('says what else was refused, and points at Membership only when the account has not joined', () => {
-    expect(listingRefusal('x', 'a', { about: false, rules: true }, null)).toMatch(/Part of the community/)
-    expect(listingRefusal('x', 'a', { about: false, rules: false }, null)).toMatch(/other pages were refused too/)
-    expect(listingRefusal('x', 'a', { about: true, rules: true }, false)).toMatch(/has not joined r\/x yet \(see Membership\)/)
-    expect(listingRefusal('x', 'a', { about: true, rules: true }, null)).not.toMatch(/joined/)
+    expect(listingRefusal('x', 'a', { about: false }, null)).toMatch(/other pages were refused too/)
+    expect(listingRefusal('x', 'a', { about: true }, false)).toMatch(/has not joined r\/x yet \(see Membership\)/)
+    expect(listingRefusal('x', 'a', { about: true }, null)).not.toMatch(/joined/)
   })
 })
 
@@ -116,13 +115,12 @@ describe('the assessment of a community whose post list Reddit refused', () => {
     const caps = byKey(await connector.assess(ctx))
     expect(caps.read_posts.status).toBe('unavailable')
     expect(caps.read_posts.detail).toContain('access denied (a network-security block page), HTTP 403')
-    expect(caps.read_posts.detail).toMatch(/rules and numbers were read with the same sign-in, so the sign-in works/)
+    expect(caps.read_posts.detail).toMatch(/own page and numbers were read with the same sign-in, so the sign-in works/)
     expect(caps.read_posts.detail).not.toMatch(/boris|chart_notebook/)
     expect(caps.read_comments.detail).toMatch(/^Not tried: .*see Read posts/)
     expect(caps.detect_changes.status).toBe('needs_check')
     expect(caps.detect_changes.detail).toMatch(/^Not examined: it needs the post list/)
     // what the same sign-in could read stays verified, and a member is shown as one
-    expect(caps.rules.status).toBe('verified')
     expect(caps.metrics.status).toBe('verified')
     expect(caps.membership).toMatchObject({ status: 'verified', detail: 'This account is a member of r/test.' })
   })
@@ -139,7 +137,7 @@ describe('the assessment of a community whose post list Reddit refused', () => {
 
   it('says the community\'s other pages were refused too when nothing could be read', async () => {
     const { ctx, page } = setup()
-    for (const path of ['/r/test/new.json', '/r/test/about.json', '/r/test/about/rules.json']) page.route(path, { message: 'Forbidden' }, 403)
+    for (const path of ['/r/test/new.json', '/r/test/about.json']) page.route(path, { message: 'Forbidden' }, 403)
     const caps = byKey(await connector.assess(ctx))
     expect(caps.read_posts.detail).toMatch(/other pages were refused too/)
     expect(caps.membership.status).toBe('needs_check')

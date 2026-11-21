@@ -7,7 +7,7 @@ import { Button, ErrorNote, Hint } from '../../ui'
 import { OpenChannelBrowser } from '../channels/OpenChannelBrowser'
 import { FullReply } from './FullReply'
 import { ReplyActions } from './ReplyActions'
-import { nextAsk, openingMove, placeKey, placeLabel, scheduledLine, sendBlock, sendLine, sendNote, storedText, wayOut, withRound, type Doing, type Place, type Round } from './reply-composer'
+import { byHand, nextAsk, openingMove, placeKey, placeLabel, scheduledLine, sendBlock, sendLine, sendNote, storedText, withRound, type Doing, type Place, type Round } from './reply-composer'
 
 interface Kept {
   text: string
@@ -22,8 +22,7 @@ const kept = new Map<string, Kept>()
  * "no link") and asks again, as many rounds as they like. The AI proposes. Nothing is posted until the owner presses a button, and each button is the
  * owner's own decision about this exact text: Send now (the AI opens the post in the account's browser and types the text, exactly as it stands, at the place
  * the owner picked), Schedule (the application does the same at the time the owner chose) or Edit in full (the card every draft has, for a picture, a link or
- * formatting). When the community's own rules stand in the way the window says so in the community's words and offers Send anyway: the owner's own press,
- * for this text only. Copy stays for the owner who would rather do it by hand.
+ * formatting). Copy stays for the owner who would rather do it by hand. What a community's rules say never stops a press and is never shown (DEC-050).
  *
  * `initialWish` is a wish the window opens with (the explanation of a post offers "Write a reply from this"): the first round is asked with it instead of an
  * empty one. It is only a request for text; nothing is sent because of it.
@@ -45,15 +44,15 @@ export function ReplyComposer({ finding, place, comments, initialWish = '', onCl
   const [result, setResult] = useState<FindingSendResult | null>(null)
   const [attempt, setAttempt] = useState<Doing>('send')
   const where = comment ? { position: comment.position, author: comment.author, text: comment.text } : null
-  const [post, posting] = useAction(async (anyway: boolean) => {
+  const [post, posting] = useAction(async () => {
     setResult(null)
     setAttempt('send')
-    setResult(await call('findings.send', { id: finding.id, place: where, text: latest.current.text, anyway }))
+    setResult(await call('findings.send', { id: finding.id, place: where, text: latest.current.text }))
   })
-  const [plan, planning] = useAction(async (at: string, anyway: boolean) => {
+  const [plan, planning] = useAction(async (at: string) => {
     setResult(null)
     setAttempt('schedule')
-    setResult(await call('findings.schedule', { id: finding.id, place: where, text: latest.current.text, at, anyway }))
+    setResult(await call('findings.schedule', { id: finding.id, place: where, text: latest.current.text, at }))
   })
   const [cancelPlan, cancelling] = useAction(async () => {
     if (!here) return
@@ -72,7 +71,6 @@ export function ReplyComposer({ finding, place, comments, initialWish = '', onCl
   const working = posting.busy || planning.busy || cancelling.busy || opening.busy
   const stopped = sendBlock({ text, blocked: replies.data?.blocked ?? '', state: here?.state ?? null, comment, busy: working })
   const line = result && result.state !== 'scheduled' ? sendLine(result, new Date(), attempt) : null
-  const way = wayOut(result)
   // The time a comment is planned for comes from the item (so it survives closing the window); the answer of the press that just planned it covers the moment before it is reloaded.
   const planned = here && here.scheduledAt ? here : result?.state === 'scheduled' && result.at ? { scheduledAt: result.at, text: latest.current.text } : null
   const plannedLine = planned ? scheduledLine(planned, text, new Date()) : null
@@ -185,17 +183,16 @@ export function ReplyComposer({ finding, place, comments, initialWish = '', onCl
             </details>
           )}
           <ReplyActions
-            way={way}
+            byHand={byHand(result)}
             plannedLine={plannedLine}
             working={working || asking.busy}
             stopped={stopped}
             posting={posting.busy}
-            onSend={(anyway) => void post(anyway)}
-            onSchedule={(at, anyway) => void plan(at, anyway)}
+            onSend={() => void post()}
+            onSchedule={(at) => void plan(at)}
             onCancelPlan={() => void cancelPlan()}
             onEditFull={() => void openFull()}
             onCopy={() => void copy()}
-            onBack={() => setResult(null)}
             copyDisabled={text.trim() === ''}
             openPost={<OpenChannelBrowser channelId={finding.channelId} url={comment?.url || finding.url} label="Open post" testId="reply-open-post" fallbackUrl={finding.url} />}
           />
@@ -210,7 +207,7 @@ export function ReplyComposer({ finding, place, comments, initialWish = '', onCl
           </span>
           {(posting.busy || planning.busy) && <AiProgressPanel />}
           {line && (
-            <Hint tone={line.tone === 'good' ? undefined : 'warn'} data-testid="reply-send-result" data-state={result?.state} data-code={result?.code ?? ''}>
+            <Hint tone={line.tone === 'good' ? undefined : 'warn'} data-testid="reply-send-result" data-state={result?.state}>
               {line.text}
             </Hint>
           )}

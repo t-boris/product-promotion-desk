@@ -18,7 +18,7 @@ describe('a new channel claims nothing', () => {
     const blank = blankCapabilities()
     expect(blank.map((c) => c.key)).toEqual(CAPABILITY_KEYS)
     expect(blank.every((c) => c.status === 'needs_check' && c.checkedAt === null)).toBe(true)
-    expect(CAPABILITY_KEYS).toHaveLength(10)
+    expect(CAPABILITY_KEYS).toHaveLength(9)
   })
 })
 
@@ -33,7 +33,7 @@ describe('assessment never claims sending abilities (REQ-002: no test publicatio
 
   it('keeps what was really observed: reading, change detection, metrics, rules', () => {
     const result = normalizeAssessment(blankCapabilities(), all('verified'), AT)
-    for (const key of ['read_posts', 'read_comments', 'detect_changes', 'metrics', 'rules'] as const) {
+    for (const key of ['read_posts', 'read_comments', 'detect_changes', 'metrics'] as const) {
       expect(get(result, key).status).toBe('verified')
     }
   })
@@ -48,7 +48,7 @@ describe('assessment never claims sending abilities (REQ-002: no test publicatio
 
   it('stamps every capability with the time of this check and reports missing ones as needing a check', () => {
     const result = normalizeAssessment(blankCapabilities(), [cap('read_posts', 'verified')], AT)
-    expect(result).toHaveLength(10)
+    expect(result).toHaveLength(9)
     expect(result.every((c) => c.checkedAt === AT)).toBe(true)
     expect(get(result, 'metrics')).toMatchObject({ status: 'needs_check', detail: 'The connector did not report this capability.' })
   })
@@ -78,7 +78,7 @@ describe('proof from real sends survives a read-only re-assessment', () => {
   it('keeps proof while the account is signed out, but nothing else is claimed', () => {
     const blocked = blockedCapabilities(proven, 'Not signed in', AT)
     expect(get(blocked, 'publish_reply').status).toBe('verified')
-    expect(blocked.filter((c) => c.status === 'needs_user')).toHaveLength(9)
+    expect(blocked.filter((c) => c.status === 'needs_user')).toHaveLength(8)
     expect(get(blocked, 'read_posts')).toMatchObject({ status: 'needs_user', detail: 'Not signed in', checkedAt: AT })
   })
 })
@@ -91,11 +91,11 @@ describe('markVerified and summary', () => {
   })
 
   it('starts from a blank list when none was stored', () => {
-    expect(withVerified([], 'publish_post', 'ok', AT)).toHaveLength(10)
+    expect(withVerified([], 'publish_post', 'ok', AT)).toHaveLength(9)
   })
 
   it('summarizes by status in plain words', () => {
     const result = normalizeAssessment(blankCapabilities(), [cap('read_posts', 'verified'), cap('publish_post', 'restricted')], AT)
-    expect(summarize(result)).toBe('1 verified, 8 need checking, 1 restricted by rules')
+    expect(summarize(result)).toBe('1 verified, 7 need checking, 1 restricted')
   })
 })

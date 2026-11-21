@@ -19,18 +19,18 @@ const cap = (channel: Channel, key: CapabilityKey): Capability => {
 describe('channels.assess: what the channel can do, without publishing anything (REQ-002)', () => {
   it('stores the observed capabilities with the time of the check, as one recorded run', async () => {
     const { w, channel } = await setup()
-    w.fake.setCapability('rules', 'verified', 'Read 6 rules; none about automation.')
+    w.fake.setCapability('metrics', 'verified', 'Readable: subscribers.')
     const assessed = await w.call('channels.assess', { channelId: channel.id })
-    expect(assessed.capabilities).toHaveLength(10)
+    expect(assessed.capabilities).toHaveLength(9)
     expect(assessed.capabilities.every((c) => c.checkedAt === w.t.clock.now().toISOString())).toBe(true)
     expect(cap(assessed, 'read_posts').status).toBe('verified')
-    expect(cap(assessed, 'rules')).toMatchObject({ status: 'verified', detail: 'Read 6 rules; none about automation.' })
+    expect(cap(assessed, 'metrics')).toMatchObject({ status: 'verified', detail: 'Readable: subscribers.' })
     expect(assessed.status).toBe('setup')
     expect(assessed.statusDetail).toMatch(/Assessed/)
 
     const [run] = w.core.runs.list({ channelId: channel.id })
     expect(run).toMatchObject({ kind: 'assess', channelId: channel.id, status: 'ok' })
-    expect(run.summary).toMatch(/Assessed r\/astrology: 7 verified, 3 need checking/)
+    expect(run.summary).toMatch(/Assessed r\/astrology: 6 verified, 3 need checking/)
   })
 
   it('never publishes: no publish call, no page write, and the sending abilities stay unverified', async () => {
@@ -77,7 +77,7 @@ describe('channels.assess: what the channel can do, without publishing anything 
     const { w, channel } = await setup()
     w.fake.capabilities = [{ key: 'read_posts', status: 'verified', detail: 'Read 10 posts.', checkedAt: null }]
     const assessed = await w.call('channels.assess', { channelId: channel.id })
-    expect(assessed.capabilities).toHaveLength(10)
+    expect(assessed.capabilities).toHaveLength(9)
     expect(cap(assessed, 'read_comments').status).toBe('needs_check')
   })
 })
@@ -113,7 +113,7 @@ describe('assessment keeps proof from real sends (honest, current capabilities)'
 
 describe('assessment when the person is needed (login, CAPTCHA)', () => {
   const loggedOut = (w: World): void => {
-    for (const key of ['read_posts', 'read_comments', 'detect_changes', 'publish_post', 'publish_reply', 'verify_send', 'metrics', 'rules'] as const) {
+    for (const key of ['read_posts', 'read_comments', 'detect_changes', 'publish_post', 'publish_reply', 'verify_send', 'metrics'] as const) {
       w.fake.setCapability(key, 'needs_user', 'The account is not signed in. Open the browser and sign in on the site.')
     }
     w.fake.login = { loggedIn: false, identity: null, captcha: false }

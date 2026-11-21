@@ -42,17 +42,17 @@ describe('universal connector: unknown site without a valid profile', () => {
   it('says plainly that nothing is read here, keeps posting at needs_check, and never claims verified (DEC-034)', async () => {
     const { connector, ctx, page } = setup({ profile: null })
     const caps = await connector.assess(ctx)
-    expect(caps).toHaveLength(10)
+    expect(caps).toHaveLength(9)
     const status = Object.fromEntries(caps.map((c) => [c.key, c.status]))
     // Posting is the one ability that stays: the AI makes the post in the account's browser, and the owner confirms it afterwards.
     expect(status.publish_post).toBe('needs_check')
     expect(status.verify_send).toBe('needs_check')
-    for (const key of ['read_posts', 'read_comments', 'detect_changes', 'publish_reply', 'metrics', 'rules', 'membership']) expect(status[key]).toBe('unavailable')
+    for (const key of ['read_posts', 'read_comments', 'detect_changes', 'publish_reply', 'metrics', 'membership']) expect(status[key]).toBe('unavailable')
     expect(caps.some((c) => c.status === 'verified')).toBe(false)
     expect(caps.find((c) => c.key === 'read_posts')?.detail).toMatch(/no site profile for forum\.example\.com/i)
     expect(caps.find((c) => c.key === 'read_posts')?.detail).toMatch(/does not read this site/)
     // The reason is told once; every other row that is unavailable says only that the app does not read the site.
-    for (const key of ['read_comments', 'detect_changes', 'publish_reply', 'metrics', 'rules', 'membership']) expect(caps.find((c) => c.key === key)?.detail).toMatch(/does not read this site\.$/)
+    for (const key of ['read_comments', 'detect_changes', 'publish_reply', 'metrics', 'membership']) expect(caps.find((c) => c.key === key)?.detail).toMatch(/does not read this site\.$/)
     // The app cannot read the page back, so it never confirms a post itself and never promises to: the owner does (DEC-034).
     expect(caps.find((c) => c.key === 'publish_post')?.detail).toMatch(/you confirm yourself that it is up/)
     expect(caps.find((c) => c.key === 'publish_post')?.detail).not.toMatch(/first real post/)
@@ -92,7 +92,6 @@ describe('universal connector: assessment with a valid profile', () => {
     expect(caps.read_posts.status).toBe('verified')
     expect(caps.read_comments.status).toBe('verified')
     expect(caps.detect_changes.status).toBe('verified')
-    expect(caps.rules.status).toBe('verified')
     expect(caps.verify_send.status).toBe('verified')
     expect(caps.metrics.status).toBe('verified')
     expect(caps.publish_post.status).toBe('needs_check')
@@ -119,13 +118,15 @@ describe('universal connector: assessment with a valid profile', () => {
     expect(caps.publish_post.status).toBe('needs_check')
   })
 
-  it('restricts sending when the rules page forbids automation', async () => {
+  it('never reads a rules page: a page that forbids bots changes nothing (DEC-050)', async () => {
     const { connector, ctx, page } = setup()
     page.at('https://forum.example.com/rules', { selectors: new Set(['div.rules']), texts: { 'div.rules': 'No bots or automated posting allowed.' } })
     const caps = byKey(await connector.assess(ctx))
-    expect(caps.publish_post.status).toBe('restricted')
-    expect(caps.publish_reply.status).toBe('restricted')
+    expect(caps.publish_post.status).toBe('needs_check')
+    expect(caps.publish_reply.status).toBe('needs_check')
+    expect(caps.publish_reply.detail).not.toMatch(/No bots|rules/i)
     expect(caps.read_posts.status).toBe('verified')
+    expect(Object.keys(caps)).not.toContain('rules')
   })
 
   it('does not verify reading when the container disappeared (site layout changed)', async () => {

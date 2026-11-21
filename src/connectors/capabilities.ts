@@ -9,7 +9,6 @@ const KEYS: Record<CapabilityKey, null> = {
   publish_reply: null,
   verify_send: null,
   metrics: null,
-  rules: null,
   membership: null,
   read_inbox: null
 }

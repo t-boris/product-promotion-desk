@@ -8,6 +8,7 @@ import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block
 import { around, fieldsFromIdea, hasText } from '../renderer/src/pages/products/goal-ideas'
 import { applySiteProposal, proposalFits, siteProposalNote } from '../renderer/src/pages/products/site-proposal'
 import { approveAnywayLabel, checkForm, countLabel, fingerprint, heldFor, introLine, needsCheck, type Held } from '../renderer/src/pages/review/approve-check'
+import { foundForAnswer, keepFound } from '../renderer/src/pages/review/found-sources'
 import { canApplyPost, postAnswerFate, postFormEmpty, postUndoable, showPostHelper, sourceHost } from '../renderer/src/pages/review/post-draft'
 
 const READY = { id: 'claude', ready: true, detail: 'ok', label: 'Claude Code' }
@@ -281,5 +282,50 @@ describe('what the AI found (the pages a post was built on)', () => {
     expect(sourceHost('https://www.astro.com/swisseph/swephinfo_e.htm')).toBe('astro.com')
     expect(sourceHost('https://en.wikipedia.org/wiki/Ephemeris')).toBe('en.wikipedia.org')
     expect(sourceHost('not an address')).toBe('not an address')
+  })
+})
+
+describe('"What the AI found": the pages belong to the text they were found for', () => {
+  const sources = [
+    { title: 'Swiss Ephemeris', url: 'https://www.astro.com/swisseph/', fact: 'Positions to 0.001 arc second.' },
+    { title: 'Ephemeris', url: 'https://en.wikipedia.org/wiki/Ephemeris', fact: 'A table of positions.' }
+  ]
+  const TEXT = 'Planets move; a table says where.'
+
+  it('keeps the pages with the exact text the AI wrote, and nothing for an answer that searched for nothing', () => {
+    expect(foundForAnswer(TEXT, sources)).toEqual({ text: TEXT, sources })
+    expect(foundForAnswer(TEXT, [])).toBeNull()
+    expect(foundForAnswer(TEXT, undefined)).toBeNull()
+  })
+
+  it('does not share the list it was given: a later change to it does not move what is shown', () => {
+    const list = [...sources]
+    const found = foundForAnswer(TEXT, list)
+    list.pop()
+    expect(found?.sources).toHaveLength(2)
+  })
+
+  it('shows the pages while the field holds exactly that text', () => {
+    const found = foundForAnswer(TEXT, sources)
+    expect(keepFound(found, TEXT)).toBe(found)
+  })
+
+  it('drops them the moment the owner edits the text, even by one letter, and they do not come back when the same words are typed again', () => {
+    let found = foundForAnswer(TEXT, sources)
+    found = keepFound(found, `${TEXT}!`)
+    expect(found).toBeNull()
+    expect(keepFound(found, TEXT)).toBeNull()
+  })
+
+  it('drops them on Undo: the field holds what was there before the AI wrote', () => {
+    const before = 'My own first words.'
+    expect(keepFound(foundForAnswer(TEXT, sources), before)).toBeNull()
+    // and it agrees with the Undo button: undo is offered exactly while the pages are shown
+    expect(canUndo(before, { text: TEXT, before })).toBe(false)
+    expect(canUndo(TEXT, { text: TEXT, before })).toBe(true)
+  })
+
+  it('has nothing to drop when nothing was found', () => {
+    expect(keepFound(null, 'anything')).toBeNull()
   })
 })

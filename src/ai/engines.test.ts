@@ -41,6 +41,28 @@ case "$FAKE_MODE" in
   codexlog)
     printf 'OpenAI Codex\n--------\nuser\nthe whole prompt\nweb search: \nweb search: swiss ephemeris history\ncodex\n{"x":1}\ntokens used\n12\n' >&2
     printf '%s\n' '{"x":1}' ;;
+  codexjson)
+    cat >&2 <<'EOT'
+OpenAI Codex
+--------
+user
+the whole prompt
+codex
+I will search for sources first.
+web search: swiss ephemeris history
+codex
+Here is the result.
+{
+  "text": "A post.",
+  "sources": [
+    { "title": "Swiss Ephemeris", "url": "https://www.astro.com/swisseph/" }
+  ],
+  "statesProductFacts": false
+}
+tokens used
+12
+EOT
+    printf '%s\n' '{"x":1}' ;;
   crash) kill -SEGV $$ ;;
   huge) yes x | head -c 200000 ;;
 esac
@@ -399,6 +421,16 @@ describe('a run that may search the web (a post is written with it)', () => {
     expect(messages).toContain('web search: swiss ephemeris history')
     expect(messages.join('\n')).not.toMatch(/whole prompt|OpenAI Codex|tokens used/)
     expect(messages).not.toContain('web search:')
+  })
+
+  it('Codex: the answer it prints into its transcript is not shown as progress, line after line of JSON; what it says before it is', async () => {
+    const engine = new CodexEngine({ searchPaths: [binDir], env: env('codexjson') })
+    const messages: string[] = []
+    await engine.run({ label: 't', prompt: 'x', search: true }, { onProgress: (m) => messages.push(m) })
+    expect(messages).toContain('I will search for sources first.')
+    expect(messages).toContain('web search: swiss ephemeris history')
+    expect(messages).toContain('Here is the result.')
+    expect(messages.join('\n')).not.toMatch(/[{}\]]|"title"|"url"|"text"|statesProductFacts|swisseph|tokens used/)
   })
 })
 

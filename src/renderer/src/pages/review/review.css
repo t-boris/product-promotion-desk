@@ -421,6 +421,12 @@
 .post-pair > * {
   min-width: 0;
 }
+/* The text, and what the AI found for it directly under it: the preview is the other column (or below both when there is no room). */
+.post-text-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
 
 .post-box {
   display: flex;

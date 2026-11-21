@@ -4,7 +4,7 @@
 import type { Capability, CapabilityKey, CapabilityStatus, PlatformInfo } from '../../../../shared/types'
 
 /** Membership comes first: whether the account joined explains what the rows below it can read. */
-export const CAPABILITY_ORDER: CapabilityKey[] = ['membership', 'read_posts', 'read_comments', 'read_inbox', 'detect_changes', 'rules', 'metrics', 'publish_post', 'publish_reply', 'verify_send']
+export const CAPABILITY_ORDER: CapabilityKey[] = ['membership', 'read_posts', 'read_comments', 'read_inbox', 'detect_changes', 'metrics', 'publish_post', 'publish_reply', 'verify_send']
 
 export const CAPABILITY_LABEL: Record<CapabilityKey, string> = {
   membership: 'Membership',
@@ -12,7 +12,6 @@ export const CAPABILITY_LABEL: Record<CapabilityKey, string> = {
   read_comments: 'Read comments',
   read_inbox: 'Read replies to you and mentions',
   detect_changes: 'Detect new activity',
-  rules: 'Read community rules',
   metrics: 'Read metrics',
   publish_post: 'Publish a post',
   publish_reply: 'Send a reply',
@@ -24,7 +23,7 @@ export const CAPABILITY_STATUS_LABEL: Record<CapabilityStatus, string> = {
   needs_check: 'Needs verification',
   needs_user: 'Needs you',
   unavailable: 'Unavailable',
-  restricted: 'Restricted by rules'
+  restricted: 'Restricted'
 }
 
 /** Membership is a fact about the account, not an ability: its states say that in the words people use for it. */

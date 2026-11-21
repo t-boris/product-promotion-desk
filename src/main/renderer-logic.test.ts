@@ -1682,7 +1682,7 @@ describe('the Membership row of "What this account can do here" (DEC-029)', () =
     expect(CAPABILITY_ORDER[0]).toBe('membership')
     expect(CAPABILITY_LABEL.membership).toBe('Membership')
     expect(new Set(CAPABILITY_ORDER).size).toBe(CAPABILITY_ORDER.length)
-    expect(CAPABILITY_ORDER).toHaveLength(10)
+    expect(CAPABILITY_ORDER).toHaveLength(9)
   })
 
   it('has a row and a label for every capability the core knows, and reading the inbox sits among the reading rows (the Feed, DEC-038)', () => {
@@ -1694,7 +1694,7 @@ describe('the Membership row of "What this account can do here" (DEC-029)', () =
 
   it('says Member, Not joined, Needs you, Unavailable and Banned for its states, and nothing else changes its words', () => {
     expect(STATUSES.map((s) => abilityStatusLabel('membership', s))).toEqual(['Member', 'Not joined', 'Needs you', 'Unavailable', 'Banned'])
-    expect(STATUSES.map((s) => abilityStatusLabel('read_posts', s))).toEqual(['Verified', 'Needs verification', 'Needs you', 'Unavailable', 'Restricted by rules'])
+    expect(STATUSES.map((s) => abilityStatusLabel('read_posts', s))).toEqual(['Verified', 'Needs verification', 'Needs you', 'Unavailable', 'Restricted'])
     for (const key of CAPABILITY_ORDER.filter((k) => k !== 'membership')) {
       expect(abilityStatusLabel(key, 'verified')).toBe('Verified')
       expect(abilityStatusLabel(key, 'needs_check')).toBe('Needs verification')

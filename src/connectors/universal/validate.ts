@@ -302,7 +302,7 @@ export function validateProfile(input: unknown): ValidationResult {
   if (!isObj(input)) return { valid: false, errors: ['profile: must be a JSON object'], profile: null }
   scanRaw(input, 'profile', 0, c)
 
-  checkKeys(input, ['schema', 'name', 'host', 'channelUrls', 'discussionUrls', 'loginUrl', 'login', 'discussions', 'comments', 'ownContent', 'publish', 'metrics', 'rulesUrl', 'rulesSelector'], 'profile', c)
+  checkKeys(input, ['schema', 'name', 'host', 'channelUrls', 'discussionUrls', 'loginUrl', 'login', 'discussions', 'comments', 'ownContent', 'publish', 'metrics'], 'profile', c)
   if (input.schema !== PROFILE_SCHEMA_VERSION) c.add('profile.schema', `must be ${PROFILE_SCHEMA_VERSION}`)
   const name = str(input, 'name', 'profile', c, { required: true, max: LIMITS.maxName })
   const host = str(input, 'host', 'profile', c, { required: true, max: 253 })
@@ -326,8 +326,6 @@ export function validateProfile(input: unknown): ValidationResult {
   const channelUrls = patterns('channelUrls')
   const discussionUrls = patterns('discussionUrls')
   const loginUrl = input.loginUrl === undefined ? undefined : urlPattern(input.loginUrl, 'profile.loginUrl', validHost, c)
-  const rulesUrl = input.rulesUrl === undefined ? undefined : urlPattern(input.rulesUrl, 'profile.rulesUrl', validHost, c)
-  const rulesSelector = selector(input, 'rulesSelector', 'profile', c)
 
   let login: SiteProfile['login'] | undefined
   if (!isObj(input.login)) c.add('profile.login', 'is required')
@@ -384,9 +382,7 @@ export function validateProfile(input: unknown): ValidationResult {
     comments,
     ...(ownContent ? { ownContent } : {}),
     ...(publish && (publish.post || publish.reply) ? { publish } : {}),
-    ...(metricList && metricList.length > 0 ? { metrics: metricList } : {}),
-    ...(rulesUrl ? { rulesUrl } : {}),
-    ...(rulesSelector ? { rulesSelector } : {})
+    ...(metricList && metricList.length > 0 ? { metrics: metricList } : {})
   }
   return { valid: true, errors: [], profile }
 }

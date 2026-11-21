@@ -12,7 +12,6 @@ import {
   mapMe,
   mapMoreChildren,
   mapOwnComments,
-  mapRules,
   mapThread,
   type AboutInfo,
   type ListingPage,
@@ -174,13 +173,6 @@ export class RedditApi {
     if (res.status !== 200) return failure(res)
     const about = mapAbout(res.json)
     return about ? { ok: true, value: about } : { ok: false, status: res.status, reason: 'unexpected response' }
-  }
-
-  async rules(subreddit: string): Promise<ApiOutcome<{ name: string; text: string }[]>> {
-    const res = await this.get(`/r/${subreddit}/about/rules.json?raw_json=1`)
-    if (res.status !== 200) return failure(res)
-    const rules = mapRules(res.json)
-    return rules ? { ok: true, value: rules } : { ok: false, status: res.status, reason: 'unexpected response' }
   }
 
   async ownSubmitted(username: string, limit: number): Promise<ApiOutcome<RedditPost[]>> {

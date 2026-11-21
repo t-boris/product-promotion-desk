@@ -553,13 +553,12 @@ export type CapabilityKey =
   | 'publish_reply'
   | 'verify_send'
   | 'metrics'
-  | 'rules'
   /** Whether the account has joined the community (DEC-029). Informational: it gates nothing. */
   | 'membership'
   /** Whether the account's inbox can be read, so that replies to the account and mentions of it are found (DEC-039). Informational: it gates nothing else. */
   | 'read_inbox'
 
-/** needs_check: discovered, not yet confirmed. needs_user: a person must act. restricted: forbidden by rules. */
+/** needs_check: discovered, not yet confirmed. needs_user: a person must act. restricted: the site itself does not allow it to this account (banned, not approved) - never a reading of the community's rules text (DEC-050). */
 export type CapabilityStatus = 'verified' | 'needs_check' | 'needs_user' | 'unavailable' | 'restricted'
 
 export interface Capability {
@@ -858,9 +857,6 @@ export interface Draft {
   createdAt: IsoTime
 }
 
-/** What an owner's approval can knowingly let through. `community_rules`: the community's own rules forbid what is sent (the owner pressed Send anyway). */
-export type Acknowledgement = 'community_rules'
-
 export interface Approval {
   id: Id
   draftId: Id
@@ -874,8 +870,6 @@ export interface Approval {
   approvedAt: IsoTime
   invalidatedAt: IsoTime | null
   invalidReason: string | null
-  /** What the owner knowingly let through with this approval; always empty for an automatic approval. */
-  acknowledged: Acknowledgement[]
 }
 
 /** sending: attempt in flight. unknown: outcome unresolved, blocks further attempts. */

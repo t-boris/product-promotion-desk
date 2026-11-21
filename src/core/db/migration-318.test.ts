@@ -1,4 +1,4 @@
-// Migration 318: an approval can carry what the owner knowingly let through ("Send anyway"). Every approval that exists keeps meaning what it meant: nothing.
+// Migration 318: an approval can carry what the owner knowingly let through ("Send anyway"). Every approval that exists keeps meaning what it meant: nothing. (DEC-050 removed "Send anyway" in 0.38.1: the column is unused now, and stays.)
 
 import Database from 'better-sqlite3'
 import { describe, expect, it } from 'vitest'

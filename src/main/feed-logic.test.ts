@@ -483,7 +483,7 @@ describe('what is read', () => {
     expect(keys('mention')).toEqual(['read_inbox'])
     expect(keys('all')).toEqual(['read_posts', 'read_comments', 'read_inbox'])
     expect(readingProblems(c, { source: 'comment', channelId: null })[0].status).toBe('Needs you')
-    expect(readingProblems(c, { source: 'mention', channelId: null })[0].status).toBe('Restricted by rules')
+    expect(readingProblems(c, { source: 'mention', channelId: null })[0].status).toBe('Restricted')
   })
 
   it('is no problem when the ability only needs checking, is verified, or was never recorded; nor for a channel of another scope or one the app does not read', () => {

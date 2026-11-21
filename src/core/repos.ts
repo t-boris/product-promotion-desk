@@ -2,7 +2,6 @@
 
 import type {
   Account,
-  Acknowledgement,
   Approval,
   Capability,
   Channel,
@@ -244,15 +243,8 @@ export const mapApproval = (r: Row): Approval => ({
   ruleId: (r.rule_id as string | null) ?? null,
   approvedAt: r.approved_at as string,
   invalidatedAt: (r.invalidated_at as string | null) ?? null,
-  invalidReason: (r.invalid_reason as string | null) ?? null,
-  acknowledged: acknowledgements(r.acknowledged_json)
+  invalidReason: (r.invalid_reason as string | null) ?? null
 })
-
-/** The names an approval carries, read defensively: anything that is not a known name is dropped. */
-function acknowledgements(raw: unknown): Acknowledgement[] {
-  const list = parseJson<unknown>(typeof raw === 'string' ? raw : null, [])
-  return Array.isArray(list) ? list.filter((x): x is Acknowledgement => x === 'community_rules') : []
-}
 
 export const mapAction = (r: Row): SendAction => ({
   id: r.id as string,

@@ -29,7 +29,6 @@ TOP-LEVEL FIELDS (all others are rejected):
 - ownContent (optional): { url: address of the page listing the account's own posts and comments, may use value placeholders such as {{identity}}; reader: an ITEM READER }. It lets the program find out whether a message really went out. For that the reader should provide time, and parentId (for replies) or title (for posts).
 - publish (optional): { post (optional): PUBLISH FLOW, reply (optional): PUBLISH FLOW }. Leave a flow out when it cannot be described reliably; the program then never sends that kind of message.
 - metrics (optional): up to ${LIMITS.maxMetrics} items { key (lower-case letters, digits, underscore, starts with a letter, at most 40), label (at most 80), selector, attr (optional) } reading one number from the channel page, for example the member count.
-- rulesUrl (optional) and rulesSelector (optional): where the community rules are published (URL pattern) and the element holding their text.
 
 ITEM READER: { containerSelector (required): exists on the page even when there are no items (its absence means the layout changed); itemSelector (required): one element per item; id (required): FIELD; title, author, body, permalink, time, parentId (all optional): FIELD }.
 FIELD: { selector (optional): an element below the item; omit it to use the item itself; attr (optional): the attribute to read instead of the element's text }. A field needs a selector or an attr. Use for example id: {"attr":"data-id"}, permalink: {"selector":"a.title","attr":"href"}, time: {"selector":"time","attr":"datetime"}. The id must be unique and stable per item. parentId is the id of the comment being answered (empty for top-level comments).
@@ -114,6 +113,5 @@ export function summarizeProfile(profile: SiteProfile): string[] {
   if (!publish?.post && !publish?.reply) lines.push('Cannot publish anything: no publishing steps are described, so the app only reads this site.')
   else if (!publish.post || !publish.reply) lines.push(`Cannot publish ${publish.post ? 'replies' : 'new posts'}: no steps are described for it.`)
   lines.push(profile.metrics && profile.metrics.length > 0 ? `Metrics: ${profile.metrics.map((m) => m.label).join(', ')}.` : 'No metrics are read.')
-  lines.push(profile.rulesUrl ? `Community rules are read from ${profile.rulesUrl}${profile.rulesSelector ? ` ("${profile.rulesSelector}")` : ''}.` : 'No rules page is described: read the rules yourself before enabling sending.')
   return lines
 }
