@@ -23,8 +23,14 @@ export interface AgentSurface {
 export class ElectronRawPage extends ScriptedPage {
   private surface: AgentSurface | null = null
 
-  /** `create` builds the hidden page; it is called again if the previous one was destroyed or crashed. */
-  constructor(private readonly create: () => AgentSurface) {
+  /**
+   * `create` builds the hidden page; it is called again if the previous one was destroyed or crashed. `onDispose` is told when the page is let
+   * go of for good, so whoever tracks it can forget it.
+   */
+  constructor(
+    private readonly create: () => AgentSurface,
+    private readonly onDispose?: () => void
+  ) {
     super()
   }
 
@@ -57,6 +63,7 @@ export class ElectronRawPage extends ScriptedPage {
   dispose(): void {
     this.surface?.dispose()
     this.surface = null
+    this.onDispose?.()
   }
 
   async goto(url: string, options?: { timeoutMs?: number }): Promise<void> {
@@ -94,7 +101,10 @@ export class ElectronRawPage extends ScriptedPage {
     return {
       currentUrl: () => contents.getURL(),
       read: (script) => this.read(script),
-      focus: async () => contents.focus(),
+      // No `contents.focus()`: in Electron it also makes the page's window the active one on macOS and Linux, which pulls the owner out of whatever
+      // they are doing each time the AI types or clicks. Real mouse and key events and text insertion reach a page whose window is behind others (checked
+      // on Electron 45 with the window shown without focus), and the page's own scripts focus the element they work on.
+      focus: async () => undefined,
       pressKey: async (key) => {
         const spec = KEYS[key]
         contents.sendInputEvent({ type: 'keyDown', keyCode: spec.keyCode })

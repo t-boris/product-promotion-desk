@@ -93,6 +93,8 @@ export async function exerciseCoexistence(service: ProbeService, tickets: Ticket
   const previous = service.onUserWindowChange
   service.onUserWindowChange = (id, change) => void events.push(`${id}:${change}`)
   const session = service.session(account)
+  // The AI's page: one for all the turns of the probe, as a mission has.
+  const aiTask = session.task('probe')
   const ticket = (): ReturnType<TicketAuthority['issue']> => tickets.issue({ actionId: `probe-${Math.random()}`, contentHash: 'probe', accountId: account.id, destination: `${base}/ai` })
   const closeOwner = async (): Promise<void> => {
     service.closeUserWindow(account)
@@ -100,7 +102,7 @@ export async function exerciseCoexistence(service: ProbeService, tickets: Ticket
   }
   try {
     // 1. The AI has a page of its own, and the site gave the session an id.
-    const ai = await session.withAgentControl('probe', async (p) => {
+    const ai = await aiTask.withAgentControl(async (p) => {
       await p.goto(`${base}/ai`)
       return { title: await p.read<string>('document.title'), url: await p.url() }
     })
@@ -118,7 +120,7 @@ export async function exerciseCoexistence(service: ProbeService, tickets: Ticket
     check('the owner window and the AI\'s page are two pages of ONE session (the same cookie)', sessionOf(owner?.title) === sid && sid !== '', `${sessionOf(owner?.title)} vs ${sid}`)
 
     // 3. The AI keeps working in its own page, behind the owner's window.
-    const typed = await session.withAgentControl('probe', async (p) => {
+    const typed = await aiTask.withAgentControl(async (p) => {
       const title = await p.read<string>('document.title')
       await p.fill('#work', 'typed beside the owner', ticket())
       await p.click('#send', ticket())
@@ -144,12 +146,12 @@ export async function exerciseCoexistence(service: ProbeService, tickets: Ticket
     await service.openForUser(account, `${base}/owner?go=/owner/next`)
     const moved = await until(async () => (await service.ownerPage?.(account))?.url === `${base}/owner/next`)
     check('the owner goes to another page in their window', moved, JSON.stringify(await service.ownerPage?.(account)))
-    const title2 = await session.withAgentControl('probe', (p) => p.read<string>('document.title'))
+    const title2 = await aiTask.withAgentControl((p) => p.read<string>('document.title'))
     check('...the AI still reads its own page', title2.startsWith('AI page'), title2)
     check('...and an ordinary page is not taken for a change of who is signed in', session.identityEpoch() === quiet, String(session.identityEpoch() - quiet))
 
     // 6. The AI's own page may go to a sign-out address: that is its mission, not the owner's doing.
-    await session.withAgentControl('probe', async (p) => {
+    await aiTask.withAgentControl(async (p) => {
       await p.goto(`${base}/logout`)
       await p.goto(`${base}/ai`)
     })
@@ -157,7 +159,7 @@ export async function exerciseCoexistence(service: ProbeService, tickets: Ticket
 
     // 7. A turn is in progress and the owner opens a window and moves around in it: the turn is not interrupted.
     await closeOwner()
-    const inTurn = await session.withAgentControl('probe', async (p) => {
+    const inTurn = await aiTask.withAgentControl(async (p) => {
       const seen: string[] = []
       await p.goto(`${base}/ai`)
       seen.push((await p.read<string>('document.title')).split(' ')[0] ?? '')
@@ -175,7 +177,7 @@ export async function exerciseCoexistence(service: ProbeService, tickets: Ticket
     await service.openForUser(account, `${base}/owner?go=/logout`)
     const sawOut = await until(() => session.identityEpoch() > beforeOut)
     check('the owner\'s window going to a sign-out page is noticed', sawOut, String(session.identityEpoch() - beforeOut))
-    const aiAfter = await session.withAgentControl('probe', (p) => p.read<string>('document.title'))
+    const aiAfter = await aiTask.withAgentControl((p) => p.read<string>('document.title'))
     check('...and the AI\'s page is not touched by it', aiAfter.startsWith('AI page') && sessionOf(aiAfter) === sid, aiAfter)
 
     // 9. A sign-out that is a request in the background.
@@ -190,7 +192,7 @@ export async function exerciseCoexistence(service: ProbeService, tickets: Ticket
     const workBefore = site.work.length
     let refused: unknown = null
     try {
-      await session.withAgentControl('probe', async (p) => {
+      await aiTask.withAgentControl(async (p) => {
         await p.goto(`${base}/ai`)
         const epoch = session.identityEpoch()
         await service.openForUser(account, `${base}/owner?go=/logout`)
@@ -203,10 +205,10 @@ export async function exerciseCoexistence(service: ProbeService, tickets: Ticket
     }
     check('a write of a turn that began before the owner\'s window used a sign-out page is refused', refused instanceof SessionChangedError, refused instanceof Error ? refused.name : String(refused))
     check('...and nothing was sent to the site', site.work.length === workBefore, `${site.work.length - workBefore} sent`)
-    const typedInPage = await session.withAgentControl('probe', (p) => p.read<string>("document.getElementById('work').value"))
+    const typedInPage = await aiTask.withAgentControl((p) => p.read<string>("document.getElementById('work').value"))
     check('...and nothing was typed in the page', typedInPage !== 'must not be typed', JSON.stringify(typedInPage))
     // The next turn is a new one: the mission itself decides, from the sign-in it reads, whether it may write.
-    const next = await session.withAgentControl('probe', async (p) => {
+    const next = await aiTask.withAgentControl(async (p) => {
       await p.fill('#work', 'a new turn', ticket())
       return p.read<string>("document.getElementById('work').value")
     })
@@ -218,24 +220,25 @@ export async function exerciseCoexistence(service: ProbeService, tickets: Ticket
     await pause(300)
     check('the owner\'s window is closed and the screen is told once', !service.hasUserWindow(account) && events.filter((event) => event.endsWith(':closed')).length === closedBefore + 1, events.join())
     check('...and there is no window to bring to the front', service.showUserWindow(account) === false)
-    const stillAi = await session.withAgentControl('probe', (p) => p.read<string>('document.title'))
+    const stillAi = await aiTask.withAgentControl((p) => p.read<string>('document.title'))
     check('...and the AI still works in its own page', stillAi.startsWith('AI page'), stillAi)
 
     // 12. The explicit take-over of the AI's own page keeps its lock.
     session.takeControl()
     let blocked: unknown = null
     try {
-      await session.withAgentControl('probe', async () => 'ran')
+      await aiTask.withAgentControl(async () => 'ran')
     } catch (error) {
       blocked = error
     }
     check('while the owner has taken the AI\'s own page, the AI is stopped', blocked instanceof TakeoverError, blocked instanceof Error ? blocked.name : String(blocked))
     session.releaseControl()
-    const resumed = await session.withAgentControl('probe', (p) => p.read<string>('document.title')).catch((error: Error) => error.message)
+    const resumed = await aiTask.withAgentControl((p) => p.read<string>('document.title')).catch((error: Error) => error.message)
     check('...and works again when it is given back', resumed.startsWith('AI page'), resumed)
   } finally {
     service.onUserWindowChange = previous
     service.closeUserWindow(account)
+    await aiTask.close()
   }
   return checks
 }

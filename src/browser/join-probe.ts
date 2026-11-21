@@ -88,9 +88,11 @@ export async function exerciseJoin(service: Pick<BrowserService, 'session'>, acc
   const { base, hits } = community
   const hosts = ['127.0.0.1']
   const reports: string[] = []
+  // One page for the whole probe, as a mission has one.
+  const ai = service.session(account).task('join')
   const make = (name = 'probe'): BrowserToolbox =>
     new BrowserToolbox({
-      withPage: (work) => service.session(account).withAgentControl('join', work),
+      withPage: (work) => ai.withAgentControl(work),
       hosts,
       values: {},
       sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
@@ -152,7 +154,7 @@ export async function exerciseJoin(service: Pick<BrowserService, 'session'>, acc
   check('it presses the community\'s own Join button', press.isError !== true, press.text.slice(0, 120))
   for (let i = 0; i < 30 && community.joined.length === 0; i++) await new Promise((resolve) => setTimeout(resolve, 100))
   check(options.realClick ? 'the site saw one press, with a real input event' : 'the site saw one press', community.joined.length === 1 && (!options.realClick || community.joined[0]?.trusted === true), `${JSON.stringify(community.joined)} ${press.text.slice(0, 60)}`)
-  const state = await service.session(account).withAgentControl('probe', (page) => page.read<string>("document.getElementById('join').textContent + '|' + document.getElementById('state').textContent"))
+  const state = await ai.withAgentControl((page) => page.read<string>("document.getElementById('join').textContent + '|' + document.getElementById('state').textContent"))
   check('the page shows the account as a member', state === 'Joined|You are a member.', state)
 
   // and nothing after it
@@ -171,7 +173,7 @@ export async function exerciseJoin(service: Pick<BrowserService, 'session'>, acc
   const fresh = make()
   await fresh.call('browser_navigate', { url: `${base}/r/probe/` })
   const before = (await fresh.call('browser_snapshot', {})).text
-  await service.session(account).withAgentControl('probe', (page) => page.goto(`${base}/r/other/`))
+  await ai.withAgentControl((page) => page.goto(`${base}/r/other/`))
   const wrong = await fresh.call('browser_click', { ref: refOf(before, 'Join', 1) })
   check('on another community\'s page it presses nothing', wrong.isError === true && /not the page of probe/.test(wrong.text), wrong.text.slice(0, 120))
   check('...and the site saw no Join of that page', !hits.includes('POST /join-elsewhere') && hits.filter((h) => h === 'POST /join').length === 1, hits.join(', '))
@@ -196,5 +198,6 @@ export async function exerciseJoin(service: Pick<BrowserService, 'session'>, acc
   const namedPress = await named.call('browser_click', { ref: refOf(namedSnapshot, 'Join r/named') })
   for (let i = 0; i < 30 && !hits.includes('POST /join-named'); i++) await new Promise((resolve) => setTimeout(resolve, 100))
   check('...and the one named after the community is pressed', namedPress.isError !== true && hits.includes('POST /join-named'), namedPress.text.slice(0, 80))
+  await ai.close()
   return checks
 }

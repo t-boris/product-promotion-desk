@@ -265,18 +265,39 @@ export interface BrowserPage {
 }
 
 /**
- * One persistent browser identity (cookies, storage) per account (DEC-038). The AI works in its own page of that session; the owner may have any
- * number of windows on the same session at the same time, and neither takes the browser from the other. Only an explicit `takeControl` (the owner
- * wants to finish something in the AI's own page) makes the AI wait.
+ * One piece of the AI's work that goes on across several calls and keeps one page and one window for all of them (a mission: the AI looks at a
+ * place, then follows a link, then reads). Opened by `BrowserSession.task`; the page is the task's alone, so nothing else the AI does for the
+ * account (another channel's check, a login check) moves it, and it is closed, with its window, when the task ends.
+ */
+export interface AgentTask {
+  /** One turn of the task, on the task's own page (made on the first turn). Turns of the account are serialized; rejects with TakeoverError like `withAgentControl`. */
+  withAgentControl<T>(work: (page: BrowserPage) => Promise<T>): Promise<T>
+  /** Makes the task's page now and shows its window to the owner without taking the focus (a failure to show it is not a failure of the task). */
+  show(): Promise<void>
+  /** Closes the task's page and window. Safe to call twice; the task takes no more turns. */
+  close(): Promise<void>
+}
+
+/**
+ * One persistent browser identity (cookies, storage) per account (DEC-038). Every call the AI makes works in a page of its own on that session
+ * and closes it again; the owner may have any number of windows on the same session at the same time, and none of them takes the browser from the
+ * AI. Only an explicit `takeControl` (the owner wants to finish something in the AI's page) makes the AI wait.
  */
 export interface BrowserSession {
   readonly accountId: Id
   control(): { holder: 'agent' | 'user' | 'none'; owner: string | null }
   /**
-   * Runs `work` as the AI's turn on its page. Runs for the same account are serialized (one at a time); rejects with TakeoverError when the owner
-   * explicitly took control, and in-flight page calls reject once they do. An owner window does not do either.
+   * Runs `work` as one call of the AI, in a page made for this call alone and closed when it ends, so that a call for one channel never finds
+   * the page of another. Turns of the same account are serialized (one at a time); rejects with TakeoverError when the owner explicitly took control,
+   * and in-flight page calls reject once they do. An owner window does not do either.
    */
   withAgentControl<T>(owner: string, work: (page: BrowserPage) => Promise<T>): Promise<T>
+  /** A piece of work of several calls on one page of its own (a mission); `owner` labels its turns. */
+  task(owner: string): AgentTask
+  /** Brings the windows of the open tasks to the front (the owner acts in the very page the AI waits on). Windows of calls are not shown. */
+  revealTasks(focus: boolean): Promise<void>
+  /** Closes every open task's page: the account is let go of or erased. */
+  closeTasks(): Promise<void>
   /** The owner explicitly takes the AI's own page: the AI stops interacting with it until `releaseControl`. */
   takeControl(): void
   releaseControl(): void
@@ -323,8 +344,8 @@ export interface BrowserService {
    */
   openForUser(account: Account, url?: string): Promise<{ tabId: string }>
   /**
-   * Optional (DEC-018): shows the account's own browser, the one the AI works in, in a window of its own without taking control or focus,
-   * so the owner watches the AI work. Closing that window only hides it. `focus` brings it in front of the owner's other windows.
+   * Optional (DEC-018): shows the windows of the AI's open tasks of the account, so the owner acts in the very page the AI waits on. A window is
+   * shown without taking the focus unless `focus` is set: that brings it in front of the owner's other windows, and the owner asked for it.
    */
   showAgentBrowser?(account: Account, focus?: boolean): void
   /**

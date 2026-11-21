@@ -4,7 +4,7 @@ import { call, useAction, useQuery } from '../../hooks'
 import { Button, ConfirmAction, ErrorNote } from '../../ui'
 import { AccountBlock } from './AccountBlock'
 
-const CONTROL_FREE = 'The AI uses its own page of this account. Take control to finish something in that page yourself (a CAPTCHA, a question from the AI): the AI then stops using it.'
+const CONTROL_FREE = 'The AI opens a window of its own for every task and closes it when it is done. While it works you can take control to finish something in that window yourself (a CAPTCHA, a question from the AI): the AI then stops using it.'
 const CONTROL_TAKEN = 'You have control of the AI’s page. The AI does not use it, and the app cannot sign in or check this account, until you give control back.'
 
 /**

@@ -13,7 +13,7 @@ import { rm } from 'node:fs/promises'
 import { join as pathJoin } from 'node:path'
 import { ApiError } from '../../shared/api'
 import type { Account, Channel, Profile, AgentAsk, AgentReadiness, AgentRun, AgentTaskKind, MissionKind } from '../../shared/types'
-import { AiError, TakeoverError, type AiEngine } from '../ports'
+import { AiError, TakeoverError, type AgentTask, type AiEngine } from '../ports'
 import { joinMissionPrompt } from '../browser-agent/join'
 import { missionPrompt, type Mission } from '../browser-agent/mission'
 import { postMissionPrompt } from '../browser-agent/post-mission'
@@ -48,7 +48,7 @@ const JOIN_MAX_CALLS = 40
 /** The pause between two actions of a join, and how long the application waits before it reads the membership a second time. */
 const JOIN_MIN_GAP_MS = 2000
 const JOIN_RECHECK_MS = 2500
-const JOIN_TIMED_OUT = 'The AI did not finish in ten minutes and was stopped. Open the browser and look at where it got to.'
+const JOIN_TIMED_OUT = 'The AI did not finish in ten minutes and was stopped. Its window is closed: open the browser to continue yourself.'
 const NEEDS_YOU_FIRST = (target: string): string =>
   `The last check of ${target} says Membership needs you first (a private community needs an invitation; a sign-in or a check has to be done by a person). Look at Membership in the table, then assess the channel again.`
 const PRIVATE_COMMUNITY = (target: string): string => `${target} is private: joining needs an invitation or approval, and the AI does not ask for it. Do it yourself in the account's browser.`
@@ -109,6 +109,8 @@ interface Live {
   reported: { status: MissionStatus; reason: string } | null
   /** The last question the AI asked and the owner's answer: the source of a rule the AI keeps from it. */
   exchange: { question: string; answer: string } | null
+  /** The mission's own page and window in the account's browser: made when it starts, closed when it ends, and never the page of anything else. */
+  task: AgentTask | null
 }
 
 export class AgentRunService implements PostMissionService, WatchMissionService, ResearchMissionService {
@@ -137,7 +139,7 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
     if (live.run.status === 'running') {
       live.abort.abort()
       this.dropQuestion(live, 'The owner stopped this task.')
-      this.finish(live, 'stopped', 'You stopped the AI. The page is as it was left; open the browser to continue yourself.')
+      this.finish(live, 'stopped', 'You stopped the AI. Its window was closed; open the browser to continue yourself.')
     }
     return snapshot(live.run)
   }
@@ -295,6 +297,7 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
       answer: null,
       reported: null,
       exchange: null,
+      task: null,
       run: {
         accountId: account.id,
         kind,
@@ -315,8 +318,13 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
     this.lessons.markUsed(this.lessons.forPlatform(account.platform))
     this.core.log.info('accounts', `The AI started to ${MISSIONS[kind].doing} ${account.label} on ${mission.hosts[0] ?? 'the platform'} (${engine.label}).`)
     this.core.events.changed('accounts')
-    // The owner watches the AI work in the account's own browser.
-    this.core.browser.showAgentBrowser?.(account)
+    try {
+      // The owner watches the AI work in a window of its own, which the mission closes when it ends.
+      await this.openTask(account, live, `agent-${kind}`)
+    } catch (error) {
+      this.finish(live, 'failed', `The AI could not open its window: ${error instanceof Error ? error.message : String(error)}`)
+      throw error
+    }
     void this.drive(account, live, mission, engine, kind)
     return snapshot(live.run)
   }
@@ -336,6 +344,7 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
       answer: null,
       reported: null,
       exchange: null,
+      task: null,
       run: { accountId: account.id, kind: 'post', status: 'running', summary: spec.opening, lines: [], typed: [], question: null, learned: [], startedAt: this.core.clock.now().toISOString(), finishedAt: null }
     }
     // The engine check above awaited: another start may have taken the account meanwhile.
@@ -352,10 +361,9 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
       // Everything after the claim is inside the try: whatever throws here ends the run as failed, and never leaves it "running".
       this.core.log.info('accounts', `The AI started to ${spec.doing} ${account.label} on ${request.hosts[0] ?? 'the platform'} (${engine.label}).`)
       this.core.events.changed('accounts')
-      this.core.browser.showAgentBrowser?.(account)
-      const session = this.core.browser.session(account)
+      const task = await this.openTask(account, live, 'agent-post')
       toolbox = new BrowserToolbox({
-        withPage: (work) => session.withAgentControl('agent-post', work),
+        withPage: (work) => task.withAgentControl(work),
         hosts: request.hosts,
         values: {},
         sleep: this.core.sleep,
@@ -379,6 +387,7 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
     } finally {
       request.authority.seal()
       this.dropQuestion(live, 'The mission is over.')
+      await live.task?.close()
     }
     if (live.run.status !== 'running') ended = 'stopped' // the owner stopped it (its run was finished by `stop`)
 
@@ -464,6 +473,7 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
       answer: null,
       reported: null,
       exchange: null,
+      task: null,
       run: { accountId: account.id, kind, ...(options.channelId ? { channelId: options.channelId } : {}), status: 'running', summary: spec.opening, lines: [], typed: [], question: null, learned: [], startedAt: this.core.clock.now().toISOString(), finishedAt: null }
     }
     // The engine check before awaited: another start may have taken the account meanwhile.
@@ -475,10 +485,9 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
     try {
       this.core.log.info('accounts', `The AI started to ${spec.doing} ${account.label} on ${options.hosts[0] ?? 'the platform'} (${engine.label}).`)
       this.core.events.changed('accounts')
-      this.core.browser.showAgentBrowser?.(account)
-      const session = this.core.browser.session(account)
+      const task = await this.openTask(account, live, `agent-${kind}`)
       toolbox = new BrowserToolbox({
-        withPage: (work) => session.withAgentControl(`agent-${kind}`, work),
+        withPage: (work) => task.withAgentControl(work),
         hosts: options.hosts,
         values: {},
         sleep: this.core.sleep,
@@ -502,6 +511,7 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
       }
     } finally {
       this.dropQuestion(live, 'The check is over.')
+      await live.task?.close()
     }
     if (toolbox?.watchPaused) ended = 'busy'
     if (live.run.status !== 'running') ended = 'stopped' // the owner stopped it (its run was finished by `stop`)
@@ -660,8 +670,8 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
     // Smaller copies of a picture, for a site that limits its size; they are removed when the mission ends.
     const shrunkDir = pathJoin(this.core.dataDir, 'shrunk', account.id)
     const toolbox = new BrowserToolbox({
-      // Each call holds the AI's page only for itself, so an explicit Take control can come between two calls.
-      withPage: (work) => session.withAgentControl(`agent-${kind}`, work),
+      // Each call holds the mission's page only for itself, so an explicit Take control can come between two calls.
+      withPage: (work) => this.taskOf(live).withAgentControl(work),
       hosts: mission.hosts,
       values: mission.values,
       files: mission.files,
@@ -696,7 +706,7 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
             return this.finish(live, 'needs_owner', JOIN_TIMED_OUT)
           }
         }
-        return this.finish(live, 'needs_owner', 'The AI did not finish in half an hour and was stopped. Open the browser and look at where it got to.')
+        return this.finish(live, 'needs_owner', 'The AI did not finish in half an hour and was stopped. Its window is closed: open the browser to continue yourself.')
       }
       if (error instanceof TakeoverError || (error instanceof ApiError && error.code === 'browser_busy')) return this.finish(live, 'needs_owner', BROWSER_BUSY)
       const reason = error instanceof Error ? error.message : String(error)
@@ -704,6 +714,7 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
       this.finish(live, 'failed', `The AI stopped because of an error: ${reason}`)
     } finally {
       this.dropQuestion(live, 'The mission is over.')
+      await live.task?.close()
       await rm(shrunkDir, { recursive: true, force: true })
     }
   }
@@ -862,7 +873,22 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
     live.run.summary = summary
     live.run.question = null
     live.run.finishedAt = this.core.clock.now().toISOString()
+    // The window the AI worked in is closed with the mission: whatever the owner needs to continue they open themselves.
+    void live.task?.close()
     this.core.events.changed('accounts', 'attention')
+  }
+
+  /** Gives the mission its own page and window (the owner watches the AI work in it; it is shown without taking the focus). */
+  private async openTask(account: Account, live: Live, owner: string): Promise<AgentTask> {
+    const task = this.core.browser.session(account).task(owner)
+    live.task = task
+    await task.show()
+    return task
+  }
+
+  private taskOf(live: Live): AgentTask {
+    if (!live.task) throw new Error('The mission has no page.')
+    return live.task
   }
 }
 

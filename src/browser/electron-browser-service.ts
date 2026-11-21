@@ -15,7 +15,8 @@ const AGENT_VIEWPORT = { width: 1280, height: 900 }
 
 interface AccountBrowser {
   session: ControlledSession
-  agent: ElectronRawPage
+  /** The AI's pages that are open now: one for each running task and each call, every one with a window of its own. They share the account's session. */
+  agentPages: Set<ElectronRawPage>
   partition: string
   /** The owner's windows on the account's session (DEC-038): any number, none of them takes anything from the AI. */
   userWindows: Set<UserBrowserWindow>
@@ -40,8 +41,9 @@ const BACKGROUND_KINDS = new Set(['xhr', 'ping', 'other', 'subFrame'])
  *
  *  - one persistent session per account (`persist:` partition) and exactly one ControlledSession per account,
  *    so every channel and product sharing the account is serialized through the same object;
- *  - the AI works in a hidden WebContents of that partition; the owner gets as many separate windows on the same partition as they
- *    open, and none of them takes the browser from the AI (only an explicit take-over of the AI's own page does, in ControlledSession);
+ *  - every call of the AI, and every mission, works in a WebContents of its own on that partition, in a window of its own that is closed when it is
+ *    done; the owner gets as many separate windows on the same partition as they open, and none of them takes the browser from the AI (only an
+ *    explicit take-over of the AI's own page does, in ControlledSession);
  *  - a window of the owner's that goes to a sign-in, sign-out or account-switch address tells the session (`noteIdentityActivity`), so a
  *    mission that checked who is signed in before knows that the check is out of date;
  *  - this is the only place besides src/main that imports Electron.
@@ -71,10 +73,9 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
     const existing = this.accounts.get(account.id)
     if (existing) return existing
     const partition = persistentPartition(account.partition)
-    const agent = new ElectronRawPage(() => this.createAgentSurface(partition, account.label))
     const entry: AccountBrowser = {
       partition,
-      agent,
+      agentPages: new Set(),
       userWindows: new Set(),
       lastUsed: null,
       recorder: new PageRecorder(
@@ -82,7 +83,7 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
         () => this.pageHost(entry),
         (note) => this.onPageNote?.(account.id, note)
       ),
-      session: new ControlledSession(account.id, async () => agent, this.tickets)
+      session: new ControlledSession(account.id, async () => this.newAgentPage(entry, account.label), this.tickets)
     }
     this.recorders.set(partition, entry.recorder)
     this.owners.set(partition, entry)
@@ -90,12 +91,27 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
     return entry
   }
 
+  /** A page for one call or one mission of the AI: its window is made when the page is first used and closed with it. */
+  private newAgentPage(entry: AccountBrowser, label: string): ElectronRawPage {
+    const page: ElectronRawPage = new ElectronRawPage(
+      () => this.createAgentSurface(entry.partition, label),
+      () => entry.agentPages.delete(page)
+    )
+    entry.agentPages.add(page)
+    return page
+  }
+
+  /** The AI page that was made last and still has a window: where the AI is looking now. */
+  private latestAgent(entry: AccountBrowser): ElectronRawPage | null {
+    return [...entry.agentPages].reverse().find((page) => page.existingContents() !== null) ?? null
+  }
+
   /**
-   * The AI works in the account's own browser and the owner watches (DEC-018): shows the agent's window without taking control.
-   * `focus` brings it to the front, for the moment the owner has to act in the page the AI is waiting on (a CAPTCHA).
+   * The AI works in the account's own browser and the owner watches (DEC-018): brings the windows of the AI's open tasks to the front, for the
+   * moment the owner has to act in the page the AI is waiting on (a CAPTCHA). A window opens by itself without taking the focus (`task.show`).
    */
   showAgentBrowser(account: Account, focus = false): void {
-    this.entry(account).agent.reveal(focus)
+    void this.entry(account).session.revealTasks(focus)
   }
 
   /**
@@ -104,7 +120,7 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
    */
   async openForUser(account: Account, url?: string): Promise<{ tabId: string }> {
     const entry = this.entry(account)
-    const target = normalizeBrowserUrl(url ?? entry.agent.currentUrl() ?? '')
+    const target = normalizeBrowserUrl(url ?? this.latestAgent(entry)?.currentUrl() ?? '')
     const tabId = `account-${account.id}`
 
     const same = [...entry.userWindows].find((window) => !window.isClosed() && window.address() === target)
@@ -155,11 +171,11 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
     return open.at(-1) ?? null
   }
 
-  /** The page the account is on now: the owner's window used last while one is open, else the page the app works in. */
+  /** The page the account is on now: the owner's window used last while one is open, else the page the AI works in (none when it is idle). */
   private livePage(entry: AccountBrowser): { contents: WebContents; where: PageReport['where'] } | null {
     const window = this.ownerWindow(entry)
     if (window) return { contents: window.siteContents(), where: 'owner_window' }
-    const contents = entry.agent.existingContents()
+    const contents = this.latestAgent(entry)?.existingContents()
     return contents ? { contents, where: 'app_page' } : null
   }
 
@@ -234,12 +250,12 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
     for (const window of [...(this.accounts.get(account.id)?.userWindows ?? [])]) window.destroy()
   }
 
-  /** Lets go of the account's windows and hidden page without erasing its session (the account moves to the other browser, DEC-026). */
+  /** Lets go of the account's windows and the AI's pages without erasing its session (the account moves to the other browser, DEC-026). */
   async releaseAccount(account: Account): Promise<void> {
     const entry = this.accounts.get(account.id)
     if (!entry) return
     this.closeUserWindow(account)
-    entry.agent.dispose()
+    this.disposeAgentPages(entry)
     this.accounts.delete(account.id)
     this.owners.delete(entry.partition)
   }
@@ -250,7 +266,7 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
     const partition = entry?.partition ?? persistentPartition(account.partition)
     if (entry) this.closeUserWindow(account)
     entry?.session.takeControl() // nothing may start on a session that is being erased
-    entry?.agent.dispose()
+    if (entry) this.disposeAgentPages(entry)
     this.accounts.delete(account.id)
     this.owners.delete(partition)
     this.recorders.delete(partition)
@@ -260,8 +276,12 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
     await ses.clearCache()
   }
 
+  private disposeAgentPages(entry: AccountBrowser): void {
+    for (const page of [...entry.agentPages]) page.dispose()
+  }
+
   /**
-   * A hidden page in a hidden BaseWindow. BaseWindow (not BrowserWindow) keeps it out of
+   * A page in a window of its own that starts hidden. BaseWindow (not BrowserWindow) keeps it out of
    * BrowserWindow.getAllWindows(), which the main process uses to tell whether an application window is open.
    */
   private createAgentSurface(partition: string, label: string): AgentSurface {

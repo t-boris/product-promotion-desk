@@ -42,8 +42,14 @@ export class ChromeRawPage extends ScriptedPage {
   private handle: ChromeHandle | null = null
   private creating: Promise<ChromeHandle> | null = null
 
-  /** `create` opens the page (starting Chrome when it is not running); it is called again if the page was closed or Chrome went away. */
-  constructor(private readonly create: () => Promise<ChromeHandle>) {
+  /**
+   * `create` opens the page (starting Chrome when it is not running); it is called again if the page was closed or Chrome went away. `onDispose`
+   * is told when the page is let go of for good, so whoever tracks it can forget it.
+   */
+  constructor(
+    private readonly create: () => Promise<ChromeHandle>,
+    private readonly onDispose?: () => void
+  ) {
     super()
   }
 
@@ -85,6 +91,7 @@ export class ChromeRawPage extends ScriptedPage {
     await this.creating?.catch(() => undefined)
     const handle = this.handle
     this.handle = null
+    this.onDispose?.()
     await handle?.dispose().catch(() => undefined)
   }
 

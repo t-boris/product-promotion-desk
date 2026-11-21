@@ -69,9 +69,14 @@ describe('login hand-off (REQ-002: the person types passwords on the site)', () 
   it('lets the person take the AI\'s own page and give it back, shows it in front, and automation yields at once', async () => {
     const w = await makeReadyWorld()
     const session = w.t.browser.session(w.account)
+    // The AI has a task open: its window is the page the owner takes.
+    const task = session.task('agent-signin')
+    await task.show()
+    expect(w.t.browser.agentFocused).toEqual([]) // shown beside the owner's work, not in front of it
     await w.call('accounts.takeControl', { accountId: w.account.id })
     expect(session.control().holder).toBe('user')
     expect(w.t.browser.agentFocused).toEqual([w.account.id]) // the page the owner is to finish something in is put in front
+    await task.close()
     await expect(session.withAgentControl('monitor', async () => 1)).rejects.toMatchObject({ name: 'TakeoverError' })
     await w.call('accounts.releaseControl', { accountId: w.account.id })
     await expect(session.withAgentControl('monitor', async () => 1)).resolves.toBe(1)

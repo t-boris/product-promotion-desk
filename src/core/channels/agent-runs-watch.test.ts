@@ -216,6 +216,29 @@ describe('what a watch mission gives the AI, and how it ends', () => {
     expect(x.w.t.browser.agentShown).toContain(x.w.account.id)
   })
 
+  it('opens a window for the look, shows it without the focus, and closes it when the look is over, however it ends', async () => {
+    const x = await ready()
+    const page = x.w.t.browser.page(x.w.account.id)
+    let whileRunning = -1
+    asTheAI(x.w, async (call) => {
+      await call('browser_snapshot')
+      whileRunning = page.disposed
+      await call('report_result', { status: 'done', reason: 'Looked.' })
+    })
+    await watch(x)
+    expect(whileRunning).toBe(0) // the window stays through the look
+    expect(x.w.t.browser.agentShown).toEqual([x.w.account.id])
+    expect(x.w.t.browser.agentFocused).toEqual([]) // it is never put in front of what the owner is doing
+    expect(page.disposed).toBe(1) // and goes with the look
+
+    const failing = await ready()
+    asTheAI(failing.w, async () => {
+      throw new Error('the engine broke')
+    })
+    await watch(failing)
+    expect(failing.w.t.browser.page(failing.w.account.id).disposed).toBe(1)
+  })
+
   it('ends as stopped when the owner presses Stop, and nothing the AI does afterwards is done', async () => {
     const x = await ready()
     let release = (): void => undefined

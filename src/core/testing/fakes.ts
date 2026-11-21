@@ -163,6 +163,17 @@ export class FakePage implements RawPage {
   responses: { match: string; value: unknown }[] = []
   selectors = new Set<string>()
   currentUrl = 'about:blank'
+  /** Told when a window of the page is shown to the owner. */
+  onReveal: ((focus: boolean) => void) | null = null
+  /** How many times the page was closed: a mission's page is closed when it ends. */
+  disposed = 0
+
+  reveal(focus: boolean): void {
+    this.onReveal?.(focus)
+  }
+  dispose(): void {
+    this.disposed += 1
+  }
 
   async goto(url: string): Promise<void> {
     this.log.push(`goto ${url}`)
@@ -223,6 +234,10 @@ export class FakeBrowserService implements BrowserService {
     let page = this.pages.get(accountId)
     if (!page) {
       page = new FakePage()
+      page.onReveal = (focus) => {
+        this.agentShown.push(accountId)
+        if (focus) this.agentFocused.push(accountId)
+      }
       this.pages.set(accountId, page)
     }
     return page
@@ -269,8 +284,8 @@ export class FakeBrowserService implements BrowserService {
   /** Accounts whose browser was brought to the front for the owner to act in it. */
   readonly agentFocused: string[] = []
   showAgentBrowser(account: Account, focus = false): void {
-    this.agentShown.push(account.id)
-    if (focus) this.agentFocused.push(account.id)
+    // The windows of the account's open tasks come to the front; each one reports itself (`FakePage.reveal`).
+    void this.session(account).revealTasks(focus)
   }
 
   /**

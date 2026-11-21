@@ -86,7 +86,9 @@ describe('ChromeBrowserService', () => {
     expect(launches[0].executable).toBe(chrome)
     expect(launches[0].args).toContain(`--user-data-dir=${profileDirFor(dataDir, fb.partition)}`)
     expect(existsSync(join(dataDir, 'chrome-profiles'))).toBe(true)
-    expect(launches[0].browser.newPages).toBe(0)
+    // The first call used the page Chrome started with and closed it; the second call opened a window of its own, and closed it too.
+    expect(launches[0].browser.newPages).toBe(1)
+    expect(launches[0].browser.pageList.every((page) => page.closed)).toBe(true)
   })
 
   it('starts a Chrome for each account, never two on one profile', async () => {
@@ -99,7 +101,8 @@ describe('ChromeBrowserService', () => {
   it('opens the window minimised when the AI works and nobody asked to see it, and shows it when asked', async () => {
     const { service } = make()
     const fb = account('a')
-    await service.session(fb).withAgentControl('t', async (page) => page.url())
+    const task = service.session(fb).task('t')
+    await task.withAgentControl(async (page) => page.url())
     expect(pageOf().windowState).toBe('normal') // no one asked to hide it: the window of a fresh Chrome is left as Chrome made it
     service.showAgentBrowser(fb, false)
     await new Promise((resolve) => setTimeout(resolve, 20))
@@ -108,13 +111,33 @@ describe('ChromeBrowserService', () => {
     service.showAgentBrowser(fb, true)
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(pageOf().fronted).toBe(1)
+    await task.close()
+    expect(pageOf().closed).toBe(true) // the window goes with the task
+  })
+
+  it('gives every call a page of its own and closes it when the call ends', async () => {
+    const { service } = make()
+    const fb = account('a')
+    const seen: string[] = []
+    await service.session(fb).withAgentControl('monitor:one', async (page) => {
+      await page.goto('https://www.facebook.com/groups/one/')
+      seen.push(await page.url())
+    })
+    await service.session(fb).withAgentControl('monitor:two', async (page) => {
+      seen.push(await page.url()) // a fresh page: it is not on the first channel's address
+      await page.goto('https://www.facebook.com/groups/two/')
+      seen.push(await page.url())
+    })
+    expect(seen).toEqual(['https://www.facebook.com/groups/one/', 'about:blank', 'https://www.facebook.com/groups/two/'])
+    expect(launches[0].browser.pageList.every((page) => page.closed)).toBe(true)
   })
 
   describe('the owner\'s windows (DEC-038)', () => {
     it('opens a window of its own for the owner, in front, without stopping the AI or taking anything from it, and says so once', async () => {
       const { service, events } = make()
       const fb = account('a')
-      await service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/'))
+      const task = service.session(fb).task('t')
+      await task.withAgentControl(async (page) => page.goto('https://www.facebook.com/'))
       const agentPage = pageOf()
       const opened = await service.openForUser(fb, 'https://www.facebook.com/r.php')
       expect(opened).toEqual({ tabId: 'account-a' })
@@ -127,7 +150,8 @@ describe('ChromeBrowserService', () => {
       expect(launches[0].browser.newPageOptions).toEqual([{ type: 'window' }])
       // The AI keeps working in its own page, which was not touched.
       expect(agentPage.address).toBe('https://www.facebook.com/')
-      await expect(service.session(fb).withAgentControl('t', async (page) => page.url())).resolves.toBe('https://www.facebook.com/')
+      await expect(task.withAgentControl(async (page) => page.url())).resolves.toBe('https://www.facebook.com/')
+      await task.close()
     })
 
     it('does not interrupt a turn of the AI in progress when the owner opens a window, and the AI page is never the owner\'s', async () => {
@@ -190,7 +214,8 @@ describe('ChromeBrowserService', () => {
     it('closes every window of the owner\'s for the app, once, and leaves the AI\'s page alone', async () => {
       const { service, events } = make()
       const fb = account('a')
-      await service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/'))
+      const task = service.session(fb).task('t')
+      await task.withAgentControl(async (page) => page.goto('https://www.facebook.com/'))
       const agentPage = pageOf()
       await service.openForUser(fb, 'https://www.facebook.com/a')
       await service.openForUser(fb, 'https://www.facebook.com/b')
@@ -199,7 +224,8 @@ describe('ChromeBrowserService', () => {
       await new Promise((resolve) => setTimeout(resolve, 5))
       expect(events).toEqual(['a:opened', 'a:closed'])
       expect(agentPage.closed).toBe(false)
-      await expect(service.session(fb).withAgentControl('t', async (page) => page.url())).resolves.toBe('https://www.facebook.com/')
+      await expect(task.withAgentControl(async (page) => page.url())).resolves.toBe('https://www.facebook.com/')
+      await task.close()
     })
 
     it('treats the owner closing the AI\'s own window as nothing for them: the AI opens a new page, the owner\'s windows stay, and nothing is announced', async () => {
@@ -267,7 +293,8 @@ describe('ChromeBrowserService', () => {
     it('adopts a tab the owner opened themselves as theirs, and a pop-up of the AI\'s page as the AI\'s', async () => {
       const { service, events } = make()
       const fb = account('a')
-      await service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/'))
+      const task = service.session(fb).task('t')
+      await task.withAgentControl(async (page) => page.goto('https://www.facebook.com/'))
       const agentPage = pageOf()
       expect(service.hasUserWindow(fb)).toBe(false)
       const popup = pageAppears(launches[0].browser, agentPage, 'https://www.facebook.com/dialog/oauth')
@@ -284,19 +311,22 @@ describe('ChromeBrowserService', () => {
       expect(service.hasUserWindow(fb)).toBe(true)
       expect(events).not.toContain('a:opened') // a tab the owner opened by hand is theirs; "opened" is for the window the app opened for them
       popup.address = 'https://www.facebook.com/dialog/oauth2'
+      await task.close()
     })
 
     it('never drives a page it did not create: the AI\'s turn reads its own page, whatever the owner has open', async () => {
       const { service } = make()
       const fb = account('a')
-      await service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/groups/1/'))
+      const task = service.session(fb).task('t')
+      await task.withAgentControl(async (page) => page.goto('https://www.facebook.com/groups/1/'))
       await service.openForUser(fb, 'https://www.facebook.com/')
       pageAppears(launches[0].browser, null, 'https://news.example/')
       await new Promise((resolve) => setTimeout(resolve, 5))
-      await expect(service.session(fb).withAgentControl('t', async (page) => page.url())).resolves.toBe('https://www.facebook.com/groups/1/')
+      await expect(task.withAgentControl(async (page) => page.url())).resolves.toBe('https://www.facebook.com/groups/1/')
       const owners = launches[0].browser.pageList.filter((page) => page.address !== 'https://www.facebook.com/groups/1/')
       for (const owner of owners) expect(owner.input).toEqual([])
       expect(owners.every((owner) => owner.scripts.length === 0)).toBe(true)
+      await task.close()
     })
   })
 
@@ -500,7 +530,8 @@ describe('ChromeBrowserService', () => {
     it('says what the page shows and did, without a query string, and whose window it is', async () => {
       const { service } = make({ diagnostics: true })
       const fb = account('a')
-      await service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/r.php?token=secret'))
+      const task = service.session(fb).task('t')
+      await task.withAgentControl(async (page) => page.goto('https://www.facebook.com/r.php?token=secret'))
       const page = pageOf()
       page.answers.push(['page-reading', { title: 'Sign up', text: 'Create a new account', alerts: ['An error occurred during your registration.'] }], ['window.innerWidth', [1280, 900]])
       page.emit('response', { request: () => ({ method: () => 'POST', resourceType: () => 'xhr', frame: () => 'main-frame' }), url: () => 'https://www.facebook.com/reg/submit/?token=secret', status: () => 400 })
@@ -519,18 +550,21 @@ describe('ChromeBrowserService', () => {
       const owner = launches[0].browser.pageList[1]
       owner.answers.push(['page-reading', { title: 'Discover', text: 'Groups', alerts: [] }])
       expect(await service.pageReport(fb)).toMatchObject({ where: 'owner_window', title: 'Discover' })
+      await task.close()
     })
 
     it('keeps the report when the picture cannot be taken', async () => {
       const { service } = make()
       const fb = account('a')
-      await service.session(fb).withAgentControl('t', async (page) => page.goto('https://www.facebook.com/'))
+      const task = service.session(fb).task('t')
+      await task.withAgentControl(async (page) => page.goto('https://www.facebook.com/'))
       pageOf().screenshot = async () => {
         throw new Error('no picture')
       }
       const report = await service.pageReport(fb)
       expect(report).not.toBeNull()
       expect(report?.screenshot).toBeNull()
+      await task.close()
     })
   })
 

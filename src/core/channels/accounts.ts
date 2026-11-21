@@ -435,9 +435,8 @@ export class AccountsService {
 
   /**
    * The owner closed their last window of the account: the sign-in is checked once, so nobody has to press "Check sign-in". Only a look: a saved
-   * password is not tried here, the owner may just have closed the window on purpose. Not while the AI works on the account: the check goes
-   * through the AI's own page and would take it away from the form the AI is filling in (DEC-038); a mission that is refused after the owner
-   * used a sign-in page reads the sign-in itself when it ends.
+   * password is not tried here, the owner may just have closed the window on purpose. Not while the AI works on the account: a mission that is
+   * refused after the owner used a sign-in page reads the sign-in itself when it ends, and two checks of one account at once would only crowd it.
    */
   private async checkAfterWindow(accountId: string): Promise<void> {
     try {

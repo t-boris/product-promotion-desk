@@ -94,13 +94,15 @@ describe('agent page', () => {
     expect(agentContents().windowOpenHandler?.({ url: 'https://popup.example/' })).toEqual({ action: 'deny' })
   })
 
-  it('shows the window to the owner on request without taking control, and closing it only hides it (DEC-018)', async () => {
+  it('shows the window of a task to the owner without the focus, brings it forward on request, and closing it only hides it (DEC-018)', async () => {
     const { service } = setup()
     const a = account('a')
-    service.showAgentBrowser(a)
+    const task = service.session(a).task('agent-watch')
+    await task.show()
     const win = created.windows[0]
     expect(win.visible).toBe(true)
-    expect(win.focused).toBe(0)
+    expect(win.focused).toBe(0) // shown beside the owner's work, never in front of it
+    expect(win.raised).toBe(0)
     expect(service.session(a).control()).toEqual({ holder: 'none', owner: null })
 
     let prevented = false
@@ -110,17 +112,44 @@ describe('agent page', () => {
     expect(win.destroyed).toBe(false)
 
     service.showAgentBrowser(a, true)
+    await vi.waitFor(() => expect(win.focused).toBe(1))
     expect(win.visible).toBe(true)
-    expect(win.focused).toBe(1)
     expect(win.raised).toBe(1)
-    // The page is the one the AI works in: showing it creates no second page.
+    // The page is the one the task works in: showing it creates no second page.
     expect(created.views).toHaveLength(1)
+    await task.close()
+    expect(win.destroyed).toBe(true) // the window goes with the task
+  })
+
+  it('gives every call a page and window of its own, and closes them when the call ends, so two channels never share a page', async () => {
+    const { service } = setup()
+    const session = service.session(account('a'))
+    await session.withAgentControl('monitor:r-one', async (page) => page.goto('https://www.reddit.com/r/one/'))
+    await session.withAgentControl('monitor:r-two', async (page) => page.goto('https://www.reddit.com/r/two/'))
+    expect(created.views).toHaveLength(2)
+    expect(created.views[0].webContents.loaded).toEqual(['https://www.reddit.com/r/one/'])
+    expect(created.views[1].webContents.loaded).toEqual(['https://www.reddit.com/r/two/'])
+    expect(created.windows.every((w) => w.destroyed)).toBe(true)
+    expect(created.windows.every((w) => !w.visible || w.destroyed)).toBe(true)
+  })
+
+  it('does not close a task\'s page between its turns, and no other call moves it', async () => {
+    const { service } = setup()
+    const session = service.session(account('a'))
+    const task = session.task('agent-watch')
+    await task.withAgentControl(async (page) => page.goto('https://www.reddit.com/r/one/'))
+    await session.withAgentControl('monitor:r-two', async (page) => page.goto('https://www.reddit.com/r/two/'))
+    await task.withAgentControl(async (page) => expect(await page.url()).toBe('https://www.reddit.com/r/one/'))
+    expect(created.windows[0].destroyed).toBe(false)
+    await task.close()
+    expect(created.windows[0].destroyed).toBe(true)
+    await expect(task.withAgentControl(async () => 1)).rejects.toThrow(/has ended/)
   })
 
   it('leaves the window the owner watches the AI in exactly as it is while the owner has windows of their own (DEC-038)', async () => {
     const { service } = setup()
     const a = account('a')
-    service.showAgentBrowser(a)
+    await service.session(a).task('agent-watch').show()
     const watched = created.windows[0]
     await service.openForUser(a, 'https://www.reddit.com/')
     expect(watched.visible).toBe(true) // nothing is hidden for the owner's window
@@ -129,24 +158,28 @@ describe('agent page', () => {
 
     // A window that was never shown stays hidden.
     const b = account('b')
-    await service.session(b).withAgentControl('t', async (page) => page.goto('https://b.test/'))
+    const quiet = service.session(b).task('monitor')
+    await quiet.withAgentControl(async (page) => page.goto('https://b.test/'))
     await service.openForUser(b, 'https://b.test/')
     created.windows.at(-1)?.close()
     expect(created.windows[2].visible).toBe(false)
+    await quiet.close()
   })
 
   it('recreates the page after it crashed or was destroyed, and releases the old window', async () => {
     const { service } = setup()
-    const session = service.session(account('a'))
-    await session.withAgentControl('t', async (page) => page.goto('https://a.test/'))
+    const task = service.session(account('a')).task('t')
+    await task.withAgentControl(async (page) => page.goto('https://a.test/'))
     const firstView = created.views[0]
     firstView.webContents.emit('render-process-gone')
     expect(firstView.webContents.destroyed).toBe(true)
     expect(created.windows[0].destroyed).toBe(true)
-    await session.withAgentControl('t', async (page) => page.goto('https://b.test/'))
+    await task.withAgentControl(async (page) => page.goto('https://b.test/'))
     expect(created.views).toHaveLength(2)
     expect(created.views[1].webContents.loaded).toEqual(['https://b.test/'])
     expect(created.windows[1].destroyed).toBe(false)
+    await task.close()
+    expect(created.windows[1].destroyed).toBe(true)
   })
 
   it('configures the session once: no permissions, no downloads, plain Chromium user agent', async () => {
@@ -171,41 +204,45 @@ describe('agent page', () => {
 
   it('times out a page that never finishes loading and stops it', async () => {
     const { service } = setup()
-    const session = service.session(account('a'))
-    await session.withAgentControl('warmup', async (page) => page.goto('https://a.test/'))
+    const task = service.session(account('a')).task('t')
+    await task.withAgentControl(async (page) => page.goto('https://a.test/'))
     agentContents().loadResult = new Promise(() => undefined)
-    await expect(session.withAgentControl('t', async (page) => page.goto('https://slow.test/', { timeoutMs: 20 }))).rejects.toThrow(/Timed out/)
+    await expect(task.withAgentControl(async (page) => page.goto('https://slow.test/', { timeoutMs: 20 }))).rejects.toThrow(/Timed out/)
     expect(agentContents().stopped).toBe(1)
+    await task.close()
   })
 
   it('treats ERR_ABORTED caused by a redirect as success once the page has loaded', async () => {
     const { service } = setup()
-    const session = service.session(account('a'))
-    await session.withAgentControl('warmup', async (page) => page.goto('https://a.test/'))
+    const task = service.session(account('a')).task('t')
+    await task.withAgentControl(async (page) => page.goto('https://a.test/'))
     agentContents().loadResult = Promise.reject(new Error("ERR_ABORTED (-3) loading 'https://b.test/'"))
-    await expect(session.withAgentControl('t', async (page) => page.goto('https://b.test/'))).resolves.toBeUndefined()
+    await expect(task.withAgentControl(async (page) => page.goto('https://b.test/'))).resolves.toBeUndefined()
+    await task.close()
   })
 
   it('reads through executeJavaScript without a user gesture and polls for selectors', async () => {
     const { service } = setup()
-    const session = service.session(account('a'))
-    await session.withAgentControl('warmup', async (page) => page.goto('https://a.test/'))
+    const task = service.session(account('a')).task('t')
+    await task.withAgentControl(async (page) => page.goto('https://a.test/'))
     agentContents().results = [{ value: 1 }]
-    expect(await session.withAgentControl('t', async (page) => page.read<{ value: number }>('1+1'))).toEqual({ value: 1 })
+    expect(await task.withAgentControl(async (page) => page.read<{ value: number }>('1+1'))).toEqual({ value: 1 })
     agentContents().results = [false, true]
-    expect(await session.withAgentControl('t', async (page) => page.waitForSelector('#x', 2000))).toBe(true)
+    expect(await task.withAgentControl(async (page) => page.waitForSelector('#x', 2000))).toBe(true)
+    await task.close()
   })
 
   it('requires a ticket for fill and click, and reports a missing element', async () => {
     const { service, tickets } = setup()
-    const session = service.session(account('a'))
-    await session.withAgentControl('warmup', async (page) => page.goto('https://a.test/'))
+    const task = service.session(account('a')).task('t')
+    await task.withAgentControl(async (page) => page.goto('https://a.test/'))
     agentContents().results = [{ ok: false, reason: 'not_found' }]
-    await expect(session.withAgentControl('t', async (page) => page.fill('#x', 'text', undefined as never))).rejects.toBeInstanceOf(TicketError)
+    await expect(task.withAgentControl(async (page) => page.fill('#x', 'text', undefined as never))).rejects.toBeInstanceOf(TicketError)
     const ticket = tickets.issue({ actionId: 'a', contentHash: 'h', accountId: 'a', destination: 'd' })
-    await expect(session.withAgentControl('t', async (page) => page.fill('#x', 'text', ticket))).rejects.toThrow(/Could not fill "#x": the element was not found/)
+    await expect(task.withAgentControl(async (page) => page.fill('#x', 'text', ticket))).rejects.toThrow(/Could not fill "#x": the element was not found/)
     agentContents().results = [{ ok: true }]
-    await expect(session.withAgentControl('t', async (page) => page.click('#x', ticket))).resolves.toBeUndefined()
+    await expect(task.withAgentControl(async (page) => page.click('#x', ticket))).resolves.toBeUndefined()
+    await task.close()
   })
 })
 
@@ -611,9 +648,13 @@ describe('what the account\'s page shows and did (DEC-016)', () => {
   it('reports the page the app works in when the owner has no window, and says so', async () => {
     const { service } = setup()
     const acc = account('a')
-    await service.session(acc).withAgentControl('t', async (page) => page.goto('https://www.reddit.com/'))
+    const task = service.session(acc).task('t')
+    await task.withAgentControl(async (page) => page.goto('https://www.reddit.com/'))
     agentContents().results = [reading]
     expect((await service.pageReport(acc))?.where).toBe('app_page')
+    await task.close()
+    // Nothing is open once the AI is done: there is no page to report.
+    expect(await service.pageReport(acc)).toBeNull()
   })
 
   it('still reports when the page could not be drawn or read', async () => {
@@ -661,7 +702,8 @@ describe('page steps of the browser agent (DEC-017): real input first, a script 
     const session = service.session(account('a'))
     return session.withAgentControl('step', async (raw) => {
       await raw.goto('https://www.facebook.com/r.php')
-      agentContents().results = results
+      // Each call has a page of its own: the one just opened is the newest.
+      created.views.at(-1)!.webContents.results = results
       return page(raw)
     })
   }
@@ -724,7 +766,8 @@ describe('page steps of the browser agent (DEC-017): real input first, a script 
     // and up is the other way
     const up = step(service, [probe, { ...probe, top: 560 }, { ...probe, top: 280 }], (page) => page.pageStep({ do: 'scroll', direction: 'up', amount: 'half' }, hosts))
     await settled(up)
-    const more = (agentContents().inputEvents.filter((e) => e.type === 'mouseWheel') as { deltaY: number }[]).slice(wheels.length)
+    // Every step of this helper is a call of its own, so the second one has a page of its own.
+    const more = created.views.at(-1)!.webContents.inputEvents.filter((e) => e.type === 'mouseWheel') as { deltaY: number }[]
     expect(more.length).toBeGreaterThan(0)
     expect(more.every((e) => e.deltaY > 0)).toBe(true)
   })
@@ -741,7 +784,9 @@ describe('page steps of the browser agent (DEC-017): real input first, a script 
     const done = step(service, [{ ok: true, x: 5, y: 5, hit: true }, { ok: true }, { ok: true }, { ok: true }], (page) => page.pageStep({ do: 'type', ref: 'e1', text: 'Natal' }, hosts))
     await expect(settled(done)).resolves.toEqual({ status: 'done', detail: 'Typed into e1.' })
     expect(agentContents().inserted).toEqual(['Natal'])
-    expect(agentContents().focused).toBeGreaterThan(0)
+    // The page's own script focuses the field; the window is never given the focus (it would pull the owner out of what they are doing).
+    expect(agentContents().focused).toBe(0)
+    expect(created.windows[0].focused).toBe(0)
     expect(agentContents().scripts.some((s) => s.includes('el.select()'))).toBe(true)
   })
 

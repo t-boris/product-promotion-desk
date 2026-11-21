@@ -52,7 +52,8 @@ export interface ChromeServiceOptions {
 
 interface AccountChrome {
   session: ControlledSession
-  agent: ChromeRawPage
+  /** The AI's pages that are open now: one for each running task and each call. Each is a window of its own in the account's Chrome. */
+  agentRaw: Set<ChromeRawPage>
   recorder: PageRecorder
   profileDir: string
   browser: Browser | null
@@ -110,9 +111,8 @@ export class ChromeBrowserService implements BrowserService, PageObserver {
   private entry(account: Account): AccountChrome {
     const existing = this.accounts.get(account.id)
     if (existing) return existing
-    const agent = new ChromeRawPage(() => this.openPage(account, entry))
     const entry: AccountChrome = {
-      agent,
+      agentRaw: new Set(),
       profileDir: profileDirFor(this.options.dataDir, account.partition),
       browser: null,
       starting: null,
@@ -128,19 +128,35 @@ export class ChromeBrowserService implements BrowserService, PageObserver {
         () => this.pageHost(entry),
         (note) => this.onPageNote?.(account.id, note)
       ),
-      session: new ControlledSession(account.id, async () => agent, this.tickets)
+      session: new ControlledSession(account.id, async () => this.newAgentPage(account, entry), this.tickets)
     }
     this.accounts.set(account.id, entry)
     return entry
   }
 
+  /** A page for one call or one mission of the AI: Chrome opens its window when the page is first used, and the window is closed with it. */
+  private newAgentPage(account: Account, entry: AccountChrome): ChromeRawPage {
+    const page: ChromeRawPage = new ChromeRawPage(
+      () => this.openPage(account, entry),
+      () => entry.agentRaw.delete(page)
+    )
+    entry.agentRaw.add(page)
+    return page
+  }
+
+  /** The AI page that was made last and is open: where the AI is looking now. */
+  private latestAgent(entry: AccountChrome): ChromeRawPage | null {
+    return [...entry.agentRaw].reverse().find((page) => page.existing() !== null) ?? null
+  }
+
   /**
-   * The AI works in the account's own Chrome and the owner watches (DEC-018): shows the window without taking control. `focus` brings it
-   * in front of the owner's windows, for the moment the owner has to act in the page the AI is waiting on (a CAPTCHA, a code).
+   * The AI works in the account's own Chrome and the owner watches (DEC-018): brings the windows of the AI's open tasks to the front, for the
+   * moment the owner has to act in the page the AI is waiting on (a CAPTCHA, a code). A window opens by itself behind the owner's (`task.show`).
    */
   showAgentBrowser(account: Account, focus = false): void {
-    const entry = this.entry(account)
-    entry.agent.reveal(focus).catch((error: unknown) => this.onPageNote?.(account.id, `Chrome could not be shown: ${withoutQueries(error instanceof Error ? error.message : String(error))}`))
+    this.entry(account)
+      .session.revealTasks(focus)
+      .catch((error: unknown) => this.onPageNote?.(account.id, `Chrome could not be shown: ${withoutQueries(error instanceof Error ? error.message : String(error))}`))
   }
 
   /**
@@ -149,7 +165,7 @@ export class ChromeBrowserService implements BrowserService, PageObserver {
    */
   async openForUser(account: Account, url?: string): Promise<{ tabId: string }> {
     const entry = this.entry(account)
-    const target = normalizeBrowserUrl(url ?? entry.agent.currentUrl() ?? '')
+    const target = normalizeBrowserUrl(url ?? this.latestAgent(entry)?.currentUrl() ?? '')
     const tabId = `account-${account.id}`
 
     const same = this.openOwnerPages(entry).find((page) => page.url() === target)
@@ -332,7 +348,7 @@ export class ChromeBrowserService implements BrowserService, PageObserver {
   private pageHost(entry: AccountChrome): string {
     try {
       const owner = entry.lastOwnerPage && !entry.lastOwnerPage.isClosed() ? entry.lastOwnerPage.url() : null
-      return new URL(owner ?? entry.agent.currentUrl() ?? '').host
+      return new URL(owner ?? this.latestAgent(entry)?.currentUrl() ?? '').host
     } catch {
       return ''
     }
@@ -354,12 +370,13 @@ export class ChromeBrowserService implements BrowserService, PageObserver {
       page = owners.length === 1 ? (owners[0] ?? null) : ((await this.pickOwnerPage(owners)) ?? entry.lastOwnerPage ?? owners.at(-1) ?? null)
       where = 'owner_window'
     } else {
-      page = entry.agent.existing()?.page ?? null
+      page = this.latestAgent(entry)?.existing()?.page ?? null
       where = 'app_page'
     }
     if (!page) return null
     const shown = page
-    const read = <T>(script: string): Promise<T> => (where === 'owner_window' ? (this.evaluateOn(shown, script) as Promise<T>) : entry.agent.read<T>(script))
+    const agent = where === 'owner_window' ? null : this.latestAgent(entry)
+    const read = <T>(script: string): Promise<T> => (agent ? agent.read<T>(script) : (this.evaluateOn(shown, script) as Promise<T>))
     const reading = await read<PageReading>(pageReadingScript()).catch(() => null)
     const png = await this.picture(read, shown, undefined)
     const small = png ? await this.picture(read, shown, REPORT_PICTURE_WIDTH) : null
@@ -420,7 +437,7 @@ export class ChromeBrowserService implements BrowserService, PageObserver {
     entry.agentPages.clear()
     entry.lastOwnerPage = null
     this.accounts.delete(account.id)
-    await entry.agent.dispose()
+    await Promise.all([...entry.agentRaw].map((page) => page.dispose()))
     await entry.browser?.close().catch(() => undefined)
     entry.browser = null
   }

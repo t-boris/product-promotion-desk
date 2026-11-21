@@ -191,7 +191,8 @@ describe('a post mission cannot leave the account stuck, or share it', () => {
 
   it('ends the run as failed when something after the claim throws, instead of leaving it running and every later send refused', async () => {
     const { w, authority, request } = await ready()
-    w.t.browser.showAgentBrowser = () => {
+    const session = w.t.browser.session.bind(w.t.browser)
+    w.t.browser.session = () => {
       throw new Error('the browser window is gone')
     }
 
@@ -202,7 +203,7 @@ describe('a post mission cannot leave the account stuck, or share it', () => {
     expect(authority.sealed).toBe(true)
     expect(w.t.engine.calls).toEqual([])
     // The account is free again: the next mission starts.
-    w.t.browser.showAgentBrowser = () => undefined
+    w.t.browser.session = session
     asTheAI(w, async () => 'Done.')
     expect(await run(w, request)).toMatchObject({ ended: 'finished' })
   })

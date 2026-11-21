@@ -153,6 +153,8 @@ export async function exercisePictures(service: Pick<BrowserService, 'session'>,
   const check = (name: string, ok: boolean, detail = ''): void => void checks.push({ name, ok, detail })
   const { base, hits } = site
   const folder = mkdtempSync(join(tmpdir(), 'ppd-post-picture-'))
+  // One page for the whole probe, as a mission has one.
+  const ai = service.session(account).task('post')
   try {
     const files = makePictures(folder)
     // The caption as the application hands it over when the draft had a link and the platform no field for it (DEC-036): the link is the last paragraph.
@@ -161,7 +163,7 @@ export async function exercisePictures(service: Pick<BrowserService, 'session'>,
     const authority = new TestAuthority(tickets, content, account.id)
     const reports: string[] = []
     const toolbox = new BrowserToolbox({
-      withPage: (work) => service.session(account).withAgentControl('post', work),
+      withPage: (work) => ai.withAgentControl(work),
       hosts: ['127.0.0.1'],
       values: {},
       sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
@@ -330,6 +332,7 @@ export async function exercisePictures(service: Pick<BrowserService, 'session'>,
     check('the site saw no page of it but the profile page', opened2.length === 0, opened2.join(', '))
     return checks
   } finally {
+    await ai.close()
     rmSync(folder, { recursive: true, force: true })
   }
 }
