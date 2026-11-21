@@ -857,11 +857,11 @@ Owner's `/goal` 2026-11-21: implement the specification in `docs/features/quick-
 Shared contract committed first, then engineers on disjoint files (lesson 259): the draft carries an explicit `postType` (`article` | `quick`) and a structured `card` (migration 309); `src/shared/quick-post.ts` is the one place for the channel kinds, the card parameters, the headline rule and the post label.
 
 - [x] I-1 data model: migration 309 (`drafts.post_type`, `drafts.card_json`), `Draft.postType/card`, `DraftInput.postType/card`, `normalizeDraftInput` (title refused, one picture, markup forced `legacy`, card validated), `inheritPostType` in `saveDraft` (editing never changes the type), post groups carry type + card, `MediaOrigin 'card'`
-- [ ] I-2 channel picker: kinds derived from the channel, the other kind disabled with a reason, clear re-enables (`mixedKindReason`)
-- [ ] I-3 quick-post composer shell: one picture slot, one caption, platform counter, live preview of Instagram / Threads / Facebook, save per ticked channel (single create or group)
-- [ ] I-4 template card: renderer (one drawing function for the preview and the PNG), style / colour / shape by clicks, headline follows the first line until edited, PNG to the library on save (`media.add` origin `card`), reopen restores the card, new PNG after an edit; AI illustration (MakePicture) and own file replace the card with no PNG rendered
-- [ ] I-5 review / approval / preview screens choose the layout by `postType`; the first words of the caption replace the title where a label is needed
-- [ ] I-6 picture sending (REQ-006): per platform "already works / gap", fill only the gaps; Approve judges a quick post like a markdown post
-- [ ] I-7 AI help: separate caption and picture actions, trend analyst through the AI browser on request (failure handled), marketer against the goal from approved knowledge, Undo, never overwrites without the owner's action
-- [ ] I-8 themes: >= 2 dark + 2 light, Settings, kept, animated background off by default and off under reduce motion, contrast test per theme, `visual-system.md` updated
-- [ ] Verify: `npm run verify`, own-instance probe / screens, version 0.24.0, `deploy:local`, MarkView walkthrough, spec statuses (REQ-006 stays `draft`: approval is the owner's)
+- [x] I-2 channel picker: kinds derived from the channel, the other kind disabled with a reason, clear re-enables (`mixedKindReason`)
+- [x] I-3 quick-post composer shell: one picture slot, one caption, platform counter, live preview of Instagram / Threads / Facebook, save per ticked channel (single create or group)
+- [x] I-4 template card: renderer (one drawing function for the preview and the PNG), style / colour / shape by clicks, headline follows the first line until edited, PNG to the library on save (`media.add` origin `card`), reopen restores the card, new PNG after an edit; AI illustration (MakePicture) and own file replace the card with no PNG rendered
+- [x] I-5 review / approval / preview screens choose the layout by `postType`; the first words of the caption replace the title where a label is needed
+- [x] I-6 picture sending (REQ-006): per platform "already works / gap", fill only the gaps; Approve judges a quick post like a markdown post
+- [x] I-7 AI help: separate caption and picture actions, trend analyst through the AI browser on request (failure handled), marketer against the goal from approved knowledge, Undo, never overwrites without the owner's action
+- [x] I-8 themes: >= 2 dark + 2 light, Settings, kept, animated background off by default and off under reduce motion, contrast test per theme, `visual-system.md` updated
+- [ ] Verify: `npm run verify`, own-instance probe / screens, version 0.24.0, `deploy:local`, MarkView walkthrough, spec statuses (REQ-006 was approved by someone else during the work and is left as found; DEC-048 and DEC-049 stay `proposed`: accepting them is the owner's; Q-008 is open)
