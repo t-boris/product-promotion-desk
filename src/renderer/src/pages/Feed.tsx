@@ -409,6 +409,9 @@ function FeedScreen({ product }: { product: Product }) {
                   </Button>
                 </div>
               )}
+              <h3 className="feed-stream-title" data-testid="feed-stream-title">
+                Posts <span className="muted">{findingRows.length}</span>
+              </h3>
               <FindingStream
                 rows={pagedFindings.visible}
                 markSeen={findings.markSeen}

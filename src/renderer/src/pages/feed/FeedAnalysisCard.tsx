@@ -14,25 +14,32 @@ export interface FeedFocus {
 /** How many themes are listed before "Show all": the card sits above the stream and must not push it off the screen. */
 const THEMES_SHOWN = 4
 
-function Theme({ theme, widest, compared, onShow }: { theme: FeedTheme; widest: number; compared: boolean; onShow: (theme: FeedTheme) => void }) {
+function Theme({ theme, rank, widest, compared, onShow }: { theme: FeedTheme; rank: number; widest: number; compared: boolean; onShow: (theme: FeedTheme) => void }) {
   const badges = themeBadges(theme)
   return (
     <li className="feed-theme" data-testid="feed-theme" data-theme-id={theme.id}>
       <details>
         <summary className="feed-theme-head">
-          <span className="feed-theme-name">{theme.name}</span>
-          {badges.map((badge) => (
-            <span key={badge.label} className={`badge badge-${badge.tone}`} data-testid="feed-theme-badge">
-              {badge.label}
+          <span className="feed-theme-rank" aria-hidden="true">
+            {rank}
+          </span>
+          <span className="feed-theme-main">
+            <span className="feed-theme-line">
+              <span className="feed-theme-name">{theme.name}</span>
+              {badges.map((badge) => (
+                <span key={badge.label} className={`badge badge-${badge.tone}`} data-testid="feed-theme-badge">
+                  {badge.label}
+                </span>
+              ))}
+              <span className="feed-theme-numbers" data-testid="feed-theme-numbers">
+                {themeNumbers(theme, compared)}
+              </span>
             </span>
-          ))}
-          <span className="feed-theme-numbers muted small" data-testid="feed-theme-numbers">
-            {themeNumbers(theme, compared)}
+            <span className="feed-theme-bar" aria-hidden="true">
+              <span style={{ width: `${barPercent(theme.posts, widest)}%` }} />
+            </span>
           </span>
         </summary>
-        <div className="feed-theme-bar" aria-hidden="true">
-          <span style={{ width: `${barPercent(theme.posts, widest)}%` }} />
-        </div>
         <div className="feed-theme-body">
           {theme.summary !== '' && <p className="feed-theme-summary">{theme.summary}</p>}
           {theme.idea !== '' && (
@@ -82,8 +89,8 @@ export function AnalysisBody({
         </p>
       )}
       <ol className="feed-themes" data-testid="feed-themes">
-        {themes.map((theme) => (
-          <Theme key={theme.id} theme={theme} widest={widest} compared={view.compared} onShow={(t) => onFocus({ label: t.name, ids: new Set(t.postIds) })} />
+        {themes.map((theme, index) => (
+          <Theme key={theme.id} theme={theme} rank={index + 1} widest={widest} compared={view.compared} onShow={(t) => onFocus({ label: t.name, ids: new Set(t.postIds) })} />
         ))}
       </ol>
       {view.themes.length > THEMES_SHOWN && (
@@ -133,7 +140,12 @@ export function FeedAnalysisCard({ productId, channelId, onFocus }: { productId:
   return (
     <section className="feed-analysis" data-testid="feed-analysis" aria-label="What is going on in your channels">
       <header className="feed-analysis-head">
-        <h3 className="feed-analysis-title">{channelId === null ? 'What is going on in your channels' : 'What is going on in this channel'}</h3>
+        <div className="feed-analysis-heading">
+          <span className="feed-analysis-eyebrow" data-testid="feed-analysis-eyebrow">
+            Analysis of the feed
+          </span>
+          <h3 className="feed-analysis-title">{channelId === null ? 'What is going on in your channels' : 'What is going on in this channel'}</h3>
+        </div>
         <SegmentedControl
           label="Period"
           name="feed-analysis-period"

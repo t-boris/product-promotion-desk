@@ -387,16 +387,19 @@
   gap: var(--space-1);
 }
 
-/* ───────────── The analysis of the whole Feed: a card above the stream ───────────── */
+/* ───────────── The analysis of the whole Feed: a panel of its own above the stream ─────────────
+   It is not a post: it is tinted with the accent, has a band on top and an eyebrow, and its themes are a ranked list of bars (no card per theme), so it
+   never reads as one more item of the stream beneath it. */
 
 .feed-analysis {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  background: var(--surface-1);
-  border: 1px solid var(--line);
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-4) var(--space-5) var(--space-4);
+  background: linear-gradient(180deg, var(--accent-tint), transparent 220px), var(--surface-0);
+  border: 1px solid var(--accent);
+  border-top-width: 4px;
   border-radius: var(--radius-lg);
 }
 .feed-analysis-head {
@@ -405,10 +408,22 @@
   align-items: center;
   gap: var(--space-2) var(--space-4);
 }
+.feed-analysis-heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+  margin-right: auto;
+}
+.feed-analysis-eyebrow {
+  font-size: 11px;
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-on-tint);
+}
 .feed-analysis-title {
   margin: 0;
-  margin-right: auto;
-  font-size: var(--fs-body);
+  font-size: var(--fs-section);
   font-weight: var(--fw-semibold);
 }
 .feed-analysis-head .segmented {
@@ -417,25 +432,60 @@
 .feed-analysis p {
   margin: 0;
 }
+.feed-analysis-summary {
+  font-size: var(--fs-title);
+  line-height: 1.45;
+}
 .feed-themes {
   margin: 0;
   padding: 0;
   list-style: none;
-  display: grid;
-  gap: var(--space-2);
+  display: flex;
+  flex-direction: column;
 }
 .feed-theme {
-  padding: var(--space-2) var(--space-3);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--line);
+}
+.feed-theme summary {
+  list-style: none;
+  cursor: pointer;
+}
+.feed-theme summary::-webkit-details-marker {
+  display: none;
 }
 .feed-theme-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+/* The rank of the theme: the list is ordered by how many posts a theme holds. */
+.feed-theme-rank {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  background: var(--accent-tint);
+  color: var(--accent-on-tint);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.feed-theme-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.feed-theme-line {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1) var(--space-3);
-  cursor: pointer;
 }
 .feed-theme-name {
   font-weight: var(--fw-semibold);
@@ -443,11 +493,14 @@
 }
 .feed-theme-numbers {
   margin-left: auto;
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+  font-variant-numeric: tabular-nums;
 }
-/* The bar says how many posts the theme holds against the widest theme: a quiet line, never a chart of its own. */
+/* How many posts the theme holds against the widest theme: always shown, so the list reads at a glance. */
 .feed-theme-bar {
-  height: 4px;
-  margin: var(--space-2) 0;
+  display: block;
+  height: 6px;
   background: var(--segment-track);
   border-radius: var(--radius-pill);
   overflow: hidden;
@@ -463,15 +516,33 @@
   flex-direction: column;
   align-items: flex-start;
   gap: var(--space-2);
+  margin: var(--space-2) 0 var(--space-1) calc(22px + var(--space-3));
+}
+.feed-questions {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--line);
 }
 .feed-questions summary {
   cursor: pointer;
+  font-weight: var(--fw-semibold);
 }
 .feed-questions ul {
   margin: var(--space-2) 0 0;
   padding-left: var(--space-4);
   display: grid;
   gap: var(--space-2);
+}
+/* The heading of the stream under the panel: the posts are a different section. */
+.feed-stream-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  font-size: 11px;
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-2);
 }
 /* The line over the stream while it shows the posts of one theme. */
 .feed-focus {

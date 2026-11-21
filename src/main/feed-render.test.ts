@@ -517,6 +517,18 @@ describe('the card of the analysis of the Feed', () => {
     expect(out).not.toContain('data-testid="feed-themes"')
   })
 
+  it('is a panel of its own, not a post: it has an eyebrow and ranks its themes', () => {
+    const card = html(createElement(FeedAnalysisCard, { productId: 'p1', channelId: null, onFocus: () => {} }))
+    expect(card).toContain('data-testid="feed-analysis-eyebrow"')
+    expect(card).toContain('Analysis of the feed')
+    expect(card).not.toContain('stream-card')
+    const out = body(view())
+    expect(out).toMatch(/feed-theme-rank[^>]*>1</)
+    expect(out).toMatch(/feed-theme-rank[^>]*>2</)
+    expect(out).toContain('feed-theme-bar')
+    expect(out).not.toContain('stream-card')
+  })
+
   it('names the channel when it is about one', () => {
     const out = html(createElement(FeedAnalysisCard, { productId: 'p1', channelId: 'c1', onFocus: () => {} }))
     expect(out).toContain('What is going on in this channel')
