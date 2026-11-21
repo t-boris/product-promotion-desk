@@ -4,6 +4,7 @@ import { AiProgressPanel } from '../../AiProgress'
 import { call, useAction, useQuery } from '../../hooks'
 import { Button, ErrorNote, Hint, SegmentedControl, formatTime } from '../../ui'
 import { PERIOD_OPTIONS, barPercent, basisLine, introWords, themeBadges, themeNumbers } from './analysis-card'
+import { TagsPanel } from './TagsPanel'
 
 /** What the stream is narrowed to: the posts of a theme, or the one post of a question. */
 export interface FeedFocus {
@@ -122,14 +123,31 @@ export function AnalysisBody({
   )
 }
 
+type AnalysisTab = 'themes' | 'tags'
+
 /**
  * "What is going on in your channels": the AI's reading of the posts the Feed holds for a period: the themes they raise, with how many posts, comments and score
  * each has (counted by the application, not by the AI), what grows, and the questions nobody answered. Opening a theme narrows the stream below to its posts.
+ * The other tab, Tags, lists the short tags the AI gave the posts, counted the same way, each a way to narrow the stream to its posts.
  * Nothing here posts or sends anything, and the AI uses no browser for it.
  */
-export function FeedAnalysisCard({ productId, channelId, onFocus }: { productId: Id; channelId: Id | null; onFocus: (focus: FeedFocus | null) => void }) {
+export function FeedAnalysisCard({
+  productId,
+  channelId,
+  onFocus,
+  pickedTags,
+  onTag
+}: {
+  productId: Id
+  channelId: Id | null
+  onFocus: (focus: FeedFocus | null) => void
+  /** The tags the stream is narrowed to, and what pressing a tag here does. */
+  pickedTags: readonly string[]
+  onTag: (name: string) => void
+}) {
   const [days, setDays] = useState<FeedPeriod>(7)
   const [all, setAll] = useState(false)
+  const [tab, setTab] = useState<AnalysisTab>('themes')
   const analysis = useQuery('feed.analysis', { productId, channelId, days }, ['opportunities'])
   const [analyze, running] = useAction(async () => {
     const made = await call('feed.analyze', { productId, channelId, days })
@@ -146,6 +164,20 @@ export function FeedAnalysisCard({ productId, channelId, onFocus }: { productId:
           </span>
           <h3 className="feed-analysis-title">{channelId === null ? 'What is going on in your channels' : 'What is going on in this channel'}</h3>
         </div>
+        <SegmentedControl<AnalysisTab>
+          label="What to show"
+          name="feed-analysis-tab"
+          testIdPrefix="feed-analysis-tab-"
+          options={[
+            { value: 'themes', label: 'Themes' },
+            { value: 'tags', label: 'Tags' }
+          ]}
+          value={tab}
+          onChange={(value) => {
+            setTab(value)
+            setAll(false)
+          }}
+        />
         <SegmentedControl
           label="Period"
           name="feed-analysis-period"
@@ -158,21 +190,29 @@ export function FeedAnalysisCard({ productId, channelId, onFocus }: { productId:
             onFocus(null)
           }}
         />
-        <Button variant={view === null ? 'primary' : 'secondary'} onClick={() => void analyze()} disabled={running.busy} data-testid="feed-analysis-run">
-          {running.busy ? 'Analyzing…' : view === null ? 'Analyze the feed' : 'Analyze again'}
-        </Button>
+        {tab === 'themes' && (
+          <Button variant={view === null ? 'primary' : 'secondary'} onClick={() => void analyze()} disabled={running.busy} data-testid="feed-analysis-run">
+            {running.busy ? 'Analyzing…' : view === null ? 'Analyze the feed' : 'Analyze again'}
+          </Button>
+        )}
       </header>
 
-      {running.busy && <AiProgressPanel subject={productId} />}
-      <ErrorNote error={running.error} />
+      {tab === 'themes' && (
+        <>
+          {running.busy && <AiProgressPanel subject={productId} />}
+          <ErrorNote error={running.error} />
 
-      {view === null && !running.busy && (
-        <p className="muted small" data-testid="feed-analysis-empty">
-          {introWords(days)}
-        </p>
+          {view === null && !running.busy && (
+            <p className="muted small" data-testid="feed-analysis-empty">
+              {introWords(days)}
+            </p>
+          )}
+
+          {view !== null && <AnalysisBody view={view} stale={view.stale && !running.busy} all={all} setAll={setAll} onFocus={onFocus} />}
+        </>
       )}
 
-      {view !== null && <AnalysisBody view={view} stale={view.stale && !running.busy} all={all} setAll={setAll} onFocus={onFocus} />}
+      {tab === 'tags' && <TagsPanel productId={productId} channelId={channelId} days={days} all={all} setAll={setAll} picked={pickedTags} onTag={onTag} />}
     </section>
   )
 }

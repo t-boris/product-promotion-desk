@@ -3,7 +3,7 @@
 // `opportunity_id`, set when a post was worth a reply and its ordinary `new_post` opportunity was opened (or was there already).
 
 import { ApiError } from '../../shared/api'
-import type { Finding, FindingCard, FindingComment, FindingCounts, FindingLabel, FindingPicture, Id } from '../../shared/types'
+import type { Finding, FindingCard, FindingComment, FindingCounts, FindingLabel, FindingPicture, FindingTag, Id } from '../../shared/types'
 import type { Core } from '../core'
 import { newId, type Db } from '../db/database'
 import { mapFinding } from '../repos'
@@ -128,6 +128,7 @@ export class FindingStore {
       if (info.changes === 1) {
         this.saveThread(id, item.comments, now)
         this.savePictures(id, item.images, now)
+        this.keepBodyOf(id, item.body, now)
         return true
       }
       // A post found before the AI read it has a verdict and nothing behind it: when the AI now read it, what it read is kept (the verdict stays).
@@ -161,8 +162,16 @@ export class FindingStore {
       this.db.prepare('DELETE FROM finding_comments WHERE finding_id = ?').run(id)
       this.saveThread(id, item.comments, now)
       this.savePictures(id, item.images, now)
+      this.keepBodyOf(id, item.body, now)
       return true
     })()
+  }
+
+  /** The text a page of the post gave with what the AI recorded, kept for this post (see `applyBody` for the rule). */
+  private keepBodyOf(id: Id, text: string | undefined, now: string): void {
+    if (text === undefined) return
+    if (text === '') this.db.prepare("UPDATE findings SET body = '', body_at = ? WHERE id = ? AND body_at IS NULL").run(now, id)
+    else this.db.prepare('UPDATE findings SET body = ?, body_at = ? WHERE id = ? AND (body <> ? OR body_at IS NULL)').run(text, now, id, text)
   }
 
   /**
@@ -184,6 +193,17 @@ export class FindingStore {
       }
     })()
     return changed
+  }
+
+  /**
+   * Keeps the post's own text a page of the post showed (the page's address is the post's own: found by the address the finding is known by). A text keeps the
+   * date it was given; an empty text (a post that plainly has none of its own) is kept only while no page has given a text, so a page that was not loaded yet
+   * never wipes a text that was read. Returns how many posts changed.
+   */
+  applyBody(channelId: Id, url: string, text: string): number {
+    const now = this.now()
+    if (text === '') return this.db.prepare("UPDATE findings SET body = '', body_at = ? WHERE channel_id = ? AND (external_id = ? OR url = ?) AND body_at IS NULL").run(now, channelId, url, url).changes
+    return this.db.prepare('UPDATE findings SET body = ?, body_at = ? WHERE channel_id = ? AND (external_id = ? OR url = ?) AND (body <> ? OR body_at IS NULL)').run(text, now, channelId, url, url, text).changes
   }
 
   /**
@@ -458,7 +478,24 @@ export class FindingStore {
           ORDER BY COALESCE(f.posted_at, f.created_at) DESC, f.rowid DESC LIMIT ?`
       )
       .all(...params, limit) as Row[]
-    return rows.map((row) => ({ finding: mapFinding(row), channelTarget: row.channel_target as string, channelPlatform: row.channel_platform as string }))
+    const tags = this.tagsOf(rows.map((row) => row.id as Id))
+    return rows.map((row) => ({ finding: mapFinding(row), channelTarget: row.channel_target as string, channelPlatform: row.channel_platform as string, tags: tags.get(row.id as Id) ?? [] }))
+  }
+
+  /** The tags of these posts, the shortest name first; a post with none is not in the map. */
+  tagsOf(ids: readonly Id[]): Map<Id, FindingTag[]> {
+    const map = new Map<Id, FindingTag[]>()
+    for (let i = 0; i < ids.length; i += 400) {
+      const part = ids.slice(i, i + 400)
+      const rows = this.db
+        .prepare(
+          `SELECT ft.finding_id AS finding_id, t.id AS id, t.name AS name FROM finding_tags ft JOIN tags t ON t.id = ft.tag_id
+            WHERE ft.finding_id IN (${part.map(() => '?').join(',')}) ORDER BY LENGTH(t.name), t.name`
+        )
+        .all(...part) as { finding_id: Id; id: Id; name: string }[]
+      for (const row of rows) map.set(row.finding_id, [...(map.get(row.finding_id) ?? []), { id: row.id, name: row.name }])
+    }
+    return map
   }
 
   /** The counts of a product, or of one of its channels (the screen counts what it shows). */

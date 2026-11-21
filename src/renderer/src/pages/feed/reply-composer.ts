@@ -24,6 +24,17 @@ export function placeLabel(place: Place, postAuthor: string, comments: readonly 
   return `${comment.author.trim() || 'someone'}'s comment: ${words}`
 }
 
+/** What the window does when it opens: ask the AI with the wish it was opened with, show the text the place already holds, ask for a first text, or leave the text it kept. */
+export type OpeningMove = { move: 'ask'; wish: string } | { move: 'show'; text: string } | { move: 'nothing' }
+
+export function openingMove(args: { initialWish: string; kept: boolean; stored: string | null }): OpeningMove {
+  // A wish the window was opened with is asked for whatever the place already holds: the text it holds is what the AI starts from.
+  if (args.initialWish.trim() !== '') return { move: 'ask', wish: args.initialWish.trim() }
+  if (args.kept) return { move: 'nothing' }
+  if (args.stored !== null) return { move: 'show', text: args.stored }
+  return { move: 'ask', wish: '' }
+}
+
 /** What the window sends to the AI for the next round: the text as it stands now (the owner may have changed it) and the wish. */
 export function nextAsk(text: string, wish: string): { current: string; instruction: string } {
   return { current: text, instruction: wish.trim() }

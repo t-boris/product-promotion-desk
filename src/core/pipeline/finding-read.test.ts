@@ -124,6 +124,24 @@ describe('Check with AI on a post', () => {
     expect((await world.core.router.call('findings.thread', { id })).map((c) => c.author)).toEqual(['anna', 'poster'])
   })
 
+  it('keeps the text of the post the page of that very post showed, and the text of no other page the AI passed through', async () => {
+    const { ai } = setup()
+    // The posts of the test channel live on its own site (the hosts the mission is given).
+    const own = 'https://fake.test/post/1'
+    new FindingStore(world.core).addWatched(world.product.id, world.channel.id, { ...read({ url: own }), about: '', thread: '', comments: [], analysis: '', topics: [], images: [] }, false)
+    const id = (world.core.db.prepare('SELECT id FROM findings WHERE external_id = ?').get(own) as { id: string }).id
+    ai.script = (request) => {
+      request.recordBody?.({ url: 'https://fake.test/post/2', text: 'The text of another post.' })
+      request.recordBody?.({ url: own, text: 'Which app draws a chart with houses?\n\nI am new to this.' })
+      request.record([read({ url: own, images: [] })])
+      return finished()
+    }
+    expect(await card(id)).toMatchObject({ body: '', bodyAt: null })
+    await readNow(id)
+    expect(await card(id)).toMatchObject({ body: 'Which app draws a chart with houses?\n\nI am new to this.', bodyAt: world.clock.now().toISOString() })
+    expect(world.core.db.prepare("SELECT COUNT(*) AS n FROM findings WHERE body LIKE '%another post%'").get()).toEqual({ n: 0 })
+  })
+
   it('fetches the pictures it named and shows them: waiting while the file is not here, ready after, as a data address', async () => {
     const { ai, id, fetched } = setup()
     ai.script = (request) => {

@@ -163,6 +163,8 @@ export const mapFinding = (r: Row): Finding => ({
   replies: (r.reply_count as number | null) ?? null,
   score: (r.score as number | null) ?? null,
   statsAt: (r.stats_at as string | null) ?? null,
+  body: (r.body as string | null) ?? '',
+  bodyAt: (r.body_at as string | null) ?? null,
   createdAt: r.created_at as string
 })
 

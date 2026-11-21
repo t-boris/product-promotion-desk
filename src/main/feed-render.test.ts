@@ -59,11 +59,14 @@ function finding(over: Partial<Finding> = {}): FindingCard {
       replies: null,
       score: null,
       statsAt: null,
+      body: '',
+      bodyAt: null,
       createdAt: '2026-11-15T08:00:00.000Z',
       ...over
     },
     channelTarget: 'r/astrology',
-    channelPlatform: 'reddit'
+    channelPlatform: 'reddit',
+    tags: []
   }
 }
 
@@ -517,7 +520,7 @@ describe('the card of the analysis of the Feed', () => {
   const body = (v: FeedAnalysisView, stale = false, all = false): string => html(createElement(AnalysisBody, { view: v, stale, all, setAll: () => {}, onFocus: () => {} }))
 
   it('offers to analyze, and says what it does, before any analysis was made', () => {
-    const out = html(createElement(FeedAnalysisCard, { productId: 'p1', channelId: null, onFocus: () => {} }))
+    const out = html(createElement(FeedAnalysisCard, { productId: 'p1', channelId: null, onFocus: () => {}, pickedTags: [], onTag: () => {} }))
     expect(out).toContain('data-testid="feed-analysis"')
     expect(out).toContain('What is going on in your channels')
     expect(out).toContain('Analyze the feed')
@@ -527,7 +530,7 @@ describe('the card of the analysis of the Feed', () => {
   })
 
   it('is a panel of its own, not a post: it has an eyebrow and ranks its themes', () => {
-    const card = html(createElement(FeedAnalysisCard, { productId: 'p1', channelId: null, onFocus: () => {} }))
+    const card = html(createElement(FeedAnalysisCard, { productId: 'p1', channelId: null, onFocus: () => {}, pickedTags: [], onTag: () => {} }))
     expect(card).toContain('data-testid="feed-analysis-eyebrow"')
     expect(card).toContain('Analysis of the feed')
     expect(card).not.toContain('stream-card')
@@ -539,12 +542,12 @@ describe('the card of the analysis of the Feed', () => {
   })
 
   it('names the channel when it is about one', () => {
-    const out = html(createElement(FeedAnalysisCard, { productId: 'p1', channelId: 'c1', onFocus: () => {} }))
+    const out = html(createElement(FeedAnalysisCard, { productId: 'p1', channelId: 'c1', onFocus: () => {}, pickedTags: [], onTag: () => {} }))
     expect(out).toContain('What is going on in this channel')
   })
 
   it('offers the three periods, the week chosen', () => {
-    const out = html(createElement(FeedAnalysisCard, { productId: 'p1', channelId: null, onFocus: () => {} }))
+    const out = html(createElement(FeedAnalysisCard, { productId: 'p1', channelId: null, onFocus: () => {}, pickedTags: [], onTag: () => {} }))
     for (const label of ['24 hours', '7 days', '30 days']) expect(out).toContain(label)
     expect(out).toMatch(/segmented-option on[^>]*>[\s\S]*?7 days/)
   })

@@ -26,13 +26,13 @@ export function sortStream(rows: readonly FindingRow[], sort: StreamSort): Findi
   return copy.sort((a, b) => ownFirst(a, b) || newestFirst(a, b))
 }
 
-/** The rows whose channel, title, author, note or reading of the post holds every word of the search (case does not matter); all of them for an empty search. */
+/** The rows whose channel, title, author, note, reading of the post or tags hold every word of the search (case does not matter); all of them for an empty search. */
 export function searchStream(rows: readonly FindingRow[], query: string): FindingRow[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean)
   if (words.length === 0) return [...rows]
   return rows.filter((row) => {
     const { finding } = row.card
-    const text = [row.where, finding.title, finding.author, finding.relation, finding.about, finding.thread].join('\n').toLowerCase()
+    const text = [row.where, finding.title, finding.author, finding.relation, finding.about, finding.thread, ...row.card.tags.map((tag) => tag.name)].join('\n').toLowerCase()
     return words.every((word) => text.includes(word))
   })
 }
@@ -66,3 +66,16 @@ export function streamCounts(rows: readonly FindingRow[]): Record<StreamFilter, 
   return { all: rows.length, own: rows.filter((row) => row.own).length, starred: rows.filter((row) => row.starred).length, unseen: rows.filter((row) => row.unseen).length }
 }
 
+
+// ───────────── Tags: the posts that carry every tag the owner picked ─────────────
+
+/** The tags picked with one more (or one less when it was picked already): a tag is picked by its name, and the order is the order of the picking. */
+export function toggleTag(selected: readonly string[], name: string): string[] {
+  return selected.includes(name) ? selected.filter((n) => n !== name) : [...selected, name]
+}
+
+/** The rows that carry EVERY tag picked (a post must match them all); every row when none is picked. */
+export function filterByTags(rows: readonly FindingRow[], selected: readonly string[]): FindingRow[] {
+  if (selected.length === 0) return [...rows]
+  return rows.filter((row) => selected.every((name) => row.card.tags.some((tag) => tag.name === name)))
+}

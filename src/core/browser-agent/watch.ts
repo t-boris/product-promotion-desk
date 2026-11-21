@@ -103,6 +103,11 @@ export interface WatchItem {
    */
   replies: number | null
   score: number | null
+  /**
+   * The post's own text, as a page of the post the AI was shown gave it (read from the page by the application, never written by the AI). Absent when no
+   * page gave it; an empty text is a post with none of its own.
+   */
+  body?: string
 }
 
 /** The numbers a site showed for one post (its canonical address is the key the finding is known by). */
@@ -110,6 +115,32 @@ export interface WatchStat {
   url: string
   replies: number | null
   score: number | null
+}
+
+/** The text of a post as its own page showed it (the address is the key the finding is known by). An empty text is a post with none of its own. */
+export interface WatchBody {
+  url: string
+  text: string
+}
+
+/** The most characters of one post's own text that are kept. */
+export const WATCH_BODY_MAX = 20_000
+
+/**
+ * The text of a post as a page showed it, made safe to keep and to show: no hidden or control characters, the paragraphs of the post kept, cut to
+ * `WATCH_BODY_MAX`. It is a stranger's text: shown as plain text, read by the AI only inside a fenced data block, never obeyed.
+ */
+export function postBodyText(raw: string): string {
+  return (
+    cleanText(raw)
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, ' ')
+      .replace(/\r\n?/g, '\n')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+      .slice(0, WATCH_BODY_MAX)
+  )
 }
 
 /** One picture of a post: where the page has it, and what the page says it shows. */
@@ -147,6 +178,11 @@ export interface WatchSetup {
    * (a post is recorded once, so its comments and score would otherwise stay as they were on the day it was found). Optional.
    */
   recordStats?: (stats: WatchStat[]) => void
+  /**
+   * The text of a post that a page of that post showed, handed over as the AI looks at the page: the application read it from the page (the AI has no field
+   * to write it), and the flow keeps it only for the finding whose own address the page has. Optional.
+   */
+  recordBody?: (body: WatchBody) => void
   maxFindings: number
   /** The least time between two openings of a page. */
   minGapMs: number
@@ -195,6 +231,7 @@ export interface WatchMissionRequest {
   brief: WatchBrief
   record: WatchSetup['record']
   recordStats?: WatchSetup['recordStats']
+  recordBody?: WatchSetup['recordBody']
 }
 
 export interface WatchOutcome {
@@ -328,7 +365,7 @@ export function readImages(raw: unknown, shown: ReadonlySet<string>): WatchPictu
  * others stand. `error` only when the call as a whole is not a list of posts. A post the AI opened and read in full (a `reply`, or a notice that carries
  * `about`) also keeps what it read: the thread's comments, the analysis, the topics and the pictures (`shown` are the picture addresses it was shown).
  */
-export function readWatchItems(raw: unknown, hosts: string[], shown: ReadonlySet<string> = new Set(), numbers: ReadonlyMap<string, { replies: number | null; score: number | null }> = new Map()): { items: WatchItem[]; refused: string[] } | { error: string } {
+export function readWatchItems(raw: unknown, hosts: string[], shown: ReadonlySet<string> = new Set(), numbers: ReadonlyMap<string, { replies: number | null; score: number | null }> = new Map(), bodies: ReadonlyMap<string, string> = new Map()): { items: WatchItem[]; refused: string[] } | { error: string } {
   if (!Array.isArray(raw) || raw.length === 0) return { error: `items must be a list of 1 to ${WATCH_MAX_ITEMS_PER_CALL} posts, each with url, title, label and relation.` }
   if (raw.length > WATCH_MAX_ITEMS_PER_CALL) return { error: `At most ${WATCH_MAX_ITEMS_PER_CALL} posts in one call; send the rest in the next one.` }
   const items: WatchItem[] = []
@@ -376,7 +413,8 @@ export function readWatchItems(raw: unknown, hosts: string[], shown: ReadonlySet
       images: read ? readImages(entry.images, shown) : [],
       own: false,
       replies: numbers.get(url)?.replies ?? null,
-      score: numbers.get(url)?.score ?? null
+      score: numbers.get(url)?.score ?? null,
+      ...(bodies.has(url) ? { body: bodies.get(url) } : {})
     })
   })
   return { items, refused }

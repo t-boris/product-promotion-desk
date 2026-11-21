@@ -18,7 +18,7 @@ const count = (n: number, one: string, many = `${one}s`): string => `${n.toLocal
  * The numbers of a theme as a line: its posts (and how that compares with the period before), the comments under them and their score. A number no site
  * showed is not written as zero: it is left out, and a line says for how many of the posts the sites gave one.
  */
-export function themeNumbers(theme: FeedTheme, compared = true): string {
+export function themeNumbers(theme: Pick<FeedTheme, 'posts' | 'before' | 'replies' | 'score' | 'known'>, compared = true): string {
   const parts = [count(theme.posts, 'post')]
   // With no posts of the period before to compare with, nothing is "new" and nothing is "as before": the posts are only counted.
   if (compared && (theme.before > 0 || theme.posts > 0)) {

@@ -59,9 +59,11 @@ import type {
   OpportunityCard,
   FeedAnalysisView,
   FeedPeriod,
+  FindingAssist,
   FindingCard,
   FindingComment,
   FindingPicture,
+  FindingTranslation,
   FindingCounts,
   FindingLabel,
   OpportunityKind,
@@ -77,6 +79,7 @@ import type {
   ResultsHistory,
   ResultsView,
   RoleSuggestion,
+  TagsView,
   MetricSnapshot,
   Run,
   SavedSiteProfile,
@@ -405,6 +408,27 @@ export interface ApiMethods {
   'feed.analysis': [{ productId: Id; channelId?: Id | null; days?: FeedPeriod }, FeedAnalysisView | null]
   /** The AI makes the analysis again from the posts the Feed holds (no browser, nothing sent). It resolves when it is kept; refused with too few posts. */
   'feed.analyze': [{ productId: Id; channelId?: Id | null; days?: FeedPeriod }, FeedAnalysisView]
+  /**
+   * The kept translation of a post and its comments into `language` (one of `READING_LANGUAGES`), or null while none was made. Read-only: nothing is asked of the AI.
+   */
+  'findings.translation': [{ id: Id; language: string }, FindingTranslation | null]
+  /**
+   * The AI translates the post (its title and own text) and the comments under it into `language`: plain text, no tools, no browser, nothing sent. A kept
+   * translation of the same text is returned as it is unless `refresh`. Resolves when it is kept; a failure is told in words and nothing is changed.
+   */
+  'findings.translate': [{ id: Id; language: string; refresh?: boolean }, FindingTranslation]
+  /** The kept explanation of a post in `language`, or null while none was made. Read-only. */
+  'findings.assistance': [{ id: Id; language: string }, FindingAssist | null]
+  /**
+   * The AI explains a post in `language`: what it is about, what the person wants, what is worth noticing, where they are right and wrong, what could be
+   * answered. A post the AI has not read is read first (in the account's browser, reading only). The model searches the web only when the post needs facts.
+   * With `question` it answers that question about the post (kept with the explanation); with `refresh` it explains again. Nothing is posted or sent.
+   */
+  'findings.assist': [{ id: Id; language: string; question?: string; refresh?: boolean }, FindingAssist]
+  /** The AI gives tags to the noted posts of a product that have none (no browser, no search, nothing sent). Resolves when they are kept. */
+  'findings.tag': [{ productId: Id }, { tagged: number; left: number }]
+  /** The tags of a period with their numbers counted from the posts (and, per tag, the last 30 days). `offsetMinutes`: the viewer's offset from UTC, for the days. Read-only. */
+  'tags.view': [{ productId: Id; channelId?: Id | null; days?: FeedPeriod; offsetMinutes?: number }, TagsView]
   'opportunities.get': [{ id: Id }, OpportunityCard]
   'opportunities.prepareDraft': [{ id: Id }, OpportunityCard]
   'opportunities.saveDraft': [{ id: Id; draft: DraftInput }, OpportunityCard]

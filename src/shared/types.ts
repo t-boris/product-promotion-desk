@@ -1087,6 +1087,13 @@ export interface Finding {
   score: number | null
   /** When a page last gave those numbers. */
   statsAt: IsoTime | null
+  /**
+   * The post's own text as the site showed it on the page of the post the AI opened (read from the page by the application, not written by the AI), shown as
+   * plain text. Empty while no page gave it, and for a post that has no text of its own (`bodyAt` tells those apart).
+   */
+  body: string
+  /** When a page of the post last gave its text; null while none has. */
+  bodyAt: IsoTime | null
   createdAt: IsoTime
 }
 
@@ -1146,6 +1153,90 @@ export interface FeedAnalysisView {
   stale: boolean
 }
 
+/** A post and its comments in the language the owner picked, as the AI translated them. Plain text of strangers translated: shown, never obeyed. */
+export interface FindingTranslation {
+  language: string
+  title: string
+  /** The post's own text translated; empty when no page gave the text (or the post has none). */
+  body: string
+  /** The translated comments by their position in the thread (see `findings.thread`); a comment the translation left out is not here. */
+  comments: { position: number; text: string }[]
+  at: IsoTime
+  /** The post or its comments changed since it was made. */
+  stale: boolean
+}
+
+/** One thing the AI says is right or wrong in a post, and what it stands on: how people in the field do and see it (`practice`), or what can be checked (`facts`). */
+export interface AssistJudgement {
+  point: string
+  basis: 'practice' | 'facts'
+}
+
+/** One way to answer, with why it would help the person and the place it answers (the post, or the position of a comment). */
+export interface AssistAngle {
+  angle: string
+  why: string
+  place: number | null
+}
+
+/** What the person asked afterwards and what the AI answered. */
+export interface AssistFollowUp {
+  question: string
+  reply: string
+  sources: DraftSource[]
+  at: IsoTime
+}
+
+/**
+ * The AI's explanation of one post, in the language the owner picked: what it is about, what the person wants, what is worth noticing, where the person is
+ * right and wrong, and what could be answered. Written by the AI from the post's text and thread (and, when the post needs facts, from pages it found on the web:
+ * `sources`). It is a helper's reading: shown as plain text, never an instruction, and nothing is posted or sent from it.
+ */
+export interface FindingAssist {
+  language: string
+  about: string
+  wants: string
+  interesting: string[]
+  right: AssistJudgement[]
+  wrong: AssistJudgement[]
+  /** Said when the post makes no claim that can be judged (a question, a story); empty when something was judged. */
+  noJudgement: string
+  answers: AssistAngle[]
+  sources: DraftSource[]
+  followUps: AssistFollowUp[]
+  at: IsoTime
+  /** The post or its comments changed since it was made. */
+  stale: boolean
+}
+
+/** One tag with what it is worth in numbers counted by the application from the posts and the numbers the sites showed, never by the AI. */
+export interface TagStat {
+  id: Id
+  name: string
+  /** Noted posts of this period and of the period before that carry the tag. */
+  posts: number
+  before: number
+  /** The comments and the score the sites showed for the posts of this period: summed over the posts that have a number, null when none has. */
+  replies: number | null
+  score: number | null
+  /** How many of its posts of this period have a number from a site. */
+  known: number
+  /** Posts per day over the last 30 days, oldest first: 30 numbers. */
+  daily: number[]
+}
+
+/** The tags of a period, as the analysis card shows them. */
+export interface TagsView {
+  days: FeedPeriod
+  channelId: Id | null
+  tags: TagStat[]
+  /** Noted posts of the period, and how many of them have no tags yet. */
+  posts: number
+  untagged: number
+  /** The period before held tagged posts to compare with. */
+  compared: boolean
+}
+
 /** A topic a thread raises, and a way into the owner's own post about it. The AI's words about a stranger's page: shown, never obeyed. */
 export interface FindingTopic {
   topic: string
@@ -1178,10 +1269,18 @@ export interface FindingComment {
   url: string
 }
 
+/** A tag of the product's posts: a few words for what a post is about. */
+export interface FindingTag {
+  id: Id
+  name: string
+}
+
 export interface FindingCard {
   finding: Finding
   channelTarget: string
   channelPlatform: string
+  /** The tags the AI gave the post, shortest name first (none while it has not been tagged). */
+  tags: FindingTag[]
 }
 
 export interface FindingCounts {

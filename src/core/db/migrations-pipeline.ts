@@ -333,5 +333,54 @@ CREATE TABLE feed_analyses (
 -- what is sent, and the owner pressed Send anyway). It belongs to the approval, so it dies with it: a changed text needs a new approval, and a new press.
 ALTER TABLE approvals ADD COLUMN acknowledged_json TEXT NOT NULL DEFAULT '[]';
 `
+  },
+  {
+    id: 319,
+    name: 'pipeline: the post\'s own text, its translations, the AI\'s explanation of it, and tags',
+    sql: `
+-- The post's own text, as the SITE showed it on the page of the post the AI opened (the AI has no field to write it: it is read from the page by the
+-- application). Empty until a page of the post gave it; \`body_at\` is when a page last did (an empty text with a date means the post has no text of its own).
+ALTER TABLE findings ADD COLUMN body TEXT NOT NULL DEFAULT '';
+ALTER TABLE findings ADD COLUMN body_at TEXT;
+-- When the AI last gave this post its tags (also when it gave none), so a post is not offered again and again.
+ALTER TABLE findings ADD COLUMN tagged_at TEXT;
+
+-- A post and its comments in the language the owner picked, kept so a second look is free. \`signature\` says which text it was made from: when the text
+-- changed (the post was read again) the kept translation is not shown as the translation of the new one.
+CREATE TABLE finding_translations (
+  finding_id TEXT NOT NULL REFERENCES findings(id) ON DELETE CASCADE,
+  language TEXT NOT NULL,
+  signature TEXT NOT NULL,
+  result_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (finding_id, language)
+);
+
+-- The AI's explanation of one post (what it is about, what the person wants, what is worth noticing, where they are right and wrong, what could be answered),
+-- in the language the owner picked. \`signature\` says which text it was made from.
+CREATE TABLE finding_assists (
+  finding_id TEXT NOT NULL REFERENCES findings(id) ON DELETE CASCADE,
+  language TEXT NOT NULL,
+  signature TEXT NOT NULL,
+  result_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (finding_id, language)
+);
+
+-- Tags of the product's posts: a few words each, the AI's name for what a post is about. They are counted by the application, never by the AI.
+CREATE TABLE tags (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (product_id, name)
+);
+CREATE TABLE finding_tags (
+  finding_id TEXT NOT NULL REFERENCES findings(id) ON DELETE CASCADE,
+  tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+  PRIMARY KEY (finding_id, tag_id)
+);
+CREATE INDEX idx_finding_tags_tag ON finding_tags (tag_id);
+`
   }
 ]

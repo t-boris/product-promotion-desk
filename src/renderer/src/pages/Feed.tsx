@@ -13,10 +13,11 @@ import { FeedList } from './feed/FeedList'
 import { ReadingNotes } from './feed/ReadingNotes'
 import { FEED_SOURCES, buildFeedRows, channelOptionLabel, emptyKind, groupByDay, nothingFoundWords, readableChannels, sourceCounts, stateCounts, visibleRows, watchedChannels, widestFilter, type FeedRow, type FeedSourceFilter } from './feed/feed-filter'
 import { FEED_TABS, isFindingRow, judgedLine, notedCount, notedEmptyKind, opportunityListOf, unseenNoticeCount, visibleFindings, type FeedTab, type ListedRow, type NotedEmpty } from './feed/finding-rows'
-import { STREAM_SORTS, filterStream, searchStream, sortStream, streamCounts, visibleFilters, type StreamFilter, type StreamSort } from './feed/stream-filter'
+import { STREAM_SORTS, filterByTags, filterStream, searchStream, sortStream, streamCounts, toggleTag, visibleFilters, type StreamFilter, type StreamSort } from './feed/stream-filter'
 import { FindingStream } from './feed/FindingStream'
 import { FeedAnalysisCard, type FeedFocus } from './feed/FeedAnalysisCard'
 import { focusLine, rowsOfFocus } from './feed/analysis-card'
+import { tagFilterLine } from './feed/tags-card'
 import { usePaging } from '../list-paging'
 import { ShowMore } from './ShowMore'
 import { FindingDetail } from './feed/FindingDetail'
@@ -89,6 +90,8 @@ function FeedScreen({ product }: { product: Product }) {
   const [chosenChannel, setChosenChannel] = useState<Id | ''>('')
   // The posts of a theme (or the one post of a question) of the analysis card: the stream below shows only them until the owner shows all again.
   const [focus, setFocus] = useState<FeedFocus | null>(null)
+  // The tags the owner picked (on a card or in the analysis): the stream shows only the posts that carry every one of them.
+  const [pickedTags, setPickedTags] = useState<string[]>([])
   const [olderFor, setOlderFor] = useState<Id | null>(null)
   // The posts the AI judged not relevant, listed read-only in place of the Feed's lists (asked for only now).
   const [auditing, setAuditing] = useState(false)
@@ -103,6 +106,7 @@ function FeedScreen({ product }: { product: Product }) {
   const tab: FeedTab = picked ?? defaultTab
   // A theme of the analysis is about the channel it was opened in: another channel or another list starts from every post again.
   useEffect(() => setFocus(null), [channelId, tab])
+  const pickTag = (name: string): void => setPickedTags((picked) => toggleTag(picked, name))
   // Noted lists findings, not opportunities: the three lists of opportunities (and the source chips, which are theirs) do not apply to it.
   const filterCounts = useMemo(() => streamCounts(notices), [notices])
   const list = opportunityListOf(tab)
@@ -113,8 +117,8 @@ function FeedScreen({ product }: { product: Product }) {
 
   // The findings of the tab, searched and sorted as the owner asked, a page at a time; the opportunity lists are paged too. A new tab, channel, search or
   // sort starts again from the top.
-  const findingRows = useMemo(() => rowsOfFocus(sortStream(searchStream(filterStream(notices, starFilter), search), sort), focus), [notices, starFilter, search, sort, focus])
-  const pagedFindings = usePaging(findingRows, `${tab}|${channelId}|${starFilter}|${search}|${sort}|${focus?.label ?? ''}`)
+  const findingRows = useMemo(() => rowsOfFocus(sortStream(searchStream(filterByTags(filterStream(notices, starFilter), pickedTags), search), sort), focus), [notices, starFilter, pickedTags, search, sort, focus])
+  const pagedFindings = usePaging(findingRows, `${tab}|${channelId}|${starFilter}|${pickedTags.join(',')}|${search}|${sort}|${focus?.label ?? ''}`)
   const pagedOpportunities = usePaging(visible, `${tab}|${source}|${channelId}`)
 
   // What the list shows: the posts judged not relevant while the owner checks them (a list with a pane), else the opportunities of the list. The Noted posts
@@ -171,6 +175,7 @@ function FeedScreen({ product }: { product: Product }) {
     if (list === null) {
       setSearch('')
       setStarFilter('all')
+      setPickedTags([])
       return
     }
     const widest = widestFilter(rows)
@@ -301,8 +306,8 @@ function FeedScreen({ product }: { product: Product }) {
                       className="input feed-search"
                       type="search"
                       value={search}
-                      placeholder="Search posts"
-                      aria-label="Search posts"
+                      placeholder="Search posts and tags"
+                      aria-label="Search posts and tags"
                       onChange={(e) => setSearch(e.target.value)}
                       data-testid="feed-search"
                     />
@@ -331,6 +336,23 @@ function FeedScreen({ product }: { product: Product }) {
 
           {!auditing && channelsQuery.data !== undefined && <ReadingNotes channels={channels} source={list === null ? 'new_post' : source} channelId={channelId} watching={watching} />}
 
+          {!auditing && list === null && pickedTags.length > 0 && (
+            <div className="feed-focus feed-tag-filter" data-testid="feed-tag-filter">
+              <ul className="tag-chips" aria-label="Tags the posts are narrowed to">
+                {pickedTags.map((name) => (
+                  <li key={name}>
+                    <button type="button" className="tag-chip on removable" onClick={() => pickTag(name)} aria-label={`Take the tag ${name} off`} data-testid="feed-tag-picked" data-tag={name}>
+                      {name} <span aria-hidden="true">×</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <span className="muted small">{tagFilterLine(pickedTags, findingRows.length)}</span>
+              <Button variant="secondary" onClick={() => setPickedTags([])} data-testid="feed-tag-clear">
+                Clear tags
+              </Button>
+            </div>
+          )}
           {(feed.capped || findings.capped) && <Hint data-testid="feed-capped">Only the newest 300 items of each list are shown.</Hint>}
 
           {loading && <Loading what="Loading" />}
@@ -400,7 +422,7 @@ function FeedScreen({ product }: { product: Product }) {
 
           {!auditing && list === null && empty === null && ready && findingRows.length > 0 && (
             <div className="feed-scroll" data-testid="feed-noted-scroll">
-              <FeedAnalysisCard productId={product.id} channelId={channelId} onFocus={setFocus} />
+              <FeedAnalysisCard productId={product.id} channelId={channelId} onFocus={setFocus} pickedTags={pickedTags} onTag={pickTag} />
               {focus !== null && (
                 <div className="feed-focus" data-testid="feed-focus">
                   <span className="muted small">{focusLine(focus.label, findingRows.length, focus.ids.size)}</span>
@@ -416,6 +438,8 @@ function FeedScreen({ product }: { product: Product }) {
                 rows={pagedFindings.visible}
                 markSeen={findings.markSeen}
                 setStarred={findings.setStarred}
+                tags={pickedTags}
+                onTag={pickTag}
                 footer={<ShowMore hidden={pagedFindings.hidden} total={pagedFindings.total} onMore={pagedFindings.more} testId="feed-show-more" />}
               />
             </div>

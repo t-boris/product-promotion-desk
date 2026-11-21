@@ -8,7 +8,7 @@ import { FakeClock, FakePage } from '../testing/fakes'
 import { TicketAuthority } from '../tickets'
 import { BrowserToolbox, type Rhythm, type ToolboxDeps } from './toolbox'
 import { NOTE_LEFT_OUT } from '../pipeline/triage-prompt'
-import { WATCH_COMMENT_DEPTH_MAX, WATCH_COMMENT_MAX, WATCH_MAX_ITEMS_PER_CALL, WATCH_THREAD_ITEMS_MAX, WATCH_THREAD_TEXT_MAX, WATCH_REPLY_PREFIX, WATCH_SKIP_RELATION, WATCH_TOOL_NAMES, canonicalWatchUrl, openProblem, readWatchItems, type WatchItem } from './watch'
+import { WATCH_BODY_MAX, WATCH_COMMENT_DEPTH_MAX, WATCH_COMMENT_MAX, WATCH_MAX_ITEMS_PER_CALL, WATCH_THREAD_ITEMS_MAX, WATCH_THREAD_TEXT_MAX, WATCH_REPLY_PREFIX, WATCH_SKIP_RELATION, WATCH_TOOL_NAMES, canonicalWatchUrl, openProblem, readWatchItems, type WatchItem } from './watch'
 
 interface Item {
   ref: string
@@ -39,9 +39,10 @@ class ListPage extends FakePage {
   humanCheck = ''
   pictures: { src: string; alt: string; width: number; height: number; offscreen?: boolean }[] = []
   stats: { href: string; replies: number | null; score: number | null }[] = []
+  post: { href: string; text: string } | null = null
   override async read<T>(script: string): Promise<T> {
     this.log.push(`read ${script.slice(0, 40)}`)
-    if (script.includes('agent-snapshot')) return { url: this.currentUrl, title: 'Page', text: 'Some posts', alerts: [], humanCheck: this.humanCheck, elements: this.items.map((i) => ({ ...i })), pictures: this.pictures, stats: this.stats } as T
+    if (script.includes('agent-snapshot')) return { url: this.currentUrl, title: 'Page', text: 'Some posts', alerts: [], humanCheck: this.humanCheck, elements: this.items.map((i) => ({ ...i })), pictures: this.pictures, stats: this.stats, ...(this.post ? { post: this.post } : {}) } as T
     return undefined as T
   }
   override async pageStep(step: PageStep, hosts: string[]): Promise<PageStepResult> {
@@ -63,6 +64,7 @@ function setup(over: Partial<ToolboxDeps> = {}, shared: { time?: { now: number }
   const said: string[] = []
   const known = new Set<string>()
   const numbers: { url: string; replies: number | null; score: number | null }[][] = []
+  const bodies: { url: string; text: string }[] = []
   const toolbox = new BrowserToolbox({
     withPage: (work) => session.withAgentControl('watch', work),
     hosts: ['instagram.com'],
@@ -92,13 +94,14 @@ function setup(over: Partial<ToolboxDeps> = {}, shared: { time?: { now: number }
         return { stored, known: dup }
       },
       recordStats: (stats) => numbers.push(stats),
+      recordBody: (body) => bodies.push(body),
       maxFindings: 60,
       minGapMs: 2000,
       now: () => time.now
     },
     ...over
   })
-  return { page, session, toolbox, time, sleeps, reports, recorded, known, said, numbers }
+  return { page, session, toolbox, time, sleeps, reports, recorded, known, said, numbers, bodies }
 }
 
 type Setup = ReturnType<typeof setup>
@@ -722,6 +725,62 @@ describe('what a post read in full carries: the analysis, the topics and the pic
       const t = setup()
       await look(t)
       expect(t.numbers).toEqual([])
+    })
+  })
+
+  describe('the text of a post its own page shows', () => {
+    const URL1 = 'https://www.instagram.com/p/Abc123/'
+
+    it('is handed to the flow by the post\'s canonical address, without hidden characters, with its paragraphs', async () => {
+      const t = setup()
+      t.page.post = { href: `${URL1}?utm_source=x`, text: 'Which app draws a chart\u200b with houses?\r\n\r\n\r\n\r\nThanks.' }
+      await look(t)
+      expect(t.bodies).toEqual([{ url: 'https://www.instagram.com/p/Abc123', text: 'Which app draws a chart  with houses?\n\nThanks.' }])
+    })
+
+    it('is given to the post that is recorded afterwards, as the PAGE showed it, whatever text the AI claims', async () => {
+      const t = setup()
+      t.page.post = { href: URL1, text: 'The real text of the post.' }
+      await look(t)
+      await record(t, [full({ body: 'Whatever the AI says is the text', text: 'Another claim' })])
+      expect(t.recorded[0]).toMatchObject({ body: 'The real text of the post.' })
+    })
+
+    it('is not given to a post whose own page was not shown, and a post recorded before any page was looked at has none', async () => {
+      const t = setup()
+      t.page.post = { href: 'https://www.instagram.com/p/Other/', text: 'The text of another post.' }
+      await look(t)
+      await record(t, [full()])
+      expect(t.recorded[0]).not.toHaveProperty('body')
+      const blind = setup()
+      await record(blind, [full()])
+      expect(blind.recorded[0]).not.toHaveProperty('body')
+    })
+
+    it('says nothing for a page of another site, or for a page that shows no post', async () => {
+      const t = setup()
+      t.page.post = { href: 'https://evil.example/p/x/', text: 'Not ours.' }
+      await look(t)
+      t.page.post = null
+      await look(t)
+      expect(t.bodies).toEqual([])
+    })
+
+    it('never lets a later page that shows no text wipe the text an earlier look at the post gave', async () => {
+      const t = setup()
+      t.page.post = { href: URL1, text: 'The real text.' }
+      await look(t)
+      t.page.post = { href: URL1, text: '' }
+      await look(t)
+      await record(t, [full()])
+      expect(t.recorded[0]).toMatchObject({ body: 'The real text.' })
+    })
+
+    it('is cut to the most a post can keep', async () => {
+      const t = setup()
+      t.page.post = { href: URL1, text: 'x'.repeat(WATCH_BODY_MAX + 500) }
+      await look(t)
+      expect(t.bodies[0]?.text).toHaveLength(WATCH_BODY_MAX)
     })
   })
 

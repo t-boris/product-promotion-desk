@@ -5,8 +5,11 @@ import { DraftCheck } from './draft-check'
 import { DraftHelp } from './draft-help'
 import { FindingPictures } from './finding-pictures'
 import { FeedAnalysis } from './feed-analysis'
+import { FindingAssistant } from './finding-assist'
 import { FindingReply } from './finding-reply'
 import { FindingSend } from './finding-send'
+import { FindingTags } from './finding-tags'
+import { FindingTranslate } from './finding-translate'
 import { DraftingFlow } from './drafting'
 import { FindingStore } from './findings'
 import { registerFlowApi } from './flow-api'
@@ -41,7 +44,12 @@ export function registerFlow(core: Core): void {
   const pictures = new FindingPictures(core, findings)
   // The analysis of the whole Feed: made on the owner's press, and again after a look when the posts changed.
   const feedAnalysis = new FeedAnalysis(core, findings)
-  const watcher = new BrowserWatchFlow(core, store, findings, ingestor, pictures, (productId) => feedAnalysis.refreshSoon(productId))
+  // The tags of the posts: given by the AI to the noted posts that have none, again after a look.
+  const tags = new FindingTags(core, findings)
+  const watcher = new BrowserWatchFlow(core, store, findings, ingestor, pictures, (productId) => {
+    tags.refreshSoon(productId)
+    feedAnalysis.refreshSoon(productId)
+  })
   const monitor = new MonitorFlow(core, store, ingestor, watch, triage, watcher)
   const drafting = new DraftingFlow(core, store, review, sending)
   const publications = new PublicationsFlow(core, store)
@@ -68,6 +76,17 @@ export function registerFlow(core: Core): void {
     },
     'findings.saveDraft': ({ id, place, text }) => findingSend.saveDraft({ id: requireText(id, 'The post'), place: place ?? null, text }),
     'findings.replies': ({ id }) => findingSend.replies(requireText(id, 'The post'))
+  })
+  // Reading a post in the language the owner reads: translating it and its comments, and the AI's explanation of it. No post is changed, nothing is posted or sent.
+  const translate = new FindingTranslate(core, findings)
+  const assistant = new FindingAssistant(core, findings, (finding) => watcher.readPost(finding))
+  core.router.register({
+    'findings.translation': (args) => translate.get(args),
+    'findings.translate': (args) => translate.translate(args),
+    'findings.assistance': (args) => assistant.get(args),
+    'findings.assist': (args) => assistant.assist(args),
+    'findings.tag': (args) => tags.tag(args),
+    'tags.view': (args) => tags.view(args)
   })
   core.router.register({
     'feed.analysis': ({ productId, channelId, days }) => feedAnalysis.get({ productId, channelId: channelId ?? null, days }),

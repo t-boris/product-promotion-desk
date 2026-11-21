@@ -25,7 +25,7 @@ import {
   visibleFindings,
   type FindingRow
 } from '../renderer/src/pages/feed/finding-rows'
-import { STREAM_FILTERS, STREAM_SORTS, filterStream, searchStream, sortStream, streamCounts, visibleFilters } from '../renderer/src/pages/feed/stream-filter'
+import { STREAM_FILTERS, STREAM_SORTS, filterByTags, filterStream, searchStream, sortStream, streamCounts, toggleTag, visibleFilters } from '../renderer/src/pages/feed/stream-filter'
 import { selectionAfterDismiss } from '../renderer/src/pages/inbox/inbox-groups'
 
 interface Seed {
@@ -42,6 +42,7 @@ interface Seed {
   seenAt?: string | null
   starredAt?: string | null
   own?: boolean
+  tags?: string[]
 }
 
 function card(seed: Seed): FindingCard {
@@ -73,10 +74,13 @@ function card(seed: Seed): FindingCard {
       replies: null,
       score: null,
       statsAt: null,
+      body: '',
+      bodyAt: null,
       createdAt: seed.createdAt ?? '2026-11-15T08:00:00.000Z'
     },
     channelTarget: seed.target ?? 'r/alpha',
-    channelPlatform: 'reddit'
+    channelPlatform: 'reddit',
+    tags: (seed.tags ?? []).map((name) => ({ id: `tag-${name}`, name }))
   }
 }
 
@@ -463,5 +467,50 @@ describe('the stream: search and sort', () => {
     expect(ids(searchStream(rows, 'alpha'))).toEqual(['new', 'mid'])
     expect(ids(searchStream(rows, 'no such words'))).toEqual([])
     expect(ids(searchStream(rows, '   '))).toEqual(['old', 'new', 'mid'])
+  })
+})
+
+describe('the stream: tags', () => {
+  const rows = [
+    rowOf({ id: 'a', title: 'Chart apps?', tags: ['houses', 'chart apps'] }),
+    rowOf({ id: 'b', title: 'Moon sign help', tags: ['moon sign'] }),
+    rowOf({ id: 'c', title: 'Which houses?', tags: ['houses', 'moon sign'] }),
+    rowOf({ id: 'd', title: 'No tags yet' })
+  ]
+
+  it('picks a tag, takes it off when it is picked again, and keeps the order of the picking', () => {
+    expect(toggleTag([], 'houses')).toEqual(['houses'])
+    expect(toggleTag(['houses'], 'moon sign')).toEqual(['houses', 'moon sign'])
+    expect(toggleTag(['houses', 'moon sign'], 'houses')).toEqual(['moon sign'])
+    const picked = ['houses']
+    toggleTag(picked, 'moon sign')
+    expect(picked).toEqual(['houses'])
+  })
+
+  it('keeps every post while no tag is picked, the posts that carry the tag when one is, and only the posts that carry ALL of the tags when several are', () => {
+    expect(ids(filterByTags(rows, []))).toEqual(['a', 'b', 'c', 'd'])
+    expect(ids(filterByTags(rows, ['houses']))).toEqual(['a', 'c'])
+    expect(ids(filterByTags(rows, ['moon sign']))).toEqual(['b', 'c'])
+    expect(ids(filterByTags(rows, ['houses', 'moon sign']))).toEqual(['c'])
+    expect(ids(filterByTags(rows, ['houses', 'no such tag']))).toEqual([])
+  })
+
+  it('matches a tag by its whole name, and never changes the list it is given', () => {
+    expect(ids(filterByTags(rows, ['house']))).toEqual([])
+    const before = ids(rows)
+    filterByTags(rows, ['houses'])
+    expect(ids(rows)).toEqual(before)
+  })
+
+  it('searches the names of the tags too, with the words of the title and the note', () => {
+    expect(ids(searchStream(rows, 'chart apps'))).toEqual(['a'])
+    expect(ids(searchStream(rows, 'moon'))).toEqual(['b', 'c'])
+    expect(ids(searchStream(rows, 'houses moon'))).toEqual(['c'])
+    expect(ids(searchStream(rows, 'tags yet'))).toEqual(['d'])
+  })
+
+  it('works together with the other filters: a starred post that carries the tag', () => {
+    const mixed = [rowOf({ id: 's1', tags: ['houses'], starredAt: '2026-11-15T09:00:00.000Z' }), rowOf({ id: 's2', tags: ['houses'] }), rowOf({ id: 's3', starredAt: '2026-11-15T09:00:00.000Z' })]
+    expect(ids(filterByTags(filterStream(mixed, 'starred'), ['houses']))).toEqual(['s1'])
   })
 })

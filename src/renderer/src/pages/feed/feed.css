@@ -588,3 +588,135 @@
   gap: var(--space-2) var(--space-3);
   margin-bottom: var(--space-3);
 }
+
+/* ───────────── Tags: the short names the AI gave a post, a button each ───────────── */
+
+.tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* A 22 px capsule like a badge, but pressable: it narrows the stream to the posts that carry the tag. */
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 22px;
+  padding: 0 var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--segment-track);
+  color: var(--text-2);
+  font: inherit;
+  font-size: var(--fs-caption);
+  line-height: 20px;
+  white-space: nowrap;
+  cursor: default;
+}
+.tag-chip:hover {
+  border-color: var(--line-strong);
+  color: var(--text-1);
+}
+.tag-chip:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.tag-chip.on {
+  background: var(--accent-tint);
+  border-color: var(--accent);
+  color: var(--accent-on-tint);
+}
+
+/* The tags the stream is narrowed to, over the stream: the same row as the theme line. */
+.feed-tag-filter .tag-chips {
+  align-items: center;
+}
+
+/* The tags tab of the analysis card: the rows of the themes, with a small picture of the last thirty days at the end. */
+.feed-tags {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.feed-tags-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+.feed-tag-spark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* ───────────── The tools of a post: Explain, Read the post, Translate, and the language they work in ───────────── */
+
+.post-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+/* The language list: as wide as its longest word, on the same 28 px line as the buttons beside it. */
+.post-tools .input.post-tools-language {
+  width: auto;
+  min-width: 130px;
+}
+.post-translation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+}
+.post-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.post-panel p {
+  margin: 0;
+}
+.post-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  overflow-wrap: anywhere;
+}
+.post-assist-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.post-assist-part ul {
+  margin: 0;
+  padding-left: var(--space-4);
+  display: grid;
+  gap: var(--space-1);
+}
+.post-assist-answers {
+  gap: var(--space-3);
+}
+.post-assist-answers li > div {
+  margin-top: var(--space-1);
+}
+.post-assist-actions,
+.post-assist-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.post-assist-ask .input {
+  flex: 1;
+  min-width: 200px;
+}

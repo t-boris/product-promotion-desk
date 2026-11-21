@@ -8,7 +8,7 @@
 
 import { ApiError } from '../../shared/api'
 import type { Account, Channel, Finding, Id } from '../../shared/types'
-import { READ_POST_MAX_CALLS, TO_READ_LABEL, WATCH_FIRST_LOOK_MAX_CALLS, WATCH_KNOWN_LIMIT, WATCH_MAX_CALLS, WATCH_MAX_POSTS, WATCH_TIMEOUT_MS, WATCH_UNREAD_LIMIT, type WatchBrief, type WatchItem, type WatchOutcome, type WatchStat, type WatchRecorded } from '../browser-agent/watch'
+import { READ_POST_MAX_CALLS, canonicalWatchUrl, TO_READ_LABEL, WATCH_FIRST_LOOK_MAX_CALLS, WATCH_KNOWN_LIMIT, WATCH_MAX_CALLS, WATCH_MAX_POSTS, WATCH_TIMEOUT_MS, WATCH_UNREAD_LIMIT, type WatchBody, type WatchBrief, type WatchItem, type WatchOutcome, type WatchStat, type WatchRecorded } from '../browser-agent/watch'
 import { MAX_LOOK_BACK_DAYS } from '../channels/settings'
 import { webPlaces } from '../channels/web-places'
 import { platformLabel } from '../../shared/post-format'
@@ -87,6 +87,8 @@ export class BrowserWatchFlow {
     const isOwn = this.ingestor.ownPostTest(channel, account)
     // The numbers a page shows for the posts on it (comments, score) refresh those of the posts known already.
     const recordStats = (stats: WatchStat[]): void => void this.findings.applyStats(channel.id, stats)
+    // The text of a post a page of that post showed: kept for the post it belongs to, when the application knows that post.
+    const recordBody = (body: WatchBody): void => void this.findings.applyBody(channel.id, body.url, body.text)
     const record = (items: WatchItem[]): WatchRecorded => {
       let stored = 0
       let known = 0
@@ -107,7 +109,7 @@ export class BrowserWatchFlow {
 
     let outcome: WatchOutcome
     try {
-      outcome = await missions.watch({ accountId: account.id, channelId: channel.id, hosts: webPlaces(channel).hosts, brief: this.brief(channel, account, firstLook, days, since), record, recordStats })
+      outcome = await missions.watch({ accountId: account.id, channelId: channel.id, hosts: webPlaces(channel).hosts, brief: this.brief(channel, account, firstLook, days, since), record, recordStats, recordBody })
     } catch (error) {
       if (error instanceof ApiError && NOT_STARTED.has(error.code)) return deferred(`The channel was not looked at: ${error.message}`)
       this.core.log.error('monitor', `The look at the channel stopped unexpectedly: ${errorMessage(error)}`, channel.id)
@@ -157,11 +159,15 @@ export class BrowserWatchFlow {
         }
         return { stored: applied, known: 0, refused }
       }
+      const ownAddress = canonicalWatchUrl(finding.url, site.hosts)
       const base = this.brief(channel, account, false, 1, this.core.clock.now().getTime(), false)
       const brief: WatchBrief = { ...base, mode: 'read', places: [{ label: `The post to read: ${finding.title}`, url: finding.url }], known: [], maxPosts: 1, maxCalls: READ_POST_MAX_CALLS }
       let outcome: WatchOutcome
       try {
-        outcome = await missions.watch({ accountId: account.id, channelId: channel.id, hosts: site.hosts, brief, record, recordStats: (stats) => void this.findings.applyStats(channel.id, stats) })
+        outcome = await missions.watch({ accountId: account.id, channelId: channel.id, hosts: site.hosts, brief, record, recordStats: (stats) => void this.findings.applyStats(channel.id, stats), recordBody: (body) => {
+          // Only the page of this very post gives its text (a page the AI passed through on the way gives the text of another one).
+          if (body.url === ownAddress) this.findings.applyBody(channel.id, finding.url, body.text)
+        } })
       } catch (error) {
         if (error instanceof ApiError && NOT_STARTED.has(error.code)) return { state: 'unavailable', message: error.message }
         this.core.log.error('monitor', `The reading of a post stopped unexpectedly: ${errorMessage(error)}`, channel.id)

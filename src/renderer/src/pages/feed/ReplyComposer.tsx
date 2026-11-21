@@ -7,7 +7,7 @@ import { Button, ErrorNote, Hint } from '../../ui'
 import { OpenChannelBrowser } from '../channels/OpenChannelBrowser'
 import { FullReply } from './FullReply'
 import { ReplyActions } from './ReplyActions'
-import { nextAsk, placeKey, placeLabel, scheduledLine, sendBlock, sendLine, sendNote, storedText, wayOut, withRound, type Doing, type Place, type Round } from './reply-composer'
+import { nextAsk, openingMove, placeKey, placeLabel, scheduledLine, sendBlock, sendLine, sendNote, storedText, wayOut, withRound, type Doing, type Place, type Round } from './reply-composer'
 
 interface Kept {
   text: string
@@ -24,8 +24,11 @@ const kept = new Map<string, Kept>()
  * the owner picked), Schedule (the application does the same at the time the owner chose) or Edit in full (the card every draft has, for a picture, a link or
  * formatting). When the community's own rules stand in the way the window says so in the community's words and offers Send anyway: the owner's own press,
  * for this text only. Copy stays for the owner who would rather do it by hand.
+ *
+ * `initialWish` is a wish the window opens with (the explanation of a post offers "Write a reply from this"): the first round is asked with it instead of an
+ * empty one. It is only a request for text; nothing is sent because of it.
  */
-export function ReplyComposer({ finding, place, comments, onClose }: { finding: Finding; place: Place; comments: FindingComment[]; onClose: () => void }) {
+export function ReplyComposer({ finding, place, comments, initialWish = '', onClose }: { finding: Finding; place: Place; comments: FindingComment[]; initialWish?: string; onClose: () => void }) {
   const key = placeKey(finding.id, place)
   const [text, setText] = useState(kept.get(key)?.text ?? '')
   const [rounds, setRounds] = useState<Round[]>(kept.get(key)?.rounds ?? [])
@@ -90,16 +93,17 @@ export function ReplyComposer({ finding, place, comments, onClose }: { finding: 
   const started = useRef(false)
   const known = replies.data !== undefined || !replies.loading
   useEffect(() => {
-    if (started.current || kept.has(key) || !known) return
+    if (started.current || !known) return
+    const move = openingMove({ initialWish, kept: kept.has(key), stored: storedText(here) })
+    if (move.move === 'nothing') return
     started.current = true
-    const stored = storedText(here)
-    if (stored !== null) {
-      kept.set(key, { text: stored, rounds: [] })
-      setText(stored)
+    if (move.move === 'show') {
+      kept.set(key, { text: move.text, rounds: [] })
+      setText(move.text)
       return
     }
-    void ask('')
-  }, [key, ask, known, here])
+    void ask(move.wish)
+  }, [key, ask, known, here, initialWish])
 
   // Back from the full card: the text is whatever the card kept.
   const backFromFull = (): void => {

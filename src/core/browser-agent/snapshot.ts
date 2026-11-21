@@ -19,6 +19,8 @@ const MAX_HREF = 500
 const MAX_PICTURES = 12
 /** The most posts whose numbers one snapshot lists. */
 const MAX_STATS = 40
+/** The most characters of the text of one post a snapshot carries: a long post is cut here, and the cut is the end of what the owner can read. */
+export const MAX_POST_TEXT = 20_000
 const STAT_MAX = 100_000_000
 const MIN_PICTURE_WIDTH = 120
 const MIN_PICTURE_HEIGHT = 90
@@ -54,6 +56,12 @@ export interface SnapshotElement {
   near?: string
 }
 
+/** The text of the post a page is about, as the site shows it (without the comments under it). The empty text of a page that is plainly a post means the post has none of its own. */
+export interface SnapshotPost {
+  href: string
+  text: string
+}
+
 /** What a site says about one post in its own markup: how many comments it has and its score. Either may be missing. */
 export interface SnapshotStat {
   href: string
@@ -84,6 +92,8 @@ export interface PageSnapshot {
   pictures?: SnapshotPicture[]
   /** The numbers the page shows for the posts on it (comments and score), where the site puts them in its markup. Absent when there are none. */
   stats?: SnapshotStat[]
+  /** The text of the post this page is about, when the page is the page of one post and the site's markup says where its text is. Absent otherwise. Never shown to the AI: it is read by the application. */
+  post?: SnapshotPost
   /** How far the page is scrolled (the document, not a box inside it): where the screen is on it. Absent when the page did not say. */
   scroll?: { top: number; max: number }
 }
@@ -221,6 +231,40 @@ export function snapshotScript(): string {
     stats.push({ href: href, score: score === null ? null : Number(score), replies: replies === null ? null : Number(replies) });
   }
 
+  // The text of the post this page is about, as the site shows it: the application reads it from the page (the AI has no field to write it). Only the page of one
+  // post gives one, and a site whose markup is not known gives none rather than a guess: for Reddit the page says so when a post has no text of its own.
+  const block = (value) => String(value || '').replace(/\\r\\n?/g, '\\n').replace(/[ \\t\\f\\v]+/g, ' ').replace(/ *\\n */g, '\\n').replace(/\\n{3,}/g, '\\n\\n').trim().slice(0, ${MAX_POST_TEXT});
+  let post = null;
+  try {
+    const path = location.pathname || '';
+    const host = String(location.host || '').toLowerCase();
+    const on = (name) => host === name || host.endsWith('.' + name);
+    let text = null;
+    if (on('reddit.com') && /\\/comments\\//.test(path)) {
+      const shreddit = all('shreddit-post', document)[0];
+      const classic = shreddit ? null : all('div.thing.link', document)[0];
+      if (shreddit) {
+        const part = shreddit.querySelector('[slot="text-body"]') || shreddit.querySelector('[id$="-post-rtjson-content"]');
+        text = part ? part.innerText : '';
+      } else if (classic) {
+        const part = classic.querySelector('.usertext-body');
+        text = part ? part.innerText : '';
+      }
+    } else if (on('instagram.com') && /^\\/(?:[^/]+\\/)?(?:p|reel|tv)\\//.test(path)) {
+      const part = all('article h1, main h1', document)[0];
+      if (part) text = part.innerText;
+    } else if (on('threads.net') || on('threads.com')) {
+      if (/\\/post\\//.test(path)) {
+        const part = all('[data-pressable-container="true"]', document)[0];
+        if (part) text = part.innerText;
+      }
+    } else if (path.length > 1) {
+      const part = all('article', document)[0] || all('main, [role=main]', document)[0];
+      if (part) text = part.innerText;
+    }
+    if (text !== null) post = { href: location.href, text: block(text) };
+  } catch (e) { post = null; }
+
   const seen = new Set();
   const alerts = [];
   for (const el of all('[role=alert],[role=status],[aria-live=assertive],[aria-live=polite],[data-error],[class*=error i],[id*=error i]', document)) {
@@ -245,7 +289,7 @@ export function snapshotScript(): string {
   const text = clean(document.body ? document.body.innerText : '', ${MAX_TEXT});
   if (humanCheck === '' && text.length < 600 && /verify you are (a )?human|are you a robot|not a robot|security check/i.test(text)) humanCheck = 'the page asks to prove you are human';
   const doc = document.scrollingElement || document.documentElement || { scrollTop: 0, scrollHeight: 0 };
-  return { url: location.href, title: clean(document.title, 120), text: text, alerts: alerts, humanCheck: humanCheck, elements: elements, pictures: pictures, stats: stats, scroll: { top: Math.round(doc.scrollTop), max: Math.max(0, Math.round(doc.scrollHeight - window.innerHeight)) } };
+  return { url: location.href, title: clean(document.title, 120), text: text, alerts: alerts, humanCheck: humanCheck, elements: elements, pictures: pictures, stats: stats, post: post, scroll: { top: Math.round(doc.scrollTop), max: Math.max(0, Math.round(doc.scrollHeight - window.innerHeight)) } };
 })()`
 }
 
@@ -296,6 +340,7 @@ export function parseSnapshot(raw: unknown): PageSnapshot | null {
   }
   const pictures = picturesOf(page.pictures)
   const stats = statsOf(page.stats)
+  const post = postOf(page.post)
   return {
     url: str(page.url, 300),
     title: str(page.title, 120),
@@ -305,8 +350,17 @@ export function parseSnapshot(raw: unknown): PageSnapshot | null {
     elements,
     ...(pictures.length > 0 ? { pictures } : {}),
     ...(stats.length > 0 ? { stats } : {}),
+    ...(post ? { post } : {}),
     ...scrollOf(page.scroll)
   }
+}
+
+/** The text of the post a page is about, checked: an https address of the page and a text, cut to `MAX_POST_TEXT`. The page is untrusted, so anything odd is dropped. */
+function postOf(raw: unknown): SnapshotPost | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined
+  const p = raw as Record<string, unknown>
+  if (typeof p.href !== 'string' || !/^https:\/\//i.test(p.href) || p.href.length > MAX_HREF || typeof p.text !== 'string') return undefined
+  return { href: p.href, text: p.text.slice(0, MAX_POST_TEXT) }
 }
 
 /** The numbers a post shows, checked: an https address, whole numbers within reason. The page is untrusted, so anything odd is dropped, and a post with no usable number is not listed. */
