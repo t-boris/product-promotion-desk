@@ -21,8 +21,8 @@ export function ChannelStatusCard({ channel, product, account, platform, account
   // How often the channel is looked at, or why it is not (DEC-040). The last and the next check are the rows below; this is the rest of the line.
   const watchingContext = useWatchingContext()
   const watching = watchingContext ? watchingLine(channel, watchingContext) : null
-  // A channel with send history cannot be removed (that history prevents sending the same thing twice); the reason is
-  // shown here, and pausing is offered instead.
+  // A channel that sent something in the last 24 hours (the account's limits still count it) or has a send with no known
+  // result cannot be removed yet; the reason is shown here, and pausing is offered instead.
   const [refusal, setRefusal] = useState<string | null>(null)
   const [activate, activating] = useAction(() => call('channels.activate', { channelId: channel.id }))
   const [setPaused, pausing] = useAction(async (paused: boolean) => {
@@ -139,7 +139,7 @@ export function ChannelStatusCard({ channel, product, account, platform, account
         <span className="sep" />
         <ConfirmAction
           label="Remove"
-          question="Deletes this channel with its discussions and drafts. The account stays. A channel that has already sent something cannot be removed, only paused."
+          question="Deletes this channel with its discussions, drafts and posts, and the history of what it sent. The account stays. A channel that sent something in the last 24 hours, or has a send with no known result, has to wait: it can be paused meanwhile."
           confirmLabel="Remove channel"
           onConfirm={() => remove()}
           testId="channel-remove"

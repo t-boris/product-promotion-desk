@@ -150,6 +150,10 @@ export function registerFlowApi({ core, store, review, monitor, drafting, sendin
       review.reject(id, reason)
       return card(id)
     },
+    'opportunities.purge': ({ id }) => {
+      review.purge(id)
+      return { id }
+    },
     'opportunities.defer': ({ id }) => {
       review.defer(id)
       return card(id)

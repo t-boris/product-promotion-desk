@@ -171,6 +171,30 @@ export class ReviewFlow implements PipelineHooks {
     return this.store.requireOpportunity(id)
   }
 
+  /**
+   * Deletes a deleted post for good (owner 2026-11-21: "Can't delete deleted posts"). Only a post of the owner's that was deleted and never went out:
+   * a reply that was rejected, or a post a send was started for (it may be on a site, and its record is what says so), stays. Its drafts, approvals
+   * and attempts that did not go out go with it; the notes it was written from are free again; a group left with no version goes too.
+   */
+  purge(id: Id): void {
+    const opp = this.store.requireOpportunity(id)
+    if (opp.kind !== 'standalone') throw new ApiError('invalid_state', 'Only a post of yours can be deleted for good. A rejected reply stays as the record of it.')
+    if (opp.state !== 'cancelled') throw new ApiError('invalid_state', 'Delete the post first: only a deleted post can be deleted for good.')
+    const db = this.core.db
+    const started = db.prepare("SELECT COUNT(*) AS n FROM send_actions WHERE opportunity_id = ? AND state IN ('sending', 'unknown', 'confirmed')").get(id) as { n: number }
+    if (started.n > 0) throw new ApiError('invalid_state', 'A send of this post was started, so the record of it stays.')
+    db.transaction(() => {
+      const group = db.prepare('SELECT group_id FROM opportunities WHERE id = ?').get(id) as { group_id: string | null } | undefined
+      // The attempts that failed first: they hold the draft and the approval, which go with the post.
+      db.prepare('DELETE FROM send_actions WHERE opportunity_id = ?').run(id)
+      db.prepare('UPDATE product_updates SET used_in_opportunity_id = NULL WHERE used_in_opportunity_id = ?').run(id)
+      db.prepare('DELETE FROM opportunities WHERE id = ?').run(id)
+      if (group?.group_id) db.prepare('DELETE FROM post_groups WHERE id = ? AND NOT EXISTS (SELECT 1 FROM opportunities WHERE group_id = ?)').run(group.group_id, group.group_id)
+    })()
+    this.core.log.info('pipeline', 'A deleted post was deleted for good, with its drafts and approvals. Nothing of it had gone out.', opp.channelId)
+    this.store.notify()
+  }
+
   defer(id: Id): Opportunity {
     const opp = this.store.requireOpportunity(id)
     this.assertEditable(opp, 'defer')

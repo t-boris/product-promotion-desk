@@ -909,3 +909,14 @@ Design: one fact, "the app does not read this channel" (`reads` = false), now me
 - [ ] later clean-up: the renderer still carries words and branches for a channel that is neither read nor watched (own-posts.ts, watching-line.ts); the core no longer produces one
 - [ ] Unproven live: the real r/astrology browser look, a real forum, the three look-around modes on real pages
 
+
+## 0.26.3 — delete deleted posts for good; remove an old channel (owner, 2026-11-21: "Can't delete deleted posts", "and I can't delete the old channel")
+
+Posts → Deleted had no way out (a delete is a cancel; the purge was deliberately left unbuilt until asked: it is now asked). Removing a channel was refused for ANY recorded send, forever, so a channel that sent once could only be paused.
+
+- [x] `ReviewFlow.purge(id)` / API `opportunities.purge`: only a standalone post in state `cancelled` with no send that was started (`sending`/`unknown`/`confirmed`); in one transaction removes its send attempts that did not go out (they hold the draft and approval), frees the product notes it was written from, drops a post group left with no version; the log says it happened, never what it said. A rejected reply stays as the record.
+- [x] Posts screen: "Delete for good" (asks first) on a deleted post, beside the note "This post was deleted." (the old words "The record of it stays." no longer true).
+- [x] Channel removal: the send history no longer blocks removal for ever. A send of the last 24 hours blocks it (the account's hourly and daily limits still count it), a send with no known result blocks it, whatever its age (it may be on a site); older history goes with the channel. Replaces `has_send_history` with `sent_recently`; `Store.sendCount` -> `latestSendAt`.
+- [x] tests: 7 purge tests (review.test.ts), channels.test.ts rewritten for the 24-hour rule (+2); `npm run verify` 5524 tests
+- [ ] commit, push, CI, deploy
+- Trade-off to tell the owner: the old guard ("history stops the same message being sent twice") is kept for the last day only; a channel made again with the same address after removal starts with no memory of what the old one sent.

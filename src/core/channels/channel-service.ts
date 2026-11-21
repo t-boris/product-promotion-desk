@@ -17,6 +17,8 @@ import { channelReads, refreshReads } from './reads'
 import { applySettingsPatch } from './settings'
 import type { ChannelPatch, ChannelsStore } from './store'
 
+/** How long a send stays on record before its channel can be removed: the account's longest sending limit (a day) counts it until then. */
+const SEND_MEMORY_MS = 24 * 60 * 60 * 1000
 const NEEDS_YOU_DEFAULT = 'The account needs you: sign in or complete the check in the account browser.'
 
 interface AssessRun extends RunResult {
@@ -259,13 +261,15 @@ export class ChannelService {
         `${channel.target} has ${open} send${open === 1 ? '' : 's'} whose result is not known yet. Check them with the platform first: removing the channel would erase the only record of a message that may be published.`
       )
     }
-    // Removal cascades to opportunities, drafts, approvals and sends. With them go the duplicate guards and the
-    // sending limits, so the same message could be sent again. A channel with any send is paused, never erased.
-    const sends = this.store.sendCount(channel.id)
-    if (sends > 0) {
+    // Removal cascades to opportunities, drafts, approvals and sends. The account's hourly and daily limits count the sends of all its channels, so a send
+    // of the last day must stay on record until it no longer counts: only then can the channel go with its history (the owner, 2026-11-21: "I can't
+    // delete the old channel"). An older send changes no limit, and a channel that is gone can no longer send the same thing twice.
+    const last = this.store.latestSendAt(channel.id)
+    const memory = last === null ? 0 : Date.parse(last) + SEND_MEMORY_MS
+    if (memory > this.core.clock.now().getTime()) {
       throw new ApiError(
-        'has_send_history',
-        `${channel.target} has ${sends} recorded send${sends === 1 ? '' : 's'}. Removing the channel would erase that history together with the duplicate checks and sending limits, so the same message could be sent twice. Pause the channel instead.`
+        'sent_recently',
+        `${channel.target} sent something in the last 24 hours, and the account's limits still count it. It can be removed after ${new Date(memory).toISOString()}. Until then it can be paused.`
       )
     }
     this.store.deleteChannel(channel.id)

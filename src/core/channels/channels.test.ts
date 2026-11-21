@@ -276,13 +276,14 @@ describe('channels.remove', () => {
     await w.call('accounts.remove', { id: w.account.id })
   })
 
-  it.each(['confirmed', 'failed'] as const)('refuses to remove a channel with a %s send: the history guards against sending twice', async (state) => {
+  it.each(['confirmed', 'failed'] as const)('refuses to remove a channel with a %s send of the last 24 hours: the account\'s limits still count it', async (state) => {
     const w = await makeReadyWorld()
     const channel = await connect(w)
     seedSend(w, channel.id, state)
     const error = await w.call('channels.remove', { id: channel.id }).catch((e: unknown) => e)
-    expect(error).toMatchObject({ code: 'has_send_history' })
-    expect((error as Error).message).toMatch(/Pause the channel instead/)
+    expect(error).toMatchObject({ code: 'sent_recently' })
+    expect((error as Error).message).toMatch(/can be removed after/)
+    expect((error as Error).message).toMatch(/can be paused/)
     expect(w.core.repos.channel(channel.id)).toBeTruthy()
     expect(w.core.db.prepare('SELECT COUNT(*) AS n FROM send_actions').get()).toEqual({ n: 1 })
     expect(w.core.db.prepare('SELECT COUNT(*) AS n FROM opportunities').get()).toEqual({ n: 1 })
@@ -298,12 +299,33 @@ describe('channels.remove', () => {
     }
   })
 
-  it('keeps refusing after an unresolved send was resolved, because its record is still history', async () => {
+  it('keeps refusing after an unresolved send was resolved, while it is still a send of the last day', async () => {
     const w = await makeReadyWorld()
     const channel = await connect(w)
     seedSend(w, channel.id, 'unknown')
     w.core.db.prepare("UPDATE send_actions SET state = 'failed'").run()
-    expect(await w.refusal('channels.remove', { id: channel.id })).toBe('has_send_history')
+    expect(await w.refusal('channels.remove', { id: channel.id })).toBe('sent_recently')
+  })
+
+  it('removes an old channel with its history once its last send is more than a day old, and the account stays', async () => {
+    const w = await makeReadyWorld()
+    const channel = await connect(w)
+    seedSend(w, channel.id, 'confirmed')
+    const old = new Date(w.core.clock.now().getTime() - 25 * 60 * 60 * 1000).toISOString()
+    w.core.db.prepare('UPDATE send_actions SET attempted_at = ?').run(old)
+    await w.call('channels.remove', { id: channel.id })
+    expect(await w.call('channels.list', undefined)).toEqual([])
+    expect(w.core.db.prepare('SELECT COUNT(*) AS n FROM send_actions').get()).toEqual({ n: 0 })
+    expect(w.core.db.prepare('SELECT COUNT(*) AS n FROM opportunities').get()).toEqual({ n: 0 })
+    expect(w.core.db.prepare('SELECT COUNT(*) AS n FROM accounts WHERE id = ?').get(w.account.id)).toEqual({ n: 1 })
+  })
+
+  it('still refuses an old channel while one of its sends has no known result, however old', async () => {
+    const w = await makeReadyWorld()
+    const channel = await connect(w)
+    seedSend(w, channel.id, 'unknown')
+    w.core.db.prepare('UPDATE send_actions SET attempted_at = ?').run(new Date(w.core.clock.now().getTime() - 72 * 60 * 60 * 1000).toISOString())
+    expect(await w.refusal('channels.remove', { id: channel.id })).toBe('unresolved_sends')
   })
 
   it('refuses an unknown channel', async () => {

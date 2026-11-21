@@ -312,6 +312,8 @@ export interface ApiMethods {
   'opportunities.saveDraft': [{ id: Id; draft: DraftInput }, OpportunityCard]
   'opportunities.approve': [{ id: Id }, OpportunityCard]
   'opportunities.reject': [{ id: Id; reason?: string }, OpportunityCard]
+  /** Deletes a deleted post of the owner's for good, with its drafts and approvals; only one that never went out. */
+  'opportunities.purge': [{ id: Id }, { id: Id }]
   'opportunities.defer': [{ id: Id }, OpportunityCard]
   'opportunities.send': [{ id: Id }, OpportunityCard]
   /** Re-checks an 'unknown' send with the platform; only then may a new attempt happen. */

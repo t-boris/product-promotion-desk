@@ -1,6 +1,7 @@
 import { useLayoutEffect } from 'react'
 import type { Id, OpportunityCard, PostGroupCard } from '../../../../shared/types'
-import { formatTime } from '../../ui'
+import { call, useAction } from '../../hooks'
+import { ConfirmAction, ErrorNote, formatTime } from '../../ui'
 import { mainActionOf } from '../review/main-action'
 import { PostGroupBox } from '../review/PostGroupSection'
 import { ReviewActionRow, ReviewBody, ReviewIdentity } from '../review/ReviewParts'
@@ -61,7 +62,8 @@ function SinglePost({ card, primaryAction, onMainAction }: { card: OpportunityCa
       <div className="inbox-bar" data-testid="post-bar">
         {settled ? (
           <div className="inbox-bar-settled">
-            <span className="review-foot-note">{opp.state === 'confirmed' ? 'This post was sent.' : 'This post was deleted. The record of it stays.'}</span>
+            <span className="review-foot-note">{opp.state === 'confirmed' ? 'This post was sent.' : 'This post was deleted.'}</span>
+            {opp.state === 'cancelled' && opp.kind === 'standalone' && <PurgeButton id={opp.id} />}
             <ReviewActionRow item={item} />
           </div>
         ) : (
@@ -71,3 +73,25 @@ function SinglePost({ card, primaryAction, onMainAction }: { card: OpportunityCa
     </div>
   )
 }
+
+/** A deleted post is taken out of the app for good: it leaves the list. Nothing of it was sent, so nothing changes on any site. */
+function PurgeButton({ id }: { id: Id }) {
+  const [purge, state] = useAction(() => call('opportunities.purge', { id }))
+  return (
+    <>
+      <ConfirmAction
+        label="Delete for good"
+        variant="quiet"
+        className="danger"
+        question="Removes this post, with its drafts and approvals, from the app for good. Nothing was sent, so nothing changes on any site. It cannot be brought back."
+        confirmLabel="Delete for good"
+        onConfirm={() => purge()}
+        disabled={state.busy}
+        testId="purge"
+        confirmTestId="purge-confirm"
+      />
+      <ErrorNote error={state.error} />
+    </>
+  )
+}
+

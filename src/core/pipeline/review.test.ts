@@ -452,6 +452,98 @@ describe('standalone publications (REQ-003 criterion 5)', () => {
   })
 })
 
+describe('opportunities.purge: a deleted post of the owner\'s is deleted for good', () => {
+  const create = async (): Promise<Opportunity> => (await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'Launch', text: 'We launched' } })).opportunity
+  const count = (table: string): number => (world.core.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n
+  /** An attempt of the post, with the draft and approval it needs, in the state given. */
+  function attempt(opp: Opportunity, state: 'failed' | 'unknown' | 'confirmed'): void {
+    const now = world.core.clock.now().toISOString()
+    const draft = world.core.repos.latestDraft(opp.id)!
+    const approval = world.store.insertApproval({ draftId: draft.id, contentHash: 'h', accountId: world.account.id, identity: null, destination: 'd', approvedBy: 'user', ruleId: null })
+    world.core.db
+      .prepare(
+        "INSERT INTO send_actions (id, opportunity_id, draft_id, approval_id, content_hash, account_id, destination, state, attempted_at, authorization_basis) VALUES (?, ?, ?, ?, 'h', ?, 'd', ?, ?, 'user')"
+      )
+      .run(`sa-${state}`, opp.id, draft.id, approval.id, world.account.id, state, now)
+  }
+
+  it('removes a deleted post with its drafts and approvals, and tells the lists', async () => {
+    world = makeWorld()
+    const opp = await create()
+    await world.core.router.call('opportunities.saveDraft', { id: opp.id, draft: { text: 'Another version' } })
+    await world.core.router.call('opportunities.approve', { id: opp.id })
+    await world.core.router.call('opportunities.reject', { id: opp.id })
+    expect(draftRows(opp)).toHaveLength(2)
+
+    expect(await world.core.router.call('opportunities.purge', { id: opp.id })).toEqual({ id: opp.id })
+    expect(count('opportunities')).toBe(0)
+    expect(count('drafts')).toBe(0)
+    expect(count('approvals')).toBe(0)
+    expect(await world.core.router.call('opportunities.list', {})).toEqual([])
+    expect(world.core.log.list(50).some((e) => /deleted for good/.test(e.message))).toBe(true)
+    // The log says that it happened, never what the post said.
+    expect(world.core.log.list(50).some((e) => /Another version|We launched/.test(e.message))).toBe(false)
+  })
+
+  it('removes the attempts that did not go out together with the post', async () => {
+    world = makeWorld()
+    const opp = await create()
+    attempt(opp, 'failed')
+    world.store.updateOpportunity(opp.id, { state: 'cancelled', reason: 'Rejected by the owner' })
+    await world.core.router.call('opportunities.purge', { id: opp.id })
+    expect(count('send_actions')).toBe(0)
+    expect(count('opportunities')).toBe(0)
+  })
+
+  it('leaves the other posts alone', async () => {
+    world = makeWorld()
+    const gone = await create()
+    const kept = await create()
+    await world.core.router.call('opportunities.reject', { id: gone.id })
+    await world.core.router.call('opportunities.purge', { id: gone.id })
+    expect((await world.core.router.call('opportunities.list', {})).map((c) => c.opportunity.id)).toEqual([kept.id])
+    expect(draftRows(kept)).toHaveLength(1)
+  })
+
+  it('refuses a post that is not deleted yet', async () => {
+    world = makeWorld()
+    const opp = await create()
+    await expect(world.core.router.call('opportunities.purge', { id: opp.id })).rejects.toMatchObject({ code: 'invalid_state' })
+    expect(count('opportunities')).toBe(1)
+  })
+
+  it.each(['unknown', 'confirmed'] as const)('refuses a post with a send that is %s: the record of it stays', async (state) => {
+    world = makeWorld()
+    const opp = await create()
+    attempt(opp, state)
+    world.store.updateOpportunity(opp.id, { state: 'cancelled', reason: 'Rejected by the owner' })
+    await expect(world.core.router.call('opportunities.purge', { id: opp.id })).rejects.toMatchObject({ code: 'invalid_state' })
+    expect(count('opportunities')).toBe(1)
+    expect(count('send_actions')).toBe(1)
+  })
+
+  it('refuses a rejected reply: only the owner\'s own posts are deleted for good', async () => {
+    world = makeWorld()
+    const reply = await world.readyReply()
+    await world.core.router.call('opportunities.reject', { id: reply.id })
+    await expect(world.core.router.call('opportunities.purge', { id: reply.id })).rejects.toMatchObject({ code: 'invalid_state' })
+    expect(count('opportunities')).toBe(1)
+  })
+
+  it('frees the notes a post was written from, and removes a group left with no post', async () => {
+    world = makeWorld()
+    const opp = await create()
+    const now = world.core.clock.now().toISOString()
+    world.core.db.prepare('INSERT INTO product_updates (id, product_id, text, created_at, used_in_opportunity_id) VALUES (?, ?, ?, ?, ?)').run('note-1', world.product.id, 'We shipped it', now, opp.id)
+    world.core.db.prepare("INSERT INTO post_groups (id, product_id, master_json, created_at) VALUES (?, ?, '{}', ?)").run('grp-1', world.product.id, now)
+    world.core.db.prepare('UPDATE opportunities SET group_id = ? WHERE id = ?').run('grp-1', opp.id)
+    await world.core.router.call('opportunities.reject', { id: opp.id })
+    await world.core.router.call('opportunities.purge', { id: opp.id })
+    expect(world.core.db.prepare('SELECT used_in_opportunity_id AS u FROM product_updates WHERE id = ?').get('note-1')).toEqual({ u: null })
+    expect(count('post_groups')).toBe(0)
+  })
+})
+
 describe('opportunities.list / get', () => {
   it('lists cards filtered by channel, kind and states, with the channel target and account label', async () => {
     world = makeWorld()

@@ -266,12 +266,12 @@ export class ChannelsStore {
     this.db.prepare('DELETE FROM channels WHERE id = ?').run(id)
   }
 
-  /** Every send ever attempted for the channel, whatever its result: this record is what prevents sending the same thing twice. */
-  sendCount(channelId: string): number {
+  /** When the latest send of the channel was attempted, whatever its result, or null if it never sent: the account's hourly and daily limits count it. */
+  latestSendAt(channelId: string): string | null {
     const row = this.db
-      .prepare('SELECT COUNT(*) AS n FROM send_actions a JOIN opportunities o ON o.id = a.opportunity_id WHERE o.channel_id = ?')
-      .get(channelId) as { n: number }
-    return row.n
+      .prepare('SELECT MAX(a.attempted_at) AS at FROM send_actions a JOIN opportunities o ON o.id = a.opportunity_id WHERE o.channel_id = ?')
+      .get(channelId) as { at: string | null }
+    return row.at
   }
 
   /** Sends whose result is not known: removing the channel would erase the only record of a possibly published message. */
