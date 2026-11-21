@@ -366,47 +366,135 @@ describe('a click of the AI\'s own publishes nothing: the form is empty until th
   })
 })
 
-describe('a control that publishes is never clicked or chosen by the AI itself, whatever the page holds', () => {
+describe('a control named like one that publishes is clicked or chosen by the AI itself only while every field of the page is empty (DEC-051)', () => {
   const NAMES = ['Post', 'Reply', 'Comment', 'Submit', 'Send', 'Publish', 'Save', 'Add a comment', 'Post comment', 'Опубликовать', 'Ответить', 'Отправить']
-  const PUBLISHING = { isError: true, text: expect.stringContaining('only browser_submit presses') }
+  const HOLDS_TEXT = { isError: true, text: expect.stringContaining('holds text') }
+  const UNREADABLE = { isError: true, text: expect.stringContaining('could not be read') }
 
-  it.each(NAMES)('refuses a click and a choice on a button named "%s" on a page whose forms are empty, and sends nothing to the page', async (name) => {
+  it.each(NAMES)('a button named "%s" on a page whose fields are all empty is clicked and chosen: with nothing typed it can only open a form', async (name) => {
     const t = setup()
     t.page.items.push({ ref: 'e9', role: 'button', name })
     await look(t)
-    expect(await t.toolbox.call('browser_click', { ref: 'e9' })).toMatchObject(PUBLISHING)
-    expect(await t.toolbox.call('browser_select', { ref: 'e9', option: 'x' })).toMatchObject(PUBLISHING)
+    expect((await t.toolbox.call('browser_click', { ref: 'e9' })).isError).toBeUndefined()
+    expect((await t.toolbox.call('browser_select', { ref: 'e9', option: 'x' })).isError).toBeUndefined()
+    expect(t.page.clicked).toEqual(['e9'])
+    // Nothing was typed and nothing was put under a ticket: only browser_submit does either.
+    expect(t.page.fields.size).toBe(0)
+    expect(t.authority.leases).toBe(0)
+    expect(t.authority.committed).toBe(false)
+  })
+
+  it('a control that submits its form natively is the same: the page marks it, and an empty form is what it submits', async () => {
+    const t = setup()
+    t.page.items.push({ ref: 'e9', role: 'button', name: 'Continue', submits: true }, { ref: 'e10', role: 'input:submit', name: 'Go' }, { ref: 'e11', role: 'input:image', name: 'Go' })
+    await look(t)
+    for (const ref of ['e9', 'e10', 'e11']) expect((await t.toolbox.call('browser_click', { ref })).isError, ref).toBeUndefined()
+    expect(t.page.clicked).toEqual(['e9', 'e10', 'e11'])
+    expect(t.authority.leases).toBe(0)
+  })
+
+  it.each(NAMES)('the same button named "%s" is refused, for a click and for a choice, the moment a field holds text, and nothing reaches the page', async (name) => {
+    const t = setup()
+    t.page.items.push({ ref: 'e9', role: 'button', name })
+    await look(t)
+    t.page.fields.set('e1', 'Typed by the owner in the window')
+    expect(await t.toolbox.call('browser_click', { ref: 'e9' })).toMatchObject(HOLDS_TEXT)
+    expect(await t.toolbox.call('browser_select', { ref: 'e9', option: 'x' })).toMatchObject(HOLDS_TEXT)
     expect(t.page.steps).toEqual([])
     expect(t.page.clicked).toEqual([])
     expect(t.authority.leases).toBe(0)
   })
 
-  it('refuses a control that submits its form natively, whatever its name says (the page marks it, not the words)', async () => {
+  it('is refused for text in a field the snapshot does not list, and for what an address or a restored draft put into the form', async () => {
+    const hidden = setup()
+    await look(hidden)
+    hidden.page.hidden = ['text in a hidden field']
+    expect(await hidden.toolbox.call('browser_click', { ref: 'e4' })).toMatchObject(HOLDS_TEXT)
+
+    const restored = setup()
+    restored.page.restore = { e1: 'A draft of an earlier visit' }
+    await look(restored)
+    await restored.toolbox.call('browser_navigate', { url: 'https://fake.test/r/test/comments/abc/slug/' })
+    expect(await restored.toolbox.call('browser_click', { ref: 'e4' })).toMatchObject(HOLDS_TEXT)
+    expect(hidden.page.clicked).toEqual([])
+    expect(restored.page.clicked).toEqual([])
+  })
+
+  it('is refused when it is not known that every field is empty: fields that cannot be read are not an empty form', async () => {
     const t = setup()
-    t.page.items.push({ ref: 'e9', role: 'button', name: 'Continue', submits: true }, { ref: 'e10', role: 'input:submit', name: 'Go' }, { ref: 'e11', role: 'input:image', name: 'Go' })
     await look(t)
-    for (const ref of ['e9', 'e10', 'e11']) {
-      expect(await t.toolbox.call('browser_click', { ref }), ref).toMatchObject(PUBLISHING)
-      expect(await t.toolbox.call('browser_select', { ref, option: 'x' }), ref).toMatchObject(PUBLISHING)
+    t.page.fieldsUnreadable = true
+    expect(await t.toolbox.call('browser_click', { ref: 'e4' })).toMatchObject(UNREADABLE)
+    expect(await t.toolbox.call('browser_select', { ref: 'e4', option: 'x' })).toMatchObject(UNREADABLE)
+    t.page.fieldsUnreadable = false
+    t.page.readThrows = true
+    expect(await t.toolbox.call('browser_click', { ref: 'e4' })).toMatchObject(UNREADABLE)
+    expect(t.page.clicked).toEqual([])
+  })
+
+  it('is judged when the click is made, not when the page was looked at: text that came into the form after the look stops the click', async () => {
+    const t = setup()
+    await look(t)
+    expect((await t.toolbox.call('browser_click', { ref: 'e5' })).isError).toBeUndefined() // empty: allowed
+    t.page.fields.set('e1', 'Typed after the look')
+    expect(await t.toolbox.call('browser_click', { ref: 'e4' })).toMatchObject(HOLDS_TEXT)
+    t.page.fields.clear()
+    expect((await t.toolbox.call('browser_click', { ref: 'e5' })).isError).toBeUndefined()
+    expect(t.page.clicked).toEqual(['e5', 'e5'])
+  })
+
+  it('blanks and zero-width characters are an empty form', async () => {
+    const t = setup()
+    await look(t)
+    t.page.fields.set('e1', '  ​ ')
+    expect((await t.toolbox.call('browser_click', { ref: 'e4' })).isError).toBeUndefined()
+  })
+
+  it('opens the reply form with a button named "Reply" and then browser_submit publishes: the AI clicks the opener, the application types and presses the one control, once', async () => {
+    const t = setup()
+    // The page of the current layout: a "Reply" button under the comment, and the form (field and button) only after it is pressed.
+    const form = t.page.items.filter((i) => ['e1', 'e4'].includes(i.ref))
+    t.page.items = [{ ref: 'e12', role: 'button', name: 'Reply' }, ...t.page.items.filter((i) => !['e1', 'e4'].includes(i.ref))]
+    t.page.beforeStep = (step) => {
+      if (step.do === 'click' && step.ref === 'e12') t.page.items.push(...form)
+    }
+    await look(t)
+    expect((await submitReply(t)).isError).toBe(true) // the form is not open: its fields are not on the page the AI has seen
+    expect((await t.toolbox.call('browser_click', { ref: 'e12' })).isError).toBeUndefined()
+    expect(t.page.fields.size).toBe(0)
+    await look(t)
+    expect((await submitReply(t)).isError).toBeUndefined()
+    expect(t.page.clicked).toEqual(['e12', 'e4']) // e4 is pressed by the application itself, inside browser_submit
+    expect(t.page.posted).toEqual([{ e1: REPLY.text }])
+    expect(t.authority.committed).toBe(true)
+    expect(t.authority.leases).toBe(1)
+  })
+
+  it('does not let a name that publishes unlock anything else: the guards of the profile, the post settings, the file chooser and the account stay', async () => {
+    const t = setup()
+    t.page.items.push(
+      { ref: 'e9', role: 'button', name: 'Edit profile' },
+      { ref: 'e10', role: 'button', name: 'Post to' },
+      { ref: 'e11', role: 'button', name: 'Delete post' },
+      { ref: 'e13', role: 'button', name: 'Report comment' },
+      { ref: 'e14', role: 'button', name: 'Reply and follow' },
+      { ref: 'e15', role: 'button', name: 'Add tags to post' }
+    )
+    await look(t)
+    for (const ref of ['e9', 'e10', 'e11', 'e13', 'e14', 'e15']) {
+      expect(await t.toolbox.call('browser_click', { ref }), ref).toMatchObject({ isError: true })
+      expect(await t.toolbox.call('browser_select', { ref, option: 'x' }), ref).toMatchObject({ isError: true })
     }
     expect(t.page.steps).toEqual([])
   })
 
-  it('judges the element by the last look too: a page that renumbered its elements cannot turn the Reply button of the AI\'s snapshot into something else', async () => {
+  it('judges the element by the last look too: a page that renumbered its elements cannot turn the harmless link of the AI\'s snapshot into a control that is refused for another reason', async () => {
     const t = setup()
+    t.page.items.push({ ref: 'e9', role: 'button', name: 'Expand comment' })
     await look(t)
-    // After the look the page is rebuilt: e4 is now a harmless link, but the AI was shown "Reply" as e4.
-    t.page.items = t.page.items.map((i) => (i.ref === 'e4' ? { ref: 'e4', role: 'link', name: 'Show more' } : i))
-    expect(await t.toolbox.call('browser_click', { ref: 'e4' })).toMatchObject(PUBLISHING)
-    expect(t.page.steps).toEqual([])
-  })
-
-  it('judges the element by the fresh look too: a page that renumbered its elements can turn the harmless control of the AI\'s snapshot into the one that publishes', async () => {
-    const t = setup()
-    await look(t) // e8 is "Continue" here
-    t.page.items = t.page.items.map((i) => (i.ref === 'e8' ? { ref: 'e8', role: 'button', name: 'Post' } : i))
-    expect(await t.toolbox.call('browser_click', { ref: 'e8' })).toMatchObject(PUBLISHING)
-    expect(await t.toolbox.call('browser_select', { ref: 'e8', option: 'x' })).toMatchObject(PUBLISHING)
+    // After the look the page is rebuilt: e9 is now the control that deletes, but the AI was shown "Expand comment" as e9.
+    t.page.items = t.page.items.map((i) => (i.ref === 'e9' ? { ref: 'e9', role: 'button', name: 'Delete' } : i))
+    expect(await t.toolbox.call('browser_click', { ref: 'e9' })).toMatchObject({ isError: true })
     expect(t.page.steps).toEqual([])
   })
 
@@ -664,12 +752,19 @@ describe('a click or a choice never sets the community, flair, tags, NSFW, spoil
   })
 
   it('also judges the option the AI names for a list, because the application opens a list that is not a plain one and clicks that option', async () => {
-    for (const option of ['NSFW', 'Add flair', 'Choose a community', 'Delete', 'Report', 'Post', 'Reply', 'Опубликовать', 'Спойлер']) {
+    for (const option of ['NSFW', 'Add flair', 'Choose a community', 'Delete', 'Report', 'Спойлер']) {
       const t = setup(POST)
       t.page.items.push({ ref: 'e9', role: 'combobox', name: 'Options' })
       await look(t)
       expect(await t.toolbox.call('browser_select', { ref: 'e9', option }), option).toMatchObject({ isError: true })
       expect(t.page.steps).toEqual([])
+    }
+    // An option named like a control that publishes is no longer refused for its name (DEC-051): with every field empty, choosing it only opens a form.
+    for (const option of ['Post', 'Reply', 'Опубликовать']) {
+      const t = setup(POST)
+      t.page.items.push({ ref: 'e9', role: 'combobox', name: 'Options' })
+      await look(t)
+      expect((await t.toolbox.call('browser_select', { ref: 'e9', option })).isError, option).toBeUndefined()
     }
     const fine = setup(POST)
     fine.page.items.push({ ref: 'e9', role: 'combobox', name: 'Sort by' })
@@ -2022,5 +2117,103 @@ describe('the owner\'s windows share the session with the mission (DEC-038)', ()
     expect(t.authority.committed).toBe(true)
     t.session.noteIdentityActivity()
     expect(t.authority.committed).toBe(true)
+  })
+})
+
+describe('the steps of a publishing mission are kept for the log (DEC-051)', () => {
+  it('has nothing before the AI does anything, and nothing in the other missions', async () => {
+    const t = setup()
+    expect(t.toolbox.steps).toBeNull()
+    const other = setup(POST, { post: undefined })
+    other.page.items.push({ ref: 'e9', role: 'button', name: 'Add flair' })
+    await look(other)
+    await other.toolbox.call('browser_click', { ref: 'e9' })
+    expect(other.toolbox.steps).toBeNull()
+  })
+
+  it('records the address it opened (without a query), the looks, the label it clicked and why the application refused', async () => {
+    const t = setup()
+    await t.toolbox.call('browser_navigate', { url: 'https://fake.test/r/test/comments/abc/slug/?utm_source=share&token=secret#top' })
+    await look(t)
+    expect((await t.toolbox.call('browser_click', { ref: 'e4' })).isError).toBeUndefined()
+    t.page.fields.set('e1', 'Typed by the owner in the window')
+    await t.toolbox.call('browser_click', { ref: 'e4' })
+    const steps = t.toolbox.steps ?? ''
+    expect(steps).toContain("The AI's steps: 1. opened fake.test/r/test/comments/abc/slug/ | 2. looked at the page | 3. clicked \"Reply\" | ")
+    expect(steps).toContain('4. clicked "Reply" (refused: A field on this page holds text')
+    expect(steps).not.toMatch(/utm_source|token|secret|#top/)
+    expect(steps).not.toContain('Typed by the owner')
+    expect(steps.length).toBeLessThanOrEqual(2000)
+  })
+
+  it('never names a field that takes text: what it holds can be its name, and it can be the approved text', async () => {
+    const t = setup()
+    t.page.nameFieldsByContent = true // an editor built on a div is named by what it holds
+    t.page.fields.set('e1', 'The approved words that were typed into the form')
+    await look(t)
+    expect((await t.toolbox.call('browser_click', { ref: 'e1' })).isError).toBe(true) // the form holds text
+    expect((await t.toolbox.call('browser_select', { ref: 'e1', option: 'x' })).isError).toBe(true)
+    const steps = t.toolbox.steps ?? ''
+    expect(steps).toContain('2. clicked a text box (refused:')
+    expect(steps).toContain('chose "x" in a text box (refused:')
+    expect(steps).not.toContain('approved words')
+  })
+
+  it('cuts the words of a page out of a refusal: the human check and the warning of the site', async () => {
+    const check = setup()
+    check.page.humanCheck = 'Solve the puzzle for Jane Doe'
+    await look(check)
+    expect((await check.toolbox.call('browser_click', { ref: 'e5' })).isError).toBe(true)
+    expect(check.toolbox.steps).toContain('clicked "Cancel" (refused: A human check is on the page)')
+    expect(check.toolbox.steps).not.toContain('Jane Doe')
+
+    const warned = setup()
+    warned.page.alerts = ['You are doing that too much. Try again in 9 minutes.']
+    await look(warned)
+    expect((await warned.toolbox.call('browser_click', { ref: 'e5' })).isError).toBe(true)
+    expect(warned.toolbox.steps).toContain('(refused: The site shows a warning)')
+    expect(warned.toolbox.steps).not.toMatch(/too much|9 minutes/)
+  })
+
+  it('records a refused browser_submit with the button it named and never the text it was to type', async () => {
+    const t = setup()
+    t.page.alter = (_ref, value) => value.replace('Natal Mystic', '***')
+    await look(t)
+    expect(await submitReply(t)).toMatchObject({ isError: true, text: expect.stringContaining('does not hold exactly the approved text') })
+    const steps = t.toolbox.steps ?? ''
+    expect(steps).toContain('2. called browser_submit with "Reply" (refused: Nothing was submitted:')
+    expect(steps).not.toMatch(/Glad it helps|Natal Mystic|\*\*\*|biased/)
+  })
+
+  it('records a step that threw, and says nothing of what the error was', async () => {
+    const t = setup()
+    await look(t)
+    t.page.crashOnClick = true
+    await expect(submitReply(t)).rejects.toThrow('the page crashed')
+    expect(t.toolbox.steps).toContain('2. called browser_submit with "Reply" (refused: The application could not carry the step out.)')
+    expect(t.toolbox.steps).not.toContain('the page crashed')
+  })
+
+  it('writes the same refused step several times in a row once, and does not record a call made after the mission was stopped', async () => {
+    const stop = new AbortController()
+    const t = setup(REPLY, { signal: stop.signal })
+    await look(t)
+    t.page.fields.set('e1', 'Typed by the owner')
+    for (let i = 0; i < 3; i++) await t.toolbox.call('browser_click', { ref: 'e4' })
+    stop.abort()
+    for (let i = 0; i < 5; i++) expect(await t.toolbox.call('browser_click', { ref: 'e4' })).toMatchObject({ isError: true, text: expect.stringContaining('stopped') })
+    const steps = t.toolbox.steps ?? ''
+    expect(steps).toContain('2. clicked "Reply" (refused: A field on this page holds text')
+    expect(steps).toContain('(×3)')
+    expect(steps.split(' | ')).toHaveLength(2)
+  })
+
+  it('keeps no more than 25 steps of a long mission and says how many it left out', async () => {
+    const t = setup()
+    for (let i = 0; i < 30; i++) await t.toolbox.call('browser_navigate', { url: `https://fake.test/r/test/comments/abc/slug/${i}` })
+    const steps = t.toolbox.steps ?? ''
+    expect(steps.startsWith("The AI's steps (the first 5 are left out): 6. opened fake.test/r/test/comments/abc/slug/5 | ")).toBe(true)
+    expect(steps).toContain('30. opened fake.test/r/test/comments/abc/slug/29')
+    expect(steps.split(' | ')).toHaveLength(25)
   })
 })

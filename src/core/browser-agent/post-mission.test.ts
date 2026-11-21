@@ -44,3 +44,45 @@ describe('the brief of a quick post (one picture, a caption or none)', () => {
     expect(brief('threads')).toMatch(/attach-media.*"Post"/s)
   })
 })
+
+describe('what the brief says about clicking (DEC-051)', () => {
+  const reply = (): string =>
+    brief('reddit', { kind: 'reply', text: 'Thanks for the question.', attachments: [], destination: 'https://www.reddit.com/r/beginnerastrology/comments/1abc/a_post/def/' })
+  const newPost = (): string => brief('reddit', { kind: 'post', title: 'A title', text: 'A body.', attachments: [], destination: 'https://www.reddit.com/r/beginnerastrology/' })
+
+  it('a reply: the Reply control under the comment may be clicked (a link or a button), then the AI looks again and names the empty field and the button in browser_submit', () => {
+    const text = reply()
+    expect(text).toContain('click the "Reply" control under that comment (a link or a button)')
+    expect(text).toContain('leave it empty')
+    expect(text).toContain('look at the page again with browser_snapshot, find the empty reply field and the button that publishes in that form, and name them in browser_submit')
+  })
+
+  it('says the true rule: a control that publishes is clicked only while every field is empty, to open a form, and after that only browser_submit presses it', () => {
+    for (const text of [reply(), newPost()]) {
+      expect(text).toContain('is clicked by you only while every field is empty, to open a form; after that only browser_submit presses it')
+      expect(text).toContain('While any field holds text nothing is clicked or chosen at all')
+    }
+  })
+
+  it('does not say any more that such a control is never clicked or is refused whatever the page shows', () => {
+    for (const text of [reply(), newPost(), brief('instagram')]) {
+      expect(text).not.toContain('is never clicked by you')
+      expect(text).not.toContain('it is refused')
+      expect(text).not.toContain('publishes nothing')
+    }
+  })
+
+  it('a new post: a "Create post" button opens the form, the form is left empty, and browser_submit does the rest', () => {
+    const text = newPost()
+    expect(text).toContain('a "Create post" button opens it')
+    expect(text).toContain('Leave the form empty.')
+    expect(text).toContain('call browser_submit ONCE with the labels of the fields and of the button')
+    expect(text).toContain('do not click that button yourself')
+  })
+
+  it('with pictures the brief keeps its own rule: only Next and Continue are clicked once they are in', () => {
+    const text = brief('instagram')
+    expect(text).toContain('Once the approved pictures are in the form, only the controls named Next or Continue are clicked')
+    expect(newPost()).not.toContain('Once the approved pictures are in the form')
+  })
+})

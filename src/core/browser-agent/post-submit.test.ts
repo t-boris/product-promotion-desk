@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { changesProfile, composePageOf, destinationMatches, fieldValueScript, formTextScript, isAttachControl, isPublishingControl, opensFileChooser, usesComposerDialog, looksLikeProgress, looksLikeSubmit, neverClicked, normalizeText, onComposePage, parseHeldText, platformWarning, replyTarget, sameContent } from './post-submit'
+import { changesProfile, composePageOf, destinationMatches, fieldValueScript, formTextScript, isAttachControl, opensFileChooser, usesComposerDialog, looksLikeProgress, looksLikeSubmit, neverClicked, normalizeText, onComposePage, parseHeldText, platformWarning, replyTarget, sameContent } from './post-submit'
 
 const HOSTS = ['reddit.com']
 const COMMENT = 'https://www.reddit.com/r/astrology/comments/abc123/my_chart/def456/'
@@ -239,26 +239,6 @@ describe('which control is named like one that publishes', () => {
 
   it.each(['', '  ', 'Delete', 'Delete comment', 'Report', 'Report comment', 'Cancel', 'Edit', 'Award', 'Comment as u/someone', 'Reply to everyone and notify all of them now', 'Log in', 'Sign up to post', 'Posts', 'Удалить', 'Пожаловаться', 'Отмена', 'Post (disabled)', 'Save to bookmarks and share it', 'Post the your new comment'])('is not: "%s"', (name) => {
     expect(looksLikeSubmit(name)).toBe(false)
-  })
-})
-
-describe('which control is one that a post mission never clicks to publish', () => {
-  it.each([
-    [{ role: 'input:image', name: 'Go' }, true],
-    [{ role: 'input:image', name: '' }, true],
-    [{ role: 'input:submit', name: 'Go' }, true],
-    [{ role: 'button', name: 'Continue', submits: true }, true],
-    [{ role: 'link', name: 'Continue', submits: true }, true],
-    [{ role: 'button', name: 'Post' }, true],
-    [{ role: 'input:button', name: 'Reply' }, true],
-    [{ role: 'link', name: 'Reply' }, false],
-    [{ role: 'link', name: 'Post' }, false],
-    [{ role: 'textarea', name: 'Post' }, false],
-    [{ role: 'button', name: 'Continue' }, false],
-    [{ role: 'button', name: 'Continue', submits: false }, false],
-    [{ role: 'input:image', name: 'Go', submits: false }, true]
-  ] as const)('%j: %s', (control, expected) => {
-    expect(isPublishingControl(control)).toBe(expected)
   })
 })
 

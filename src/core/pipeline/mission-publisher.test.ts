@@ -627,6 +627,59 @@ describe('free text of the AI and of the site stays out of the log and the run l
   })
 })
 
+describe('what the log keeps of the steps of a mission that did not go through (DEC-051)', () => {
+  const STEPS = `The AI's steps: 1. opened www.reddit.com/r/test/comments/abc/slug/ | 2. looked at the page | 3. clicked "Reply" (refused: A field on this page holds text.)`
+  const stepEvents = () => world.core.log.list(500).filter((l) => l.message.startsWith("The AI's steps"))
+
+  it.each([
+    ['nothing was pressed and the AI says it could not', async () => ({ steps: STEPS, reported: { status: 'failed' as const, reason: 'No reply form' } }), 'failed'],
+    ['the owner stopped the AI', async () => ({ steps: STEPS, ended: 'stopped' as const }), 'failed'],
+    ['the control was pressed and the site does not show the text', async (request: PostMissionRequest) => {
+      await press(request, { show: false })
+      return { steps: STEPS }
+    }, 'unknown']
+  ])('writes them as ONE event of the send, with the channel, when %s', async (_name, script, state) => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    useMissions(script)
+
+    const action = await sending().send(opp.id)
+
+    expect(action.state).toBe(state)
+    const events = stepEvents()
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({ source: 'send', level: 'warn', message: STEPS, channelId: world.channel.id })
+  })
+
+  it('writes nothing for a publication that is confirmed, and nothing when the mission has no steps to tell', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    useMissions(async (request) => {
+      await press(request)
+      return { steps: STEPS }
+    })
+    expect((await sending().send(opp.id)).state).toBe('confirmed')
+    expect(stepEvents()).toEqual([])
+
+    const none = makeWorld()
+    await closeWorld(world)
+    world = none
+    const other = await world.readyReply()
+    useMissions(async () => ({ steps: null }))
+    expect((await sending().send(other.id)).state).toBe('failed')
+    expect(stepEvents()).toEqual([])
+  })
+
+  it('writes nothing when no mission could start: there were no steps', async () => {
+    world = makeWorld()
+    const opp = await world.readyReply()
+    world.core.services.postMissions = undefined
+    world.core.settings.updateApp({ publishWith: 'ai_browser' })
+    await sending().send(opp.id)
+    expect(stepEvents()).toEqual([])
+  })
+})
+
 describe('what a mission that did not press leaves behind', () => {
   it('is a failure with nothing submitted when the AI ends without pressing, however it words it, and the item goes back to review', async () => {
     world = makeWorld()

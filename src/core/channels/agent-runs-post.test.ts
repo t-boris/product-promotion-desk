@@ -221,7 +221,15 @@ describe('how a post mission ends: the authority says whether the control was pr
 
     const outcome = await run(w, request)
 
-    expect(outcome).toEqual({ ended: 'finished', committed: true, reported: { status: 'done', reason: 'The reply shows under the comment.' }, humanCheck: null, warning: null, error: null })
+    expect(outcome).toEqual({
+      ended: 'finished',
+      committed: true,
+      reported: { status: 'done', reason: 'The reply shows under the comment.' },
+      humanCheck: null,
+      warning: null,
+      error: null,
+      steps: `The AI's steps: 1. looked at the page | 2. called browser_submit with "Reply" | 3. reported done`
+    })
     expect(authority.committed).toBe(true)
     const final = (await state(w)) as AgentRun
     expect(final).toMatchObject({ kind: 'post', status: 'done', accountId: w.account.id })
@@ -264,7 +272,7 @@ describe('how a post mission ends: the authority says whether the control was pr
     expect((await state(w))?.status).toBe('needs_owner')
   })
 
-  it('is not committed when the AI clicks the button itself: the click is refused, and the page is asked nothing, nothing the AI typed either', async () => {
+  it('is not committed when the AI clicks the button itself: with every field empty the click carries nothing, what the AI types, presses or runs is refused, and the steps say so', async () => {
     const { w, authority, request } = await ready()
     asTheAI(w, async (call) => {
       await call('browser_snapshot')
@@ -276,9 +284,12 @@ describe('how a post mission ends: the authority says whether the control was pr
     const outcome = await run(w, request)
     expect(outcome.committed).toBe(false)
     expect(authority.leases).toBe(0)
+    // The one step the page got is the click on an empty form (DEC-051); nothing was typed, no key was pressed, no script ran.
     const steps = w.t.browser.page(w.account.id).steps.map((s) => s.step)
-    expect(steps).toEqual([])
+    expect(steps).toEqual([{ do: 'click', ref: 'e4' }])
     expect(w.t.browser.page(w.account.id).log.some((l) => l.includes('my own text'))).toBe(false)
+    expect(outcome.steps).toContain('2. clicked "Reply" | 3. called browser_type (refused: There is no tool called "browser_type" in this mission.)')
+    expect(outcome.steps).not.toContain('my own text')
   })
 
   it('passes on what the page showed: a human check and a warning of the site', async () => {

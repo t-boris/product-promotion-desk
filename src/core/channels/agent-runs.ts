@@ -449,7 +449,7 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
     }
     // The AI's own words are shown to the owner in the run; the log keeps a fixed phrase and the status it reported.
     this.core.log.info('accounts', `The AI ${committed ? 'pressed the button that publishes' : 'did not publish'} for ${account.label}${reported ? ` (it reported "${reported.status}")` : ''}.`)
-    return { ended, committed, reported, humanCheck: observed.humanCheck, warning: observed.warning, error }
+    return { ended, committed, reported, humanCheck: observed.humanCheck, warning: observed.warning, error, steps: toolbox?.steps ?? null }
   }
 
   /** What a look at a channel needs (DEC-042): an account that is signed in, no run going on it, and an engine that can work the browser. */

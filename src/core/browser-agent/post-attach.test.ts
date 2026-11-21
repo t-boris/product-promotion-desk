@@ -398,13 +398,25 @@ describe('while the pictures are in the form, the AI only goes on to a next step
     expect(t.page.clicked).toEqual(['e7'])
   })
 
-  it('never clicks the control that publishes, with or without pictures, and with or without text in the form', async () => {
+  it('clicks the control that publishes only while nothing is in the form: not with a picture in it, and not with text in it', async () => {
     const t = setup()
     await look(t)
-    expect(await t.toolbox.call('browser_click', { ref: 'e5' })).toMatchObject({ isError: true, text: expect.stringContaining('publishes') })
+    // Nothing in the form (no picture, no text): the press carries nothing (a site refuses an empty post), and the application's own press is another one.
+    expect((await t.toolbox.call('browser_click', { ref: 'e5' })).isError).toBeUndefined()
+    expect(t.page.shared).toEqual([{ caption: '', pictures: 0 }])
+    t.page.shared.length = 0
     await attach(t)
     expect(await t.toolbox.call('browser_click', { ref: 'e5' })).toMatchObject({ isError: true, text: expect.stringContaining('publishes') })
     expect(t.page.shared).toEqual([])
+    // A caption in the form, with the pictures or without them: nothing is clicked.
+    t.page.fields.set('e4', 'A caption nobody approved')
+    expect(await t.toolbox.call('browser_click', { ref: 'e5' })).toMatchObject({ isError: true })
+    const captioned = setup()
+    await look(captioned)
+    captioned.page.fields.set('e4', 'A caption nobody approved')
+    expect(await captioned.toolbox.call('browser_click', { ref: 'e5' })).toMatchObject({ isError: true, text: expect.stringContaining('holds text') })
+    expect(t.page.shared).toEqual([])
+    expect(captioned.page.shared).toEqual([])
   })
 
   it('is read from the page, not from a history of calls: a change of the fragment keeps the document, so the pictures are still in the form and the clicks stay narrow', async () => {

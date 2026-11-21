@@ -117,6 +117,11 @@ export interface PostMissionOutcome {
   warning: string | null
   /** Why the run ended in an error, when it did. */
   error: string | null
+  /**
+   * What the AI did, in a few words a step (the tool it called, the address it opened, the label of what it pressed, why a call was refused): for the
+   * log when the publication does not go through. Never a typed text or the words of a page (see `StepTrace`). Absent when the mission had no toolbox.
+   */
+  steps?: string | null
 }
 
 /** The service the send flow starts a post mission through. Implemented by the AI agent service. */
@@ -441,18 +446,6 @@ export function replyTarget(destination: string): { post: string; comment: strin
   } catch {
     return null
   }
-}
-
-/**
- * Whether a control is one that a post mission never clicks or chooses itself, whatever the page holds: one the page marks as submitting
- * its form natively (a submit button of a form, an input of type submit or image), or a button or an input button that is named like a
- * control that publishes (`looksLikeSubmit`). A link is not one (it opens a form, and cannot submit one without a script), and neither is
- * a text box. The consequence for the AI: on a page that offers the composer only behind a button named "Reply" or "Add a comment", it
- * opens the form some other way (a link, the same address on the old layout of the site) and browser_submit does the rest.
- */
-export function isPublishingControl(control: { role: string; name: string; submits?: boolean }): boolean {
-  if (control.submits === true || control.role === 'input:submit' || control.role === 'input:image') return true
-  return /^(?:button|input:button)$/.test(control.role) && looksLikeSubmit(control.name)
 }
 
 /**

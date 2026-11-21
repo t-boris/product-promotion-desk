@@ -246,8 +246,11 @@ export class MissionPublisher {
     }
 
     // The authority's word decides whether the control was pressed. The AI's report is a note and is only ever shown.
-    if (!authority.committed) return authority.sessionMoved ? this.afterSessionChange(pair, grant) : this.notSubmitted(outcome, crash)
-    return this.readBack(pair, grant, attemptedAt, outcome, crash)
+    const result = !authority.committed ? (authority.sessionMoved ? await this.afterSessionChange(pair, grant) : this.notSubmitted(outcome, crash)) : await this.readBack(pair, grant, attemptedAt, outcome, crash)
+    // A publication that did not go through (it failed, was stopped, or is not known) leaves what the AI did in the log, in one event: the run keeps one line, and
+    // a refusal without the steps before it does not say what the AI tried. Labels, addresses and the application's own sentences only (see `StepTrace`).
+    if ((result.status === 'failed' || result.status === 'unknown') && outcome?.steps) this.core.log.warn('send', outcome.steps, grant.channel.id)
+    return result
   }
 
   /**
