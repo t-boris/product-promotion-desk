@@ -50,19 +50,18 @@ describe('Scheduler: running due channels (REQ-005)', () => {
     expect(h.monitor.calls).toEqual([])
   })
 
-  it('never starts a channel the app does not read, however due it is, and leaves it with no failure and no "Next check" (DEC-034)', async () => {
+  it('starts a channel the app does not read like one it reads: the AI watches it in the browser, and it has no failure (DEC-045)', async () => {
     const h = makeHarness()
-    const own = h.channel({ target: '@brand', reads: false, nextCheckAt: null })
+    const unread = h.channel({ target: '@brand', reads: false, nextCheckAt: null })
     const read = h.channel({ target: 'r/read' })
 
     await h.start()
     await h.elapse(10 * MINUTE_MS)
 
-    expect(h.monitor.calls).toEqual([read.id])
-    const after = h.core.repos.channel(own.id)
-    expect(after).toMatchObject({ status: 'active', nextCheckAt: null, lastRunAt: null, statusDetail: '' })
-    expect(monitorRuns(h).filter((r) => r.channelId === own.id)).toEqual([])
-    expect(h.automation.store.get(own.id).consecutiveFailures).toBe(0)
+    expect([...h.monitor.calls].sort()).toEqual([read.id, unread.id].sort())
+    expect(h.core.repos.channel(unread.id)).toMatchObject({ status: 'active', statusDetail: '' })
+    expect(monitorRuns(h).filter((r) => r.channelId === unread.id).length).toBeGreaterThan(0)
+    expect(h.automation.store.get(unread.id).consecutiveFailures).toBe(0)
   })
 
   it('isolates failures: one channel throwing never stops the others', async () => {

@@ -1,7 +1,6 @@
 // Which channels may be worked on right now (REQ-005: permissions are re-checked, nothing is retried blindly).
 
 import type { Account, CapabilityKey, Channel, Id } from '../../shared/types'
-import { OWN_POSTS_DETAIL } from '../channels/reads'
 import type { Core } from '../core'
 import type { ScheduleStore } from './scheduler-state'
 
@@ -55,9 +54,8 @@ export function reviewChannels(core: Core, store: ScheduleStore, nowMs: number):
       core.log.warn('scheduler', `Channel ${channel.target} suspended: ${problem}`, channel.id)
       result.suspended.push(channel.id)
     } else if (channel.status === 'needs_user' && !problem && store.get(channel.id).autoResume) {
-      // A channel the app watches in the browser is looked at on the schedule like a read one (DEC-042); only a channel for own posts has no next check.
-      const observed = channel.reads || channel.watchedInBrowser
-      store.restore(channel.id, observed ? new Date(nowMs).toISOString() : null, observed ? '' : OWN_POSTS_DETAIL)
+      // Every channel is looked at on the schedule: through its connector, or, where the app cannot read it, in the account's browser (DEC-042, DEC-045).
+      store.restore(channel.id, new Date(nowMs).toISOString(), '')
       core.log.info('scheduler', `Channel ${channel.target} resumed: the problem that suspended it is gone`, channel.id)
       result.restored.push(channel.id)
     }
@@ -73,11 +71,11 @@ export function schedulableChannels(core: Core): Channel[] {
 }
 
 /**
- * The channels the scheduler may observe: the schedulable ones the app can read, and the ones it watches in the account's browser (DEC-042). A channel
- * for own posts that is neither is only ever worked on for its posts.
+ * The channels the scheduler may observe: the schedulable ones. The app reads one through its connector or, when it cannot, the AI watches it in the
+ * account's browser (DEC-042, DEC-045), so there is no channel that is only ever worked on for its posts.
  */
 export function readableChannels(core: Core): Channel[] {
-  return schedulableChannels(core).filter((c) => c.reads || c.watchedInBrowser)
+  return schedulableChannels(core)
 }
 
 /**

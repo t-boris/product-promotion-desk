@@ -1,5 +1,5 @@
-// Watching a channel the app has no connector for, through the account's browser (DEC-042). The monitor calls this for a channel with
-// `watchedInBrowser` (Instagram, Facebook, Threads, X, LinkedIn pages and searches); the AI agent service does the looking, the findings table keeps
+// Watching a channel the app cannot read itself, through the account's browser (DEC-042, DEC-045). The monitor calls this for a channel with
+// `watchedInBrowser` (any platform or site: Instagram, a Reddit community whose list Reddit refuses, a forum); the AI agent service does the looking, the findings table keeps
 // what it recorded, and this flow decides what the look was worth: a whole look moves the cursor and sets the first-look mark, anything else leaves
 // them alone so the next look covers the same ground (a post is recorded once, so nothing is judged twice).
 //
@@ -10,7 +10,8 @@ import { ApiError } from '../../shared/api'
 import type { Account, Channel } from '../../shared/types'
 import { WATCH_KNOWN_LIMIT, WATCH_MAX_POSTS, WATCH_MAX_QUERIES, WATCH_TIMEOUT_MS, type WatchBrief, type WatchItem, type WatchOutcome, type WatchRecorded } from '../browser-agent/watch'
 import { MAX_LOOK_BACK_DAYS } from '../channels/settings'
-import { presetFor, searchAddress } from '../channels/presets'
+import { webPlaces } from '../channels/web-places'
+import { platformLabel } from '../../shared/post-format'
 import type { Core } from '../core'
 import type { FindingStore } from './findings'
 import type { Ingestor } from './ingest'
@@ -86,7 +87,7 @@ export class BrowserWatchFlow {
 
     let outcome: WatchOutcome
     try {
-      outcome = await missions.watch({ accountId: account.id, channelId: channel.id, hosts: presetFor(channel.platform)?.hosts ?? [], brief: this.brief(channel, account, firstLook, days, since), record })
+      outcome = await missions.watch({ accountId: account.id, channelId: channel.id, hosts: webPlaces(channel).hosts, brief: this.brief(channel, account, firstLook, days, since), record })
     } catch (error) {
       if (error instanceof ApiError && NOT_STARTED.has(error.code)) return deferred(`The channel was not looked at: ${error.message}`)
       this.core.log.error('monitor', `The look at the channel stopped unexpectedly: ${errorMessage(error)}`, channel.id)
@@ -124,15 +125,16 @@ export class BrowserWatchFlow {
   /** What the AI is told: the owner's product and goals, the channel's own page and the platform's search for its first queries, how far back, and what was judged. */
   private brief(channel: Channel, account: Account, firstLook: boolean, lookBackDays: number, since: number): WatchBrief {
     const product = this.core.repos.product(channel.productId)
-    const preset = presetFor(channel.platform)
+    const site = webPlaces(channel)
     const queries = channel.settings.queries.filter((q) => q.trim() !== '').slice(0, WATCH_MAX_QUERIES)
-    const places = [{ label: `The channel's own page, ${channel.target}`, url: channel.url }]
+    // The newest posts first where the site has such a page (a Reddit community's own page shows its best posts, not what was written since the last look).
+    const places = [...(site.newest ? [{ label: `The newest posts of ${channel.target}`, url: site.newest }] : []), { label: `The channel's own page, ${channel.target}`, url: channel.url }]
     for (const query of queries) {
-      const url = preset ? searchAddress(preset, query) : null
-      if (url) places.push({ label: `The platform's own search for "${query}"`, url })
+      const url = site.search(query)
+      if (url) places.push({ label: `${platformLabel(channel.platform)}'s own search for "${query}"`, url })
     }
     return {
-      platform: preset?.label ?? channel.platform,
+      platform: platformLabel(channel.platform),
       channelTarget: channel.target,
       channelUrl: channel.url,
       accountLabel: account.label,

@@ -662,3 +662,33 @@ textarea.input.short {
 .mix-note-aside {
   display: block;
 }
+
+/* look around with the AI (DEC-045) */
+.look-result,
+.look-angle {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.look-topics {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.look-topics li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+}
+.look-angle .input {
+  resize: vertical;
+}
+

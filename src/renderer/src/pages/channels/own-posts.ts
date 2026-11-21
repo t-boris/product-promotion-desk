@@ -1,4 +1,5 @@
-// What the Channels and Feed screens say about a channel the app cannot read (DEC-034): it takes the owner's own posts and nothing else.
+// What the Channels and Feed screens say about a channel the app cannot read (DEC-034): it takes the owner's own posts and the AI watches it in the browser (DEC-042,
+// DEC-045: every such channel, on any site, so the words for one that is not watched are never reached from a channel the core makes).
 // Words only, in a module without components, so they are tested apart from the interface.
 
 import { isWatchedInBrowser, type ReadingWays } from '../feed/watching-line'
@@ -14,13 +15,13 @@ export const OWN_POSTS_WHAT_IT_DOES = 'Your own posts only. The app does not rea
 // browser like a person, on the channel's schedule, and notes what matters (Noted in the Feed). Posting is as above: the owner's own posts.
 
 /** The "Reading" row of the status card of a channel watched in the browser, above its schedule rows. */
-export const BROWSER_WATCH_READING = 'Watched in the browser by the AI, like a person. Nothing is replied to or measured here. Needs Claude Code as the AI engine.'
+export const BROWSER_WATCH_READING = 'Watched in the browser by the AI, like a person. Nothing is replied to or measured here. Needs an AI engine that can work the browser (Claude Code or Codex).'
 
 /** The card that stands in for the mode selector of a channel watched in the browser: it is watched, and still never replied to. */
 export const BROWSER_WATCH_WHAT_IT_DOES = 'Your own posts only. The AI watches this platform in the browser and notes what matters in the Feed, but no reply is prepared here. Each post goes out when you press Send, after you approved that exact text. The app cannot read the page back, so afterwards you tell it whether the post is up.'
 
 /** One quiet sentence on the Feed, where the notes of the channels it does not read are shown. */
-export const BROWSER_WATCH_NOTE = 'Watched in the browser by the AI like a person: it scrolls, judges each post against your goals and notes what matters here. It never replies or posts from this. Needs Claude Code as the AI engine.'
+export const BROWSER_WATCH_NOTE = 'Watched in the browser by the AI like a person: it scrolls, judges each post against your goals and notes what matters here. It never replies or posts from this. Needs an AI engine that can work the browser (Claude Code or Codex).'
 
 /** Under the search queries of a channel watched in the browser: the queries are used there too. */
 export const BROWSER_WATCH_QUERIES_HINT = 'The AI also searches the platform for these (the first three).'

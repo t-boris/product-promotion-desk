@@ -62,9 +62,7 @@ export class MonitorFlow implements MonitorService {
       return { status: 'failed', summary: errorMessage(error), newOpportunities: 0 }
     }
     if (channel.status === 'paused') return { status: 'skipped', summary: 'Channel is paused', newOpportunities: 0 }
-    // A channel the app cannot read has nothing to observe (DEC-034): it is not a failure, and nothing is retried. One it can only look at in the
-    // account's browser (DEC-042) is looked at below, once the account is known to be signed in.
-    if (!channel.reads && !channel.watchedInBrowser) return { status: 'skipped', summary: 'The app does not read this channel (your own posts only)', newOpportunities: 0 }
+    // A channel the app cannot read itself is looked at in the account's browser (DEC-042, DEC-045), below, once the account is known to be signed in.
 
     if (account.status !== 'ready') {
       // The account state is already recorded by whoever set it; only the channel is suspended here.

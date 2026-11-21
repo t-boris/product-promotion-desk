@@ -42,6 +42,25 @@ describe('onboarding a subreddit end to end (REQ-002)', () => {
     expect(assessed.capabilities.every((c) => c.checkedAt !== null)).toBe(true)
   })
 
+  it('a community whose post list Reddit refuses is watched in the browser instead: it activates, and reads through Reddit again once the list answers (DEC-045)', async () => {
+    const { core, page, account, channel } = await onboard()
+    page.route('/r/test/new.json', '<html>blocked</html>', 403)
+    core.db.prepare("UPDATE accounts SET status = 'ready' WHERE id = ?").run(account.id)
+
+    const refused = await core.router.call('channels.assess', { channelId: channel.id })
+    expect(status(refused.capabilities, 'read_posts')).toBe('unavailable')
+    expect(refused).toMatchObject({ reads: false, watchedInBrowser: true })
+
+    // Before: "Comments cannot be read on this channel ... so it cannot be monitored". Now it goes live and the AI looks at it.
+    const active = await core.router.call('channels.activate', { channelId: channel.id })
+    expect(active).toMatchObject({ status: 'active', statusDetail: '', reads: false, watchedInBrowser: true })
+    expect(active.nextCheckAt).not.toBeNull()
+
+    routeHealthyReddit(page)
+    const healed = await core.router.call('channels.assess', { channelId: channel.id })
+    expect(healed).toMatchObject({ reads: true, watchedInBrowser: false })
+  })
+
   it('shows the person what to do when the session is signed out, and keeps the account status in step', async () => {
     const { core, page, account, channel } = await onboard()
     page.route('/api/me.json', { message: 'Forbidden', error: 403 }, 403)

@@ -90,12 +90,21 @@ export type QuickPictureResult =
 
 // ───────────────────────────── the search for trends ─────────────────────────────
 
+/**
+ * What the AI looks for in the browser (DEC-045): `trends` is what people talk about around a subject (the site's own search; the default), `now` is what is
+ * happening in the place at this moment (its newest posts), `feed` is an analysis of the place's feed: what kinds of posts get a response and what falls flat.
+ */
+export type QuickLookMode = 'trends' | 'now' | 'feed'
+export const QUICK_LOOK_MODES: readonly QuickLookMode[] = ['trends', 'now', 'feed']
+
 export interface QuickTrendsArgs {
   productId: Id
-  /** The channel whose account's browser does the search; the platform and the account come from it. */
+  /** The channel whose account's browser does the search; the platform, the site and the account come from it. Any channel, not only a picture post's. */
   channelId: Id
   /** What to look for, in the owner's words; without it the search is for the channel's own topics and queries. */
   wish?: string
+  /** What kind of look; `trends` when absent. */
+  mode?: QuickLookMode
 }
 
 /** One thing the search found people are talking about. `url` is a page of the platform that shows it, when there is one. */

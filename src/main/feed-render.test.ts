@@ -253,7 +253,7 @@ describe('ReadingNotes: the channels\' own watching lines', () => {
       const out = notes([insta()], context)
       expect(out).toContain('data-testid="feed-browser-watch"')
       expect(out).toContain(BROWSER_WATCH_NOTE)
-      expect(out).toContain('Needs Claude Code as the AI engine.')
+      expect(out).toContain('Needs an AI engine that can work the browser (Claude Code or Codex).')
       // It is not one the app does not read.
       expect(out).not.toContain('feed-unread')
       expect(out).not.toContain('own-posts-no-check')

@@ -1,5 +1,5 @@
-// DEC-042: an assessment that lets a suspended channel carry on must not park a watched channel as one for own posts only: it is looked at, so it has
-// nothing to say about itself. A channel of a platform that is not watched is parked as before (DEC-034).
+// DEC-042, DEC-045: an assessment that lets a suspended channel carry on must not park a watched channel as one for own posts only: it is looked at, so it has
+// nothing to say about itself. Every channel the app does not read is watched, on any platform or site.
 
 import { describe, expect, it } from 'vitest'
 import { makeReadyWorld } from './test-helpers'
@@ -18,7 +18,7 @@ describe('channels.assess: a channel that was waiting for the owner', () => {
     expect(await suspended(platform)).toEqual({ detail: '', status: 'active', reads: false })
   })
 
-  it('carries on as a channel for own posts only when its platform is not watched', async () => {
-    expect(await suspended('web')).toEqual({ detail: 'Your own posts only.', status: 'active', reads: false })
+  it('does the same on a platform the app has no list for (any site is watched in the browser, DEC-045)', async () => {
+    expect(await suspended('web')).toEqual({ detail: '', status: 'active', reads: false })
   })
 })

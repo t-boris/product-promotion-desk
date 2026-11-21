@@ -47,13 +47,12 @@ describe('Scheduler: a channel watched in the browser', () => {
     expect(h.monitor.calls).toEqual([])
   })
 
-  it('never starts a channel for own posts of a platform the app does not watch, however due it is', async () => {
+  it('starts a channel of any site too, once it is due: the AI watches whatever the app cannot read (DEC-045)', async () => {
     const h = makeHarness()
-    const own = h.channel({ ...watchedSeed, platform: 'web', target: 'https://example.com/blog' })
+    const forum = h.channel({ ...watchedSeed, platform: 'web', target: 'https://forum.example.com/c/astrology' })
     await h.start()
     await h.elapse(10 * MINUTE_MS)
-    expect(h.monitor.calls).toEqual([])
-    expect(h.core.repos.channel(own.id)).toMatchObject({ status: 'active', nextCheckAt: null, lastRunAt: null })
+    expect(h.monitor.calls).toContain(forum.id)
   })
 
   it('tries a look that could not start again at the time the monitor chose, not at the regular interval, and counts no failure', async () => {

@@ -15,7 +15,7 @@ import type {
   RemoteInboxItem,
   SendTicket
 } from '../../core/ports'
-import type { Capability, IsoTime, MetricReading } from '../../shared/types'
+import type { Capability, Channel, IsoTime, MetricReading } from '../../shared/types'
 import { gateProbeScript, type GateProbe } from '../page-scripts'
 import { ensureRedditOrigin, RedditApi } from './api'
 import { refusalError } from './auth'
@@ -81,6 +81,17 @@ export class RedditConnector implements Connector {
       example: 'r/yourcommunity',
       hint: 'The community, not the whole site: r/astrology or https://www.reddit.com/r/astrology/. Feeds such as r/all or r/popular and user pages (u/…) are not accepted.'
     }
+  }
+
+  /**
+   * DEC-045: Reddit refuses the post list of a community to a client that is not its own application (HTTP 403 with a page instead of data), while the
+   * community's rules and numbers are still given. When the assessment found the list refused, the app cannot read the community itself, and the AI
+   * watches it in the account's browser like a person. A list that was never tried, or failed in a way that may pass (a limit, a network error), does
+   * not change what the app does: the community stays read through Reddit until an assessment says it cannot be.
+   */
+  readsChannel(channel: Channel): boolean {
+    const posts = channel.capabilities.find((c) => c.key === 'read_posts')
+    return !(posts && (posts.status === 'unavailable' || posts.status === 'restricted'))
   }
 
   async checkLogin(ctx: ConnectorContext): Promise<LoginState> {

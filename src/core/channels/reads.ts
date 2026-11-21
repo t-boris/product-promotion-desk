@@ -6,7 +6,7 @@ import type { Core } from '../core'
 import { handleOf, presetFor } from './presets'
 import type { ChannelsStore } from './store'
 
-/** What the channel says about itself while the app does not read it. */
+/** What a channel stored before DEC-045 says about itself while the app does not read it; every such channel is watched in the browser now, and the text is cleared once it is looked at. */
 export const OWN_POSTS_DETAIL = 'Your own posts only.'
 
 /** Asks the channel's connector. A connector that does not say can read, as every connector did before this question existed. */

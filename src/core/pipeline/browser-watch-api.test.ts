@@ -64,10 +64,11 @@ describe('activating a channel that is watched in the browser', () => {
     await expect(call('channels.activate', { channelId })).rejects.toMatchObject({ code: 'channel_paused' })
   })
 
-  it('still parks a channel of a platform that is not watched, as for own posts only', async () => {
+  it('watches a channel of any site too, not only of the platforms that were listed (DEC-045)', async () => {
     const { channelId } = watchedWorld({ platform: 'web' })
     const channel = await call('channels.activate', { channelId })
-    expect(channel).toMatchObject({ status: 'active', statusDetail: 'Your own posts only.', nextCheckAt: null, watchedInBrowser: false })
+    expect(channel).toMatchObject({ status: 'active', statusDetail: '', watchedInBrowser: true })
+    expect(channel.nextCheckAt).not.toBeNull()
   })
 })
 
@@ -86,11 +87,10 @@ describe('"Check now" on a channel that is watched in the browser', () => {
     expect(channelOf(channelId)).toMatchObject({ reads: false, status: 'active' })
   })
 
-  it('refuses a channel that is neither read nor watched, as before', async () => {
+  it('looks at a channel of any site, not only of the platforms that were listed (DEC-045)', async () => {
     const { ai, channelId } = watchedWorld({ status: 'active', platform: 'web' })
-    await expect(call('channels.checkNow', { channelId })).rejects.toMatchObject({ code: 'not_read' })
-    expect(ai.requests).toEqual([])
-    expect(world.core.runs.list({ channelId })).toEqual([])
+    await call('channels.checkNow', { channelId })
+    expect(ai.requests).toHaveLength(1)
   })
 
   it('refuses a paused channel', async () => {

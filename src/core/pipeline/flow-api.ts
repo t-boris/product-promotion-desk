@@ -5,7 +5,7 @@ import { ApiError } from '../../shared/api'
 import type { Channel, Id, Run } from '../../shared/types'
 import type { Core } from '../core'
 import { requireText } from '../channels/errors'
-import { OWN_POSTS_DETAIL, channelReads } from '../channels/reads'
+import { channelReads } from '../channels/reads'
 import { buildCard } from './cards'
 import type { DraftingFlow } from './drafting'
 import { checkIds, checkLabels, type FindingStore } from './findings'
@@ -60,8 +60,8 @@ export function registerFlowApi({ core, store, review, monitor, drafting, sendin
     if (post && (post.status === 'unavailable' || post.status === 'restricted')) {
       throw new ApiError('publish_unavailable', `Posts cannot be made on this channel (${post.status}${post.detail ? `: ${post.detail}` : ''}).`)
     }
-    if (channel.watchedInBrowser) return setChannelStatus(channel, 'active', '', core.clock.now().toISOString())
-    return setChannelStatus(channel, 'active', OWN_POSTS_DETAIL)
+    // The AI watches it in the account's browser from now on, with no baseline to read first (DEC-042, DEC-045).
+    return setChannelStatus(channel, 'active', '', core.clock.now().toISOString())
   }
 
   core.router.register({
@@ -103,7 +103,6 @@ export function registerFlowApi({ core, store, review, monitor, drafting, sendin
     'channels.checkNow': async ({ channelId }) => {
       const channel = store.requireChannel(channelId)
       if (channel.status === 'paused') throw new ApiError('channel_paused', 'The channel is paused. Resume it first.')
-      if (!channel.reads && !channel.watchedInBrowser) throw new ApiError('not_read', 'The app does not read this channel: it is for your own posts, so there is nothing to check.')
       await core.runs.track('monitor', { channelId, productId: channel.productId }, async () => {
         const outcome = await monitor.runChannel(channelId)
         // What the AI finds in a channel it only looks at in the browser is a finding: nothing is drafted for it (DEC-042).
@@ -127,7 +126,7 @@ export function registerFlowApi({ core, store, review, monitor, drafting, sendin
       // "Resume" never leaves setup: that is what Activate is for, with its checks of the account and of posting. A channel the app does not read has
       // no first read to tell a started channel from a new one, so a started one is told by having left setup.
       const next = channel.baselineDoneAt || (channel.status !== 'setup' && !channel.reads) ? 'active' : 'setup'
-      return setChannelStatus(channel, next, next === 'active' && !channel.reads && !channel.watchedInBrowser ? OWN_POSTS_DETAIL : '')
+      return setChannelStatus(channel, next, '')
     },
 
     // ───────────── review queues ─────────────

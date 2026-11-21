@@ -66,9 +66,11 @@ export interface ResearchBrief {
   about: string[]
   /** What the owner asked to look for, when they said; null otherwise. */
   wish: string | null
-  /** The pages, in the order of `ResearchSetup.places`: the platform's search for each thing to look for. */
+  /** The pages, in the order of `ResearchSetup.places`: the platform's search for each thing to look for, or the place's own pages. */
   places: { label: string; url: string }[]
   maxTopics: number
+  /** What kind of look this is (DEC-045); `trends` when absent. */
+  focus?: 'trends' | 'now' | 'feed'
 }
 
 export interface ResearchMissionRequest {

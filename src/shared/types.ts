@@ -623,16 +623,13 @@ export interface Channel {
    */
   reads: boolean
   /**
-   * The app reads this channel through the account's browser, like a person (DEC-042): a channel of a platform it has no connector for (Instagram,
-   * Facebook, Threads, X, LinkedIn). Derived, never stored: `!reads` and a platform in BROWSER_WATCH_PLATFORMS. Such a channel is watched and judged
-   * on the schedule, and what the AI finds is shown as notices; nothing is replied to, measured or sent from what it reads.
+   * The app reads this channel through the account's browser, like a person (DEC-042, DEC-045): every channel the app has no way to read itself, on
+   * any platform or site (Instagram, a Reddit community whose list Reddit refuses, a forum). Derived, never stored: it is `!reads`. Such a channel is
+   * watched and judged on the schedule, and what the AI finds is shown as notices; nothing is replied to, measured or sent from what it reads.
    */
   watchedInBrowser: boolean
   createdAt: IsoTime
 }
-
-/** The platforms whose channels are watched through the browser when the app has no connector for them (DEC-042). */
-export const BROWSER_WATCH_PLATFORMS: readonly string[] = ['instagram', 'facebook', 'threads', 'x', 'linkedin']
 
 /** Start of the status text a channel carries while its checks fail (the scheduler writes it; the watching line reads it back without repeating it). */
 export const FAILURE_DETAIL_PREFIX = 'Last check failed'

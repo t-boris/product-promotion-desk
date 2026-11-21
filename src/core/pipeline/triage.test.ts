@@ -285,14 +285,14 @@ describe('which posts are read, and when', () => {
     expect(numbered(calls('triage.titles')[0])).toHaveLength(1)
   })
 
-  it('is not made for a paused channel, nor for one the app does not read', async () => {
+  it('is not made for a paused channel, nor through the connector for one the app does not read (it is watched in the browser, DEC-045)', async () => {
     world = makeWorld(ABOUT_CHARTS)
     post('p1')
     aiSays()
     world.core.db.prepare("UPDATE channels SET status = 'paused' WHERE id = ?").run(world.channel.id)
     expect((await world.monitor.runChannel(world.channel.id)).status).toBe('skipped')
     world.core.db.prepare("UPDATE channels SET status = 'active', reads = 0 WHERE id = ?").run(world.channel.id)
-    expect((await world.monitor.runChannel(world.channel.id)).status).toBe('skipped')
+    await world.monitor.runChannel(world.channel.id)
     expect(world.connector.calls).not.toContain('listPosts')
     expect(findings()).toEqual([])
   })

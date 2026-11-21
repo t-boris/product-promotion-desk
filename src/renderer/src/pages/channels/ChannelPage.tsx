@@ -9,6 +9,7 @@ import { isWatchable } from '../feed/watching-line'
 import { CapabilityCard } from './CapabilityCard'
 import { ChannelMixCard } from './ChannelMixCard'
 import { ChannelPlanCard } from './ChannelPlanCard'
+import { LookAroundCard } from './LookAroundCard'
 import { ChannelStatusCard } from './ChannelStatusCard'
 import { ModeSelector } from './ModeSelector'
 import { OpenAccountBrowser } from './OpenAccountBrowser'
@@ -104,6 +105,7 @@ export function ChannelPage({
           <>
             <ChannelStatusCard channel={channel} product={products.find((p) => p.id === channel.productId)} account={account} platform={platform} accountLabel={account?.label ?? 'Unknown account'} filled={stage === 'activate'} onRemoved={onRemoved} />
             <CapabilityCard channel={channel} filled={stage === 'assess'} platform={platform} />
+            <LookAroundCard channel={channel} />
           </>
         )}
         {tab === 'plan' && <ChannelPlanCard channel={channel} platforms={platforms} blockedReason={planBlockedReason} />}

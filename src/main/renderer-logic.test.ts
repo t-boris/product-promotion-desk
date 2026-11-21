@@ -1034,8 +1034,8 @@ describe('a channel the AI watches in the browser (DEC-042): its words', () => {
   const browser = { reads: false, watchedInBrowser: true }
   const unread = { reads: false, watchedInBrowser: false }
 
-  it('says it is watched like a person by the AI, that it needs Claude Code, and that nothing is replied to, measured or posted from it', () => {
-    expect(BROWSER_WATCH_NOTE).toBe('Watched in the browser by the AI like a person: it scrolls, judges each post against your goals and notes what matters here. It never replies or posts from this. Needs Claude Code as the AI engine.')
+  it('says it is watched like a person by the AI, that it needs an engine that can work the browser, and that nothing is replied to, measured or posted from it', () => {
+    expect(BROWSER_WATCH_NOTE).toBe('Watched in the browser by the AI like a person: it scrolls, judges each post against your goals and notes what matters here. It never replies or posts from this. Needs an AI engine that can work the browser (Claude Code or Codex).')
     for (const words of [BROWSER_WATCH_READING, BROWSER_WATCH_WHAT_IT_DOES, BROWSER_WATCH_NOTE, BROWSER_WATCH_QUERIES_HINT]) {
       expect(words).toMatch(/^[A-Z]/)
       expect(words).toMatch(/[.]$/)

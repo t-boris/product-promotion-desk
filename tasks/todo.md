@@ -895,3 +895,17 @@ Owner 2026-11-21: "Why does it not add the link to my site at the end of every p
 Unproven live: the "Link in bio" line on a real Instagram post; Threads/Facebook posts ending with the address (disclosure rule applies to them).
 Open on the same day (owner's next two messages): the Reddit channel cannot read its post list (HTTP 403), the owner wants it read through the browser like Instagram and Threads, and wants any forum or site supported, with trend search and feed analysis. Needs a plan and the owner's approval before it is built.
 
+## 0.26.0: any site is watched and searched through the browser (owner 2026-11-21: "all 3 steps, to the end, go")
+
+Owner's words: "we must support any forum or site we find"; Reddit r/astrology cannot read its post list (HTTP 403 to every non-OAuth client), "we can open the browser like in Instagram or Threads"; "search variants for trends, for what is happening, for the feed analysis".
+
+Design: one fact, "the app does not read this channel" (`reads` = false), now means "the AI watches it in the account's browser, read-only" for EVERY platform (DEC-042 had a list of five). Addresses the AI may open come from the channel itself, not from a platform table.
+
+- [x] Step 1, Reddit: the Reddit connector answers `readsChannel` false when its assessment found the post list refused; assessment asks it with the NEW capabilities; activation then goes the browser way instead of "Comments cannot be read"
+- [x] Step 2, any site: `watchedInBrowser` = `!reads` (drop BROWSER_WATCH_PLATFORMS); `web-places.ts`: hosts of the AI's pages from the platform preset, else from the channel's own address; search/newest/top pages for known sites (Reddit, presets), only the channel's page for an unknown site
+- [x] Step 3, look around: `quick.trends` gets a mode (trends / now / feed); the research brief says what each looks for; a channel-page card with three buttons shows the topics and one angle (nothing saved, nothing posted)
+- [x] tests for each step (17 old tests rewritten to the new rule, 24 new); `npm run verify` 5513 tests; DEC-045 (proposed); 0.26.0
+- [ ] commit, push, CI, deploy, look at the card in an own instance on demo data
+- [ ] later clean-up: the renderer still carries words and branches for a channel that is neither read nor watched (own-posts.ts, watching-line.ts); the core no longer produces one
+- [ ] Unproven live: the real r/astrology browser look, a real forum, the three look-around modes on real pages
+

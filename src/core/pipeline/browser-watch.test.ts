@@ -371,13 +371,32 @@ describe('a look that needs the owner', () => {
 })
 
 describe('what is not looked at', () => {
-  it('a channel of a platform that is neither read nor watched in the browser stays skipped, and the AI is never asked', async () => {
+  it('a channel of any site is looked at too, and the AI goes nowhere but the site of its address (DEC-045)', async () => {
     const x = watched({ platform: 'web' })
-    expect(channelOf(x)).toMatchObject({ reads: false, watchedInBrowser: false })
-    const outcome = await check(x)
-    expect(outcome).toEqual({ status: 'skipped', summary: 'The app does not read this channel (your own posts only)', newOpportunities: 0 })
-    expect(x.ai.requests).toEqual([])
-    expect(channelOf(x)).toMatchObject({ lastRunAt: null, nextCheckAt: null })
+    x.w.core.db.prepare('UPDATE channels SET url = ? WHERE id = ?').run('https://www.forum.example.com/c/astrology', x.channelId)
+    expect(channelOf(x)).toMatchObject({ reads: false, watchedInBrowser: true })
+    await check(x)
+    expect(x.ai.requests).toHaveLength(1)
+    const request = x.ai.requests[0] as WatchMissionRequest
+    expect(request.hosts).toEqual(['forum.example.com'])
+    // A site the app knows no search for gets its channel page only; the AI follows the links it sees there, on the same site.
+    expect(request.brief.places.map((place) => place.url)).toEqual(['https://www.forum.example.com/c/astrology'])
+  })
+
+  it('a Reddit community whose post list Reddit refuses is looked at in the browser: its newest posts first, then its page and its own search (DEC-045)', async () => {
+    const x = watched({ platform: 'reddit' })
+    x.w.core.db.prepare('UPDATE channels SET url = ?, target = ? WHERE id = ?').run('https://www.reddit.com/r/astrology', 'r/astrology', x.channelId)
+    await check(x)
+    const request = x.ai.requests[0] as WatchMissionRequest
+    expect(request.hosts).toEqual(['reddit.com'])
+    expect(request.brief.platform).toBe('Reddit')
+    expect(request.brief.places.map((place) => place.url)).toEqual([
+      'https://www.reddit.com/r/astrology/new/',
+      'https://www.reddit.com/r/astrology',
+      'https://www.reddit.com/r/astrology/search/?q=natal%20chart&restrict_sr=1&sort=new',
+      'https://www.reddit.com/r/astrology/search/?q=birth%20chart%20app&restrict_sr=1&sort=new',
+      'https://www.reddit.com/r/astrology/search/?q=astrology&restrict_sr=1&sort=new'
+    ])
   })
 
   it('a paused channel is not looked at', async () => {

@@ -612,6 +612,68 @@ describe('quick.trends: the search', () => {
     expect(result).toMatchObject({ state: 'ready', searched: ['w', 'a', 'b'] })
   })
 
+  describe('the three kinds of look at any channel (DEC-045)', () => {
+    /** A Reddit community, the case the owner needed: its post list is refused, and the AI looks at it in the browser. */
+    function onReddit(): { channel: Channel; ai: ScriptedResearch } {
+      const found = searching({ platform: 'reddit', settings: { queries: ['natal chart'], topics: [] } })
+      world.core.db.prepare('UPDATE channels SET url = ?, target = ? WHERE id = ?').run('https://www.reddit.com/r/astrology', 'r/astrology', found.channel.id)
+      return found
+    }
+    const placesOf = (ai: ScriptedResearch): string[] => (ai.requests[0] as ResearchMissionRequest).brief.places.map((p) => p.url)
+
+    it('trends searches the community with its own search, on reddit.com only', async () => {
+      const { channel, ai } = onReddit()
+      expect(await trends(channel, { mode: 'trends' })).toMatchObject({ state: 'ready', searched: ['natal chart'] })
+      expect(placesOf(ai)).toEqual(['https://www.reddit.com/r/astrology/search/?q=natal%20chart&restrict_sr=1&sort=new'])
+      expect(ai.requests[0]).toMatchObject({ hosts: ['reddit.com'] })
+      expect((ai.requests[0] as ResearchMissionRequest).brief).toMatchObject({ platform: 'Reddit', focus: 'trends' })
+    })
+
+    it('"what is happening now" looks at the newest posts first, then the community page', async () => {
+      const { channel, ai } = onReddit()
+      expect(await trends(channel, { mode: 'now' })).toMatchObject({ state: 'ready', searched: [] })
+      expect(placesOf(ai)).toEqual(['https://www.reddit.com/r/astrology/new/', 'https://www.reddit.com/r/astrology'])
+      expect((ai.requests[0] as ResearchMissionRequest).brief.focus).toBe('now')
+    })
+
+    it('"analyse the feed" looks at the community page and its best posts of the week, and a wish adds its search', async () => {
+      const { channel, ai } = onReddit()
+      expect(await trends(channel, { mode: 'feed', wish: 'memes' })).toMatchObject({ state: 'ready', searched: ['memes'] })
+      expect(placesOf(ai)).toEqual([
+        'https://www.reddit.com/r/astrology',
+        'https://www.reddit.com/r/astrology/top/?t=week',
+        'https://www.reddit.com/r/astrology/search/?q=memes&restrict_sr=1&sort=new'
+      ])
+      expect((ai.requests[0] as ResearchMissionRequest).brief.focus).toBe('feed')
+    })
+
+    it('a site the app knows no search for is looked at through its page, whatever the kind of look', async () => {
+      const { channel, ai } = searching({ platform: 'web', settings: { queries: ['natal chart'], topics: [] } })
+      world.core.db.prepare('UPDATE channels SET url = ? WHERE id = ?').run('https://forum.example.com/c/astrology', channel.id)
+      for (const mode of ['trends', 'now', 'feed'] as const) {
+        ai.requests.length = 0
+        expect(await trends(channel, { mode })).toMatchObject({ state: 'ready' })
+        expect(placesOf(ai)).toEqual(['https://forum.example.com/c/astrology'])
+        expect(ai.requests[0]).toMatchObject({ hosts: ['forum.example.com'] })
+      }
+    })
+
+    it('refuses a kind of look it does not have, and changes nothing', async () => {
+      const { channel, ai } = onReddit()
+      const before = stored()
+      expect(await refusal('quick.trends', { productId: world.product.id, channelId: channel.id, mode: 'post_for_me' })).toBe('invalid_input')
+      expect(ai.requests).toEqual([])
+      expect(stored()).toBe(before)
+    })
+
+    it('changes nothing for any kind of look: not a draft, not a post, not a finding', async () => {
+      const { channel } = onReddit()
+      const before = stored()
+      for (const mode of ['trends', 'now', 'feed'] as const) await trends(channel, { mode })
+      expect(stored()).toBe(before)
+    })
+  })
+
   it('is a message, not an error, when it cannot start: the owner can write and make the picture all the same', async () => {
     const { channel, ai } = searching()
     ai.readiness = { ready: false, reason: 'Fake engine cannot be held to the browser tools alone, so the trends are not searched.' }

@@ -320,6 +320,23 @@ describe('the brief', () => {
     expect(prompt.match(/<\/wish>/g)).toHaveLength(1)
   })
 
+  it('says what each kind of look is for, and the AI only reads in all of them (DEC-045)', () => {
+    const today = new Date('2026-11-20T10:00:00Z')
+    const trends = researchMissionPrompt({ ...brief, focus: 'trends' }, today)
+    const now = researchMissionPrompt({ ...brief, focus: 'now' }, today)
+    const feed = researchMissionPrompt({ ...brief, focus: 'feed' }, today)
+    expect(trends).toContain('what people are talking about')
+    expect(now).toContain('what is happening on')
+    expect(feed).toContain('Analyse the feed')
+    expect(feed).toContain('patterns')
+    // without a kind, it is the search for trends as before
+    expect(researchMissionPrompt(brief, today)).toContain('what people are talking about')
+    for (const prompt of [trends, now, feed]) {
+      expect(prompt).toContain('You only READ')
+      expect(prompt).toContain('browser_snapshot, browser_scroll, watch_open, watch_back, research_record, report_result')
+    }
+  })
+
   it('says so when the owner asked for nothing in particular', () => {
     expect(researchMissionPrompt(brief, new Date('2026-11-20T10:00:00Z'))).toContain('The owner did not ask for anything in particular')
   })

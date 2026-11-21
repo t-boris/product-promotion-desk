@@ -35,6 +35,8 @@ import {
   type QuickPoint,
   type QuickSuggestion,
   type QuickTopic,
+  QUICK_LOOK_MODES,
+  type QuickLookMode,
   type QuickTrendsArgs,
   type QuickTrendsResult,
   type QuickVerdict
@@ -44,8 +46,8 @@ import type { Channel, Id } from '../../shared/types'
 import { readyEngine } from '../assist/gate'
 import { askWithRepair, fence, holdsCredential, isRecord, oneLine, plainText, type Parsed } from '../assist/kit'
 import { found, requireText } from '../channels/errors'
-import { presetFor, searchAddress } from '../channels/presets'
 import { RESEARCH_MAX_ABOUT, RESEARCH_MAX_QUERIES, RESEARCH_MAX_TOPICS, TopicList, type ResearchBrief } from '../browser-agent/research'
+import { webPlaces } from '../channels/web-places'
 import type { Core } from '../core'
 import { collapseWhitespace } from '../passports/text'
 import { AiError, type AiEngine, type AiRunOptions, type AiTask } from '../ports'
@@ -648,21 +650,35 @@ export class QuickHelp {
    */
   async trends(args: QuickTrendsArgs): Promise<QuickTrendsResult> {
     const wish = ownerLine(args.wish, QUICK_SEARCH_WISH_MAX, 'What to look for')
+    const mode: QuickLookMode = args.mode === undefined ? 'trends' : args.mode
+    if (!QUICK_LOOK_MODES.includes(mode)) throw new ApiError('invalid_input', 'The AI can look for trends, for what is happening now, or analyse the feed.')
     const channelId = requireText(args.channelId, 'The channel')
     const channel = found(() => this.core.repos.channel(channelId), 'The channel')
-    const prepared = await this.prepare({ productId: args.productId, channelId, platform: channel.platform })
+    // Any channel: the look is made on the channel's own site (DEC-045), so it is not held to the platforms the picture posts are made for.
+    const prepared = await this.prepare({ productId: args.productId, channelId, platform: channel.platform }, true)
     if (prepared.knowledge.approved.length === 0) throw noKnowledge()
-    const preset = presetFor(channel.platform)
-    if (!preset) throw new ApiError('invalid_input', 'The AI cannot search this platform.')
+    const site = webPlaces(channel)
+    if (site.hosts.length === 0) throw new ApiError('invalid_input', 'The address of this channel cannot be opened in the browser.')
+    const label = platformLabel(channel.platform)
     const missions = this.core.services.researchMissions
-    if (!missions) return { state: 'unavailable', message: 'The AI browser is not available in this build, so the trends cannot be searched. Write the caption and make the picture yourself.' }
+    if (!missions) return { state: 'unavailable', message: 'The AI browser is not available in this build, so the look cannot be made. Write the caption and make the picture yourself.' }
 
-    // What to look for is the owner's wish, then the channel's own topics and search words; the application builds the search pages, the AI cannot type.
-    const queries = [...new Set([wish, ...channel.settings.queries, ...channel.settings.topics].map((q) => q.trim()).filter((q) => q !== ''))].slice(0, RESEARCH_MAX_QUERIES)
-    const places = queries.flatMap((query) => {
-      const url = searchAddress(preset, query)
-      return url ? [{ label: `${preset.label}'s own search for "${query}"`, url }] : []
+    // What to look for is the owner's wish, then the channel's own topics and search words; the application builds the pages, the AI cannot type.
+    const queries =
+      mode === 'trends'
+        ? [...new Set([wish, ...channel.settings.queries, ...channel.settings.topics].map((q) => q.trim()).filter((q) => q !== ''))].slice(0, RESEARCH_MAX_QUERIES)
+        : wish === ''
+          ? []
+          : [wish]
+    const searches = queries.flatMap((query) => {
+      const url = site.search(query)
+      return url ? [{ label: `${label}'s own search for "${query}"`, url }] : []
     })
+    const page = { label: `The channel's own page, ${channel.target}`, url: channel.url }
+    const newest = site.newest ? [{ label: `The newest posts of ${channel.target}`, url: site.newest }] : []
+    const top = site.top ? [{ label: `The best posts of the week of ${channel.target}`, url: site.top }] : []
+    // Trends are looked up by search; "now" and "feed" look at the place itself, and a wish adds its search. A site with no search of its own is looked at through its page.
+    const places = mode === 'trends' ? (searches.length > 0 ? searches : queries.length > 0 ? [page] : []) : mode === 'now' ? [...newest, page, ...searches] : [page, ...top, ...searches]
     if (places.length === 0) return { state: 'unavailable', message: 'There is nothing to search for yet: say what to look for, or add topics to the channel.' }
 
     const account = this.core.repos.account(channel.accountId)
@@ -671,18 +687,19 @@ export class QuickHelp {
 
     const list = new TopicList(RESEARCH_MAX_TOPICS)
     const brief: ResearchBrief = {
-      platform: preset.label,
+      platform: label,
       accountLabel: account.label,
       product: { name: prepared.subject.product.name, websiteUrl: prepared.subject.product.website, description: prepared.subject.product.description },
       about: prepared.subject.approved.slice(0, RESEARCH_MAX_ABOUT).map((c) => oneLine(c.text, 200)),
       wish: wish === '' ? null : wish,
       places,
-      maxTopics: RESEARCH_MAX_TOPICS
+      maxTopics: RESEARCH_MAX_TOPICS,
+      focus: mode
     }
     const subject = quickTrendsSubject(channel.id)
     let outcome
     try {
-      outcome = await missions.research({ accountId: account.id, subject, hosts: preset.hosts, brief, record: list.record })
+      outcome = await missions.research({ accountId: account.id, subject, hosts: site.hosts, brief, record: list.record })
     } catch (error) {
       if (error instanceof ApiError && NOT_STARTED.has(error.code)) return { state: 'unavailable', message: error.message }
       this.core.log.error('pipeline', `The search for trends stopped unexpectedly: ${error instanceof Error ? error.message : String(error)}`, channel.id)
@@ -720,7 +737,7 @@ export class QuickHelp {
     } catch {
       return { state: 'failed', message: 'The product knowledge changed while the AI worked. Search again.' }
     }
-    this.core.log.info('pipeline', `The AI searched ${preset.label} for what people talk about for ${channel.target}: ${topics.length} topic${topics.length === 1 ? '' : 's'}. Nothing is stored.`, channel.id)
+    this.core.log.info('pipeline', `The AI ${mode === 'trends' ? `searched ${label} for what people talk about` : mode === 'now' ? `looked at what is happening now on ${label}` : `analysed the feed of ${label}`} for ${channel.target}: ${topics.length} topic${topics.length === 1 ? '' : 's'}. Nothing is stored.`, channel.id)
     return { state: 'ready', topics, angle, searched: queries, note }
   }
 
@@ -744,11 +761,11 @@ export class QuickHelp {
     }
   }
 
-  /** The product, the platform's form, the channel when the composer names one, the approved knowledge and a ready engine. Refuses what is not a quick post. */
-  private async prepare(args: { productId: Id; channelId?: Id | null; platform: string }): Promise<Prepared> {
+  /** The product, the platform's form, the channel when the composer names one, the approved knowledge and a ready engine. Refuses what is not a quick post, unless `anyPlatform` (the look at a channel, DEC-045). */
+  private async prepare(args: { productId: Id; channelId?: Id | null; platform: string }, anyPlatform = false): Promise<Prepared> {
     const productId = requireText(args.productId, 'The product')
     const product = found(() => this.core.repos.product(productId), 'The product')
-    if (typeof args.platform !== 'string' || !QUICK_PLATFORMS.includes(args.platform)) throw new ApiError('invalid_input', 'The AI helps with the picture posts of Instagram, Threads and Facebook.')
+    if (typeof args.platform !== 'string' || (!anyPlatform && !QUICK_PLATFORMS.includes(args.platform))) throw new ApiError('invalid_input', 'The AI helps with the picture posts of Instagram, Threads and Facebook.')
     let channel: Channel | null = null
     if (args.channelId !== undefined && args.channelId !== null) {
       const channelId = requireText(args.channelId, 'The channel')

@@ -17,7 +17,6 @@ afterEach(async () => {
   await closeWorld(world)
 })
 
-const OWN_POSTS = 'Your own posts only.'
 
 /** A mission service whose AI is a script: it gets the request the send flow built, and answers as the service would. */
 class ScriptedMissions implements PostMissionService {
@@ -42,11 +41,12 @@ function ownPostsWorld(options: { status?: 'setup' | 'active' | 'paused' } = {})
 const fetches = (): number => world.connector.calls.filter((c) => c.startsWith('fetchActivity')).length
 
 describe('activating a channel the app does not read', () => {
-  it('needs no first read: it becomes active at once and says what it is for', async () => {
+  it('needs no first read: it becomes active at once, and the AI watches it in the browser (DEC-045)', async () => {
     world = ownPostsWorld()
     const channel = await world.core.router.call('channels.activate', { channelId: world.channel.id })
     expect(channel.status).toBe('active')
-    expect(channel.statusDetail).toBe(OWN_POSTS)
+    expect(channel.statusDetail).toBe('')
+    expect(channel.watchedInBrowser).toBe(true)
     expect(channel.baselineDoneAt).toBeNull()
     expect(fetches()).toBe(0)
     expect(world.core.runs.list({ channelId: world.channel.id }).filter((r) => r.kind === 'monitor')).toEqual([])
@@ -97,30 +97,30 @@ describe('activating a channel the app does not read', () => {
     expect(fetches()).toBe(1)
   })
 
-  it('asks the connector now: a channel stored as read that the connector no longer reads is activated as own posts', async () => {
+  it('asks the connector now: a channel stored as read that the connector no longer reads is activated without a baseline, to be watched in the browser', async () => {
     world = makeWorld({ baselineDone: false })
     expect(world.channel.reads).toBe(true)
     world.connector.canRead = false
     const channel = await world.core.router.call('channels.activate', { channelId: world.channel.id })
-    expect(channel).toMatchObject({ status: 'active', reads: false, statusDetail: OWN_POSTS })
+    expect(channel).toMatchObject({ status: 'active', reads: false, watchedInBrowser: true, statusDetail: '' })
     expect(fetches()).toBe(0)
   })
 })
 
 describe('what is never done to a channel the app does not read', () => {
-  it('the monitor skips it without a failure, a read or a change of status', async () => {
+  it('the monitor never reads it through its connector, and prepares nothing: it is looked at in the browser (DEC-045)', async () => {
     world = ownPostsWorld({ status: 'active' })
     const outcome = await world.monitor.runChannel(world.channel.id)
-    expect(outcome).toMatchObject({ status: 'skipped', newOpportunities: 0 })
-    expect(outcome.summary).toMatch(/does not read this channel/)
+    // The look itself is covered by browser-watch.test.ts; here the AI of the world has no script for it, so only what the look must not do is asserted.
+    expect(outcome.summary).not.toMatch(/does not read this channel/)
+    expect(outcome.newOpportunities).toBe(0)
     expect(fetches()).toBe(0)
-    expect(world.refresh()).toMatchObject({ status: 'active', lastRunAt: null, nextCheckAt: null })
   })
 
-  it('"Check now" says there is nothing to check and starts no run', async () => {
+  it('"Check now" never reads it through its connector either: it is the same look in the browser', async () => {
     world = ownPostsWorld({ status: 'active' })
-    await expect(world.core.router.call('channels.checkNow', { channelId: world.channel.id })).rejects.toMatchObject({ code: 'not_read' })
-    expect(world.core.runs.list({ channelId: world.channel.id })).toEqual([])
+    await world.core.router.call('channels.checkNow', { channelId: world.channel.id })
+    expect(fetches()).toBe(0)
   })
 
   it('resuming a paused one puts it back to work, not back to setup', async () => {
@@ -128,7 +128,7 @@ describe('what is never done to a channel the app does not read', () => {
     await world.core.router.call('channels.setPaused', { channelId: world.channel.id, paused: true })
     expect(world.refresh().status).toBe('paused')
     const resumed = await world.core.router.call('channels.setPaused', { channelId: world.channel.id, paused: false })
-    expect(resumed).toMatchObject({ status: 'active', statusDetail: OWN_POSTS })
+    expect(resumed).toMatchObject({ status: 'active', statusDetail: '' })
   })
 
   it('a channel that was never started cannot be paused, and "resume" does not start it: that is what Activate is for', async () => {

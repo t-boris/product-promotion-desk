@@ -20,7 +20,7 @@ import type {
   SendAction
 } from '../shared/types'
 import { parseQuickCard } from '../shared/quick-post'
-import { BROWSER_WATCH_PLATFORMS, DEFAULT_CHANNEL_SETTINGS } from '../shared/types'
+import { DEFAULT_CHANNEL_SETTINGS } from '../shared/types'
 import { parseJson, type Db } from './db/database'
 
 type Row = Record<string, unknown>
@@ -116,7 +116,7 @@ export const mapChannel = (r: Row): Channel => ({
   nextCheckAt: (r.next_check_at as string | null) ?? null,
   plan: parseJson<ChannelPlan | null>(r.plan_json as string | null, null),
   reads: r.reads !== 0,
-  watchedInBrowser: r.reads === 0 && BROWSER_WATCH_PLATFORMS.includes(r.platform as string),
+  watchedInBrowser: r.reads === 0,
   createdAt: r.created_at as string
 })
 

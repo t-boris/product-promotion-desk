@@ -2,7 +2,7 @@
 
 import { ApiError } from '../../shared/api'
 import type { Account, CapabilityKey, Channel, ChannelMode, ChannelSettings, Product } from '../../shared/types'
-import { BROWSER_WATCH_PLATFORMS, DEFAULT_CHANNEL_SETTINGS } from '../../shared/types'
+import { DEFAULT_CHANNEL_SETTINGS } from '../../shared/types'
 import { nextCheckFor } from '../pipeline/scheduler-timing'
 import type { Core } from '../core'
 import { UNIVERSAL_CONNECTOR_ID } from '../connector-registry'
@@ -13,7 +13,7 @@ import { blankCapabilities, blockedCapabilities, find, normalizeAssessment, summ
 import { browserError, found, requireText } from './errors'
 import { assertModeAllowed, modeAfterAssessment } from './mode-rules'
 import { addressOnPlatform, expandHandle, handleOf, presetFor } from './presets'
-import { OWN_POSTS_DETAIL, channelReads, refreshReads } from './reads'
+import { channelReads, refreshReads } from './reads'
 import { applySettingsPatch } from './settings'
 import type { ChannelPatch, ChannelsStore } from './store'
 
@@ -162,14 +162,15 @@ export class ChannelService {
     }
 
     // What the connector can read may have changed since the channel was connected (a site profile was added): the channel is told again.
-    const reads = channelReads(this.core, channel)
+    // Asked with what was just seen: a connector may decide from it (Reddit's refused post list makes the community one the AI watches, DEC-045).
+    const reads = channelReads(this.core, { ...channel, capabilities })
     const patch: ChannelPatch = { capabilities, reads }
     if (channel.status === 'needs_user') {
       // The reason it needed the person is gone; monitoring resumes if it had started, else it awaits activation. The answer just given
       // decides, not the stored one: a channel that is read now has no baseline yet and awaits activation, a channel that is not read never will.
       patch.status = channel.baselineDoneAt || !reads ? 'active' : 'setup'
-      // A channel the app only looks at in the browser says nothing about itself (DEC-042); one for own posts only says so.
-      patch.statusDetail = reads || BROWSER_WATCH_PLATFORMS.includes(channel.platform) ? '' : OWN_POSTS_DETAIL
+      // A channel the app only looks at in the browser says nothing about itself (DEC-042, DEC-045).
+      patch.statusDetail = ''
     }
     if ((patch.status ?? channel.status) === 'setup') patch.statusDetail = 'Assessed. Review the settings, then activate the channel when ready.'
     const fallback = modeAfterAssessment({ mode: channel.mode, capabilities })
