@@ -11,7 +11,7 @@
 import { stat } from 'node:fs/promises'
 import { SessionChangedError, TakeoverError, type BrowserPage, type PageStep } from '../ports'
 import type { McpTool, McpToolHost, McpToolResult } from '../mcp/protocol'
-import { DOCUMENT_TOKEN_SCRIPT, approvedFileProblem, changesPostSettings, changesProfile, communitiesShown, communityOf, destinationMatches, fieldValueScript, filesHeldScript, formTextScript, isAttachControl, looksLikeProgress, looksLikeSubmit, neverClicked, opensFileChooser, onComposePage, composePageOf, parseHeldFiles, parseHeldText, replyTarget, platformWarning, sameContent, usesComposerDialog, type HeldText, type PostSetup, type SubmitLease } from './post-submit'
+import { DOCUMENT_TOKEN_SCRIPT, approvedFileProblem, describeHeld, changesPostSettings, changesProfile, communitiesShown, communityOf, destinationMatches, fieldValueScript, filesHeldScript, formTextScript, isAttachControl, looksLikeProgress, looksLikeSubmit, neverClicked, opensFileChooser, onComposePage, composePageOf, parseHeldFiles, parseHeldText, replyTarget, platformWarning, sameContent, usesComposerDialog, type HeldText, type PostSetup, type SubmitLease } from './post-submit'
 import { isJoinControl, joinNamesCommunity, JOIN_AMBIGUOUS, JOIN_CHANGED, JOIN_CLICK_ONLY, JOIN_INSTRUCTIONS, JOIN_PRESSED, JOIN_WRONG_PAGE, type JoinSetup } from './join'
 import { describeScroll, parseSnapshot, renderElements, renderPictures, snapshotScript, type PageSnapshot, type SnapshotElement } from './snapshot'
 import { RESEARCH_MAX_ITEMS_PER_CALL, readResearchTopics, type ResearchSetup } from './research'
@@ -883,7 +883,7 @@ export class BrowserToolbox implements McpToolHost {
     if (!this.deps.post) return null
     const held = await this.heldText(page)
     if (held === null) return fail(FIELDS_UNREADABLE)
-    if (held.length > 0) return fail(FORM_HOLDS_TEXT)
+    if (held.length > 0) return fail(FORM_HOLDS_TEXT.replace('A field on this page holds text,', `A field on this page holds text (${describeHeld(held)}),`))
     return null
   }
 
@@ -1351,7 +1351,7 @@ export class BrowserToolbox implements McpToolHost {
     if (held === null) return FIELDS_UNREADABLE
     const foreign = held.filter((h) => !(h.ref !== null && parts.some((p) => p.ref === h.ref)) && !parts.some((p) => sameContent(h.text, p.value)))
     if (foreign.length === 0) return null
-    return 'a field of the form holds text that is not part of the approved content (the address, the site or someone else filled it in). Nothing was typed or pressed. Open the page again with browser_navigate to start with an empty form; if the text comes back, call report_result with needs_owner.'
+    return `a field of the form holds text (${describeHeld(foreign)}) that is not part of the approved content (the address, the site or someone else filled it in). Nothing was typed or pressed. Open the page again with browser_navigate to start with an empty form; if the text comes back, call report_result with needs_owner.`
   }
 
   /** The part of a submission that holds the ticket: type, read back, look again, press. Returns why it stopped before the press, or nothing. */

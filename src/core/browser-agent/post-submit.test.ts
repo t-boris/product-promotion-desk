@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { changesProfile, composePageOf, destinationMatches, fieldValueScript, formTextScript, isAttachControl, opensFileChooser, usesComposerDialog, looksLikeProgress, looksLikeSubmit, neverClicked, normalizeText, onComposePage, parseHeldText, platformWarning, replyTarget, sameContent } from './post-submit'
+import { changesProfile, composePageOf, describeHeld, destinationMatches, fieldValueScript, formTextScript, isAttachControl, opensFileChooser, usesComposerDialog, looksLikeProgress, looksLikeSubmit, neverClicked, normalizeText, onComposePage, parseHeldText, platformWarning, replyTarget, sameContent } from './post-submit'
 
 const HOSTS = ['reddit.com']
 const COMMENT = 'https://www.reddit.com/r/astrology/comments/abc123/my_chart/def456/'
@@ -105,6 +105,8 @@ describe('reading what the form holds', () => {
     /** The document of a same-origin frame; `blocked` is a frame of another origin: the browser lets a script in neither way. */
     frame?: Node[]
     blocked?: boolean
+    /** An element with no box on the page (display: none): a browser answers `getClientRects()` with nothing for it. */
+    hidden?: boolean
   }
   const pageOf = (nodes: Node[]) => {
     const toElement = (n: Node): unknown => ({
@@ -117,6 +119,7 @@ describe('reading what the form holds', () => {
       type: n.tag === 'input' ? (n.type ?? 'text') : undefined,
       name: n.name ?? '',
       id: '',
+      getClientRects: () => (n.hidden === true ? [] : [{}]),
       getAttribute: (name: string) => (name === 'type' ? (n.attribute ?? n.type ?? null) : name === 'data-ppd-ref' ? (n.ref ?? null) : null),
       shadowRoot: n.shadow ? rootOf(n.shadow) : null,
       get contentDocument(): unknown {
@@ -130,7 +133,8 @@ describe('reading what the form holds', () => {
     })
     return rootOf(nodes)
   }
-  const read = (nodes: Node[]) => parseHeldText(new Function('document', `return ${formTextScript()}`)(pageOf(nodes)))
+  const readFull = (nodes: Node[]) => parseHeldText(new Function('document', `return ${formTextScript()}`)(pageOf(nodes)))
+  const read = (nodes: Node[]) => readFull(nodes)?.map(({ ref, text }) => ({ ref, text })) ?? null
 
   it('is a read-only script', () => {
     const script = formTextScript()
@@ -197,6 +201,41 @@ describe('reading what the form holds', () => {
     ])
   })
 
+  it('does not count a captcha token or any textarea nobody can see: Reddit keeps a hidden g-recaptcha-response of two thousand characters on every thread', () => {
+    const token = 'x'.repeat(2361)
+    expect(
+      read([
+        { tag: 'textarea', value: token, name: 'g-recaptcha-response', hidden: true },
+        { tag: 'textarea', value: token, name: 'h-captcha-response' },
+        { tag: 'textarea', value: 'abc', name: 'csrf_token' },
+        { tag: 'textarea', value: 'a leftover of an editor', name: 'innerTextArea', hidden: true },
+        { tag: 'textarea', value: '', name: 'q' }
+      ])
+    ).toEqual([])
+    // The same page with a person's text in the visible comment box: that is the one place that holds text.
+    expect(
+      read([
+        { tag: 'textarea', value: token, name: 'g-recaptcha-response', hidden: true },
+        { tag: 'textarea', value: 'my comment', name: 'innerTextArea', ref: 'e3' }
+      ])
+    ).toEqual([{ ref: 'e3', text: 'my comment' }])
+  })
+
+  it('still counts a hidden textarea that an editor mirrors its body, title or link into, because a form posts that one', () => {
+    expect(read([{ tag: 'textarea', value: 'a draft mirrored', name: 'text', hidden: true }, { tag: 'textarea', value: 'a title', name: 'title', hidden: true }])).toEqual([
+      { ref: null, text: 'a draft mirrored' },
+      { ref: null, text: 'a title' }
+    ])
+  })
+
+  it('says what holds the text and how long it is, and never the text', () => {
+    const held = readFull([{ tag: 'textarea', value: 'a secret draft', name: 'innerTextArea' }, { tag: 'input', type: 'search', value: 'chart', name: 'q' }, { tag: 'div', editable: true, text: 'typed' }])
+    expect(held?.map((h) => h.field)).toEqual(['textarea innerTextArea', 'input search q', 'div'])
+    const said = describeHeld(held ?? [])
+    expect(said).toBe('textarea innerTextArea, 14 characters; input search q, 5 characters; and 1 more')
+    expect(said).not.toContain('secret')
+  })
+
   it('walks into a frame of the same origin, and does not fail on one of another origin, which it cannot read', () => {
     expect(
       read([
@@ -228,7 +267,8 @@ describe('reading what the form holds', () => {
     expect(parseHeldText('text')).toBeNull()
     expect(parseHeldText([{ ref: 'e1' }])).toBeNull()
     expect(parseHeldText([null])).toBeNull()
-    expect(parseHeldText([{ ref: 'e1; drop', text: 'a' }])).toEqual([{ ref: null, text: 'a' }])
+    expect(parseHeldText([{ ref: 'e1; drop', text: 'a' }])).toEqual([{ ref: null, text: 'a', field: '' }])
+    expect(parseHeldText([{ ref: null, text: 'a', field: 'textarea q'.repeat(20) }])?.[0]?.field).toHaveLength(60)
   })
 })
 

@@ -199,6 +199,8 @@ export const DOCUMENT_TOKEN_SCRIPT = '(() => /* ppd-document */ String(performan
 export interface HeldText {
   ref: string | null
   text: string
+  /** What the place is, for a sentence to the AI and the log: its tag, its type and its name or id ("textarea g-recaptcha-response"). Never its content. */
+  field: string
 }
 
 const MAX_HELD = 20
@@ -213,6 +215,9 @@ const MAX_HELD_TEXT = 20_000
  * attribute check would call something else), textareas, editable elements (contenteditable, any tag), hidden inputs that are named like
  * a body, a title or a link (a site mirrors an editor's text there; the other hidden inputs hold tokens and ids and would hide every
  * page), with shadow roots and same-origin frames walked.
+ * What it does not count: a textarea that no person can see (it has no box on the page) and that no editor mirrors a body into (its name is not
+ * that of a body, a title or a link), and any field named like a token (a captcha's answer, a csrf token, a nonce). Reddit's page carries a hidden
+ * `g-recaptcha-response` textarea holding two thousand characters of token on every thread: counting it refused every click and every submission.
  * What it cannot read: a frame of another origin (the browser does not let a script in), a closed shadow root, and text a site keeps in
  * script memory and draws on a canvas. Such a place is not known to be empty and is not reported as holding text either.
  */
@@ -221,6 +226,7 @@ export function formTextScript(): string {
   /* ppd-form-text */
   const TYPES = ['text', 'search', 'url', 'email', 'tel'];
   const MIRRORS = /^(?:text|body|title|comment|content|message|selftext|description|url|link|reply)$/i;
+  const TOKENS = /captcha|turnstile|csrf|xsrf|token|nonce/i;
   const blank = (text) => text.replace(/[\\s\\u200b-\\u200d\\u2060\\ufeff]/g, '') === '';
   const found = [];
   const seen = new Set();
@@ -230,7 +236,11 @@ export function formTextScript(): string {
     for (const el of root.querySelectorAll('input,textarea,[contenteditable],[role=textbox]')) {
       const tag = el.tagName.toLowerCase();
       let text = '';
-      if (tag === 'textarea') text = String(el.value);
+      if (tag === 'textarea') {
+        const name = el.name || el.id || '';
+        if (TOKENS.test(name) || (!MIRRORS.test(name) && el.getClientRects().length === 0)) continue;
+        text = String(el.value);
+      }
       else if (tag === 'input') {
         const type = String(el.type || 'text').toLowerCase();
         if (type === 'hidden') { if (!MIRRORS.test(el.name || el.id || '')) continue; }
@@ -240,7 +250,8 @@ export function formTextScript(): string {
       else if (el.isContentEditable) text = String(el.innerText || el.textContent || '');
       else continue;
       if (blank(text)) continue;
-      found.push({ ref: el.getAttribute('data-ppd-ref'), text: text.slice(0, ${MAX_HELD_TEXT}) });
+      const kind = tag === 'input' ? 'input ' + String(el.type || 'text').toLowerCase() : tag;
+      found.push({ ref: el.getAttribute('data-ppd-ref'), text: text.slice(0, ${MAX_HELD_TEXT}), field: (kind + ' ' + (el.name || el.id || '')).trim().slice(0, 60) });
     }
     for (const el of root.querySelectorAll('*')) if (el.shadowRoot) walk(el.shadowRoot);
     for (const frame of root.querySelectorAll('iframe,frame')) {
@@ -260,7 +271,7 @@ export function parseHeldText(raw: unknown): HeldText[] | null {
     if (typeof entry !== 'object' || entry === null) return null
     const e = entry as Record<string, unknown>
     if (typeof e.text !== 'string') return null
-    held.push({ ref: typeof e.ref === 'string' && REF.test(e.ref) ? e.ref : null, text: e.text })
+    held.push({ ref: typeof e.ref === 'string' && REF.test(e.ref) ? e.ref : null, text: e.text, field: typeof e.field === 'string' ? e.field.slice(0, 60) : '' })
   }
   return held
 }
@@ -560,4 +571,10 @@ const PLATFORM_WARNING =
 /** The first message of the site that says publishing is unwise now (a rate limit, a restriction), or null. Messages only, not the page text. */
 export function platformWarning(alerts: string[]): string | null {
   return alerts.find((alert) => PLATFORM_WARNING.test(alert)) ?? null
+}
+
+/** The places that hold text, in words for the AI and the log: what each is and how long its text is. Never the text itself. */
+export function describeHeld(held: readonly HeldText[]): string {
+  const shown = held.slice(0, 2).map((h) => `${h.field || 'a field'}, ${h.text.length} characters`)
+  return held.length > 2 ? `${shown.join('; ')}; and ${held.length - 2} more` : shown.join('; ')
 }
