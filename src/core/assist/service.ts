@@ -48,12 +48,12 @@ export class AssistService {
 
     // A channel's text is written for that channel (its platform and address); the product is the channel's. A product's text names the product.
     let productId: unknown = args.productId
-    let channel: { platform: string; target: string } | undefined
+    let channel: { platform: string; target: string; languages: string[] } | undefined
     if (spec.scope === 'channel') {
       const channelId = requireText(args.channelId, 'The channel')
       const record = found(() => this.core.repos.channel(channelId), 'The channel')
       productId = record.productId
-      channel = { platform: record.platform, target: record.target }
+      channel = { platform: record.platform, target: record.target, languages: record.settings.languages }
     }
     // The AI writes for one product: its name and approved statements (when there are any) are what it may rely on.
     const { product, engine, claims } = await prepareAssist(this.core, productId, { passport: 'optional' })

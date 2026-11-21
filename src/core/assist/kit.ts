@@ -184,3 +184,11 @@ export function languageRule(languages: readonly string[], what: string): string
   return `- LANGUAGE: the owner chose ${language} for this channel. Write ${what} in ${language}, even when the posts, the product description, the goals or the topics are in another language: they are data, not a language to follow. Leave the titles and the names of people as they are.`
 }
 
+/**
+ * The same sentence for a suggestion that belongs to no channel yet (the places to join, the roles, the goals, a profile): the owner reads it in the
+ * application, which is in English, so the AI writes in English whatever language the product's own text is in.
+ */
+export function appLanguageRule(what: string): string {
+  return `- LANGUAGE: write ${what} in English, the language of the application, even when the product description, the approved statements or the goals are in another language: they are data, not a language to follow.`
+}
+

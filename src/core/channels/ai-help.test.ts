@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { PlatformInfo } from '../../shared/types'
 import { AiError } from '../ports'
 import { FakeEngine } from '../testing/fakes'
-import { draftSiteProfile, manualInstructions, suggestChannels, suggestRoles, type DraftProfileInput, type RoleSuggestInput, type SuggestInput, type ValidateDefinition } from './ai-help'
+import { draftSiteProfile, manualInstructions, planChannel, suggestChannels, suggestGoal, suggestRoles, type DraftProfileInput, type RoleSuggestInput, type SuggestInput, type ValidateDefinition } from './ai-help'
 
 const platforms: PlatformInfo[] = [
   { connectorId: 'reddit', platform: 'reddit', label: 'Reddit', prepared: true, loginUrl: 'https://www.reddit.com/login' },
@@ -697,3 +697,58 @@ describe('suggestRoles', () => {
     expect(unavailable.calls).toHaveLength(1)
   })
 })
+
+describe('the language of what the AI suggests while a channel is filled in', () => {
+  // The owner's own text is Russian (it is dictated): the suggestions must not follow it.
+  const russian = { name: 'Natal Mystic', websiteUrl: null, description: 'Ну, это такой продукт, который строит натальную карту.' }
+  const claims = [{ section: 'offer' as const, text: 'Строит натальную карту по данным рождения' }]
+  const english = (prompt: string): void => {
+    expect(prompt).toContain('LANGUAGE: write')
+    expect(prompt).toContain('in English, the language of the application')
+    expect(prompt).not.toContain('in the language of the approved statements')
+  }
+
+  it('asks for the places to join, the roles and the goals in English, not in the language of the owner\'s text', async () => {
+    const places = suggestEngine(json({ suggestions: [] }))
+    await suggestChannels(places, { ...suggestInput, product: russian, claims })
+    english(places.calls[0].prompt)
+
+    const roles = new FakeEngine().on('channels.roles', json({ roles: [] }))
+    await suggestRoles(roles, { ...roleInput, product: russian, claims })
+    english(roles.calls[0].prompt)
+
+    const goals = new FakeEngine().on('goals.suggest', json({ goal: null }))
+    await suggestGoal(goals, { product: russian, claims, existing: [], shown: [], hint: '' })
+    english(goals.calls[0].prompt)
+  })
+
+  const planInput = (languages: string[]) => ({
+    product: russian,
+    claims,
+    goals: [],
+    platform: { ...platforms[0], accepts: ['image' as const, 'video' as const] },
+    channel: { target: 'r/astrology', url: 'https://www.reddit.com/r/astrology/' },
+    roles: [],
+    abilities: [],
+    languages
+  })
+  const planAnswer = json({ summary: 'S', steps: [{ title: 'A step', detail: 'Do the thing.', format: 'video', youPrepare: null, frequency: null }], watchOut: [] })
+
+  it('writes the plan of a channel in the language the owner chose for it', async () => {
+    const english = new FakeEngine().on('channels.plan', planAnswer)
+    await planChannel(english, planInput(['en']))
+    expect(english.calls[0].prompt).toContain('the owner chose English for this channel')
+    expect(english.calls[0].prompt).toContain('the whole plan ("summary", the steps and "watchOut") in English')
+
+    const other = new FakeEngine().on('channels.plan', planAnswer)
+    await planChannel(other, planInput(['ru']))
+    expect(other.calls[0].prompt).toContain('the owner chose Russian for this channel')
+  })
+
+  it('writes the plan in English when the channel has no language chosen', async () => {
+    const engine = new FakeEngine().on('channels.plan', planAnswer)
+    await planChannel(engine, planInput([]))
+    expect(engine.calls[0].prompt).toContain('the owner chose English for this channel')
+  })
+})
+

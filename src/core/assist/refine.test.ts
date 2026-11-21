@@ -264,3 +264,38 @@ describe('readRefined: what is kept and what is cut', () => {
     expect(readRefined({ text: 'Automatically post replies every day' }, FIELDS['goal.notes'])).toMatchObject({ ok: false })
   })
 })
+
+describe('assist.refine: the language of the text', () => {
+  const claims = [claim('c1', 'Строит натальную карту по данным рождения')]
+  const input = { product: { name: 'Natal Mystic', websiteUrl: null, description: 'Ну, это такой продукт, который строит натальную карту.' }, claims, around: [], instruction: '' }
+
+  it('is the language the owner chose for the channel, for any text of that channel', () => {
+    const english = refinePrompt({ ...input, field: 'channel.topics', channel: { platform: 'reddit', target: 'r/astrology', languages: ['en'] }, current: '' }).prompt
+    expect(english).toContain('the owner chose English for this channel')
+    expect(english).not.toContain('language of the approved statements')
+    // The channel's language wins over the language of the text the owner already wrote.
+    const russian = refinePrompt({ ...input, field: 'channel.style', channel: { platform: 'reddit', target: 'r/astrology', languages: ['ru'] }, current: 'Пишите тепло.' }).prompt
+    expect(russian).toContain('the owner chose Russian for this channel')
+  })
+
+  it('is English for a product text written from scratch, whatever language the statements are in', () => {
+    const prompt = refinePrompt({ ...input, field: 'goal.targetAction', current: '' }).prompt
+    expect(prompt).toContain('in English, the language of the application')
+    expect(prompt).not.toContain('language of the approved statements')
+  })
+
+  it('keeps the language of a product text that is improved', () => {
+    const prompt = refinePrompt({ ...input, field: 'goal.targetAction', current: 'Создать первую карту.' }).prompt
+    expect(prompt).toContain('Write in the language of the current text.')
+    expect(prompt).not.toContain('in English, the language of the application')
+  })
+
+  it('reaches the engine from a channel: the service sends the languages chosen on the channel', async () => {
+    const w = await world()
+    const channel = await w.call('channels.connect', { productId: w.productId, accountId: w.account.id, target: 'r/astrology' })
+    w.t.engine.on('assist.write', text('astrology beginners'))
+    await w.call('assist.refine', { field: 'channel.topics', channelId: channel.id, current: '' })
+    expect(w.t.engine.calls.at(-1)?.prompt).toContain('for this channel. Write the text in')
+  })
+})
+

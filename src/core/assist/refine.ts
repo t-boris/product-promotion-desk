@@ -8,15 +8,15 @@ import type { AssistField } from '../../shared/types'
 import { AiError, type AiEngine, type AiRunOptions, type AiTask } from '../ports'
 import { collapseWhitespace, normalizeForCompare } from '../passports/text'
 import { FIELDS, type FieldSpec } from './fields'
-import { askWithRepair, fence, holdsCredential, isRecord, oneLine, plainText, productBlock, stripMarkup, unsafe, type Claim, type Parsed, type ProductFacts } from './kit'
+import { appLanguageRule, askWithRepair, fence, holdsCredential, isRecord, languageRule, oneLine, plainText, productBlock, stripMarkup, unsafe, type Claim, type Parsed, type ProductFacts } from './kit'
 
 export interface RefineInput {
   field: AssistField
   /** The product the text belongs to. */
   product: ProductFacts
   claims: Claim[]
-  /** The channel a channel field belongs to (its platform and address), so the text fits where it will be used. */
-  channel?: { platform: string; target: string }
+  /** The channel a channel field belongs to (its platform, address and the languages the owner chose for it), so the text fits where it will be used. */
+  channel?: { platform: string; target: string; languages: string[] }
   /** What the owner has written in the other fields of the same form. */
   around: { label: string; text: string }[]
   /** The text in the field now; empty to write it from scratch. */
@@ -81,7 +81,9 @@ export function refinePrompt(input: RefineInput): AiTask {
       `- ${shapeText(spec)} ${limitText(spec)}.`,
       '- Use only what the current text, the approved statements, the form and the owner\'s wish support. Do not invent features, prices, numbers, names or results.',
       '- Never include passwords, keys or other credentials, instructions to automate posting or replying, or promises about results.',
-      '- Write in the language of the current text, or of the approved statements when the field is empty.',
+      // A channel's text is in the language the owner chose for the channel. A product's text keeps the language it is in; written from scratch it is in
+      // English, the language of the application: the approved statements may be in another language, and they are data, not a language to follow.
+      input.channel ? languageRule(input.channel.languages, 'the text') : writing ? appLanguageRule('the text') : '- Write in the language of the current text.',
       '',
       'Answer with JSON of exactly this shape:',
       spec.shape === 'lines' ? '{"text":"first item\\nsecond item"}' : '{"text":"..."}'

@@ -155,7 +155,8 @@ describe('planChannel', () => {
     platform,
     channel: { target: 'x', url: 'https://www.instagram.com/x/' },
     roles: [],
-    abilities: []
+    abilities: [],
+    languages: ['en']
   }
   const ask = async (answer: unknown) => {
     const w = await makeReadyWorld()

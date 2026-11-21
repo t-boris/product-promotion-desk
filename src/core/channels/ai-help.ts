@@ -16,7 +16,7 @@
 
 import type { AccountRole, ChannelPlan, ChannelPlanStep, ChannelSuggestion, GoalIdea, PassportSection, PlanFormat, PlatformInfo, ProfileFields, RoleSuggestion, SiteProfileDraft } from '../../shared/types'
 import { AiError, type AiEngine, type AiRunOptions, type AiTask } from '../ports'
-import { askWithRepair, describeParseError, fence, isRecord, oneLine, plainText, productBlock, repairPrompt, unsafe, type Parsed } from '../assist/kit'
+import { appLanguageRule, askWithRepair, describeParseError, fence, isRecord, languageRule, oneLine, plainText, productBlock, repairPrompt, unsafe, type Parsed } from '../assist/kit'
 import { extractJson } from '../passports/ai-json'
 import { collapseWhitespace, normalizeForCompare, truncate } from '../passports/text'
 import { MAX_AGE, MIN_AGE, missingIdentity, readProfileFields } from './profile-fields'
@@ -68,6 +68,7 @@ function suggestPrompt(input: SuggestInput): AiTask {
       `- "target" is only the address: "r/name" for Reddit, or a full "https://..." address for any other site, never a description or a sentence (at most ${MAX_TARGET} characters).`,
       `- "reason" is one plain sentence (at most ${MAX_REASON} characters) on why it may fit. Mention that the community rules need checking before anything is posted.`,
       '- Never include passwords, keys or other credentials, instructions to automate posting or replying, or promises about results.',
+      appLanguageRule('every "reason"'),
       '',
       'Answer with JSON of exactly this shape (use [] if you have no safe suggestion):',
       '{"suggestions":[{"platform":"reddit","target":"r/example","reason":"..."}]}'
@@ -205,7 +206,7 @@ function goalPrompt(input: GoalSuggestInput): AiTask {
       `- "successMetrics" has at most ${MAX_GOAL_METRICS} short items (at most ${MAX_GOAL_METRIC} characters each) that the owner can count by hand or read from the numbers a platform shows, for example replies, saves, sign-ups the owner counts. The application cannot see the owner's own site analytics, so do not name conversion rates or analytics tools.`,
       `- "reason" is one plain sentence (at most ${MAX_GOAL_REASON} characters) on why this goal fits what the product is.`,
       '- Never include passwords, keys or other credentials, instructions to automate posting or replying, or promises about results.',
-      '- Write in the language of the approved statements.',
+      appLanguageRule('"targetAction", "successMetrics" and "reason"'),
       '',
       'Answer with JSON of exactly this shape (use {"goal":null} if you have no safe new idea):',
       '{"goal":{"targetAction":"...","successMetrics":["..."],"reason":"..."}}'
@@ -297,6 +298,7 @@ function rolesPrompt(input: RoleSuggestInput): AiTask {
       `- "usernameIdeas" has 1 to ${MAX_USERNAMES} login names: 3 to 24 characters, letters, digits and underscore only. No real people's names, no imitation of another brand, company or official account, no numbers that look like a birth year.`,
       `- "reason" is one plain sentence (at most ${MAX_REASON} characters) on why this voice fits the audience.`,
       '- The owner creates the logins by hand; never include passwords, keys or other credentials, instructions to automate posting or replying, or promises about results.',
+      appLanguageRule('"name", "voice" and "reason"'),
       '',
       'Answer with JSON of exactly this shape (use [] if you have no honest suggestion):',
       '{"roles":[{"name":"developer","voice":"...","usernameIdeas":["example_dev"],"reason":"..."}]}'
@@ -550,6 +552,8 @@ export interface PlanInput {
   roles: { name: string; voice: string }[]
   /** What the application has actually seen for this channel: ability and its state, nothing from the site itself. */
   abilities: { key: string; status: string }[]
+  /** The languages the owner chose for the channel: the plan is written in the first (English when none). */
+  languages: string[]
 }
 
 /** The plan as the AI wrote it, checked; the service adds the time and the engine. */
@@ -611,6 +615,7 @@ function planPrompt(input: PlanInput): AiTask {
       '- Do not promise results. Do not include passwords, keys or other credentials. Do not tell the owner to automate posting or replying.',
       `- "watchOut" has at most ${MAX_WATCH_OUT} short points on rules, limits and risks of this platform that the owner should check first.`,
       `- "summary" is one or two plain sentences (at most ${MAX_SUMMARY} characters) on the idea of the plan.`,
+      languageRule(input.languages, 'the whole plan ("summary", the steps and "watchOut")'),
       '',
       'Answer with JSON of exactly this shape:',
       '{"summary":"...","steps":[{"title":"...","detail":"...","format":"video","youPrepare":"a 30 second video","frequency":"once a week","kind":"own_update","everyDays":7}],"watchOut":["..."]}'
@@ -761,6 +766,7 @@ function profileProposePrompt(input: ProfileProposeInput): AiTask {
       '- "pictureIdea" describes the picture in one or two sentences: who or what it shows, the style, the light, the mood, chosen for this audience. It must not show a real person\'s likeness, a logo of another company or any text.',
       `- "reasons" has one short sentence (at most ${MAX_REASON_TEXT} characters) for each of: ${REASON_KEYS.join(', ')}.`,
       '- Never include passwords, keys or other credentials.',
+      appLanguageRule('every text of the answer, the about-text of the profile included'),
       '',
       'Answer with JSON of exactly this shape:',
       '{"purpose":"...","strategy":"...","firstName":"...","lastName":"...","displayName":"...","username":"...","birthDate":"1988-03-14","gender":"female","place":"...","about":"...","website":"","pictureIdea":"...","reasons":{"firstName":"...","lastName":"...","displayName":"...","username":"...","birthDate":"...","gender":"...","place":"...","about":"...","website":"...","pictureIdea":"..."}}'

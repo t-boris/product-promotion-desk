@@ -43,7 +43,8 @@ export class ChannelPlanService {
       platform,
       channel: { target: channel.target, url: channel.url },
       roles: this.core.repos.accountsOfProduct(product.id).flatMap((a) => (a.platform === channel.platform && a.role ? [a.role] : [])),
-      abilities: channel.capabilities.map((c) => ({ key: c.key, status: c.status }))
+      abilities: channel.capabilities.map((c) => ({ key: c.key, status: c.status })),
+      languages: channel.settings.languages
     }
     try {
       const draft = await this.ai.planChannel(engine, input)
