@@ -25,6 +25,12 @@
   flex: 1;
   min-width: 0;
   padding: 0;
+  margin-bottom: 0;
+}
+/* A segmented control sits at the top of a row by default (styles.css); here the fields carry a label above them, so the control goes to the foot of the
+   row and shares the line of the fields (both are one control high). */
+.posts-controls .segmented {
+  align-self: flex-end;
 }
 .posts-toolbar .field:nth-child(2) {
   flex: 1;

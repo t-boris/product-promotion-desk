@@ -30,8 +30,8 @@ export const DRAFT_IMPROVE_LABEL = 'drafts.improve'
 const TIMEOUT_MS = 120_000
 // The AI's own text keeps the limits of the AI drafts (draft-prompt.ts). The owner's text is what the AI is shown: it is never cut (a
 // text that is too long for the AI to read whole is refused, not shortened).
-const MAX_CURRENT = 20_000
-const MAX_INSTRUCTION = 300
+export const MAX_CURRENT = 20_000
+export const MAX_INSTRUCTION = 300
 const MAX_ABOUT = 300
 
 /** What the editor holds now. */

@@ -320,6 +320,11 @@ export interface ApiMethods {
   'findings.markSeen': [{ ids: Id[] }, void]
   /** The comments under a post the AI read and judged worth a reply, in reading order (at most 25); empty for a post nobody read. Read-only. */
   'findings.thread': [{ id: Id }, FindingComment[]]
+  /**
+   * The AI writes (or, with `current` and `instruction`, rewrites) the comment to leave at ONE place of a thread it read: `place` is the position of a
+   * comment (see findings.thread) or null for the post itself. Checked like every AI draft; nothing is stored or sent. Refused for a post the AI has not read.
+   */
+  'findings.writeReply': [{ id: Id; place: number | null; current?: string; instruction?: string }, { text: string }]
   'opportunities.get': [{ id: Id }, OpportunityCard]
   'opportunities.prepareDraft': [{ id: Id }, OpportunityCard]
   'opportunities.saveDraft': [{ id: Id; draft: DraftInput }, OpportunityCard]

@@ -10,6 +10,7 @@ import type { FindingLabel } from '../../shared/types'
 import { isRecord, oneLine } from '../assist/kit'
 import { hostMatches } from '../channels/presets'
 import { MAX_RELATION_CHARS, cleanText, safeLine } from '../pipeline/triage-prompt'
+import { WATCH_REPLY_PREFIX } from '../../shared/finding-reply'
 
 /** A check is one visit to the channel's pages: twenty minutes and a hundred and twenty calls are generous, and nobody is asked anything. */
 export const WATCH_TIMEOUT_MS = 20 * 60 * 1000
@@ -36,7 +37,7 @@ export const WATCH_RETRY_MIN = 5
 /** The tools of a watch mission, exactly. A test lists them, so that nothing can be added by accident. */
 export const WATCH_TOOL_NAMES = ['browser_snapshot', 'browser_scroll', 'watch_open', 'watch_back', 'watch_record', 'report_result'] as const
 
-export const WATCH_REPLY_PREFIX = 'Worth a reply: '
+export { WATCH_REPLY_PREFIX }
 /** How many posts a look is sent back to read: the ones it called worth a reply before it read threads. A few at a time, so a look still has its calls for the new posts. */
 export const WATCH_UNREAD_LIMIT = 8
 /** What a place of the brief that is such a post starts with. */

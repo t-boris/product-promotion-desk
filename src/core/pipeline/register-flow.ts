@@ -2,6 +2,7 @@ import type { Core } from '../core'
 import { BrowserWatchFlow } from './browser-watch'
 import { DraftCheck } from './draft-check'
 import { DraftHelp } from './draft-help'
+import { FindingReply } from './finding-reply'
 import { DraftingFlow } from './drafting'
 import { FindingStore } from './findings'
 import { registerFlowApi } from './flow-api'
@@ -45,6 +46,9 @@ export function registerFlow(core: Core): void {
   registerFlowApi({ core, store, review, monitor, drafting, sending, publications, findings })
   const draftHelp = new DraftHelp(core, store)
   core.router.register({ 'drafts.refine': (args) => draftHelp.refine(args) })
+  // "Reply here" in the Feed: the AI writes the comment for one place of a thread it read. Nothing is stored or sent.
+  const findingReply = new FindingReply(core, findings)
+  core.router.register({ 'findings.writeReply': (args) => findingReply.write(args) })
   // The AI in the quick-post composer (REQ-004): the caption, the picture, the search for trends and the marketer. Nothing is stored.
   const quickHelp = new QuickHelp(core)
   core.router.register({

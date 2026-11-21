@@ -137,6 +137,13 @@ export class FindingStore {
     comments.forEach((c, position) => insert.run(newId(), findingId, position, c.depth, c.author, c.text, c.url, now))
   }
 
+  /** One finding by its id; refused when it is not there. */
+  get(id: Id): Finding {
+    const row = this.db.prepare('SELECT * FROM findings WHERE id = ?').get(id) as Record<string, unknown> | undefined
+    if (!row) throw new ApiError('not_found', 'The post was not found. It may have been removed.')
+    return mapFinding(row)
+  }
+
   /** The comments the AI read under a post worth a reply, in reading order; none for a post nobody read. */
   thread(findingId: Id): FindingComment[] {
     return this.db.prepare('SELECT position, depth, author, text, url FROM finding_comments WHERE finding_id = ? ORDER BY position').all(findingId) as FindingComment[]

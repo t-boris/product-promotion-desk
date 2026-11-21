@@ -2087,3 +2087,12 @@ a:not(.btn):not(.badge):not(.nav-item):not(.tb-value):hover,
     border-color var(--dur-fast) var(--ease-out),
     color var(--dur-fast) var(--ease-out);
 }
+
+/* Under a long list: how much is shown and the button that shows more. */
+.show-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+}

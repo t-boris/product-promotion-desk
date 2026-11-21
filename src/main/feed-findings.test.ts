@@ -20,11 +20,14 @@ import {
   notedCount,
   notedEmptyKind,
   opportunityListOf,
+  replyEmptyKind,
+  replyRows,
   unseenNoticeCount,
   unseenToMark,
   visibleFindings,
   type FindingRow
 } from '../renderer/src/pages/feed/finding-rows'
+import { STREAM_SORTS, searchStream, sortStream } from '../renderer/src/pages/feed/stream-filter'
 import { selectionAfterDismiss } from '../renderer/src/pages/inbox/inbox-groups'
 
 interface Seed {
@@ -74,20 +77,21 @@ const ids = (rows: readonly { id: string }[]): string[] => rows.map((row) => row
 const counts = (over: Partial<FindingCounts> = {}): FindingCounts => ({ unseenNotices: 0, notices: 0, skipped: 0, pending: 0, ...over })
 
 describe('the tabs', () => {
-  it('are the three lists of opportunities and Noted, in the order the owner reads them', () => {
-    expect(FEED_TABS.map((tab) => tab.id)).toEqual(['decide', 'noted', 'sent', 'skipped'])
-    expect(FEED_TABS.map((tab) => tab.label)).toEqual(['To decide', 'Noted', 'Sent', 'Skipped'])
+  it('are Worth a reply, the three lists of opportunities and Noted, in the order the owner reads them', () => {
+    expect(FEED_TABS.map((tab) => tab.id)).toEqual(['reply', 'decide', 'noted', 'sent', 'skipped'])
+    expect(FEED_TABS.map((tab) => tab.label)).toEqual(['Worth a reply', 'To decide', 'Noted', 'Sent', 'Skipped'])
   })
 
   it('leave Noted out of the lists of opportunities: no opportunity state is ever Noted', () => {
     expect(FEED_STATES.map((state) => state.id)).toEqual(['decide', 'sent', 'skipped'])
-    expect(FEED_TABS.filter((tab) => tab.id !== 'noted').map((tab) => tab.id)).toEqual(FEED_STATES.map((state) => state.id))
+    expect(FEED_TABS.filter((tab) => tab.id !== 'noted' && tab.id !== 'reply').map((tab) => tab.id)).toEqual(FEED_STATES.map((state) => state.id))
     const every: OpportunityState[] = ['discovered', 'analyzing', 'draft', 'awaiting_approval', 'ready', 'sending', 'confirmed', 'no_reply', 'deferred', 'cancelled', 'needs_user', 'error', 'unknown_result']
     const listed = FEED_STATES.flatMap((state) => statesOf(state.id))
     expect([...listed].sort()).toEqual([...every].sort())
   })
 
-  it('say which opportunity list a tab shows, and none for Noted', () => {
+  it('say which opportunity list a tab shows, and none for Noted and Worth a reply', () => {
+    expect(opportunityListOf('reply')).toBeNull()
     expect(opportunityListOf('decide')).toBe('decide')
     expect(opportunityListOf('sent')).toBe('sent')
     expect(opportunityListOf('skipped')).toBe('skipped')
@@ -362,5 +366,55 @@ describe('findings and opportunities in the same selection logic', () => {
     expect(groupByDay(odd, '2026-11-15', 0).map((day) => day.label)).toEqual(['Earlier'])
     const opportunity = { opportunity: { id: 'o1', channelId: 'c1', productId: 'p1', kind: 'reply', source: 'comment', state: 'draft', createdAt: '2026-11-15T07:00:00.000Z', updatedAt: '2026-11-15T07:00:00.000Z' }, channelTarget: 'r/alpha', comment: { author: 'a', body: 'b' }, discussion: null, draft: null, lastAction: null } as unknown as OpportunityCard
     expect(groupByDay(buildFeedRows([opportunity]), '2026-11-15', 0).map((day) => day.ids)).toEqual([['o1']])
+  })
+})
+
+describe('Worth a reply', () => {
+  const asked = 'Worth a reply: asks for a tool like ours.'
+  it('lists the notices whose note says they are worth a reply, and no other', () => {
+    const rows = [rowOf({ id: 'a', relation: asked }), rowOf({ id: 'b', relation: 'Relates to the goal.' }), rowOf({ id: 'c', relation: asked })]
+    expect(ids(replyRows(rows))).toEqual(['a', 'c'])
+    expect(ids(replyRows([]))).toEqual([])
+  })
+
+  it('says nothing is worth a reply where the Noted list says nothing is noted, and keeps every other reason', () => {
+    expect(replyEmptyKind('nothing_noted')).toBe('nothing_reply')
+    expect(replyEmptyKind('no_channels')).toBe('no_channels')
+    expect(replyEmptyKind('no_match')).toBe('no_match')
+    expect(replyEmptyKind(null)).toBeNull()
+  })
+})
+
+describe('the stream: search and sort', () => {
+  const rows = [
+    rowOf({ id: 'old', target: 'r/beta', title: 'Chart apps?', relation: 'Worth a reply: asks for chart tools.', postedAt: '2026-11-10T08:00:00.000Z', seenAt: '2026-11-11T08:00:00.000Z' }),
+    rowOf({ id: 'new', target: 'r/alpha', title: 'Moon sign help', relation: 'Worth a reply: a beginner question.', postedAt: '2026-11-15T08:00:00.000Z' }),
+    rowOf({ id: 'mid', target: 'r/alpha', title: 'Rising sign?', relation: 'Worth a reply: asks what a rising sign is.', postedAt: '2026-11-12T08:00:00.000Z' })
+  ]
+
+  it('sorts newest first, oldest first, not seen first and by channel, the same way every time', () => {
+    expect(ids(sortStream(rows, 'newest'))).toEqual(['new', 'mid', 'old'])
+    expect(ids(sortStream(rows, 'oldest'))).toEqual(['old', 'mid', 'new'])
+    expect(ids(sortStream(rows, 'unseen'))).toEqual(['new', 'mid', 'old'])
+    expect(ids(sortStream(rows, 'channel'))).toEqual(['new', 'mid', 'old'])
+    expect(ids(sortStream([...rows].reverse(), 'channel'))).toEqual(ids(sortStream(rows, 'channel')))
+  })
+
+  it('offers the sorts the screen lists, each once', () => {
+    expect(STREAM_SORTS.map((sort) => sort.id)).toEqual(['newest', 'oldest', 'unseen', 'channel'])
+  })
+
+  it('does not change the list it is given', () => {
+    const before = ids(rows)
+    sortStream(rows, 'oldest')
+    expect(ids(rows)).toEqual(before)
+  })
+
+  it('searches the channel, the title and the note: every word, any case', () => {
+    expect(ids(searchStream(rows, 'RISING'))).toEqual(['mid'])
+    expect(ids(searchStream(rows, 'r/beta chart'))).toEqual(['old'])
+    expect(ids(searchStream(rows, 'alpha'))).toEqual(['new', 'mid'])
+    expect(ids(searchStream(rows, 'no such words'))).toEqual([])
+    expect(ids(searchStream(rows, '   '))).toEqual(['old', 'new', 'mid'])
   })
 })

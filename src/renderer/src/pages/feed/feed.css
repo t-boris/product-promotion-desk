@@ -189,3 +189,104 @@
 .feed-detail[data-source='new_post'] .thread-post-body {
   color: var(--text-1);
 }
+
+/* ───────────── "Worth a reply": a stream of posts, each with its thread under it ───────────── */
+
+.stream {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+}
+.stream-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+.stream-card[data-unseen='true'] {
+  border-left: 3px solid var(--accent);
+}
+.stream-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+}
+.stream-when {
+  margin-left: auto;
+}
+.stream-title {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  overflow-wrap: anywhere;
+}
+.stream-brief {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.stream-thread-summary {
+  margin: 0 0 var(--space-1);
+}
+.stream-unread {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+.stream-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.finding-thread-item .finding-thread-actions {
+  align-self: flex-start;
+}
+.finding-thread-item.active {
+  border-left-color: var(--accent);
+}
+.reply-composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+}
+.reply-composer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.reply-wish {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.reply-wish .input {
+  flex: 1;
+  min-width: 200px;
+}
+.reply-rounds ol {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.reply-rounds li {
+  display: flex;
+  flex-direction: column;
+}
+.reply-round-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

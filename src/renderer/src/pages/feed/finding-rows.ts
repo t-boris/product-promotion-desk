@@ -5,6 +5,7 @@
 // of the Feed needs, so the selection (`useListSelection`, `selectionAfterKey`) and the day groups work on either kind of row.
 
 import type { FindingCard, FindingCounts, FindingLabel, FindingStage, Id, IsoTime } from '../../../../shared/types'
+import { isReplyNote } from '../../../../shared/finding-reply'
 import { rowExcerpt } from '../inbox/inbox-groups'
 import { LINE_LIMIT, type FeedEmpty, type FeedRow, type FeedState } from './feed-filter'
 import { isWatchable, type ReadingWays } from './watching-line'
@@ -12,19 +13,25 @@ import { isWatchable, type ReadingWays } from './watching-line'
 // ───────────── The tabs ─────────────
 
 /** What the Feed's tabs choose: the three lists of opportunities, or the notices the AI found worth a look. */
-export type FeedTab = FeedState | 'noted'
+export type FeedTab = FeedState | 'noted' | 'reply'
 
 /** The tabs in the order they are shown. */
 export const FEED_TABS: readonly { id: FeedTab; label: string }[] = [
+  { id: 'reply', label: 'Worth a reply' },
   { id: 'decide', label: 'To decide' },
   { id: 'noted', label: 'Noted' },
   { id: 'sent', label: 'Sent' },
   { id: 'skipped', label: 'Skipped' }
 ]
 
-/** The opportunity list a tab shows; null for Noted, whose rows are findings. */
+/** The opportunity list a tab shows; null for Noted and Worth a reply, whose rows are findings. */
 export function opportunityListOf(tab: FeedTab): FeedState | null {
-  return tab === 'noted' ? null : tab
+  return tab === 'noted' || tab === 'reply' ? null : tab
+}
+
+/** The findings the AI judged worth a reply: the notices that say so (the stream of posts with their threads). */
+export function replyRows(rows: readonly FindingRow[]): FindingRow[] {
+  return rows.filter((row) => isReplyNote(row.card.finding.relation))
 }
 
 // ───────────── Words ─────────────
@@ -154,7 +161,10 @@ export function unseenToMark(selected: FindingRow | undefined, already: Readonly
 // ───────────── Empty ─────────────
 
 /** Why the Noted list shows nothing, when it does not: the Feed's own reasons, or that the AI has found nothing worth noting yet. */
-export type NotedEmpty = FeedEmpty | 'nothing_noted'
+export type NotedEmpty = FeedEmpty | 'nothing_noted' | 'nothing_reply'
+
+/** The same reasons for the Worth a reply list: where the Noted list would say the AI has noted nothing, this one says nothing is worth a reply yet. */
+export const replyEmptyKind = (kind: NotedEmpty | null): NotedEmpty | null => (kind === 'nothing_noted' ? 'nothing_reply' : kind)
 
 export function notedEmptyKind(channels: readonly ReadingWays[], all: readonly FindingRow[], visible: readonly FindingRow[]): NotedEmpty | null {
   if (channels.length === 0) return 'no_channels'

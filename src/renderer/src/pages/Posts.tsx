@@ -8,6 +8,8 @@ import { connectChannelHref } from './attention-links'
 import { selectionAfterDismiss } from './inbox/inbox-groups'
 import { SELECTION_KEYS, selectionAfterKey, type SelectionKey } from '../list-selection'
 import { useListSelection } from '../use-list-selection'
+import { usePaging } from '../list-paging'
+import { ShowMore } from './ShowMore'
 import { NoProduct } from './ProductScreen'
 import { PostDetail } from './posts/PostDetail'
 import { PostsCalendar } from './posts/PostsCalendar'
@@ -85,7 +87,10 @@ function PostsScreen({ product }: { product: Product }) {
   const counts = useMemo(() => stateCounts(rows, { channelId, query }), [rows, channelId, query])
 
   // The row shown: the chosen one while it is listed; when it leaves the list (it was deleted under a filter, say) the one that was next to it.
-  const order = useMemo(() => visible.map((row) => row.id), [visible])
+  // A long list is shown a page at a time (the calendar shows them all); a new filter, search or sort starts again from the top.
+  const paged = usePaging(visible, `${state}|${channelId}|${query}|${sort}`)
+  const listed = view === 'list' ? paged.visible : visible
+  const order = useMemo(() => listed.map((row) => row.id), [listed])
   const [selectedId, setChosen] = useListSelection(order, selectionAfterDismiss)
   const selected = visible.find((row) => row.id === selectedId)
   const selectedGroup = selected?.kind === 'group' ? (groups.find((g) => g.group.id === selected.id) ?? null) : null
@@ -94,8 +99,8 @@ function PostsScreen({ product }: { product: Product }) {
   const main = useMainActionOwner(selectedId ? [selectedId] : [])
 
   // The arrow keys walk the list view; a focused field, button or link of the post keeps its own keys.
-  const latest = useRef({ visible, selectedId })
-  latest.current = { visible, selectedId }
+  const latest = useRef({ visible: listed, selectedId })
+  latest.current = { visible: listed, selectedId }
   const listing = view === 'list' && writing === null
   useEffect(() => {
     if (!listing) return
@@ -350,7 +355,7 @@ function PostsScreen({ product }: { product: Product }) {
             </EmptyState>
           ) : (
             <div className="posts-split">
-              <PostsList rows={visible} selectedId={selectedId} onSelect={setChosen} />
+              <PostsList rows={listed} selectedId={selectedId} onSelect={setChosen} footer={<ShowMore hidden={paged.hidden} total={paged.total} onMore={paged.more} testId="posts-show-more" />} />
               <div className="posts-detail-pane">
                 {selected && (
                   <PostDetail

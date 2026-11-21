@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { Badge } from '../../ui'
 import { relativeTime } from '../inbox/inbox-groups'
 import { PROPOSAL_LABEL, SOURCE_LABEL, type FeedDay } from './feed-filter'
@@ -25,7 +25,8 @@ export function FeedList({
   selectedId,
   onSelect,
   label = 'Items in the feed',
-  now = new Date()
+  now = new Date(),
+  footer
 }: {
   days: FeedDay[]
   rows: ReadonlyMap<string, ListedRow>
@@ -35,6 +36,8 @@ export function FeedList({
   label?: string
   /** The moment "how long ago" is counted from. */
   now?: Date
+  /** Under the last row: the button that shows more of a long list. */
+  footer?: ReactNode
 }) {
   const list = useRef<HTMLDivElement>(null)
   // The selection moves with the arrow keys: the focus follows it when it was in the list, and the row is brought into view.
@@ -86,6 +89,7 @@ export function FeedList({
           })}
         </div>
       ))}
+      {footer}
     </div>
   )
 }

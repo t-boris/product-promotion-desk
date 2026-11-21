@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import type { Attachment } from '../../../../shared/types'
 import { Badge, type Tone } from '../../ui'
 import { useThumb } from '../review/useMedia'
@@ -26,7 +26,7 @@ function whenOf(row: PostRow): string {
  * small thumbnail, the title, where it goes, its state and its time. A selected group opens into its versions, one line each. The list is
  * a listbox: the owner moves through it with the arrow keys (the page handles them) and the selected row is the one shown beside it.
  */
-export function PostsList({ rows, selectedId, onSelect }: { rows: PostRow[]; selectedId: string | null; onSelect: (id: string) => void }) {
+export function PostsList({ rows, selectedId, onSelect, footer }: { rows: PostRow[]; selectedId: string | null; onSelect: (id: string) => void; footer?: ReactNode }) {
   const list = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const row = list.current?.querySelector<HTMLElement>('[aria-selected="true"]')
@@ -74,6 +74,7 @@ export function PostsList({ rows, selectedId, onSelect }: { rows: PostRow[]; sel
           </div>
         )
       })}
+      {footer}
     </div>
   )
 }
