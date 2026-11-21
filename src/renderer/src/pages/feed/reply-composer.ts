@@ -1,6 +1,7 @@
 // What the reply window of the Feed keeps about one place of one thread: the text and the rounds of asking the AI. Pure, so it is tested from src/main.
 
-import type { FindingSendResult } from '../../../../shared/api'
+import type { FindingReplyPlace, FindingSendResult } from '../../../../shared/api'
+import { COMMENT_SCHEDULE_MAX_DAYS } from '../../../../shared/finding-reply'
 import type { FindingComment, OpportunityState } from '../../../../shared/types'
 
 /** One round: what the owner asked for (empty for the AI's first text) and the text the AI gave. */
@@ -48,24 +49,121 @@ export function sendBlock(args: { text: string; blocked: string; state: Opportun
 
 export type SendTone = 'good' | 'warn' | 'bad'
 
-/** What the window says after a press of Send: how it ended, in the owner's words, and how strongly to say it. */
-export function sendLine(result: FindingSendResult): { tone: SendTone; text: string } {
+/** What the owner pressed: the reply window asks the same way for a send and for a schedule, and says a refusal for the one that was pressed. */
+export type Doing = 'send' | 'schedule'
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const HOUR_MS = 60 * 60 * 1000
+const DAY_MS = 24 * HOUR_MS
+
+/** The evening and the morning of the Schedule menu, in the owner's own clock. */
+export const EVENING_HOUR = 19
+export const MORNING_HOUR = 9
+
+const sameDay = (a: Date, b: Date): boolean => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+
+/** "7:00 pm", "9:30 am": the owner's clock, the twelve-hour way the menu says it. */
+function clock(at: Date): string {
+  const hours = at.getHours()
+  return `${hours % 12 || 12}:${String(at.getMinutes()).padStart(2, '0')} ${hours < 12 ? 'am' : 'pm'}`
+}
+
+/** A planned time in the owner's words: "today 7:00 pm", "tomorrow 9:00 am", or the day when it is further away ("Mon 24 Nov, 9:00 am"). */
+export function whenWords(iso: string, now: Date): string {
+  const at = new Date(iso)
+  if (Number.isNaN(at.getTime())) return 'a time that is not known'
+  if (sameDay(at, now)) return `today ${clock(at)}`
+  if (sameDay(at, new Date(now.getTime() + DAY_MS))) return `tomorrow ${clock(at)}`
+  return `${WEEKDAYS[at.getDay()]} ${at.getDate()} ${MONTHS[at.getMonth()]}, ${clock(at)}`
+}
+
+/** One time the Schedule menu offers without typing. */
+export interface ScheduleChoice {
+  id: 'hour' | 'evening' | 'tomorrow'
+  label: string
+  at: string
+}
+
+/** The times of the Schedule menu: in an hour, this evening (only while it is before 7 pm), and tomorrow morning. */
+export function scheduleChoices(now: Date): ScheduleChoice[] {
+  const choices: ScheduleChoice[] = [{ id: 'hour', label: 'In 1 hour', at: new Date(now.getTime() + HOUR_MS).toISOString() }]
+  const evening = new Date(now)
+  evening.setHours(EVENING_HOUR, 0, 0, 0)
+  if (now.getTime() < evening.getTime()) choices.push({ id: 'evening', label: 'This evening 7:00 pm', at: evening.toISOString() })
+  const tomorrow = new Date(now)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  tomorrow.setHours(MORNING_HOUR, 0, 0, 0)
+  choices.push({ id: 'tomorrow', label: 'Tomorrow 9:00 am', at: tomorrow.toISOString() })
+  return choices
+}
+
+/** A time for the field "Pick a time…" (the value of a datetime-local input, in the owner's clock). */
+export function localInputValue(at: Date): string {
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(at.getHours())}:${pad(at.getMinutes())}`
+}
+
+/** What the owner typed into "Pick a time…": the time to send at, or the sentence that says why not (the core says the same). */
+export function pickedTime(value: string, now: Date): { ok: true; at: string } | { ok: false; message: string } {
+  if (value.trim() === '') return { ok: false, message: 'Pick a day and a time.' }
+  const at = new Date(value)
+  if (Number.isNaN(at.getTime())) return { ok: false, message: 'Pick a day and a time.' }
+  if (at.getTime() <= now.getTime()) return { ok: false, message: 'That time has already passed. Pick a time in the future.' }
+  if (at.getTime() - now.getTime() > COMMENT_SCHEDULE_MAX_DAYS * DAY_MS) return { ok: false, message: `A comment can be scheduled up to ${COMMENT_SCHEDULE_MAX_DAYS} days ahead.` }
+  return { ok: true, at: at.toISOString() }
+}
+
+/** What the window says after a press: how it ended, in the owner's words, and how strongly to say it. */
+export function sendLine(result: FindingSendResult, now: Date = new Date(), doing: Doing = 'send'): { tone: SendTone; text: string } {
+  const not = doing === 'schedule' ? 'Not scheduled.' : 'Not posted.'
   switch (result.state) {
     case 'sent':
       return { tone: 'good', text: result.url ? `Posted: ${result.url}` : result.message }
+    case 'scheduled':
+      return { tone: 'good', text: result.at ? `Scheduled for ${whenWords(result.at, now)}.` : result.message }
     case 'unknown':
       return { tone: 'warn', text: result.message }
     case 'failed':
-      return { tone: 'bad', text: `Not posted. ${result.message}` }
+      return { tone: 'bad', text: `${not} ${result.message}` }
     case 'held':
-      return { tone: 'warn', text: `Not posted yet. ${result.message} Press Send to try again.` }
+      // The community's rules are not a thing that passes: the way through is the owner's "Send anyway", which is beside this line.
+      return { tone: 'warn', text: doing === 'schedule' || result.code === 'channel_restricted' ? `${not} ${result.message}` : `Not posted yet. ${result.message} Press Send now to try again.` }
     case 'refused':
-      return { tone: 'warn', text: `Not posted. ${result.message}` }
+      return { tone: 'warn', text: `${not} ${result.message}` }
   }
 }
 
-/** What Send will do, said before it is pressed: who opens the post, what is typed and where, and that nothing goes out until the press. */
+/**
+ * What the owner can do about a press that did not go through, beside the sentence that says why. `anyway`: the community's own rules are the reason, and
+ * the owner may knowingly let them through. `by-hand`: something else is in the way; the comment can be copied and the post opened. Nothing for the rest.
+ */
+export type WayOut = 'anyway' | 'by-hand'
+
+export function wayOut(result: FindingSendResult | null): WayOut | null {
+  if (!result) return null
+  if (result.state !== 'held' && result.state !== 'refused' && result.state !== 'failed') return null
+  return result.code === 'channel_restricted' ? 'anyway' : 'by-hand'
+}
+
+/** The states in which a place's stored text is still the owner's to use again when the window is opened anew (it was kept, edited in full, or planned). */
+const REOPENABLE: readonly OpportunityState[] = ['draft', 'awaiting_approval', 'ready', 'needs_user']
+
+/** The text this place already holds, to open the window on instead of asking the AI for a new one; null when there is none. */
+export function storedText(place: Pick<FindingReplyPlace, 'state' | 'text'> | null): string | null {
+  if (!place || !REOPENABLE.includes(place.state) || place.text.trim() === '') return null
+  return place.text
+}
+
+/** When this place is planned, in the line of the window: the time, and a word when the text above is no longer the planned one. */
+export function scheduledLine(place: Pick<FindingReplyPlace, 'scheduledAt' | 'text'>, text: string, now: Date): string | null {
+  if (!place.scheduledAt) return null
+  const when = `Scheduled for ${whenWords(place.scheduledAt, now)}`
+  return place.text.trim() === text.trim() ? when : `${when}, with the text it had when you scheduled it. Change plans the text above instead.`
+}
+
+/** What Send now will do, said before it is pressed: who opens the post, what is typed and where, and that nothing goes out until a press. */
 export function sendNote(accountLabel: string, where: string): string {
   const browser = accountLabel.trim() ? `the browser of ${accountLabel.trim()}` : "the account's browser"
-  return `Send: the AI opens the post in ${browser} and types this text, exactly as written, as a reply to ${where}. Nothing is posted before you press it.`
+  return `Send now: the AI opens the post in ${browser} and types this text, exactly as written, as a reply to ${where}. Nothing is posted before you press a button.`
 }

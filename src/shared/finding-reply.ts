@@ -4,5 +4,8 @@
  */
 export const WATCH_REPLY_PREFIX = 'Worth a reply: '
 
+/** How many days ahead the owner may schedule a comment of the Feed: the reply window and the core say the same number. */
+export const COMMENT_SCHEDULE_MAX_DAYS = 30
+
 /** Whether a finding's note says the AI judged it worth a reply. */
 export const isReplyNote = (relation: string): boolean => relation.startsWith(WATCH_REPLY_PREFIX)

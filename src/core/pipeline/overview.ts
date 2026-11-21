@@ -147,7 +147,7 @@ export function buildOverview(core: Core, args: { productId: Id; days: number; u
         platform: channel.platform,
         target: channel.target,
         status: channel.status,
-        waiting: count(core, `SELECT COUNT(*) AS n FROM opportunities WHERE channel_id = ? AND state IN (${marks})`, channel.id, ...WAITING_STATES),
+        waiting: count(core, `SELECT COUNT(*) AS n FROM opportunities WHERE channel_id = ? AND finding_id IS NULL AND state IN (${marks})`, channel.id, ...WAITING_STATES),
         sent: sentByChannel.get(channel.id) ?? 0,
         lastSuccessAt: channel.lastSuccessAt,
         nextCheckAt: channel.nextCheckAt,

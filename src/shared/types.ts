@@ -849,6 +849,9 @@ export interface Draft {
   createdAt: IsoTime
 }
 
+/** What an owner's approval can knowingly let through. `community_rules`: the community's own rules forbid what is sent (the owner pressed Send anyway). */
+export type Acknowledgement = 'community_rules'
+
 export interface Approval {
   id: Id
   draftId: Id
@@ -862,6 +865,8 @@ export interface Approval {
   approvedAt: IsoTime
   invalidatedAt: IsoTime | null
   invalidReason: string | null
+  /** What the owner knowingly let through with this approval; always empty for an automatic approval. */
+  acknowledged: Acknowledgement[]
 }
 
 /** sending: attempt in flight. unknown: outcome unresolved, blocks further attempts. */

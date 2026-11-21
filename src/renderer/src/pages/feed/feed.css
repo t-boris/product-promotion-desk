@@ -292,6 +292,42 @@
   flex: 1;
   min-width: 200px;
 }
+.reply-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+/* "Scheduled for … · Change · Cancel": what the comment is planned for, in a quiet line above the buttons. */
+.reply-scheduled {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+}
+/* The menu opens to the right of its button (the window's buttons start at the left edge, so the base menu, which opens to the left, would leave the window). */
+.reply-schedule-pop {
+  left: 0;
+  right: auto;
+}
+.reply-schedule-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  padding: var(--space-1) 10px;
+}
+.reply-full {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.reply-full-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
 .reply-rounds ol {
   margin: var(--space-1) 0 0;
   padding-left: var(--space-4);

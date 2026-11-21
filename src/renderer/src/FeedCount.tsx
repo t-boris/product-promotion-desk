@@ -10,7 +10,7 @@ const DECIDE = statesOf('decide')
  * Nothing is drawn for none. The core returns at most 300 items, so a longer list is shown as "300+".
  */
 export function FeedCount({ productId }: { productId: Id }) {
-  const waiting = useQuery('opportunities.list', { productId, kind: 'reply', states: DECIDE }, ['opportunities'])
+  const waiting = useQuery('opportunities.list', { productId, kind: 'reply', states: DECIDE, withoutFeedAnswers: true }, ['opportunities'])
   const label = feedCountLabel(waiting.data?.length ?? 0)
   if (label === null) return null
   return (

@@ -20,9 +20,10 @@ export interface FeedCards {
 
 /** The reply opportunities of one product, every source and every state, as the Feed lists them (DEC-039). The lists follow every change of the opportunities. */
 export function useFeedCards(productId: Id): FeedCards {
-  const decide = useQuery('opportunities.list', { productId, kind: 'reply', states: DECIDE }, ['opportunities'])
-  const sent = useQuery('opportunities.list', { productId, kind: 'reply', states: SENT }, ['opportunities'])
-  const skipped = useQuery('opportunities.list', { productId, kind: 'reply', states: SKIPPED }, ['opportunities'])
+  // The answers the owner made from a post are not listed here, whatever their state: they are decided, planned and told as sent in the reply window of their post.
+  const decide = useQuery('opportunities.list', { productId, kind: 'reply', states: DECIDE, withoutFeedAnswers: true }, ['opportunities'])
+  const sent = useQuery('opportunities.list', { productId, kind: 'reply', states: SENT, withoutFeedAnswers: true }, ['opportunities'])
+  const skipped = useQuery('opportunities.list', { productId, kind: 'reply', states: SKIPPED, withoutFeedAnswers: true }, ['opportunities'])
   const cards = useMemo(() => mergeCards([decide.data ?? [], sent.data ?? [], skipped.data ?? []]), [decide.data, sent.data, skipped.data])
   return {
     cards,

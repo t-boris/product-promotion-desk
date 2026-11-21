@@ -24,7 +24,8 @@ function excerpt(text: string): string {
 
 function opportunityItems(core: Core, db: Db, targets: Map<Id, string>): AttentionItem[] {
   const rows = db
-    .prepare("SELECT * FROM opportunities WHERE state IN ('awaiting_approval', 'ready', 'draft', 'needs_user') ORDER BY updated_at DESC")
+    // An answer the owner made from a post of the Feed is not an item of the Inbox: it is decided and sent in the reply window of its post.
+    .prepare("SELECT * FROM opportunities WHERE state IN ('awaiting_approval', 'ready', 'draft', 'needs_user') AND finding_id IS NULL ORDER BY updated_at DESC")
     .all() as Row[]
   return rows.map((row): AttentionItem => {
     const opp: Opportunity = mapOpportunity(row)

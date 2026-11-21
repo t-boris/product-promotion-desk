@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { DraftHelpResult, Opportunity } from '../../shared/types'
 import { AiError } from '../ports'
 import { DraftHelp, readDraftAnswer, type DraftHelpInput, type DraftHelper } from './draft-help'
+import { PUBLICATION_SYSTEM, REPLY_SYSTEM } from './draft-prompt'
 import { closeWorld, makeClaim, makeWorld, type World } from './test-fixture'
 
 let world: World
@@ -203,6 +204,31 @@ describe('drafts.refine: the AI never hands over text the pipeline would block',
     expect(await help({ field: 'text', opportunityId: opp.id, form: { title: '', text: mine } })).toEqual({ text: BORING })
     expect(world.engine.calls.map((c) => c.label)).toEqual(['drafts.improve', 'drafts.improve.repair'])
     expect(world.engine.calls[1].prompt).toMatch(/evil\.example\.com/)
+  })
+
+  it('a reply carries no link of the AI\'s: not the product\'s own address, in a link or bare, and the prompt says so', async () => {
+    world = makeWorld({ mode: 'draft' })
+    const opp = await replyCard()
+    for (const link of ['https://natalmystic.com', '[the site](https://natalmystic.com/chart)', 'natalmystic.com']) {
+      world.engine.calls.length = 0
+      world.engine.on('drafts.improve', answer({ text: `${BORING} More at ${link}` }))
+      world.engine.on('drafts.improve.repair', answer({ text: BORING }))
+      expect(await help({ field: 'text', opportunityId: opp.id, form: { title: '', text: 'it makes charts' } })).toEqual({ text: BORING })
+      expect(world.engine.calls.map((c) => c.label)).toEqual(['drafts.improve', 'drafts.improve.repair'])
+      expect(world.engine.calls[1].prompt).toMatch(/must not add a link/)
+    }
+    const system = world.engine.calls[0].system ?? ''
+    expect(system).toContain('A reply carries no link')
+    expect(system).not.toContain('Add a link only if')
+  })
+
+  it('keeps the link the owner wrote in a reply, the product\'s own address included', async () => {
+    world = makeWorld({ mode: 'draft' })
+    const opp = await replyCard()
+    const mine = 'it makes charts, see https://natalmystic.com'
+    world.engine.on('drafts.improve', answer({ text: `${BORING} See https://natalmystic.com` }))
+    expect(await help({ field: 'text', opportunityId: opp.id, form: { title: '', text: mine } })).toEqual({ text: `${BORING} See https://natalmystic.com` })
+    expect(world.engine.calls.map((c) => c.label)).toEqual(['drafts.improve'])
   })
 
   it('refuses with the reasons when the second answer is blocked too, and stores nothing', async () => {
@@ -500,13 +526,22 @@ describe('drafts.refine: the owner\'s own lines are never cut', () => {
   })
 })
 
-describe('drafts.refine: the product named, or its website, is not a reason to hand a text back', () => {
-  it('a text that points to the product\'s website goes through as it is', async () => {
+describe('drafts.refine: the product named is not a reason to hand a text back; a link of the AI\'s in a reply is', () => {
+  it('a reply that names the product goes through as it is', async () => {
+    world = makeWorld({ mode: 'draft' })
+    const opp = await replyCard()
+    world.engine.on('drafts.improve', answer({ text: 'Natal Mystic builds the chart from your birth date, time and place.' }))
+    expect(await help({ field: 'text', opportunityId: opp.id, form: { title: '', text: 'see the site' } })).toEqual({ text: 'Natal Mystic builds the chart from your birth date, time and place.' })
+    expect(world.engine.calls).toHaveLength(1)
+  })
+
+  it('a reply the AI wrote with the product\'s address in it is handed back once, and the corrected answer is used; the address in the owner\'s own text stays', async () => {
     world = makeWorld({ mode: 'draft' })
     const opp = await replyCard()
     world.engine.on('drafts.improve', answer({ text: 'You can see how it works at natalmystic.com.' }))
-    expect(await help({ field: 'text', opportunityId: opp.id, form: { title: '', text: 'see the site' } })).toEqual({ text: 'You can see how it works at natalmystic.com.' })
-    expect(world.engine.calls).toHaveLength(1)
+    world.engine.on('drafts.improve.repair', answer({ text: 'It works from your birth date, time and place.' }))
+    expect(await help({ field: 'text', opportunityId: opp.id, form: { title: '', text: 'see the site' } })).toEqual({ text: 'It works from your birth date, time and place.' })
+    expect(world.engine.calls.map((c) => c.label)).toEqual(['drafts.improve', 'drafts.improve.repair'])
   })
 })
 
@@ -534,5 +569,13 @@ describe('readDraftAnswer', () => {
     expect(read({ text: '  ', usedClaimIds: ['c1'], statesProductFacts: true }, 'text')).toMatchObject({ ok: false })
     expect(read({ usedClaimIds: ['c1'], statesProductFacts: true }, 'text')).toMatchObject({ ok: false })
     expect(read('nope')).toMatchObject({ ok: false })
+  })
+})
+
+describe('the prompts say who may bring a link', () => {
+  it('the AI\'s replies to comments carry no link, and its posts may carry the product\'s own', () => {
+    expect(REPLY_SYSTEM).toContain('A reply carries no link')
+    expect(REPLY_SYSTEM).not.toContain('Add a link only if')
+    expect(PUBLICATION_SYSTEM).toContain('Add a link only if it is context.product.website')
   })
 })

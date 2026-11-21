@@ -7,7 +7,10 @@ import type { FindingSendResult } from '../../shared/api'
 import type { PostMissionOutcome, PostMissionRequest, PostMissionService } from '../browser-agent/post-submit'
 import { FindingStore } from './findings'
 import { commentFingerprint } from './finding-send'
-import { closeWorld, makeWorld, type World } from './test-fixture'
+import { SCHEDULE_MISSED_REASON } from './sending'
+import { scheduledByOwner, sendWays } from './send-ways'
+import { closeWorld, makeWorld, verifiedCapabilities, type World } from './test-fixture'
+import type { Capability } from '../../shared/types'
 
 let world: World
 afterEach(async () => {
@@ -42,10 +45,10 @@ const COMMENTS = [
 ]
 
 /** A world with one channel the app does not read and one post of the Feed that the AI has read in full. */
-function setup(script: ScriptedMissions['script'] = presses): { missions: ScriptedMissions; findingId: string } {
+function setup(script: ScriptedMissions['script'] = presses, capabilities?: Capability[]): { missions: ScriptedMissions; findingId: string } {
   world = makeWorld({ mode: 'approval' })
   world.connector.canRead = false
-  world.channel = world.addChannel({ reads: false, mode: 'approval', status: 'active', target: '@brand' })
+  world.channel = world.addChannel({ reads: false, mode: 'approval', status: 'active', target: '@brand', capabilities })
   const missions = new ScriptedMissions(script)
   world.core.services.postMissions = missions
   const findings = new FindingStore(world.core)
@@ -77,7 +80,21 @@ function setup(script: ScriptedMissions['script'] = presses): { missions: Script
 }
 
 const place = (index: number) => ({ position: index, author: COMMENTS[index].author, text: COMMENTS[index].text })
-const send = (findingId: string, where: ReturnType<typeof place> | null, text: string): Promise<FindingSendResult> => world.core.router.call('findings.send', { id: findingId, place: where, text })
+const send = (findingId: string, where: ReturnType<typeof place> | null, text: string, anyway?: boolean): Promise<FindingSendResult> =>
+  world.core.router.call('findings.send', { id: findingId, place: where, text, ...(anyway === undefined ? {} : { anyway }) })
+const schedule = (findingId: string, where: ReturnType<typeof place> | null, text: string, at: string, anyway?: boolean): Promise<FindingSendResult> =>
+  world.core.router.call('findings.schedule', { id: findingId, place: where, text, at, ...(anyway === undefined ? {} : { anyway }) })
+/** A time this far from now, as the planned time of a comment. */
+const inMinutes = (minutes: number): string => new Date(world.clock.now().getTime() + minutes * 60_000).toISOString()
+/** A reply of the Inbox, on a channel the application reads: not an answer from the Feed. */
+async function inboxReply() {
+  world.connector.canRead = true
+  return world.readyReply({ channel: world.addChannel({ target: 'r/inbox', status: 'active' }) })
+}
+/** The channel's replying is forbidden by the community's own rules, in its own words. */
+const COMMUNITY_WORDS = 'Rule 3: no comments from accounts younger than 30 days.'
+const restricted = (status: 'restricted' | 'needs_user' = 'restricted'): Capability[] => verifiedCapabilities().map((c) => (c.key === 'publish_reply' ? { ...c, status, detail: COMMUNITY_WORDS } : c))
+const approvals = () => world.core.db.prepare('SELECT approved_by AS by, acknowledged_json AS acknowledged, invalidated_at AS invalidated FROM approvals ORDER BY rowid').all() as { by: string; acknowledged: string; invalidated: string | null }[]
 const opportunities = () => world.core.db.prepare('SELECT * FROM opportunities').all() as Record<string, unknown>[]
 const actions = () => world.core.db.prepare('SELECT state, destination FROM send_actions').all() as { state: string; destination: string }[]
 
@@ -126,7 +143,7 @@ describe('Send under a post', () => {
     await world.core.router.call('opportunities.resolveUnknown', { id: result.opportunityId as string, outcome: 'published', url: `${POST}#mine` })
     expect(await send(findingId, null, 'Another one.')).toMatchObject({ state: 'sent', message: expect.stringMatching(/already posted/) })
     const replies = await world.core.router.call('findings.replies', { id: findingId })
-    expect(replies.places).toEqual([{ position: null, opportunityId: result.opportunityId, state: 'confirmed', reason: '', text: 'A comment.', url: `${POST}#mine` }])
+    expect(replies.places).toEqual([{ position: null, opportunityId: result.opportunityId, state: 'confirmed', reason: '', text: 'A comment.', url: `${POST}#mine`, scheduledAt: null }])
   })
 
   it('is stopped by the gate as any reply would be: the account\'s browser is under the owner\'s control, the daily limit', async () => {
@@ -297,5 +314,321 @@ describe('what was sent from a post', () => {
   it('is the same fingerprint for the same words however they are spaced and cased', () => {
     expect(commentFingerprint('Anna', 'Try  a free\nchart site')).toBe(commentFingerprint(' anna ', 'try a free chart site'))
     expect(commentFingerprint('anna', 'a')).not.toBe(commentFingerprint('anna', 'b'))
+  })
+})
+
+describe('Send anyway: the owner lets the community\'s own rules through, for this text only', () => {
+  it('holds a comment the community forbids, says so in the community\'s own words, and keeps the owner\'s approval of exactly that text', async () => {
+    const { missions, findingId } = setup(presses, restricted())
+    const result = await send(findingId, null, 'A comment.')
+    expect(result).toMatchObject({ state: 'held', code: 'channel_restricted', message: expect.stringContaining(COMMUNITY_WORDS) })
+    expect(missions.requests).toHaveLength(0)
+    expect(actions()).toEqual([])
+    expect(approvals()).toEqual([{ by: 'user', acknowledged: '[]', invalidated: null }])
+  })
+
+  it('sends it on "Send anyway", with an approval that says what the owner let through', async () => {
+    const { missions, findingId } = setup(presses, restricted())
+    await send(findingId, null, 'A comment.')
+    const result = await send(findingId, null, 'A comment.', true)
+    expect(result.state).toBe('unknown')
+    expect(missions.requests).toHaveLength(1)
+    const rows = approvals()
+    // the plain approval was replaced by the one that carries the owner's word
+    expect(rows.map((r) => [r.acknowledged, r.invalidated === null])).toEqual([['[]', false], ['["community_rules"]', true]])
+  })
+
+  it('lets nothing else through: a capability that needs the owner holds with no way out, and anyway changes nothing', async () => {
+    const { missions, findingId } = setup(presses, restricted('needs_user'))
+    const first = await send(findingId, null, 'A comment.')
+    expect(first.state).toBe('held')
+    expect(first.code).toBeUndefined()
+    const second = await send(findingId, null, 'A comment.', true)
+    expect(second.state).toBe('held')
+    expect(second.code).toBeUndefined()
+    expect(missions.requests).toHaveLength(0)
+  })
+
+  it('dies with the text: after an edit the old "anyway" is gone and the new text is held again', async () => {
+    const { missions, findingId } = setup(presses, restricted())
+    await schedule(findingId, null, 'First words.', inMinutes(60), true)
+    expect(approvals()).toEqual([{ by: 'user', acknowledged: '["community_rules"]', invalidated: null }])
+    await world.core.router.call('findings.saveDraft', { id: findingId, place: null, text: 'Other words.' })
+    expect(approvals()[0].invalidated).not.toBeNull()
+    expect(await send(findingId, null, 'Other words.')).toMatchObject({ state: 'held', code: 'channel_restricted' })
+    expect(missions.requests).toHaveLength(0)
+  })
+
+  it('is never carried by an approval an automatic rule made: the store keeps nothing of it, and the gate sends such an approval back', async () => {
+    const { findingId } = setup(presses, restricted())
+    await send(findingId, null, 'A comment.')
+    const [opp] = opportunities()
+    const draft = world.core.repos.latestDraft(opp.id as string)!
+    // the store: a rule's approval is made with nothing let through, whatever it was asked to keep
+    world.core.db.prepare('UPDATE approvals SET invalidated_at = ?').run(world.clock.now().toISOString())
+    const made = world.store.insertApproval({ draftId: draft.id, contentHash: 'h', accountId: world.account.id, identity: null, destination: POST, approvedBy: 'auto_rule', ruleId: 'r1', acknowledged: ['community_rules'] })
+    expect(made.acknowledged).toEqual([])
+    // the gate: an approval made by a rule is not the owner's press, whatever its row says; it is sent back before the community's rules are even asked about
+    world.core.db.prepare('DELETE FROM approvals WHERE id = ?').run(made.id)
+    await send(findingId, null, 'A comment.')
+    world.core.db.prepare("UPDATE approvals SET approved_by = 'auto_rule', rule_id = 'r1', acknowledged_json = '[\"community_rules\"]' WHERE invalidated_at IS NULL").run()
+    await expect(world.sending.send(opp.id as string)).rejects.toMatchObject({ block: { effect: 'review', code: 'auto_rule_refused' } })
+  })
+})
+
+describe('Schedule: the owner\'s press made ahead of time', () => {
+  it('approves exactly this text and plans it, and nothing goes out now', async () => {
+    const { missions, findingId } = setup()
+    const at = inMinutes(60)
+    const result = await schedule(findingId, null, '  Houses split the sky.  ', at)
+    expect(result).toMatchObject({ state: 'scheduled', at, url: '' })
+    expect(missions.requests).toHaveLength(0)
+    expect(opportunities()).toMatchObject([{ kind: 'reply', state: 'ready', scheduled_at: at, finding_id: findingId }])
+    expect(approvals()).toEqual([{ by: 'user', acknowledged: '[]', invalidated: null }])
+    const replies = await world.core.router.call('findings.replies', { id: findingId })
+    expect(replies.places).toMatchObject([{ position: null, state: 'ready', text: 'Houses split the sky.', scheduledAt: at }])
+  })
+
+  it('moves the time when it is pressed again, with one opportunity and one approval', async () => {
+    const { findingId } = setup()
+    await schedule(findingId, null, 'Words.', inMinutes(60))
+    const later = inMinutes(180)
+    await schedule(findingId, null, 'Words.', later)
+    expect(opportunities()).toMatchObject([{ scheduled_at: later }])
+    expect(approvals()).toHaveLength(1)
+  })
+
+  it('refuses a time that is not one, has passed, or is more than 30 days away, and makes nothing', async () => {
+    const { findingId } = setup()
+    await expect(schedule(findingId, null, 'Words.', 'nonsense')).rejects.toMatchObject({ code: 'invalid_input', message: expect.stringMatching(/when/) })
+    await expect(schedule(findingId, null, 'Words.', inMinutes(-5))).rejects.toMatchObject({ code: 'invalid_input', message: expect.stringMatching(/passed/) })
+    await expect(schedule(findingId, null, 'Words.', inMinutes(31 * 24 * 60))).rejects.toMatchObject({ code: 'invalid_input', message: expect.stringMatching(/30 days/) })
+    await expect(schedule(findingId, null, '   ', inMinutes(60))).rejects.toMatchObject({ code: 'invalid_input' })
+    expect(opportunities()).toEqual([])
+  })
+
+  it('is refused by the same checks as a press of Send: a post the AI has not read, and the same text sent before', async () => {
+    const { findingId } = setup()
+    world.core.db.prepare("UPDATE findings SET about = '', read_at = NULL WHERE id = ?").run(findingId)
+    expect(await schedule(findingId, null, 'Words.', inMinutes(60))).toMatchObject({ state: 'refused', message: expect.stringMatching(/has not read/) })
+    world.core.db.prepare("UPDATE findings SET about = 'It asks.', read_at = ? WHERE id = ?").run(world.clock.now().toISOString(), findingId)
+    await send(findingId, null, 'Words.')
+    expect(await schedule(findingId, place(0), 'Words.', inMinutes(60))).toMatchObject({ state: 'refused', message: expect.stringMatching(/already sent/) })
+  })
+
+  it('refuses a community that forbids replying at once, with the way out, and makes nothing; "anyway" plans it', async () => {
+    const { findingId } = setup(presses, restricted())
+    expect(await schedule(findingId, null, 'Words.', inMinutes(60))).toMatchObject({ state: 'refused', code: 'channel_restricted', message: expect.stringContaining(COMMUNITY_WORDS) })
+    expect(opportunities()).toEqual([])
+    expect(await schedule(findingId, null, 'Words.', inMinutes(60), true)).toMatchObject({ state: 'scheduled' })
+    expect(approvals()).toEqual([{ by: 'user', acknowledged: '["community_rules"]', invalidated: null }])
+  })
+
+  it('is replaced by Send now: the press goes out and the plan is gone, so the comment does not go out a second time', async () => {
+    const { missions, findingId } = setup()
+    await schedule(findingId, null, 'Words.', inMinutes(60))
+    expect((await send(findingId, null, 'Words.')).state).toBe('unknown')
+    expect(opportunities()).toMatchObject([{ state: 'unknown_result', scheduled_at: null }])
+    world.clock.advance(2 * 60 * 60_000)
+    expect(await world.sending.sendDuePublications()).toBe(0)
+    expect(missions.requests).toHaveLength(1)
+  })
+
+  it('is taken off the schedule by Cancel: the approval is withdrawn and it is a draft again', async () => {
+    const { missions, findingId } = setup()
+    const { opportunityId } = await schedule(findingId, null, 'Words.', inMinutes(60))
+    await world.core.router.call('findings.unschedule', { opportunityId: opportunityId as string })
+    expect(opportunities()).toMatchObject([{ state: 'draft', scheduled_at: null }])
+    expect(approvals()[0].invalidated).not.toBeNull()
+    const replies = await world.core.router.call('findings.replies', { id: findingId })
+    expect(replies.places).toMatchObject([{ state: 'draft', scheduledAt: null }])
+    world.clock.advance(2 * 60 * 60_000)
+    expect(await world.sending.sendDuePublications()).toBe(0)
+    expect(missions.requests).toHaveLength(0)
+    // there is nothing left to cancel
+    await expect(world.core.router.call('findings.unschedule', { opportunityId: opportunityId as string })).rejects.toMatchObject({ code: 'invalid_state' })
+  })
+
+  it('does not cancel an item that is not an answer from the Feed', async () => {
+    setup()
+    const opp = await inboxReply()
+    await expect(world.core.router.call('findings.unschedule', { opportunityId: opp.id })).rejects.toMatchObject({ code: 'invalid_state' })
+  })
+})
+
+describe('Edit in full: the text is kept as a draft and nothing is approved or sent', () => {
+  it('makes the item of the place with the text as its draft, and no approval', async () => {
+    const { missions, findingId } = setup()
+    const { opportunityId } = await world.core.router.call('findings.saveDraft', { id: findingId, place: null, text: '  Draft words.  ' })
+    expect(opportunities()).toMatchObject([{ id: opportunityId, state: 'draft', finding_id: findingId }])
+    expect(world.core.repos.latestDraft(opportunityId)?.text).toBe('Draft words.')
+    expect(approvals()).toEqual([])
+    expect(missions.requests).toHaveLength(0)
+  })
+
+  it('keeps one item for the place, and a later Send takes the text the card kept', async () => {
+    const { findingId } = setup()
+    const { opportunityId } = await world.core.router.call('findings.saveDraft', { id: findingId, place: null, text: 'First.' })
+    await world.core.router.call('opportunities.saveDraft', { id: opportunityId, draft: { text: 'Edited in the full card.' } })
+    const again = await world.core.router.call('findings.saveDraft', { id: findingId, place: null, text: 'Edited in the full card.' })
+    expect(again.opportunityId).toBe(opportunityId)
+    expect(opportunities()).toHaveLength(1)
+    expect((await send(findingId, null, 'Edited in the full card.')).state).toBe('unknown')
+  })
+
+  it('says why it cannot, as a send would', async () => {
+    const { findingId } = setup()
+    world.core.db.prepare("UPDATE findings SET about = '', read_at = NULL WHERE id = ?").run(findingId)
+    await expect(world.core.router.call('findings.saveDraft', { id: findingId, place: null, text: 'Words.' })).rejects.toMatchObject({ code: 'invalid_state', message: expect.stringMatching(/has not read/) })
+  })
+})
+
+describe('The scheduler sends the owner\'s scheduled comments from the Feed, and only those', () => {
+  it('sends one when its time comes, through the AI browser, with no press', async () => {
+    const { missions, findingId } = setup()
+    await schedule(findingId, null, 'Scheduled words.', inMinutes(30))
+    expect(await world.sending.sendDuePublications()).toBe(0)
+    expect(missions.requests).toHaveLength(0)
+
+    world.clock.advance(31 * 60_000)
+    expect(await world.sending.sendDuePublications()).toBe(1)
+    expect(missions.requests).toHaveLength(1)
+    expect(missions.requests[0].authority.content).toMatchObject({ kind: 'reply', text: 'Scheduled words.', destination: POST })
+    // the page cannot be read back: the owner is asked, as for a press of Send
+    expect(opportunities()).toMatchObject([{ state: 'unknown_result' }])
+    expect(actions()).toEqual([{ state: 'unknown', destination: POST }])
+    expect(world.connector.calls.filter((c) => c === 'publish')).toEqual([])
+  })
+
+  it('sends it under a comment, at the address of that comment', async () => {
+    const { missions, findingId } = setup()
+    await schedule(findingId, place(0), 'Thanks.', inMinutes(10))
+    world.clock.advance(11 * 60_000)
+    expect(await world.sending.sendDuePublications()).toBe(1)
+    expect(missions.requests[0].authority.content).toMatchObject({ destination: COMMENT_URL })
+  })
+
+  it('sends a comment planned "anyway" in a community that forbids it, because the owner said so for this text', async () => {
+    const { missions, findingId } = setup(presses, restricted())
+    await schedule(findingId, null, 'Words.', inMinutes(10), true)
+    world.clock.advance(11 * 60_000)
+    expect(await world.sending.sendDuePublications()).toBe(1)
+    expect(missions.requests).toHaveLength(1)
+  })
+
+  it('does nothing while automation is paused, and sends once it is not', async () => {
+    const { missions, findingId } = setup()
+    await schedule(findingId, null, 'Words.', inMinutes(10))
+    world.clock.advance(11 * 60_000)
+    world.core.settings.setRaw('automation.paused', true)
+    expect(await world.sending.sendDuePublications()).toBe(0)
+    expect(missions.requests).toHaveLength(0)
+    world.core.settings.setRaw('automation.paused', false)
+    expect(await world.sending.sendDuePublications()).toBe(1)
+    expect(missions.requests).toHaveLength(1)
+  })
+
+  it('sends nothing more than an hour late: it goes back to review, the plan is gone and the window does not say "scheduled"', async () => {
+    const { missions, findingId } = setup()
+    await schedule(findingId, null, 'Words.', inMinutes(10))
+    world.clock.advance(80 * 60_000)
+    expect(await world.sending.sendDuePublications()).toBe(0)
+    expect(missions.requests).toHaveLength(0)
+    expect(opportunities()).toMatchObject([{ state: 'awaiting_approval', reason: SCHEDULE_MISSED_REASON, scheduled_at: null }])
+    const replies = await world.core.router.call('findings.replies', { id: findingId })
+    expect(replies.places).toMatchObject([{ state: 'awaiting_approval', scheduledAt: null }])
+    // and it is not sent behind the owner's back later
+    world.clock.advance(60 * 60_000)
+    expect(await world.sending.sendDuePublications()).toBe(0)
+  })
+
+  it('does not send one whose text was edited after it was planned: the approval is gone', async () => {
+    const { missions, findingId } = setup()
+    const { opportunityId } = await schedule(findingId, null, 'Planned words.', inMinutes(10))
+    await world.core.router.call('opportunities.saveDraft', { id: opportunityId as string, draft: { text: 'Other words.' } })
+    world.clock.advance(11 * 60_000)
+    expect(await world.sending.sendDuePublications()).toBe(0)
+    expect(missions.requests).toHaveLength(0)
+  })
+
+  it('never sends one an automatic rule approved, even with a time on it', async () => {
+    const { missions, findingId } = setup()
+    const { opportunityId } = await schedule(findingId, null, 'Words.', inMinutes(10))
+    world.core.db.prepare("UPDATE approvals SET approved_by = 'auto_rule', rule_id = 'r1'").run()
+    world.clock.advance(11 * 60_000)
+    expect(await world.sending.sendDuePublications()).toBe(0)
+    expect(missions.requests).toHaveLength(0)
+    // the gate sent it back to the owner instead: a rule's approval is not the owner's press
+    expect(world.opportunity(opportunityId as string).state).toBe('awaiting_approval')
+  })
+
+  it('never takes a reply of the Inbox that has a time on it: only the owner\'s answers from the Feed are planned', async () => {
+    setup()
+    const opp = await inboxReply()
+    world.core.db.prepare('UPDATE opportunities SET scheduled_at = ? WHERE id = ?').run(inMinutes(5), opp.id)
+    world.clock.advance(10 * 60_000)
+    expect(await world.sending.sendDuePublications()).toBe(0)
+    expect(world.connector.calls.filter((c) => c === 'publish')).toEqual([])
+  })
+
+  it('does not take a second attempt at the same place: a result nobody knows blocks the next planned send', async () => {
+    const { missions, findingId } = setup()
+    await send(findingId, null, 'First.')
+    await schedule(findingId, null, 'Second.', inMinutes(10))
+    world.clock.advance(11 * 60_000)
+    expect(await world.sending.sendDuePublications()).toBe(0)
+    expect(missions.requests).toHaveLength(1)
+  })
+})
+
+describe('the one place that says whether a send nobody presses may drive the browser', () => {
+  it('lets the AI browser carry it only when the owner scheduled it and the owner approved it', () => {
+    setup()
+    const ways = (send: { automatic: boolean; approvedBy: string; scheduled?: boolean }) => sendWays(world.core, send, world.channel).aiBrowser
+    expect(ways({ automatic: true, approvedBy: 'user', scheduled: true })).toBe(true)
+    // a rule's approval, or a send nobody planned, is still never an unattended drive of the browser
+    expect(ways({ automatic: true, approvedBy: 'auto_rule', scheduled: true })).toBe(false)
+    expect(ways({ automatic: true, approvedBy: 'user' })).toBe(false)
+    expect(ways({ automatic: true, approvedBy: 'user', scheduled: false })).toBe(false)
+    // and the owner's own press is what it always was
+    expect(ways({ automatic: false, approvedBy: 'user' })).toBe(true)
+    expect(ways({ automatic: false, approvedBy: 'auto_rule' })).toBe(false)
+  })
+
+  it('counts an item as planned by the owner only when it is an answer from the Feed and has a time', () => {
+    expect(scheduledByOwner({ findingId: 'f1', scheduledAt: '2026-11-21T19:00:00.000Z' })).toBe(true)
+    expect(scheduledByOwner({ findingId: 'f1', scheduledAt: null })).toBe(false)
+    // a post of the owner's has a time too, and keeps the rule that a scheduled post never drives a browser
+    expect(scheduledByOwner({ findingId: null, scheduledAt: '2026-11-21T19:00:00.000Z' })).toBe(false)
+  })
+})
+
+describe('No card of the Feed\'s answers is left to decide anywhere', () => {
+  const DECIDE = ['draft', 'awaiting_approval', 'ready', 'needs_user'] as const
+
+  it('keeps an answer from a post out of the list to decide, the Inbox, and the counts of what waits; it is in the reply window of its post', async () => {
+    const { findingId } = setup(presses, restricted())
+    // a held send leaves an approved item behind, and a draft kept by "Edit in full" another
+    await send(findingId, null, 'Held words.')
+    await world.core.router.call('findings.saveDraft', { id: findingId, place: place(0), text: 'Kept words.' })
+    expect(opportunities()).toHaveLength(2)
+    // a reply of the Inbox on a channel the application reads waits as it always did
+    const inbox = await inboxReply()
+    const productId = world.product.id
+
+    const all = await world.core.router.call('opportunities.list', { productId, kind: 'reply', states: [...DECIDE] })
+    expect(all).toHaveLength(3)
+    const decide = await world.core.router.call('opportunities.list', { productId, kind: 'reply', states: [...DECIDE], withoutFeedAnswers: true })
+    expect(decide.map((card) => card.opportunity.id)).toEqual([inbox.id])
+
+    const attention = await world.core.router.call('attention.list', undefined)
+    expect(attention.filter((item) => item.refType === 'opportunity').map((item) => item.refId)).toEqual([inbox.id])
+
+    const overview = await world.core.router.call('overview.get', { productId, days: 7 })
+    expect(overview.channels.find((c) => c.channelId === world.channel.id)?.waiting).toBe(0)
+    expect(overview.channels.find((c) => c.channelId === inbox.channelId)?.waiting).toBe(1)
+
+    const replies = await world.core.router.call('findings.replies', { id: findingId })
+    expect(replies.places).toMatchObject([{ position: null, state: 'ready', text: 'Held words.' }, { position: 0, state: 'draft', text: 'Kept words.' }])
   })
 })

@@ -324,5 +324,14 @@ CREATE TABLE feed_analyses (
   UNIQUE (product_id, channel_key, days)
 );
 `
+  },
+  {
+    id: 318,
+    name: 'pipeline: an approval can carry what the owner knowingly let through (Send anyway)',
+    sql: `
+-- What the owner knowingly let through when they gave this approval, as a JSON list of names (today only 'community_rules': the community's own rules forbid
+-- what is sent, and the owner pressed Send anyway). It belongs to the approval, so it dies with it: a changed text needs a new approval, and a new press.
+ALTER TABLE approvals ADD COLUMN acknowledged_json TEXT NOT NULL DEFAULT '[]';
+`
   }
 ]

@@ -22,7 +22,7 @@ import type { Comment, Discussion } from '../../shared/types'
 import type { Core } from '../core'
 import { TakeoverError, type Connector, type ConnectorContext, type LoginState, type PublishedRef, type PublishRequest } from '../ports'
 import { EXTENSION_BY_MIME } from './attachments'
-import { chooseExecutor, sendWays, type Executor } from './send-ways'
+import { chooseExecutor, scheduledByOwner, sendWays, type Executor } from './send-ways'
 import type { ApprovedContent, ApprovedFile, LeaseResult, PostAuthority, PostMissionOutcome, PostMissionRequest, SubmitLease } from '../browser-agent/post-submit'
 import type { GateGrant, SendGate } from './gate'
 import { contentHash } from './hash'
@@ -200,7 +200,7 @@ export class MissionPublisher {
    * keeps going through it, the way that is known to work. Everything else goes through the connector as before.
    */
   executorFor(grant: GateGrant, automatic: boolean): Executor {
-    const ways = sendWays(this.core, { automatic, approvedBy: grant.approval.approvedBy }, grant.channel)
+    const ways = sendWays(this.core, { automatic, approvedBy: grant.approval.approvedBy, scheduled: scheduledByOwner(grant.opportunity) }, grant.channel)
     const executor = chooseExecutor(ways, grant.draft, grant.channel.platform)
     if (ways.aiBrowser && executor === 'connector') this.core.log.info('send', 'This one is sent through the connector, which can carry it.', grant.channel.id)
     return executor

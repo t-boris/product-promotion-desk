@@ -493,7 +493,9 @@ export class SendingFlow implements SendingService {
   // ───────────── scheduled standalone publications ─────────────
 
   /**
-   * Sends approved publications whose planned time has come, without a click. Two guards keep that safe:
+   * Sends approved publications whose planned time has come, without a click, and the owner's own answers from the Feed that they put on a schedule (the
+   * owner's press made ahead of time, on exactly the text they approved; the gate and `sendWays` let those through, an automatic rule's approval never). Two
+   * guards keep that safe:
    *  - only what was approved BEFORE its planned time is picked up: approving something whose time already passed
    *    is the owner looking at it, and sending it is then the owner's Send, never an immediate side effect;
    *  - one more than an hour late (the app was not running) goes back to review instead of going out stale.
@@ -503,10 +505,14 @@ export class SendingFlow implements SendingService {
     if (this.core.settings.getRaw('automation.paused', false)) return 0
     const nowMs = this.core.clock.now().getTime()
     const due = this.core.db
-      .prepare("SELECT id, scheduled_at AS at FROM opportunities WHERE kind = 'standalone' AND state = 'ready' AND scheduled_at IS NOT NULL AND scheduled_at <= ? ORDER BY scheduled_at, rowid")
-      .all(this.store.now()) as { id: string; at: string }[]
+      .prepare(
+        `SELECT id, scheduled_at AS at, finding_id AS finding FROM opportunities
+          WHERE (kind = 'standalone' OR (kind = 'reply' AND finding_id IS NOT NULL)) AND state = 'ready' AND scheduled_at IS NOT NULL AND scheduled_at <= ?
+          ORDER BY scheduled_at, rowid`
+      )
+      .all(this.store.now()) as { id: string; at: string; finding: string | null }[]
     let attempted = 0
-    for (const { id, at } of due) {
+    for (const { id, at, finding } of due) {
       try {
         const draft = this.core.repos.latestDraft(id)
         const approval = draft ? this.core.repos.activeApproval(draft.id) : null
@@ -515,6 +521,8 @@ export class SendingFlow implements SendingService {
         if (Date.parse(approval.approvedAt) > plannedMs) continue
         if (nowMs - plannedMs > SCHEDULE_GRACE_MS) {
           this.review.returnToReview(id, SCHEDULE_MISSED_REASON)
+          // An answer from the Feed is shown in its window as "Scheduled for ...": with the approval gone that line would be a lie.
+          if (finding !== null) this.store.updateOpportunity(id, { scheduledAt: null })
           this.core.log.warn('send', `Scheduled publication ${id} was ${Math.round((nowMs - plannedMs) / 60_000)} minutes late; returned to review`)
           this.store.notify()
           continue

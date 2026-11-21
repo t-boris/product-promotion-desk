@@ -116,11 +116,18 @@ export interface FindingPlace {
  * How a press of Send ended: `sent` (confirmed), `unknown` (it may be there: the owner looks at the post and says), `failed` (it was not posted, with why),
  * `held` (nothing was posted; the AI browser could not be used now, press again) and `refused` (nothing was posted; something stops it, with what).
  */
-export type FindingSendState = 'sent' | 'unknown' | 'failed' | 'held' | 'refused'
+export type FindingSendState = 'sent' | 'unknown' | 'failed' | 'held' | 'refused' | 'scheduled'
+
+/** Why a send was held that the owner may knowingly let through: the community's own rules forbid it (the reply window offers "Send anyway"). */
+export type FindingSendCode = 'channel_restricted'
 
 export interface FindingSendResult {
   state: FindingSendState
   message: string
+  /** Set when the owner has a way through that is theirs to take (see `FindingSendCode`). */
+  code?: FindingSendCode
+  /** The time a scheduled answer goes out (ISO), for `scheduled`. */
+  at?: string
   /** The opportunity that carries this answer (it holds the draft, the approval and the attempt); null when nothing was made. */
   opportunityId: Id | null
   /** Where the comment is, when the application knows. */
@@ -135,6 +142,8 @@ export interface FindingReplyPlace {
   reason: string
   text: string
   url: string
+  /** When this answer goes out by itself (ISO): set only while it is approved and waiting for its time. Null otherwise. */
+  scheduledAt: string | null
 }
 
 export interface FindingReplies {
@@ -352,7 +361,7 @@ export interface ApiMethods {
    * Opportunities, newest first, at most 300. `productId` keeps those of one product; `source` those of one source (DEC-039): the Feed's chips are
    * `source: 'new_post'`, `'comment'`, `'reply_to_me'` and `'mention'`. Every filter is optional and they combine.
    */
-  'opportunities.list': [{ channelId?: Id; productId?: Id; kind?: OpportunityKind; source?: OpportunitySource; states?: OpportunityState[] }, OpportunityCard[]]
+  'opportunities.list': [{ channelId?: Id; productId?: Id; kind?: OpportunityKind; source?: OpportunitySource; states?: OpportunityState[]; withoutFeedAnswers?: boolean }, OpportunityCard[]]
   /**
    * What the AI judged of a channel's posts (DEC-040), newest first, at most `limit` (default 100, at most 300). `labels` keeps the given labels (all when
    * absent; a pending finding has no label and is listed only when `labels` is absent). Read-only.
@@ -379,7 +388,13 @@ export interface ApiMethods {
    * Send in the reply window: the AI puts the owner's own text, exactly as written, under the post (`place` null) or under one comment of its thread, in the
    * account's browser. The owner's press is the approval. It resolves when the send is over; `refused` and `held` mean nothing was posted.
    */
-  'findings.send': [{ id: Id; place: FindingPlace | null; text: string }, FindingSendResult]
+  'findings.send': [{ id: Id; place: FindingPlace | null; text: string; anyway?: boolean }, FindingSendResult]
+  /** Approves exactly this text for this place and puts it on a schedule: the AI browser sends it at `at` (ISO, in the future, within 30 days). `anyway`: knowingly past the community's rules. */
+  'findings.schedule': [{ id: Id; place: FindingPlace | null; text: string; at: string; anyway?: boolean }, FindingSendResult]
+  /** Takes a scheduled answer off its schedule and withdraws its approval: it is a draft of the reply window again. */
+  'findings.unschedule': [{ opportunityId: Id }, { ok: true }]
+  /** "Edit in full": keeps this text as the draft of this place WITHOUT approving or sending it, and says which item holds it (the full card is shown for it). */
+  'findings.saveDraft': [{ id: Id; place: FindingPlace | null; text: string }, { opportunityId: Id }]
   /** What was sent from this post before, place by place, the account that sends, and why a send is not possible now (an empty text when it is). */
   'findings.replies': [{ id: Id }, FindingReplies]
   /**

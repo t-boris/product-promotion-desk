@@ -6,6 +6,7 @@ import { siteLinkFor } from '../../shared/post-format'
 import type { PostType, QuickCard } from '../../shared/quick-post'
 import type {
   Account,
+  Acknowledgement,
   Approval,
   Attachment,
   Capability,
@@ -100,6 +101,11 @@ export interface OpportunityFilter {
   kind?: OpportunityKind
   source?: OpportunitySource
   states?: OpportunityState[]
+  /**
+   * Leaves out the answers the owner made from a post of the Feed (`finding_id` set). They are decided and sent in the reply window of their post, so they
+   * are never a card to decide, a count of what waits, or an item of the Inbox.
+   */
+  withoutFeedAnswers?: boolean
   limit?: number
 }
 
@@ -288,6 +294,7 @@ export class FlowStore {
       where.push(`state IN (${filter.states.map(() => '?').join(', ')})`)
       params.push(...filter.states)
     }
+    if (filter.withoutFeedAnswers) where.push('finding_id IS NULL')
     const sql = `SELECT * FROM opportunities ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY updated_at DESC, rowid DESC LIMIT ?`
     return (this.db.prepare(sql).all(...params, filter.limit ?? 300) as Row[]).map(mapOpportunity)
   }
@@ -577,14 +584,25 @@ export class FlowStore {
   }
 
   /** `identity` is who was signed in to the account when the hash was computed; it is part of what the hash binds. */
-  insertApproval(p: { draftId: Id; contentHash: string; accountId: Id; identity: string | null; destination: string; approvedBy: Approval['approvedBy']; ruleId: string | null }): Approval {
+  insertApproval(p: {
+    draftId: Id
+    contentHash: string
+    accountId: Id
+    identity: string | null
+    destination: string
+    approvedBy: Approval['approvedBy']
+    ruleId: string | null
+    /** What the owner knowingly let through; kept only for the owner's own approval. */
+    acknowledged?: Acknowledgement[]
+  }): Approval {
     const id = newId()
+    const acknowledged = p.approvedBy === 'user' ? [...new Set(p.acknowledged ?? [])] : []
     this.db
       .prepare(
-        `INSERT INTO approvals (id, draft_id, content_hash, account_id, signed_in_identity, destination, approved_by, rule_id, approved_at, invalidated_at, invalid_reason)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)`
+        `INSERT INTO approvals (id, draft_id, content_hash, account_id, signed_in_identity, destination, approved_by, rule_id, approved_at, invalidated_at, invalid_reason, acknowledged_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)`
       )
-      .run(id, p.draftId, p.contentHash, p.accountId, p.identity, p.destination, p.approvedBy, p.ruleId, this.now())
+      .run(id, p.draftId, p.contentHash, p.accountId, p.identity, p.destination, p.approvedBy, p.ruleId, this.now(), toJson(acknowledged))
     const row = this.db.prepare('SELECT * FROM approvals WHERE id = ?').get(id) as Row
     return mapApproval(row)
   }

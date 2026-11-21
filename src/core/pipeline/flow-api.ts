@@ -135,7 +135,9 @@ export function registerFlowApi({ core, store, review, monitor, drafting, sendin
     // ───────────── review queues ─────────────
     'opportunities.list': (args) => {
       const filter = args ?? {}
-      return store.list({ channelId: filter.channelId, productId: filter.productId, kind: filter.kind, source: filter.source, states: filter.states }).map((opp) => buildCard(core, store, opp))
+      return store
+        .list({ channelId: filter.channelId, productId: filter.productId, kind: filter.kind, source: filter.source, states: filter.states, withoutFeedAnswers: filter.withoutFeedAnswers === true })
+        .map((opp) => buildCard(core, store, opp))
     },
     'opportunities.get': ({ id }) => card(id),
     'opportunities.prepareDraft': async ({ id }) => {

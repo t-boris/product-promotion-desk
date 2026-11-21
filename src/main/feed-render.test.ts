@@ -10,7 +10,11 @@ import { FeedList } from '../renderer/src/pages/feed/FeedList'
 import { FindingDetail } from '../renderer/src/pages/feed/FindingDetail'
 import { FindingStream } from '../renderer/src/pages/feed/FindingStream'
 import { AnalysisBody, FeedAnalysisCard } from '../renderer/src/pages/feed/FeedAnalysisCard'
+import { FullReply } from '../renderer/src/pages/feed/FullReply'
+import { ReplyActions } from '../renderer/src/pages/feed/ReplyActions'
 import { ReplyComposer } from '../renderer/src/pages/feed/ReplyComposer'
+import { ScheduleMenu } from '../renderer/src/pages/feed/ScheduleMenu'
+import type { WayOut } from '../renderer/src/pages/feed/reply-composer'
 import { ThreadTree } from '../renderer/src/pages/feed/FindingThread'
 import { ReadingNotes } from '../renderer/src/pages/feed/ReadingNotes'
 import { BROWSER_WATCH_NOTE, OWN_POSTS_NO_CHECK } from '../renderer/src/pages/channels/own-posts'
@@ -452,11 +456,16 @@ describe('ReplyComposer: Send under a post', () => {
   const composer = (place: 'post' | number, comments: FindingComment[] = []): string =>
     html(createElement(ReplyComposer, { finding: finding({ about: 'It asks.', readAt: '2026-11-15T09:00:00.000Z' }).finding, place, comments, onClose: () => {} }))
 
-  it('has a primary Send button next to Copy', () => {
+  it('has a primary Send now button, a Schedule menu, Edit in full and Copy in one row', () => {
     const out = composer('post')
     expect(out).toContain('data-testid="reply-send"')
     expect(out).toMatch(/data-testid="reply-send"[^>]*btn-primary/)
+    expect(out).toContain('Send now')
+    expect(out).toContain('data-testid="reply-schedule"')
+    expect(out).toContain('data-testid="reply-edit-full"')
     expect(out).toContain('data-testid="reply-copy"')
+    // one row: nothing else is between the buttons
+    expect(out).toMatch(/data-testid="reply-actions"/)
   })
 
   it('keeps Send shut while there is no text, and says why', () => {
@@ -600,5 +609,92 @@ describe('the card of the analysis of the Feed', () => {
   it('says for how many posts the numbers are known, when it is some of them', () => {
     expect(body(view({ themes: [theme({ known: 2 })] }))).toContain('known for 2 of 3 posts')
     expect(body(view({ themes: [theme({ known: 3 })] }))).not.toContain('known for')
+  })
+})
+
+describe('ReplyActions: what the window offers beside the text', () => {
+  const actions = (over: { way?: WayOut | null; plannedLine?: string | null; working?: boolean; stopped?: string; posting?: boolean; copyDisabled?: boolean } = {}): string =>
+    html(
+      createElement(ReplyActions, {
+        way: over.way ?? null,
+        plannedLine: over.plannedLine ?? null,
+        working: over.working ?? false,
+        stopped: over.stopped ?? '',
+        posting: over.posting ?? false,
+        onSend: () => {},
+        onSchedule: () => {},
+        onCancelPlan: () => {},
+        onEditFull: () => {},
+        onCopy: () => {},
+        onBack: () => {},
+        copyDisabled: over.copyDisabled ?? false,
+        openPost: createElement('a', { 'data-testid': 'reply-open-post' }, 'Open post')
+      })
+    )
+
+  it('offers Send now, Schedule, Edit in full and Copy, and nothing about a refusal, when nothing went wrong', () => {
+    const out = actions()
+    for (const id of ['reply-send', 'reply-schedule', 'reply-edit-full', 'reply-copy']) expect(out).toContain(`data-testid="${id}"`)
+    for (const id of ['reply-send-anyway', 'reply-schedule-anyway', 'reply-open-post', 'reply-back', 'reply-scheduled']) expect(out).not.toContain(`data-testid="${id}"`)
+    expect(out).toContain('Send now')
+    expect(out).not.toContain('Send anyway')
+  })
+
+  it('offers Send anyway and Schedule anyway beside Copy and the post when the community\'s own rules are in the way, and no Edit in full', () => {
+    const out = actions({ way: 'anyway' })
+    for (const id of ['reply-send-anyway', 'reply-schedule-anyway', 'reply-copy', 'reply-open-post', 'reply-back']) expect(out).toContain(`data-testid="${id}"`)
+    expect(out).toContain('Send anyway')
+    expect(out).toContain('Schedule anyway')
+    for (const id of ['reply-send"', 'reply-schedule"', 'reply-edit-full']) expect(out).not.toContain(`data-testid="${id}`)
+    expect(out).toMatch(/data-testid="reply-send-anyway"[^>]*btn-primary/)
+  })
+
+  it('offers the same buttons and the post to open for any other refusal, and never Send anyway', () => {
+    const out = actions({ way: 'by-hand' })
+    for (const id of ['reply-send', 'reply-schedule', 'reply-edit-full', 'reply-copy', 'reply-open-post']) expect(out).toContain(`data-testid="${id}"`)
+    expect(out).not.toContain('Send anyway')
+    expect(out).not.toContain('data-testid="reply-back"')
+  })
+
+  it('says when the comment is planned, with Change and Cancel, keeps Send now, and puts the Schedule menu away', () => {
+    const out = actions({ plannedLine: 'Scheduled for today 7:00 pm' })
+    expect(out).toContain('data-testid="reply-scheduled"')
+    expect(out).toContain('Scheduled for today 7:00 pm')
+    expect(out).toContain('data-testid="reply-reschedule"')
+    expect(out).toContain('data-testid="reply-unschedule"')
+    expect(out).toContain('Cancel')
+    expect(out).toContain('data-testid="reply-send"')
+    expect(out).not.toContain('data-testid="reply-schedule"')
+  })
+
+  it('shuts Send now, Schedule and Edit in full while something is being done or something is in the way, and never shuts Copy for that', () => {
+    for (const out of [actions({ working: true }), actions({ stopped: 'Write the comment first.' })]) {
+      expect(out).toMatch(/disabled=""\s+data-testid="reply-send"/)
+      expect(out).toMatch(/disabled=""\s+data-testid="reply-edit-full"/)
+      expect(out).toMatch(/disabled=""[^>]*data-testid="reply-schedule"/)
+      expect(out).not.toMatch(/disabled=""\s+data-testid="reply-copy"/)
+    }
+    expect(actions({ copyDisabled: true })).toMatch(/disabled=""\s+data-testid="reply-copy"/)
+    expect(actions({ posting: true })).toContain('Posting…')
+  })
+})
+
+describe('ScheduleMenu', () => {
+  it('shows only its button until it is opened: the times are worked out when it opens', () => {
+    const out = html(createElement(ScheduleMenu, { label: 'Schedule', onPick: () => {}, testId: 'sm' }))
+    expect(out).toContain('data-testid="sm"')
+    expect(out).toContain('aria-haspopup="menu"')
+    expect(out).toContain('aria-expanded="false"')
+    expect(out).not.toContain('role="menu"')
+  })
+})
+
+describe('FullReply: Edit in full', () => {
+  it('has the way back to the reply window while the card loads, and no card yet', () => {
+    const out = html(createElement(FullReply, { opportunityId: 'o1', onBack: () => {} }))
+    expect(out).toContain('data-testid="reply-full"')
+    expect(out).toContain('Back to the reply window')
+    expect(out).toContain('Opening the comment')
+    expect(out).not.toContain('data-testid="review-card-')
   })
 })
