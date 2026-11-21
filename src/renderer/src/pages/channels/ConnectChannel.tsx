@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { Account, Channel, ChannelSuggestion, PlatformInfo, Product } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
 import { Button, Card, ErrorNote, Field, Hint, useMainVariant } from '../../ui'
@@ -41,6 +41,10 @@ export function ConnectChannel({ product, needsAccount, accounts, firstAccountId
   const [target, setTarget] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
   const [justJoined, setJustJoined] = useState(false)
+  // The idea "Use this" filled in, said beside the form: the ideas are far below it, so a form filled out of sight looks like a button that does nothing.
+  const [fromIdea, setFromIdea] = useState<string | null>(null)
+  const formRef = useRef<HTMLFormElement>(null)
+  const targetRef = useRef<HTMLInputElement>(null)
   const [connect, state] = useAction((args: { productId: string; accountId: string; target: string }) => call('channels.connect', args))
 
   const productId = product?.id ?? ''
@@ -64,6 +68,11 @@ export function ConnectChannel({ product, needsAccount, accounts, firstAccountId
     const match = wanted ? (mine.find((a) => a.platform === wanted.platform) ?? accounts.find((a) => a.platform === wanted.platform)) : undefined
     setTarget(prefill.suggestion.target)
     setJustJoined(false)
+    setFromIdea(`${prefill.suggestion.target} on ${platformLabel(prefill.suggestion.platform, platforms)}`)
+    // Show the form that was filled: bring it into view and put the cursor in the address, so Enter connects after a look at it.
+    const calm = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    formRef.current?.scrollIntoView({ block: 'center', behavior: calm ? 'auto' : 'smooth' })
+    targetRef.current?.focus({ preventScroll: true })
     if (match) {
       setAccountId(match.id)
       setNotice(null)
@@ -81,6 +90,7 @@ export function ConnectChannel({ product, needsAccount, accounts, firstAccountId
       setJustJoined(otherLoginThere)
       setTarget('')
       setNotice(null)
+      setFromIdea(null)
       onConnected(channel)
     }
   }
@@ -96,7 +106,7 @@ export function ConnectChannel({ product, needsAccount, accounts, firstAccountId
             Connecting saves the address for <strong>{product.name}</strong>: nothing is posted and nothing is read yet.
           </Hint>
         ))}
-      <form onSubmit={(e) => void submit(e)} data-testid="connect-form">
+      <form ref={formRef} onSubmit={(e) => void submit(e)} data-testid="connect-form">
         <div className="form-row">
           <Field label="Account">
             <select className="input" value={account?.id ?? ''} onChange={(e) => setAccountId(e.target.value)} disabled={accounts.length === 0} data-testid="connect-account">
@@ -125,9 +135,11 @@ export function ConnectChannel({ product, needsAccount, accounts, firstAccountId
             <input
               className="input"
               value={target}
+              ref={targetRef}
               onChange={(e) => {
                 setTarget(e.target.value)
                 setJustJoined(false)
+                setFromIdea(null)
               }}
               placeholder={addressExample(info)}
               disabled={needsAccount}
@@ -145,6 +157,11 @@ export function ConnectChannel({ product, needsAccount, accounts, firstAccountId
         {(otherLoginThere || justJoined) && (
           <div className="note" data-testid="one-login-speaks">
             {ONE_LOGIN_SPEAKS}
+          </div>
+        )}
+        {fromIdea && (
+          <div className="note" data-testid="connect-from-idea">
+            Filled in from the idea: {fromIdea}. Check the account and the address, then press Connect channel. Nothing is connected until you do.
           </div>
         )}
         {notice && (
