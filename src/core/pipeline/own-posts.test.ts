@@ -66,20 +66,30 @@ describe('activating a channel the app does not read', () => {
     expect(world.refresh().status).toBe('setup')
   })
 
-  it('is refused when posting itself is known to be impossible there', async () => {
+  it.each([
+    ['unavailable', 'text only'],
+    ['restricted', 'No memes, ChatGPT or shitposts.']
+  ] as const)('is activated even when posting is %s there: the AI only reads it, and a place that forbids posts like yours is still worth reading (DEC-045)', async (status, detail) => {
     world = ownPostsWorld()
-    const caps = world.channel.capabilities.map((c) => (c.key === 'publish_post' ? { ...c, status: 'unavailable' as const, detail: 'text only' } : c))
+    const caps = world.channel.capabilities.map((c) => (c.key === 'publish_post' ? { ...c, status, detail } : c))
     world.core.db.prepare('UPDATE channels SET capabilities_json = ? WHERE id = ?').run(toJson(caps), world.channel.id)
-    await expect(world.core.router.call('channels.activate', { channelId: world.channel.id })).rejects.toMatchObject({ code: 'publish_unavailable' })
-    expect(world.refresh().status).toBe('setup')
+    const channel = await world.core.router.call('channels.activate', { channelId: world.channel.id })
+    expect(channel).toMatchObject({ status: 'active', watchedInBrowser: true })
+    expect(channel.capabilities.find((c) => c.key === 'publish_post')).toMatchObject({ status, detail })
   })
 
-  it('is refused too when posting is restricted by the rules there', async () => {
+  it('stops a post at the send, not at the activation, when posting is restricted there: nothing is carried to the page', async () => {
     world = ownPostsWorld()
-    const caps = world.channel.capabilities.map((c) => (c.key === 'publish_post' ? { ...c, status: 'restricted' as const, detail: 'no posts by new accounts' } : c))
+    const missions = new ScriptedMissions(async () => undefined)
+    world.core.services.postMissions = missions
+    const caps = world.channel.capabilities.map((c) => (c.key === 'publish_post' ? { ...c, status: 'restricted' as const, detail: 'No memes, ChatGPT or shitposts.' } : c))
     world.core.db.prepare('UPDATE channels SET capabilities_json = ? WHERE id = ?').run(toJson(caps), world.channel.id)
-    await expect(world.core.router.call('channels.activate', { channelId: world.channel.id })).rejects.toMatchObject({ code: 'publish_unavailable' })
-    expect(world.refresh().status).toBe('setup')
+    await world.core.router.call('channels.activate', { channelId: world.channel.id })
+    const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'Hello', text: 'A post of my own.' } })
+    await world.core.router.call('opportunities.approve', { id: opportunity.id })
+    await expect(world.sending.send(opportunity.id)).rejects.toThrow(/restricted/)
+    expect(missions.requests).toEqual([])
+    expect(world.connector.published).toHaveLength(0)
   })
 
   it('does not activate a paused channel', async () => {

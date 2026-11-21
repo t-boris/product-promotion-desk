@@ -56,10 +56,9 @@ export function registerFlowApi({ core, store, review, monitor, drafting, sendin
   const activateOwnPosts = (channel: Channel): Channel => {
     const account = core.repos.account(channel.accountId)
     if (account.status !== 'ready') throw new ApiError('account_not_ready', `${account.label} is not signed in. Sign in first, then activate the channel.`)
-    const post = channel.capabilities.find((c) => c.key === 'publish_post')
-    if (post && (post.status === 'unavailable' || post.status === 'restricted')) {
-      throw new ApiError('publish_unavailable', `Posts cannot be made on this channel (${post.status}${post.detail ? `: ${post.detail}` : ''}).`)
-    }
+    // Whether a post can be made there is not asked here: the AI only reads the channel from now on (DEC-045), and a community that forbids posts like
+    // the owner's, or any post at all, is still worth reading. Posting stays stopped where it is decided: the approval and the send refuse a post whose
+    // ability is unavailable or restricted, and the abilities table says why.
     // The AI watches it in the account's browser from now on, with no baseline to read first (DEC-042, DEC-045).
     return setChannelStatus(channel, 'active', '', core.clock.now().toISOString())
   }

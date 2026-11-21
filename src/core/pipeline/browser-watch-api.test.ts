@@ -49,14 +49,14 @@ describe('activating a channel that is watched in the browser', () => {
     expect(world.core.runs.list({ channelId }).filter((r) => r.kind === 'monitor')).toEqual([])
   })
 
-  it('keeps the checks it has always made: the account must be signed in, and posting must not be unavailable', async () => {
+  it('needs the account signed in, and nothing else: whether posts can be made there is not asked of a channel that is only read (DEC-045)', async () => {
     const { channelId } = watchedWorld()
     world.core.db.prepare("UPDATE accounts SET status = 'login_required' WHERE id = ?").run(world.account.id)
     await expect(call('channels.activate', { channelId })).rejects.toMatchObject({ code: 'account_not_ready' })
     world.core.db.prepare("UPDATE accounts SET status = 'ready' WHERE id = ?").run(world.account.id)
     const caps = channelOf(channelId).capabilities.map((c) => (c.key === 'publish_post' ? { ...c, status: 'unavailable' as const } : c))
     world.core.db.prepare('UPDATE channels SET capabilities_json = ? WHERE id = ?').run(toJson(caps), channelId)
-    await expect(call('channels.activate', { channelId })).rejects.toMatchObject({ code: 'publish_unavailable' })
+    expect(await call('channels.activate', { channelId })).toMatchObject({ status: 'active', watchedInBrowser: true })
   })
 
   it('does not activate a paused channel', async () => {
