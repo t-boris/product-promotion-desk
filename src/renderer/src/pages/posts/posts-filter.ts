@@ -3,6 +3,7 @@
 // The state of a post comes from its opportunity and nothing else; the screen never invents one.
 
 import type { Attachment, Id, IsoTime, OpportunityCard, OpportunityState, PostGroupCard } from '../../../../shared/types'
+import { nameOf } from '../review/quick/labels'
 
 /** The states the owner filters by. `deleted` is a post the owner took back (the record of it stays). */
 export type PostState = 'draft' | 'approved' | 'scheduled' | 'sent' | 'deleted'
@@ -86,9 +87,13 @@ const STATE_ORDER: PostState[] = ['draft', 'approved', 'scheduled', 'sent', 'del
 
 const TITLE_LIMIT = 80
 
-/** The post's title, or the first line of its text, cut to a row. */
+/**
+ * The post's name in a row, by its type: an article is its title, else the first line of its text, cut to a row (as it always was); a quick post
+ * has no title, and is the first words of its caption (a picture alone is "Picture post").
+ */
 export function titleOf(card: OpportunityCard): string {
   const draft = card.draft
+  if (draft?.postType === 'quick') return nameOf(draft) || 'Picture post'
   const title = draft?.title?.trim()
   if (title) return title
   const first = (draft?.text ?? '').split('\n').map((line) => line.trim()).find((line) => line !== '')
@@ -106,7 +111,8 @@ function rowOf(id: Id, kind: PostRow['kind'], cards: OpportunityCard[], masterTe
     .map((c) => c.opportunity.scheduledAt as string)
     .sort()
   const sent = cards.map((c) => (c.opportunity.state === 'confirmed' ? c.lastAction?.completedAt ?? c.opportunity.updatedAt : null)).filter((at): at is string => at !== null).sort()
-  const text = cards.map((c) => `${c.draft?.title ?? ''} ${c.draft?.text ?? ''}`).join(' ')
+  // What the search reads: the title and the text, and the headline of a card (it is text on the picture, and may be the owner's own words).
+  const text = cards.map((c) => `${c.draft?.title ?? ''} ${c.draft?.text ?? ''} ${c.draft?.postType === 'quick' ? (c.draft.card?.headline ?? '') : ''}`).join(' ')
   return {
     id,
     kind,

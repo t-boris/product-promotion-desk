@@ -3,6 +3,7 @@
 
 import type { AttentionItem, Channel, Account, Id, IsoTime, OpportunityCard, OpportunityState } from '../../../../shared/types'
 import { STATE_TONE } from '../review/labels'
+import { nameOf } from '../review/quick/labels'
 
 export type InboxGroupId = 'replies' | 'posts' | 'questions' | 'results'
 
@@ -141,7 +142,9 @@ export interface RowSummary {
 export function rowSummary(card: OpportunityCard): RowSummary {
   const opp = card.opportunity
   const standalone = opp.kind === 'standalone'
-  const who = standalone ? card.draft?.title || 'New post' : (card.comment?.author ?? card.discussion?.author ?? 'Comment')
+  // A post of the owner's is named by its type: an article by its title, a quick post (it has none) by the first words of its caption.
+  const own = card.draft?.postType === 'quick' ? nameOf(card.draft) || 'Picture post' : card.draft?.title || 'New post'
+  const who = standalone ? own : (card.comment?.author ?? card.discussion?.author ?? 'Comment')
   // What the item is about: the comment answered, the post written, or what the AI asks.
   const text = opp.state === 'needs_user' ? opp.reason || (card.comment?.body ?? '') : standalone ? (card.draft?.text ?? '') : (card.comment?.body ?? card.discussion?.title ?? '')
   const tone = STATE_TONE[opp.state]

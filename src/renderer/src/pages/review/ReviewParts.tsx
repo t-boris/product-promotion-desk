@@ -8,6 +8,8 @@ import { ReviewButtons } from './ReviewButtons'
 import { ScheduleControl } from './ScheduleControl'
 import { ThreadView } from './ThreadView'
 import { CATEGORY_LABEL, DECISION_LABEL, DISCLOSURE_HINT, KIND_LABEL, STATE_LABEL, STATE_TONE, isUndisclosed } from './labels'
+import { QuickComposer } from './quick/QuickComposer'
+import { QUICK_SLOTS } from './quick/quick-slots'
 import { removalWords } from './removal-words'
 import type { ReviewItem } from './useReviewItem'
 import './review.css'
@@ -70,15 +72,31 @@ export function ReviewBody({ item, notes }: { item: ReviewItem; /** What the own
         </div>
       )}
 
-      <DraftEditor
-        form={item.form}
-        onChange={item.setForm}
-        withTitle={standalone}
-        disabled={locked || working}
-        draft={card.draft}
-        ai={locked ? undefined : { opportunityId: opp.id }}
-        post={standalone ? { productId: opp.productId, platform: card.channelPlatform, reads: card.channelReads, author: { name: card.accountLabel, target: card.channelTarget } } : undefined}
-      />
+      {/* The layout follows the type of the draft, never an empty title: a quick post is edited in the composer, everything else in the editor. */}
+      {item.quick ? (
+        <QuickComposer
+          {...QUICK_SLOTS}
+          productId={opp.productId}
+          channelId={opp.channelId}
+          form={item.quick.form}
+          onChange={item.quick.setForm}
+          platforms={[card.channelPlatform]}
+          author={{ name: card.accountLabel, target: card.channelTarget }}
+          reads={card.channelReads}
+          disabled={locked || working}
+          draft={card.draft}
+        />
+      ) : (
+        <DraftEditor
+          form={item.form}
+          onChange={item.setForm}
+          withTitle={standalone}
+          disabled={locked || working}
+          draft={card.draft}
+          ai={locked ? undefined : { opportunityId: opp.id }}
+          post={standalone ? { productId: opp.productId, platform: card.channelPlatform, reads: card.channelReads, author: { name: card.accountLabel, target: card.channelTarget } } : undefined}
+        />
+      )}
       {standalone && !locked && card.channelReads !== false && <ScheduleControl opportunity={opp} busy={working} onSchedule={(at) => void actions.schedule(opp.id, at)} />}
 
       {notes}

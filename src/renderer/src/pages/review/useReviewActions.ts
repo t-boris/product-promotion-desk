@@ -33,8 +33,11 @@ export interface ReviewActions {
 /**
  * The owner's actions on one review card, with one shared busy/error state so the card can disable its buttons
  * while a call is running and show why a call failed. `onDone` is called after any successful action.
+ *
+ * `settle` finishes a draft before it is saved: a quick post whose card changed is drawn and stored first (REQ-003), and the draft that comes
+ * back carries the new picture. It runs inside the busy step, so the buttons are off and the form cannot change while the card is drawn.
  */
-export function useReviewActions(onDone?: (card: OpportunityCard) => void): ReviewActions {
+export function useReviewActions(onDone?: (card: OpportunityCard) => void, settle?: (draft: DraftInput) => Promise<DraftInput>): ReviewActions {
   const [perform, state] = useAction(async (work: () => Promise<OpportunityCard>) => {
     const card = await work()
     onDone?.(card)
@@ -47,15 +50,15 @@ export function useReviewActions(onDone?: (card: OpportunityCard) => void): Revi
     busy: state.busy || checking,
     error: state.error,
     prepare: (id) => perform(() => call('opportunities.prepareDraft', { id })),
-    save: (id, draft) => perform(() => call('opportunities.saveDraft', { id, draft })),
+    save: (id, draft) => perform(async () => call('opportunities.saveDraft', { id, draft: settle ? await settle(draft) : draft })),
     approve: (id, draft) =>
       perform(async () => {
-        if (draft) await call('opportunities.saveDraft', { id, draft })
+        if (draft) await call('opportunities.saveDraft', { id, draft: settle ? await settle(draft) : draft })
         return call('opportunities.approve', { id })
       }),
     approveAndSend: (id, draft) =>
       perform(async () => {
-        if (draft) await call('opportunities.saveDraft', { id, draft })
+        if (draft) await call('opportunities.saveDraft', { id, draft: settle ? await settle(draft) : draft })
         await call('opportunities.approve', { id })
         return call('opportunities.send', { id })
       }),

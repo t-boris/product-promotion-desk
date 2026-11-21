@@ -4,6 +4,7 @@
 
 import type { DraftInput } from '../../../../shared/api'
 import { platformLabel } from '../../../../shared/post-format'
+import { postLabel } from '../../../../shared/quick-post'
 import type { Draft, GroupChannelOption, Id, OpportunityCard, OpportunityState, PostGroup, PostGroupResult, PostVersion, SendWay } from '../../../../shared/types'
 import type { Tone } from '../../tone'
 import { LOCKED_STATES } from './labels'
@@ -15,8 +16,12 @@ export const plural = (count: number, word: string): string => `${count} ${word}
 const TITLE_WORDS = 8
 const TITLE_CHARS = 80
 
-/** The master's title, else its first words: what the group is called on the screen. */
+/**
+ * What the group is called on the screen: by the type of its master (never by an empty title). An article is its title, else its first words
+ * (as before); a quick post has no title and is its caption's first words.
+ */
 export function groupTitle(group: PostGroup): string {
+  if (group.master.postType === 'quick') return postLabel({ postType: 'quick', title: group.master.title, text: group.master.text }) || 'Post for several channels'
   const title = group.master.title?.trim()
   if (title) return title
   const words = group.master.text.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean)
@@ -229,7 +234,8 @@ const ALSO_POST_STATES: OpportunityState[] = ['draft', 'awaiting_approval', 'rea
 export const alsoPostAllowed = (card: Pick<OpportunityCard, 'opportunity' | 'draft'>): boolean =>
   card.opportunity.kind === 'standalone' && !card.opportunity.groupId && card.draft !== null && ALSO_POST_STATES.includes(card.opportunity.state)
 
-/** The post's own text as the draft the channel list is asked about. */
+/** The post's own text as the draft the channel list is asked about. A quick post is asked as one (its caption, its one picture), so a channel is judged by the rules of a quick post. */
 export function draftInputOf(draft: Draft): DraftInput {
-  return { title: draft.title, text: draft.text, link: draft.link, attachments: draft.attachments, markup: draft.markup ?? 'legacy' }
+  const input: DraftInput = { title: draft.title, text: draft.text, link: draft.link, attachments: draft.attachments, markup: draft.markup ?? 'legacy' }
+  return draft.postType === 'quick' ? { ...input, postType: 'quick', card: draft.card } : input
 }

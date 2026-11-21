@@ -2,6 +2,7 @@ import { useLayoutEffect, useState, type ReactNode } from 'react'
 import type { Id, OpportunityCard } from '../../../../shared/types'
 import { Button, Card, formatTime } from '../../ui'
 import { mainActionOf } from './main-action'
+import { ownPostSummary } from './quick/labels'
 import { ReviewActionRow, ReviewBody, ReviewIdentity } from './ReviewParts'
 import { useReviewItem } from './useReviewItem'
 import './review.css'
@@ -50,7 +51,8 @@ export function ReviewCard({ card, collapsible = false, defaultOpen = true, prod
   const opp = card.opportunity
   const item = useReviewItem(card, { frozen, alsoPostTo })
   const { dirty } = item
-  const summary = item.standalone ? card.draft?.title || card.draft?.text || 'New publication' : (card.comment?.body ?? 'Comment')
+  // A quick post has no title, and is named by the first words of its caption; an article is its title, else its text, as before.
+  const summary = item.standalone ? ownPostSummary(card.draft) : (card.comment?.body ?? 'Comment')
 
   // The list gives the one filled button to the first card that shows a main action; a closed card shows none.
   const offersMain = open && mainActionOf(opp.state, dirty) !== null

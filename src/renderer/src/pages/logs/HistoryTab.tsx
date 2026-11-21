@@ -3,6 +3,7 @@ import { useQuery } from '../../hooks'
 import { Badge, Card, EmptyState, ErrorNote, Loading, formatTime } from '../../ui'
 import { SEND_STATE_LABEL, SEND_STATE_TONE } from './labels'
 import { useVersionLabels } from './useVersionLabels'
+import { headingOf } from '../review/quick/labels'
 
 const EXCERPT = 220
 
@@ -17,6 +18,8 @@ function isWebLink(url: string | null): url is string {
 function HistoryRow({ entry, versionLabel }: { entry: HistoryEntry; versionLabel: string | null }) {
   const { action, draft, opportunity } = entry
   const when = action.completedAt ?? action.attemptedAt
+  // By the type of the post, never by an empty title: a quick post is named by the first words of its caption.
+  const heading = headingOf(draft)
   return (
     <tr data-testid={`history-${action.id}`}>
       <td className="log-fit">
@@ -24,8 +27,8 @@ function HistoryRow({ entry, versionLabel }: { entry: HistoryEntry; versionLabel
         {action.completedAt && <div className="muted small">Attempted {formatTime(action.attemptedAt)}</div>}
       </td>
       <td className="log-text">
-        {draft.title && <strong>{draft.title}</strong>}
-        <div>{excerpt(draft.text)}</div>
+        {heading.heading && <strong>{heading.heading}</strong>}
+        {!heading.repeats && <div>{excerpt(draft.text)}</div>}
         {draft.link && <div className="muted small">Link: {draft.link}</div>}
         <div className="muted small">{opportunity.kind === 'standalone' ? 'Standalone publication' : 'Reply'}</div>
       </td>

@@ -1,7 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { judgedForFit, parseBlocks, platformLabel, renderForPlatform, sendProblems, type Block, type Inline, type PostContent, type RenderedPost } from '../../../../shared/post-format'
 import { PREVIEW_PLATFORMS, counterFor, fold, initialOf, previewKind, sketchNote, visiblePictures, whereLine, type PreviewKind } from '../../../../shared/post-preview'
+import type { CardShape } from '../../../../shared/quick-post'
 import { CopyButton } from '../channels/CopyButton'
+import { previewPlatformOf } from './quick/preview-model'
 import { useThumbs } from './useMedia'
 
 /** The marks of a text as React elements: no HTML is ever built from the text, and a link is shown, never followed. */
@@ -87,8 +89,14 @@ export interface PostAuthor {
 
 type Thumbs = Record<string, string>
 
+/** A picture that is not saved yet and is drawn from what is on the screen (the card of a quick post): the first picture of the post that has no library id. */
+export interface LivePicture {
+  url: string
+  alt: string
+}
+
 /** The pictures of the post in the layout of the platform: one after another (Reddit), a grid with "+N" (a feed), an album (a chat), the first with a count (Instagram). */
-function Pictures({ rendered, kind, thumbs }: { rendered: RenderedPost; kind: PreviewKind; thumbs: Thumbs }) {
+function Pictures({ rendered, kind, thumbs, live }: { rendered: RenderedPost; kind: PreviewKind; thumbs: Thumbs; live?: LivePicture }) {
   const all = rendered.attachments
   const { shown, more } = visiblePictures(kind, all.length)
   if (shown === 0) return null
@@ -97,7 +105,7 @@ function Pictures({ rendered, kind, thumbs }: { rendered: RenderedPost; kind: Pr
     <div className={`pv-pictures pv-pictures-${kind} n${Math.min(shown, 4)}`} data-testid="preview-pictures">
       {items.map((a, index) => (
         <div key={a.mediaId ?? a.path} className="pv-picture">
-          {a.mediaId && thumbs[a.mediaId] ? <img src={thumbs[a.mediaId]} alt={a.name} /> : <span className="muted small">{a.name}</span>}
+          {a.mediaId && thumbs[a.mediaId] ? <img src={thumbs[a.mediaId]} alt={a.name} /> : live && index === 0 && !a.mediaId ? <img src={live.url} alt={live.alt} data-testid="preview-live-picture" /> : <span className="muted small">{a.name}</span>}
           {more > 0 && index === items.length - 1 && kind !== 'instagram' && <span className="pv-more">+{more}</span>}
         </div>
       ))}
@@ -124,9 +132,9 @@ function Words({ rendered, markdown }: { rendered: RenderedPost; markdown: boole
   return markdown ? <div className="pv-words marked">{blocks(parseBlocks(rendered.text))}</div> : rendered.text !== '' ? <div className="pv-words pv-plain">{rendered.text}</div> : null
 }
 
-function Sketch({ rendered, kind, author, thumbs, markdown }: { rendered: RenderedPost; kind: PreviewKind; author: PostAuthor; thumbs: Thumbs; markdown: boolean }) {
+function Sketch({ rendered, kind, author, thumbs, markdown, live }: { rendered: RenderedPost; kind: PreviewKind; author: PostAuthor; thumbs: Thumbs; markdown: boolean; live?: LivePicture }) {
   const link = rendered.link ? <div className="pv-link small">{rendered.link}</div> : null
-  const pictures = <Pictures rendered={rendered} kind={kind} thumbs={thumbs} />
+  const pictures = <Pictures rendered={rendered} kind={kind} thumbs={thumbs} live={live} />
   switch (kind) {
     case 'reddit':
       return (
@@ -204,11 +212,42 @@ function Sketch({ rendered, kind, author, thumbs, markdown }: { rendered: Render
 export const postAsText = (rendered: { title: string | null; text: string; link: string | null }): string =>
   [rendered.title, rendered.text, rendered.link].filter((part): part is string => typeof part === 'string' && part.trim() !== '').join('\n\n')
 
-export function PostPreview({ content, channelPlatform, author, aiBrowser = false, noConnector = false }: { content: PostContent; channelPlatform: string; author: PostAuthor; /** The AI publishes in the account's browser (chosen in Settings, or the channel has no other way): pictures then go to any platform that takes them. */ aiBrowser?: boolean; /** The application does not read the channel, so no connector can post to it (DEC-035). */ noConnector?: boolean }) {
-  const [platform, setPlatform] = useState(channelPlatform)
+export function PostPreview({
+  content,
+  channelPlatform,
+  author,
+  aiBrowser = false,
+  noConnector = false,
+  platforms,
+  livePicture,
+  pictureShape
+}: {
+  content: PostContent
+  channelPlatform: string
+  author: PostAuthor
+  /** The AI publishes in the account's browser (chosen in Settings, or the channel has no other way): pictures then go to any platform that takes them. */
+  aiBrowser?: boolean
+  /** The application does not read the channel, so no connector can post to it (DEC-035). */
+  noConnector?: boolean
+  /**
+   * The platforms the owner can look at the post as, when they are only the channels it goes to (the quick-post composer): the pop-up offers these and
+   * no other, and the sketch's note speaks of the platform shown, since each of them is a place the post is going.
+   */
+  platforms?: readonly string[]
+  /** The first picture of the post without a library id, drawn from what is on the screen (the card of a quick post that is not saved yet). */
+  livePicture?: LivePicture
+  /** The shape of the picture when it is known (the card's): the sketch gives the picture that shape instead of its own. */
+  pictureShape?: CardShape
+}) {
+  const [picked, setPicked] = useState(channelPlatform)
   // A different channel starts at its own platform again.
-  useEffect(() => setPlatform(channelPlatform), [channelPlatform])
-  const choices = PREVIEW_PLATFORMS.some((p) => p.platform === channelPlatform) ? PREVIEW_PLATFORMS : [...PREVIEW_PLATFORMS, { platform: channelPlatform, label: platformLabel(channelPlatform) }]
+  useEffect(() => setPicked(channelPlatform), [channelPlatform])
+  const platform = platforms ? (previewPlatformOf(picked, platforms) ?? channelPlatform) : picked
+  const choices = platforms
+    ? platforms.map((p) => ({ platform: p, label: platformLabel(p) }))
+    : PREVIEW_PLATFORMS.some((p) => p.platform === channelPlatform)
+      ? PREVIEW_PLATFORMS
+      : [...PREVIEW_PLATFORMS, { platform: channelPlatform, label: platformLabel(channelPlatform) }]
   const kind = previewKind(platform)
   const rendered = renderForPlatform(content, platform)
   // An older draft is judged by its connector; the one thing said of it is that a link added to the end of the text took it over the limit (DEC-036). A quick post is judged whole, like a post written in the editor (its picture's own rules are shown by the composer).
@@ -219,15 +258,15 @@ export function PostPreview({ content, channelPlatform, author, aiBrowser = fals
   const markdown = rendered.format === 'markdown' && content.markup === 'markdown'
   const counter = counterFor(platform, rendered.text)
   return (
-    <section className="post-preview" aria-label={`The post as ${platformLabel(platform)} shows it`} data-testid="post-preview" data-platform={platform}>
+    <section className="post-preview" aria-label={`The post as ${platformLabel(platform)} shows it`} data-testid="post-preview" data-platform={platform} data-shape={pictureShape}>
       <div className="post-preview-head">
         <label className="post-preview-pick">
           <span className="post-preview-title">Preview as</span>
-          <select className="input" value={platform} onChange={(e) => setPlatform(e.target.value)} data-testid="preview-platform">
+          <select className="input" value={platform} onChange={(e) => setPicked(e.target.value)} data-testid="preview-platform">
             {choices.map((p) => (
               <option key={p.platform} value={p.platform}>
                 {p.label}
-                {p.platform === channelPlatform ? ' (this channel)' : ''}
+                {!platforms && p.platform === channelPlatform ? ' (this channel)' : ''}
               </option>
             ))}
           </select>
@@ -239,9 +278,9 @@ export function PostPreview({ content, channelPlatform, author, aiBrowser = fals
         )}
       </div>
       <div className={`pv pv-${kind}`} data-testid="preview-sketch" data-kind={kind}>
-        {empty ? <div className="muted small">Nothing to show yet.</div> : <Sketch rendered={rendered} kind={kind} author={author} thumbs={thumbs} markdown={markdown} />}
+        {empty ? <div className="muted small">Nothing to show yet.</div> : <Sketch rendered={rendered} kind={kind} author={author} thumbs={thumbs} markdown={markdown} live={livePicture} />}
       </div>
-      <div className="muted small">{sketchNote(platform, channelPlatform)}</div>
+      <div className="muted small">{sketchNote(platform, platforms ? platform : channelPlatform)}</div>
       {!empty && (
         <div className="post-preview-copy">
           <CopyButton text={postAsText(rendered)} label="Copy post" testId="copy-post" />

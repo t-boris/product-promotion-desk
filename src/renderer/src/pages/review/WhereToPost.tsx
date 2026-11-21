@@ -32,13 +32,15 @@ interface Props {
   disabled: boolean
   /** Said when there is no other channel to offer. */
   alone?: string
+  /** Channels that cannot be ticked now, with the reason, by channel id (a picture post and an article never go together). A ticked channel is never listed: it must be possible to untick it. */
+  blocked?: Readonly<Record<Id, string>>
 }
 
 /**
  * "Where to post": the channels of the product, one tick each. Nothing is ticked for the owner but the channel the screen is on; the app
  * only marks the ones it suggests. A channel the post does not fit may still be ticked: its version will say what is wrong.
  */
-export function WhereToPost({ heading, note, rows, loading, error, chosen, onToggle, disabled, alone }: Props) {
+export function WhereToPost({ heading, note, rows, loading, error, chosen, onToggle, disabled, alone, blocked }: Props) {
   return (
     <div className="where" data-testid="where-to-post">
       <div className="where-head">
@@ -49,22 +51,32 @@ export function WhereToPost({ heading, note, rows, loading, error, chosen, onTog
       {rows === undefined && loading && <Loading what="Looking at the channels" />}
       {rows !== undefined && (
         <div className="where-list" role="group" aria-label={heading}>
-          {rows.map((row) => (
-            <label key={row.channelId} className="where-row" data-testid={`where-${row.channelId}`}>
-              <input type="checkbox" checked={chosen.includes(row.channelId)} disabled={disabled} onChange={() => onToggle(row.channelId)} data-testid={`where-check-${row.channelId}`} />
-              <span className="where-main">
-                <span className="where-name">
-                  <strong>{rowName(row)}</strong>
-                  <span className="where-account">as {row.accountLabel}</span>
-                  <Badge tone={row.fits ? 'good' : 'warn'}>{row.fits ? 'Fits' : 'Does not fit'}</Badge>
-                  {row.suggested && <Badge tone="info">Suggested</Badge>}
+          {rows.map((row) => {
+            const stopped = blocked?.[row.channelId]
+            const reasonId = `where-blocked-${row.channelId}`
+            return (
+              <label key={row.channelId} className={`where-row${stopped ? ' blocked' : ''}`} data-testid={`where-${row.channelId}`}>
+                <input type="checkbox" checked={chosen.includes(row.channelId)} disabled={disabled || stopped !== undefined} aria-describedby={stopped ? reasonId : undefined} onChange={() => onToggle(row.channelId)} data-testid={`where-check-${row.channelId}`} />
+                <span className="where-main">
+                  <span className="where-name">
+                    <strong>{rowName(row)}</strong>
+                    <span className="where-account">as {row.accountLabel}</span>
+                    {!stopped && <Badge tone={row.fits ? 'good' : 'warn'}>{row.fits ? 'Fits' : 'Does not fit'}</Badge>}
+                    {!stopped && row.suggested && <Badge tone="info">Suggested</Badge>}
+                  </span>
+                  {stopped ? (
+                    <span className="where-reason off" id={reasonId} data-testid={reasonId}>
+                      {stopped}
+                    </span>
+                  ) : (
+                    <span className={`where-reason${row.fits ? '' : ' off'}`} data-testid={`where-reason-${row.channelId}`}>
+                      {row.reason}
+                    </span>
+                  )}
                 </span>
-                <span className={`where-reason${row.fits ? '' : ' off'}`} data-testid={`where-reason-${row.channelId}`}>
-                  {row.reason}
-                </span>
-              </span>
-            </label>
-          ))}
+              </label>
+            )
+          })}
         </div>
       )}
       {rows !== undefined && alone && rows.length <= 1 && <Hint data-testid="where-alone">{alone}</Hint>}

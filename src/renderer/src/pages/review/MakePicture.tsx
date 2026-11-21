@@ -31,9 +31,28 @@ function Candidate({ item, onUse }: { item: MediaItem; onUse: (item: MediaItem) 
  * The AI makes a picture from a description (DEC-030). The description is the owner's: the AI proposes a start from the post, the owner
  * edits it, and only then is an image asked for. Every press makes a new picture; none replaces another, so the owner can compare.
  */
-export function MakePicture({ productId, title, text, onUse, onClose }: { productId: string; title: string; text: string; onUse: (item: MediaItem) => void; onClose: () => void }) {
+export function MakePicture({
+  productId,
+  title,
+  text,
+  onUse,
+  onClose,
+  description: held,
+  onDescription
+}: {
+  productId: string
+  title: string
+  text: string
+  onUse: (item: MediaItem) => void
+  onClose: () => void
+  /** The description, when the screen that holds this panel keeps it (the quick-post composer, whose AI help proposes one): then it is the screen's, and `onDescription` is how it changes. */
+  description?: string
+  onDescription?: (description: string) => void
+}) {
   const status = useQuery('media.status', { checkEngine: true }, [])
-  const [description, setDescription] = useState('')
+  const [own, setOwn] = useState('')
+  const description = held ?? own
+  const setDescription = (next: string): void => (onDescription ? onDescription(next) : setOwn(next))
   const [shape, setShape] = useState<MediaShape>('square')
   const [candidates, setCandidates] = useState<MediaItem[]>([])
   const { blocked } = useAssistBlock({ engineReady: false })

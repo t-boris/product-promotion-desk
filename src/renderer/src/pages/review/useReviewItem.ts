@@ -2,6 +2,7 @@ import { useState, type Dispatch, type SetStateAction } from 'react'
 import type { DraftInput } from '../../../../shared/api'
 import type { OpportunityCard } from '../../../../shared/types'
 import { useDraftForm, type DraftForm } from './DraftEditor'
+import { useQuickDraft, type QuickEdit } from './quick/use-quick-draft'
 import { LOCKED_STATES, LOGIN_CONFLICT_HINT, isLoginConflict, stateHintFor } from './labels'
 import { alsoPostAllowed } from './post-group'
 import { useReviewActions, type ReviewActions } from './useReviewActions'
@@ -11,6 +12,11 @@ export interface ReviewItem {
   standalone: boolean
   form: DraftForm
   setForm: Dispatch<SetStateAction<DraftForm>>
+  /**
+   * The composer's form when the draft is a quick post (a caption and one picture, REQ-002), else null. Its type decides the layout, never the title:
+   * a quick post is edited in the composer, an article in the editor. `dirty` and `input` below are the quick post's then.
+   */
+  quick: QuickEdit | null
   /** The editor holds changes that are not saved. */
   dirty: boolean
   /** The form as it stands; approving saves it first so the approval covers exactly what is on screen. */
@@ -40,8 +46,13 @@ export function useReviewItem(card: OpportunityCard, options: { frozen?: boolean
   const { frozen = false, alsoPostTo = false, onDone } = options
   const opp = card.opportunity
   const standalone = opp.kind === 'standalone'
-  const { form, setForm, dirty, input } = useDraftForm(card.draft, standalone)
-  const actions = useReviewActions(onDone)
+  const classic = useDraftForm(card.draft, standalone)
+  // A quick post is edited in the composer: its form replaces the editor's, and saving it draws a new card first when the card changed.
+  const quick = useQuickDraft(card.draft, opp.productId, standalone && card.draft?.postType === 'quick')
+  const { form, setForm } = classic
+  const dirty = quick ? quick.dirty : classic.dirty
+  const input = quick ? quick.input : classic.input
+  const actions = useReviewActions(onDone, quick ? quick.settle : undefined)
   // While the group works on this item nothing here is offered; the card shows the work as busy.
   const working = frozen || actions.busy
   const buttons = working === actions.busy ? actions : { ...actions, busy: true }
@@ -52,6 +63,7 @@ export function useReviewItem(card: OpportunityCard, options: { frozen?: boolean
     standalone,
     form,
     setForm,
+    quick,
     dirty,
     input,
     actions: buttons,
