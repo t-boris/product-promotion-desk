@@ -112,6 +112,25 @@ describe('feed.analyze', () => {
     expect(got).toMatchObject({ other: 0, stale: false, compared: true, summary: 'People ask how to read a chart and how to pick a tool.', readInFull: 5 })
   })
 
+  it('says nothing is "most answered" or "most popular" when the numbers are too thin to compare themes', async () => {
+    world = makeWorld({ mode: 'draft' })
+    // One theme has numbers for one of its ten posts: that is not what the theme draws, and another theme has none at all.
+    seed({ title: 'Houses 1', replies: 4, score: 1 })
+    for (let i = 2; i <= 10; i++) seed({ title: `Houses ${i}` })
+    for (const t of ['Apps 1', 'Apps 2', 'Apps 3']) seed({ title: t })
+    answerWith({ Houses: Array.from({ length: 10 }, (_, i) => `Houses ${i + 1}`), Apps: ['Apps 1', 'Apps 2', 'Apps 3'] })
+    const got = await analyze()
+    expect(got.themes.map((t) => [t.name, t.mostAnswered, t.mostPopular])).toEqual([['Houses', false, false], ['Apps', false, false]])
+    expect(got.themes[0]).toMatchObject({ replies: 4, score: 1, known: 1 })
+
+    // With numbers for most posts of two themes they can be compared.
+    for (const [n, t] of ['Apps 1', 'Apps 2'].entries()) new FindingStore(world.core).applyStats(world.channel.id, [{ url: `https://www.reddit.com/r/x/comments/${t.replace(/\W+/g, '_')}`, replies: 10 * (n + 1), score: 5 }])
+    for (let i = 1; i <= 6; i++) new FindingStore(world.core).applyStats(world.channel.id, [{ url: `https://www.reddit.com/r/x/comments/Houses_${i}`, replies: 1, score: 100 }])
+    const compared = (await view()) as FeedAnalysisView
+    expect(compared.themes.find((t) => t.name === 'Apps')).toMatchObject({ mostAnswered: true, mostPopular: false })
+    expect(compared.themes.find((t) => t.name === 'Houses')).toMatchObject({ mostAnswered: false, mostPopular: true })
+  })
+
   it('marks nothing as growing and says there was nothing to compare with when the period before holds no posts', async () => {
     world = makeWorld({ mode: 'draft' })
     seed({ title: 'A' })

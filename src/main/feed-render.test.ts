@@ -586,7 +586,7 @@ describe('the card of the analysis of the Feed', () => {
   })
 
   it('says for how many posts the numbers are known, when it is some of them', () => {
-    expect(body(view({ themes: [theme({ known: 2 })] }))).toContain('Comments and score known for 2 of 3 posts.')
-    expect(body(view({ themes: [theme({ known: 3 })] }))).not.toContain('Comments and score known for')
+    expect(body(view({ themes: [theme({ known: 2 })] }))).toContain('known for 2 of 3 posts')
+    expect(body(view({ themes: [theme({ known: 3 })] }))).not.toContain('known for')
   })
 })

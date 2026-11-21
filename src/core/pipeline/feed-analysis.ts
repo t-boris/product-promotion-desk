@@ -351,8 +351,12 @@ export class FeedAnalysis {
       }
     })
     themes.sort((a, b) => b.posts - a.posts || (b.replies ?? -1) - (a.replies ?? -1) || a.name.localeCompare(b.name))
+    // "Most answered" and "most popular" compare themes by the numbers of their posts, so they are said only where the numbers are good enough to compare: a theme
+    // counts when the sites showed a number for at least two of its posts and for at least half of them, and there must be two such themes. One post's four comments
+    // under a theme of ten posts is not what that theme draws.
+    const comparable = themes.filter((t) => t.known >= 2 && t.known * 2 >= t.posts)
     const best = (pick: (t: FeedTheme) => number | null): FeedTheme | undefined =>
-      themes.reduce<FeedTheme | undefined>((top, t) => ((pick(t) ?? 0) > (top ? (pick(top) ?? 0) : 0) ? t : top), undefined)
+      comparable.length < 2 ? undefined : comparable.reduce<FeedTheme | undefined>((top, t) => ((pick(t) ?? 0) > (top ? (pick(top) ?? 0) : 0) ? t : top), undefined)
     const answered = best((t) => t.replies)
     const popular = best((t) => t.score)
     if (answered) answered.mostAnswered = true

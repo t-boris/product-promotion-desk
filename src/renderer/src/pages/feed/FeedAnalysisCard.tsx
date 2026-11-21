@@ -3,7 +3,7 @@ import type { FeedAnalysisView, FeedPeriod, FeedTheme, Id } from '../../../../sh
 import { AiProgressPanel } from '../../AiProgress'
 import { call, useAction, useQuery } from '../../hooks'
 import { Button, ErrorNote, Hint, SegmentedControl, formatTime } from '../../ui'
-import { PERIOD_OPTIONS, barPercent, basisLine, introWords, themeBadges, themeKnown, themeNumbers } from './analysis-card'
+import { PERIOD_OPTIONS, barPercent, basisLine, introWords, themeBadges, themeNumbers } from './analysis-card'
 
 /** What the stream is narrowed to: the posts of a theme, or the one post of a question. */
 export interface FeedFocus {
@@ -16,7 +16,6 @@ const THEMES_SHOWN = 4
 
 function Theme({ theme, widest, compared, onShow }: { theme: FeedTheme; widest: number; compared: boolean; onShow: (theme: FeedTheme) => void }) {
   const badges = themeBadges(theme)
-  const known = themeKnown(theme)
   return (
     <li className="feed-theme" data-testid="feed-theme" data-theme-id={theme.id}>
       <details>
@@ -41,7 +40,6 @@ function Theme({ theme, widest, compared, onShow }: { theme: FeedTheme; widest: 
               Idea for your post: {theme.idea}
             </p>
           )}
-          {known !== '' && <p className="muted small">{known}</p>}
           <Button variant="secondary" onClick={() => onShow(theme)} disabled={theme.postIds.length === 0} data-testid="feed-theme-show">
             Show these posts ({theme.postIds.length})
           </Button>

@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 import type { FeedAnalysisView, FeedTheme } from '../shared/types'
-import { barPercent, basisLine, focusLine, introWords, periodWords, rowsOfFocus, themeBadges, themeKnown, themeNumbers } from '../renderer/src/pages/feed/analysis-card'
+import { barPercent, basisLine, focusLine, introWords, periodWords, rowsOfFocus, themeBadges, themeNumbers } from '../renderer/src/pages/feed/analysis-card'
 import type { FindingRow } from '../renderer/src/pages/feed/finding-rows'
 
 const theme = (over: Partial<FeedTheme> = {}): FeedTheme => ({
@@ -45,11 +45,11 @@ describe('themeNumbers', () => {
   })
 })
 
-describe('themeKnown', () => {
-  it('says how many posts the numbers cover, only when it is some of them', () => {
-    expect(themeKnown(theme({ known: 2 }))).toBe('Comments and score known for 2 of 3 posts.')
-    expect(themeKnown(theme({ known: 3 }))).toBe('')
-    expect(themeKnown(theme({ known: 0 }))).toBe('')
+describe('numbers that cover only some of a theme\'s posts', () => {
+  it('say how many posts they cover, only when it is some of them', () => {
+    expect(themeNumbers(theme({ known: 2 }))).toBe('3 posts (+2 against before) · 42 comments · score 1,300 · known for 2 of 3 posts')
+    expect(themeNumbers(theme({ known: 3 }))).not.toContain('known for')
+    expect(themeNumbers(theme({ known: 0, replies: null, score: null }))).not.toContain('known for')
   })
 })
 

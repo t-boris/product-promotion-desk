@@ -27,13 +27,9 @@ export function themeNumbers(theme: FeedTheme, compared = true): string {
   }
   if (theme.replies !== null) parts.push(count(theme.replies, 'comment'))
   if (theme.score !== null) parts.push(`score ${theme.score.toLocaleString('en-US')}`)
+  // Numbers that cover only some of the posts are said to: the sum is of those posts alone.
+  if (theme.known > 0 && theme.known < theme.posts) parts.push(`known for ${theme.known} of ${theme.posts} posts`)
   return parts.join(' · ')
-}
-
-/** Said under the numbers when only some of the posts had numbers: "Comments and score known for 2 of 3 posts". Empty when all had them, or none (then there are no numbers to qualify). */
-export function themeKnown(theme: FeedTheme): string {
-  if (theme.known === 0 || theme.known >= theme.posts) return ''
-  return `Comments and score known for ${theme.known} of ${theme.posts} posts.`
 }
 
 /** The marks a theme earns, in the order they are shown. */
