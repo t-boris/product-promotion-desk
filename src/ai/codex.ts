@@ -1,4 +1,6 @@
 import { AiError, type AiTask } from '../core/ports'
+import { parseModelName } from '../shared/engine-model'
+import type { EngineModel } from '../shared/types'
 import { CliEngine, type CliEngineOptions } from './cli-engine'
 
 /**
@@ -45,6 +47,24 @@ export class CodexEngine extends CliEngine {
   /** A picture is made in the folder the caller names (the only exception to the scratch folder): the sandbox lets it write there. */
   protected override taskCwd(task: AiTask): string | undefined {
     return task.makeFiles?.dir
+  }
+
+  /** `codex debug models` renders the model catalog of this account as JSON, offline: the ones with `visibility: "list"` are what Codex itself offers. */
+  protected modelsCommand(): { args: string[] } {
+    return { args: ['debug', 'models'] }
+  }
+
+  protected parseModels(stdout: string): EngineModel[] {
+    const catalog = JSON.parse(stdout) as { models?: unknown }
+    if (!Array.isArray(catalog.models)) throw new Error('there is no "models" list in its output')
+    return (catalog.models as { slug?: unknown; display_name?: unknown; description?: unknown; visibility?: unknown; priority?: unknown }[])
+      .filter((entry) => entry.visibility === 'list' && typeof entry.slug === 'string' && parseModelName(entry.slug))
+      .sort((a, b) => (typeof a.priority === 'number' ? a.priority : 1e9) - (typeof b.priority === 'number' ? b.priority : 1e9))
+      .map((entry) => ({
+        id: entry.slug as string,
+        label: typeof entry.display_name === 'string' && entry.display_name ? entry.display_name : (entry.slug as string),
+        description: typeof entry.description === 'string' ? entry.description : ''
+      }))
   }
 
   protected buildArgs(task: AiTask, cwd: string): string[] {

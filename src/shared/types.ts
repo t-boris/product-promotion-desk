@@ -11,6 +11,13 @@ export type IsoTime = string
 
 export type EngineId = 'claude' | 'codex'
 
+/** A model an AI engine offers: `id` is the name `--model` takes, `label` and `description` are the engine's own words for it. */
+export interface EngineModel {
+  id: string
+  label: string
+  description: string
+}
+
 export interface EngineStatus {
   id: EngineId
   label: string
@@ -959,7 +966,7 @@ export interface AppSettings {
   engineId: EngineId | null
   /**
    * The model each AI engine is asked for (`--model`), by the name the engine knows it. Empty means the engine's own default, which is what it
-   * used before the owner could choose. Set only through `engines.setModel`, which tries the name before it keeps it.
+   * used before the owner could choose. Set only through `engines.setModel`, which keeps only a model the engine itself offers.
    */
   models: Record<EngineId, string>
   notifications: boolean

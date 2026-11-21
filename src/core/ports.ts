@@ -8,6 +8,7 @@ import type {
   Capability,
   Channel,
   EngineId,
+  EngineModel,
   EngineStatus,
   Id,
   IsoTime,
@@ -102,6 +103,8 @@ export interface AiEngine {
   /** True when the engine can make a picture with its own image tool (`AiTask.makeFiles`). */
   readonly makesImages?: boolean
   check(): Promise<EngineStatus>
+  /** The models the engine offers for this account, as the engine itself lists them: no model is asked anything. Rejects with AiError when the list cannot be read. */
+  models(): Promise<EngineModel[]>
   /** Resolves with the final text. A failure of the engine process rejects with AiError and never crashes the app. */
   run(task: AiTask, options?: AiRunOptions): Promise<string>
 }

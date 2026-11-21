@@ -1,4 +1,6 @@
 import { AiError, type AiTask } from '../core/ports'
+import { parseModelName } from '../shared/engine-model'
+import type { EngineModel } from '../shared/types'
 import { CliEngine, type CliEngineOptions } from './cli-engine'
 
 /** A server name that is one entry of an allow-list: a space or a comma would make it several, a wildcard would make it more. */
@@ -39,6 +41,38 @@ export class ClaudeCodeEngine extends CliEngine {
 
   constructor(options: CliEngineOptions = {}) {
     super(options)
+  }
+
+  /**
+   * Claude Code has no command that lists models, but the protocol the Agent SDK speaks answers `initialize` with the models of this account
+   * (`models`: value, displayName, description). With no user message nothing is sent to a model, so it costs nothing and takes under a second.
+   * `--setting-sources ""` keeps the owner's own settings out of it.
+   */
+  protected modelsCommand(): { args: string[]; stdin: string } {
+    return {
+      args: ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--tools', '', '--setting-sources', ''],
+      stdin: `${JSON.stringify({ type: 'control_request', request_id: 'models', request: { subtype: 'initialize' } })}\n`
+    }
+  }
+
+  protected parseModels(stdout: string): EngineModel[] {
+    for (const line of stdout.split('\n')) {
+      if (!line.startsWith('{')) continue
+      let message: unknown
+      try {
+        message = JSON.parse(line)
+      } catch {
+        continue
+      }
+      const models = (message as { type?: string; response?: { response?: { models?: unknown } } }).type === 'control_response' ? (message as { response?: { response?: { models?: unknown } } }).response?.response?.models : undefined
+      if (!Array.isArray(models)) continue
+      return models.flatMap((entry: { value?: unknown; displayName?: unknown; description?: unknown }) => {
+        // "default" is no choice of its own: it is the engine's own default, which the application's first option already is.
+        if (typeof entry.value !== 'string' || entry.value === 'default' || !parseModelName(entry.value)) return []
+        return [{ id: entry.value, label: typeof entry.displayName === 'string' && entry.displayName ? entry.displayName : entry.value, description: typeof entry.description === 'string' ? entry.description : '' }]
+      })
+    }
+    throw new Error('there was no answer to "initialize" in its output')
   }
 
   protected buildArgs(task: AiTask): string[] {

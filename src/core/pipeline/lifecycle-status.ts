@@ -5,7 +5,10 @@ import { APP_NAME } from '../../shared/app-name'
 import type { AutomationState } from '../../shared/types'
 
 export interface TrayModel {
-  /** Text next to the menu-bar icon: the application's one name (BUG-051), then the pause and the attention count. */
+  /**
+   * Text next to the menu-bar icon: only what the icon cannot say, the pause and the attention count. Without an icon (it could not be loaded) it starts
+   * with the application's one name (BUG-051), so the item is never an empty gap in the menu bar.
+   */
   title: string
   tooltip: string
   /** Disabled first line of the menu. */
@@ -16,7 +19,7 @@ export interface TrayModel {
   quitLabel: string
 }
 
-export function describeTray(state: AutomationState, attentionCount: number): TrayModel {
+export function describeTray(state: AutomationState, attentionCount: number, hasIcon = true): TrayModel {
   let statusLine: string
   if (state.paused) statusLine = 'Automation paused'
   else if (!state.running) statusLine = 'Automation starting'
@@ -24,7 +27,9 @@ export function describeTray(state: AutomationState, attentionCount: number): Tr
   else statusLine = 'Automation running'
 
   const attentionLine = attentionCount > 0 ? `${attentionCount} ${attentionCount === 1 ? 'item needs' : 'items need'} attention` : null
-  const title = [APP_NAME, state.paused ? '(paused)' : '', attentionCount > 0 ? `· ${attentionCount}` : ''].filter(Boolean).join(' ')
+  const title = hasIcon
+    ? [state.paused ? 'paused' : '', attentionCount > 0 ? String(attentionCount) : ''].filter(Boolean).join(' ')
+    : [APP_NAME, state.paused ? '(paused)' : '', attentionCount > 0 ? `· ${attentionCount}` : ''].filter(Boolean).join(' ')
 
   return {
     title,

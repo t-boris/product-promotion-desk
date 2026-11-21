@@ -1,3 +1,5 @@
+import type { EngineModel } from '../../../shared/types'
+
 // The status text of an AI engine comes from the engine as one string: what was found, then "Writing: …", then "Account missions: …".
 // Run together they read as one grey line with a path glued to a sentence (QA finding 11). Split here, so each part gets its own line.
 
@@ -41,25 +43,26 @@ export function engineChoiceVariant(engineId: string, recommendedId: string | nu
   return anySelected ? 'secondary' : 'primary'
 }
 
-/** What the model field of an engine shows and does: what is saved, what is typed, and whether pressing the button would change anything. */
-export interface ModelFieldView {
-  /** What the input holds. */
+/** The first option of the model list: no model named, so the engine uses its own default (what it did before the owner could choose). */
+export const DEFAULT_MODEL_OPTION = "The engine's own default"
+
+export interface ModelOption {
   value: string
-  /** The name to try and keep when the button is pressed (trimmed; empty means the engine's own default). */
-  name: string
-  /** The button has something to do: the typed name is not the one in use. */
-  changed: boolean
-  /** One line under the field: what is in use now. */
-  inUse: string
+  label: string
 }
 
-export function modelFieldView(saved: string, draft: string | null): ModelFieldView {
-  const value = draft ?? saved
-  const name = value.trim()
-  return {
-    value,
-    name,
-    changed: name !== saved,
-    inUse: saved ? `Asked for the model ${saved}.` : "The engine's own default model is used."
-  }
+/**
+ * What the model dropdown of an engine offers: the engine's own default, then every model the engine lists. A model that was chosen earlier and that
+ * the engine no longer lists stays in the list, marked, so the card never shows a choice it does not have.
+ */
+export function modelOptions(offered: readonly EngineModel[], saved: string): ModelOption[] {
+  const options: ModelOption[] = [{ value: '', label: DEFAULT_MODEL_OPTION }, ...offered.map((m) => ({ value: m.id, label: m.label === m.id ? m.label : `${m.label} (${m.id})` }))]
+  if (saved && !offered.some((m) => m.id === saved)) options.push({ value: saved, label: `${saved} (the engine no longer lists it)` })
+  return options
+}
+
+/** The line under the dropdown: what the engine says about the chosen model, or what the default means. */
+export function modelNote(offered: readonly EngineModel[], saved: string): string {
+  if (!saved) return "No model is named, so the engine uses the one it chooses itself."
+  return offered.find((m) => m.id === saved)?.description || ''
 }

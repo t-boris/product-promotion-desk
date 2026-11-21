@@ -105,7 +105,7 @@ export function SettingsPage() {
                   {!engine.ready && detail.summary && <div className="hint">{detail.summary}</div>}
                   {detail.writing && <div className={`hint${detail.limits ? ' warn' : ''}`}>{detail.writing}</div>}
                   {detail.missions && <div className="hint">{detail.missions}</div>}
-                  <EngineModelField engine={engine.id} label={engine.label} saved={current?.models?.[engine.id] ?? ''} installed={engine.installed} />
+                  <EngineModelField key={engine.checkedAt} engine={engine.id} label={engine.label} saved={current?.models?.[engine.id] ?? ''} installed={engine.installed} />
                   {engine.path && (
                     <More label="Details">
                       <div className="mono engine-location" data-testid={`engine-path-${engine.id}`}>

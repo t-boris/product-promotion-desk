@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { Product } from '../../shared/types'
-import type { EngineId, EngineStatus } from '../../shared/types'
+import type { EngineId, EngineModel, EngineStatus } from '../../shared/types'
 import type { Core } from '../core'
 import { AiError, type AiEngine, type AiRunOptions, type AiTask } from '../ports'
 import { makeTestCore, type TestCore } from '../testing/fakes'
@@ -34,6 +34,10 @@ export class ScriptedEngine implements AiEngine {
 
   callsFor(label: string): AiTask[] {
     return this.calls.filter((c) => c.label === label)
+  }
+
+  async models(): Promise<EngineModel[]> {
+    return []
   }
 
   async check(): Promise<EngineStatus> {

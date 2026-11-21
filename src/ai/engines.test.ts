@@ -29,6 +29,7 @@ if [ -n "$LOG" ]; then
 fi
 case "$FAKE_MODE" in
   ok) printf 'ANSWER:%s\\n' "$input" ;;
+  print) printf '%s\\n' "$FAKE_OUT" ;;
   fail) echo "something broke" >&2; exit 2 ;;
   auth) echo "Error: not logged in. Please run login." >&2; exit 1 ;;
   empty) ;;
@@ -391,6 +392,71 @@ describe('the model an engine is asked for', () => {
       expect(argvOf().join('')).not.toContain('--model')
       expect(argvOf().join(' ')).not.toMatch(/dangerously|whoami/)
     }
+  })
+})
+
+describe('the models an engine offers', () => {
+  // What the real CLIs printed (Claude Code 2.1.x: `initialize` over stream-json; Codex: `debug models`), cut down to the fields that are read.
+  const CLAUDE_OUT = [
+    '{"type":"system","subtype":"hook_started","hook_name":"SessionStart:startup"}',
+    'plain text a hook printed',
+    JSON.stringify({
+      type: 'control_response',
+      response: {
+        subtype: 'success',
+        request_id: 'models',
+        response: {
+          models: [
+            { value: 'default', resolvedModel: 'claude-opus-5-5', displayName: 'Default (recommended)', description: 'Opus 5.5 · Best for everyday, complex tasks' },
+            { value: 'opus', displayName: 'Opus 5.5', description: 'For complex work and everyday tasks' },
+            { value: 'claude-haiku-4-5-20251001', displayName: 'Haiku 4.5', description: 'Fastest for quick answers' },
+            { value: 'bad name', displayName: 'Not a name' },
+            { value: 'sonnet' }
+          ]
+        }
+      }
+    })
+  ].join('\n')
+  const CODEX_OUT = JSON.stringify({
+    models: [
+      { slug: 'gpt-6.1-terra', display_name: 'GPT-6.1 Terra', description: 'Efficient model', visibility: 'list', priority: 3 },
+      { slug: 'gpt-reserve', display_name: 'GPT-Reserve', visibility: 'hide', priority: 4 },
+      { slug: 'gpt-6.2-sol', display_name: 'GPT-6.2-Sol', description: 'Fast, go-to model', visibility: 'list', priority: 1 },
+      { slug: 'gpt-6.2-astra', visibility: 'list', priority: 2 },
+      { slug: '--help', visibility: 'list', priority: 0 }
+    ]
+  })
+
+  it('Claude Code lists them through the initialize request, with no model asked anything, and leaves out "default" and names that are not names', async () => {
+    const engine = new ClaudeCodeEngine({ searchPaths: [binDir], env: env('print', { FAKE_OUT: CLAUDE_OUT }) })
+    expect(await engine.models()).toEqual([
+      { id: 'opus', label: 'Opus 5.5', description: 'For complex work and everyday tasks' },
+      { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5', description: 'Fastest for quick answers' },
+      { id: 'sonnet', label: 'sonnet', description: '' }
+    ])
+    const argv = read('argv').split('\n').filter(Boolean)
+    expect(argv.join('')).toContain('[--input-format][stream-json]')
+    expect(argv.join('')).toContain('[--tools][]')
+    expect(argv.join('')).toContain('[--setting-sources][]')
+    expect(JSON.parse(read('stdin'))).toEqual({ type: 'control_request', request_id: 'models', request: { subtype: 'initialize' } })
+  })
+
+  it('Codex lists the ones it offers (not the hidden ones), in its own order', async () => {
+    const engine = new CodexEngine({ searchPaths: [binDir], env: env('print', { FAKE_OUT: CODEX_OUT }) })
+    expect(await engine.models()).toEqual([
+      { id: 'gpt-6.2-sol', label: 'GPT-6.2-Sol', description: 'Fast, go-to model' },
+      { id: 'gpt-6.2-astra', label: 'gpt-6.2-astra', description: '' },
+      { id: 'gpt-6.1-terra', label: 'GPT-6.1 Terra', description: 'Efficient model' }
+    ])
+    expect(read('argv').split('\n').filter(Boolean)).toEqual(['[debug]', '[models]'])
+  })
+
+  it('says so when the output is not what that CLI prints, when it fails, and when it is not installed', async () => {
+    await expect(new ClaudeCodeEngine({ searchPaths: [binDir], env: env('print', { FAKE_OUT: 'nothing useful' }) }).models()).rejects.toMatchObject({ kind: 'invalid_output', message: expect.stringContaining('no answer to "initialize"') })
+    await expect(new CodexEngine({ searchPaths: [binDir], env: env('print', { FAKE_OUT: 'not json' }) }).models()).rejects.toMatchObject({ kind: 'invalid_output' })
+    await expect(new CodexEngine({ searchPaths: [binDir], env: env('print', { FAKE_OUT: '{"models":5}' }) }).models()).rejects.toMatchObject({ kind: 'invalid_output', message: expect.stringContaining('no "models" list') })
+    await expect(new CodexEngine({ searchPaths: [binDir], env: env('fail') }).models()).rejects.toMatchObject({ kind: 'failed', message: expect.stringContaining('exit code 2') })
+    await expect(new CodexEngine({ searchPaths: [join(dir, 'empty')], env: env('ok') }).models()).rejects.toMatchObject({ kind: 'unavailable' })
   })
 })
 

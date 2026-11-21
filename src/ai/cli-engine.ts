@@ -6,7 +6,7 @@ import { homedir, tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 import { AiError, type AiEngine, type AiRunOptions, type AiTask } from '../core/ports'
 import { parseModelName } from '../shared/engine-model'
-import type { EngineId, EngineStatus } from '../shared/types'
+import type { EngineId, EngineModel, EngineStatus } from '../shared/types'
 import { defaultSearchDirs, findExecutable, isExecutableFile } from './locate'
 import { runProcess, type ProcessResult } from './process'
 
@@ -39,6 +39,8 @@ interface Located {
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000
 const VERSION_TIMEOUT_MS = 15 * 1000
+const MODELS_TIMEOUT_MS = 30 * 1000
+const MODELS_MAX_BYTES = 4 * 1024 * 1024
 const AUTH_PATTERN = /not logged in|log ?in required|please (?:run )?.*log ?in|sign in|authenticat|unauthori[sz]ed|invalid api key|no api key|credentials/i
 
 export function parseVersion(output: string): string | null {
@@ -73,6 +75,10 @@ export abstract class CliEngine implements AiEngine {
     const name = parseModelName(task.model)
     return name ? ['--model', name] : []
   }
+  /** What the CLI is started with to list its models: the arguments and what is written to its stdin. Neither CLI asks a model anything for this. */
+  protected abstract modelsCommand(): { args: string[]; stdin?: string }
+  /** The models in what the listing command printed; throws when it is not what that CLI prints. */
+  protected abstract parseModels(stdout: string): EngineModel[]
   /** What is written to the CLI's stdin. */
   protected buildInput(task: AiTask): string {
     return task.prompt
@@ -156,6 +162,35 @@ export abstract class CliEngine implements AiEngine {
       return { ...status, version, ready: true, detail: `${this.label} ${version} is installed and answers.${this.toolNote()}` }
     } catch (error) {
       return { ...status, detail: `Could not check ${this.label}: ${error instanceof Error ? error.message : String(error)}${this.toolNote()}` }
+    }
+  }
+
+  async models(): Promise<EngineModel[]> {
+    const located = this.locate()
+    if (!located) throw new AiError('unavailable', `${this.label} is not installed (${this.binaryName} was not found).`)
+    const scratch = mkdtempSync(join(tmpdir(), 'ppd-ai-'))
+    try {
+      const command = this.modelsCommand()
+      const result = await runProcess({
+        command: located.command,
+        args: [...located.prefixArgs, ...command.args],
+        stdin: command.stdin ?? '',
+        cwd: scratch,
+        env: this.childEnv(located),
+        timeoutMs: MODELS_TIMEOUT_MS,
+        // Codex prints its whole catalog, instructions included: about a megabyte.
+        maxStdoutBytes: MODELS_MAX_BYTES,
+        killGraceMs: this.options.killGraceMs
+      })
+      if (result.outcome === 'timeout') throw new AiError('timeout', `${this.label} did not list its models in time.`)
+      if (result.outcome !== 'exited' || result.exitCode !== 0) throw new AiError('failed', `${this.label} could not list its models${result.exitCode === null ? '' : ` (exit code ${result.exitCode})`}: ${lastLines(result.stderr || result.stdout, 300) || 'no reason given'}`)
+      try {
+        return this.parseModels(result.stdout)
+      } catch (error) {
+        throw new AiError('invalid_output', `${this.label} listed its models in a form this application does not read: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    } finally {
+      rmSync(scratch, { recursive: true, force: true })
     }
   }
 

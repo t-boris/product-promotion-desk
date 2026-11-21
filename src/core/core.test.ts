@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../shared/api'
-import { AiError } from './ports'
 import { makeTestCore } from './testing/fakes'
 
 describe('Core', () => {
@@ -29,52 +28,56 @@ describe('Core', () => {
   describe('the model of an engine', () => {
     it('is the engine\'s own default until the owner chooses one, and every run is asked for the one chosen for that engine', async () => {
       const { core, engine } = makeTestCore()
-      engine.on('t', 'ok').on('engines.model', 'ok')
+      engine.on('t', 'ok')
       expect(core.settings.app().models).toEqual({ claude: '', codex: '' })
       await core.engines.require().run({ label: 't', prompt: 'hi' })
       expect(engine.calls.at(-1)?.model).toBeUndefined()
 
-      await core.router.call('engines.setModel', { id: 'claude', model: '  opus  ' })
+      await core.router.call('engines.setModel', { id: 'claude', model: 'opus' })
       expect(core.settings.app().models).toEqual({ claude: 'opus', codex: '' })
       await core.engines.require().run({ label: 't', prompt: 'hi' })
       expect(engine.calls.at(-1)?.model).toBe('opus')
-      // a task that names its own model keeps it: the model is tried that way before it is kept
+      // a task that names its own model keeps it
       await core.engines.require().run({ label: 't', prompt: 'hi', model: 'sonnet' })
       expect(engine.calls.at(-1)?.model).toBe('sonnet')
       await core.shutdown()
     })
 
-    it('is tried with one short question before it is kept, and the engine\'s refusal is said in its own words and nothing is kept', async () => {
+    it('lists what the engine offers, once until the next re-check, and nothing is asked of a model for it', async () => {
       const { core, engine } = makeTestCore()
-      engine.on('engines.model', 'ok')
-      await core.router.call('engines.setModel', { id: 'claude', model: 'opus' })
-      expect(engine.calls.filter((c) => c.label === 'engines.model')).toEqual([expect.objectContaining({ model: 'opus', prompt: expect.stringContaining('ok') })])
-
-      engine.on('engines.model', () => {
-        throw new AiError('failed', 'There is no model called nope-1.\nTry another.')
-      })
-      const refused = core.router.call('engines.setModel', { id: 'claude', model: 'nope-1' })
-      await expect(refused).rejects.toMatchObject({ code: 'invalid_model', message: 'Fake engine did not take the model "nope-1": There is no model called nope-1. Try another.' })
-      expect(core.settings.app().models.claude).toBe('opus')
+      expect(await core.router.call('engines.models', { id: 'claude' })).toEqual(engine.modelList)
+      await core.router.call('engines.models', { id: 'claude' })
+      expect(engine.listed).toBe(1)
+      expect(engine.calls).toHaveLength(0)
+      await core.router.call('engines.list', undefined)
+      await core.router.call('engines.models', { id: 'claude' })
+      expect(engine.listed).toBe(2)
+      await expect(core.router.call('engines.models', { id: 'codex' })).rejects.toMatchObject({ code: 'not_found' })
       await core.shutdown()
     })
 
-    it('goes back to the engine\'s own default with an empty name, without asking the engine anything', async () => {
+    it('says why the list cannot be read, and does not keep a failed list', async () => {
       const { core, engine } = makeTestCore()
-      engine.on('engines.model', 'ok')
-      await core.router.call('engines.setModel', { id: 'claude', model: 'opus' })
-      const asked = engine.calls.length
+      engine.installed = false
+      await expect(core.router.call('engines.models', { id: 'claude' })).rejects.toMatchObject({ code: 'engine_unavailable' })
+      engine.installed = true
+      expect(await core.router.call('engines.models', { id: 'claude' })).toEqual(engine.modelList)
+      await core.shutdown()
+    })
+
+    it('keeps only a model the engine offers, and goes back to the default with an empty name', async () => {
+      const { core } = makeTestCore()
+      await core.router.call('engines.setModel', { id: 'claude', model: ' sonnet ' })
+      expect(core.settings.app().models.claude).toBe('sonnet')
+      await expect(core.router.call('engines.setModel', { id: 'claude', model: 'nope-1' })).rejects.toMatchObject({ code: 'invalid_model', message: 'Fake engine does not offer the model "nope-1". Choose one from its list.' })
+      expect(core.settings.app().models.claude).toBe('sonnet')
       await core.router.call('engines.setModel', { id: 'claude', model: '' })
       expect(core.settings.app().models.claude).toBe('')
-      expect(engine.calls).toHaveLength(asked)
-      await core.engines.require().run({ label: 'engines.model', prompt: 'hi' })
-      expect(engine.calls.at(-1)?.model).toBeUndefined()
       await core.shutdown()
     })
 
-    it('refuses a name that is not a plain model name, an unknown engine, and an engine that is not installed, and keeps nothing', async () => {
+    it('refuses a name that is not a plain model name, an unknown engine, and a list that cannot be read, and keeps nothing', async () => {
       const { core, engine } = makeTestCore()
-      engine.on('engines.model', 'ok')
       await expect(core.router.call('engines.setModel', { id: 'claude', model: '--help' })).rejects.toMatchObject({ code: 'invalid_input' })
       await expect(core.router.call('engines.setModel', { id: 'codex', model: 'gpt-5.5' })).rejects.toMatchObject({ code: 'not_found' })
       engine.installed = false
@@ -84,11 +87,10 @@ describe('Core', () => {
       await core.shutdown()
     })
 
-    it('cannot be set through the settings as a whole, which would keep a name nobody tried', async () => {
+    it('cannot be set through the settings as a whole, which would keep a name nobody checked', async () => {
       const { core } = makeTestCore()
       await expect(core.router.call('app.settings.update', { models: { claude: 'opus', codex: '' } })).rejects.toMatchObject({ code: 'invalid_input' })
       expect(core.settings.app().models.claude).toBe('')
-      // and the rest of the settings still change as before
       await core.router.call('app.settings.update', { notifications: false })
       expect(core.settings.app().models).toEqual({ claude: '', codex: '' })
       await core.shutdown()

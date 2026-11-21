@@ -3,7 +3,7 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Account, EngineId, EngineStatus, PageReport, VaultUnavailable } from '../../shared/types'
+import type { Account, EngineId, EngineModel, EngineStatus, PageReport, VaultUnavailable } from '../../shared/types'
 import { ControlledSession, type RawPage } from '../browser-session'
 import { isSessionAddress, type AddressUse } from '../session-address'
 import { Core, type CoreDeps } from '../core'
@@ -116,6 +116,18 @@ export class FakeEngine implements AiEngine {
   on(label: string, script: Script): this {
     this.scripts.set(label, script)
     return this
+  }
+
+  /** The models this engine offers, in the order it lists them; tests set it, or make `listing` throw. */
+  modelList: EngineModel[] = [
+    { id: 'opus', label: 'Opus', description: 'For complex work' },
+    { id: 'sonnet', label: 'Sonnet', description: 'Most efficient' }
+  ]
+  listed = 0
+  async models(): Promise<EngineModel[]> {
+    this.listed += 1
+    if (!this.installed) throw new AiError('unavailable', 'not installed')
+    return this.modelList
   }
 
   async check(): Promise<EngineStatus> {

@@ -958,12 +958,19 @@ Owner: three Reddit channels on ONE account were looked at one by one ("the AI c
 
 **LIVE RESULT of 0.27.2 (installed 2026-11-21 03:39 UTC):** the three Reddit looks started 15 s apart and ran at once. r/astrology and r/beginnerastrology ended "done" after about 3 minutes with 39 and 52 posts judged, the cursor set, the failure streak cleared and the next look in 3 h; r/AskAstrologers had 48 posts saved and was still going. The red "keeps failing" cards in the Inbox were the OLD streaks (5, 4, 7 in a row): a card goes only when its channel's first look succeeds (`scheduler_state.consecutive_failures` is cleared by `recordSuccess`), so it was still on screen for the owner a minute after the install ("не фиксается").
 
-## 0.27.3 — a model for each AI agent (owner, 2026-11-21: "BTW we can't choose a model, only agent", "Still can't use model in settings")
+## 0.27.3 / 0.27.4 — a model for each AI agent (owner, 2026-11-21: "BTW we can't choose a model, only agent", "Still can't use model in settings", then, after the free-text field of 0.27.3: "of course download all the models that are there and offer me a dropdown of what can be chosen")
 
-- [x] `AppSettings.models: Record<EngineId, string>` (empty = the engine's own default, as before). `src/shared/engine-model.ts` is the one place that says what a model name is (letters, digits and `. _ : / [ ] -`, never a leading dash or a space; at most 80 characters).
+- [x] 0.27.4: the Model field is a DROPDOWN of what the engine itself lists for this account, not a text field. `AiEngine.models()`: Claude Code answers the stream-json `initialize` request with `models` (13 on the owner's account, no model asked anything, 0.8 s); Codex `codex debug models` (JSON catalog, `visibility: "list"` only, 10 models, 0.5 s). `engines.models` keeps the list until the next Re-check; `engines.setModel` keeps only a model the engine lists (no trial question any more); a saved model that is no longer listed stays in the dropdown, marked.
+- [x] `AppSettings.models: Record<EngineId, string>` (empty = the engine's own default, as before). `src/shared/engine-model.ts` is the one place that says what a model name is (letters, digits and `. _ : / [ ] -`, never a leading dash or a space; at most 80 characters); it still guards the command line.
 - [x] `AiTask.model`; `CliEngine.modelArgs` passes `--model <name>` to both CLIs (text runs, missions, confined missions, Codex pictures); a name that is not a plain name is never passed.
 - [x] `ModelledEngine` (in `EngineRegistry`) adds the model chosen for the engine to every run that does not name its own, so every caller (analysis, drafting, looks, missions) uses it without changing.
-- [x] `engines.setModel { id, model }` tries the name with one short question (90 s) and keeps it only when the engine took it; the engine's own words come back as `invalid_model`. An empty name clears it without asking. `app.settings.update` refuses `models`, so a name nobody tried cannot be kept.
-- [x] Settings: a Model field with a "Try and use" button in each engine's row, one line under it saying what is in use.
-- Unproven live: a real model name on Codex and on Claude Code; which names the owner's accounts accept.
+- [x] `app.settings.update` refuses `models`, so a name nobody checked cannot be kept.
+- [x] Settings: a Model dropdown in each engine's row (first option: the engine's own default), one line under it with the engine's own description of the chosen model.
+- Proven with the real CLIs: both adapters' `models()` return the lists above; an unknown name is refused by both CLIs (Claude Code exit 1 "There's an issue with the selected model", Codex "not supported when using Codex with a ChatGPT account"); `--model haiku` and `--model <the config's model>` answer "ok".
+- Unproven live: a mission (a look) run on a chosen non-default model.
+
+## 0.27.4 — the menu bar shows the icon, not the name (owner, 2026-11-21: "in the Mac menu at the top, instead of the icon there is the text 'Product Promotion Desk 2'... it must be an icon")
+
+- [x] `tray.ts` made the item with an EMPTY image and put the name and the attention count in the title ("Product Promotion Desk · 2"). Now the application's bubble-and-check, as a macOS template image (black on transparent, 18 pt + 36 px, made by `scripts/make-tray-icon.py` from `build/icon.png` into `src/main/tray-icon.ts`), with only the count (and "paused") beside it. If the image cannot be made the title falls back to the name, so the item never disappears.
+- Unproven live: how it looks on the owner's menu bar (checked by a screenshot of mine only).
 

@@ -1,4 +1,4 @@
-import type { EngineId, EngineStatus } from '../shared/types'
+import type { EngineId, EngineModel, EngineStatus } from '../shared/types'
 import { AiError, type AiEngine, type AiRunOptions, type AiTask } from './ports'
 import { titleOf, type AiActivity } from './ai-activity'
 import type { SettingsStore } from './settings'
@@ -34,6 +34,10 @@ class TrackedEngine implements AiEngine {
 
   check(): ReturnType<AiEngine['check']> {
     return this.inner.check()
+  }
+
+  models(): ReturnType<AiEngine['models']> {
+    return this.inner.models()
   }
 
   async run(task: AiTask, options: AiRunOptions = {}): Promise<string> {
@@ -93,6 +97,10 @@ class ModelledEngine implements AiEngine {
     return this.inner.check()
   }
 
+  models(): ReturnType<AiEngine['models']> {
+    return this.inner.models()
+  }
+
   run(task: AiTask, options?: AiRunOptions): Promise<string> {
     const chosen = this.settings.app().models[this.inner.id]
     return this.inner.run(task.model === undefined && chosen ? { ...task, model: chosen } : task, options)
@@ -102,6 +110,7 @@ class ModelledEngine implements AiEngine {
 /** Holds the installed AI engines and the user's selection. Product data never depends on which one is selected. */
 export class EngineRegistry {
   private readonly engines = new Map<EngineId, AiEngine>()
+  private readonly modelLists = new Map<EngineId, EngineModel[]>()
 
   constructor(
     engines: AiEngine[],
@@ -135,7 +144,20 @@ export class EngineRegistry {
   }
 
   async checkAll(): Promise<EngineStatus[]> {
+    // A re-check is also how the owner asks for the models again (a new one may have come out): the lists are read afresh next time.
+    this.modelLists.clear()
     return Promise.all(this.all().map((e) => e.check()))
+  }
+
+  /** The models an engine offers, as the engine lists them. Kept until the next re-check; a list that could not be read is not kept. */
+  async models(id: EngineId): Promise<EngineModel[]> {
+    const engine = this.engines.get(id)
+    if (!engine) throw new AiError('unavailable', `Unknown AI engine: ${id}`)
+    const kept = this.modelLists.get(id)
+    if (kept) return kept
+    const list = await engine.models()
+    this.modelLists.set(id, list)
+    return list
   }
 
   /**

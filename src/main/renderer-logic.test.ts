@@ -12,7 +12,7 @@ import { connectChannelHref, fixLinkFor } from '../renderer/src/pages/attention-
 import { KIND_TONE, attentionCountTone } from '../renderer/src/pages/attention-tone'
 import { startHeadline, startSteps } from '../renderer/src/pages/attention-start'
 import { INBOX_GROUPS, ROW_EXCERPT, displayOrder, effectiveSelection, fixItemsFor, groupOf, inboxSections, moveSelection, needsDecision, newestFirst, rememberSeen, relativeTime, rowExcerpt, rowSummary, selectionAfterAction, selectionAfterDismiss, waitingElsewhere } from '../renderer/src/pages/inbox/inbox-groups'
-import { engineChoiceVariant, modelFieldView, recommendedEngineId, splitEngineDetail } from '../renderer/src/pages/engine-detail'
+import { DEFAULT_MODEL_OPTION, engineChoiceVariant, modelNote, modelOptions, recommendedEngineId, splitEngineDetail } from '../renderer/src/pages/engine-detail'
 import { describeSources, planStages, progressOf } from '../renderer/src/pages/products/analysis-plan'
 import { TAB_STAGE, launchCounts, launchProgress, launchStages, nextStage, tabAccent, type LaunchFacts } from '../renderer/src/pages/products/launch-path'
 import { approvableClaims } from '../renderer/src/pages/products/model'
@@ -2363,16 +2363,33 @@ describe('the content mix card of a channel (DEC-033)', () => {
   })
 })
 
-describe('the model field of an engine card', () => {
-  it('shows the saved model, says what is in use, and has nothing to do until the name changes', () => {
-    expect(modelFieldView('opus', null)).toEqual({ value: 'opus', name: 'opus', changed: false, inUse: 'Asked for the model opus.' })
-    expect(modelFieldView('', null)).toEqual({ value: '', name: '', changed: false, inUse: "The engine's own default model is used." })
+describe('the model dropdown of an engine card', () => {
+  const offered = [
+    { id: 'opus', label: 'Opus 5.5', description: 'For complex work and everyday tasks' },
+    { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5', description: 'Fastest for quick answers' },
+    { id: 'gpt-6.2-sol', label: 'gpt-6.2-sol', description: '' }
+  ]
+
+  it('starts with the engine\'s own default, then every model the engine lists, named the way the engine names it', () => {
+    expect(modelOptions(offered, '')).toEqual([
+      { value: '', label: DEFAULT_MODEL_OPTION },
+      { value: 'opus', label: 'Opus 5.5 (opus)' },
+      { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5 (claude-haiku-4-5-20251001)' },
+      { value: 'gpt-6.2-sol', label: 'gpt-6.2-sol' }
+    ])
+    expect(modelOptions([], '')).toEqual([{ value: '', label: DEFAULT_MODEL_OPTION }])
   })
 
-  it('trims what is typed, and an emptied field is a change back to the default', () => {
-    expect(modelFieldView('', '  gpt-5.5 ')).toMatchObject({ value: '  gpt-5.5 ', name: 'gpt-5.5', changed: true })
-    expect(modelFieldView('opus', '  opus ')).toMatchObject({ changed: false })
-    expect(modelFieldView('opus', '')).toMatchObject({ name: '', changed: true })
+  it('keeps a model that was chosen and is no longer listed, marked, so the card never shows a choice it does not have', () => {
+    expect(modelOptions(offered, 'opus')).toHaveLength(4)
+    const options = modelOptions(offered, 'claude-old-1')
+    expect(options.at(-1)).toEqual({ value: 'claude-old-1', label: 'claude-old-1 (the engine no longer lists it)' })
+    expect(options).toHaveLength(5)
+  })
+
+  it('says what the engine says about the chosen model, or what the default means', () => {
+    expect(modelNote(offered, 'opus')).toBe('For complex work and everyday tasks')
+    expect(modelNote(offered, '')).toMatch(/uses the one it chooses itself/)
+    expect(modelNote(offered, 'unlisted')).toBe('')
   })
 })
-
