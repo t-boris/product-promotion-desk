@@ -4,8 +4,10 @@
 // application's MCP tools (src/core/browser-agent/toolbox.ts); here is what only the application knows: which account, which engine, which
 // secrets, which hosts.
 //
-// Rules held here: the password is read from the vault for the one mission and handed over by name; one mission per account; the browser is
-// shown to the owner while the AI works in it; the owner may take the browser between two tool calls (a CAPTCHA) and the AI waits; after the
+// Rules held here: the password is read from the vault for the one mission and handed over by name; one mission per account, except that missions
+// which only look (a watch of a channel, a search for trends) may run side by side, each in a window of its own, and never beside a mission that
+// acts (a sign-in, a profile, a join, a publication); how many looks run at once is the scheduler's limit, not this service's; the browser is shown
+// to the owner while the AI works in it; the owner may take the browser between two tool calls (a CAPTCHA) and the AI waits; after the
 // engine ends, the site's own answer decides (the connector's login check), not the AI's opinion.
 
 import { statSync } from 'node:fs'
@@ -18,7 +20,7 @@ import { joinMissionPrompt } from '../browser-agent/join'
 import { missionPrompt, type Mission } from '../browser-agent/mission'
 import { postMissionPrompt } from '../browser-agent/post-mission'
 import type { PostMissionOutcome, PostMissionRequest, PostMissionService } from '../browser-agent/post-submit'
-import { BrowserToolbox, type MissionStatus } from '../browser-agent/toolbox'
+import { BrowserToolbox, type MissionStatus, type Rhythm } from '../browser-agent/toolbox'
 import { WATCH_MAX_CALLS, WATCH_MAX_FINDINGS, WATCH_MIN_GAP_MS, WATCH_TIMEOUT_MS, type WatchMissionRequest, type WatchMissionService, type WatchOutcome, type WatchSetup } from '../browser-agent/watch'
 import { watchMissionPrompt } from '../browser-agent/watch-mission'
 import { RESEARCH_MAX_CALLS, RESEARCH_MAX_TOPICS, RESEARCH_MIN_GAP_MS, RESEARCH_TIMEOUT_MS, type ResearchMissionRequest, type ResearchMissionService, type ResearchOutcome, type ResearchSetup } from '../browser-agent/research'
@@ -34,6 +36,8 @@ import { presetFor } from './presets'
 import type { VaultService } from './vault'
 
 const MAX_LINES = 80
+/** How much of the AI's last words a failed look keeps (for the log and the channel's status). */
+const LAST_WORDS_MAX = 200
 const MAX_FACT = 400
 /** A mission is minutes, not hours: a run that has not ended after this long is stopped. */
 const RUN_TIMEOUT_MS = 30 * 60 * 1000
@@ -114,7 +118,12 @@ interface Live {
 }
 
 export class AgentRunService implements PostMissionService, WatchMissionService, ResearchMissionService {
+  /** The mission of an account that acts (a sign-in, a profile, a join, a publication): one at a time, and never beside a look. */
   private readonly runs = new Map<string, Live>()
+  /** The looks of an account: the ones running and the last one that ended (the screen reads how it ended). They only read and nobody is asked anything. */
+  private readonly looks = new Map<string, Live[]>()
+  /** When a page was last opened on an account by any look of it: the least time between two openings holds for all the looks together. */
+  private readonly rhythms = new Map<string, Rhythm>()
 
   constructor(
     private readonly core: Core,
@@ -126,29 +135,44 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
     private readonly channels: Pick<ChannelService, 'assess'>
   ) {}
 
+  /** What the AI is doing on the account: the mission that acts, else the look that began last (running ones first), else how the last one ended. */
   state(accountId: unknown): AgentRun | null {
     const account = this.accounts.account(accountId)
-    const live = this.runs.get(account.id)
+    const live = this.liveOf(account.id)
     return live ? snapshot(live.run) : null
   }
 
+  /** Stops everything the AI is doing on the account: Stop is the owner's word for the account, not for one window. */
   stop(accountId: unknown): AgentRun | null {
     const account = this.accounts.account(accountId)
-    const live = this.runs.get(account.id)
-    if (!live) return null
-    if (live.run.status === 'running') {
+    const lives = this.lives(account.id)
+    if (lives.length === 0) return null
+    for (const live of lives) {
+      if (live.run.status !== 'running') continue
       live.abort.abort()
       this.dropQuestion(live, 'The owner stopped this task.')
       this.finish(live, 'stopped', 'You stopped the AI. Its window was closed; open the browser to continue yourself.')
     }
-    return snapshot(live.run)
+    const shown = this.liveOf(account.id)
+    return shown ? snapshot(shown.run) : null
   }
 
+  /** Every run of the account that is kept: the one that acts, then the looks. */
+  private lives(accountId: string): Live[] {
+    const acting = this.runs.get(accountId)
+    return [...(acting ? [acting] : []), ...(this.looks.get(accountId) ?? [])]
+  }
+
+  private liveOf(accountId: string): Live | undefined {
+    const all = this.lives(accountId)
+    const running = all.filter((live) => live.run.status === 'running')
+    return (running.length > 0 ? running : all).reduce<Live | undefined>((latest, live) => (!latest || live.run.startedAt >= latest.run.startedAt ? live : latest), undefined)
+  }
   /** Brings the browser the AI works in to the front: the owner acts in the very page the AI waits on (a CAPTCHA). */
   showBrowser(accountId: unknown): { shown: boolean } {
     const account = this.accounts.account(accountId)
     const show = this.core.browser.showAgentBrowser
-    if (!show || this.runs.get(account.id)?.run.status !== 'running') return { shown: false }
+    if (!show || !this.working(account.id)) return { shown: false }
     show.call(this.core.browser, account, true)
     return { shown: true }
   }
@@ -169,9 +193,9 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
     return snapshot(live.run)
   }
 
-  /** True while a mission is running on the account. */
+  /** True while a mission, or a look, is running on the account. */
   working(accountId: string): boolean {
-    return this.runs.get(accountId)?.run.status === 'running'
+    return this.lives(accountId).some((live) => live.run.status === 'running')
   }
 
   /** Every question an AI is waiting on now, for the pop-up that appears on any screen. */
@@ -260,11 +284,33 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
   }
 
   /**
-   * One run at a time on an account. Synchronous on purpose: the caller claims the account (`runs.set`) in the same turn, with nothing
-   * awaited in between, so two starts that were both waiting for the engine cannot both go on.
+   * A mission that acts takes the whole account: nothing else runs on it, a look included. Synchronous on purpose: the caller claims the account
+   * (`runs.set`) in the same turn, with nothing awaited in between, so two starts that were both waiting for the engine cannot both go on.
    */
   private assertIdle(account: Account): void {
+    if (this.working(account.id)) throw new ApiError('agent_running', `The AI is already working on ${account.label}.`)
+  }
+
+  /**
+   * A look needs the account free of a mission that acts; any number of looks may run beside each other (the owner has several channels on one account,
+   * and looking at them one after another took the best part of an hour). How many run at once is the scheduler's limit for channel checks; the owner's
+   * own "Look around" adds to it by one press at a time. The least time between two openings of a page is shared by all the looks of the account
+   * (`rhythmOf`), so they do not open pages faster than one sign-in ever did. Synchronous like `assertIdle`: the caller claims its place in the same turn.
+   */
+  private assertRoomToLook(account: Account): void {
     if (this.runs.get(account.id)?.run.status === 'running') throw new ApiError('agent_running', `The AI is already working on ${account.label}.`)
+  }
+
+  private claimLook(account: Account, live: Live): void {
+    const kept = this.looks.get(account.id) ?? []
+    const lastEnded = kept.filter((other) => other.run.status !== 'running').at(-1)
+    this.looks.set(account.id, [...(lastEnded ? [lastEnded] : []), ...kept.filter((other) => other.run.status === 'running'), live])
+  }
+
+  private rhythmOf(accountId: string): Rhythm {
+    let rhythm = this.rhythms.get(accountId)
+    if (!rhythm) this.rhythms.set(accountId, (rhythm = { at: null, reserved: null }))
+    return rhythm
   }
 
   /**
@@ -273,8 +319,9 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
    * that cannot be held to the application's tools): `runEngine` holds the engine to the tools when it can be, and what the send needs stays
    * the same for every engine (the send ticket, the content checked against the approval, the owner's own press).
    */
-  private async readyEngine(account: Account): Promise<AiEngine> {
-    this.assertIdle(account)
+  private async readyEngine(account: Account, looking = false): Promise<AiEngine> {
+    if (looking) this.assertRoomToLook(account)
+    else this.assertIdle(account)
 
     const engine = this.core.engines.selected()
     if (!engine) throw new ApiError('no_engine', 'No AI engine is selected. Choose Claude Code or Codex in Settings.')
@@ -408,7 +455,7 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
   /** What a look at a channel needs (DEC-042): an account that is signed in, no run going on it, and an engine that can work the browser. */
   private async watchPrerequisites(account: Account): Promise<AiEngine> {
     if (account.status !== 'ready') throw new ApiError('not_ready', `${account.label} is not signed in, so its channels are not watched. Sign in first.`)
-    return this.readyEngine(account)
+    return this.readyEngine(account, true)
   }
 
   async watchReady(accountId: string): Promise<AgentReadiness> {
@@ -425,13 +472,13 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
     const account = this.accounts.account(request.accountId)
     const engine = await this.watchPrerequisites(account)
     const setup = { watch: { places: request.brief.places.map((place) => place.url), record: request.record, maxFindings: WATCH_MAX_FINDINGS, minGapMs: WATCH_MIN_GAP_MS, now: () => this.core.clock.now().getTime() } }
-    return this.look('watch', account, engine, { channelId: request.channelId, subject: account.profileId ?? account.id, hosts: request.hosts, prompt: watchMissionPrompt(request.brief, this.core.clock.now()), setup })
+    return this.look('watch', account, engine, { channelId: request.channelId, title: `the AI is looking at ${request.brief.channelTarget}`, subject: account.profileId ?? account.id, hosts: request.hosts, prompt: watchMissionPrompt(request.brief, this.core.clock.now()), setup })
   }
 
   /** What a search for trends needs (REQ-004): an account that is signed in, no run going on it, and an engine that can work the browser. */
   private async researchPrerequisites(account: Account): Promise<AiEngine> {
     if (account.status !== 'ready') throw new ApiError('not_ready', `${account.label} is not signed in, so its browser cannot search for trends. Sign in first.`)
-    return this.readyEngine(account)
+    return this.readyEngine(account, true)
   }
 
   async researchReady(accountId: string): Promise<AgentReadiness> {
@@ -453,7 +500,7 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
     const account = this.accounts.account(request.accountId)
     const engine = await this.researchPrerequisites(account)
     const research: ResearchSetup = { places: request.brief.places.map((place) => place.url), record: request.record, maxTopics: RESEARCH_MAX_TOPICS, minGapMs: RESEARCH_MIN_GAP_MS, now: () => this.core.clock.now().getTime() }
-    return this.look('research', account, engine, { subject: request.subject, hosts: request.hosts, prompt: researchMissionPrompt(request.brief, this.core.clock.now()), setup: { research } })
+    return this.look('research', account, engine, { title: 'the AI is searching for what people talk about', subject: request.subject, hosts: request.hosts, prompt: researchMissionPrompt(request.brief, this.core.clock.now()), setup: { research } })
   }
 
   /**
@@ -464,7 +511,7 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
     kind: 'watch' | 'research',
     account: Account,
     engine: AiEngine,
-    options: { channelId?: string; subject: string; hosts: string[]; prompt: string; setup: { watch: WatchSetup } | { research: ResearchSetup } }
+    options: { channelId?: string; title: string; subject: string; hosts: string[]; prompt: string; setup: { watch: WatchSetup } | { research: ResearchSetup } }
   ): Promise<WatchOutcome> {
     const spec = MISSIONS[kind]
     const words = LOOKS[kind]
@@ -476,16 +523,17 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
       task: null,
       run: { accountId: account.id, kind, ...(options.channelId ? { channelId: options.channelId } : {}), status: 'running', summary: spec.opening, lines: [], typed: [], question: null, learned: [], startedAt: this.core.clock.now().toISOString(), finishedAt: null }
     }
-    // The engine check before awaited: another start may have taken the account meanwhile.
-    this.assertIdle(account)
-    this.runs.set(account.id, live)
+    // The engine check before awaited: another start may have taken the account, or the last place beside its looks, meanwhile.
+    this.assertRoomToLook(account)
+    this.claimLook(account, live)
     let ended: WatchOutcome['ended'] = 'finished'
     let error: string | null = null
     let toolbox: BrowserToolbox | null = null
+    let lastWords = ''
     try {
       this.core.log.info('accounts', `The AI started to ${spec.doing} ${account.label} on ${options.hosts[0] ?? 'the platform'} (${engine.label}).`)
       this.core.events.changed('accounts')
-      const task = await this.openTask(account, live, `agent-${kind}`)
+      const task = await this.openTask(account, live, `agent-${kind}`, options.title)
       toolbox = new BrowserToolbox({
         withPage: (work) => task.withAgentControl(work),
         hosts: options.hosts,
@@ -497,10 +545,12 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
         report: (result) => void (live.reported = result),
         signal: live.abort.signal,
         maxCalls: spec.maxCalls,
+        rhythm: this.rhythmOf(account.id),
         ...options.setup
       })
       const said = await this.runEngine(live, engine, toolbox, `agent.${kind}`, options.subject, options.prompt, spec.timeoutMs, true)
-      if (said.trim()) this.say(live, `The AI: ${said.trim().replace(/\s+/g, ' ').slice(0, 240)}`)
+      lastWords = said.trim().replace(/\s+/g, ' ').slice(0, LAST_WORDS_MAX)
+      if (lastWords) this.say(live, `The AI: ${lastWords.slice(0, 240)}`)
     } catch (caught) {
       if (caught instanceof AiError && caught.kind === 'cancelled') ended = 'stopped'
       else if (caught instanceof AiError && caught.kind === 'timeout') ended = 'timeout'
@@ -517,6 +567,9 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
     if (live.run.status !== 'running') ended = 'stopped' // the owner stopped it (its run was finished by `stop`)
 
     const reported = live.reported ? { status: live.reported.status, reason: live.reported.reason } : null
+    // A look that ended by itself without saying how it went: the log keeps how far it got and its last words, never what the pages said, so the next
+    // look is not a guess (the owner saw this end six times in a row with nothing to go on).
+    if (ended === 'finished' && !reported && live.run.status === 'running') this.logUnreported(account, live, toolbox, lastWords, words.did)
     if (live.run.status === 'running') {
       if (ended === 'busy') this.finish(live, 'stopped', words.busy)
       else if (ended === 'timeout') this.finish(live, 'failed', words.timeout)
@@ -524,7 +577,15 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
       else this.finish(live, reported?.status ?? 'failed', reported?.reason || 'The AI ended without saying how it went.')
     }
     this.core.log.info('accounts', `${words.did} ${account.label}${reported ? ` (it reported "${reported.status}")` : ''}.`)
-    return { ended, reported, humanCheck: toolbox?.observed.humanCheck ?? null, error }
+    return { ended, reported, humanCheck: toolbox?.observed.humanCheck ?? null, error, said: lastWords }
+  }
+
+  /** One line in the log for a look that ended without its report: the calls it made, what it recorded, the last page it was on and what it said last. */
+  private logUnreported(account: Account, live: Live, toolbox: BrowserToolbox | null, lastWords: string, did: string): void {
+    const progress = toolbox?.progress
+    const where = progress?.address ? `${displayAddress(progress.address)}${progress.title ? ` ("${progress.title.replace(/\s+/g, ' ').slice(0, 80)}")` : ''}` : 'no page at all'
+    const calls = progress ? `${progress.calls} tool call${progress.calls === 1 ? '' : 's'}, ${progress.recorded} post${progress.recorded === 1 ? '' : 's'} recorded` : 'no tool called'
+    this.core.log.warn('accounts', `${did} ${account.label} ended without a report after ${calls}. The last page: ${where}. The AI's last words: ${lastWords ? `"${lastWords}"` : 'none'}.`, live.run.channelId)
   }
 
   /**
@@ -879,16 +940,26 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
   }
 
   /** Gives the mission its own page and window (the owner watches the AI work in it; it is shown without taking the focus). */
-  private async openTask(account: Account, live: Live, owner: string): Promise<AgentTask> {
+  private async openTask(account: Account, live: Live, owner: string, title?: string): Promise<AgentTask> {
     const task = this.core.browser.session(account).task(owner)
     live.task = task
-    await task.show()
+    await task.show(title)
     return task
   }
 
   private taskOf(live: Live): AgentTask {
     if (!live.task) throw new Error('The mission has no page.')
     return live.task
+  }
+}
+
+/** An address without its query and fragment: where the AI was, not what it searched for. */
+function displayAddress(url: string): string {
+  try {
+    const parsed = new URL(url)
+    return `${parsed.host}${parsed.pathname}`
+  } catch {
+    return url.slice(0, 120)
   }
 }
 

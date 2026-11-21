@@ -38,6 +38,12 @@ export interface TaskFile {
 
 export type MissionStatus = 'done' | 'needs_owner' | 'failed'
 
+/** The pace of an account's page openings, shared by the toolboxes that work it. `reserved` is the place the last toolbox to ask took, so two that ask at once are spaced apart. */
+export interface Rhythm {
+  at: number | null
+  reserved: { slot: number; by: object } | null
+}
+
 export interface ToolboxDeps {
   /** Runs `work` with the account's browser in its own stretch of control; rejects with TakeoverError while the person holds the browser. */
   withPage: <T>(work: (page: BrowserPage) => Promise<T>) => Promise<T>
@@ -66,6 +72,11 @@ export interface ToolboxDeps {
   signal?: AbortSignal
   /** Tool calls allowed in one mission. */
   maxCalls?: number
+  /**
+   * When a page was last opened on the account, shared by every toolbox that works it: looks of one account run side by side, and the least time between
+   * two openings must hold for all of them together, or three looks would open pages three times as fast as one sign-in ever did.
+   */
+  rhythm?: Rhythm
   /** How long one `ask_owner` call waits before it asks the AI to call again (an engine's own tool timeout must never cut the wait). */
   askWaitMs?: number
   /**
@@ -385,7 +396,7 @@ export class BrowserToolbox implements McpToolHost {
   readonly tools: McpTool[]
   private calls = 0
   /** Post missions: when the last action on the page ended (for the pause between actions). */
-  private lastActionAt: number | null = null
+  private readonly rhythm: Rhythm
   /** Join missions: the Join button was pressed. Nothing more is clicked or opened after it. */
   private joined = false
   /**
@@ -418,6 +429,7 @@ export class BrowserToolbox implements McpToolHost {
     this.tools = deps.watch ? watchTools(deps.watch) : deps.research ? researchTools(deps.research) : deps.join ? joinTools(deps.join) : deps.post ? postTools((deps.post.authority.content.attachments ?? []).map((f) => f.name)) : deps.remember ? withUpload : withUpload.filter((t) => t.name !== 'remember_lesson')
     this.instructions = deps.watch ? WATCH_INSTRUCTIONS : deps.research ? RESEARCH_INSTRUCTIONS : deps.join ? JOIN_INSTRUCTIONS : deps.post ? ((deps.post.authority.content.attachments ?? []).length > 0 ? `${POST_INSTRUCTIONS} ${POST_PICTURES}` : POST_INSTRUCTIONS) : INSTRUCTIONS
     this.maxCalls = deps.maxCalls ?? DEFAULT_MAX_CALLS
+    this.rhythm = deps.rhythm ?? { at: null, reserved: null }
     this.askWaitMs = deps.askWaitMs ?? DEFAULT_ASK_WAIT_MS
   }
 
@@ -588,17 +600,24 @@ export class BrowserToolbox implements McpToolHost {
     })
   }
 
-  /** Waits so that two actions on the page are at least `minGapMs` apart (post missions only). */
+  /**
+   * Waits so that two actions on the page are at least `minGapMs` apart (post, join and looking missions). The place is taken before the wait, so
+   * two looks of one account that ask at the same moment are spaced apart too, not released together; a toolbox is never held back by its own place.
+   */
   private async pace(): Promise<void> {
     const timing = this.deps.post ?? this.deps.join ?? this.looking
-    if (!timing || this.lastActionAt === null) return
-    const wait = timing.minGapMs - ((timing.now ?? Date.now)() - this.lastActionAt)
-    if (wait > 0) await this.deps.sleep(wait)
+    if (!timing) return
+    const now = (timing.now ?? Date.now)()
+    const own = this.rhythm.at === null ? 0 : this.rhythm.at + timing.minGapMs
+    const others = this.rhythm.reserved && this.rhythm.reserved.by !== this ? this.rhythm.reserved.slot + timing.minGapMs : 0
+    const slot = Math.max(now, own, others)
+    this.rhythm.reserved = { slot, by: this }
+    if (slot > now) await this.deps.sleep(slot - now)
   }
 
   private touched(): void {
     const timing = this.deps.post ?? this.deps.join ?? this.looking
-    if (timing) this.lastActionAt = (timing.now ?? Date.now)()
+    if (timing) this.rhythm.at = Math.max(this.rhythm.at ?? 0, (timing.now ?? Date.now)())
   }
 
   /** Why nothing more is done in this mission (the owner pressed Stop, or the application ended it), in words for the AI, or null. */
@@ -987,6 +1006,14 @@ export class BrowserToolbox implements McpToolHost {
   /** What the page showed that matters to the send flow after the mission: a human check, a warning of the site. */
   get observed(): { humanCheck: string | null; warning: string | null } {
     return { humanCheck: this.humanCheckSeen, warning: this.warningSeen }
+  }
+
+  /**
+   * Where a mission that only looks got to, for the log when it ends without saying how it went: how many tools the AI called, how many posts it
+   * recorded, and the address and title of the last page it looked at (never what the page said).
+   */
+  get progress(): { calls: number; recorded: number; address: string; title: string } {
+    return { calls: Math.min(this.calls, this.maxCalls), recorded: this.recorded, address: this.last?.url ?? '', title: this.last?.title ?? '' }
   }
 
   /**

@@ -40,7 +40,7 @@ export function watchMissionPrompt(brief: WatchBrief, today: Date): string {
       ].join('\n')
     ),
     fence('goals', goals.length > 0 ? goals.join('\n') : '(none set yet: judge by the product and the channel alone)'),
-    fence('channel', [`Channel: ${oneLine(brief.channelTarget, 120)} (${oneLine(brief.channelUrl, 300)})`, `Topics of the channel:\n${list(brief.topics, 30, 120)}`, `Search queries of the channel:\n${list(brief.queries, 30, 120)}`].join('\n')),
+    fence('channel', [`Channel: ${oneLine(brief.channelTarget, 120)} (${oneLine(brief.channelUrl, 300)})`, `Topics of the channel:\n${list(brief.topics, 30, 120)}`, `What the owner follows here (to judge posts by, not to search for):\n${list(brief.queries, 30, 120)}`].join('\n')),
     identity ? `The account you are signed in as is ${identity}: its own posts are never recorded.` : 'The identity of the account is not known: leave out any post that is plainly the account\'s own.',
     '',
     'WHERE TO LOOK (open one with watch_open and its number as "place"):',

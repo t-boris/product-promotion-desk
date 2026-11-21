@@ -158,8 +158,8 @@ describe('Settings: the form keeps what it does not show', () => {
 })
 
 describe('Settings: the hint under the search queries (DEC-042)', () => {
-  it('says the AI also searches the platform for them, only for a channel it watches in the browser', () => {
-    expect(queriesHint({ reads: false, watchedInBrowser: true })).toBe('One per line or separated by commas. The AI also searches the platform for these (the first three).')
+  it('says what the AI does with them, only for a channel it watches in the browser', () => {
+    expect(queriesHint({ reads: false, watchedInBrowser: true })).toBe('One per line or separated by commas. The AI judges the posts it reads against these. It does not search for them on its own; Look around does.')
     expect(queriesHint({ reads: true, watchedInBrowser: false })).toBe(QUERIES_HINT)
     expect(queriesHint({ reads: false, watchedInBrowser: false })).toBe('One per line or separated by commas.')
     // A connector reads the channel: the flag does not make it a browser channel.

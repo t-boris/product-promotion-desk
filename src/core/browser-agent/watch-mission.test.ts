@@ -50,7 +50,7 @@ describe('the brief of a watch mission', () => {
     const text = watchMissionPrompt(brief(), NOW)
     expect(text).toMatch(/<product>\nName: Natal Mystic\nWebsite: https:\/\/natalmystic.com\nDescription: A natal chart calculator for hobby astrologers\n<\/product>/)
     expect(text).toMatch(/<goals>\n- Get hobby astrologers to try the free chart \(judged by: 100 signups\)\n<\/goals>/)
-    expect(text).toMatch(/<channel>\nChannel: @natalmystic[^\n]*\nTopics of the channel:\n- astrology\n- birth charts\nSearch queries of the channel:\n- natal chart\n- birth chart app\n<\/channel>/)
+    expect(text).toMatch(/<channel>\nChannel: @natalmystic[^\n]*\nTopics of the channel:\n- astrology\n- birth charts\nWhat the owner follows here \(to judge posts by, not to search for\):\n- natal chart\n- birth chart app\n<\/channel>/)
   })
 
   it('cannot be talked out of its fences by what the owner wrote', () => {

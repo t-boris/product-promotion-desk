@@ -32,7 +32,7 @@ class ScriptedWatch implements WatchMissionService {
   }
 }
 
-const done = (over: Partial<WatchOutcome> = {}): WatchOutcome => ({ ended: 'finished', reported: { status: 'done', reason: 'Looked at it all.' }, humanCheck: null, error: null, ...over })
+const done = (over: Partial<WatchOutcome> = {}): WatchOutcome => ({ ended: 'finished', reported: { status: 'done', reason: 'Looked at it all.' }, humanCheck: null, error: null, said: '', ...over })
 const item = (n: number | string, over: Partial<WatchItem> = {}): WatchItem => ({ url: `https://www.instagram.com/p/P${n}`, title: `Post ${n}`, author: 'someone', label: 'notice', relation: 'Astrology fans talk about birth charts.', ...over })
 
 interface Watched {
@@ -113,14 +113,9 @@ describe('a channel the app only watches in the browser: a whole look', () => {
       goals: [{ targetAction: 'Try the free chart', successMetrics: ['signups'] }]
     })
     expect(Date.parse(request.brief.since)).toBe(before - 14 * DAY)
-    // the channel's own page, then the platform's search for the first three queries only
-    expect(request.brief.queries).toEqual(['natal chart', 'birth chart app', 'astrology'])
-    expect(request.brief.places.map((place) => place.url)).toEqual([
-      'https://fake.test/@natalmystic',
-      'https://www.instagram.com/explore/search/keyword/?q=natal%20chart',
-      'https://www.instagram.com/explore/search/keyword/?q=birth%20chart%20app',
-      'https://www.instagram.com/explore/search/keyword/?q=astrology'
-    ])
+    // the channel's own page only: no search is made for the channel's queries, they only tell the AI what the owner follows
+    expect(request.brief.queries).toEqual(['natal chart', 'birth chart app', 'astrology', 'a fourth one'])
+    expect(request.brief.places.map((place) => place.url)).toEqual(['https://fake.test/@natalmystic'])
   })
 
   it('looks only at what is new the next time, tells the AI what it judged already and marks no second first look', async () => {
@@ -241,6 +236,16 @@ describe('a look that was not whole', () => {
     const result = await check(x)
     expect(result.status).toBe('failed')
     expect(result.summary).toMatch(reason)
+    unmoved(x)
+  })
+
+  it('quotes the AI\'s last words when it ended without saying how it went, so the owner can see why', async () => {
+    const x = watched()
+    x.ai.script = () => done({ reported: null, said: 'The page said the community is private.' })
+    const result = await check(x)
+    expect(result.status).toBe('failed')
+    expect(result.summary).toBe('The AI ended without saying how it went (its last words: "The page said the community is private."), so the look does not count.')
+    expect(channelOf(x).statusDetail).toContain('The page said the community is private.')
     unmoved(x)
   })
 
@@ -379,24 +384,18 @@ describe('what is not looked at', () => {
     expect(x.ai.requests).toHaveLength(1)
     const request = x.ai.requests[0] as WatchMissionRequest
     expect(request.hosts).toEqual(['forum.example.com'])
-    // A site the app knows no search for gets its channel page only; the AI follows the links it sees there, on the same site.
+    // A site gets its channel page only; the AI follows the links it sees there, on the same site.
     expect(request.brief.places.map((place) => place.url)).toEqual(['https://www.forum.example.com/c/astrology'])
   })
 
-  it('a Reddit community whose post list Reddit refuses is looked at in the browser: its newest posts first, then its page and its own search (DEC-045)', async () => {
+  it('a Reddit community whose post list Reddit refuses is looked at in the browser: its newest posts first, then its page, and no search', async () => {
     const x = watched({ platform: 'reddit' })
     x.w.core.db.prepare('UPDATE channels SET url = ?, target = ? WHERE id = ?').run('https://www.reddit.com/r/astrology', 'r/astrology', x.channelId)
     await check(x)
     const request = x.ai.requests[0] as WatchMissionRequest
     expect(request.hosts).toEqual(['reddit.com'])
     expect(request.brief.platform).toBe('Reddit')
-    expect(request.brief.places.map((place) => place.url)).toEqual([
-      'https://www.reddit.com/r/astrology/new/',
-      'https://www.reddit.com/r/astrology',
-      'https://www.reddit.com/r/astrology/search/?q=natal%20chart&restrict_sr=1&sort=new',
-      'https://www.reddit.com/r/astrology/search/?q=birth%20chart%20app&restrict_sr=1&sort=new',
-      'https://www.reddit.com/r/astrology/search/?q=astrology&restrict_sr=1&sort=new'
-    ])
+    expect(request.brief.places.map((place) => place.url)).toEqual(['https://www.reddit.com/r/astrology/new/', 'https://www.reddit.com/r/astrology'])
   })
 
   it('a paused channel is not looked at', async () => {

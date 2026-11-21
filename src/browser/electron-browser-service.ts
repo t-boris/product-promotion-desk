@@ -303,9 +303,9 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
       event.preventDefault()
       win.hide()
     })
-    const reveal = (focus: boolean): void => {
+    const reveal = (focus: boolean, title?: string): void => {
       if (win.isDestroyed()) return
-      win.setTitle(`${label} — the AI is working here`)
+      win.setTitle(`${label} — ${title ?? 'the AI is working here'}`)
       win.showInactive()
       if (focus) {
         win.moveTop()

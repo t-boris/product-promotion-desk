@@ -6,7 +6,7 @@ import { ControlledSession } from '../browser-session'
 import type { PageStep, PageStepResult } from '../ports'
 import { FakeClock, FakePage } from '../testing/fakes'
 import { TicketAuthority } from '../tickets'
-import { BrowserToolbox, type ToolboxDeps } from './toolbox'
+import { BrowserToolbox, type Rhythm, type ToolboxDeps } from './toolbox'
 import { NOTE_LEFT_OUT } from '../pipeline/triage-prompt'
 import { WATCH_MAX_ITEMS_PER_CALL, WATCH_REPLY_PREFIX, WATCH_SKIP_RELATION, WATCH_TOOL_NAMES, canonicalWatchUrl, openProblem, readWatchItems, type WatchItem } from './watch'
 
@@ -49,13 +49,13 @@ class ListPage extends FakePage {
   }
 }
 
-function setup(over: Partial<ToolboxDeps> = {}) {
+function setup(over: Partial<ToolboxDeps> = {}, shared: { time?: { now: number }; sleeps?: number[] } = {}) {
   const page = new ListPage()
   page.currentUrl = LIST
   const clock = new FakeClock()
   const session = new ControlledSession('acc', async () => page, new TicketAuthority(clock))
-  const time = { now: 10_000 }
-  const sleeps: number[] = []
+  const time = shared.time ?? { now: 10_000 }
+  const sleeps = shared.sleeps ?? []
   const reports: { status: string; reason: string }[] = []
   const recorded: WatchItem[] = []
   const said: string[] = []
@@ -259,6 +259,21 @@ describe('watch_open', () => {
     t.sleeps.length = 0
     await open(t, { place: 2 })
     expect(t.sleeps).toContain(2000)
+  })
+
+  it('waits between two openings of two looks of one account too: the pace is the account\'s, not the look\'s', async () => {
+    const shared = { time: { now: 10_000 }, sleeps: [] as number[] }
+    const rhythm: Rhythm = { at: null, reserved: null }
+    const first = setup({ rhythm }, shared)
+    const second = setup({ rhythm }, shared)
+
+    const paces = (): number => shared.sleeps.filter((ms) => ms === 2000).length
+    await open(first, { place: 1 }) // the first opening of the account: no pause
+    expect(paces()).toBe(0)
+    await open(second, { place: 1 }) // another look, at once: it pauses for the account's pace, though it has opened nothing yet itself
+    expect(paces()).toBe(1)
+    await open(first, { place: 2 })
+    expect(paces()).toBe(2)
   })
 })
 

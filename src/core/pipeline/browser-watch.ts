@@ -8,7 +8,7 @@
 
 import { ApiError } from '../../shared/api'
 import type { Account, Channel } from '../../shared/types'
-import { WATCH_KNOWN_LIMIT, WATCH_MAX_POSTS, WATCH_MAX_QUERIES, WATCH_TIMEOUT_MS, type WatchBrief, type WatchItem, type WatchOutcome, type WatchRecorded } from '../browser-agent/watch'
+import { WATCH_KNOWN_LIMIT, WATCH_MAX_POSTS, WATCH_TIMEOUT_MS, type WatchBrief, type WatchItem, type WatchOutcome, type WatchRecorded } from '../browser-agent/watch'
 import { MAX_LOOK_BACK_DAYS } from '../channels/settings'
 import { webPlaces } from '../channels/web-places'
 import { platformLabel } from '../../shared/post-format'
@@ -106,7 +106,7 @@ export class BrowserWatchFlow {
     if (outcome.ended === 'timeout') return { status: 'failed', reason: `The AI did not finish in ${WATCH_TIMEOUT_MS / MINUTE_MS} minutes and was stopped.` }
     if (outcome.ended === 'error') return { status: 'failed', reason: `The AI stopped because of an error: ${outcome.error ?? 'unknown error'}` }
     if (outcome.humanCheck) return { status: 'needs_owner', reason: `The site shows a human check (${outcome.humanCheck}): solve it in the account's browser.`, humanCheck: true }
-    if (!reported) return { status: 'failed', reason: 'The AI ended without saying how it went, so the look does not count.' }
+    if (!reported) return { status: 'failed', reason: `The AI ended without saying how it went${outcome.said ? ` (its last words: "${outcome.said}")` : ''}, so the look does not count.` }
     if (reported.status === 'needs_owner') return { status: 'needs_owner', reason: `The AI needs you: ${reported.reason || 'the site asks for something only a person can do.'}`, humanCheck: false }
     if (reported.status === 'failed') return { status: 'failed', reason: `The AI could not look at the channel: ${reported.reason || 'it gave no reason.'}` }
     // Only a look that was whole moves the cursor, and to the moment it STARTED: a post written while it ran is looked at again next time.
@@ -122,17 +122,15 @@ export class BrowserWatchFlow {
     })()
   }
 
-  /** What the AI is told: the owner's product and goals, the channel's own page and the platform's search for its first queries, how far back, and what was judged. */
+  /** What the AI is told: the owner's product and goals, the channel's newest posts (or its own page), how far back, and what was judged. */
   private brief(channel: Channel, account: Account, firstLook: boolean, lookBackDays: number, since: number): WatchBrief {
     const product = this.core.repos.product(channel.productId)
     const site = webPlaces(channel)
-    const queries = channel.settings.queries.filter((q) => q.trim() !== '').slice(0, WATCH_MAX_QUERIES)
-    // The newest posts first where the site has such a page (a Reddit community's own page shows its best posts, not what was written since the last look).
+    // The owner asked for one thing: what was posted in the channel since the last look (30 days the first time). So the AI goes through the channel itself,
+    // the newest posts first where the site has such a page (a Reddit community's own page shows its best posts, not what was written since the last look),
+    // and never searches: the channel's queries only tell it what the owner follows, and "Look around" is where the owner asks for a search.
     const places = [...(site.newest ? [{ label: `The newest posts of ${channel.target}`, url: site.newest }] : []), { label: `The channel's own page, ${channel.target}`, url: channel.url }]
-    for (const query of queries) {
-      const url = site.search(query)
-      if (url) places.push({ label: `${platformLabel(channel.platform)}'s own search for "${query}"`, url })
-    }
+    const queries = channel.settings.queries.filter((q) => q.trim() !== '')
     return {
       platform: platformLabel(channel.platform),
       channelTarget: channel.target,

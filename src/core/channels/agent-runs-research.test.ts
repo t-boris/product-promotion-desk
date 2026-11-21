@@ -111,18 +111,21 @@ describe('what a research mission needs', () => {
     expect(x.w.t.engine.calls).toEqual([])
   })
 
-  it('does not start while another task works the account, and does not disturb that task', async () => {
+  it('may run beside another look of the account, and does not disturb it', async () => {
     const x = await ready()
-    let release = (): void => undefined
+    const releases: Array<() => void> = []
     asTheAI(x.w, async () => {
-      await new Promise<void>((resolve) => (release = resolve))
+      await new Promise<void>((resolve) => releases.push(resolve))
     })
     const first = research(x)
     await tick(5)
-    await expect(research(x)).rejects.toMatchObject({ code: 'agent_running' })
-    expect(await service(x.w).researchReady(x.w.account.id)).toMatchObject({ ready: false, reason: expect.stringContaining('already working') })
-    release()
+    const second = research(x)
+    await tick(5)
+    expect(releases).toHaveLength(2)
+    expect(await service(x.w).researchReady(x.w.account.id)).toEqual({ ready: true, reason: null })
+    releases.forEach((release) => release())
     expect((await first).ended).toBe('finished')
+    expect((await second).ended).toBe('finished')
   })
 })
 
@@ -141,7 +144,7 @@ describe('what a research mission gives the AI, and how it ends', () => {
 
     const outcome = await research(x)
 
-    expect(outcome).toEqual({ ended: 'finished', reported: { status: 'done', reason: 'Looked at the search.' }, humanCheck: null, error: null })
+    expect(outcome).toEqual({ ended: 'finished', reported: { status: 'done', reason: 'Looked at the search.' }, humanCheck: null, error: null, said: 'Done.' })
     expect(x.list.topics).toEqual([{ topic: 'Birth chart memes', what: 'People joke about their rising sign.', url: 'https://www.instagram.com/p/Abc123' }])
     const task = x.w.t.engine.calls.at(-1)
     expect(task?.label).toBe('agent.research')

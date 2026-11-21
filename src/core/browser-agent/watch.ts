@@ -1,5 +1,5 @@
 // Watching a channel the app has no connector for, in the account's own browser, like a person (DEC-042). The AI only READS: it looks at the channel's
-// own page and at the platform's search for the channel's queries, judges what it sees against the product's goals, and records what matters as findings.
+// own page (its newest posts first), judges what it sees against the product's goals, and records what matters as findings. It does not search.
 // Nothing is replied to, measured, baselined or sent from what it reads, and no opportunity or draft comes out of it.
 //
 // This file holds the pure rules: what the toolbox's watch mode is allowed (see BrowserToolbox: six tools, no click, no typing, no script, no upload,
@@ -21,8 +21,6 @@ export const WATCH_MAX_ITEMS_PER_CALL = 20
 export const WATCH_MIN_GAP_MS = 2000
 /** How many of the channel's most recent finding addresses a check is told it judged already. */
 export const WATCH_KNOWN_LIMIT = 150
-/** How many of the channel's queries are searched on the platform in one check. */
-export const WATCH_MAX_QUERIES = 3
 /** How many posts a check works through at most (the brief says so; the finding cap is what holds). */
 export const WATCH_MAX_POSTS = 60
 /** A check that could not run is tried again after this long, whatever the reason (the browser is busy, the engine is not ready). */
@@ -54,7 +52,7 @@ export interface WatchRecorded {
 
 /** What the toolbox is held to in a watch mission. */
 export interface WatchSetup {
-  /** The pages the AI may start from, numbered from 1: the channel's own page and the platform's search for the first queries. */
+  /** The pages the AI may start from, numbered from 1: the channel's newest posts where the site has such a page, and the channel's own page. */
   places: string[]
   /** Stores the findings; the flow that started the check owns the table. */
   record: (items: WatchItem[]) => WatchRecorded
@@ -106,6 +104,8 @@ export interface WatchOutcome {
   /** A human check the last page showed (a CAPTCHA), described; null when none. */
   humanCheck: string | null
   error: string | null
+  /** The AI's own last words, on one line and short; empty when it said nothing. Shown when it ended without reporting, so the owner can see why. */
+  said: string
 }
 
 /** The service the monitor's watch flow starts a check through. Implemented by the AI agent service. */

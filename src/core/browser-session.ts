@@ -27,7 +27,7 @@ export interface RawPage {
   /** Closes the page and the window it lives in; the page is not used again. Pages of a back end that has nothing to close leave it out. */
   dispose?(): void | Promise<void>
   /** Shows the window of the page to the owner. Without `focus` the owner's front window stays in front; with it the window comes forward. */
-  reveal?(focus: boolean): void | Promise<void>
+  reveal?(focus: boolean, title?: string): void | Promise<void>
 }
 
 const TASK_ENDED = 'The AI task has ended.'
@@ -113,9 +113,10 @@ export class ControlledSession implements BrowserSession {
         })
       return opening
     }
+    let title: string | undefined
     const handle = {
       reveal: async (focus: boolean): Promise<void> => {
-        await page?.reveal?.(focus)
+        await page?.reveal?.(focus, title)
       },
       close: async (): Promise<void> => {
         if (closed) return
@@ -130,11 +131,12 @@ export class ControlledSession implements BrowserSession {
     this.tasks.add(handle)
     return {
       withAgentControl: (work) => this.turn(owner, work, open),
-      show: async () => {
+      show: async (given?: string) => {
+        title = given
         // The window is for the owner to watch, and a window that cannot be shown does not stop the AI working in it: showing it goes on in the
         // background (a browser that has to be started first takes a moment), and nothing waits for it.
         const made = await open()
-        void (async () => made.reveal?.(false))().catch(() => undefined)
+        void (async () => made.reveal?.(false, title))().catch(() => undefined)
       },
       close: handle.close
     }

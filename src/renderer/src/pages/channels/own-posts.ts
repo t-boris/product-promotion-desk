@@ -23,8 +23,8 @@ export const BROWSER_WATCH_WHAT_IT_DOES = 'Your own posts only. The AI watches t
 /** One quiet sentence on the Feed, where the notes of the channels it does not read are shown. */
 export const BROWSER_WATCH_NOTE = 'Watched in the browser by the AI like a person: it scrolls, judges each post against your goals and notes what matters here. It never replies or posts from this. Needs an AI engine that can work the browser (Claude Code or Codex).'
 
-/** Under the search queries of a channel watched in the browser: the queries are used there too. */
-export const BROWSER_WATCH_QUERIES_HINT = 'The AI also searches the platform for these (the first three).'
+/** Under the search queries of a channel watched in the browser: they help judge posts; the AI does not search for them while it watches. */
+export const BROWSER_WATCH_QUERIES_HINT = 'The AI judges the posts it reads against these. It does not search for them on its own; Look around does.'
 
 /** The words of the card that stands in for the mode selector. */
 export const ownPostsWhatItDoes = (channel: ReadingWays): string => (isWatchedInBrowser(channel) ? BROWSER_WATCH_WHAT_IT_DOES : OWN_POSTS_WHAT_IT_DOES)

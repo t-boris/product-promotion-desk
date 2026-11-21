@@ -1043,7 +1043,7 @@ describe('a channel the AI watches in the browser (DEC-042): its words', () => {
     }
     expect(BROWSER_WATCH_READING).toMatch(/Claude Code/)
     expect(BROWSER_WATCH_READING).toMatch(/Nothing is replied to or measured/)
-    expect(BROWSER_WATCH_QUERIES_HINT).toBe('The AI also searches the platform for these (the first three).')
+    expect(BROWSER_WATCH_QUERIES_HINT).toBe('The AI judges the posts it reads against these. It does not search for them on its own; Look around does.')
   })
 
   it('still says it takes only the owner\'s own posts, sent on the owner\'s press, and that the app cannot read the page back', () => {

@@ -272,8 +272,11 @@ export interface BrowserPage {
 export interface AgentTask {
   /** One turn of the task, on the task's own page (made on the first turn). Turns of the account are serialized; rejects with TakeoverError like `withAgentControl`. */
   withAgentControl<T>(work: (page: BrowserPage) => Promise<T>): Promise<T>
-  /** Makes the task's page now and shows its window to the owner without taking the focus (a failure to show it is not a failure of the task). */
-  show(): Promise<void>
+  /**
+   * Makes the task's page now and shows its window to the owner without taking the focus (a failure to show it is not a failure of the task).
+   * `title` says what the window is for ("looking at r/astrology"), so several windows of one account can be told apart; it stays on the window.
+   */
+  show(title?: string): Promise<void>
   /** Closes the task's page and window. Safe to call twice; the task takes no more turns. */
   close(): Promise<void>
 }
