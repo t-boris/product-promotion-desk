@@ -14,6 +14,13 @@ import { MAX_RELATION_CHARS, cleanText, safeLine } from '../pipeline/triage-prom
 /** A check is one visit to the channel's pages: twenty minutes and a hundred and twenty calls are generous, and nobody is asked anything. */
 export const WATCH_TIMEOUT_MS = 20 * 60 * 1000
 export const WATCH_MAX_CALLS = 120
+/**
+ * The first look at a channel goes back the owner's days (30 by default), and a busy community has thousands of posts in that time: it gets more calls, because
+ * a look that runs out of them keeps what it saved and goes on at the next look, but one that can never get to the end would never be a whole look.
+ */
+export const WATCH_FIRST_LOOK_MAX_CALLS = 300
+/** A look that ran out of calls after saving posts is tried again after this long (it has more to do, nothing failed). */
+export const WATCH_PARTIAL_RETRY_MIN = 10
 /** The most findings one check records (the skipped ones included): the rest of what it saw waits for the next check. */
 export const WATCH_MAX_FINDINGS = 60
 export const WATCH_MAX_ITEMS_PER_CALL = 20
@@ -85,6 +92,8 @@ export interface WatchBrief {
   /** The addresses already judged in earlier checks: not opened and not recorded again. */
   known: string[]
   maxPosts: number
+  /** The tool calls the look has in all, the ones it makes after the last page included (saving and reporting still work then). */
+  maxCalls: number
 }
 
 export interface WatchMissionRequest {
@@ -106,6 +115,8 @@ export interface WatchOutcome {
   error: string | null
   /** The AI's own last words, on one line and short; empty when it said nothing. Shown when it ended without reporting, so the owner can see why. */
   said: string
+  /** A call was refused because the allowance of tool calls was used up: the look did not get to the end of what it set out to do, whatever it reported. */
+  outOfCalls: boolean
 }
 
 /** The service the monitor's watch flow starts a check through. Implemented by the AI agent service. */

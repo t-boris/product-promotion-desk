@@ -27,6 +27,7 @@ const brief = (over: Partial<WatchBrief> = {}): WatchBrief => ({
   since: '2026-10-16T12:00:00.000Z',
   known: [],
   maxPosts: 60,
+  maxCalls: 120,
   ...over
 })
 
@@ -51,6 +52,14 @@ describe('the brief of a watch mission', () => {
     expect(text).toMatch(/<product>\nName: Natal Mystic\nWebsite: https:\/\/natalmystic.com\nDescription: A natal chart calculator for hobby astrologers\n<\/product>/)
     expect(text).toMatch(/<goals>\n- Get hobby astrologers to try the free chart \(judged by: 100 signups\)\n<\/goals>/)
     expect(text).toMatch(/<channel>\nChannel: @natalmystic[^\n]*\nTopics of the channel:\n- astrology\n- birth charts\nWhat the owner follows here \(to judge posts by, not to search for\):\n- natal chart\n- birth chart app\n<\/channel>/)
+  })
+
+  it('tells the AI how many tool calls it has, to judge from the list and to save as it goes', () => {
+    const text = watchMissionPrompt(brief({ maxCalls: 300 }), NOW)
+    expect(text).toContain('You have 300 tool calls in all')
+    expect(text).toContain('SAVE AS YOU GO')
+    expect(text).toContain('after the limit only those two still work')
+    expect(text).toMatch(/Open a post .* only when its title cannot tell you/)
   })
 
   it('cannot be talked out of its fences by what the owner wrote', () => {

@@ -277,6 +277,56 @@ describe('watch_open', () => {
   })
 })
 
+describe('the allowance of tool calls', () => {
+  /** A look with `calls` tool calls in all, and all of them used on snapshots. */
+  async function usedUp(calls: number) {
+    const t = setup({ maxCalls: calls })
+    for (let i = 0; i < calls; i++) await t.toolbox.call('browser_snapshot', {})
+    return t
+  }
+
+  it('lets the AI save what it judged and say how it went after the last call, and nothing else', async () => {
+    const t = await usedUp(2)
+    const refused = await t.toolbox.call('browser_snapshot', {})
+    expect(refused.isError).toBe(true)
+    expect(refused.text).toMatch(/used all 2 tool calls\. Only watch_record \(save what you judged\) and report_result \(say how it went\) still work/)
+    expect(t.toolbox.progress.outOfCalls).toBe(true)
+
+    const saved = await record(t, [post()])
+    expect(saved.isError).toBeFalsy()
+    expect(t.recorded).toHaveLength(1)
+    const reported = await t.toolbox.call('report_result', { status: 'failed', reason: 'Ran out of calls.' })
+    expect(reported.isError).toBeFalsy()
+    expect(t.reports).toEqual([{ status: 'failed', reason: 'Ran out of calls.' }])
+    // a look that opened nothing more, and the page was not touched after the limit
+    expect((await open(t, { place: 1 })).isError).toBe(true)
+  })
+
+  it('does not call a look out of calls when it reports with the last call it had', async () => {
+    const t = setup({ maxCalls: 2 })
+    await t.toolbox.call('browser_snapshot', {})
+    await t.toolbox.call('report_result', { status: 'done', reason: 'Looked.' })
+    expect(t.toolbox.progress.outOfCalls).toBe(false)
+  })
+
+  it('reminds the AI to save after three screens without a record, and again when only a few calls are left', async () => {
+    const t = setup({ maxCalls: 40 })
+    const texts: string[] = []
+    for (let i = 0; i < 4; i++) texts.push((await t.toolbox.call('browser_snapshot', {})).text)
+    expect(texts[0]).not.toMatch(/without recording anything/)
+    expect(texts[1]).not.toMatch(/without recording anything/)
+    expect(texts[2]).toMatch(/You have looked at 3 screens without recording anything\. Call watch_record now/)
+    expect(texts[3]).toMatch(/looked at 4 screens/)
+    await record(t, [post()])
+    expect((await t.toolbox.call('browser_snapshot', {})).text).not.toMatch(/without recording anything/)
+
+    const tight = setup({ maxCalls: 25 })
+    let last = ''
+    for (let i = 0; i < 6; i++) last = (await tight.toolbox.call('browser_snapshot', {})).text
+    expect(last).toMatch(/Only 19 tool calls left: call watch_record with what you judged and then report_result/)
+  })
+})
+
 describe('watch_back', () => {
   it('goes back to the list the post was opened from, and not further', async () => {
     const t = setup()

@@ -144,7 +144,7 @@ describe('what a research mission gives the AI, and how it ends', () => {
 
     const outcome = await research(x)
 
-    expect(outcome).toEqual({ ended: 'finished', reported: { status: 'done', reason: 'Looked at the search.' }, humanCheck: null, error: null, said: 'Done.' })
+    expect(outcome).toEqual({ ended: 'finished', reported: { status: 'done', reason: 'Looked at the search.' }, humanCheck: null, error: null, said: 'Done.', outOfCalls: false })
     expect(x.list.topics).toEqual([{ topic: 'Birth chart memes', what: 'People joke about their rising sign.', url: 'https://www.instagram.com/p/Abc123' }])
     const task = x.w.t.engine.calls.at(-1)
     expect(task?.label).toBe('agent.research')

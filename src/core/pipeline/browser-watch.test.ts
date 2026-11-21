@@ -32,7 +32,7 @@ class ScriptedWatch implements WatchMissionService {
   }
 }
 
-const done = (over: Partial<WatchOutcome> = {}): WatchOutcome => ({ ended: 'finished', reported: { status: 'done', reason: 'Looked at it all.' }, humanCheck: null, error: null, said: '', ...over })
+const done = (over: Partial<WatchOutcome> = {}): WatchOutcome => ({ ended: 'finished', reported: { status: 'done', reason: 'Looked at it all.' }, humanCheck: null, error: null, said: '', outOfCalls: false, ...over })
 const item = (n: number | string, over: Partial<WatchItem> = {}): WatchItem => ({ url: `https://www.instagram.com/p/P${n}`, title: `Post ${n}`, author: 'someone', label: 'notice', relation: 'Astrology fans talk about birth charts.', ...over })
 
 interface Watched {
@@ -237,6 +237,70 @@ describe('a look that was not whole', () => {
     expect(result.status).toBe('failed')
     expect(result.summary).toMatch(reason)
     unmoved(x)
+  })
+
+  it('tells the first look it has 300 tool calls, and a later one 120', async () => {
+    const x = watched()
+    x.ai.script = (request) => {
+      request.record([item(1)])
+      return done()
+    }
+    await check(x)
+    expect((x.ai.requests[0] as WatchMissionRequest).brief.maxCalls).toBe(300)
+    x.w.clock.advance(4 * 60 * MINUTE)
+    await check(x)
+    expect((x.ai.requests[1] as WatchMissionRequest).brief.maxCalls).toBe(120)
+  })
+
+  describe('a look that ran out of calls', () => {
+    it('keeps what it saved, is no failure, does not move the cursor and goes on in ten minutes, whatever the AI said about it', async () => {
+      const x = watched()
+      x.ai.script = (request) => {
+        request.record([item(1), item(2, { label: 'skip' })])
+        return done({ outOfCalls: true, reported: { status: 'done', reason: 'Looked at everything.' } })
+      }
+      const outcome = await check(x)
+      expect(outcome).toMatchObject({ status: 'ok', summary: expect.stringContaining('ran out of calls: 1 noted, 1 judged not relevant') })
+      expect(rows(x)).toHaveLength(2)
+      expect(cursor(x)).toBeNull() // not a whole look: the next one is a first look again
+      expect(channelOf(x).lookedBackAt).toBeNull()
+      expect(channelOf(x)).toMatchObject({ status: 'active', nextCheckAt: new Date(x.w.clock.now().getTime() + 10 * MINUTE).toISOString() })
+      nothingToAct(x)
+    })
+
+    it('clears the red of a channel that failed before, because this look did work', async () => {
+      const x = watched()
+      x.ai.script = () => done({ reported: null })
+      await check(x)
+      expect(channelOf(x).status).toBe('error')
+      x.w.clock.advance(11 * MINUTE)
+      x.ai.script = (request) => {
+        request.record([item(1)])
+        return done({ outOfCalls: true, reported: null })
+      }
+      await check(x)
+      expect(channelOf(x)).toMatchObject({ status: 'active', statusDetail: '' })
+    })
+
+    it('is a failure when it saved nothing at all, with the AI\'s last words', async () => {
+      const x = watched()
+      x.ai.script = () => done({ outOfCalls: true, reported: null, said: 'The call limit came before I could save.' })
+      const result = await check(x)
+      expect(result.status).toBe('failed')
+      expect(result.summary).toBe('The AI used all its tool calls without saving a single post (its last words: "The call limit came before I could save.").')
+      expect(cursor(x)).toBeNull()
+    })
+
+    it('still stops for a person when the AI said it needs one', async () => {
+      const x = watched()
+      x.ai.script = (request) => {
+        request.record([item(1)])
+        return done({ outOfCalls: true, reported: { status: 'needs_owner', reason: 'A login page.' } })
+      }
+      const result = await check(x)
+      expect(result.status).toBe('suspended')
+      expect(channelOf(x).status).not.toBe('active')
+    })
   })
 
   it('quotes the AI\'s last words when it ended without saying how it went, so the owner can see why', async () => {

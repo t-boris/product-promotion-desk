@@ -5,7 +5,7 @@
 // `ctx.session.withAgentControl` (the session is not re-entrant), so this service must not wrap the call.
 
 import type { Account, AccountStatus, Channel } from '../../shared/types'
-import { WATCH_RETRY_MIN } from '../browser-agent/watch'
+import { WATCH_PARTIAL_RETRY_MIN, WATCH_RETRY_MIN } from '../browser-agent/watch'
 import { OWN_POSTS_DETAIL } from '../channels/reads'
 import type { Core } from '../core'
 import { TakeoverError, type Connector, type ConnectorContext } from '../ports'
@@ -118,6 +118,8 @@ export class MonitorFlow implements MonitorService {
         return this.succeedWatched(channel, result.summary)
       case 'failed':
         return this.fail(channel, result.reason)
+      case 'partial':
+        return this.partial(channel, result.summary)
       case 'deferred':
         return this.defer(channel, result)
       case 'needs_owner':
@@ -137,6 +139,16 @@ export class MonitorFlow implements MonitorService {
     })
     this.core.events.changed('channels', 'attention')
     return { status: 'ok', summary, newOpportunities: 0 }
+  }
+
+  /** The look saved posts and ran out of calls: not a failure and not a whole look. The channel is not troubled, and it is looked at again in a few minutes. */
+  private partial(channel: Channel, summary: string): MonitorOutcome {
+    const now = this.core.clock.now()
+    const wasTroubled = channel.status === 'needs_user' || channel.status === 'error'
+    const retryAt = minutesFrom(now, WATCH_PARTIAL_RETRY_MIN)
+    this.store.updateChannel(channel.id, { lastRunAt: now.toISOString(), nextCheckAt: retryAt, ...(wasTroubled ? { status: 'active' as const, statusDetail: '' } : {}) })
+    this.core.events.changed('channels', 'attention')
+    return { status: 'ok', summary, newOpportunities: 0, retryAt }
   }
 
   /** The look did not run, and nothing failed: no failure is counted and nothing is suspended; it is tried again in a few minutes, or at the next regular check. */

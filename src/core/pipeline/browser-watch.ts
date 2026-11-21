@@ -8,7 +8,7 @@
 
 import { ApiError } from '../../shared/api'
 import type { Account, Channel } from '../../shared/types'
-import { WATCH_KNOWN_LIMIT, WATCH_MAX_POSTS, WATCH_TIMEOUT_MS, type WatchBrief, type WatchItem, type WatchOutcome, type WatchRecorded } from '../browser-agent/watch'
+import { WATCH_FIRST_LOOK_MAX_CALLS, WATCH_KNOWN_LIMIT, WATCH_MAX_CALLS, WATCH_MAX_POSTS, WATCH_TIMEOUT_MS, type WatchBrief, type WatchItem, type WatchOutcome, type WatchRecorded } from '../browser-agent/watch'
 import { MAX_LOOK_BACK_DAYS } from '../channels/settings'
 import { webPlaces } from '../channels/web-places'
 import { platformLabel } from '../../shared/post-format'
@@ -28,6 +28,8 @@ export type WatchResult =
   /** The AI could not go on without a person: a sign-in, a CAPTCHA, a check. `humanCheck`: the last page showed a human check. */
   | { status: 'needs_owner'; reason: string; humanCheck: boolean }
   | { status: 'failed'; reason: string }
+  /** The look saved posts and then ran out of calls: what it saved stands, nothing failed, and it goes on soon. The cursor does not move. */
+  | { status: 'partial'; summary: string }
   /** The look did not run: nothing failed. `soon`: it is tried again in a few minutes; otherwise at the channel's next regular check. */
   | { status: 'deferred'; reason: string; soon: boolean }
 
@@ -106,8 +108,14 @@ export class BrowserWatchFlow {
     if (outcome.ended === 'timeout') return { status: 'failed', reason: `The AI did not finish in ${WATCH_TIMEOUT_MS / MINUTE_MS} minutes and was stopped.` }
     if (outcome.ended === 'error') return { status: 'failed', reason: `The AI stopped because of an error: ${outcome.error ?? 'unknown error'}` }
     if (outcome.humanCheck) return { status: 'needs_owner', reason: `The site shows a human check (${outcome.humanCheck}): solve it in the account's browser.`, humanCheck: true }
+    if (reported?.status === 'needs_owner') return { status: 'needs_owner', reason: `The AI needs you: ${reported.reason || 'the site asks for something only a person can do.'}`, humanCheck: false }
+    // Out of calls: what the AI said about how it went does not make the look whole, however it put it. What it saved stands and the next look goes on.
+    if (outcome.outOfCalls) {
+      const seen = tally.noted + tally.skipped
+      if (seen + tally.known === 0) return { status: 'failed', reason: `The AI used all its tool calls without saving a single post${outcome.said ? ` (its last words: "${outcome.said}")` : ''}.` }
+      return { status: 'partial', summary: `Looked at part of it and ran out of calls: ${tally.noted} noted, ${tally.skipped} judged not relevant, ${tally.known} already known. The next look goes on` }
+    }
     if (!reported) return { status: 'failed', reason: `The AI ended without saying how it went${outcome.said ? ` (its last words: "${outcome.said}")` : ''}, so the look does not count.` }
-    if (reported.status === 'needs_owner') return { status: 'needs_owner', reason: `The AI needs you: ${reported.reason || 'the site asks for something only a person can do.'}`, humanCheck: false }
     if (reported.status === 'failed') return { status: 'failed', reason: `The AI could not look at the channel: ${reported.reason || 'it gave no reason.'}` }
     // Only a look that was whole moves the cursor, and to the moment it STARTED: a post written while it ran is looked at again next time.
     this.finish(channel, startedAt)
@@ -146,7 +154,8 @@ export class BrowserWatchFlow {
       lookBackDays,
       since: new Date(since).toISOString(),
       known: this.findings.recentUrls(channel.id, WATCH_KNOWN_LIMIT),
-      maxPosts: WATCH_MAX_POSTS
+      maxPosts: WATCH_MAX_POSTS,
+      maxCalls: firstLook ? WATCH_FIRST_LOOK_MAX_CALLS : WATCH_MAX_CALLS
     }
   }
 }

@@ -40,6 +40,7 @@ const brief = (over: Partial<WatchBrief> = {}): WatchBrief => ({
   since: '2026-10-16T12:00:00.000Z',
   known: [],
   maxPosts: 60,
+  maxCalls: 120,
   ...over
 })
 
@@ -255,7 +256,7 @@ describe('what a watch mission gives the AI, and how it ends', () => {
 
     const outcome = await watch(x)
 
-    expect(outcome).toEqual({ ended: 'finished', reported: { status: 'done', reason: 'Looked at the search.' }, humanCheck: null, error: null, said: 'Done.' })
+    expect(outcome).toEqual({ ended: 'finished', reported: { status: 'done', reason: 'Looked at the search.' }, humanCheck: null, error: null, said: 'Done.', outOfCalls: false })
     expect(x.stored).toEqual([{ url: 'https://www.instagram.com/p/Abc123', title: 'A post about natal charts', author: 'someone', label: 'notice', relation: 'Worth a reply: Asks how to read a chart.' }])
     const task = x.w.t.engine.calls.at(-1)
     expect(task?.label).toBe('agent.watch')

@@ -544,7 +544,7 @@ class ScriptedResearch implements ResearchMissionService {
   }
 }
 
-const done = (over: Partial<ResearchOutcome> = {}): ResearchOutcome => ({ ended: 'finished', reported: { status: 'done', reason: 'Looked.' }, humanCheck: null, error: null, said: '', ...over })
+const done = (over: Partial<ResearchOutcome> = {}): ResearchOutcome => ({ ended: 'finished', reported: { status: 'done', reason: 'Looked.' }, humanCheck: null, error: null, said: '', outOfCalls: false, ...over })
 const topic = (n: number | string, over: Partial<ResearchTopic> = {}): ResearchTopic => ({ topic: `Topic ${n}`, what: `People talk about ${n}.`, url: null, ...over })
 const ANGLE = { angle: 'Birth chart memes are everywhere: show what a real chart says in one minute.', why: 'It takes topic 1.' }
 /** What the owner is shown of it. */

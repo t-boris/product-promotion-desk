@@ -472,7 +472,7 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
     const account = this.accounts.account(request.accountId)
     const engine = await this.watchPrerequisites(account)
     const setup = { watch: { places: request.brief.places.map((place) => place.url), record: request.record, maxFindings: WATCH_MAX_FINDINGS, minGapMs: WATCH_MIN_GAP_MS, now: () => this.core.clock.now().getTime() } }
-    return this.look('watch', account, engine, { channelId: request.channelId, title: `the AI is looking at ${request.brief.channelTarget}`, subject: account.profileId ?? account.id, hosts: request.hosts, prompt: watchMissionPrompt(request.brief, this.core.clock.now()), setup })
+    return this.look('watch', account, engine, { channelId: request.channelId, maxCalls: request.brief.maxCalls, title: `the AI is looking at ${request.brief.channelTarget}`, subject: account.profileId ?? account.id, hosts: request.hosts, prompt: watchMissionPrompt(request.brief, this.core.clock.now()), setup })
   }
 
   /** What a search for trends needs (REQ-004): an account that is signed in, no run going on it, and an engine that can work the browser. */
@@ -511,7 +511,7 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
     kind: 'watch' | 'research',
     account: Account,
     engine: AiEngine,
-    options: { channelId?: string; title: string; subject: string; hosts: string[]; prompt: string; setup: { watch: WatchSetup } | { research: ResearchSetup } }
+    options: { channelId?: string; title: string; subject: string; hosts: string[]; prompt: string; maxCalls?: number; setup: { watch: WatchSetup } | { research: ResearchSetup } }
   ): Promise<WatchOutcome> {
     const spec = MISSIONS[kind]
     const words = LOOKS[kind]
@@ -544,7 +544,7 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
         note: () => undefined,
         report: (result) => void (live.reported = result),
         signal: live.abort.signal,
-        maxCalls: spec.maxCalls,
+        maxCalls: options.maxCalls ?? spec.maxCalls,
         rhythm: this.rhythmOf(account.id),
         ...options.setup
       })
@@ -577,7 +577,7 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
       else this.finish(live, reported?.status ?? 'failed', reported?.reason || 'The AI ended without saying how it went.')
     }
     this.core.log.info('accounts', `${words.did} ${account.label}${reported ? ` (it reported "${reported.status}")` : ''}.`)
-    return { ended, reported, humanCheck: toolbox?.observed.humanCheck ?? null, error, said: lastWords }
+    return { ended, reported, humanCheck: toolbox?.observed.humanCheck ?? null, error, said: lastWords, outOfCalls: toolbox?.progress.outOfCalls ?? false }
   }
 
   /** One line in the log for a look that ended without its report: the calls it made, what it recorded, the last page it was on and what it said last. */
