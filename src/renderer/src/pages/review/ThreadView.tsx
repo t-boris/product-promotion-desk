@@ -4,6 +4,7 @@ import { Badge, formatTime } from '../../ui'
 import { OPEN_IN_ACCOUNT_BROWSER } from '../channels/open-browser'
 import { OpenChannelBrowser } from '../channels/OpenChannelBrowser'
 import { isHttpUrl } from './labels'
+import { AddressLink } from '../AddressLink'
 
 const BODY_PREVIEW = 700
 
@@ -14,9 +15,9 @@ function preview(text: string): string {
 function ExternalLink({ url, children }: { url: string | null | undefined; children: string }) {
   if (!isHttpUrl(url)) return null
   return (
-    <a href={url} target="_blank" rel="noreferrer" data-testid="open-in-browser">
+    <AddressLink url={url} testId="open-in-browser">
       {children}
-    </a>
+    </AddressLink>
   )
 }
 

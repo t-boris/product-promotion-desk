@@ -1,7 +1,7 @@
 // The browser an account works in (DEC-026), and the name of an account.
 
 import { describe, expect, it } from 'vitest'
-import { makeReadyWorld } from './test-helpers'
+import { OtherConnector, makeReadyWorld } from './test-helpers'
 
 describe('the name of an account', () => {
   it('can be changed, with the rules of the name at creation', async () => {
@@ -116,3 +116,42 @@ describe('the browser of an account', () => {
     expect(await w.call('accounts.browser', { accountId: w.account.id })).toMatchObject({ chromeFound: false })
   })
 })
+
+describe('an address a screen links to', () => {
+  it('opens in the account named, and in the account of the channel named', async () => {
+    const w = await makeReadyWorld({ extra: [new OtherConnector()] })
+    const second = await w.call('accounts.create', { productId: w.productId, platform: 'other', label: 'Other account' })
+    const channel = await w.call('channels.connect', { productId: w.productId, accountId: w.account.id, target: 'r/astrology' })
+    await w.call('accounts.openAddress', { url: 'https://www.reddit.com/r/astrology/comments/1/', accountId: second.id })
+    await w.call('accounts.openAddress', { url: 'https://www.reddit.com/r/astrology/comments/2/', channelId: channel.id })
+    expect(w.t.browser.opened).toEqual([
+      { accountId: second.id, url: 'https://www.reddit.com/r/astrology/comments/1/' },
+      { accountId: w.account.id, url: 'https://www.reddit.com/r/astrology/comments/2/' }
+    ])
+  })
+
+  it('opens in an account whose platform owns the address, and in the first account when none does', async () => {
+    const w = await makeReadyWorld({ extra: [new OtherConnector()] })
+    await w.call('accounts.create', { productId: w.productId, platform: 'other', label: 'Other account' })
+    await w.call('accounts.openAddress', { url: 'https://www.reddit.com/r/x/comments/1/' })
+    await w.call('accounts.openAddress', { url: 'https://forum.example.org/t/42' })
+    const opened = w.t.browser.opened
+    expect(opened[0]).toEqual({ accountId: w.account.id, url: 'https://www.reddit.com/r/x/comments/1/' })
+    expect(opened[1].url).toBe('https://forum.example.org/t/42')
+    expect((await w.call('accounts.list', undefined)).map((a) => a.id)).toContain(opened[1].accountId)
+  })
+
+  it('is refused for an address that is not a web page, with a password in it, or when there is no account at all', async () => {
+    const w = await makeReadyWorld()
+    expect(await w.refusal('accounts.openAddress', { url: 'javascript:alert(1)' })).toBe('invalid_input')
+    expect(await w.refusal('accounts.openAddress', { url: 'file:///etc/passwd' })).toBe('invalid_input')
+    expect(await w.refusal('accounts.openAddress', { url: 'https://user:secret@example.com/' })).toBe('invalid_input')
+    expect(await w.refusal('accounts.openAddress', { url: '   ' })).toBe('invalid_input')
+    expect(await w.refusal('accounts.openAddress', { url: 'https://example.com/', accountId: 'nope' })).toBe('not_found')
+    expect(await w.refusal('accounts.openAddress', { url: 'https://example.com/', channelId: 'nope' })).toBe('not_found')
+    expect(w.t.browser.opened).toEqual([])
+    w.core.db.prepare('DELETE FROM accounts').run()
+    expect(await w.refusal('accounts.openAddress', { url: 'https://example.com/' })).toBe('no_account')
+  })
+})
+

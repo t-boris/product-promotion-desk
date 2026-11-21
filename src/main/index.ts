@@ -1,6 +1,6 @@
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { BrowserWindow, Menu, app, clipboard, ipcMain, nativeTheme, powerMonitor, safeStorage, shell } from 'electron'
+import { BrowserWindow, Menu, app, clipboard, ipcMain, nativeTheme, powerMonitor, safeStorage } from 'electron'
 import { ApiError, IPC_EVENT, IPC_INVOKE, type ApiEvent, type ApiMethod } from '../shared/api'
 import { APP_NAME } from '../shared/app-name'
 import { createEngines } from '../ai'
@@ -149,8 +149,11 @@ async function start(): Promise<void> {
         nodeIntegration: false
       }
     })
+    // A link that opens a new window (a middle click, a "_blank" link) goes to the app's own browser, never to the system's: the pages are the accounts'.
     win.webContents.setWindowOpenHandler(({ url }) => {
-      if (/^https?:/.test(url)) void shell.openExternal(url)
+      if (/^https?:/.test(url)) {
+        core.router.call('accounts.openAddress', { url }).catch((error: unknown) => core.log.warn('app', `A link was not opened: ${error instanceof Error ? error.message : String(error)}`))
+      }
       return { action: 'deny' }
     })
     win.webContents.on('will-navigate', (event, url) => {

@@ -98,8 +98,9 @@ describe('FindingDetail', () => {
     expect(out.match(/<a /g)).toHaveLength(1)
   })
 
-  it('opens the post in the owner\'s browser the way the other "open in browser" links do', () => {
-    expect(detail()).toContain('<a class="btn" href="https://www.reddit.com/r/astrology/comments/f1/" target="_blank" rel="noreferrer" data-testid="finding-open-post">Open post</a>')
+  it('opens the post in the app\'s own browser, never in the system\'s: no "_blank" link', () => {
+    expect(detail()).not.toContain('target="_blank"')
+    expect(detail()).toContain('<a class="btn" href="https://www.reddit.com/r/astrology/comments/f1/" rel="noreferrer" data-testid="finding-open-post" aria-busy="false">Open post</a>')
   })
 
   it('shows nothing of a thread for a post nobody read, and the post, the thread, whom to answer and the comment for one the AI read', () => {

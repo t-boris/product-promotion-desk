@@ -184,6 +184,11 @@ export interface ApiMethods {
   'platforms.list': [void, PlatformInfo[]]
   /** Opens the account's persistent browser at `url` and hands control to the user (login handoff). */
   'accounts.openBrowser': [{ accountId: Id; url?: string }, { tabId: string }]
+  /**
+   * Any address a screen links to, opened in the app's own browser, never in the system's. The account: the one named, else the channel's, else one whose
+   * platform owns the address, else any; refused only when there is no account at all.
+   */
+  'accounts.openAddress': [{ url: string; accountId?: Id; channelId?: Id }, { tabId: string }]
   /** Opens the account's own browser where channels of its platform are found: on `address` when a connector reads it as a channel, else on the platform's browse page (DEC-028). */
   'accounts.browseChannels': [{ accountId: Id; address?: string }, { tabId: string }]
   /** The address (no query, no fragment, no credentials) and title of the page open in the owner's window of the account; `trimmed` says that something was cut from the address. Null when no window is open. Refused with a sentence when several tabs are open or the page is not a web page. Nothing else is read. */

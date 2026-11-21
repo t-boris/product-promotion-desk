@@ -3,6 +3,7 @@ import type { Channel, Id } from '../../../../shared/types'
 import { call, useAction, useQuery } from '../../hooks'
 import { Badge, Button, Card, EmptyState, ErrorNote, Field, Loading, formatTime } from '../../ui'
 import { isHttpUrl } from './labels'
+import { AddressLink } from '../AddressLink'
 
 const MAX_SHOWN = 100
 
@@ -57,9 +58,7 @@ export function OlderDiscussions({ channel, defaultOpen = false }: { channel: Ch
                 <span className="older-side">
                   {d.selectedForProcessing && <Badge tone="info">Chosen</Badge>}
                   {isHttpUrl(d.url) && (
-                    <a href={d.url} target="_blank" rel="noreferrer">
-                      Open
-                    </a>
+                    <AddressLink url={d.url}>Open</AddressLink>
                   )}
                 </span>
               </label>

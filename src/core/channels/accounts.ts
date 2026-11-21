@@ -318,6 +318,29 @@ export class AccountsService {
   }
 
   /**
+   * An address a screen links to (a post, a comment, a result, a page the AI saw), opened in the app's own browser and never in the system's. The account
+   * it opens in: the one named; else the one of the channel named; else one whose platform owns the address; else any account (the sign-in of another
+   * site is harmless on a page that does not belong to it). Refused only when there is no account at all, because the app's browser is always an account's.
+   */
+  async openAddress(args: { url: string; accountId?: string; channelId?: string }): Promise<{ tabId: string }> {
+    const url = parseBrowserUrl(args.url)
+    return this.openBrowser({ accountId: this.accountForAddress(url, args).id, url })
+  }
+
+  private accountForAddress(url: string, args: { accountId?: string; channelId?: string }): Account {
+    if (args.accountId) return this.account(args.accountId)
+    if (args.channelId) return this.account(found(() => this.core.repos.channel(requireText(args.channelId, 'The channel')), 'The channel').accountId)
+    const accounts = this.list()
+    const owner = accounts.find((account) => {
+      const preset = presetFor(account.platform)
+      return preset !== undefined && addressOnPlatform(preset, url)
+    })
+    const chosen = owner ?? accounts[0]
+    if (!chosen) throw new ApiError('no_account', "Add an account first: every address opens in the app's own browser, as one of your accounts.")
+    return chosen
+  }
+
+  /**
    * "Open browser" from a place where a channel is chosen or shown (DEC-028): the typed address when it reads as a channel of the account's
    * platform, else the page of the platform where channels are found. The owner looks around there, signed in as the account.
    */

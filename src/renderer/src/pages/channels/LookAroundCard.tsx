@@ -7,6 +7,7 @@ import { call, useAction } from '../../hooks'
 import { Button, Card, ErrorNote, Hint } from '../../ui'
 import { LOOK_AROUND_INTRO, LOOK_BUTTONS, lookArgs, lookBlockedReason, lookButtonOf, lookView } from './look-around'
 import '../../assist/assist.css'
+import { AddressLink } from '../AddressLink'
 
 /**
  * Look around (DEC-045): on any channel, the owner asks the AI to look at the place in the browser of the channel's account and report what it saw:
@@ -79,9 +80,9 @@ export function LookAroundCard({ channel }: { channel: Channel }) {
                 <strong>{topic.topic}</strong>
                 <span>{topic.what}</span>
                 {topic.url && (
-                  <a className="small" href={topic.url} target="_blank" rel="noreferrer">
+                  <AddressLink className="small" url={topic.url} channelId={channel.id}>
                     Open the page
-                  </a>
+                  </AddressLink>
                 )}
               </li>
             ))}

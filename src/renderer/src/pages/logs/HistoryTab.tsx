@@ -4,6 +4,7 @@ import { Badge, Card, EmptyState, ErrorNote, Loading, formatTime } from '../../u
 import { SEND_STATE_LABEL, SEND_STATE_TONE } from './labels'
 import { useVersionLabels } from './useVersionLabels'
 import { headingOf } from '../review/quick/labels'
+import { AddressLink } from '../AddressLink'
 
 const EXCERPT = 220
 
@@ -37,9 +38,9 @@ function HistoryRow({ entry, versionLabel }: { entry: HistoryEntry; versionLabel
           {entry.channelTarget} as {entry.accountLabel}
         </div>
         {isWebLink(action.destination) ? (
-          <a className="small" href={action.destination} target="_blank" rel="noreferrer">
+          <AddressLink className="small" url={action.destination}>
             {action.destination}
-          </a>
+          </AddressLink>
         ) : (
           <div className="muted small">{action.destination}</div>
         )}
@@ -52,9 +53,9 @@ function HistoryRow({ entry, versionLabel }: { entry: HistoryEntry; versionLabel
         <Badge tone={SEND_STATE_TONE[action.state] ?? 'neutral'}>{SEND_STATE_LABEL[action.state] ?? action.state}</Badge>
         {isWebLink(action.resultUrl) && (
           <div>
-            <a className="small" href={action.resultUrl} target="_blank" rel="noreferrer" data-testid={`result-link-${action.id}`}>
+            <AddressLink className="small" url={action.resultUrl} testId={`result-link-${action.id}`}>
               Open published message
-            </a>
+            </AddressLink>
           </div>
         )}
         {action.error && <div className="muted small">{action.error}</div>}

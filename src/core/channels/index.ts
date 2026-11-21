@@ -94,6 +94,7 @@ export function register(core: Core): void {
     'profiles.picture': (args) => people.picture(args),
     'platforms.list': () => listPlatforms(core.connectors),
     'accounts.openBrowser': (args) => accounts.openBrowser(args),
+    'accounts.openAddress': (args) => accounts.openAddress(args),
     'accounts.browseChannels': (args) => accounts.browseChannels(args),
     'accounts.currentPage': (args) => accounts.currentPage(args.accountId),
     'accounts.browser': (args) => accounts.browserState(args.accountId),

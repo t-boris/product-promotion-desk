@@ -9,6 +9,7 @@ import { angleInUse, angleToUse, angleUsable, progressSubject, trendsArgs, trend
 import type { QuickTrendsProps } from './types'
 import '../../../../assist/assist.css'
 import './quick-ai.css'
+import { AddressLink } from '../../../AddressLink'
 
 /**
  * What is talked about now (REQ-004, DEC-042): the owner asks, and the AI looks at the platform's own search in the AI browser of the channel's account,
@@ -130,9 +131,9 @@ export function QuickTrends({ productId, channelId, platform, angle, disabled, o
                 <strong>{topic.topic}</strong>
                 <span>{topic.what}</span>
                 {topic.url && (
-                  <a className="small" href={topic.url} target="_blank" rel="noreferrer">
+                  <AddressLink className="small" url={topic.url}>
                     Open on {platform ? platformLabel(platform) : 'the platform'}
-                  </a>
+                  </AddressLink>
                 )}
               </li>
             ))}

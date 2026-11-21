@@ -1,6 +1,7 @@
 import type { OpportunityCard } from '../../../../shared/types'
 import { Badge, formatTime } from '../../ui'
 import { SEND_STATE_LABEL, SEND_STATE_TONE, isHttpUrl } from './labels'
+import { AddressLink } from '../AddressLink'
 
 /**
  * What the owner approved and what happened when it was sent: the exact account and destination the approval
@@ -41,9 +42,9 @@ export function ActionSummary({ card }: { card: OpportunityCard }) {
               <dt>Link</dt>
               <dd>
                 {isHttpUrl(action.resultUrl) ? (
-                  <a href={action.resultUrl} target="_blank" rel="noreferrer" data-testid="result-link">
+                  <AddressLink url={action.resultUrl} testId="result-link">
                     {action.resultUrl}
-                  </a>
+                  </AddressLink>
                 ) : (
                   <span className="muted">—</span>
                 )}
