@@ -596,6 +596,32 @@ describe('a click or a choice of the AI\'s own is made only on the approved dest
   })
 })
 
+describe('a click on a text box only puts the cursor in it, whatever the site calls the box', () => {
+  // Reddit's comment box is a text box whose accessible name is "Join the conversation": the live page of a thread showed it (0.38.3).
+  it.each(['textarea', 'textbox', 'input:text', 'input:search'])('clicks a %s named "Join the conversation", "Report a problem" or "Bio", and the click reaches the page', async (role) => {
+    for (const name of ['Join the conversation', 'Report a problem', 'Bio', 'Follow up']) {
+      const t = setup()
+      t.page.items.push({ ref: 'e9', role, name })
+      await look(t)
+      expect((await t.toolbox.call('browser_click', { ref: 'e9' })).isError).toBeUndefined()
+      expect(t.page.steps).toHaveLength(1)
+    }
+  })
+
+  it('still refuses the same words on anything that acts: a button, a link, a menu item, and a choice made in a text box', async () => {
+    for (const role of ['button', 'link', 'menuitem']) {
+      const t = setup()
+      t.page.items.push({ ref: 'e9', role, name: 'Join the conversation' })
+      await look(t)
+      expect(await t.toolbox.call('browser_click', { ref: 'e9' })).toMatchObject({ isError: true, text: expect.stringContaining('joins, follows, votes') })
+    }
+    const t = setup()
+    t.page.items.push({ ref: 'e9', role: 'textarea', name: 'Join the conversation' })
+    await look(t)
+    expect(await t.toolbox.call('browser_select', { ref: 'e9', option: 'x' })).toMatchObject({ isError: true, text: expect.stringContaining('joins, follows, votes') })
+  })
+})
+
 describe('a click or a choice never touches the account\'s own profile (DEC-035)', () => {
   const PROFILE = { isError: true, text: expect.stringContaining('own profile') }
   const NAMES = ['Edit profile', 'Change profile photo', 'Add profile photo', 'Add bio', 'Change username', 'Add phone number', 'Change password', 'Settings', 'Account settings', 'Редактировать профиль', 'Изменить фото профиля', 'Настройки']

@@ -829,8 +829,11 @@ export class BrowserToolbox implements McpToolHost {
     // option with that text, so the option is a click too and is judged by what it says, as a button is (an item of a menu is one).
     const clicked = option === undefined ? named : [...named, { role: 'button', name: option, submits: false }]
     if (clicked.some((e) => opensFileChooser(e))) return fail(FILE_CHOOSER)
-    if (clicked.some((e) => changesProfile(e.name))) return fail(PROFILE_UNTOUCHED)
-    if (clicked.some((e) => neverClicked(e.name))) return fail(NOT_PUBLISHED_HERE)
+    // A click on a text box only puts the cursor in it: what the site calls the box says nothing about what a click does. Reddit's comment box is
+    // named "Join the conversation", and the words of the two guards below (join, follow, vote, report, bio...) are for the controls that DO those things.
+    const focusOnly = option === undefined && named.every((e) => TEXT_ENTRY_ROLE.test(e.role))
+    if (!focusOnly && clicked.some((e) => changesProfile(e.name))) return fail(PROFILE_UNTOUCHED)
+    if (!focusOnly && clicked.some((e) => neverClicked(e.name))) return fail(NOT_PUBLISHED_HERE)
     if (clicked.some((e) => changesPostSettings(e))) return fail(POST_SETTING_CONTROL)
     // A picture in the form is content that no check of "does a form hold text" can see, so from here only a step forward is recognised.
     if (await this.picturesInForm(page)) {
