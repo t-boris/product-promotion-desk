@@ -8,7 +8,7 @@
 
 import { ApiError } from '../../shared/api'
 import type { Account, Channel } from '../../shared/types'
-import { WATCH_FIRST_LOOK_MAX_CALLS, WATCH_KNOWN_LIMIT, WATCH_MAX_CALLS, WATCH_MAX_POSTS, WATCH_TIMEOUT_MS, type WatchBrief, type WatchItem, type WatchOutcome, type WatchRecorded } from '../browser-agent/watch'
+import { TO_READ_LABEL, WATCH_FIRST_LOOK_MAX_CALLS, WATCH_KNOWN_LIMIT, WATCH_MAX_CALLS, WATCH_MAX_POSTS, WATCH_TIMEOUT_MS, WATCH_UNREAD_LIMIT, type WatchBrief, type WatchItem, type WatchOutcome, type WatchRecorded } from '../browser-agent/watch'
 import { MAX_LOOK_BACK_DAYS } from '../channels/settings'
 import { webPlaces } from '../channels/web-places'
 import { platformLabel } from '../../shared/post-format'
@@ -137,7 +137,9 @@ export class BrowserWatchFlow {
     // The owner asked for one thing: what was posted in the channel since the last look (30 days the first time). So the AI goes through the channel itself,
     // the newest posts first where the site has such a page (a Reddit community's own page shows its best posts, not what was written since the last look),
     // and never searches: the channel's queries only tell it what the owner follows, and "Look around" is where the owner asks for a search.
-    const places = [...(site.newest ? [{ label: `The newest posts of ${channel.target}`, url: site.newest }] : []), { label: `The channel's own page, ${channel.target}`, url: channel.url }]
+    // After them, the posts the AI called worth a reply before it read threads: it is sent to read them, a few at a time (see `FindingStore.unreadReplies`).
+    const toRead = this.findings.unreadReplies(channel.id, WATCH_UNREAD_LIMIT).map((post) => ({ label: `${TO_READ_LABEL}: ${post.title}`, url: post.url }))
+    const places = [...(site.newest ? [{ label: `The newest posts of ${channel.target}`, url: site.newest }] : []), { label: `The channel's own page, ${channel.target}`, url: channel.url }, ...toRead]
     const queries = channel.settings.queries.filter((q) => q.trim() !== '')
     return {
       platform: platformLabel(channel.platform),

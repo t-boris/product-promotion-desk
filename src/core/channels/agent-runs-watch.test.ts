@@ -249,7 +249,7 @@ describe('what a watch mission gives the AI, and how it ends', () => {
       expect((await call('watch_open', { place: 2 })).isError).toBeFalsy()
       await call('browser_snapshot')
       expect((await call('watch_open', { ref: 'e1' })).isError).toBeFalsy()
-      const recorded = await call('watch_record', { items: [{ url: POST, title: 'A post about natal charts', author: 'someone', label: 'reply', relation: 'Asks how to read a chart.' }] })
+      const recorded = await call('watch_record', { items: [{ url: POST, title: 'A post about natal charts', author: 'someone', label: 'reply', relation: 'Asks how to read a chart.', about: 'Asks how to read a chart.', thread: 'Nobody answers yet.', reply_to: 'The author.', comment: 'Start with the sun, moon and rising signs.' }] })
       expect(recorded.isError).toBeFalsy()
       await call('report_result', { status: 'done', reason: 'Looked at the search.' })
     })
@@ -257,7 +257,7 @@ describe('what a watch mission gives the AI, and how it ends', () => {
     const outcome = await watch(x)
 
     expect(outcome).toEqual({ ended: 'finished', reported: { status: 'done', reason: 'Looked at the search.' }, humanCheck: null, error: null, said: 'Done.', outOfCalls: false })
-    expect(x.stored).toEqual([{ url: 'https://www.instagram.com/p/Abc123', title: 'A post about natal charts', author: 'someone', label: 'notice', relation: 'Worth a reply: Asks how to read a chart.' }])
+    expect(x.stored).toEqual([{ url: 'https://www.instagram.com/p/Abc123', title: 'A post about natal charts', author: 'someone', label: 'notice', relation: 'Worth a reply: Asks how to read a chart.', about: 'Asks how to read a chart.', thread: 'Nobody answers yet.', replyTo: 'The author.', comment: 'Start with the sun, moon and rising signs.' }])
     const task = x.w.t.engine.calls.at(-1)
     expect(task?.label).toBe('agent.watch')
     expect(task?.agent?.confined).toBe(true)

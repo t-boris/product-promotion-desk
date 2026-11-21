@@ -54,12 +54,27 @@ describe('the brief of a watch mission', () => {
     expect(text).toMatch(/<channel>\nChannel: @natalmystic[^\n]*\nTopics of the channel:\n- astrology\n- birth charts\nWhat the owner follows here \(to judge posts by, not to search for\):\n- natal chart\n- birth chart app\n<\/channel>/)
   })
 
+  it('tells the AI that a post it calls reply must be opened and its thread read, and what to give for it', () => {
+    const text = watchMissionPrompt(brief(), NOW)
+    expect(text).toContain('ALWAYS before you call it "reply"')
+    expect(text).toMatch(/about \(what the post says\), thread \(what the comments say\), reply_to \(whom to answer/)
+    expect(text).toContain('you never post it')
+    expect(text).toContain('A "reply" recorded without these four is refused')
+  })
+
+  it('sends the AI first to the posts an earlier check called worth a reply without reading them, and says nothing of it when there are none', () => {
+    expect(watchMissionPrompt(brief(), NOW)).not.toContain('Do these FIRST')
+    const text = watchMissionPrompt(brief({ places: [{ label: 'The newest posts of r/x', url: 'https://www.reddit.com/r/x/new' }, { label: 'A post you called worth a reply before, not read yet: Houses?', url: 'https://www.reddit.com/r/x/comments/1' }] }), NOW)
+    expect(text).toContain('Do these FIRST')
+    expect(text).toContain('A post you called worth a reply before, not read yet: Houses?')
+  })
+
   it('tells the AI how many tool calls it has, to judge from the list and to save as it goes', () => {
     const text = watchMissionPrompt(brief({ maxCalls: 300 }), NOW)
     expect(text).toContain('You have 300 tool calls in all')
     expect(text).toContain('SAVE AS YOU GO')
     expect(text).toContain('after the limit only those two still work')
-    expect(text).toMatch(/Open a post .* only when its title cannot tell you/)
+    expect(text).toMatch(/Open a post .* when its title cannot tell you/)
   })
 
   it('cannot be talked out of its fences by what the owner wrote', () => {

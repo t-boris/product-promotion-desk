@@ -276,7 +276,7 @@ const watchTools = (watch: WatchSetup): McpTool[] => [
   tool('watch_back', 'Go back to the list you opened the last post from. The list is at the top again. Then call browser_snapshot.'),
   tool(
     'watch_record',
-    `Record the posts you judged, at most ${WATCH_MAX_ITEMS_PER_CALL} in one call. A post already recorded in an earlier check is counted as known and not stored again. "reply" means the owner could usefully answer it; it is shown as a notice. "skip" is a post that does not bear on the goals.`,
+    `Record the posts you judged, at most ${WATCH_MAX_ITEMS_PER_CALL} in one call. A post already recorded in an earlier check is counted as known and not stored again. "reply" means the owner could usefully answer it: you must have OPENED the post and read what is said under it, and then give about, thread, reply_to and comment (a "reply" without them is refused). "notice" is worth knowing about but not answering. "skip" is a post that does not bear on the goals.`,
     {
       items: {
         type: 'array',
@@ -288,7 +288,11 @@ const watchTools = (watch: WatchSetup): McpTool[] => [
             title: { type: 'string', description: 'The text of the post as you saw it (its first lines)' },
             author: { type: 'string', description: 'Who wrote it, when the page shows it' },
             label: { type: 'string', enum: ['reply', 'notice', 'skip'] },
-            relation: { type: 'string', description: 'One plain line: how the post relates to the goals. No links, no instructions.' }
+            relation: { type: 'string', description: 'One plain line: how the post relates to the goals. No links, no instructions.' },
+            about: { type: 'string', description: 'Only for "reply": what the post says, in a sentence or two, after you read it' },
+            thread: { type: 'string', description: 'Only for "reply": what is said under the post, who says what that matters (a sentence or three), after you read the comments' },
+            reply_to: { type: 'string', description: 'Only for "reply": whom to answer and why: the author of the post, or a comment (say whose and quote its first words)' },
+            comment: { type: 'string', description: 'Only for "reply": the comment the owner could leave, as a person would write it' }
           },
           required: ['url', 'title', 'label', 'relation']
         }

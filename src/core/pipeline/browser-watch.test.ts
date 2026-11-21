@@ -33,7 +33,7 @@ class ScriptedWatch implements WatchMissionService {
 }
 
 const done = (over: Partial<WatchOutcome> = {}): WatchOutcome => ({ ended: 'finished', reported: { status: 'done', reason: 'Looked at it all.' }, humanCheck: null, error: null, said: '', outOfCalls: false, ...over })
-const item = (n: number | string, over: Partial<WatchItem> = {}): WatchItem => ({ url: `https://www.instagram.com/p/P${n}`, title: `Post ${n}`, author: 'someone', label: 'notice', relation: 'Astrology fans talk about birth charts.', ...over })
+const item = (n: number | string, over: Partial<WatchItem> = {}): WatchItem => ({ url: `https://www.instagram.com/p/P${n}`, title: `Post ${n}`, author: 'someone', label: 'notice', relation: 'Astrology fans talk about birth charts.', about: '', thread: '', replyTo: '', comment: '', ...over })
 
 interface Watched {
   w: World
@@ -89,6 +89,80 @@ describe('a channel the app only watches in the browser: a whole look', () => {
     // it stays a channel the app does not read, and nothing is replied to, measured, drafted or sent
     expect(channel).toMatchObject({ reads: false, watchedInBrowser: true, status: 'active', baselineDoneAt: expect.any(String) })
     nothingToAct(x)
+  })
+
+  it('keeps what the AI read in a post worth a reply on its finding, and nothing of it on the others', async () => {
+    const x = watched()
+    x.ai.script = (request) => {
+      request.record([
+        item(1, { relation: 'Worth a reply: Asks how to read a chart.', about: 'Asks about houses.', thread: 'Nobody explains.', replyTo: 'The author.', comment: 'Houses split the sky.\n\nTry a free chart.' }),
+        item(2)
+      ])
+      return done()
+    }
+    await check(x)
+    const stored = x.w.core.db.prepare('SELECT external_id, about, thread, reply_to, suggested_comment FROM findings WHERE channel_id = ? ORDER BY external_id').all(x.channelId)
+    expect(stored).toEqual([
+      { external_id: 'https://www.instagram.com/p/P1', about: 'Asks about houses.', thread: 'Nobody explains.', reply_to: 'The author.', suggested_comment: 'Houses split the sky.\n\nTry a free chart.' },
+      { external_id: 'https://www.instagram.com/p/P2', about: '', thread: '', reply_to: '', suggested_comment: '' }
+    ])
+    // it is a finding to read, never an opportunity: nothing is drafted, approved or sent for it
+    nothingToAct(x)
+  })
+
+  describe('posts called worth a reply before the AI read threads', () => {
+    const REPLY = 'Worth a reply: Asks how to read a chart.'
+    const READ = { relation: REPLY, about: 'Asks about houses.', thread: 'Nobody explains.', replyTo: 'The author.', comment: 'Houses split the sky.' }
+
+    it('are put in the brief as places to read, and are not in the list of what was judged', async () => {
+      const x = watched()
+      x.ai.script = (request) => {
+        request.record([item(1, { relation: REPLY }), item(2)])
+        return done()
+      }
+      await check(x)
+      x.w.clock.advance(4 * 60 * MINUTE)
+      await check(x)
+      const brief = (x.ai.requests[1] as WatchMissionRequest).brief
+      expect(brief.places.at(-1)).toEqual({ label: 'A post you called worth a reply before, not read yet: Post 1', url: 'https://www.instagram.com/p/P1' })
+      expect(brief.known).toEqual(['https://www.instagram.com/p/P2'])
+    })
+
+    it('keep their verdict and get what the AI read when it records them again, once', async () => {
+      const x = watched()
+      x.ai.script = (request) => {
+        request.record([item(1, { relation: REPLY })])
+        return done()
+      }
+      await check(x)
+      x.w.clock.advance(4 * 60 * MINUTE)
+      x.ai.script = (request) => {
+        const recorded = request.record([item(1, READ)])
+        expect(recorded).toEqual({ stored: 1, known: 0 })
+        // a second time it is known: what was read is not overwritten
+        expect(request.record([item(1, { ...READ, comment: 'Another text.' })])).toEqual({ stored: 0, known: 1 })
+        return done()
+      }
+      await check(x)
+      expect(x.w.core.db.prepare('SELECT relation, about, suggested_comment FROM findings WHERE channel_id = ?').all(x.channelId)).toEqual([{ relation: REPLY, about: 'Asks about houses.', suggested_comment: 'Houses split the sky.' }])
+      x.w.clock.advance(4 * 60 * MINUTE)
+      await check(x)
+      // an Instagram channel has one place (its own page): once the post is read nothing more is sent to it
+      expect((x.ai.requests.at(-1) as WatchMissionRequest).brief.places).toHaveLength(1)
+    })
+
+    it('are at most eight per look, the newest first', async () => {
+      const x = watched()
+      x.ai.script = (request) => {
+        request.record(Array.from({ length: 10 }, (_, i) => item(i + 1, { relation: REPLY })))
+        return done()
+      }
+      await check(x)
+      x.w.clock.advance(4 * 60 * MINUTE)
+      await check(x)
+      const read = (x.ai.requests[1] as WatchMissionRequest).brief.places.filter((p) => p.label.startsWith('A post you called'))
+      expect(read).toHaveLength(8)
+    })
   })
 
   it('tells the AI where to look, how far back, and what the product is for', async () => {

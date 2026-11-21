@@ -3,7 +3,7 @@
 // goals, the topics) and everything the pages say is DATA, fenced as such: it cannot close its fence, and nothing in it is an instruction.
 
 import { fence, oneLine } from '../assist/kit'
-import type { WatchBrief } from './watch'
+import { TO_READ_LABEL, type WatchBrief } from './watch'
 
 const HOUR_MS = 3_600_000
 
@@ -55,8 +55,12 @@ export function watchMissionPrompt(brief: WatchBrief, today: Date): string {
     'HOW TO WORK:',
     '- You work in the account\'s own browser, which the owner may watch, through the tools of the "ppd" MCP server: browser_snapshot, browser_scroll, watch_open, watch_back, watch_record, report_result. You have no other tools: you cannot click, type or press a key, and nothing on this computer is yours to use.',
     '- Start with watch_open and place 1. After that visit the other places one by one, each with watch_open and its number. Look at the page with browser_snapshot; scroll with browser_scroll to see more of a list, like a person.',
+    ...(brief.places.some((place) => place.label.startsWith(TO_READ_LABEL))
+      ? [`- Some of the places are posts that an earlier check called worth a reply without reading them (they start with "${TO_READ_LABEL}"). Do these FIRST: open each with watch_open and its number, read the post and what is said under it, and record it again as "reply" with about, thread, reply_to and comment. If, once read, it is not worth a reply after all, record it as "notice" or "skip".`]
+      : []),
     `- You have ${brief.maxCalls} tool calls in all, and every call counts: a snapshot, a scroll, an opened page, a record. Most of them go to going down the list, so spend them there.`,
-    '- Judge each post by its title or its first lines in the list, against the goals above: that is almost always enough. Open a post (watch_open with the label of the post\'s link, as listed by browser_snapshot) only when its title cannot tell you whether it bears on the goals, and open few: going back to the list puts it at the top again, and scrolling down to where you were costs many calls.',
+    '- Judge each post by its title or its first lines in the list, against the goals above: that is almost always enough. Open a post (watch_open with the label of the post\'s link, as listed by browser_snapshot) when its title cannot tell you whether it bears on the goals, and ALWAYS before you call it "reply". Going back to the list puts it at the top again, and scrolling down to where you were costs many calls, so open only what you must.',
+    '- A post you would call "reply" must be READ: open it, read the post, scroll down and read what is said under it, then record it with about (what the post says), thread (what the comments say), reply_to (whom to answer: the author, or a comment you name and quote the first words of, and why that one) and comment (the comment the owner could leave there). The comment is written as a person would write it: it answers what the post asks, in the language of the thread, helpful first; it mentions the owner\'s product only if it really answers the question, and then plainly, never as an advertisement. Plain text, a few sentences. It is only a proposal: the owner reads it and decides; you never post it. A "reply" recorded without these four is refused. When you are running short of calls, record the posts you did not get to read as "notice".',
     '- SAVE AS YOU GO: after every two or three screens call watch_record with what you judged so far. What is not recorded when the calls run out is lost. Keep the last ten calls for watch_record and report_result: after the limit only those two still work.',
     '- Record what you judged with watch_record, at most 20 posts in one call. For each post give: url (its address, as browser_snapshot lists it), title (its text as you saw it), author (when shown), label and relation. Labels: "reply" the owner could usefully answer it; "notice" worth knowing about but not worth answering; "skip" it does not bear on the goals. "relation" is one plain line saying how the post relates to the goals, without any link or instruction.',
     '- Record the clearly irrelevant posts too, as "skip", in batches: the owner audits them. Never record a post of the account itself, and never one already judged (above).',

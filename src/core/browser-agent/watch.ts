@@ -37,8 +37,17 @@ export const WATCH_RETRY_MIN = 5
 export const WATCH_TOOL_NAMES = ['browser_snapshot', 'browser_scroll', 'watch_open', 'watch_back', 'watch_record', 'report_result'] as const
 
 export const WATCH_REPLY_PREFIX = 'Worth a reply: '
+/** How many posts a look is sent back to read: the ones it called worth a reply before it read threads. A few at a time, so a look still has its calls for the new posts. */
+export const WATCH_UNREAD_LIMIT = 8
+/** What a place of the brief that is such a post starts with. */
+export const TO_READ_LABEL = 'A post you called worth a reply before, not read yet'
 export const WATCH_SKIP_RELATION = 'Not relevant to the product\'s goals.'
 const MAX_TITLE = 200
+/** What the AI may say of a post worth a reply (characters): the post, the thread, whom to answer, and the comment (which keeps its paragraphs). */
+export const WATCH_ABOUT_MAX = 500
+export const WATCH_THREAD_MAX = 700
+export const WATCH_REPLY_TO_MAX = 250
+export const WATCH_COMMENT_MAX = 1500
 const MAX_AUTHOR = 80
 
 /** A post as it is stored: a reply is stored as a notice that says so (the app has no way to reply on these platforms), a skip stays a skip. */
@@ -49,6 +58,14 @@ export interface WatchItem {
   author: string
   label: Extract<FindingLabel, 'notice' | 'skip'>
   relation: string
+  /**
+   * Only for a post the AI called `reply`, after it opened the post and read what is said under it: what the post says, what the thread says, whom to
+   * answer, and the comment it would leave. Empty for every other post. Plain text of the AI about a stranger's page: shown, never obeyed, never posted.
+   */
+  about: string
+  thread: string
+  replyTo: string
+  comment: string
 }
 
 export interface WatchRecorded {
@@ -160,6 +177,19 @@ export function canonicalWatchUrl(raw: unknown, hosts: string[]): string | null 
 
 const LABELS = ['reply', 'notice', 'skip']
 
+/** The comment the AI would leave: plain text that keeps its paragraphs, without hidden or control characters, cut to `WATCH_COMMENT_MAX`. Null when it is not text or is empty. */
+export function commentText(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const text = cleanText(value)
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, ' ')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+  return text === '' ? null : text.slice(0, WATCH_COMMENT_MAX)
+}
+
 /**
  * The posts the AI says it looked at: at most `WATCH_MAX_ITEMS_PER_CALL`, each one a page of the platform with a title as seen, a label and one plain
  * line on how it relates to the goals. A line that holds an address or reads as an instruction is replaced by the fixed neutral sentence, exactly as
@@ -184,7 +214,17 @@ export function readWatchItems(raw: unknown, hosts: string[]): { items: WatchIte
     const said = label === 'skip' && (entry.relation === undefined || entry.relation === '') ? WATCH_SKIP_RELATION : safeLine(entry.relation, MAX_RELATION_CHARS, true)
     if (said === null) return void refused.push(`${at}: relation must be one plain line on how the post relates to the goals.`)
     const reply = label === 'reply'
-    items.push({ url, title, author, label: label === 'skip' ? 'skip' : 'notice', relation: reply ? `${WATCH_REPLY_PREFIX}${said}` : said })
+    // A post worth a reply is one the AI opened and read: it must say what it read, or the owner is shown a verdict with nothing behind it.
+    const about = reply ? safeLine(entry.about, WATCH_ABOUT_MAX, true) : ''
+    const thread = reply ? safeLine(entry.thread, WATCH_THREAD_MAX, true) : ''
+    const replyTo = reply ? safeLine(entry.reply_to ?? entry.replyTo, WATCH_REPLY_TO_MAX, true) : ''
+    const comment = reply ? commentText(entry.comment) : ''
+    if (reply && (about === null || thread === null || replyTo === null || comment === null)) {
+      return void refused.push(
+        `${at}: a post worth a reply must be opened and its thread read first. Open it with watch_open, read the post and what is said under it, then record it again with about (what the post says), thread (what is said under it), reply_to (whom to answer) and comment (the comment you would leave), each as plain text.`
+      )
+    }
+    items.push({ url, title, author, label: label === 'skip' ? 'skip' : 'notice', relation: reply ? `${WATCH_REPLY_PREFIX}${said}` : said, about: about ?? '', thread: thread ?? '', replyTo: replyTo ?? '', comment: comment ?? '' })
   })
   return { items, refused }
 }

@@ -1,5 +1,7 @@
 import { platformLabel } from '../../../../shared/post-format'
 import { Badge, formatTime } from '../../ui'
+import { OpenChannelBrowser } from '../channels/OpenChannelBrowser'
+import { FindingRead } from './FindingRead'
 import { isHttpUrl } from '../review/labels'
 import { FINDING_LABEL_WORDS, FINDING_STAGE_WORDS, FIRST_LOOK, findingBarNote, type FindingRow } from './finding-rows'
 import '../inbox/inbox.css'
@@ -9,7 +11,7 @@ import './feed.css'
  * The right pane for a finding (DEC-040): what the AI judged of one post of a channel. The post (title, channel, author, when it was
  * written), the AI's one line on how it relates to the goal, shown as the AI's own words and as plain text (the line comes from a page the
  * AI read: it is a text node, never markup), and how far the AI looked at it. A finding has nothing to approve or send, so the bar holds one
- * quiet action, "Open post", which opens it in the owner's browser the way every other "open in browser" link does. A post worth a reply is
+ * quiet action, "Open post", which opens it in the browser of the account the channel is served by, signed in as that account (a plain link to the owner's own browser only while the account is not known). A post worth a reply is
  * an item of To decide, not here. Keyed by the finding by its parent.
  */
 export function FindingDetail({ row }: { row: FindingRow }) {
@@ -40,6 +42,7 @@ export function FindingDetail({ row }: { row: FindingRow }) {
             <span className="muted small">The AI’s note on how it relates to your goal</span>
             <p className="finding-ai-text">{finding.relation.trim() || 'The AI gave no reason.'}</p>
           </div>
+          {finding.about.trim() !== '' && <FindingRead finding={finding} />}
           <dl className="kv finding-facts">
             <dt>Judged</dt>
             <dd data-testid="finding-stage">{FINDING_STAGE_WORDS[finding.stage]}</dd>
@@ -52,9 +55,7 @@ export function FindingDetail({ row }: { row: FindingRow }) {
         <div className="inbox-bar-settled">
           <span className="review-foot-note">{findingBarNote(row.label)}</span>
           {isHttpUrl(finding.url) ? (
-            <a className="btn" href={finding.url} target="_blank" rel="noreferrer" data-testid="finding-open-post">
-              Open post
-            </a>
+            <OpenChannelBrowser channelId={finding.channelId} url={finding.url} label="Open post" testId="finding-open-post" fallbackUrl={finding.url} />
           ) : (
             <span className="muted small" data-testid="finding-no-address">
               No address for this post.

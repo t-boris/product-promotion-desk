@@ -4,7 +4,7 @@
 
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Channel, Finding, FindingCard, OpportunityCard } from '../shared/types'
 import { FeedList } from '../renderer/src/pages/feed/FeedList'
 import { FindingDetail } from '../renderer/src/pages/feed/FindingDetail'
@@ -13,6 +13,11 @@ import { BROWSER_WATCH_NOTE, OWN_POSTS_NO_CHECK } from '../renderer/src/pages/ch
 import { buildFeedRows } from '../renderer/src/pages/feed/feed-filter'
 import { findingRowOf } from '../renderer/src/pages/feed/finding-rows'
 import { SegmentedControl } from '../renderer/src/ui'
+
+// The finding pane opens a post in the account's browser, so it imports the application's transport, which wants the window of the preload script: stubbed before the imports run.
+vi.hoisted(() => {
+  vi.stubGlobal('window', { ppd: { invoke: () => new Promise(() => {}), onEvent: () => () => {} }, location: { search: '', hash: '' } })
+})
 
 const html = (node: Parameters<typeof renderToStaticMarkup>[0]): string => renderToStaticMarkup(node)
 const NOW = new Date('2026-11-15T12:00:00.000Z')
@@ -31,6 +36,10 @@ function finding(over: Partial<Finding> = {}): FindingCard {
       stage: 'read',
       label: 'notice',
       relation: 'Asks for tools like ours.',
+      about: '',
+      thread: '',
+      replyTo: '',
+      suggestedComment: '',
       firstLook: false,
       opportunityId: null,
       seenAt: null,
@@ -90,6 +99,27 @@ describe('FindingDetail', () => {
 
   it('opens the post in the owner\'s browser the way the other "open in browser" links do', () => {
     expect(detail()).toContain('<a class="btn" href="https://www.reddit.com/r/astrology/comments/f1/" target="_blank" rel="noreferrer" data-testid="finding-open-post">Open post</a>')
+  })
+
+  it('shows nothing of a thread for a post nobody read, and the post, the thread, whom to answer and the comment for one the AI read', () => {
+    expect(detail()).not.toContain('finding-read')
+    const out = detail({ about: 'Asks which app draws a chart with houses.', thread: 'Two people suggest apps; nobody explains houses.', replyTo: 'The author: the question is still open.', suggestedComment: 'Houses depend on the birth time.\n\nTry a free chart first.' })
+    expect(out).toContain('data-testid="finding-about"')
+    expect(out).toContain('Asks which app draws a chart with houses.')
+    expect(out).toContain('Two people suggest apps; nobody explains houses.')
+    expect(out).toContain('The author: the question is still open.')
+    expect(out).toContain('Houses depend on the birth time.')
+    expect(out).toContain('data-testid="finding-comment-copy"')
+    // nothing posts or sends from here: the only buttons are the copy of the text and the opening of the post
+    expect(out).not.toMatch(/Approve|Send|Post it|Reject/)
+  })
+
+  it('shows the AI\'s words as text, never as markup', () => {
+    const out = detail({ about: '<img src=x onerror=alert(1)>', thread: '<b>bold</b>', replyTo: '<script>x</script>', suggestedComment: '<a href="https://evil.example">x</a>' })
+    expect(out).not.toContain('<img')
+    expect(out).not.toContain('<script')
+    expect(out).not.toContain('<b>')
+    expect(out).not.toContain('href="https://evil.example"')
   })
 
   it('opens only a web address: any other address is not a link', () => {

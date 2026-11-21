@@ -9,6 +9,7 @@ import { newId, type Db } from '../db/database'
 import { mapFinding } from '../repos'
 import { oneLine } from '../assist/kit'
 import type { RemoteDiscussion } from '../ports'
+import { WATCH_REPLY_PREFIX } from '../browser-agent/watch'
 
 type Row = Record<string, unknown>
 type Bindable = string | number | null
@@ -86,21 +87,63 @@ export class FindingStore {
    * as the triage's own are. A post of the channel that has a finding keeps it. Returns whether a row was added. No opportunity, no draft: the finding
    * carries none.
    */
-  addWatched(productId: Id, channelId: Id, item: { url: string; title: string; author: string; label: 'notice' | 'skip'; relation: string }, firstLook: boolean): boolean {
+  addWatched(
+    productId: Id,
+    channelId: Id,
+    item: { url: string; title: string; author: string; label: 'notice' | 'skip'; relation: string; about: string; thread: string; replyTo: string; comment: string },
+    firstLook: boolean
+  ): boolean {
     const now = this.now()
     const info = this.db
       .prepare(
-        `INSERT INTO findings (id, product_id, channel_id, external_id, title, url, author, posted_at, stage, label, relation, first_look, opportunity_id, seen_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, NULL, ?, ?)
+        `INSERT INTO findings (id, product_id, channel_id, external_id, title, url, author, posted_at, stage, label, relation, about, thread, reply_to, suggested_comment, first_look, opportunity_id, seen_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
          ON CONFLICT (channel_id, external_id) DO NOTHING`
       )
-      .run(newId(), productId, channelId, item.url, oneLine(item.title, MAX_STORED_TITLE), item.url, oneLine(item.author, MAX_STORED_AUTHOR), item.label === 'skip' ? 'title' : 'read', item.label, item.relation, firstLook ? 1 : 0, now, now)
-    return info.changes === 1
+      .run(
+        newId(),
+        productId,
+        channelId,
+        item.url,
+        oneLine(item.title, MAX_STORED_TITLE),
+        item.url,
+        oneLine(item.author, MAX_STORED_AUTHOR),
+        item.label === 'skip' ? 'title' : 'read',
+        item.label,
+        item.relation,
+        item.about,
+        item.thread,
+        item.replyTo,
+        item.comment,
+        firstLook ? 1 : 0,
+        now,
+        now
+      )
+    if (info.changes === 1) return true
+    // A post called worth a reply before the AI read threads has a verdict and nothing behind it: when the AI now read it, what it read is kept (the verdict stays).
+    if (item.about !== '') {
+      const upgraded = this.db
+        .prepare(`UPDATE findings SET about = ?, thread = ?, reply_to = ?, suggested_comment = ?, updated_at = ? WHERE channel_id = ? AND external_id = ? AND about = '' AND relation LIKE '${WATCH_REPLY_PREFIX}%'`)
+        .run(item.about, item.thread, item.replyTo, item.comment, now, channelId, item.url)
+      return upgraded.changes === 1
+    }
+    return false
+  }
+
+  /** Posts the AI called worth a reply before it read threads: a verdict with nothing behind it. The newest first; the AI is sent back to read them. */
+  unreadReplies(channelId: Id, limit: number): { url: string; title: string }[] {
+    const rows = this.db
+      .prepare(`SELECT external_id AS url, title FROM findings WHERE channel_id = ? AND about = '' AND relation LIKE '${WATCH_REPLY_PREFIX}%' ORDER BY created_at DESC, rowid DESC LIMIT ?`)
+      .all(channelId, limit) as { url: string; title: string }[]
+    return rows
   }
 
   /** The addresses of the channel's most recent findings (the ones a look in the browser is told it judged already), newest first. */
   recentUrls(channelId: Id, limit: number): string[] {
-    const rows = this.db.prepare('SELECT external_id AS id FROM findings WHERE channel_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?').all(channelId, limit) as { id: string }[]
+    // A post that waits to be read (see `unreadReplies`) is not "judged": the look is sent to it by name.
+    const rows = this.db
+      .prepare(`SELECT external_id AS id FROM findings WHERE channel_id = ? AND NOT (about = '' AND relation LIKE '${WATCH_REPLY_PREFIX}%') ORDER BY created_at DESC, rowid DESC LIMIT ?`)
+      .all(channelId, limit) as { id: string }[]
     return rows.map((row) => row.id)
   }
 

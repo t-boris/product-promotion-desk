@@ -204,5 +204,17 @@ ALTER TABLE drafts ADD COLUMN card_json TEXT;
 -- On for every product that exists: the owner asked for the site's address at the end of each post. The switch is on the product's page.
 ALTER TABLE products ADD COLUMN add_site_link INTEGER NOT NULL DEFAULT 1;
 `
+  },
+  {
+    id: 311,
+    name: 'pipeline: a post worth a reply keeps what the AI read in it: the post, the thread, whom to answer and a comment to leave',
+    sql: `
+-- Written by the AI after it opened a post in the account's browser and read what is said under it; plain text of a stranger's page, shown and never obeyed.
+-- Empty for every finding that was not read that way (a skip, a notice, and everything found before this).
+ALTER TABLE findings ADD COLUMN about TEXT NOT NULL DEFAULT '';
+ALTER TABLE findings ADD COLUMN thread TEXT NOT NULL DEFAULT '';
+ALTER TABLE findings ADD COLUMN reply_to TEXT NOT NULL DEFAULT '';
+ALTER TABLE findings ADD COLUMN suggested_comment TEXT NOT NULL DEFAULT '';
+`
   }
 ]

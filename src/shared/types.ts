@@ -1040,6 +1040,15 @@ export interface Finding {
   author: string
   postedAt: IsoTime | null
   stage: FindingStage
+  /**
+   * For a post the AI looked at in the account's browser and judged worth a reply, after it opened the post and read what is said under it: what the post
+   * says, what the thread says, whom to answer and the comment it would leave. Empty for every other finding. The AI's own words about a stranger's
+   * page, shown as plain text; nothing here is posted or sent by anyone but the owner.
+   */
+  about: string
+  thread: string
+  replyTo: string
+  suggestedComment: string
   /** Null while `stage` is `pending`, and also while `stage` is `title` and the post waits to be read (it was judged relevant by its title). */
   label: FindingLabel | null
   /** One line: how the post relates, or does not relate, to the product's goal. Written by the AI from page text; shown as data. */
