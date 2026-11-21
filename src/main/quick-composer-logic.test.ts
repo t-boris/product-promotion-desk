@@ -4,7 +4,7 @@
 // only src/shared (and each other), so they are tested from here, without a screen and without a canvas.
 
 import { describe, expect, it } from 'vitest'
-import { CARD_PIXELS, CARD_COLOURS, CARD_SHAPES, CARD_STYLES, DEFAULT_CARD, cardHeadline, headlineFromCaption, postTypeOfPlatform } from '../shared/quick-post'
+import { CARD_HEADLINE_MAX, CARD_PIXELS, CARD_COLOURS, CARD_SHAPES, CARD_STYLES, DEFAULT_CARD, cardHeadline, headlineFromCaption, postTypeOfPlatform } from '../shared/quick-post'
 import { pictureProblems } from '../shared/post-pictures'
 import { renderForPlatform } from '../shared/post-format'
 import type { Attachment, Draft, GroupChannelOption } from '../shared/types'
@@ -25,6 +25,8 @@ import {
   withLook,
   WRITE_A_CAPTION,
   WRITE_A_HEADLINE,
+  HEADLINE_TOO_LONG,
+  clampHeadline,
   cardFileName,
   drawnCard,
   emptyQuickForm,
@@ -46,7 +48,7 @@ import {
   withStyle
 } from '../renderer/src/pages/review/quick/quick-form'
 import { CARD_PALETTES, contrastRatio, leastContrast } from '../renderer/src/pages/review/quick/card-colours'
-import { STYLE_SPECS, fontOf, layoutCard, wrapLines, type Measure } from '../renderer/src/pages/review/quick/card-layout'
+import { STYLE_SPECS, fontOf, layoutCard, withEllipsis, wrapLines, type Measure } from '../renderer/src/pages/review/quick/card-layout'
 import { drawCard, type CardContext, type CardGradient } from '../renderer/src/pages/review/quick/draw-card'
 import { MADE_PIXELS, factsOfCard, factsOfMedia, pictureCheck, shapeHint } from '../renderer/src/pages/review/quick/picture-check'
 import { previewContent, previewPlatformOf } from '../renderer/src/pages/review/quick/preview-model'
@@ -833,5 +835,60 @@ describe('the other channels of a post, by its kind', () => {
     const input = draftInputOf(saved())
     expect(input).toMatchObject({ postType: 'quick', title: null, card: saved().card })
     expect(draftInputOf(saved({ postType: 'article', card: null, title: 'T' }))).not.toHaveProperty('postType')
+  })
+})
+
+// ───────────────────────────── a headline the core would refuse, and a letter made of many code points ─────────────────────────────
+
+describe('a headline longer than the core stores', () => {
+  const long = 'x'.repeat(CARD_HEADLINE_MAX + 40)
+
+  it('is stopped in the field at the limit, counting an emoji as one character', () => {
+    const typed = withHeadline(withCaption(emptyQuickForm(), 'Caption'), long)
+    expect([...typed.card.headline]).toHaveLength(CARD_HEADLINE_MAX)
+    expect(typed.card.headlineEdited).toBe(true)
+    expect(clampHeadline('😀'.repeat(CARD_HEADLINE_MAX + 5))).toBe('😀'.repeat(CARD_HEADLINE_MAX))
+    expect(clampHeadline('short')).toBe('short')
+  })
+
+  it('also blocks the save when a longer one reaches the form some other way, before anything is drawn or added to the library', () => {
+    const form = { ...withCaption(emptyQuickForm(), 'Caption'), card: { ...DEFAULT_CARD, headline: long, headlineEdited: true } }
+    expect(quickReason(form)).toBe(HEADLINE_TOO_LONG)
+    const atTheLimit = { ...form, card: { ...form.card, headline: 'x'.repeat(CARD_HEADLINE_MAX) } }
+    expect(quickReason(atTheLimit)).toBeNull()
+    // The owner's own picture has no headline to refuse.
+    expect(quickReason({ ...form, source: 'picture', picture: { name: 'a.png', path: '/a.png', mime: 'image/png', sha256: 'a', mediaId: 'm' } })).toBeNull()
+  })
+})
+
+describe('breaking and cutting a headline never splits a letter the owner sees as one', () => {
+  const family = '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}'
+  const font = '40px sans-serif'
+
+  it('breaks a long word of emoji sequences between the sequences', () => {
+    const lines = wrapLines(family.repeat(5), 200, font, fake)
+    expect(lines.length).toBeGreaterThan(1)
+    for (const line of lines) {
+      expect(line.length % family.length).toBe(0)
+      expect(line.startsWith('\u200D')).toBe(false)
+    }
+    expect(lines.join('')).toBe(family.repeat(5))
+  })
+
+  it('keeps a letter with its combining mark when it breaks a word', () => {
+    const word = 'e\u0301'.repeat(30)
+    const lines = wrapLines(word, 100, font, fake)
+    for (const line of lines) expect(line.startsWith('\u0301')).toBe(false)
+    expect(lines.join('')).toBe(word)
+  })
+
+  it('does not leave half a sequence before the ellipsis when the last line is cut', () => {
+    // Three sequences are 420 wide at this type; 250 holds one of them and the ellipsis, not two (300) and not 11 of their 21 code points.
+    const cut = withEllipsis(family.repeat(3), 250, font, fake)
+    expect(cut).toBe(`${family}…`)
+    const layout = layoutCard(`${family.repeat(60)}`, 'bold', 'wide', fake)
+    expect(layout.truncated).toBe(true)
+    const body = layout.lines[layout.lines.length - 1].text.slice(0, -1)
+    expect(body.length % family.length).toBe(0)
   })
 })

@@ -69,9 +69,17 @@ export interface CardLayout {
 const ELLIPSIS = '…'
 const collapse = (text: string): string => text.replace(/\s+/g, ' ').trim()
 
+const segmenter = typeof Intl !== 'undefined' && 'Segmenter' in Intl ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null
+
+/**
+ * The letters of a text as a person sees them: an emoji made of several code points (a family, a flag, a skin tone) or a letter with a combining
+ * mark is one, so a break or a cut never falls inside it. Without `Intl.Segmenter` it falls back to code points.
+ */
+export const graphemes = (text: string): string[] => (segmenter ? Array.from(segmenter.segment(text), (part) => part.segment) : Array.from(text))
+
 /**
  * The words of a text as lines no wider than `maxWidth`. A word is never split unless it alone is wider than a line; then it is broken by
- * letter (never inside a letter that is made of several code points, such as an emoji).
+ * letter (never inside a letter that is made of several code points: an emoji sequence, a letter with a mark).
  */
 export function wrapLines(text: string, maxWidth: number, font: string, measure: Measure): string[] {
   const words = collapse(text).split(' ').filter((w) => w !== '')
@@ -93,7 +101,7 @@ export function wrapLines(text: string, maxWidth: number, font: string, measure:
       continue
     }
     // A word wider than a line: break it by letter.
-    for (const letter of Array.from(word)) {
+    for (const letter of graphemes(word)) {
       if (line !== '' && measure(line + letter, font) > maxWidth) push()
       line += letter
     }
@@ -103,8 +111,8 @@ export function wrapLines(text: string, maxWidth: number, font: string, measure:
 }
 
 /** The last line cut so that it, and the ellipsis after it, fits the width. */
-function withEllipsis(line: string, maxWidth: number, font: string, measure: Measure): string {
-  const letters = Array.from(line)
+export function withEllipsis(line: string, maxWidth: number, font: string, measure: Measure): string {
+  const letters = graphemes(line)
   while (letters.length > 0 && measure(`${letters.join('').trimEnd()}${ELLIPSIS}`, font) > maxWidth) letters.pop()
   return `${letters.join('').trimEnd()}${ELLIPSIS}`
 }

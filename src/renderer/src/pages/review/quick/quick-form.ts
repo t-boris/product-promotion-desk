@@ -3,7 +3,8 @@
 // card, what a save sends, what stops it) is tested without the screen.
 
 import type { DraftInput } from '../../../../../shared/api'
-import { cardHeadline, DEFAULT_CARD, type CardColour, type CardShape, type CardStyle, type QuickCard } from '../../../../../shared/quick-post'
+import { characterCount } from '../../../../../shared/post-format'
+import { CARD_HEADLINE_MAX, cardHeadline, DEFAULT_CARD, type CardColour, type CardShape, type CardStyle, type QuickCard } from '../../../../../shared/quick-post'
 import type { Attachment, Draft } from '../../../../../shared/types'
 
 /** `card`: the app draws the picture from the headline (the default). `picture`: the owner's own, an AI illustration, a file or a library picture. */
@@ -60,8 +61,14 @@ export const withCaption = (form: QuickForm, caption: string): QuickForm => ({ .
 export const withAngle = (form: QuickForm, angle: string): QuickForm => ({ ...form, angle })
 export const withIllustrationWish = (form: QuickForm, illustrationWish: string): QuickForm => ({ ...form, illustrationWish })
 
-/** The owner typed in the headline field: from now on the headline is theirs and never follows the caption again. */
-export const withHeadline = (form: QuickForm, headline: string): QuickForm => ({ ...form, card: { ...form.card, headline, headlineEdited: true } })
+/** The most a headline holds, counted like every limit (an emoji is one character): what the core refuses to store beyond. */
+export const clampHeadline = (headline: string): string => [...headline].slice(0, CARD_HEADLINE_MAX).join('')
+
+/**
+ * The owner typed in the headline field: from now on the headline is theirs and never follows the caption again. The field stops at the limit
+ * the core stores (a longer one was drawn and added to the library before the core refused the draft, and left a picture nobody uses).
+ */
+export const withHeadline = (form: QuickForm, headline: string): QuickForm => ({ ...form, card: { ...form.card, headline: clampHeadline(headline), headlineEdited: true } })
 
 /** Takes the headline from the caption again, as it was before the owner edited it. */
 export const followCaption = (form: QuickForm): QuickForm => ({ ...form, card: { ...form.card, headline: '', headlineEdited: false } })
@@ -157,6 +164,7 @@ export function needsNewCard(form: QuickForm, saved: Draft | null): boolean {
 export const WRITE_A_CAPTION = 'Write a caption first.'
 export const CHOOSE_A_PICTURE = 'Choose a picture, or go back to the card.'
 export const WRITE_A_HEADLINE = 'Write a headline for the card, or choose a picture of your own.'
+export const HEADLINE_TOO_LONG = `The headline is longer than ${CARD_HEADLINE_MAX} characters. Shorten it before saving.`
 
 /**
  * Why the post cannot be saved yet, or null: nothing to say (no caption and no headline on the card), a card without a headline, or a picture
@@ -167,6 +175,8 @@ export function quickReason(form: QuickForm): string | null {
   if (isCardPicture(form)) {
     if (caption === '' && drawnCard(form).headline.trim() === '') return WRITE_A_CAPTION
     if (drawnCard(form).headline.trim() === '') return WRITE_A_HEADLINE
+    // Checked before anything is drawn or added to the library: the core refuses a card whose headline is longer than it stores.
+    if (characterCount(drawnCard(form).headline) > CARD_HEADLINE_MAX) return HEADLINE_TOO_LONG
     return null
   }
   return form.picture ? null : CHOOSE_A_PICTURE
