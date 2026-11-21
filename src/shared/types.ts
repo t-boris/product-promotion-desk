@@ -108,6 +108,8 @@ export interface Product {
   id: Id
   name: string
   websiteUrl: string | null
+  /** The site's address ends every new post where a link works in the text, and on Instagram "Link in bio" does (DEC-044). On unless the owner switched it off. */
+  addSiteLink: boolean
   description: string | null
   goals: PromotionGoal[]
   /** Currently approved passport version (null until the first approval). */

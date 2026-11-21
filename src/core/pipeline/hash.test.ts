@@ -55,7 +55,8 @@ describe('content hash (REQ-004 criterion 1)', () => {
     expect(hash({ ...base, markup: 'markdown' }, account, 'https://x/y', 'threads')).not.toBe(hash({ ...base, markup: 'markdown' }, account, 'https://x/y', 'reddit'))
     // Pinned: renaming the key, or raising LINK_PLACEMENT_VERSION without meaning to, would send every approval of such a draft back to review.
     expect(onFacebook).toBe('cf12ac85ae4e206c15dc90f31aa2763fea4bc649ac7c7c989b070a7411a5eb75')
-    expect(onInstagram).toBe('26258edcbadee3ea28c0380722275092e252302d0f3544adb05531561b4ddf74')
+    // Instagram's placement changed from "left out" to "Link in bio" (DEC-044): an approval of an Instagram post with a link is given again, on purpose.
+    expect(onInstagram).toBe('1995d869449761eb6eb693c84a940890fbca74cfd3a625654e830bec9c73ed2b')
   })
 
   it('binds a markdown draft to its markup, and so to what each platform will be shown', () => {

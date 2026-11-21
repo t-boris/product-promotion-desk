@@ -279,10 +279,10 @@ describe('its own posts', () => {
       return missions.requests[0]!.authority.content
     }
 
-    it.each(['markdown', 'legacy'] as const)('Instagram, a %s draft: the mission is given the caption and no link, so it has no field to look for (the screenshot case)', async (markup) => {
+    it.each(['markdown', 'legacy'] as const)('Instagram, a %s draft: the mission is given the caption ending with "Link in bio" and no link, so it has no field to look for (the screenshot case, DEC-044)', async (markup) => {
       const content = await sendWithLink('instagram', markup)
       expect(content.link).toBeNull()
-      expect(content.text).toBe('A caption. I work on it.')
+      expect(content.text).toBe('A caption. I work on it.\n\nLink in bio')
       expect(content.attachments).toHaveLength(1)
     })
 

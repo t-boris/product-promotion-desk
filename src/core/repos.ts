@@ -29,6 +29,7 @@ export const mapProduct = (r: Row): Product => ({
   id: r.id as string,
   name: r.name as string,
   websiteUrl: (r.website_url as string | null) ?? null,
+  addSiteLink: r.add_site_link !== 0,
   description: (r.description as string | null) ?? null,
   goals: parseJson(r.goals_json as string | null, []),
   activePassportVersionId: (r.active_passport_version_id as string | null) ?? null,

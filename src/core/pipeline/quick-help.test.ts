@@ -122,7 +122,7 @@ describe('quick.caption', () => {
     expect(task?.system).toContain('plain text')
     expect(task?.system).toContain('no Markdown')
     const context = JSON.parse(block(task?.prompt ?? '', 'context'))
-    expect(context.platform).toMatchObject({ name: 'Instagram', captionLimit: 2200, hashtags: 'allowed', link: 'Instagram does not show links in a post: leave "link" empty.' })
+    expect(context.platform).toMatchObject({ name: 'Instagram', captionLimit: 2200, hashtags: 'allowed', link: expect.stringMatching(/^Instagram does not show links in a post: leave "link" empty\. The application ends the caption with "Link in bio" itself/) })
     expect(context.channel).toMatchObject({ platform: 'instagram', target: '@natalmystic', style: 'warm and brief', languages: ['en'] })
     expect(context.knowledge.approvedClaims.map((c: { id: string }) => c.id)).toEqual(['c1', 'c2'])
     expect(block(task?.prompt ?? '', 'owner_wish')).toBe('warmer')

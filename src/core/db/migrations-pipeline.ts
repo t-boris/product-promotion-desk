@@ -196,5 +196,13 @@ ALTER TABLE drafts ADD COLUMN post_type TEXT NOT NULL DEFAULT 'article';
 -- and drawn again (REQ-003). Null when the picture is not a card, and for every article.
 ALTER TABLE drafts ADD COLUMN card_json TEXT;
 `
+  },
+  {
+    id: 310,
+    name: 'pipeline: the product keeps whether its site ends every new post (DEC-044)',
+    sql: `
+-- On for every product that exists: the owner asked for the site's address at the end of each post. The switch is on the product's page.
+ALTER TABLE products ADD COLUMN add_site_link INTEGER NOT NULL DEFAULT 1;
+`
   }
 ]

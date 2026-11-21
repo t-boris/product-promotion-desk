@@ -134,7 +134,7 @@ export interface ApiMethods {
   // products and passports (REQ-001)
   'products.list': [void, Product[]]
   'products.create': [{ name: string; websiteUrl?: string; description?: string }, Product]
-  'products.update': [{ id: Id; name?: string; websiteUrl?: string | null; description?: string | null }, Product]
+  'products.update': [{ id: Id; name?: string; websiteUrl?: string | null; description?: string | null; addSiteLink?: boolean }, Product]
   'products.delete': [{ id: Id }, void]
   'products.saveGoal': [{ id: Id; goal: PromotionGoalInput }, Product]
   'products.removeGoal': [{ id: Id; goalId: Id }, Product]

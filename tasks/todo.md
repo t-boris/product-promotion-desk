@@ -880,3 +880,18 @@ Owner 2026-11-20, after Codex was refused at sending a quick post to Instagram (
 
 Review: the change removes a safety boundary the owner set; the risk (a prompt-injected page steering Codex, which can run commands and read files) is accepted by the owner and written in DEC-043 and in the Settings text. Unproven live: a real send to Instagram/Threads/Facebook with Codex.
 
+## 0.25.0: the site ends every new post, "Link in bio" on Instagram (DEC-044 over DEC-036)
+
+Owner 2026-11-21: "Why does it not add the link to my site at the end of every post?"; chose "#2" (Instagram: the line "Link in bio") and asked for it as soon as possible.
+
+- [x] `in_bio` placement for Instagram (replaces `left_out`), `BIO_LINE`, `siteLinkFor` (one function for the core and the composer's preview)
+- [x] migration 310 (`products.add_site_link`, on), `Product.addSiteLink`, `products.update`, switch on the product's page
+- [x] the first draft of a new standalone post gets the site (`FlowStore.insertDraft`); replies, platforms with a link field, later drafts and a product with the switch off do not
+- [x] group versions: the site does not make a version "edited by hand"; Adapt keeps it
+- [x] composer: the form's preview and limits count the site before the first save
+- [x] tests: 15 new (rule, groups, switch), migration test, 10 old expectations rewritten, fixtures pinned to the switch off; `npm run verify` 5489 tests
+- [ ] commit, push, CI, `deploy:local`, relaunch
+
+Unproven live: the "Link in bio" line on a real Instagram post; Threads/Facebook posts ending with the address (disclosure rule applies to them).
+Open on the same day (owner's next two messages): the Reddit channel cannot read its post list (HTTP 403), the owner wants it read through the browser like Instagram and Threads, and wants any forum or site supported, with trend search and feed analysis. Needs a plan and the owner's approval before it is built.
+

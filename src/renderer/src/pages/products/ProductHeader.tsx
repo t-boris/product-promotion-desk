@@ -4,7 +4,7 @@ import { productHref, setupHref } from '../../route'
 import { AiField } from '../../assist/AiField'
 import { useAssistBlock } from '../../assist/useAssistBlock'
 import { call, useAction } from '../../hooks'
-import { Badge, Button, Card, ConfirmAction, ErrorNote, Field, ObjectHeader, useOpenForm } from '../../ui'
+import { Badge, Button, Card, ConfirmAction, ErrorNote, Field, ObjectHeader, Switch, useOpenForm } from '../../ui'
 import { ClampedText } from './ClampedText'
 import { ANALYSIS_LABELS, ANALYSIS_TONES } from './labels'
 import { deleteBlocker, NOT_ANALYZED_HINT, passportStatus } from './product-status'
@@ -76,6 +76,8 @@ export function ProductHeader({ view, channels, onDeleted, onOpenAnalysis }: { v
     await call('products.delete', { id: product.id })
     onDeleted()
   })
+  // The site's address at the end of every new post (DEC-044): one switch that takes effect at once, like the settings switches.
+  const [setSiteLink, switching] = useAction((next: boolean) => call('products.update', { id: product.id, addSiteLink: next }))
 
   return (
     <div className="obj">
@@ -121,6 +123,22 @@ export function ProductHeader({ view, channels, onDeleted, onOpenAnalysis }: { v
               </span>
             )}
           </dd>
+          {product.websiteUrl && (
+            <>
+              <dt>In posts</dt>
+              <dd>
+                <Switch
+                  checked={product.addSiteLink}
+                  disabled={switching.busy}
+                  onChange={(next) => void setSiteLink(next)}
+                  label="Put the website address at the end of every new post"
+                  note="On Instagram the post ends with “Link in bio” instead, because a link in a caption does not work: keep the address in your profile."
+                  testId="site-link-switch"
+                />
+                <ErrorNote error={switching.error} />
+              </dd>
+            </>
+          )}
           <dt>Description</dt>
           {/* Two lines and "Show full text": the full text is also a source on the Sources tab, and the tabs stay near the top (BUG-037). */}
           <dd>

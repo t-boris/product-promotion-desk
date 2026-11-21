@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Attachment } from './types'
-import { RENDER_VERSION, judgedForFit, linkPlacementOf, linkRuleOf, pictureIdsIn, removePictures, characterCount, formOf, parseBlocks, parseInline, renderForPlatform, sendProblems, toPlainText, withoutInlinePictures, type PostContent, type SendWays } from './post-format'
+import { RENDER_VERSION, siteLinkFor, judgedForFit, linkPlacementOf, linkRuleOf, pictureIdsIn, removePictures, characterCount, formOf, parseBlocks, parseInline, renderForPlatform, sendProblems, toPlainText, withoutInlinePictures, type PostContent, type SendWays } from './post-format'
 
 const picture = (id: string): Attachment => ({ name: `${id}.png`, path: `/data/media/${id}.png`, mime: 'image/png', sha256: id.repeat(8), mediaId: id })
 const post = (over: Partial<PostContent> = {}): PostContent => ({ title: 'A title', text: 'Some words', link: null, attachments: [], markup: 'markdown', ...over })
@@ -349,14 +349,24 @@ describe('the link of a post where the platform has no field for it (DEC-036)', 
     }
   })
 
-  it('instagram: the link is left out, and the preview says so; the caption is what the owner wrote', () => {
+  it('instagram: the address is not sent, the caption ends with "Link in bio", and the preview says so (DEC-044)', () => {
     for (const markup of ['markdown', 'legacy'] as const) {
       const rendered = renderForPlatform(post({ title: null, text: 'A caption.', link, markup, attachments: [picture('a')] }), 'instagram')
-      expect(rendered.text).toBe('A caption.')
+      expect(rendered.text).toBe('A caption.\n\nLink in bio')
       expect(rendered.link).toBeNull()
-      expect(rendered.notes.join(' ')).toMatch(/does not make a link in a post clickable and has no field for it: the link is left out/)
+      expect(rendered.shownLink).toBeNull()
+      expect(rendered.notes.join(' ')).toMatch(/does not make a link in a post clickable and has no field for it: the caption ends with "Link in bio"/)
       expect(rendered.problems).toEqual([])
     }
+  })
+
+  it('instagram: a caption that already sends the reader to the profile is not given the line twice, and no words of the owner\'s are no caption', () => {
+    for (const text of ['More in my profile. Link in bio!', 'Link in my bio.', 'link in profile']) {
+      expect(renderForPlatform(post({ title: null, text, link, markup: 'legacy', attachments: [picture('a')] }), 'instagram').text, text).toBe(text)
+    }
+    expect(renderForPlatform(post({ title: null, text: '', link, markup: 'legacy', attachments: [picture('a')] }), 'instagram').text).toBe('')
+    // no link: nothing is added
+    expect(renderForPlatform(post({ title: null, text: 'A caption.', link: null, markup: 'legacy', attachments: [picture('a')] }), 'instagram').text).toBe('A caption.')
   })
 
   it('reddit and a site that is not listed keep the link as a field of its own', () => {
@@ -426,13 +436,14 @@ describe('the link of a post where the platform has no field for it (DEC-036)', 
     expect(renderForPlatform(post({ title: null, text: 'x'.repeat(520), link: null, markup: 'legacy' }), 'threads').problems).toEqual([])
     expect(renderForPlatform(post({ title: null, text: 'x'.repeat(520), link, markup: 'legacy' }), 'threads').problems).toEqual([])
     expect(renderForPlatform(post({ title: null, text: 'x'.repeat(400), link, markup: 'legacy' }), 'threads').problems).toEqual([])
-    // Instagram adds nothing to the text, so it takes no room of the limit
-    expect(renderForPlatform(post({ title: null, text: 'x'.repeat(2_190), link, markup: 'legacy', attachments: [picture('a')] }), 'instagram').problems).toEqual([])
+    // Instagram adds "Link in bio" (11 characters and the blank line), which takes room of the limit
+    expect(renderForPlatform(post({ title: null, text: 'x'.repeat(2_185), link, markup: 'legacy', attachments: [picture('a')] }), 'instagram').problems).toEqual([])
+    expect(renderForPlatform(post({ title: null, text: 'x'.repeat(2_190), link, markup: 'legacy', attachments: [picture('a')] }), 'instagram').problems.join(' ')).toMatch(/2203 characters; Instagram allows 2200/)
   })
 
   it('names how a link is placed, for the approval to be bound to it: only where the form has no field and the draft has a link', () => {
     expect(linkPlacementOf('facebook', 'https://x.io')).toBe('in_text:1')
-    expect(linkPlacementOf('instagram', 'https://x.io')).toBe('left_out:1')
+    expect(linkPlacementOf('instagram', 'https://x.io')).toBe('in_bio:1')
     expect(linkPlacementOf('reddit', 'https://x.io')).toBeNull()
     expect(linkPlacementOf('some-new-site', 'https://x.io')).toBeNull()
     expect(linkPlacementOf('facebook', null)).toBeNull()
@@ -446,14 +457,14 @@ describe('the link of a post where the platform has no field for it (DEC-036)', 
     expect(rendered.problems.join(' ')).toMatch(/505 characters; Threads allows 500/)
   })
 
-  it('does not take a link alone for a post on a platform that leaves it out', () => {
+  it('does not take a link alone for a post on a platform that sends the reader to the profile', () => {
     const problems = renderForPlatform(post({ title: null, text: '', link }), 'instagram').problems.join(' ')
     expect(problems).toMatch(/nothing to post/)
     expect(problems).toMatch(/needs a picture/)
   })
 
   it('tells the AI that writes a post what the platform does with a link, and nothing for a platform that has a field', () => {
-    expect(linkRuleOf('instagram')).toMatch(/leave "link" empty/)
+    expect(linkRuleOf('instagram')).toMatch(/leave "link" empty.*ends the caption with "Link in bio" itself.*counts against the text limit/)
     expect(linkRuleOf('facebook')).toMatch(/added at the end of the text.*counts against the text limit/)
     expect(linkRuleOf('reddit')).toBeNull()
     expect(linkRuleOf('some-new-site')).toBeNull()
@@ -480,7 +491,7 @@ describe('what a platform receives is pinned to the version of the rules', () =>
   const linked: [string, string, string | null, string][] = [
     ['facebook', 'Words', 'https://example.org/a', 'Words\n\nhttps://example.org/a'],
     ['threads', 'Words', 'https://example.org/a', 'Words\n\nhttps://example.org/a'],
-    ['instagram', 'Words', 'https://example.org/a', 'Words'],
+    ['instagram', 'Words', 'https://example.org/a', 'Words\n\nLink in bio'],
     ['reddit', 'Words', 'https://example.org/a', 'Words']
   ]
 
@@ -561,11 +572,13 @@ describe('a quick post (DEC-046): a caption sent as it is written, judged whole 
     expect(renderForPlatform(quick({ text: 'a'.repeat(2201), postType: undefined }), 'instagram').problems).toEqual([])
   })
 
-  it('counts a link that goes into the text (Threads, Facebook) and leaves out the one Instagram cannot show', () => {
+  it('counts a link that goes into the text (Threads, Facebook) and the "Link in bio" line that replaces the one Instagram cannot show', () => {
     const link = 'https://natalmystic.com'
     expect(renderForPlatform(quick({ text: 'x'.repeat(480), link }), 'threads').problems).toEqual(['The text is 505 characters; Threads allows 500.'])
     expect(renderForPlatform(quick({ text: 'x'.repeat(480), link }), 'threads').text).toBe(`${'x'.repeat(480)}\n\n${link}`)
-    expect(renderForPlatform(quick({ text: 'x'.repeat(2200), link }), 'instagram').problems).toEqual([])
+    expect(renderForPlatform(quick({ text: 'x'.repeat(2185), link }), 'instagram').problems).toEqual([])
+    expect(renderForPlatform(quick({ text: 'x'.repeat(2185), link }), 'instagram').text).toBe(`${'x'.repeat(2185)}\n\nLink in bio`)
+    expect(renderForPlatform(quick({ text: 'x'.repeat(2200), link }), 'instagram').problems).toEqual(['The text is 2213 characters; Instagram allows 2200.'])
     expect(renderForPlatform(quick({ text: 'x'.repeat(2200), link }), 'instagram').link).toBeNull()
   })
 
@@ -596,5 +609,22 @@ describe('a quick post (DEC-046): a caption sent as it is written, judged whole 
       expect(renderForPlatform(post({ title: null, text: '**Same** words' }), platform).text).toBe('Same words')
       expect(renderForPlatform(quick({ text: '**Same** words' }), platform).text).toBe('**Same** words')
     }
+  })
+})
+
+describe('the site of the product at the end of a new post (DEC-044)', () => {
+  const site = { websiteUrl: 'https://natalmystic.com', addSiteLink: true }
+
+  it('is the address where it goes into the text or points to the profile, and nowhere else', () => {
+    for (const platform of ['instagram', 'facebook', 'threads', 'x', 'linkedin', 'telegram']) expect(siteLinkFor(platform, site), platform).toBe('https://natalmystic.com')
+    // a platform with a link field of its own gets none: a Reddit post with a link is another kind of post
+    for (const platform of ['reddit', 'pinterest', 'tiktok', 'youtube', 'some-new-site']) expect(siteLinkFor(platform, site), platform).toBeNull()
+  })
+
+  it('needs the setting on and a site', () => {
+    expect(siteLinkFor('threads', { ...site, addSiteLink: false })).toBeNull()
+    expect(siteLinkFor('threads', { ...site, websiteUrl: null })).toBeNull()
+    expect(siteLinkFor('threads', { ...site, websiteUrl: '   ' })).toBeNull()
+    expect(siteLinkFor('threads', { ...site, websiteUrl: ' https://natalmystic.com ' })).toBe('https://natalmystic.com')
   })
 })

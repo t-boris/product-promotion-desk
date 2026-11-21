@@ -258,7 +258,7 @@ function captionProblems(caption: string, c: Claimed & { subject: QuickSubject; 
   if (count > limit) problems.push(`the caption is ${count} characters; ${label} takes at most ${limit}. Shorten it`)
   if (MARKDOWN_MARKS.test(caption)) problems.push('the caption holds Markdown or HTML marks; write plain text')
   // A platform that does not make a link in a post work is given none by the AI: the owner's own links stay.
-  if (formOf(c.subject.platform).link === 'left_out') {
+  if (formOf(c.subject.platform).link === 'in_bio') {
     const own = new Set(linksIn(forChecks(c.ownerCaption)).hosts)
     const added = linksIn(read).hosts.filter((host) => !own.has(host))
     if (added.length > 0) problems.push(`it adds a link (${added[0]}), and ${label} does not make links in a post work: leave it out`)

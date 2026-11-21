@@ -13,7 +13,7 @@
 // Nothing here approves or sends by itself: this file is not reached from the scheduler.
 
 import { ApiError, type DraftInput } from '../../shared/api'
-import { characterCount, formOf, judgedForFit, platformLabel, renderForPlatform, type PostContent, type SendWays } from '../../shared/post-format'
+import { characterCount, formOf, judgedForFit, platformLabel, renderForPlatform, siteLinkFor, type PostContent, type SendWays } from '../../shared/post-format'
 import type {
   Channel,
   Draft,
@@ -71,16 +71,17 @@ export function adaptInstruction(platform: string, link: string | null = null): 
   return parts.join(' ')
 }
 
-const sameMaster = (draft: Draft, master: PostMaster): boolean =>
+/** `siteLink`: the site's address the core put at the end of this version's first draft (DEC-044): it is not a change the owner made. */
+const sameMaster = (draft: Draft, master: PostMaster, siteLink: string | null): boolean =>
   draft.title === master.title &&
   draft.text === master.text &&
-  draft.link === master.link &&
+  (draft.link === master.link || (master.link === null && siteLink !== null && draft.link === siteLink)) &&
   draft.markup === master.markup &&
   draft.postType === (master.postType ?? 'article') &&
   JSON.stringify(draft.attachments.map((a) => a.sha256)) === JSON.stringify(master.attachments.map((a) => a.sha256))
 
 /** The owner changed this version by hand: the latest draft is theirs and is not the master any more. */
-export const editedByHand = (draft: Draft | null, master: PostMaster): boolean => draft !== null && draft.author === 'user' && !sameMaster(draft, master)
+export const editedByHand = (draft: Draft | null, master: PostMaster, siteLink: string | null = null): boolean => draft !== null && draft.author === 'user' && !sameMaster(draft, master, siteLink)
 
 const labelOf = (channel: Channel): string => `${platformLabel(channel.platform)} ${channel.target}`
 
@@ -183,7 +184,7 @@ export class PostGroupsFlow {
       return {
         card,
         problems,
-        edited: editedByHand(draft, group.master),
+        edited: editedByHand(draft, group.master, this.siteLinkOf(group.productId, channel)),
         // A channel no connector can post to goes out by the AI browser or not at all: the line names that way, and the problems say what stops it now.
         way: ways.noConnector ? 'ai_browser' : draft ? chooseExecutor(ways, draft, channel.platform) : 'connector'
       }
@@ -267,7 +268,7 @@ export class PostGroupsFlow {
         if (!draft) skip('It has no text yet.')
         else if (SEND_LOCKED_STATES.includes(opp.state)) skip('It was sent already.')
         else if (group.master.text.trim() === '') skip('The post has no words to adapt (only a picture or a link).')
-        else if (editedByHand(draft, group.master) && !force) skip('You changed it by hand, so it was left as it is. Start over to let the AI adapt it again.')
+        else if (editedByHand(draft, group.master, this.siteLinkOf(group.productId, channel)) && !force) skip('You changed it by hand, so it was left as it is. Start over to let the AI adapt it again.')
         else if (!picked && opp.state === 'deferred') skip('You put it off, so it was left as it is. Choose it to adapt it.')
         else if (!picked && this.core.repos.activeApproval(draft.id)) skip('You approved it, so it was left as it is. Choose it to adapt it again (that cancels its approval).')
         else {
@@ -281,7 +282,8 @@ export class PostGroupsFlow {
             const text = (written.text ?? '').trim()
             if (!text) throw new ApiError('suggest_failed', 'The AI gave back no text.')
             // Only if the version is still the draft that was adapted: a hand edit made while the AI wrote is not replaced.
-            await this.review.saveDraft(opp.id, { ...group.master, text }, { author: 'ai', expectDraftId: draft.id })
+            // The version stands on the master, with the site's address its first draft was given (DEC-044), so the rewrite does not lose it.
+            await this.review.saveDraft(opp.id, { ...group.master, text, link: group.master.link ?? this.siteLinkOf(group.productId, channel) }, { author: 'ai', expectDraftId: draft.id })
             const saved = this.core.repos.latestDraft(opp.id)
             const problems = saved ? this.fitProblems(channel.platform, saved, sendWays(this.core, undefined, channel)) : []
             results.push({ opportunityId: opp.id, channelLabel: label, status: 'done', reason: problems.length > 0 ? `Adapted, but ${problems[0]}` : 'Adapted. Read it, then approve.' })
@@ -421,6 +423,11 @@ export class PostGroupsFlow {
     const createdAt = this.store.now()
     this.core.db.prepare('INSERT INTO post_groups (id, product_id, master_json, created_at) VALUES (?, ?, ?, ?)').run(id, productId, toJson({ ...master, provenance }), createdAt)
     return { id, productId, master, createdAt, provenance }
+  }
+
+  /** The site's address that ends a new post on this channel (DEC-044), or null: what the first draft of a version was given besides the master. */
+  private siteLinkOf(productId: Id, channel: Channel): string | null {
+    return siteLinkFor(channel.platform, this.core.repos.product(productId))
   }
 
   /** A version is an ordinary standalone post of one channel, written from the master and standing on the same facts. */

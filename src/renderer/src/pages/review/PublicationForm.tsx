@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
+import { siteLinkFor } from '../../../../shared/post-format'
 import type { GroupChannelOption, Id, IsoTime } from '../../../../shared/types'
-import { call, useAction } from '../../hooks'
+import { call, useAction, useQuery } from '../../hooks'
 import { Button, Card, ErrorNote, useOpenForm } from '../../ui'
 import { DraftEditor, emptyForm, toInput, type DraftForm } from './DraftEditor'
 import { PostDrafter } from './PostDrafter'
@@ -29,7 +30,8 @@ export function PublicationForm({ productId, channelId, platform, reads, author,
   const saveVariant = useOpenForm()
   // One form for each kind of post; the channels ticked decide which one is shown.
   const [form, setForm] = useState<DraftForm>(emptyForm(true))
-  const [quick, setQuick] = useState<QuickForm>(emptyQuickForm())
+  const [typed, setQuick] = useState<QuickForm>(emptyQuickForm())
+  const products = useQuery('products.list', undefined, ['products'])
   // The channel the screen is on is ticked until the owner ticks anything; nothing else is ticked for them.
   const [picked, setPicked] = useState<Id[] | null>(null)
   const chosen = picked ?? [channelId]
@@ -38,6 +40,10 @@ export function PublicationForm({ productId, channelId, platform, reads, author,
   const own = { channelId, platform }
   const platforms = chosenPlatforms(known, chosen, own)
   const kind = kindOfChannels(platforms)
+  // A new picture post ends with the product's site, as the core writes it into the first draft (DEC-044): the preview and the limits count it already.
+  const product = products.data?.find((p) => p.id === productId)
+  const siteLink = product && platforms.length > 0 ? siteLinkFor(platforms[0]!, product) : null
+  const quick: QuickForm = typed.link === null && siteLink ? { ...typed, link: siteLink } : typed
   const input = toInput(form, true)
   const options = useChannelOptions(productId, kind === 'quick' ? quickQuestion(quick) : input)
   useEffect(() => {

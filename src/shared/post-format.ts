@@ -521,10 +521,11 @@ export interface PlatformForm {
   maxPictures: number
   /**
    * Where a draft's link goes. `field`: the platform's form has a field for it (Reddit), and a site that is not listed is taken to have one.
-   * `in_text`: no field, but a link in the text works: it is the last paragraph of the text. `left_out`: no field, and a link in the text does
-   * not work either (Instagram does not make a caption's link clickable): it is not sent, and the preview says so (DEC-036).
+   * `in_text`: no field, but a link in the text works: it is the last paragraph of the text. `in_bio`: no field, and a link in the text does
+   * not work either (Instagram does not make a caption's link clickable): the address is not sent, the caption ends with "Link in bio" instead
+   * and the link lives in the account's profile (DEC-036, changed by DEC-044).
    */
-  link: 'field' | 'in_text' | 'left_out'
+  link: 'field' | 'in_text' | 'in_bio'
 }
 
 const OTHER: PlatformForm = { format: 'plain', hasTitle: false, titleLimit: null, textLimit: null, pictures: 'optional', maxPictures: 10, link: 'field' }
@@ -532,7 +533,7 @@ const OTHER: PlatformForm = { format: 'plain', hasTitle: false, titleLimit: null
 /** What each platform of the application shows and holds. Limits are the platforms' published ones; a site that is not listed has none. */
 export const PLATFORM_FORMS: Record<string, PlatformForm> = {
   reddit: { format: 'markdown', hasTitle: true, titleLimit: 300, textLimit: 40_000, pictures: 'optional', maxPictures: 20, link: 'field' },
-  instagram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 2_200, pictures: 'required', maxPictures: 10, link: 'left_out' },
+  instagram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 2_200, pictures: 'required', maxPictures: 10, link: 'in_bio' },
   facebook: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 63_206, pictures: 'optional', maxPictures: 10, link: 'in_text' },
   threads: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 500, pictures: 'optional', maxPictures: 10, link: 'in_text' },
   x: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 280, pictures: 'optional', maxPictures: 4, link: 'in_text' },
@@ -552,7 +553,7 @@ export const formOf = (platform: string): PlatformForm => PLATFORM_FORMS[platfor
 export function linkRuleOf(platform: string): string | null {
   const link = formOf(platform).link
   if (link === 'in_text') return `${platformLabel(platform)} has no link field: a link is added at the end of the text, and counts against the text limit.`
-  if (link === 'left_out') return `${platformLabel(platform)} does not show links in a post: leave "link" empty.`
+  if (link === 'in_bio') return `${platformLabel(platform)} does not show links in a post: leave "link" empty. The application ends the caption with "${BIO_LINE}" itself, so do not write that line; it counts against the text limit.`
   return null
 }
 
@@ -573,15 +574,25 @@ function holdsAddress(text: string, address: string): boolean {
   return new RegExp(`(?<![\\p{L}\\p{N}_@./:-])${pattern}(?:/(?!${more}|\\.[\\p{L}\\p{N}]|:\\d))?(?!${more}|\\.[\\p{L}\\p{N}]|:\\d)`, 'u').test(text)
 }
 
+/** The closing line of a caption on a platform that does not make a link in a post work: the link is in the account's profile (DEC-044). */
+export const BIO_LINE = 'Link in bio'
+
+/** Whether the text already sends the reader to the profile ("link in bio", "link in my profile"), so the line is not written twice. */
+const holdsBioLine = (text: string): boolean => /\blink\s+in\s+(?:my\s+|our\s+|the\s+)?(?:bio|profile)\b/i.test(text)
+
 /**
  * The link of a draft where the platform has no field for it (DEC-036). `in_text`: the last paragraph of the text, unless the text already holds
- * that very address. `left_out`: not sent. Either way the link is no longer a separate part of the post, so nothing is typed into a field that is
- * not there, and the preview says what became of it.
+ * that very address. `in_bio`: the address is not sent; the last paragraph is "Link in bio", unless the text says so already. Either way the link is
+ * no longer a separate part of the post, so nothing is typed into a field that is not there, and the preview says what became of it.
  */
 function placeLink(form: PlatformForm, label: string, text: string, link: string | null): { text: string; link: string | null; shown: string | null; note: string | null } {
   const address = link?.trim() ?? ''
   if (address === '' || form.link === 'field') return { text, link, shown: link, note: null }
-  if (form.link === 'left_out') return { text, link: null, shown: null, note: `${label} does not make a link in a post clickable and has no field for it: the link is left out of the post.` }
+  if (form.link === 'in_bio') {
+    // A line that only points to the profile is no caption: with no words of the owner's, a link alone is still nothing to post.
+    if (text.trim() === '' || holdsBioLine(text)) return { text, link: null, shown: null, note: null }
+    return { text: `${text.trimEnd()}\n\n${BIO_LINE}`, link: null, shown: null, note: `${label} does not make a link in a post clickable and has no field for it: the caption ends with "${BIO_LINE}", and the link belongs in the profile.` }
+  }
   if (holdsAddress(text, address)) return { text, link: null, shown: link, note: null }
   return { text: text.trim() === '' ? address : `${text.trimEnd()}\n\n${address}`, link: null, shown: link, note: `${label} has no link field: the link is added at the end of the text.` }
 }
@@ -590,7 +601,7 @@ function placeLink(form: PlatformForm, label: string, text: string, link: string
 export const LINK_PLACEMENT_VERSION = 1
 
 /**
- * How the link of a draft is placed on `platform` when its form has no field for it (`in_text:1`, `left_out:1`), or null when the draft has no link
+ * How the link of a draft is placed on `platform` when its form has no field for it (`in_text:1`, `in_bio:1`), or null when the draft has no link
  * or the form has a field. The approval hash carries it (DEC-036): a draft approved before the rule existed, or under another placement, was
  * approved for a different post than the one this rule types, and is approved again. Reddit and a draft without a link are never touched.
  */
@@ -598,6 +609,18 @@ export function linkPlacementOf(platform: string, link: string | null | undefine
   const how = formOf(platform).link
   if (how === 'field' || !link || link.trim() === '') return null
   return `${how}:${LINK_PLACEMENT_VERSION}`
+}
+
+/**
+ * The address of the product's site that ends a new post, or null (DEC-044): only where the link goes in the post's text or points to the profile
+ * (`in_text`, `in_bio`), never into a platform's link field (a Reddit post with a link is another kind of post), and only when the product keeps
+ * the setting on and has a site. The one answer for the core, which writes it into the first draft, and for the composer's preview.
+ */
+export function siteLinkFor(platform: string, product: { websiteUrl: string | null; addSiteLink: boolean }): string | null {
+  const how = formOf(platform).link
+  if (how !== 'in_text' && how !== 'in_bio') return null
+  const address = product.websiteUrl?.trim() ?? ''
+  return product.addSiteLink && address !== '' ? address : null
 }
 
 const LABELS: Record<string, string> = { reddit: 'Reddit', instagram: 'Instagram', facebook: 'Facebook', threads: 'Threads', x: 'X', linkedin: 'LinkedIn', telegram: 'Telegram', pinterest: 'Pinterest', tiktok: 'TikTok', youtube: 'YouTube' }

@@ -2,7 +2,7 @@
 // opportunity/draft/approval/action tables goes through here so the other flow modules stay free of SQL.
 
 import { ApiError } from '../../shared/api'
-import { renderForPlatform } from '../../shared/post-format'
+import { renderForPlatform, siteLinkFor } from '../../shared/post-format'
 import type { PostType, QuickCard } from '../../shared/quick-post'
 import type {
   Account,
@@ -491,7 +491,22 @@ export class FlowStore {
 
   // ───────────── drafts and approvals ─────────────
 
-  insertDraft(opportunityId: Id, content: DraftContent, meta: DraftMeta): Draft {
+  /**
+   * The first draft of a new post of the owner's ends with the product's site (DEC-044), unless it has a link already or the product keeps the
+   * setting off. Only the first draft: a later one is the owner's edit (or the AI's rewrite of the words), and a link they took out stays out.
+   * A reply never gets it, and neither does a platform with a link field (`siteLinkFor`).
+   */
+  private withSiteLink(opportunityId: Id, content: DraftContent): DraftContent {
+    if (content.link && content.link.trim() !== '') return content
+    if (this.db.prepare('SELECT 1 FROM drafts WHERE opportunity_id = ? LIMIT 1').get(opportunityId)) return content
+    const opp = this.requireOpportunity(opportunityId)
+    if (opp.kind !== 'standalone') return content
+    const link = siteLinkFor(this.requireChannel(opp.channelId).platform, this.core.repos.product(opp.productId))
+    return link ? { ...content, link } : content
+  }
+
+  insertDraft(opportunityId: Id, draftContent: DraftContent, meta: DraftMeta): Draft {
+    const content = this.withSiteLink(opportunityId, draftContent)
     const id = newId()
     this.db
       .prepare(

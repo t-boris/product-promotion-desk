@@ -71,14 +71,15 @@ export class ProductStore {
     return this.product(id)
   }
 
-  update(id: Id, patch: { name?: string; websiteUrl?: string | null; description?: string | null }): Product {
+  update(id: Id, patch: { name?: string; websiteUrl?: string | null; description?: string | null; addSiteLink?: boolean }): Product {
     const current = this.product(id)
     this.db
-      .prepare('UPDATE products SET name = ?, website_url = ?, description = ?, updated_at = ? WHERE id = ?')
+      .prepare('UPDATE products SET name = ?, website_url = ?, description = ?, add_site_link = ?, updated_at = ? WHERE id = ?')
       .run(
         patch.name ?? current.name,
         patch.websiteUrl === undefined ? current.websiteUrl : patch.websiteUrl,
         patch.description === undefined ? current.description : patch.description,
+        (patch.addSiteLink === undefined ? current.addSiteLink : patch.addSiteLink) ? 1 : 0,
         this.now(),
         id
       )

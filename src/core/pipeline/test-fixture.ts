@@ -121,7 +121,8 @@ export function makeWorld(options: WorldOptions = {}): World {
   const productId = newId()
   const now = core.clock.now().toISOString()
   core.db
-    .prepare('INSERT INTO products (id, name, website_url, description, goals_json, active_passport_version_id, analysis_status, created_at, updated_at) VALUES (?, ?, ?, ?, json_array(), ?, ?, ?, ?)')
+    .prepare('INSERT INTO products (id, name, website_url, description, goals_json, active_passport_version_id, analysis_status, created_at, updated_at, add_site_link) VALUES (?, ?, ?, ?, json_array(), ?, ?, ?, ?, 0)')
+    // The site's address does not end a new post here (DEC-044): a test that wants it turns the setting on (`add_site_link`).
     .run(productId, 'Natal Mystic', 'https://natalmystic.com', 'Astrology app', 'pv-1', 'complete', now, now)
 
   const world = {} as World
@@ -135,7 +136,7 @@ export function makeWorld(options: WorldOptions = {}): World {
     sequence += 1
     const id = newId()
     core.db
-      .prepare('INSERT INTO products (id, name, website_url, description, goals_json, active_passport_version_id, analysis_status, created_at, updated_at) VALUES (?, ?, ?, ?, json_array(), ?, ?, ?, ?)')
+      .prepare('INSERT INTO products (id, name, website_url, description, goals_json, active_passport_version_id, analysis_status, created_at, updated_at, add_site_link) VALUES (?, ?, ?, ?, json_array(), ?, ?, ?, ?, 0)')
       .run(id, name ?? `Product ${sequence}`, `https://product-${sequence}.test`, 'Another product', 'pv-1', 'complete', now, now)
     return core.repos.product(id)
   }
