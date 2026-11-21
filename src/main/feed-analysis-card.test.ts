@@ -35,6 +35,11 @@ describe('themeNumbers', () => {
     expect(themeNumbers(theme({ replies: 0, score: null }))).toBe('3 posts (+2 against before) · 0 comments')
   })
 
+  it('only counts the posts when there is no period before to compare with', () => {
+    expect(themeNumbers(theme({ before: 0 }), false)).toBe('3 posts · 42 comments · score 1,300')
+    expect(themeNumbers(theme({ before: 0, replies: null, score: null }), false)).toBe('3 posts')
+  })
+
   it('says when a theme has no posts this period but had some before', () => {
     expect(themeNumbers(theme({ posts: 0, before: 4, replies: null, score: null }))).toBe('0 posts (−4 against before)')
   })

@@ -502,6 +502,7 @@ describe('the card of the analysis of the Feed', () => {
     other: 0,
     total: 4,
     stale: false,
+    compared: true,
     ...over
   })
   const body = (v: FeedAnalysisView, stale = false, all = false): string => html(createElement(AnalysisBody, { view: v, stale, all, setAll: () => {}, onFocus: () => {} }))
@@ -538,6 +539,13 @@ describe('the card of the analysis of the Feed', () => {
     expect(out).toContain('Show these posts (3)')
     expect(out).toContain('1 post (new)')
     expect(out).not.toContain('1 post (new) ·')
+  })
+
+  it('writes no comparison, and marks nothing as growing, when there was no period before to compare with', () => {
+    const out = body(view({ compared: false }))
+    expect(out).toContain('3 posts · 42 comments · score 1,300')
+    expect(out).not.toContain('against before')
+    expect(out).not.toContain('(new)')
   })
 
   it('says what it was made from and when', () => {

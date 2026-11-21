@@ -109,7 +109,21 @@ describe('feed.analyze', () => {
     expect(apps).toMatchObject({ posts: 3, before: 0, replies: 9, score: 250, known: 2, mostAnswered: false, mostPopular: true, growing: true })
     // The theme with more posts comes first.
     expect(got.themes.map((t) => t.name)).toEqual(['Which app to use', 'What the houses mean'])
-    expect(got).toMatchObject({ other: 0, stale: false, summary: 'People ask how to read a chart and how to pick a tool.', readInFull: 5 })
+    expect(got).toMatchObject({ other: 0, stale: false, compared: true, summary: 'People ask how to read a chart and how to pick a tool.', readInFull: 5 })
+  })
+
+  it('marks nothing as growing and says there was nothing to compare with when the period before holds no posts', async () => {
+    world = makeWorld({ mode: 'draft' })
+    seed({ title: 'A' })
+    seed({ title: 'B' })
+    seed({ title: 'C' })
+    answerWith({ Theme: ['A', 'B', 'C'] })
+    const got = await analyze()
+    expect(got.compared).toBe(false)
+    expect(got.themes[0]).toMatchObject({ posts: 3, before: 0, growing: false, fading: false })
+    seed({ title: 'Old', ago: 10 })
+    answerWith({ Theme: ['A', 'B', 'C', 'Old'] })
+    expect((await analyze()).compared).toBe(true)
   })
 
   it('refuses a period with too few noted posts, without asking the AI', async () => {

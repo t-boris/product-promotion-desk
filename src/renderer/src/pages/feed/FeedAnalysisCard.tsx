@@ -14,7 +14,7 @@ export interface FeedFocus {
 /** How many themes are listed before "Show all": the card sits above the stream and must not push it off the screen. */
 const THEMES_SHOWN = 4
 
-function Theme({ theme, widest, onShow }: { theme: FeedTheme; widest: number; onShow: (theme: FeedTheme) => void }) {
+function Theme({ theme, widest, compared, onShow }: { theme: FeedTheme; widest: number; compared: boolean; onShow: (theme: FeedTheme) => void }) {
   const badges = themeBadges(theme)
   const known = themeKnown(theme)
   return (
@@ -28,7 +28,7 @@ function Theme({ theme, widest, onShow }: { theme: FeedTheme; widest: number; on
             </span>
           ))}
           <span className="feed-theme-numbers muted small" data-testid="feed-theme-numbers">
-            {themeNumbers(theme)}
+            {themeNumbers(theme, compared)}
           </span>
         </summary>
         <div className="feed-theme-bar" aria-hidden="true">
@@ -85,7 +85,7 @@ export function AnalysisBody({
       )}
       <ol className="feed-themes" data-testid="feed-themes">
         {themes.map((theme) => (
-          <Theme key={theme.id} theme={theme} widest={widest} onShow={(t) => onFocus({ label: t.name, ids: new Set(t.postIds) })} />
+          <Theme key={theme.id} theme={theme} widest={widest} compared={view.compared} onShow={(t) => onFocus({ label: t.name, ids: new Set(t.postIds) })} />
         ))}
       </ol>
       {view.themes.length > THEMES_SHOWN && (

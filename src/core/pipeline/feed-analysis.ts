@@ -120,7 +120,7 @@ export function analysisPrompt(input: AnalysisInput): AiTask {
     'Answer with ONLY this JSON object, no code fences and no other text:',
     '{"summary": "...", "themes": [{"name": "...", "summary": "...", "idea": "...", "posts": ["p1", "p4"]}], "questions": [{"post": "p3", "question": "..."}]}'
   ].join('\n')
-  return { label: 'feed.analysis', title: 'the AI is analyzing what is going on in the Feed', subject: input.productId, prompt }
+  return { label: 'feed.analysis', title: 'Analyzing the Feed', subject: input.productId, prompt }
 }
 
 /** Reads and checks the answer: unknown or repeated posts are dropped, texts are plain and short, an unsafe idea is left out. A problem is handed back for one repair. */
@@ -364,6 +364,13 @@ export class FeedAnalysis {
       if (!channelOf.has(f.channelId)) channelOf.set(f.channelId, this.core.repos.channel(f.channelId).target)
       return [{ postId: f.id, title: f.title, channel: channelOf.get(f.channelId) ?? '', question: q.question }]
     })
+    const compared = stored.before.some((id) => byId.has(id))
+    if (!compared) {
+      for (const t of themes) {
+        t.growing = false
+        t.fading = false
+      }
+    }
     const placed = new Set(themes.flatMap((t) => t.postIds))
     const alive = stored.current.filter((id) => byId.has(id))
     return {
@@ -373,6 +380,7 @@ export class FeedAnalysis {
       summary: stored.summary,
       themes,
       questions,
+      compared,
       posts: alive.length,
       readInFull: alive.filter((id) => byId.get(id)?.readAt != null).length,
       other: alive.filter((id) => !placed.has(id)).length,

@@ -1123,6 +1123,8 @@ export interface FeedAnalysisView {
   summary: string
   themes: FeedTheme[]
   questions: FeedQuestion[]
+  /** The period before held posts to compare with: without them nothing can be said to grow or fade, and no theme is "new". */
+  compared: boolean
   /** The posts of the period it looked at, how many of them the AI read in full, how many belong to no theme, and how many the period has in all (the newest are looked at). */
   posts: number
   readInFull: number
