@@ -1,6 +1,5 @@
 // The fourth list of the Feed, Noted, and the read-only list of what the AI judged not relevant (DEC-040): one row for each finding, the
-// tabs the Feed offers (the three lists of opportunities and Noted), what the Noted tab counts, the words of a finding, when a notice is
-// marked seen, and what to say when a list is empty. Pure, so it is tested from src/main/feed-logic.test.ts. A finding is NOT an opportunity
+// tabs the Feed offers (the three lists of opportunities and Noted), what the Noted tab counts, the words of a finding, and what to say when a list is empty. Pure, so it is tested from src/main/feed-logic.test.ts. A finding is NOT an opportunity
 // (nothing to approve or send), so it has no state in the opportunity maps: it has its own row, which carries the `id` and `at` every list
 // of the Feed needs, so the selection (`useListSelection`, `selectionAfterKey`) and the day groups work on either kind of row.
 
@@ -63,7 +62,7 @@ export interface FindingRow {
   /** The AI's one line on how the post relates to the goal, on one line (page-derived text: shown as it is, never as markup). */
   relation: string
   firstLook: boolean
-  /** The owner has not looked at it yet. */
+  /** The owner has not read it yet: the card is unread (the stored mark is `seenAt`). */
   unseen: boolean
   /** The owner's star on the post (the AI starts the posts it calls worth a reply starred). */
   starred: boolean
@@ -129,7 +128,7 @@ export function notedCount(counts: FindingCounts | undefined, rows: readonly Fin
   return channelId === null && counts ? counts.notices : visibleFindings(rows, channelId).length
 }
 
-/** The number of notices the owner has not looked at yet (the badge on the Noted tab), for the product or the chosen channel. */
+/** The number of notices the owner has not read yet (the badge on the Noted tab), for the product or the chosen channel. */
 export function unseenNoticeCount(counts: FindingCounts | undefined, rows: readonly FindingRow[], channelId: Id | null): number {
   return channelId === null && counts ? counts.unseenNotices : visibleFindings(rows, channelId).filter((row) => row.unseen).length
 }
@@ -147,18 +146,6 @@ export interface JudgedLine {
 export function judgedLine(counts: FindingCounts | undefined): JudgedLine | null {
   if (!counts) return null
   return { text: `Judged not relevant: ${counts.skipped}`, canShow: counts.skipped > 0, waiting: counts.pending > 0 ? `${counts.pending} waiting for the AI` : null }
-}
-
-// ───────────── Seen ─────────────
-
-/**
- * The findings to mark seen when `selected` is the row shown: a notice the owner has not seen, that this screen did not already mark.
- * `already` is what the screen has marked; asking again for the same row (every render, every reload) gives nothing, so the core is asked
- * once. Posts judged not relevant are not marked: the owner is auditing them, they are not waiting to be noticed.
- */
-export function unseenToMark(selected: FindingRow | undefined, already: ReadonlySet<Id>): Id[] {
-  if (!selected || selected.label !== 'notice' || !selected.unseen || already.has(selected.id)) return []
-  return [selected.id]
 }
 
 // ───────────── Empty ─────────────

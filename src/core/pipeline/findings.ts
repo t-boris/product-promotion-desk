@@ -531,6 +531,19 @@ export class FindingStore {
     }
     return changed
   }
+
+  /**
+   * The owner asks to read these again (Mark as unread): they count as unseen once more. Ids that are not findings, and findings not seen, are left as they
+   * are. Returns how many findings changed. `updated_at` is left alone for the reason `markSeen` gives.
+   */
+  markUnseen(ids: Id[]): number {
+    let changed = 0
+    for (let i = 0; i < ids.length; i += 500) {
+      const chunk = ids.slice(i, i + 500)
+      changed += this.db.prepare(`UPDATE findings SET seen_at = NULL WHERE seen_at IS NOT NULL AND id IN (${chunk.map(() => '?').join(', ')})`).run(...chunk).changes
+    }
+    return changed
+  }
 }
 
 // ───────────── the handlers' argument checks ─────────────

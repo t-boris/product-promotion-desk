@@ -419,6 +419,62 @@ describe('findings.markSeen', () => {
   })
 })
 
+describe('findings.markUnseen', () => {
+  const seenAt = (id: string): string | null => (world.core.db.prepare('SELECT seen_at AS at FROM findings WHERE id = ?').get(id) as { at: string | null }).at
+
+  it('takes the mark off the findings given and leaves the others as they are', async () => {
+    world = makeWorld()
+    const a = seed({ externalId: 'a', label: 'notice' })
+    const b = seed({ externalId: 'b', label: 'notice' })
+    const c = seed({ externalId: 'c', label: 'notice' })
+    await world.core.router.call('findings.markSeen', { ids: [a, b, c] })
+
+    await world.core.router.call('findings.markUnseen', { ids: [a] })
+
+    expect(seenAt(a)).toBeNull()
+    expect(seenAt(b)).not.toBeNull()
+    expect(seenAt(c)).not.toBeNull()
+    expect((await world.core.router.call('findings.counts', { productId: world.product.id })).unseenNotices).toBe(1)
+  })
+
+  it('is not an error for an id that is not a finding, for a finding not seen, or for an empty list', async () => {
+    world = makeWorld()
+    const a = seed({ externalId: 'a', label: 'notice' })
+    await expect(world.core.router.call('findings.markUnseen', { ids: ['nope', a] })).resolves.toBeUndefined()
+    await expect(world.core.router.call('findings.markUnseen', { ids: [] })).resolves.toBeUndefined()
+    expect(seenAt(a)).toBeNull()
+  })
+
+  it('does not move the time of the judgment: updated_at stays', async () => {
+    world = makeWorld()
+    const a = seed({ externalId: 'a', label: 'notice' })
+    await world.core.router.call('findings.markSeen', { ids: [a] })
+    const before = (world.core.db.prepare('SELECT updated_at AS at FROM findings WHERE id = ?').get(a) as { at: string }).at
+    world.clock.advance(DAY)
+    await world.core.router.call('findings.markUnseen', { ids: [a] })
+    expect((world.core.db.prepare('SELECT updated_at AS at FROM findings WHERE id = ?').get(a) as { at: string }).at).toBe(before)
+  })
+
+  it('refuses something that is not a list of ids', async () => {
+    world = makeWorld()
+    await expect(world.core.router.call('findings.markUnseen', { ids: 'a' as unknown as string[] })).rejects.toMatchObject({ code: 'invalid_input' })
+  })
+
+  it('tells the screens the findings changed, but not when nothing did', async () => {
+    world = makeWorld()
+    const a = seed({ externalId: 'a', label: 'notice' })
+    await world.core.router.call('findings.markSeen', { ids: [a] })
+    const events: ApiEvent[] = []
+    world.core.events.subscribe((event) => events.push(event))
+
+    await world.core.router.call('findings.markUnseen', { ids: ['nope'] })
+    expect(events.filter((e) => e.type === 'changed' && e.scope === 'opportunities')).toEqual([])
+
+    await world.core.router.call('findings.markUnseen', { ids: [a] })
+    expect(events.filter((e) => e.type === 'changed' && e.scope === 'opportunities')).toHaveLength(1)
+  })
+})
+
 describe('what the triage changes is told to the screens', () => {
   it('a pass that judged something says the opportunities changed', async () => {
     world = makeWorld({ settings: { lookBackDays: 7 } })

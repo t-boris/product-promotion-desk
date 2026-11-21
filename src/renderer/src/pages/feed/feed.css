@@ -11,6 +11,73 @@
   overflow-y: auto;
 }
 
+/* The tabs and the filters are one bar. Over the Noted feed the page scrolls as a whole and the bar stays at the top, as a toolbar does (translucent, like the
+   window's own). It bleeds over the page's side gutters so the cards do not show beside it. */
+.feed-bar {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.feed-bar.sticky {
+  position: sticky;
+  /* The page scrolls inside padding of --gutter, and sticky measures from the inside of that padding: so the bar goes up by the gutter to meet the top of the window. */
+  top: calc(-1 * var(--gutter));
+  z-index: 20;
+  margin: 0 calc(-1 * var(--gutter));
+  padding: var(--space-2) var(--gutter);
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+
+/* The Noted feed: a centred column of cards (680 px) and the analysis in a rail beside it (300 px). Under 1100 px the rail is a strip above the feed. */
+.feed-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 680px) 300px;
+  justify-content: center;
+  align-items: start;
+  gap: var(--space-5);
+}
+.feed-columns[data-analysis='open'] {
+  grid-template-columns: minmax(0, 680px);
+}
+.feed-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* The rail stays in view under the bar while the cards go by. */
+.feed-rail {
+  position: sticky;
+  top: 80px;
+  min-width: 0;
+}
+.feed-full-analysis {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.feed-full-analysis .feed-analysis {
+  align-self: stretch;
+  margin-bottom: 0;
+}
+.feed-full-close {
+  align-self: flex-end;
+}
+@media (max-width: 1100px) {
+  .feed-columns {
+    grid-template-columns: minmax(0, 680px);
+  }
+  .feed-rail {
+    position: static;
+    order: -1;
+  }
+}
+
 /* ───────────── Lists: the four tabs, and the quiet line of what the AI judged not relevant at their right ───────────── */
 
 .feed-lists {
@@ -213,13 +280,18 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-4);
   background: var(--surface-1);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
 }
+/* Unread: the accent edge and a bold title. Read: the card is quieter, so what is still to be read stands out in a long feed. */
 .stream-card[data-unseen='true'] {
   border-left: 3px solid var(--accent);
+}
+.stream-card[data-unseen='false'] .stream-title {
+  font-weight: var(--fw-medium);
+  color: var(--text-2);
 }
 /* One of the account's own posts: the comments under it come first, so the card stands out from the rest. */
 .stream-card[data-own='true'] {
@@ -227,20 +299,84 @@
   border-color: var(--good, var(--accent));
   box-shadow: 0 0 0 1px var(--good, var(--accent));
 }
+
+/* The head, as a feed has it: the round mark of the platform, who and where from (and when), then the owner's marks of the post. */
 .stream-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+.stream-mark {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  background: var(--accent-tint);
+  color: var(--accent-on-tint);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+}
+.stream-who {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+}
+.stream-who-line {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-3);
+  align-items: baseline;
+  gap: 0 var(--space-2);
 }
-.stream-when {
-  margin-left: auto;
+.stream-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+}
+.stream-head-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+/* The unread dot: the same accent as the card's edge, for a card whose edge is out of sight. */
+.stream-dot {
+  width: 8px;
+  height: 8px;
+  margin-right: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+.card-menu-pop {
+  min-width: 200px;
 }
 .stream-title {
   margin: 0;
-  font-size: var(--fs-body);
+  font-size: 18px;
+  line-height: var(--lh-title);
   font-weight: var(--fw-semibold);
   overflow-wrap: anywhere;
+}
+/* The text of the post itself, five lines of it and "Read more". */
+.stream-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+.stream-body {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: var(--lh-prose);
+}
+.stream-body.cut {
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .stream-brief {
   margin: 0;
@@ -256,10 +392,69 @@
   align-items: center;
   gap: var(--space-2) var(--space-3);
 }
-.stream-foot {
+.stream-unread p {
+  margin: 0;
+  flex: 1 1 260px;
+}
+/* The bar under the post: what the site showed, then what the owner can do. */
+.stream-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--line);
+}
+.stream-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: var(--control-h);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+  font-variant-numeric: tabular-nums;
+}
+/* What the AI read of the thread, folded into one line that opens in place. */
+.stream-reading {
+  border-top: 1px solid var(--line);
+  padding-top: var(--space-2);
+}
+.stream-reading > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-h);
+  cursor: pointer;
+  list-style: none;
+}
+.stream-reading > summary::-webkit-details-marker {
+  display: none;
+}
+.stream-reading-label {
+  flex: none;
+  font-weight: var(--fw-medium);
+}
+.stream-reading-line {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stream-reading > summary .icon {
+  flex: none;
+  margin-left: auto;
+  color: var(--text-2);
+}
+.stream-reading[open] > summary .icon {
+  transform: rotate(180deg);
+}
+.stream-reading-body {
+  display: flex;
+  flex-direction: column;
   gap: var(--space-2);
 }
 .finding-thread-item .finding-thread-actions {
@@ -374,22 +569,32 @@
 
 /* What the AI read in full: the pictures of the post, the analysis of the thread and the topics it raises. */
 .stream-pictures {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  margin: var(--space-3) 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+  margin: var(--space-1) 0;
+}
+/* Two or more pictures share two columns, as a feed lays them out. */
+.stream-pictures[data-columns='2'] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .stream-picture {
   margin: 0;
-  max-width: 100%;
+  min-width: 0;
 }
 .stream-picture img {
   display: block;
-  max-width: 100%;
-  max-height: 320px;
+  width: 100%;
+  height: auto;
+  max-height: 420px;
+  object-fit: contain;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: var(--surface-2);
+}
+.stream-pictures[data-columns='2'] .stream-picture img {
+  height: 220px;
+  object-fit: cover;
 }
 .stream-picture.missing {
   padding: var(--space-3);
@@ -568,12 +773,19 @@
   display: grid;
   gap: var(--space-2);
 }
-/* The heading of the stream under the panel: the posts are a different section. */
+/* The heading of the stream: the posts are a different section from the analysis beside them; "Mark all as read" is at its right. */
+.feed-stream-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
 .feed-stream-title {
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
-  margin: 0 0 var(--space-2);
+  margin: 0;
   font-size: 11px;
   font-weight: var(--fw-semibold);
   letter-spacing: 0.08em;
@@ -719,4 +931,138 @@
 .post-assist-ask .input {
   flex: 1;
   min-width: 200px;
+}
+
+/* ───────────── The compact analysis of the right rail ───────────── */
+
+.feed-analysis.compact {
+  gap: var(--space-2);
+  margin-bottom: 0;
+  padding: var(--space-3) var(--space-4);
+  border-top-width: 3px;
+}
+.feed-analysis.compact .feed-analysis-title {
+  font-size: var(--fs-title);
+}
+.feed-analysis.compact .feed-analysis-summary {
+  font-size: var(--fs-body);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.feed-rail-tools {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+.feed-rail-themes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.feed-rail-theme {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) 0;
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--line);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.feed-rail-theme:hover:not(:disabled) .feed-theme-name {
+  color: var(--accent-on-tint);
+}
+.feed-rail-theme:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.feed-rail-theme-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.feed-rail-theme-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.feed-rail-theme .feed-theme-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ───────────── Under the bar: each channel's watching line, and the one sentence on how the AI watches, behind a small button ───────────── */
+
+.feed-notes-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-2) var(--space-4);
+}
+.feed-notes-row > details[open] {
+  flex: 1 1 100%;
+}
+.feed-help > summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-h);
+  height: var(--control-h);
+  border-radius: var(--control-radius);
+  color: var(--text-2);
+  cursor: pointer;
+  list-style: none;
+}
+.feed-help > summary::-webkit-details-marker {
+  display: none;
+}
+.feed-help > summary:hover {
+  background: var(--hover-fill);
+  color: var(--text-1);
+}
+.feed-help[open] > .hint {
+  margin-top: var(--space-1);
+}
+
+/* Under 1100 px the rail is a strip above the feed: the title and the way to the full analysis on one line; the period, the themes and the numbers are in the full
+   analysis. (After the rules of the compact card, so that these win.) The progress of a running analysis and its errors stay. */
+@media (max-width: 1100px) {
+  .feed-analysis.compact {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-4);
+    padding: var(--space-2) var(--space-4);
+    border-top-width: 1px;
+  }
+  .feed-analysis.compact .feed-analysis-head {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .feed-analysis.compact .feed-analysis-heading {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 var(--space-3);
+  }
+  .feed-analysis.compact .feed-rail-tools,
+  .feed-analysis.compact .feed-analysis-summary,
+  .feed-analysis.compact .feed-rail-themes,
+  .feed-analysis.compact [data-testid='feed-analysis-basis'],
+  .feed-analysis.compact [data-testid='feed-analysis-empty'] {
+    display: none;
+  }
 }

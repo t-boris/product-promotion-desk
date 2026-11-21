@@ -22,7 +22,8 @@ import { usePaging } from '../list-paging'
 import { ShowMore } from './ShowMore'
 import { FindingDetail } from './feed/FindingDetail'
 import { useFeedCards } from './feed/useFeedCards'
-import { useFindings, useMarkSeenOnShow } from './feed/useFindings'
+import { useFindings } from './feed/useFindings'
+import { unreadIds } from './feed/read-marks'
 import { useWatchingContext } from './feed/useWatching'
 import { productWatching } from './feed/watching-line'
 import { selectionAfterDismiss } from './inbox/inbox-groups'
@@ -90,6 +91,8 @@ function FeedScreen({ product }: { product: Product }) {
   const [chosenChannel, setChosenChannel] = useState<Id | ''>('')
   // The posts of a theme (or the one post of a question) of the analysis card: the stream below shows only them until the owner shows all again.
   const [focus, setFocus] = useState<FeedFocus | null>(null)
+  // The whole analysis, opened from the compact card of the right rail: it takes the width above the feed until it is closed.
+  const [analysisOpen, setAnalysisOpen] = useState(false)
   // The tags the owner picked (on a card or in the analysis): the stream shows only the posts that carry every one of them.
   const [pickedTags, setPickedTags] = useState<string[]>([])
   const [olderFor, setOlderFor] = useState<Id | null>(null)
@@ -135,9 +138,6 @@ function FeedScreen({ product }: { product: Product }) {
   const order = useMemo(() => listed.map((row) => row.id), [listed])
   const [selectedId, setChosen] = useListSelection(order, selectionAfterDismiss)
   const selected = selectedId !== null ? listedById.get(selectedId) : undefined
-  // A notice that is shown is a notice the owner has seen: asked of the core once.
-  useMarkSeenOnShow(selected !== undefined && isFindingRow(selected) ? selected : undefined, findings.markSeen)
-
   // The one filled button belongs to the selected item while it offers a main action.
   const main = useMainActionOwner(selectedId ? [selectedId] : [])
 
@@ -194,15 +194,18 @@ function FeedScreen({ product }: { product: Product }) {
   const error = channelsQuery.error ?? feed.error ?? findings.error
   const summary = watching !== null && channelsQuery.data !== undefined ? productWatching(channels, watching) : null
   const judged = judgedLine(findings.counts)
+  // The Noted posts are one feed that scrolls with the whole page (the filters stay at the top); every other list is panes that scroll each on its own.
+  const streaming = !viewingOlder && !auditing && list === null
+  const unreadShown = useMemo(() => unreadIds(findingRows), [findingRows])
   const tabLabel = (id: FeedTab, label: string): ReactNode => {
     if (id !== 'noted') return `${label} ${states[id]}`
     return (
       <>
         {label} {noted}
         {unseen > 0 && (
-          <span className="count neutral" title={`${unseen} not seen yet`} data-testid="feed-noted-unseen">
+          <span className="count neutral" title={`${unseen} unread`} data-testid="feed-noted-unseen">
             <span aria-hidden="true">{unseen}</span>
-            <span className="sr-only">{`${unseen} not seen yet`}</span>
+            <span className="sr-only">{`${unseen} unread`}</span>
           </span>
         )}
       </>
@@ -213,7 +216,7 @@ function FeedScreen({ product }: { product: Product }) {
     <Page
       title="Feed"
       subtitle={`${product.name} · What happens in your channels, and what the AI proposes`}
-      fill
+      fill={!streaming}
       actions={
         viewingOlder || auditing ? (
           <Button onClick={backToFeed} data-testid="feed-back">
@@ -249,7 +252,7 @@ function FeedScreen({ product }: { product: Product }) {
           )}
 
           {!auditing && channelsQuery.data !== undefined && channels.length > 0 && (
-            <>
+            <div className={`feed-bar${streaming ? ' sticky' : ''}`} data-testid="feed-bar">
               <div className="feed-lists" data-testid="feed-lists">
                 <SegmentedControl<FeedTab>
                   label="State"
@@ -331,7 +334,7 @@ function FeedScreen({ product }: { product: Product }) {
                 {/* The chosen channel's page in the browser of its account, to look around signed in as it (DEC-028). It sits in this row, which wraps: a sentence of it takes a line. */}
                 {channelId !== null && <OpenChannelBrowser channelId={channelId} testId="opportunities-browse" />}
               </div>
-            </>
+            </div>
           )}
 
           {!auditing && channelsQuery.data !== undefined && <ReadingNotes channels={channels} source={list === null ? 'new_post' : source} channelId={channelId} watching={watching} />}
@@ -421,27 +424,63 @@ function FeedScreen({ product }: { product: Product }) {
           )}
 
           {!auditing && list === null && empty === null && ready && findingRows.length > 0 && (
-            <div className="feed-scroll" data-testid="feed-noted-scroll">
-              <FeedAnalysisCard productId={product.id} channelId={channelId} onFocus={setFocus} pickedTags={pickedTags} onTag={pickTag} />
-              {focus !== null && (
-                <div className="feed-focus" data-testid="feed-focus">
-                  <span className="muted small">{focusLine(focus.label, findingRows.length, focus.ids.size)}</span>
-                  <Button variant="secondary" onClick={() => setFocus(null)} data-testid="feed-focus-clear">
-                    Show all posts
+            <div className="feed-columns" data-analysis={analysisOpen ? 'open' : 'closed'} data-testid="feed-noted-scroll">
+              {analysisOpen && (
+                <div className="feed-full-analysis" data-testid="feed-full-analysis">
+                  <Button variant="quiet" className="feed-full-close" onClick={() => setAnalysisOpen(false)} data-testid="feed-analysis-close-full">
+                    Close full analysis
                   </Button>
+                  {/* Showing the posts of a theme closes the full analysis: the posts are below it, and a press that seemed to do nothing would be worse. */}
+                  <FeedAnalysisCard
+                    productId={product.id}
+                    channelId={channelId}
+                    onFocus={(next) => {
+                      setFocus(next)
+                      if (next !== null) setAnalysisOpen(false)
+                    }}
+                    pickedTags={pickedTags}
+                    onTag={pickTag}
+                  />
                 </div>
               )}
-              <h3 className="feed-stream-title" data-testid="feed-stream-title">
-                Posts <span className="muted">{findingRows.length}</span>
-              </h3>
-              <FindingStream
-                rows={pagedFindings.visible}
-                markSeen={findings.markSeen}
-                setStarred={findings.setStarred}
-                tags={pickedTags}
-                onTag={pickTag}
-                footer={<ShowMore hidden={pagedFindings.hidden} total={pagedFindings.total} onMore={pagedFindings.more} testId="feed-show-more" />}
-              />
+              <div className="feed-main">
+                {focus !== null && (
+                  <div className="feed-focus" data-testid="feed-focus">
+                    <span className="muted small">{focusLine(focus.label, findingRows.length, focus.ids.size)}</span>
+                    <Button variant="secondary" onClick={() => setFocus(null)} data-testid="feed-focus-clear">
+                      Show all posts
+                    </Button>
+                  </div>
+                )}
+                <div className="feed-stream-head">
+                  <h3 className="feed-stream-title" data-testid="feed-stream-title">
+                    Posts <span className="muted">{findingRows.length}</span>
+                  </h3>
+                  <Button
+                    variant="quiet"
+                    onClick={() => void findings.markSeen(unreadShown)}
+                    disabled={unreadShown.length === 0}
+                    title="Marks every post the filters show as read"
+                    data-testid="feed-mark-all-read"
+                  >
+                    {unreadShown.length === 0 ? 'Mark all as read' : `Mark all as read (${unreadShown.length})`}
+                  </Button>
+                </div>
+                <FindingStream
+                  rows={pagedFindings.visible}
+                  markSeen={findings.markSeen}
+                  markUnseen={findings.markUnseen}
+                  setStarred={findings.setStarred}
+                  tags={pickedTags}
+                  onTag={pickTag}
+                  footer={<ShowMore hidden={pagedFindings.hidden} total={pagedFindings.total} onMore={pagedFindings.more} testId="feed-show-more" />}
+                />
+              </div>
+              {!analysisOpen && (
+                <aside className="feed-rail" data-testid="feed-rail">
+                  <FeedAnalysisCard productId={product.id} channelId={channelId} onFocus={setFocus} pickedTags={pickedTags} onTag={pickTag} compact onOpenFull={() => setAnalysisOpen(true)} />
+                </aside>
+              )}
             </div>
           )}
 

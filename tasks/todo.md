@@ -1138,3 +1138,65 @@ Cause: the click guard of a publish mission refused by NAME every control named 
 - Not proven on the real site: Reddit's shadow-DOM Reply button under a comment and the composer that opens after it on the live page (the tests use a fake page whose opener button reveals the form).
 - Differences from the plan: emptiness is judged by the existing DOM read of the page (`handsOff`), not by the snapshot's editable values, because the snapshot has no value for contenteditable text boxes (Reddit's composer is one).
 - Residual risks (DEC-051): the held-text read is not atomic with the mouse event; closed shadow roots and cross-origin frames cannot be read; a control that acts with nothing typed (a bookmark "Save", a repost menu) is no longer refused by its name.
+
+
+## 0.40.0 — maximize a picture and download it (owner, 2026-11-21: "Add ability to maximize images and download them") — PLAN, waits for the owner's yes
+One shared mechanism, not a button per screen (owner rule: AI-first/one mechanism). Every picture the application shows (Feed post pictures, the pictures of a post in the editor and its preview, the picture library and "Make a picture" candidates, the quick-post card, the account's profile picture, a page screenshot of a look) opens in one viewer when pressed; the viewer has Download.
+
+Viewer (renderer, one component `PictureViewer`, opened by a wrapper `ViewablePicture` that replaces the bare `<img>` in the places above):
+- Press a picture (cursor zoom-in, also reachable by keyboard: it is a button) → a dark overlay with the picture fitted to the window (never cropped, never upscaled past its size), name/size line, buttons `Download` and `Close`.
+- Esc, a press on the dark area or Close closes it. When the picture belongs to a group (several pictures of one post, several attachments of one draft) the arrows ← → and on-screen Previous/Next walk through the group; the line says "2 of 5".
+- Download opens the system's Save dialog with a proposed file name (the picture's own name; for a post picture "post-picture-N.<ext>"), writes the ORIGINAL file (not the screen copy), then says "Saved to <path>" with Show in Finder. Cancelling the dialog says nothing and changes nothing.
+
+Core / main:
+- `MediaTools.save(source, suggestedName)` (port) — Electron `dialog.showSaveDialog` + copy of the stored file, or the decoded bytes of a data address (screenshot, live card); returns the saved path or null when cancelled. The owner picks the folder; nothing is written anywhere else.
+- API: `media.save {id}`, `findings.savePicture {id}`, `profiles.savePicture {id}`, `pictures.saveDataUrl {dataUrl, name}` — one core function behind them; the id is checked against the stored file (the renderer never names a path).
+- Larger screen copy for the viewer: `THUMB_MAX` 960 → 2048 in `media/service.ts` and `finding-pictures.ts` (the default stays 240, so every small picture is unchanged); a picture smaller than the window is shown at its own size. A kind the system image tools cannot read (webp from Reddit) is shown as the file, as now.
+
+Steps:
+- [ ] J1. `MediaTools.save` (port + Electron implementation + fake), `media.save`, `findings.savePicture`, `profiles.savePicture`, `pictures.saveDataUrl` in core and `shared/api.ts`; suggested names and extensions from the stored mime/name (pure function, tested).
+- [ ] J2. `PictureViewer` + `ViewablePicture` + pure helpers (fit, group walk, file name, "Saved to" line); styles with the shared tokens; focus trap, Esc, restore focus to the pressed picture.
+- [ ] J3. Replace the bare `<img>` in PostReading (Feed), PostEditorParts, PostPreview, MakePicture, OwnPicture, PictureSlot (live card), ProfileDetail, PageReportView, PostsList thumbnail (opens the first picture of that post).
+- [ ] J4. Tests (names/extensions, save refuses an unknown id, cancel returns null, group walk, keyboard); `npm run verify`; look at the real screen: Feed picture, editor attachment, quick card, Download on a real file.
+
+
+## 0.39.0 — posts are marked as read after they are read (owner, 2026-11-21: "Нужно отметить посты как прочитаные", then "В смысле отмечать после прочтения") — BUILT as 0.39.0 together with the new Feed look below
+Found in the real data: 91 of the 92 noted posts are already marked seen, because the stream marks a card the moment half of it passes through the window (IntersectionObserver, no wait) and the list marks a row the moment it is selected. Scrolling or arrowing past posts marks all of them, so "Not seen", "Not seen first", the accent edge, the bold title and the count of the Noted tab say nothing. The 440 posts the AI judged not relevant are not tracked on purpose (the owner audits them).
+
+Rule (pure, one place, used by the stream and the list): a post counts as read when it has been on show for 3 seconds in a row — at least half of its card in the window (stream) or its row selected (list) — while the application window is in front. Leaving the screen before that starts the count again. Nothing the AI does marks a post.
+
+Owner's controls, because a clock can be wrong either way:
+- on every card a `Mark as unread` / `Mark as read` button next to the star (a press is final: the clock never undoes it);
+- `Mark all as read` above the list, for the posts the current filters show (never the hidden ones);
+- the words say Unread / Read (the old "Not seen" wording goes: filter chip, sort "Unread first", the count of the Noted tab, screen-reader text). The AI's own reading keeps its words ("The AI has read it").
+- The 91 posts already marked stay as they are: nothing is reset behind the owner's back.
+
+Core: `findings.markSeen` stays (ids, chunks of 500, `updated_at` untouched); new `findings.markUnseen {ids}`. No migration (`seen_at` is the field), no new table.
+
+Steps:
+- [x] K1. Pure rule + hook `useReadAfterShow` (timer, window focus, visibility) replacing `useMarkSeenOnShow` and the observer of the stream card; tested with fake timers (3 s on show reads, 2 s does not, leaving resets, hidden window does not count, a post marked once is not asked twice).
+- [x] K2. `findings.markUnseen` (core + api + handler + test); renderer helpers `markRead/markUnread/markAllRead`.
+- [x] K3. Card button, list header button, wording change, tests of the pure parts (which rows "Mark all" takes, the counts after a press).
+- [x] K4. `npm run verify`; look at the real screen: scroll fast through the stream (nothing marked), stay on one card (marked after 3 s), Mark as unread, Mark all as read.
+
+
+## 0.39.0 (revised) — the Feed looks like a feed: Reddit's structure, Facebook's action bar (owner, 2026-11-21: "И визуально улучши - сделай feed примерно как в facebook или redit") — BUILT as 0.39.0 (owner approved the layout with "lf")
+Seen on the real screen (0.38.4): the Noted stream gets about 500 px of an 880 px window — the title, the two lines of explanation, the tabs, the filters and the Analysis card sit above it and only the stream scrolls inside its own small box; every card is a long block (head, title, tags, brief, the AI's thread panel, every comment, three rows of buttons), so one post fills the screen and the owner cannot scan. The read-marks plan above becomes part of this release (the Mark as read button and the unread dot live in the new card).
+Layout (renderer only; no data, engine or migration change; every existing function stays: star, tags, Explain, Read the post, Translate, reply window, Check with AI, Open post):
+- Page: one scroll for the whole Feed (no inner box). The title row stays; the tabs and the filters (All / Starred / Unread, search, sort, channel) are one sticky bar; the paragraph about how the AI watches goes behind a small "?" ; "Each channel" stays a fold.
+- Two columns on a wide window: the feed column (max 680 px, centred) and a right rail (300 px) with the Analysis of the Feed as a compact card (the top themes, 24 hours / 7 days / 30 days, Analyze again, "Open full analysis" shows the whole card in place). Under 1100 px the rail becomes a one-line strip above the feed.
+- Card: head = round channel mark, community name in bold, author, time, badges, then unread dot, star, a ⋯ menu (Mark as read/unread, Check again with AI, Open post); title 18 px semibold; tags as small chips; the post's own text (stored since 0.38.0) cut to five lines with Read more, else the AI's one-line brief; pictures across the full card width (a grid for two to four); a footer bar: score and comment count as the site showed them (read-only), Explain, Translate, Reply, Open post; the AI's reading of the thread (what people say, topics, comments) is ONE collapsed line under the footer — "What people say: … ▾" — and opens in place; the reply window and the Explain panel open under the footer as now.
+- Read cards are quieter (normal weight title, muted); unread keep the accent edge and bold title.
+Steps:
+- [x] L1. Page structure: single scroll, sticky filter bar, two columns, the rail with the compact analysis, the narrow-window strip (feed.css, Feed.tsx, FeedAnalysisCard compact mode).
+- [x] L2. The card: head, title, body with Read more, pictures grid, footer bar, collapsed thread, ⋯ menu (FindingStream.tsx split into smaller parts; pure helpers for the clamp, the grid and the counts line, tested).
+- [x] L3. Read marks (K1-K3 of the 0.39.0 read plan above) inside the new card and bar.
+- [x] L4. `npm run verify`; real-screen check at 1320 px and at a narrow window; compare with the screenshot of 0.38.4 (feed-now.png, feed-scrolled2.png in the scratchpad).
+Order: this release (0.39.0) first, then pictures maximize/download (0.40.0): the picture grid of the new card is where the viewer opens from.
+
+### Review (0.39.0, 2026-11-21): the Feed looks like a feed, posts are read after they are read
+Built: one scroll for the whole Noted feed, a sticky filter bar, a 680 px feed column with a 300 px rail (compact Analysis; "Open full analysis" shows the whole card above the feed; under 1100 px the rail is a one-line strip), the new card (round channel mark, bold community, author, time, badges, unread dot, star, ⋯ menu; 18 px title; tag chips; the post's own text cut to five lines with Read more, else the AI's brief; pictures across the card, two columns for two or more; a bar with the site's score and comments, Explain, Translate, Reply, Open post; the AI's reading of the thread folded into one line "What people say: …"), read marks (3 s on show with the window in front, leaving resets, Mark as read / unread in the ⋯ menu and final, Mark all as read for the posts the filters show, Unread wording), core `findings.markUnseen`.
+Proven: `npm run verify` (5,823 tests, typecheck, lint, build); the real app at 1320 px and at 900 px (screenshots through the app's own debugging port): sticky bar, rail, strip, picture grid, Read more, menu, folded thread, full analysis, the list of posts judged not relevant unchanged; read rule live: a card marked unread by hand stays unread after 5 s fully on show; the same card, released, stays unread while off screen for 5 s, and becomes read between 2.5 and 4 s after it is on show.
+Choices that go beyond the plan: the list of posts judged not relevant is never marked (it holds only skipped posts, which are not tracked), so `useMarkSeenOnShow` and `unseenToMark` are gone; "Mark all as read" takes every unread post the filters match, not only the pages loaded; the menu has Read the post but not Open post (the bar has it); the time on a card is the post's time; the full analysis closes when the owner presses a theme (its posts are below it); a post marked unread by hand is remembered in the window's storage (up to 500) so a restart does not give it back to the clock.
+Not proven live: the window not in front / page hidden stop the count (unit-tested only); Mark all as read on real unread posts (the real data had none left); a card taller than the window (half of the window counts); light theme; Facebook/Instagram/Threads cards with no site numbers (the bar shows none).
+Real data touched by the check: one unread post was read by scrolling past it for three seconds; another was marked unread and read again by the rules above. All 93 noted posts are read now.

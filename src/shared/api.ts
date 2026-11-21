@@ -368,6 +368,8 @@ export interface ApiMethods {
   'findings.counts': [{ productId: Id; /** Only the findings of this channel; every channel of the product when absent. */ channelId?: Id }, FindingCounts]
   /** The owner looked at these findings: they stop counting as unseen. */
   'findings.markSeen': [{ ids: Id[] }, void]
+  /** The owner asks to read these again: they count as unseen once more. */
+  'findings.markUnseen': [{ ids: Id[] }, void]
   'findings.setStarred': [{ id: Id; starred: boolean }, void]
   /** The pictures the AI named for a post, in the order the page showed them. */
   'findings.pictures': [{ id: Id }, FindingPicture[]]

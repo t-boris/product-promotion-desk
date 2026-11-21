@@ -84,6 +84,9 @@ const GLYPHS = {
       <path d="M8 6.5v3M8 11.25h.01" />
     </>
   ),
+  // The score of a post and the number of its comments, on the card of the Feed.
+  arrowUp: <path d="M8 13V3.5M4 7.25 8 3.25l4 4" />,
+  comment: <path d="M2.75 3.75h10.5v6.5H8.4L5 13v-2.75H2.75z" />,
   sparkles: (
     <>
       <path d="M6.5 2.75 7.6 6l3.25 1.1L7.6 8.2 6.5 11.45 5.4 8.2 2.15 7.1 5.4 6z" />

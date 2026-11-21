@@ -1,4 +1,5 @@
 import type { Channel, Id } from '../../../../shared/types'
+import { Icon } from '../../icons'
 import { Hint, More } from '../../ui'
 import { channelHref } from '../../route'
 import { BROWSER_WATCH_NOTE, OWN_POSTS_NO_CHECK } from '../channels/own-posts'
@@ -49,18 +50,30 @@ export function ReadingNotes({ channels, source, channelId, watching }: { channe
           </div>
         </div>
       )}
-      {own.length > 0 && watching !== null && (
-        <More label="Each channel">
-          <ul className="feed-watching-list" data-testid="feed-watching-channels">
-            {own.map((channel) => (
-              <li key={channel.id} data-testid={`feed-watching-${channel.id}`}>
-                <strong>{channel.target}</strong> · {watchingLine(channel, watching).text}
-              </li>
-            ))}
-          </ul>
-        </More>
+      {((own.length > 0 && watching !== null) || inBrowser.length > 0) && (
+        <div className="feed-notes-row">
+          {own.length > 0 && watching !== null && (
+            <More label="Each channel">
+              <ul className="feed-watching-list" data-testid="feed-watching-channels">
+                {own.map((channel) => (
+                  <li key={channel.id} data-testid={`feed-watching-${channel.id}`}>
+                    <strong>{channel.target}</strong> · {watchingLine(channel, watching).text}
+                  </li>
+                ))}
+              </ul>
+            </More>
+          )}
+          {/* How the AI watches a channel in the browser: one sentence, behind a small button so it does not take a line of the screen. */}
+          {inBrowser.length > 0 && (
+            <details className="feed-help" data-testid="feed-browser-watch-help">
+              <summary aria-label="How the AI watches these channels" title="How the AI watches these channels">
+                <Icon name="info" />
+              </summary>
+              <Hint data-testid="feed-browser-watch">{BROWSER_WATCH_NOTE}</Hint>
+            </details>
+          )}
+        </div>
       )}
-      {inBrowser.length > 0 && <Hint data-testid="feed-browser-watch">{BROWSER_WATCH_NOTE}</Hint>}
       {unread.length > 0 &&
         (channelId !== null ? (
           <Hint data-testid="own-posts-no-check">{OWN_POSTS_NO_CHECK}</Hint>

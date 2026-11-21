@@ -185,6 +185,9 @@ export function registerFlowApi({ core, store, review, monitor, drafting, sendin
     'findings.markSeen': ({ ids }) => {
       if (findings.markSeen(checkIds(ids)) > 0) findings.notify()
     },
+    'findings.markUnseen': ({ ids }) => {
+      if (findings.markUnseen(checkIds(ids)) > 0) findings.notify()
+    },
     'findings.pictures': ({ id }) => findings.pictures(requireText(id, 'The post')),
     'findings.picture': ({ id, side }) => pictures.dataUrl(requireText(id, 'The picture'), side),
     // "Check with AI" on a post: the AI opens it in the account's browser and reads it in full. Nothing is replied to, sent or approved.

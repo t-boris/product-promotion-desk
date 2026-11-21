@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { ChangeScope } from '../../../../shared/api'
 import type { FindingCard, FindingCounts, FindingLabel, Id } from '../../../../shared/types'
 import { call, useQuery } from '../../hooks'
 import { FEED_LIMIT } from './feed-filter'
-import { buildFindingRows, unseenToMark, type FindingRow } from './finding-rows'
+import { buildFindingRows, type FindingRow } from './finding-rows'
 
 // There is no change scope of its own for findings: a check that judged posts ends by changing its channel (and the opportunities it opened),
 // so the lists follow those; what the owner does here (marking seen) reloads them directly.
@@ -24,8 +24,10 @@ export interface Findings {
   error: string | null
   /** A list is as long as the core returns: older findings exist and are not listed. */
   capped: boolean
-  /** Marks the findings seen, then reloads what counts them. Never throws: a failure is `error`. */
+  /** Marks the findings read, then reloads what counts them. Never throws: a failure is `error`. */
   markSeen: (ids: Id[]) => Promise<void>
+  /** Marks the findings unread again, then reloads what counts them. Never throws: a failure is `error`. */
+  markUnseen: (ids: Id[]) => Promise<void>
   /** Stars a post or takes its star off, then reloads the notices. Never throws: a failure is `error`. */
   setStarred: (id: Id, starred: boolean) => Promise<void>
 }
@@ -34,7 +36,7 @@ const NO_CARDS: FindingCard[] = []
 
 /**
  * What the AI judged of the product's posts (DEC-040): the notices (the Noted list), the counts (the badge of the tab, the quiet "judged not
- * relevant" line) and, only once the owner asks to look at them, the posts judged not relevant. Read-only except `markSeen`.
+ * relevant" line) and, only once the owner asks to look at them, the posts judged not relevant. Read-only except what the owner marks: read, unread, starred.
  */
 export function useFindings(productId: Id, options: { skipped: boolean; channelId: Id | null }): Findings {
   const notices = useQuery('findings.list', { productId, labels: NOTICE, limit: FEED_LIMIT }, SCOPES)
@@ -48,19 +50,22 @@ export function useFindings(productId: Id, options: { skipped: boolean; channelI
 
   const reloadNotices = notices.reload
   const reloadCounts = counts.reload
-  const markSeen = useCallback(
-    async (ids: Id[]): Promise<void> => {
-      try {
-        await call('findings.markSeen', { ids })
-        setMarkError(null)
-        reloadNotices()
-        reloadCounts()
-      } catch (e) {
-        setMarkError(e instanceof Error ? e.message : String(e))
-      }
-    },
+  const mark = useCallback(
+    (api: 'findings.markSeen' | 'findings.markUnseen') =>
+      async (ids: Id[]): Promise<void> => {
+        try {
+          await call(api, { ids })
+          setMarkError(null)
+          reloadNotices()
+          reloadCounts()
+        } catch (e) {
+          setMarkError(e instanceof Error ? e.message : String(e))
+        }
+      },
     [reloadNotices, reloadCounts]
   )
+  const markSeen = useMemo(() => mark('findings.markSeen'), [mark])
+  const markUnseen = useMemo(() => mark('findings.markUnseen'), [mark])
 
   const setStarred = useCallback(
     async (id: Id, starred: boolean): Promise<void> => {
@@ -84,26 +89,7 @@ export function useFindings(productId: Id, options: { skipped: boolean; channelI
     error: notices.error ?? counts.error ?? skipped.error ?? markError,
     capped: (notices.data?.length ?? 0) >= FEED_LIMIT || (skipped.data?.length ?? 0) >= FEED_LIMIT,
     markSeen,
+    markUnseen,
     setStarred
   }
-}
-
-/**
- * Marks the notice on show as seen, once: when the owner selects it (or it is the first row of the list) and it has not been seen. The
- * ids already asked for are kept, so a render, a reload or the arrow keys going back to the row never ask the core again. A refusal is
- * shown (`Findings.error`) and not retried on its own; the next visit to the screen asks again.
- */
-export function useMarkSeenOnShow(shown: FindingRow | undefined, markSeen: (ids: Id[]) => Promise<void>): void {
-  const asked = useRef(new Set<Id>())
-  const latest = useRef(markSeen)
-  latest.current = markSeen
-  const id = shown?.id
-  const wanted = shown !== undefined && unseenToMark(shown, asked.current).length > 0
-  useEffect(() => {
-    if (!shown || !wanted) return
-    const ids = unseenToMark(shown, asked.current)
-    for (const found of ids) asked.current.add(found)
-    void latest.current(ids)
-    // Only the row on show and whether it is still to be marked decide when the core is asked.
-  }, [id, wanted])
 }

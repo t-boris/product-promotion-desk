@@ -7,7 +7,7 @@ export type StreamSort = 'newest' | 'oldest' | 'unseen' | 'channel'
 export const STREAM_SORTS: readonly { id: StreamSort; label: string }[] = [
   { id: 'newest', label: 'Newest first' },
   { id: 'oldest', label: 'Oldest first' },
-  { id: 'unseen', label: 'Not seen first' },
+  { id: 'unseen', label: 'Unread first' },
   { id: 'channel', label: 'By channel' }
 ]
 
@@ -37,7 +37,7 @@ export function searchStream(rows: readonly FindingRow[], query: string): Findin
   })
 }
 
-// ───────────── The filter of the one list: all, the posts the owner starred, the posts not seen yet ─────────────
+// ───────────── The filter of the one list: all, the posts the owner starred, the posts not read yet ─────────────
 
 export type StreamFilter = 'all' | 'own' | 'starred' | 'unseen'
 
@@ -45,7 +45,7 @@ export const STREAM_FILTERS: readonly { id: StreamFilter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'own', label: 'Your posts' },
   { id: 'starred', label: 'Starred' },
-  { id: 'unseen', label: 'Not seen' }
+  { id: 'unseen', label: 'Unread' }
 ]
 
 /** The rows the filter keeps, in the order they were given. */

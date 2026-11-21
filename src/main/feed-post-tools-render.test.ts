@@ -85,12 +85,13 @@ describe('the tags on a post', () => {
 })
 
 describe('the tools of a post', () => {
-  it('are Explain, Read the post and Translate with one language list, Russian first and chosen until the owner chooses another', () => {
+  it('are Explain and Translate on the bar of the card with one language list, Russian first and chosen until the owner chooses another; Read the post is in its menu', () => {
     const out = stream([finding()])
     expect(out).toContain('data-testid="post-tools"')
-    for (const id of ['post-explain', 'post-read', 'post-translate', 'post-language']) expect(out).toContain(`data-testid="${id}"`)
+    for (const id of ['post-explain', 'post-translate', 'post-language']) expect(out).toContain(`data-testid="${id}"`)
     expect(out).toContain('Explain')
-    expect(out).toContain('Read the post')
+    // "Read the post" is an entry of the card's menu (closed here), not a button of the bar.
+    expect(out).not.toContain('data-testid="post-read"')
     expect(out).toMatch(/data-testid="post-translate"[^>]*>Translate</)
     const options = [...out.matchAll(/<option value="([^"]+)"/g)].map((m) => m[1])
     expect(options).toEqual(['Russian', 'English', 'Ukrainian', 'Spanish', 'German', 'French', 'Portuguese', 'Italian', 'Turkish', 'Polish'])

@@ -1,9 +1,14 @@
 import type { Finding, FindingPicture } from '../../../../shared/types'
 import { useQuery } from '../../hooks'
+import { pictureColumns } from './stream-card'
+
+/** The longest side, in pixels, of the copy of a picture the card shows. */
+const SINGLE_SIDE = 960
+const SHARED_SIDE = 640
 
 /** One picture of a post: the file the application fetched, a note while it is on its way, or why the site would not give it. */
-function PostPicture({ picture }: { picture: FindingPicture }) {
-  const shown = useQuery('findings.picture', { id: picture.id, side: 480 }, [], { skip: picture.state !== 'ready' })
+function PostPicture({ picture, side }: { picture: FindingPicture; side: number }) {
+  const shown = useQuery('findings.picture', { id: picture.id, side }, [], { skip: picture.state !== 'ready' })
   if (picture.state === 'failed') {
     return (
       <div className="stream-picture missing muted small" data-testid="stream-picture-failed">
@@ -37,10 +42,13 @@ export function PostPictures({ findingId }: { findingId: string }) {
   const pictures = useQuery('findings.pictures', { id: findingId }, ['opportunities'])
   const list = pictures.data ?? []
   if (list.length === 0) return null
+  const columns = pictureColumns(list.length)
+  // One picture is as wide as the card, so it is fetched larger; two or more share two columns.
+  const side = columns === 1 ? SINGLE_SIDE : SHARED_SIDE
   return (
-    <div className="stream-pictures" data-testid="stream-pictures" aria-label="Pictures of the post">
+    <div className="stream-pictures" data-testid="stream-pictures" data-columns={columns} aria-label="Pictures of the post">
       {list.map((picture) => (
-        <PostPicture key={picture.id} picture={picture} />
+        <PostPicture key={picture.id} picture={picture} side={side} />
       ))}
     </div>
   )

@@ -9,7 +9,7 @@ import type { Channel, FeedAnalysisView, Finding, FindingCard, FindingComment, O
 import { FeedList } from '../renderer/src/pages/feed/FeedList'
 import { FindingDetail } from '../renderer/src/pages/feed/FindingDetail'
 import { FindingStream } from '../renderer/src/pages/feed/FindingStream'
-import { AnalysisBody, FeedAnalysisCard } from '../renderer/src/pages/feed/FeedAnalysisCard'
+import { AnalysisBody, FeedAnalysisCard, RailBody } from '../renderer/src/pages/feed/FeedAnalysisCard'
 import { FullReply } from '../renderer/src/pages/feed/FullReply'
 import { ReplyActions } from '../renderer/src/pages/feed/ReplyActions'
 import { ReplyComposer } from '../renderer/src/pages/feed/ReplyComposer'
@@ -208,8 +208,8 @@ describe('FeedList with findings', () => {
     expect(out).toContain('Asks for tools like ours.')
   })
 
-  it('says a post not seen yet is not seen, in words and in a bold title, and a seen one is quiet', () => {
-    expect(out).toContain('<span class="sr-only">Not seen yet. </span><strong>Best birth chart apps?</strong>')
+  it('says an unread post is unread, in words and in a bold title, and a read one is quiet', () => {
+    expect(out).toContain('<span class="sr-only">Unread. </span><strong>Best birth chart apps?</strong>')
     expect(out).toContain('data-unseen="true"')
     expect(out).toContain('data-unseen="false"')
     expect(out).not.toContain('<strong>&lt;b&gt;Mod announcement')
@@ -445,8 +445,9 @@ describe('FindingStream: the Noted posts as cards', () => {
     expect(out.match(/data-testid="stream-topic"/g)).toHaveLength(2)
     expect(out).toContain('Idea for your post: A short post on the twelve houses.')
     expect(out.match(/Idea for your post/g)).toHaveLength(1)
-    expect(out).toContain('Check again with AI')
+    // A post the AI read has no "Check with AI" button on the card: "Check again with AI" is an entry of its menu.
     expect(out).not.toContain('data-testid="stream-unread"')
+    expect(out).not.toContain('data-testid="stream-check-ai"')
   })
 
   it('shows no analysis block for a post read with nothing to say about it', () => {
@@ -543,6 +544,31 @@ describe('the card of the analysis of the Feed', () => {
   it('names the channel when it is about one', () => {
     const out = html(createElement(FeedAnalysisCard, { productId: 'p1', channelId: 'c1', onFocus: () => {}, pickedTags: [], onTag: () => {} }))
     expect(out).toContain('What is going on in this channel')
+  })
+
+  it('is a compact card in the rail beside the feed: the period, Analyze, and a way to the full analysis, without the tabs', () => {
+    const out = html(createElement(FeedAnalysisCard, { productId: 'p1', channelId: null, onFocus: () => {}, pickedTags: [], onTag: () => {}, compact: true, onOpenFull: () => {} }))
+    expect(out).toContain('data-testid="feed-analysis-rail"')
+    expect(out).toContain('feed-analysis compact')
+    expect(out).toContain('Analysis of the feed')
+    expect(out).toContain('Analyze the feed')
+    for (const label of ['24 hours', '7 days', '30 days']) expect(out).toContain(label)
+    expect(out).toContain('data-testid="feed-analysis-open-full"')
+    expect(out).toContain('Open full analysis')
+    expect(out).not.toContain('feed-analysis-tab-')
+    expect(out).not.toContain('data-testid="feed-analysis"')
+  })
+
+  it('lists the top three themes of the rail, each a press that shows its posts, and when it was made', () => {
+    const many = view({ themes: [theme(), theme({ id: 't2', name: 'Which app to use' }), theme({ id: 't3', name: 'Transits' }), theme({ id: 't4', name: 'Fourth theme' })] })
+    const out = html(createElement(RailBody, { view: many, stale: false, onFocus: () => {} }))
+    expect(out).toContain('People ask how to read a chart.')
+    expect(out.match(/data-testid="feed-rail-theme"/g)).toHaveLength(3)
+    expect(out).toContain('What the houses mean')
+    expect(out).not.toContain('Fourth theme')
+    expect(out).toMatch(/data-testid="feed-analysis-basis">Made /)
+    expect(out).not.toContain('newer posts not included')
+    expect(html(createElement(RailBody, { view: many, stale: true, onFocus: () => {} }))).toContain('newer posts not included')
   })
 
   it('offers the three periods, the week chosen', () => {

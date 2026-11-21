@@ -95,7 +95,7 @@ export function FeedList({
 }
 
 /**
- * One finding: a ring or a filled dot (not seen yet, bold title), the channel and how long ago the post was written, the title, and under
+ * One finding: a ring or a filled dot (unread, bold title), the channel and how long ago the post was written, the title, and under
  * it the AI's line on the post, with the First look tag where the look-back found it. The row is neutral like every row; its selection is
  * the quiet fill. The AI's line is page-derived text: it is a text node, never markup.
  */
@@ -118,7 +118,7 @@ function FindingRowButton({ row, selected, onSelect, now }: { row: FindingRow; s
         <span className="inbox-row-time">{relativeTime(row.at, now)}</span>
       </span>
       <span className="inbox-row-text">
-        {row.unseen && <span className="sr-only">Not seen yet. </span>}
+        {row.unseen && <span className="sr-only">Unread. </span>}
         {row.unseen ? <strong>{row.title}</strong> : row.title}
       </span>
       <span className="feed-row-ai">

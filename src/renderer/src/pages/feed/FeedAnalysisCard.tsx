@@ -125,6 +125,55 @@ export function AnalysisBody({
 
 type AnalysisTab = 'themes' | 'tags'
 
+/** How many themes the compact card of the right rail lists: the full analysis has the rest. */
+const RAIL_THEMES = 3
+
+/** The compact body of the right rail: the AI's summary, the top themes as one press each (a press narrows the stream to its posts), and when it was made. */
+export function RailBody({ view, stale, onFocus }: { view: FeedAnalysisView; stale: boolean; onFocus: (focus: FeedFocus | null) => void }) {
+  const widest = Math.max(0, ...view.themes.map((t) => t.posts))
+  return (
+    <>
+      {view.summary !== '' && (
+        <p className="feed-analysis-summary" data-testid="feed-analysis-summary">
+          {view.summary}
+        </p>
+      )}
+      <ol className="feed-rail-themes" data-testid="feed-rail-themes">
+        {view.themes.slice(0, RAIL_THEMES).map((theme, index) => (
+          <li key={theme.id}>
+            <button
+              type="button"
+              className="feed-rail-theme"
+              onClick={() => onFocus({ label: theme.name, ids: new Set(theme.postIds) })}
+              disabled={theme.postIds.length === 0}
+              title="Show these posts"
+              data-testid="feed-rail-theme"
+              data-theme-id={theme.id}
+            >
+              <span className="feed-theme-rank" aria-hidden="true">
+                {index + 1}
+              </span>
+              <span className="feed-rail-theme-main">
+                <span className="feed-rail-theme-line">
+                  <span className="feed-theme-name">{theme.name}</span>
+                  <span className="muted small">{theme.posts}</span>
+                </span>
+                <span className="feed-theme-bar" aria-hidden="true">
+                  <span style={{ width: `${barPercent(theme.posts, widest)}%` }} />
+                </span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ol>
+      <p className="muted small" data-testid="feed-analysis-basis">
+        Made {formatTime(view.at)}
+        {stale ? ' · newer posts not included' : ''}
+      </p>
+    </>
+  )
+}
+
 /**
  * "What is going on in your channels": the AI's reading of the posts the Feed holds for a period: the themes they raise, with how many posts, comments and score
  * each has (counted by the application, not by the AI), what grows, and the questions nobody answered. Opening a theme narrows the stream below to its posts.
@@ -136,7 +185,9 @@ export function FeedAnalysisCard({
   channelId,
   onFocus,
   pickedTags,
-  onTag
+  onTag,
+  compact = false,
+  onOpenFull
 }: {
   productId: Id
   channelId: Id | null
@@ -144,6 +195,9 @@ export function FeedAnalysisCard({
   /** The tags the stream is narrowed to, and what pressing a tag here does. */
   pickedTags: readonly string[]
   onTag: (name: string) => void
+  /** The card of the Feed's right rail: the summary and the top themes, with "Open full analysis" (`onOpenFull`) in place of the tabs, the other themes and the questions. */
+  compact?: boolean
+  onOpenFull?: () => void
 }) {
   const [days, setDays] = useState<FeedPeriod>(7)
   const [all, setAll] = useState(false)
@@ -155,6 +209,47 @@ export function FeedAnalysisCard({
     return made
   })
   const view = analysis.data ?? null
+  if (compact) {
+    return (
+      <section className="feed-analysis compact" data-testid="feed-analysis-rail" aria-label="What is going on in your channels">
+        <header className="feed-analysis-head">
+          <div className="feed-analysis-heading">
+            <span className="feed-analysis-eyebrow" data-testid="feed-analysis-eyebrow">
+              Analysis of the feed
+            </span>
+            <h3 className="feed-analysis-title">{channelId === null ? 'What is going on in your channels' : 'What is going on in this channel'}</h3>
+          </div>
+        </header>
+        <div className="feed-rail-tools">
+          <SegmentedControl
+            label="Period"
+            name="feed-analysis-period"
+            testIdPrefix="feed-analysis-period"
+            options={PERIOD_OPTIONS.map((p) => ({ value: String(p.value), label: p.label }))}
+            value={String(days)}
+            onChange={(value) => {
+              setDays(Number(value) as FeedPeriod)
+              onFocus(null)
+            }}
+          />
+          <Button variant={view === null ? 'primary' : 'secondary'} onClick={() => void analyze()} disabled={running.busy} data-testid="feed-analysis-run">
+            {running.busy ? 'Analyzing…' : view === null ? 'Analyze the feed' : 'Analyze again'}
+          </Button>
+        </div>
+        {running.busy && <AiProgressPanel subject={productId} />}
+        <ErrorNote error={running.error} />
+        {view === null && !running.busy && (
+          <p className="muted small" data-testid="feed-analysis-empty">
+            {introWords(days)}
+          </p>
+        )}
+        {view !== null && <RailBody view={view} stale={view.stale && !running.busy} onFocus={onFocus} />}
+        <Button variant="secondary" onClick={onOpenFull} data-testid="feed-analysis-open-full">
+          Open full analysis
+        </Button>
+      </section>
+    )
+  }
   return (
     <section className="feed-analysis" data-testid="feed-analysis" aria-label="What is going on in your channels">
       <header className="feed-analysis-head">

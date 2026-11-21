@@ -21,7 +21,6 @@ import {
   notedEmptyKind,
   opportunityListOf,
   unseenNoticeCount,
-  unseenToMark,
   visibleFindings,
   type FindingRow
 } from '../renderer/src/pages/feed/finding-rows'
@@ -209,7 +208,7 @@ describe('the numbers of the Noted tab', () => {
     expect(notedCount(undefined, rows, 'c1')).toBe(1)
   })
 
-  it('counts the notices not seen yet the same way: the core for the product, the rows for a channel', () => {
+  it('counts the unread notices the same way: the core for the product, the rows for a channel', () => {
     expect(unseenNoticeCount(counts({ unseenNotices: 5 }), rows, null)).toBe(5)
     expect(unseenNoticeCount(counts({ unseenNotices: 5 }), rows, 'c2')).toBe(1)
     expect(unseenNoticeCount(undefined, rows, null)).toBe(2)
@@ -235,39 +234,6 @@ describe('judgedLine', () => {
     expect(judgedLine(counts({ skipped: 4, pending: 12 }))?.waiting).toBe('12 waiting for the AI')
     expect(judgedLine(counts({ skipped: 0, pending: 1 }))).toEqual({ text: 'Judged not relevant: 0', canShow: false, waiting: '1 waiting for the AI' })
     expect(judgedLine(counts({ pending: 0 }))?.waiting).toBeNull()
-  })
-})
-
-describe('marking a notice seen', () => {
-  it('asks for the notice on show once, when it is not seen', () => {
-    const asked = new Set<string>()
-    const shown = rowOf({ id: 'f1', seenAt: null })
-    const first = unseenToMark(shown, asked)
-    expect(first).toEqual(['f1'])
-    for (const id of first) asked.add(id)
-    // Every render and every reload after that.
-    expect(unseenToMark(shown, asked)).toEqual([])
-    expect(unseenToMark(rowOf({ id: 'f1', seenAt: null }), asked)).toEqual([])
-  })
-
-  it('asks once for each notice as the owner moves through the list, and not again when the owner comes back', () => {
-    const asked = new Set<string>()
-    const walk = ['f1', 'f2', 'f3', 'f2', 'f1', 'f3'].map((id) => rowOf({ id, seenAt: null }))
-    let calls = 0
-    for (const shown of walk) {
-      const wanted = unseenToMark(shown, asked)
-      calls += wanted.length
-      for (const id of wanted) asked.add(id)
-    }
-    expect(calls).toBe(3)
-  })
-
-  it('does not ask for a notice that is seen, nothing on show, or a post judged not relevant', () => {
-    const asked = new Set<string>()
-    expect(unseenToMark(rowOf({ id: 'f1', seenAt: '2026-11-15T09:00:00.000Z' }), asked)).toEqual([])
-    expect(unseenToMark(undefined, asked)).toEqual([])
-    expect(unseenToMark(rowOf({ id: 'f2', label: 'skip' }), asked)).toEqual([])
-    expect(unseenToMark(rowOf({ id: 'f3', label: null, stage: 'pending' }), asked)).toEqual([])
   })
 })
 
@@ -403,7 +369,7 @@ describe('the stream: filters', () => {
     rowOf({ id: 'd', starredAt: '2026-11-15T09:30:00.000Z' })
   ]
 
-  it('keeps every post, the starred ones, the own ones or the ones not seen yet, in the order given', () => {
+  it('keeps every post, the starred ones, the own ones or the unread ones, in the order given', () => {
     expect(ids(filterStream(rows, 'all'))).toEqual(['a', 'b', 'c', 'd'])
     expect(ids(filterStream(rows, 'starred'))).toEqual(['a', 'd'])
     expect(ids(filterStream(rows, 'own'))).toEqual(['c'])
@@ -437,7 +403,7 @@ describe('the stream: search and sort', () => {
     rowOf({ id: 'mid', target: 'r/alpha', title: 'Rising sign?', relation: 'Worth a reply: asks what a rising sign is.', postedAt: '2026-11-12T08:00:00.000Z' })
   ]
 
-  it('sorts newest first, oldest first, not seen first and by channel, the same way every time', () => {
+  it('sorts newest first, oldest first, unread first and by channel, the same way every time', () => {
     expect(ids(sortStream(rows, 'newest'))).toEqual(['new', 'mid', 'old'])
     expect(ids(sortStream(rows, 'oldest'))).toEqual(['old', 'mid', 'new'])
     expect(ids(sortStream(rows, 'unseen'))).toEqual(['new', 'mid', 'old'])

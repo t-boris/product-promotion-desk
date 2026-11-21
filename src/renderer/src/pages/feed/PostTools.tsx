@@ -26,7 +26,7 @@ export function useReadingLanguage(): [ReadingLanguage, (language: ReadingLangua
 }
 
 /** The language the owner reads in, from the fixed list: the one dropdown of the card's tools. */
-function LanguagePicker({ value, onChange, disabled }: { value: ReadingLanguage; onChange: (language: ReadingLanguage) => void; disabled: boolean }) {
+export function LanguagePicker({ value, onChange, disabled }: { value: ReadingLanguage; onChange: (language: ReadingLanguage) => void; disabled: boolean }) {
   return (
     <select
       className="input post-tools-language"
@@ -61,7 +61,8 @@ export function PostToolsRow({
   translated,
   onTranslate,
   onShowOriginal,
-  translating
+  translating,
+  compact = false
 }: {
   panel: PostPanel
   onPanel: (panel: PostPanel) => void
@@ -73,6 +74,8 @@ export function PostToolsRow({
   onTranslate: () => void
   onShowOriginal: () => void
   translating: boolean
+  /** The card's bar has "Read the post" in its menu and the text of the post on the card: the row then has Explain and Translate only. */
+  compact?: boolean
 }) {
   const translateLabel = translating ? 'Translating…' : translated ? 'Show original' : translation === null ? 'Translate' : translation.stale ? 'Translate again' : 'Show translation'
   return (
@@ -80,9 +83,11 @@ export function PostToolsRow({
       <Button variant={panel === 'explain' ? 'secondary' : 'quiet'} onClick={() => onPanel(panel === 'explain' ? null : 'explain')} aria-pressed={panel === 'explain'} data-testid="post-explain">
         Explain
       </Button>
-      <Button variant={panel === 'read' ? 'secondary' : 'quiet'} onClick={() => onPanel(panel === 'read' ? null : 'read')} aria-pressed={panel === 'read'} data-testid="post-read">
-        Read the post
-      </Button>
+      {!compact && (
+        <Button variant={panel === 'read' ? 'secondary' : 'quiet'} onClick={() => onPanel(panel === 'read' ? null : 'read')} aria-pressed={panel === 'read'} data-testid="post-read">
+          Read the post
+        </Button>
+      )}
       <Button variant="quiet" onClick={translated && !translating ? onShowOriginal : onTranslate} disabled={translating} data-testid="post-translate">
         {translateLabel}
       </Button>
