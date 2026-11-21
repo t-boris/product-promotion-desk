@@ -13,7 +13,7 @@
 // Nothing here approves or sends by itself: this file is not reached from the scheduler.
 
 import { ApiError, type DraftInput } from '../../shared/api'
-import { characterCount, formOf, platformLabel, renderForPlatform, sendProblems, type PostContent, type SendWays } from '../../shared/post-format'
+import { characterCount, formOf, judgedForFit, platformLabel, renderForPlatform, type PostContent, type SendWays } from '../../shared/post-format'
 import type {
   Channel,
   Draft,
@@ -35,7 +35,7 @@ import { normalizeDraftInput } from './draft-input'
 import type { DraftHelp } from './draft-help'
 import { SendBlockedError } from './gate'
 import type { ReviewFlow } from './review'
-import { chooseExecutor, sendWays } from './send-ways'
+import { chooseExecutor, sendFitProblems, sendWays } from './send-ways'
 import type { SendingFlow } from './sending'
 import { SEND_LOCKED_STATES, type FlowStore } from './store'
 import { errorMessage } from './util'
@@ -211,7 +211,8 @@ export class PostGroupsFlow {
       text: (input.text ?? '').trim(),
       link: (input.link ?? '').trim() || null,
       attachments: input.attachments ?? [],
-      markup: input.markup === 'markdown' ? 'markdown' : 'legacy'
+      markup: input.markup === 'markdown' ? 'markdown' : 'legacy',
+      ...(input.postType === 'quick' ? { postType: 'quick' as const } : {})
     }
     const product = this.core.repos.product(productId)
     const options: GroupChannelOption[] = []
@@ -452,8 +453,8 @@ export class PostGroupsFlow {
    * ways to carry them); for an older one the approval checks nothing, but a text longer than the platform takes is still said.
    */
   private fitProblems(platform: string, content: PostContent, ways: SendWays): string[] {
+    if (judgedForFit(content)) return sendFitProblems(this.core, content, platform, ways)
     const rendered = renderForPlatform(content, platform)
-    if (content.markup === 'markdown') return sendProblems(platform, rendered, ways)
     const limit = formOf(platform).textLimit
     return limit !== null && rendered.text.length > limit ? [`the text is longer than ${platformLabel(platform)} takes (${rendered.text.length} of ${limit} characters).`] : []
   }

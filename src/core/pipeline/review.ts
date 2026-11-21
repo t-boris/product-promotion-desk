@@ -6,13 +6,13 @@
 
 import { ApiError, type DraftInput } from '../../shared/api'
 import type { Approval, Draft, Id, Opportunity, OpportunityState } from '../../shared/types'
-import { noConnectorProblem, renderForPlatform, sendProblems } from '../../shared/post-format'
+import { judgedForFit, noConnectorProblem, renderForPlatform } from '../../shared/post-format'
 import type { PipelineHooks } from '../services'
 import type { Core } from '../core'
 import { attachmentProblem } from './attachments'
 import { inheritPostType, normalizeDraftInput } from './draft-input'
 import { contentHash, hashedIdentity } from './hash'
-import { sendWays } from './send-ways'
+import { sendFitProblems, sendWays } from './send-ways'
 import { OTHER_LOGIN_SPEAKS_REASON, SEND_LOCKED_STATES, SPEAKING_STATES, type FlowStore } from './store'
 
 export const FACTS_CHANGED_REASON = 'Product facts changed; review again'
@@ -97,11 +97,11 @@ export class ReviewFlow implements PipelineHooks {
     if (opp.kind === 'reply' && !draft.text.trim()) throw new ApiError('invalid_input', 'The reply is empty.')
     const problem = await attachmentProblem(draft.attachments)
     if (problem) throw new ApiError('invalid_attachment', problem)
-    // A post written in the post editor is approved only when its platform can show it and this application can send it (DEC-030).
-    if (draft.markup === 'markdown') {
+    // A post written in the post editor, and a quick post, is approved only when its platform can show it and this application can send it (DEC-030, DEC-044).
+    if (judgedForFit(draft)) {
       const channel = this.store.requireChannel(opp.channelId)
       const platform = channel.platform
-      const unfit = sendProblems(platform, renderForPlatform(draft, platform), sendWays(this.core, undefined, channel))
+      const unfit = sendFitProblems(this.core, draft, platform, sendWays(this.core, undefined, channel))
       if (unfit.length > 0) throw new ApiError('post_does_not_fit', unfit.join(' '))
     } else {
       const channel = this.store.requireChannel(opp.channelId)

@@ -539,9 +539,24 @@ describe('a click or a choice never touches the account\'s own profile (DEC-035)
 
   it('leaves what a new post\'s own wizard says alone', async () => {
     const t = setup(POST)
-    t.page.items.push({ ref: 'e9', role: 'button', name: 'Select from computer' }, { ref: 'e10', role: 'button', name: 'Add photos/videos' })
+    t.page.items.push({ ref: 'e9', role: 'button', name: 'Select from computer' }, { ref: 'e10', role: 'button', name: 'Add to your post' })
     await look(t)
     expect((await t.toolbox.call('browser_click', { ref: 'e10' })).isError).toBeFalsy()
+  })
+
+  it.each(['Add photos/videos', 'Add photo/video', 'Add Photos/Videos', 'Add photos / videos'])('a button that opens the file chooser is told as that, not as the profile: "%s" (Facebook\'s drop zone says it), and nothing reaches the page', async (name) => {
+    const t = setup(POST)
+    t.page.items.push({ ref: 'e9', role: 'button', name })
+    await look(t)
+    expect(await t.toolbox.call('browser_click', { ref: 'e9' })).toMatchObject({ isError: true, text: expect.stringContaining('file chooser') })
+    expect(t.page.steps).toEqual([])
+  })
+
+  it('still leaves the entry that only opens the picture step alone: "Photo/video" is not a chooser', async () => {
+    const t = setup(POST)
+    t.page.items.push({ ref: 'e9', role: 'button', name: 'Photo/video' })
+    await look(t)
+    expect((await t.toolbox.call('browser_click', { ref: 'e9' })).isError).toBeFalsy()
   })
 })
 

@@ -5,6 +5,7 @@
 // `![alt](media:<id>)`. Platforms have no typefaces; Reddit shows Markdown, the others show plain text. A draft that is not `markdown` (every
 // older draft, every reply, every text the AI wrote) is sent exactly as it is written.
 
+import type { PostType } from './quick-post'
 import type { Attachment, PostMarkup } from './types'
 
 /**
@@ -610,7 +611,16 @@ export interface PostContent {
   link: string | null
   attachments: Attachment[]
   markup: PostMarkup
+  /** `quick`: one picture and a caption, sent as it is written (DEC-046). Left out, the post is an article (an older draft is one). */
+  postType?: PostType
 }
+
+/**
+ * Whether the application judges what a platform takes of this post (its limits, its pictures, the way it is carried) before it is approved:
+ * a post written in the post editor, and a quick post, whose caption is plain words (`markup` legacy) but whose picture must fit the platform.
+ * An older draft is judged by its connector, as before (DEC-030). One answer for the approval, the gate, the group view and the preview.
+ */
+export const judgedForFit = (content: Pick<PostContent, 'markup' | 'postType'>): boolean => content.markup === 'markdown' || content.postType === 'quick'
 
 export interface RenderedPost {
   title: string | null
@@ -648,6 +658,8 @@ export function renderForPlatform(content: PostContent, platform: string, option
     const placed = placeLink(form, label, content.text, content.link)
     // Only what the link caused: a draft that was over the limit without it was never judged here, and is not now.
     const over = placed.text !== content.text && form.textLimit !== null && characterCount(content.text) <= form.textLimit && characterCount(placed.text) > form.textLimit
+    // A quick post is judged whole, by the rules of the platform, on the caption as it is written (plus the link where it is placed in the text).
+    const problems = content.postType === 'quick' ? formProblems(form, label, { title: content.title, text: placed.text, link: placed.link, pictures: content.attachments.length }) : over ? [`The text is ${characterCount(placed.text)} characters; ${label} allows ${form.textLimit}.`] : []
     return {
       title: content.title,
       text: placed.text,
@@ -656,11 +668,10 @@ export function renderForPlatform(content: PostContent, platform: string, option
       attachments: content.attachments,
       format: 'plain',
       notes: placed.note ? [placed.note] : [],
-      problems: over ? [`The text is ${characterCount(placed.text)} characters; ${label} allows ${form.textLimit}.`] : []
+      problems
     }
   }
   const notes: string[] = []
-  const problems: string[] = []
   const placed = pictureIdsIn(content.text).length
   const words = form.format === 'markdown' ? (options.pictures === 'keep' ? content.text.trim() : withoutInlinePictures(content.text)) : toPlainText(content.text)
   let title = content.title
@@ -674,13 +685,24 @@ export function renderForPlatform(content: PostContent, platform: string, option
     notes.push(`${label} has no title: the title is left out.`)
     title = null
   }
-  if (form.pictures === 'none' && content.attachments.length > 0) problems.push(`${label} takes no pictures with a post.`)
-  if (form.pictures === 'required' && content.attachments.length === 0) problems.push(`${label} needs a picture: add one.`)
-  if (content.attachments.length > form.maxPictures && form.maxPictures > 0) problems.push(`${label} takes at most ${form.maxPictures} picture${form.maxPictures === 1 ? '' : 's'}; this post has ${content.attachments.length}.`)
-  if (title && form.titleLimit !== null && characterCount(title) > form.titleLimit) problems.push(`The title is ${characterCount(title)} characters; ${label} allows ${form.titleLimit}.`)
-  if (form.textLimit !== null && characterCount(text) > form.textLimit) problems.push(`The text is ${characterCount(text)} characters; ${label} allows ${form.textLimit}.`)
-  if (text === '' && content.attachments.length === 0 && !title && !linked.link) problems.push('There is nothing to post: no words and no picture.')
+  const problems = formProblems(form, label, { title, text, link: linked.link, pictures: content.attachments.length })
   return { title, text, link: linked.link, shownLink: linked.shown, attachments: content.attachments, format: form.format, notes, problems }
+}
+
+/**
+ * What a platform's form refuses about a post whatever the way it is written: the pictures it takes, needs or refuses, the limits of its title and
+ * text (`text` is what is typed, the link included where it is placed in the text), a post with nothing in it. One list for a post written in
+ * the post editor and for a quick post, so the two cannot be judged by different rules.
+ */
+function formProblems(form: PlatformForm, label: string, post: { title: string | null; text: string; link: string | null; pictures: number }): string[] {
+  const problems: string[] = []
+  if (form.pictures === 'none' && post.pictures > 0) problems.push(`${label} takes no pictures with a post.`)
+  if (form.pictures === 'required' && post.pictures === 0) problems.push(`${label} needs a picture: add one.`)
+  if (post.pictures > form.maxPictures && form.maxPictures > 0) problems.push(`${label} takes at most ${form.maxPictures} picture${form.maxPictures === 1 ? '' : 's'}; this post has ${post.pictures}.`)
+  if (post.title && form.titleLimit !== null && characterCount(post.title) > form.titleLimit) problems.push(`The title is ${characterCount(post.title)} characters; ${label} allows ${form.titleLimit}.`)
+  if (form.textLimit !== null && characterCount(post.text) > form.textLimit) problems.push(`The text is ${characterCount(post.text)} characters; ${label} allows ${form.textLimit}.`)
+  if (post.text === '' && post.pictures === 0 && !post.title && !post.link) problems.push('There is nothing to post: no words and no picture.')
+  return problems
 }
 
 /** How this application can publish, as far as it decides what a post may hold: the AI browser carries pictures to any platform, and only on a send the owner presses (DEC-031). */

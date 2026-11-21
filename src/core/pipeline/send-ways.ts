@@ -1,9 +1,10 @@
 // How a send can be carried out, decided in one place: the approval's fit check, the gate's re-check at the send and the choice of the
 // executor ask the same question, so what the owner is told can be sent is what is sent (DEC-031).
 
-import { renderForPlatform, sendProblems, type SendWays } from '../../shared/post-format'
-import type { Channel, Draft } from '../../shared/types'
+import { judgedForFit, renderForPlatform, sendProblems, type PostContent, type SendWays } from '../../shared/post-format'
+import type { Channel } from '../../shared/types'
 import type { Core } from '../core'
+import { pictureFitProblems } from './picture-fit'
 
 export type Executor = 'connector' | 'ai_browser'
 
@@ -36,10 +37,22 @@ export function sendWays(core: Core, send?: { automatic: boolean; approvedBy: st
  * that is known to work. Legacy drafts are judged by their connector, as before: it refuses what it cannot carry. One function for the send
  * (`executorFor`) and for the group view that tells the owner "will go by".
  */
-export function chooseExecutor(ways: SendWays, draft: Pick<Draft, 'attachments' | 'markup' | 'title' | 'text' | 'link'>, platform: string): Executor {
+export function chooseExecutor(ways: SendWays, draft: PostContent, platform: string): Executor {
   if (!ways.aiBrowser) return 'connector'
   // No connector can post to this channel: whatever the draft holds, the AI browser is the only way.
   if (ways.noConnector) return 'ai_browser'
-  if (draft.attachments.length > 0 && (draft.markup !== 'markdown' || sendProblems(platform, renderForPlatform(draft, platform), { aiBrowser: false }).length === 0)) return 'connector'
+  if (draft.attachments.length > 0 && (!judgedForFit(draft) || sendProblems(platform, renderForPlatform(draft, platform), { aiBrowser: false }).length === 0)) return 'connector'
   return 'ai_browser'
+}
+
+/**
+ * Why a post that the application judges (`judgedForFit`: a post written in the post editor, a quick post) cannot be sent as it is, in words: what
+ * the platform cannot take (limits, pictures, what the render says), what the way the application publishes cannot carry, and, for a quick post,
+ * what the platform refuses about its one picture (type, size, shape). The approval, the gate and the group view ask this one function, so what the
+ * owner is told fits is what the press accepts (lesson 209). Empty when nothing stops it.
+ */
+export function sendFitProblems(core: Core, draft: PostContent, platform: string, ways: SendWays): string[] {
+  const problems = sendProblems(platform, renderForPlatform(draft, platform), ways)
+  if (draft.postType === 'quick') problems.push(...pictureFitProblems(core, platform, draft.attachments))
+  return problems
 }

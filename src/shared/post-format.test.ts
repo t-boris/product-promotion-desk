@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Attachment } from './types'
-import { RENDER_VERSION, linkPlacementOf, linkRuleOf, pictureIdsIn, removePictures, characterCount, formOf, parseBlocks, parseInline, renderForPlatform, sendProblems, toPlainText, withoutInlinePictures, type PostContent, type SendWays } from './post-format'
+import { RENDER_VERSION, judgedForFit, linkPlacementOf, linkRuleOf, pictureIdsIn, removePictures, characterCount, formOf, parseBlocks, parseInline, renderForPlatform, sendProblems, toPlainText, withoutInlinePictures, type PostContent, type SendWays } from './post-format'
 
 const picture = (id: string): Attachment => ({ name: `${id}.png`, path: `/data/media/${id}.png`, mime: 'image/png', sha256: id.repeat(8), mediaId: id })
 const post = (over: Partial<PostContent> = {}): PostContent => ({ title: 'A title', text: 'Some words', link: null, attachments: [], markup: 'markdown', ...over })
@@ -530,5 +530,71 @@ describe('a channel that no connector can post to (DEC-035): the AI browser is i
   it('does not change what a channel the app reads is told', () => {
     expect(via({ text: 'x', attachments: [picture('a')] }, 'instagram', { aiBrowser: false })).toMatch(/choose it in the settings/)
     expect(via({ title: 'T', text: 'words', attachments: [picture('a')] }, 'reddit', { aiBrowser: false })).toMatch(/Choose the AI browser in the settings/)
+  })
+})
+
+describe('a quick post (DEC-046): a caption sent as it is written, judged whole by the platform', () => {
+  const quick = (over: Partial<PostContent> = {}): PostContent => ({ title: null, text: 'A caption', link: null, attachments: [picture('a')], markup: 'legacy', postType: 'quick', ...over })
+
+  it('is judged by the application, as a post written in the editor is; an older draft and an article of the legacy kind are not', () => {
+    expect(judgedForFit(quick())).toBe(true)
+    expect(judgedForFit(post())).toBe(true)
+    expect(judgedForFit(post({ markup: 'legacy' }))).toBe(false)
+    expect(judgedForFit(post({ markup: 'legacy', postType: 'article' }))).toBe(false)
+  })
+
+  it('keeps the caption exactly: no mark of Markdown is read, no mark is removed, nothing is trimmed away inside', () => {
+    const caption = '# not a heading\n**not bold** and _not italic_, #tag @name 5*3=15 [not](a link)\n\n- not a list'
+    const rendered = renderForPlatform(quick({ text: caption }), 'instagram')
+    expect(rendered.text).toBe(caption)
+    expect(rendered.notes).toEqual([])
+    expect(rendered.title).toBeNull()
+    expect(rendered.problems).toEqual([])
+  })
+
+  it('counts the limit on the caption as it is written, by character: 2,200 on Instagram, 500 on Threads', () => {
+    expect(renderForPlatform(quick({ text: 'a'.repeat(2200) }), 'instagram').problems).toEqual([])
+    expect(renderForPlatform(quick({ text: 'a'.repeat(2201) }), 'instagram').problems).toEqual(['The text is 2201 characters; Instagram allows 2200.'])
+    expect(renderForPlatform(quick({ text: '🙂'.repeat(500) }), 'threads').problems).toEqual([])
+    expect(renderForPlatform(quick({ text: '🙂'.repeat(501) }), 'threads').problems).toEqual(['The text is 501 characters; Threads allows 500.'])
+    // the same words as a legacy draft that is NOT a quick post are not judged (its connector decides), as before
+    expect(renderForPlatform(quick({ text: 'a'.repeat(2201), postType: undefined }), 'instagram').problems).toEqual([])
+  })
+
+  it('counts a link that goes into the text (Threads, Facebook) and leaves out the one Instagram cannot show', () => {
+    const link = 'https://natalmystic.com'
+    expect(renderForPlatform(quick({ text: 'x'.repeat(480), link }), 'threads').problems).toEqual(['The text is 505 characters; Threads allows 500.'])
+    expect(renderForPlatform(quick({ text: 'x'.repeat(480), link }), 'threads').text).toBe(`${'x'.repeat(480)}\n\n${link}`)
+    expect(renderForPlatform(quick({ text: 'x'.repeat(2200), link }), 'instagram').problems).toEqual([])
+    expect(renderForPlatform(quick({ text: 'x'.repeat(2200), link }), 'instagram').link).toBeNull()
+  })
+
+  it('says Instagram needs a picture, and that a platform takes at most so many', () => {
+    expect(renderForPlatform(quick({ attachments: [] }), 'instagram').problems).toEqual(['Instagram needs a picture: add one.'])
+    expect(renderForPlatform(quick({ attachments: [] }), 'threads').problems).toEqual([])
+    expect(renderForPlatform(quick({ attachments: Array.from({ length: 11 }, (_, i) => picture(`p${i}`)) }), 'instagram').problems).toEqual(['Instagram takes at most 10 pictures; this post has 11.'])
+  })
+
+  it('a picture alone is a post, and a post with nothing in it is not', () => {
+    expect(renderForPlatform(quick({ text: '' }), 'instagram').problems).toEqual([])
+    expect(renderForPlatform(quick({ text: '', attachments: [] }), 'threads').problems).toEqual(['There is nothing to post: no words and no picture.'])
+  })
+
+  it('goes through sendProblems like a post of the editor: the way that carries the picture is said too', () => {
+    const rendered = renderForPlatform(quick(), 'instagram')
+    expect(sendProblems('instagram', rendered, { aiBrowser: true, noConnector: true })).toEqual([])
+    expect(sendProblems('instagram', rendered, { aiBrowser: false, noConnector: true })).toEqual([expect.stringMatching(/only through the AI browser/)])
+    expect(sendProblems('instagram', rendered, { aiBrowser: false })).toEqual([expect.stringMatching(/only through the AI browser/)])
+  })
+
+  it('reads the same caption the same way for every platform of the composer: one function, no kind guessed from an empty title', () => {
+    for (const platform of ['instagram', 'threads', 'facebook']) {
+      const asQuick = renderForPlatform(quick({ text: 'Same words #tag' }), platform)
+      expect(asQuick.text).toBe('Same words #tag')
+      expect(asQuick.title).toBeNull()
+      // a markdown post with no title, which is NOT a quick post, is read by the Markdown rules (marks removed): the kind is the field, not the title
+      expect(renderForPlatform(post({ title: null, text: '**Same** words' }), platform).text).toBe('Same words')
+      expect(renderForPlatform(quick({ text: '**Same** words' }), platform).text).toBe('**Same** words')
+    }
   })
 })

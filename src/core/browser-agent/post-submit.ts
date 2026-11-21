@@ -382,7 +382,7 @@ export function looksLikeProgress(name: string): boolean {
 const FILE_CHOOSER_NAME = new RegExp(
   [
     // select / choose / browse / upload / pick / add, then what, then where from: "Select files", "Upload a photo", "Select photos and videos from your device"
-    '^(?:select|choose|browse|upload|pick|add)(?:\\s+(?:a|an|the|your|some))?\\s+(?:files?|photos?|pictures?|images?|videos?|media)(?:\\s+(?:and|or|/)\\s+(?:files?|photos?|pictures?|images?|videos?))?(?:\\s+(?:from|on)\\s+(?:your\\s+|the\\s+|this\\s+)?(?:computer|device|mac|desktop|pc))?$',
+    '^(?:select|choose|browse|upload|pick|add)(?:\\s+(?:a|an|the|your|some))?\\s+(?:files?|photos?|pictures?|images?|videos?|media)(?:(?:\\s+(?:and|or)\\s+|\\s*/\\s*)(?:files?|photos?|pictures?|images?|videos?))?(?:\\s+(?:from|on)\\s+(?:your\\s+|the\\s+|this\\s+)?(?:computer|device|mac|desktop|pc))?$',
     // "Select from computer", "Upload from your device", "Browse"
     '^(?:browse|upload)(?:\\s+(?:from|on)\\s+(?:your\\s+|the\\s+|this\\s+)?(?:computer|device|mac|desktop|pc))?$',
     '^(?:select|choose|pick)\\s+(?:from|on)\\s+(?:your\\s+|the\\s+|this\\s+)?(?:computer|device|mac|desktop|pc)$',

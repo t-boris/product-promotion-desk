@@ -388,7 +388,7 @@ describe('where a post of a platform with a dialog for new posts may be worked o
 })
 
 describe('which control opens the system\'s file chooser', () => {
-  it.each(['Select from computer', 'Select From Computer', 'select from your computer', 'Select files', 'Choose file', 'Choose files', 'Choose a photo', 'Browse files', 'Upload file', 'Upload files', 'Upload a photo', 'Upload photos', 'Add photo', 'Add a picture', 'Select photos from your device', 'Select photos and videos from your device', 'Add media', 'Upload', 'Browse', 'Upload from computer', 'Upload from your device', 'Выбрать файл', 'Выбрать файлы', 'Выбрать с компьютера', 'Загрузить фото', 'Добавить изображение'])('the button %s does', (name) => {
+  it.each(['Select from computer', 'Select From Computer', 'select from your computer', 'Select files', 'Choose file', 'Choose files', 'Choose a photo', 'Browse files', 'Upload file', 'Upload files', 'Upload a photo', 'Upload photos', 'Add photo', 'Add a picture', 'Select photos from your device', 'Select photos and videos from your device', 'Add media', 'Upload', 'Browse', 'Upload from computer', 'Upload from your device', 'Add photos/videos', 'Add photo/video', 'Add Photos/Videos', 'Add photos / videos', 'Select photos/videos from your device', 'Выбрать файл', 'Выбрать файлы', 'Выбрать с компьютера', 'Загрузить фото', 'Добавить изображение'])('the button %s does', (name) => {
     expect(opensFileChooser({ role: 'button', name })).toBe(true)
     expect(opensFileChooser({ role: 'link', name })).toBe(true)
   })

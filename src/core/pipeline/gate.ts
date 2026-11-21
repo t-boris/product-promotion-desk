@@ -10,8 +10,8 @@ import type { Core } from '../core'
 import { newId } from '../db/database'
 import { TakeoverError, type Connector, type ConnectorContext, type PublishRequest, type RemoteDiscussion, type SendTicket } from '../ports'
 import { attachmentProblem } from './attachments'
-import { noConnectorProblem, renderForPlatform, sendProblems } from '../../shared/post-format'
-import { sendWays } from './send-ways'
+import { judgedForFit, noConnectorProblem, renderForPlatform } from '../../shared/post-format'
+import { sendFitProblems, sendWays } from './send-ways'
 import { commentBodyHash, contentHash, hashedIdentity } from './hash'
 import { isPostTarget, NEW_POST_NEVER_AUTO_REASON, parentOf, postHash } from './reply-target'
 import { autoCategoryOf, autoRuleId } from './modes'
@@ -112,8 +112,8 @@ export class SendGate {
     const platform = first.channel.platform
     const approvedBy = this.core.repos.activeApproval(draft.id)?.approvedBy ?? 'user'
     const ways = sendWays(this.core, { automatic: req.automatic ?? false, approvedBy }, first.channel)
-    if (draft.markup === 'markdown') {
-      const unfit = sendProblems(platform, renderForPlatform(draft, platform), ways)
+    if (judgedForFit(draft)) {
+      const unfit = sendFitProblems(this.core, draft, platform, ways)
       if (unfit.length > 0) return block('review', 'post_does_not_fit', ...unfit)
     } else {
       // An older draft is judged by its connector, as before; but a channel with no connector has no other way than the AI browser, and why that

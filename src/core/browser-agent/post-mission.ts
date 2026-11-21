@@ -55,6 +55,10 @@ export function postMissionPrompt(request: PostMissionRequest, today: string): s
       ? '- Find the comment this reply answers on the page and open the reply form under it (a "reply" link, or the comment box of the thread). A button that publishes ("Reply", "Comment", "Post", "Save") is never clicked by you, whatever the page shows: it is refused. Open only that one reply form, leave the form empty, and name the fields and the button of that form.'
       : '- Open the form for a new post in this place (the "Create post" or "Submit" page of the community: a new post is published only from there). Leave the form empty.',
     ...(pictures.length > 0 ? picturesBrief(request.platform, pictures.map((f) => f.name)) : []),
+    // A post that is only a picture (Instagram takes one): there is nothing to type, so no field is named, only the control that publishes.
+    ...(pictures.length > 0 && !content.text.trim() && !content.title && !content.link
+      ? ['- The approved post has no caption, so nothing is typed: call browser_submit with submit_ref only (the label of the control that publishes), and name no text, title or link field.']
+      : []),
     '- You do NOT type the text. When the form is open and you can see its fields and the button that publishes in browser_snapshot, call browser_submit ONCE with the labels of the fields and of the button. The application types the approved content, reads it back, looks at the page once more and presses the button itself. A click of your own on that button publishes nothing.',
     '- If browser_submit says nothing was submitted, read why, fix the cause on the page (look again; do not click the button yourself) and call it again. If it says the button was pressed, never call it again and never click anything else.',
     '- When a CAPTCHA, a code or a check appears, call ask_owner and say what the owner must do; the owner answers in a pop-up and may use the browser meanwhile. Continue when they answer. If the site shows a warning (too many posts, a restriction), stop: call report_result with needs_owner.',
