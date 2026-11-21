@@ -51,7 +51,7 @@ export const FIRST_LOOK = 'First look'
 
 /** What the action bar says in place of buttons: a finding has nothing to approve or send. */
 export function findingBarNote(label: FindingLabel | null): string {
-  return label === 'skip' ? 'The AI judged this post not relevant. Nothing is proposed for it.' : 'A notice has nothing to send. A post worth a reply is in To decide.'
+  return label === 'skip' ? 'The AI judged this post not relevant. Nothing is proposed for it.' : 'A notice has nothing to send. A post worth a reply is also in Worth a reply, with its thread.'
 }
 
 // ───────────── Rows ─────────────

@@ -94,7 +94,7 @@ describe('FindingDetail', () => {
     expect(out).not.toContain('<button')
     expect(out).not.toContain('<textarea')
     expect(out).not.toMatch(/Approve|Send|Save|Skip|Reject/)
-    expect(out).toContain('A notice has nothing to send. A post worth a reply is in To decide.')
+    expect(out).toContain('A notice has nothing to send. A post worth a reply is also in Worth a reply, with its thread.')
     expect(out.match(/<a /g)).toHaveLength(1)
   })
 

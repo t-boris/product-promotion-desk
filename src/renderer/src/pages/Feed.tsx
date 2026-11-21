@@ -374,7 +374,7 @@ function FeedScreen({ product }: { product: Product }) {
 
           {empty === 'nothing_noted' && (
             <EmptyState fill art="inbox" title="Nothing noted yet">
-              The AI looks at every post of your channels when it checks them. A post that is worth knowing about, but not worth a reply, is listed here. A post worth a reply is in To decide. Press Check now to look again.
+              The AI looks at every post of your channels when it checks them. A post that is worth knowing about, but not worth a reply, is listed here. A post worth a reply is also in Worth a reply, with its thread. Press Check now to look again.
             </EmptyState>
           )}
 

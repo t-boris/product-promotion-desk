@@ -270,7 +270,7 @@ describe('the words of a finding', () => {
   })
 
   it('says in the bar that a notice has nothing to send, and where a reply is', () => {
-    expect(findingBarNote('notice')).toBe('A notice has nothing to send. A post worth a reply is in To decide.')
+    expect(findingBarNote('notice')).toBe('A notice has nothing to send. A post worth a reply is also in Worth a reply, with its thread.')
     expect(findingBarNote('skip')).toBe('The AI judged this post not relevant. Nothing is proposed for it.')
   })
 })
