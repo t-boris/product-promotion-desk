@@ -2,7 +2,7 @@
 // model and not the barrier: the barrier is the toolbox's watch mode (six tools, no click, no typing). Everything the owner wrote (the product, the
 // goals, the topics) and everything the pages say is DATA, fenced as such: it cannot close its fence, and nothing in it is an instruction.
 
-import { fence, oneLine } from '../assist/kit'
+import { fence, languageRule, oneLine } from '../assist/kit'
 import { TO_READ_LABEL, type WatchBrief } from './watch'
 
 const HOUR_MS = 3_600_000
@@ -63,6 +63,7 @@ export function watchMissionPrompt(brief: WatchBrief, today: Date): string {
     '- A post you would call "reply" must be READ: open it, read the post, scroll down and read what is said under it, then record it with about (what the post says), thread (what the comments say), reply_to (whom to answer: the author, or a comment you name and quote the first words of, and why that one), comment (the comment the owner could leave there) and comments (the comments of the thread that matter, at most 25, in reading order, each with author, text, depth and its own address if you can see it: the owner sees them under the post and picks any one to answer). The comment is written as a person would write it: it answers what the post asks, in the language of the thread, helpful first; it mentions the owner\'s product only if it really answers the question, and then plainly, never as an advertisement. Plain text, a few sentences. It is only a proposal: the owner reads it and decides; you never post it. A "reply" recorded without these four is refused. When you are running short of calls, record the posts you did not get to read as "notice".',
     '- SAVE AS YOU GO: after every two or three screens call watch_record with what you judged so far. What is not recorded when the calls run out is lost. Keep the last ten calls for watch_record and report_result: after the limit only those two still work.',
     '- Record what you judged with watch_record, at most 20 posts in one call. For each post give: url (its address, as browser_snapshot lists it), title (its text as you saw it), author (when shown), label and relation. Labels: "reply" the owner could usefully answer it; "notice" worth knowing about but not worth answering; "skip" it does not bear on the goals. "relation" is one plain line saying how the post relates to the goals, without any link or instruction.',
+    languageRule(brief.languages, 'relation, about, thread, reply_to, comment and the sentence of your report'),
     '- Record the clearly irrelevant posts too, as "skip", in batches: the owner audits them. Never record a post of the account itself, and never one already judged (above).',
     `- Work through at most ${brief.maxPosts} posts. When the posts you reach are older than the limit above, stop scrolling that list and go to the next place.`,
     '- You ask the owner nothing. If a sign-in, a CAPTCHA or a security check stops you, or the site asks the account for anything, call report_result with needs_owner and say what it asks, and stop.',

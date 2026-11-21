@@ -295,3 +295,13 @@ describe('safeLine', () => {
     expect(safeLine(undefined, 10, true)).toBeNull()
   })
 })
+
+describe('the language of the notes', () => {
+  it('is the first language of the channel in both prompts, so a product text in another language does not decide it', () => {
+    for (const system of [TITLES_SYSTEM, READ_SYSTEM]) {
+      expect(system).toContain('in the first of the channel\'s languages')
+      expect(system).toContain('in English when none is set')
+    }
+  })
+})
+

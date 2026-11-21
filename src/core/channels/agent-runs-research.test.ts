@@ -24,6 +24,7 @@ const feed = {
 
 const brief = (over: Partial<ResearchBrief> = {}): ResearchBrief => ({
   platform: 'Instagram',
+  languages: ['en'],
   accountLabel: 'Main',
   product: { name: 'Natal Mystic', websiteUrl: null, description: null },
   about: ['It draws a natal chart from a birth date.'],

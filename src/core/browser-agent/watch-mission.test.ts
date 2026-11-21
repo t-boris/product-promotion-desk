@@ -10,6 +10,7 @@ const NOW = new Date('2026-11-15T12:00:00.000Z')
 
 const brief = (over: Partial<WatchBrief> = {}): WatchBrief => ({
   platform: 'Instagram',
+  languages: ['en'],
   channelTarget: '@natalmystic',
   channelUrl: 'https://www.instagram.com/natalmystic/',
   accountLabel: 'Natal Mystic Instagram',
@@ -67,6 +68,20 @@ describe('the brief of a watch mission', () => {
     const text = watchMissionPrompt(brief({ places: [{ label: 'The newest posts of r/x', url: 'https://www.reddit.com/r/x/new' }, { label: 'A post you called worth a reply before, not read yet: Houses?', url: 'https://www.reddit.com/r/x/comments/1' }] }), NOW)
     expect(text).toContain('Do these FIRST')
     expect(text).toContain('A post you called worth a reply before, not read yet: Houses?')
+  })
+
+  it('tells the AI to write what it records in the language the owner chose for the channel, whatever language the owner\'s own text is in', () => {
+    const russian = { name: 'Natal Mystic', websiteUrl: null, description: 'Ну, это такой продукт, который строит натальную карту.' }
+    const english = watchMissionPrompt(brief({ product: russian, languages: ['en'] }), NOW)
+    expect(english).toContain('the owner chose English for this channel')
+    expect(english).toContain('relation, about, thread, reply_to, comment and the sentence of your report in English')
+    expect(watchMissionPrompt(brief({ languages: ['ru'] }), NOW)).toContain('the owner chose Russian for this channel')
+    expect(watchMissionPrompt(brief({ languages: ['Polish'] }), NOW)).toContain('the owner chose Polish for this channel')
+  })
+
+  it('writes in English when the channel has no language chosen, and takes the first of several', () => {
+    expect(watchMissionPrompt(brief({ languages: [] }), NOW)).toContain('the owner chose English for this channel')
+    expect(watchMissionPrompt(brief({ languages: ['  ', 'de', 'en'] }), NOW)).toContain('the owner chose German for this channel')
   })
 
   it('tells the AI how many tool calls it has, to judge from the list and to save as it goes', () => {

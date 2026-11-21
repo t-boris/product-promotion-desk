@@ -151,6 +151,7 @@ export class BrowserWatchFlow {
       goals: product.goals.map((g) => ({ targetAction: g.targetAction, successMetrics: g.successMetrics })),
       topics: channel.settings.topics,
       queries,
+      languages: channel.settings.languages,
       places,
       firstLook,
       lookBackDays,

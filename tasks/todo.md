@@ -1013,3 +1013,10 @@ B1 as built (0.29.0): `watch_record` takes `comments` (author, text, depth, addr
 - Not done: the Log, Inbox and Overview lists still have no paging or sorting; the calendar shows everything by design.
 - Unproven live: threads exist only for posts a look has read since 0.29.0 (the owner presses Check now); the composer against the real engine; the Instagram/Threads Preview question below.
 - Waits for the owner: the Preview list in the new-post form shows only the channels ticked (Instagram); proposal: show every connected channel of the same kind, unticked ones marked "not selected".
+
+### 0.30.2: the AI writes in the language chosen for the channel (owner, 2026-11-21: "why did the AI start writing in Russian? Fix immediately", "respect the language that we choose for a channel")
+- [x] Cause: the watch and look-around briefs gave the AI the owner's Russian product description, goals and topics and no language to write in; the triage prompts showed a "Languages" line but never said to use it. 104 findings (looks of 01:00-03:00 UTC) are in Russian on channels set to English.
+- [x] `channelLanguage` / `languageRule` (assist/kit.ts): the first language of the channel, named in words, English when none; the watch brief (relation, about, thread, reply_to, comment, report), the look-around brief (topic, what, report) and both triage prompts say to write in it. `WatchBrief.languages` and `ResearchBrief.languages` are required, so a brief cannot forget it.
+- [x] Checked on the real Codex with a Russian description: `en` gives English, `ru` gives Russian. Without the rule the same small test also gave English, so the Russian of 01:00-03:00 was not reproduced in isolation: the diagnosis (Russian data and no rule) is the likely cause, not a proven one.
+- Not done: the 104 stored Russian findings stay Russian (the looks do not record a post twice); translating them is an AI job waiting for the owner's yes. Other prompts that write free text for the owner (account profile, channel plan, goals, passport claims) still follow "the language of the source" and are unchanged.
+

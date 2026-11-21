@@ -692,6 +692,7 @@ export class QuickHelp {
       product: { name: prepared.subject.product.name, websiteUrl: prepared.subject.product.website, description: prepared.subject.product.description },
       about: prepared.subject.approved.slice(0, RESEARCH_MAX_ABOUT).map((c) => oneLine(c.text, 200)),
       wish: wish === '' ? null : wish,
+      languages: channel.settings.languages,
       places,
       maxTopics: RESEARCH_MAX_TOPICS,
       focus: mode

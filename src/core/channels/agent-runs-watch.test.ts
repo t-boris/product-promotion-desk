@@ -23,6 +23,7 @@ const feed = {
 
 const brief = (over: Partial<WatchBrief> = {}): WatchBrief => ({
   platform: 'Instagram',
+  languages: ['en'],
   channelTarget: '@natalmystic',
   channelUrl: 'https://www.instagram.com/natalmystic/',
   accountLabel: 'Main',

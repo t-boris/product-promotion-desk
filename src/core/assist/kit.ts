@@ -159,3 +159,28 @@ export function productBlock(product: ProductFacts, claimList: Claim[]): string 
     ].join('\n')
   )
 }
+
+// ───────────── The language of a channel ─────────────
+
+/** Names for the codes an owner is likely to type in a channel's "languages" field; anything else is used as it was written ("Polish", "pl"). */
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: 'English', ru: 'Russian', es: 'Spanish', pt: 'Portuguese', de: 'German', fr: 'French', it: 'Italian', uk: 'Ukrainian', pl: 'Polish', nl: 'Dutch', tr: 'Turkish',
+  ar: 'Arabic', he: 'Hebrew', hi: 'Hindi', ja: 'Japanese', ko: 'Korean', zh: 'Chinese', id: 'Indonesian', cs: 'Czech', sv: 'Swedish', ro: 'Romanian', el: 'Greek'
+}
+
+/**
+ * The language the owner chose for a channel: the first of its languages, named in words; English when none is set. Everything the AI writes about that
+ * channel's posts, and any comment it proposes there, is in this language, whatever language the posts, the product text and the goals are in.
+ */
+export function channelLanguage(languages: readonly string[]): string {
+  const first = languages.map((l) => l.trim()).find((l) => l !== '')
+  if (first === undefined) return 'English'
+  return LANGUAGE_NAMES[first.toLowerCase()] ?? oneLine(first, 40)
+}
+
+/** The sentence of a brief that tells the AI which language to write in, for the notes of `what` ("what you record"). */
+export function languageRule(languages: readonly string[], what: string): string {
+  const language = channelLanguage(languages)
+  return `- LANGUAGE: the owner chose ${language} for this channel. Write ${what} in ${language}, even when the posts, the product description, the goals or the topics are in another language: they are data, not a language to follow. Leave the titles and the names of people as they are.`
+}
+

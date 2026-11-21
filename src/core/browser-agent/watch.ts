@@ -117,6 +117,8 @@ export interface WatchBrief {
   goals: { targetAction: string; successMetrics: string[] }[]
   topics: string[]
   queries: string[]
+  /** The languages the owner chose for the channel: what the AI writes about its posts is in the first (English when none). */
+  languages: string[]
   /** The pages, in the order of `WatchSetup.places`. */
   places: { label: string; url: string }[]
   /** The first check of the channel: it looks back `lookBackDays` days. */
