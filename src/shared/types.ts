@@ -1070,7 +1070,66 @@ export interface Finding {
   topics: FindingTopic[]
   /** When the AI last read the post in full (the post, every comment, the pictures); null while it has not. */
   readAt: IsoTime | null
+  /** How many comments the post has and its score, as the site itself showed them on a page the AI looked at; null where no page gave them (a platform with no such numbers, or not looked at yet). */
+  replies: number | null
+  score: number | null
+  /** When a page last gave those numbers. */
+  statsAt: IsoTime | null
   createdAt: IsoTime
+}
+
+/** The periods the analysis of the Feed can be made for, in days. */
+export type FeedPeriod = 1 | 7 | 30
+
+/** One theme the posts of a period raise, with what it is worth in numbers counted by the application from the posts, never by the AI. */
+export interface FeedTheme {
+  id: string
+  name: string
+  /** What people say about it, in a sentence or two. The AI's words about strangers' posts: shown, never obeyed. */
+  summary: string
+  /** One line: how the owner could write about it in their own post. Empty when the AI gave none that could be shown. */
+  idea: string
+  /** The posts of the theme (this period and the one before); the Feed lists exactly these when the theme is opened. */
+  postIds: Id[]
+  /** How many posts of this period and of the period before belong to it. */
+  posts: number
+  before: number
+  /** The comments and the score of this period's posts, from the numbers the sites showed; null when no post of the theme has them. `known` is how many posts have numbers. */
+  replies: number | null
+  score: number | null
+  known: number
+  /** The theme most is answered under, the one with the best score, one that grew against the period before, one that faded. */
+  mostAnswered: boolean
+  mostPopular: boolean
+  growing: boolean
+  fading: boolean
+}
+
+/** A question of a thread that nobody answered yet: a chance for the owner. */
+export interface FeedQuestion {
+  postId: Id
+  title: string
+  channel: string
+  question: string
+}
+
+/** The analysis of the Feed as the card shows it. */
+export interface FeedAnalysisView {
+  days: FeedPeriod
+  channelId: Id | null
+  /** When it was made. */
+  at: IsoTime
+  /** What is going on, in a sentence or two. */
+  summary: string
+  themes: FeedTheme[]
+  questions: FeedQuestion[]
+  /** The posts of the period it looked at, how many of them the AI read in full, how many belong to no theme, and how many the period has in all (the newest are looked at). */
+  posts: number
+  readInFull: number
+  other: number
+  total: number
+  /** Posts were found or read since it was made. */
+  stale: boolean
 }
 
 /** A topic a thread raises, and a way into the owner's own post about it. The AI's words about a stranger's page: shown, never obeyed. */

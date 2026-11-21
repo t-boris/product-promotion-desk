@@ -93,8 +93,8 @@ export class FindingStore {
       const id = newId()
       const info = this.db
         .prepare(
-          `INSERT INTO findings (id, product_id, channel_id, external_id, title, url, author, posted_at, stage, label, relation, about, thread, reply_to, suggested_comment, analysis, topics_json, read_at, is_own, first_look, opportunity_id, seen_at, starred_at, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
+          `INSERT INTO findings (id, product_id, channel_id, external_id, title, url, author, posted_at, stage, label, relation, about, thread, reply_to, suggested_comment, analysis, topics_json, read_at, is_own, first_look, opportunity_id, seen_at, starred_at, reply_count, score, stats_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (channel_id, external_id) DO NOTHING`
         )
         .run(
@@ -119,6 +119,9 @@ export class FindingStore {
           firstLook ? 1 : 0,
           // A post the AI calls worth a reply starts starred: the owner's first filter ("Starred") is the posts the AI would answer.
           item.relation.startsWith(WATCH_REPLY_PREFIX) ? now : null,
+          item.replies,
+          item.score,
+          item.replies !== null || item.score !== null ? now : null,
           now,
           now
         )
@@ -150,15 +153,61 @@ export class FindingStore {
         .prepare(
           `UPDATE findings SET about = ?, thread = ?, reply_to = ?, suggested_comment = ?, analysis = ?, topics_json = ?, read_at = ?, updated_at = ?,
                  relation = CASE WHEN ? THEN ? ELSE relation END, starred_at = CASE WHEN ? THEN COALESCE(starred_at, ?) ELSE starred_at END,
-                 is_own = CASE WHEN ? THEN 1 ELSE is_own END
+                 is_own = CASE WHEN ? THEN 1 ELSE is_own END,
+                 reply_count = COALESCE(?, reply_count), score = COALESCE(?, score), stats_at = CASE WHEN ? OR ? THEN ? ELSE stats_at END
            WHERE id = ?`
         )
-        .run(item.about, item.thread, item.replyTo, item.comment, item.analysis, JSON.stringify(item.topics), now, now, becomesReply ? 1 : 0, item.relation, becomesReply ? 1 : 0, now, item.own ? 1 : 0, id)
+        .run(item.about, item.thread, item.replyTo, item.comment, item.analysis, JSON.stringify(item.topics), now, now, becomesReply ? 1 : 0, item.relation, becomesReply ? 1 : 0, now, item.own ? 1 : 0, item.replies, item.score, item.replies !== null ? 1 : 0, item.score !== null ? 1 : 0, now, id)
       this.db.prepare('DELETE FROM finding_comments WHERE finding_id = ?').run(id)
       this.saveThread(id, item.comments, now)
       this.savePictures(id, item.images, now)
       return true
     })()
+  }
+
+  /**
+   * The numbers a page showed for the posts on it (comments, score), kept for the posts of this channel that the application knows: a post is recorded once, so
+   * without this its numbers would stay as they were on the day it was found. A number the page did not give is not touched. Returns how many posts changed.
+   */
+  applyStats(channelId: Id, stats: readonly { url: string; replies: number | null; score: number | null }[]): number {
+    if (stats.length === 0) return 0
+    const now = this.now()
+    const update = this.db.prepare(
+      `UPDATE findings SET reply_count = COALESCE(?, reply_count), score = COALESCE(?, score), stats_at = ?
+        WHERE channel_id = ? AND external_id = ? AND (COALESCE(?, reply_count) IS NOT reply_count OR COALESCE(?, score) IS NOT score OR stats_at IS NULL)`
+    )
+    let changed = 0
+    this.db.transaction(() => {
+      for (const stat of stats) {
+        if (stat.replies === null && stat.score === null) continue
+        changed += update.run(stat.replies, stat.score, now, channelId, stat.url, stat.replies, stat.score).changes
+      }
+    })()
+    return changed
+  }
+
+  /**
+   * The posts the AI noted (a notice or a reply) that the application first saw from `from` up to (not including) `to`, the newest first, at most `limit`, and how
+   * many there are in all. Posts judged not relevant are not among them. These are the posts the analysis of the Feed is made of.
+   */
+  notedBetween(productId: Id, channelId: Id | null, from: string, to: string, limit: number): { findings: Finding[]; total: number } {
+    const where = `product_id = ? AND label IN ('reply', 'notice') AND created_at >= ? AND created_at < ?${channelId !== null ? ' AND channel_id = ?' : ''}`
+    const args: Bindable[] = [productId, from, to, ...(channelId !== null ? [channelId] : [])]
+    const rows = this.db.prepare(`SELECT * FROM findings WHERE ${where} ORDER BY created_at DESC, id LIMIT ?`).all(...args, limit) as Row[]
+    const total = (this.db.prepare(`SELECT COUNT(*) AS n FROM findings WHERE ${where}`).get(...args) as { n: number }).n
+    return { findings: rows.map(mapFinding), total }
+  }
+
+  /** The posts of these ids, for the card of the analysis (a post that is gone is left out). */
+  byIds(ids: readonly Id[]): Finding[] {
+    if (ids.length === 0) return []
+    const out: Finding[] = []
+    for (let i = 0; i < ids.length; i += 200) {
+      const part = ids.slice(i, i + 200)
+      const rows = this.db.prepare(`SELECT * FROM findings WHERE id IN (${part.map(() => '?').join(',')})`).all(...part) as Row[]
+      out.push(...rows.map(mapFinding))
+    }
+    return out
   }
 
   /** The pictures of a post, as the page showed them, waiting to be fetched. An address kept already is not added again; at most `WATCH_IMAGES_MAX` in all. */

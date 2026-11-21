@@ -15,6 +15,8 @@ import { FEED_SOURCES, buildFeedRows, channelOptionLabel, emptyKind, groupByDay,
 import { FEED_TABS, isFindingRow, judgedLine, notedCount, notedEmptyKind, opportunityListOf, unseenNoticeCount, visibleFindings, type FeedTab, type ListedRow, type NotedEmpty } from './feed/finding-rows'
 import { STREAM_SORTS, filterStream, searchStream, sortStream, streamCounts, visibleFilters, type StreamFilter, type StreamSort } from './feed/stream-filter'
 import { FindingStream } from './feed/FindingStream'
+import { FeedAnalysisCard, type FeedFocus } from './feed/FeedAnalysisCard'
+import { focusLine, rowsOfFocus } from './feed/analysis-card'
 import { usePaging } from '../list-paging'
 import { ShowMore } from './ShowMore'
 import { FindingDetail } from './feed/FindingDetail'
@@ -85,6 +87,8 @@ function FeedScreen({ product }: { product: Product }) {
   const [starFilter, setStarFilter] = useState<StreamFilter>('all')
   const [sort, setSort] = useState<StreamSort>('newest')
   const [chosenChannel, setChosenChannel] = useState<Id | ''>('')
+  // The posts of a theme (or the one post of a question) of the analysis card: the stream below shows only them until the owner shows all again.
+  const [focus, setFocus] = useState<FeedFocus | null>(null)
   const [olderFor, setOlderFor] = useState<Id | null>(null)
   // The posts the AI judged not relevant, listed read-only in place of the Feed's lists (asked for only now).
   const [auditing, setAuditing] = useState(false)
@@ -97,6 +101,8 @@ function FeedScreen({ product }: { product: Product }) {
   const notices = useMemo(() => visibleFindings(findings.notices, channelId), [findings.notices, channelId])
   const defaultTab: FeedTab = states.decide === 0 && notices.length > 0 ? 'noted' : 'decide'
   const tab: FeedTab = picked ?? defaultTab
+  // A theme of the analysis is about the channel it was opened in: another channel or another list starts from every post again.
+  useEffect(() => setFocus(null), [channelId, tab])
   // Noted lists findings, not opportunities: the three lists of opportunities (and the source chips, which are theirs) do not apply to it.
   const filterCounts = useMemo(() => streamCounts(notices), [notices])
   const list = opportunityListOf(tab)
@@ -107,8 +113,8 @@ function FeedScreen({ product }: { product: Product }) {
 
   // The findings of the tab, searched and sorted as the owner asked, a page at a time; the opportunity lists are paged too. A new tab, channel, search or
   // sort starts again from the top.
-  const findingRows = useMemo(() => sortStream(searchStream(filterStream(notices, starFilter), search), sort), [notices, starFilter, search, sort])
-  const pagedFindings = usePaging(findingRows, `${tab}|${channelId}|${starFilter}|${search}|${sort}`)
+  const findingRows = useMemo(() => rowsOfFocus(sortStream(searchStream(filterStream(notices, starFilter), search), sort), focus), [notices, starFilter, search, sort, focus])
+  const pagedFindings = usePaging(findingRows, `${tab}|${channelId}|${starFilter}|${search}|${sort}|${focus?.label ?? ''}`)
   const pagedOpportunities = usePaging(visible, `${tab}|${source}|${channelId}`)
 
   // What the list shows: the posts judged not relevant while the owner checks them (a list with a pane), else the opportunities of the list. The Noted posts
@@ -161,6 +167,7 @@ function FeedScreen({ product }: { product: Product }) {
   const check = (id: Id): void => void checkNow(id)
   const showAll = (): void => {
     setChosenChannel('')
+    setFocus(null)
     if (list === null) {
       setSearch('')
       setStarFilter('all')
@@ -393,6 +400,15 @@ function FeedScreen({ product }: { product: Product }) {
 
           {!auditing && list === null && empty === null && ready && findingRows.length > 0 && (
             <div className="feed-scroll" data-testid="feed-noted-scroll">
+              <FeedAnalysisCard productId={product.id} channelId={channelId} onFocus={setFocus} />
+              {focus !== null && (
+                <div className="feed-focus" data-testid="feed-focus">
+                  <span className="muted small">{focusLine(focus.label, findingRows.length, focus.ids.size)}</span>
+                  <Button variant="secondary" onClick={() => setFocus(null)} data-testid="feed-focus-clear">
+                    Show all posts
+                  </Button>
+                </div>
+              )}
               <FindingStream
                 rows={pagedFindings.visible}
                 markSeen={findings.markSeen}

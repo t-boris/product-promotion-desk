@@ -387,3 +387,97 @@
   gap: var(--space-1);
 }
 
+/* ───────────── The analysis of the whole Feed: a card above the stream ───────────── */
+
+.feed-analysis {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+.feed-analysis-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+.feed-analysis-title {
+  margin: 0;
+  margin-right: auto;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+}
+.feed-analysis-head .segmented {
+  align-self: center;
+}
+.feed-analysis p {
+  margin: 0;
+}
+.feed-themes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-2);
+}
+.feed-theme {
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.feed-theme-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  cursor: pointer;
+}
+.feed-theme-name {
+  font-weight: var(--fw-semibold);
+  overflow-wrap: anywhere;
+}
+.feed-theme-numbers {
+  margin-left: auto;
+}
+/* The bar says how many posts the theme holds against the widest theme: a quiet line, never a chart of its own. */
+.feed-theme-bar {
+  height: 4px;
+  margin: var(--space-2) 0;
+  background: var(--segment-track);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.feed-theme-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+}
+.feed-theme-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+.feed-questions summary {
+  cursor: pointer;
+}
+.feed-questions ul {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-4);
+  display: grid;
+  gap: var(--space-2);
+}
+/* The line over the stream while it shows the posts of one theme. */
+.feed-focus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+}

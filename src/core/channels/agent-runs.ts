@@ -471,7 +471,7 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
   async watch(request: WatchMissionRequest): Promise<WatchOutcome> {
     const account = this.accounts.account(request.accountId)
     const engine = await this.watchPrerequisites(account)
-    const setup = { watch: { places: request.brief.places.map((place) => place.url), record: request.record, maxFindings: WATCH_MAX_FINDINGS, minGapMs: WATCH_MIN_GAP_MS, now: () => this.core.clock.now().getTime() } }
+    const setup = { watch: { places: request.brief.places.map((place) => place.url), record: request.record, recordStats: request.recordStats, maxFindings: WATCH_MAX_FINDINGS, minGapMs: WATCH_MIN_GAP_MS, now: () => this.core.clock.now().getTime() } }
     return this.look('watch', account, engine, { channelId: request.channelId, maxCalls: request.brief.maxCalls, title: `the AI is looking at ${request.brief.channelTarget}`, subject: account.profileId ?? account.id, hosts: request.hosts, prompt: watchMissionPrompt(request.brief, this.core.clock.now()), setup })
   }
 

@@ -159,6 +159,9 @@ export const mapFinding = (r: Row): Finding => ({
   analysis: (r.analysis as string | null) ?? '',
   topics: parseTopics(r.topics_json),
   readAt: (r.read_at as string | null) ?? null,
+  replies: (r.reply_count as number | null) ?? null,
+  score: (r.score as number | null) ?? null,
+  statsAt: (r.stats_at as string | null) ?? null,
   createdAt: r.created_at as string
 })
 

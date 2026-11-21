@@ -8,7 +8,7 @@
 
 import { ApiError } from '../../shared/api'
 import type { Account, Channel, Finding, Id } from '../../shared/types'
-import { READ_POST_MAX_CALLS, TO_READ_LABEL, WATCH_FIRST_LOOK_MAX_CALLS, WATCH_KNOWN_LIMIT, WATCH_MAX_CALLS, WATCH_MAX_POSTS, WATCH_TIMEOUT_MS, WATCH_UNREAD_LIMIT, type WatchBrief, type WatchItem, type WatchOutcome, type WatchRecorded } from '../browser-agent/watch'
+import { READ_POST_MAX_CALLS, TO_READ_LABEL, WATCH_FIRST_LOOK_MAX_CALLS, WATCH_KNOWN_LIMIT, WATCH_MAX_CALLS, WATCH_MAX_POSTS, WATCH_TIMEOUT_MS, WATCH_UNREAD_LIMIT, type WatchBrief, type WatchItem, type WatchOutcome, type WatchStat, type WatchRecorded } from '../browser-agent/watch'
 import { MAX_LOOK_BACK_DAYS } from '../channels/settings'
 import { webPlaces } from '../channels/web-places'
 import { platformLabel } from '../../shared/post-format'
@@ -57,7 +57,9 @@ export class BrowserWatchFlow {
     private readonly store: FlowStore,
     private readonly findings: FindingStore,
     private readonly ingestor: Ingestor,
-    private readonly pictures: FindingPictures
+    private readonly pictures: FindingPictures,
+    /** Told after a look that recorded posts, or a post read: the analysis of the whole Feed may be made again. */
+    private readonly afterNew: (productId: Id) => void = () => undefined
   ) {}
 
   /** One look at the channel. Never throws for what it can name: the monitor turns the result into the channel's state. */
@@ -83,6 +85,8 @@ export class BrowserWatchFlow {
 
     const tally = { noted: 0, skipped: 0, known: 0 }
     const isOwn = this.ingestor.ownPostTest(channel, account)
+    // The numbers a page shows for the posts on it (comments, score) refresh those of the posts known already.
+    const recordStats = (stats: WatchStat[]): void => void this.findings.applyStats(channel.id, stats)
     const record = (items: WatchItem[]): WatchRecorded => {
       let stored = 0
       let known = 0
@@ -103,7 +107,7 @@ export class BrowserWatchFlow {
 
     let outcome: WatchOutcome
     try {
-      outcome = await missions.watch({ accountId: account.id, channelId: channel.id, hosts: webPlaces(channel).hosts, brief: this.brief(channel, account, firstLook, days, since), record })
+      outcome = await missions.watch({ accountId: account.id, channelId: channel.id, hosts: webPlaces(channel).hosts, brief: this.brief(channel, account, firstLook, days, since), record, recordStats })
     } catch (error) {
       if (error instanceof ApiError && NOT_STARTED.has(error.code)) return deferred(`The channel was not looked at: ${error.message}`)
       this.core.log.error('monitor', `The look at the channel stopped unexpectedly: ${errorMessage(error)}`, channel.id)
@@ -113,6 +117,7 @@ export class BrowserWatchFlow {
     this.findings.pruneSkipped()
     if (tally.noted + tally.skipped > 0) this.findings.notify()
     void this.pictures.fetchWaiting()
+    if (tally.noted > 0) this.afterNew(channel.productId)
     return this.result(channel, outcome, startedAt.toISOString(), tally)
   }
 
@@ -156,7 +161,7 @@ export class BrowserWatchFlow {
       const brief: WatchBrief = { ...base, mode: 'read', places: [{ label: `The post to read: ${finding.title}`, url: finding.url }], known: [], maxPosts: 1, maxCalls: READ_POST_MAX_CALLS }
       let outcome: WatchOutcome
       try {
-        outcome = await missions.watch({ accountId: account.id, channelId: channel.id, hosts: site.hosts, brief, record })
+        outcome = await missions.watch({ accountId: account.id, channelId: channel.id, hosts: site.hosts, brief, record, recordStats: (stats) => void this.findings.applyStats(channel.id, stats) })
       } catch (error) {
         if (error instanceof ApiError && NOT_STARTED.has(error.code)) return { state: 'unavailable', message: error.message }
         this.core.log.error('monitor', `The reading of a post stopped unexpectedly: ${errorMessage(error)}`, channel.id)
@@ -165,6 +170,7 @@ export class BrowserWatchFlow {
       if (applied > 0) {
         await this.pictures.fetchWaiting()
         this.findings.notify()
+        this.afterNew(channel.productId)
         return { state: 'read', message: 'The AI read the post: the thread, the analysis, the topics and the pictures are on the card.' }
       }
       const { reported } = outcome

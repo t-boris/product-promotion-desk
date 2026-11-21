@@ -97,6 +97,19 @@ export interface WatchItem {
   images: WatchPicture[]
   /** The post is one of the account's own: set by the application from the author and the account's identity, never by the AI. */
   own: boolean
+  /**
+   * How many comments the post has and its score, as the SITE said them on a page the AI was shown (never as the AI said them: the AI has no field for them);
+   * null when no page the AI saw gave the number.
+   */
+  replies: number | null
+  score: number | null
+}
+
+/** The numbers a site showed for one post (its canonical address is the key the finding is known by). */
+export interface WatchStat {
+  url: string
+  replies: number | null
+  score: number | null
 }
 
 /** One picture of a post: where the page has it, and what the page says it shows. */
@@ -129,6 +142,11 @@ export interface WatchSetup {
   places: string[]
   /** Stores the findings; the flow that started the check owns the table. */
   record: (items: WatchItem[]) => WatchRecorded
+  /**
+   * The numbers the pages showed for the posts on them, handed over as the AI looks at each page: they refresh the counts of posts that are known already
+   * (a post is recorded once, so its comments and score would otherwise stay as they were on the day it was found). Optional.
+   */
+  recordStats?: (stats: WatchStat[]) => void
   maxFindings: number
   /** The least time between two openings of a page. */
   minGapMs: number
@@ -176,6 +194,7 @@ export interface WatchMissionRequest {
   hosts: string[]
   brief: WatchBrief
   record: WatchSetup['record']
+  recordStats?: WatchSetup['recordStats']
 }
 
 export interface WatchOutcome {
@@ -309,7 +328,7 @@ export function readImages(raw: unknown, shown: ReadonlySet<string>): WatchPictu
  * others stand. `error` only when the call as a whole is not a list of posts. A post the AI opened and read in full (a `reply`, or a notice that carries
  * `about`) also keeps what it read: the thread's comments, the analysis, the topics and the pictures (`shown` are the picture addresses it was shown).
  */
-export function readWatchItems(raw: unknown, hosts: string[], shown: ReadonlySet<string> = new Set()): { items: WatchItem[]; refused: string[] } | { error: string } {
+export function readWatchItems(raw: unknown, hosts: string[], shown: ReadonlySet<string> = new Set(), numbers: ReadonlyMap<string, { replies: number | null; score: number | null }> = new Map()): { items: WatchItem[]; refused: string[] } | { error: string } {
   if (!Array.isArray(raw) || raw.length === 0) return { error: `items must be a list of 1 to ${WATCH_MAX_ITEMS_PER_CALL} posts, each with url, title, label and relation.` }
   if (raw.length > WATCH_MAX_ITEMS_PER_CALL) return { error: `At most ${WATCH_MAX_ITEMS_PER_CALL} posts in one call; send the rest in the next one.` }
   const items: WatchItem[] = []
@@ -355,7 +374,9 @@ export function readWatchItems(raw: unknown, hosts: string[], shown: ReadonlySet
       analysis: analysis ?? '',
       topics: read ? readTopics(entry.topics) : [],
       images: read ? readImages(entry.images, shown) : [],
-      own: false
+      own: false,
+      replies: numbers.get(url)?.replies ?? null,
+      score: numbers.get(url)?.score ?? null
     })
   })
   return { items, refused }

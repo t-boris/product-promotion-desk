@@ -4,6 +4,7 @@ import { BrowserWatchFlow } from './browser-watch'
 import { DraftCheck } from './draft-check'
 import { DraftHelp } from './draft-help'
 import { FindingPictures } from './finding-pictures'
+import { FeedAnalysis } from './feed-analysis'
 import { FindingReply } from './finding-reply'
 import { FindingSend } from './finding-send'
 import { DraftingFlow } from './drafting'
@@ -38,7 +39,9 @@ export function registerFlow(core: Core): void {
   const findings = new FindingStore(core)
   const triage = new TriageFlow(core, store, findings, ingestor)
   const pictures = new FindingPictures(core, findings)
-  const watcher = new BrowserWatchFlow(core, store, findings, ingestor, pictures)
+  // The analysis of the whole Feed: made on the owner's press, and again after a look when the posts changed.
+  const feedAnalysis = new FeedAnalysis(core, findings)
+  const watcher = new BrowserWatchFlow(core, store, findings, ingestor, pictures, (productId) => feedAnalysis.refreshSoon(productId))
   const monitor = new MonitorFlow(core, store, ingestor, watch, triage, watcher)
   const drafting = new DraftingFlow(core, store, review, sending)
   const publications = new PublicationsFlow(core, store)
@@ -59,6 +62,10 @@ export function registerFlow(core: Core): void {
   core.router.register({
     'findings.send': ({ id, place, text }) => findingSend.send({ id: requireText(id, 'The post'), place: place ?? null, text }),
     'findings.replies': ({ id }) => findingSend.replies(requireText(id, 'The post'))
+  })
+  core.router.register({
+    'feed.analysis': ({ productId, channelId, days }) => feedAnalysis.get({ productId, channelId: channelId ?? null, days }),
+    'feed.analyze': ({ productId, channelId, days }) => feedAnalysis.run({ productId, channelId: channelId ?? null, days })
   })
   // The AI in the quick-post composer (REQ-004): the caption, the picture, the search for trends and the marketer. Nothing is stored.
   const quickHelp = new QuickHelp(core)

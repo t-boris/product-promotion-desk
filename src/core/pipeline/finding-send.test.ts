@@ -66,7 +66,9 @@ function setup(script: ScriptedMissions['script'] = presses): { missions: Script
       analysis: '',
       topics: [],
       images: [],
-      own: false
+      own: false,
+      replies: null,
+      score: null
     },
     false
   )
@@ -211,7 +213,9 @@ describe('Send under a comment', () => {
         analysis: '',
         topics: [],
         images: [],
-        own: false
+        own: false,
+        replies: null,
+        score: null
       },
       world.clock.now().toISOString()
     )

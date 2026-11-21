@@ -38,9 +38,10 @@ class ListPage extends FakePage {
   ]
   humanCheck = ''
   pictures: { src: string; alt: string; width: number; height: number; offscreen?: boolean }[] = []
+  stats: { href: string; replies: number | null; score: number | null }[] = []
   override async read<T>(script: string): Promise<T> {
     this.log.push(`read ${script.slice(0, 40)}`)
-    if (script.includes('agent-snapshot')) return { url: this.currentUrl, title: 'Page', text: 'Some posts', alerts: [], humanCheck: this.humanCheck, elements: this.items.map((i) => ({ ...i })), pictures: this.pictures } as T
+    if (script.includes('agent-snapshot')) return { url: this.currentUrl, title: 'Page', text: 'Some posts', alerts: [], humanCheck: this.humanCheck, elements: this.items.map((i) => ({ ...i })), pictures: this.pictures, stats: this.stats } as T
     return undefined as T
   }
   override async pageStep(step: PageStep, hosts: string[]): Promise<PageStepResult> {
@@ -61,6 +62,7 @@ function setup(over: Partial<ToolboxDeps> = {}, shared: { time?: { now: number }
   const recorded: WatchItem[] = []
   const said: string[] = []
   const known = new Set<string>()
+  const numbers: { url: string; replies: number | null; score: number | null }[][] = []
   const toolbox = new BrowserToolbox({
     withPage: (work) => session.withAgentControl('watch', work),
     hosts: ['instagram.com'],
@@ -89,13 +91,14 @@ function setup(over: Partial<ToolboxDeps> = {}, shared: { time?: { now: number }
         }
         return { stored, known: dup }
       },
+      recordStats: (stats) => numbers.push(stats),
       maxFindings: 60,
       minGapMs: 2000,
       now: () => time.now
     },
     ...over
   })
-  return { page, session, toolbox, time, sleeps, reports, recorded, known, said }
+  return { page, session, toolbox, time, sleeps, reports, recorded, known, said, numbers }
 }
 
 type Setup = ReturnType<typeof setup>
@@ -371,7 +374,7 @@ describe('watch_record', () => {
     const result = await record(t, [post({ url: 'https://www.instagram.com/p/Abc123/?igsh=xyz#c1' })])
     expect(result.isError).toBeFalsy()
     expect(result.text).toMatch(/Recorded 1 post\./)
-    expect(t.recorded).toEqual([{ url: 'https://www.instagram.com/p/Abc123', title: 'A post about natal charts', author: 'someone', label: 'notice', relation: 'Astrology fans talk about birth charts.', about: '', thread: '', replyTo: '', comment: '', comments: [], analysis: '', topics: [], images: [], own: false }])
+    expect(t.recorded).toEqual([{ url: 'https://www.instagram.com/p/Abc123', title: 'A post about natal charts', author: 'someone', label: 'notice', relation: 'Astrology fans talk about birth charts.', about: '', thread: '', replyTo: '', comment: '', comments: [], analysis: '', topics: [], images: [], own: false, replies: null, score: null }])
     expect(t.page.log).toEqual([])
   })
 
@@ -680,6 +683,46 @@ describe('what a post read in full carries: the analysis, the topics and the pic
     const bad = setup()
     await record(bad, [full({ topics: [{ topic: 'We guarantee viral results', idea: 'x' }, { topic: 'Fine topic', idea: 'Fine idea.' }] })])
     expect(bad.recorded[0].topics).toEqual([{ topic: 'Fine topic', idea: 'Fine idea.' }])
+  })
+
+  describe('the numbers a page shows for its posts', () => {
+    const URL1 = 'https://www.instagram.com/p/Abc123/'
+
+    it('are given to the post that is recorded, as the SITE said them, whatever numbers the AI claims', async () => {
+      const t = setup()
+      t.page.stats = [{ href: URL1, replies: 42, score: 1300 }]
+      await look(t)
+      await record(t, [full({ replies: 5000, score: 5000, comment_count: 7 })])
+      expect(t.recorded[0]).toMatchObject({ replies: 42, score: 1300 })
+    })
+
+    it('are null for a post no page showed them for, and for a post recorded before any page was looked at', async () => {
+      const t = setup()
+      t.page.stats = [{ href: 'https://www.instagram.com/p/Other/', replies: 3, score: 4 }]
+      await look(t)
+      await record(t, [full()])
+      expect(t.recorded[0]).toMatchObject({ replies: null, score: null })
+      const blind = setup()
+      await record(blind, [full()])
+      expect(blind.recorded[0]).toMatchObject({ replies: null, score: null })
+    })
+
+    it('are handed to the flow as the AI looks at each page, by the post\'s canonical address, so known posts are refreshed', async () => {
+      const t = setup()
+      t.page.stats = [
+        { href: URL1, replies: 42, score: null },
+        { href: 'https://evil.example/p/x/', replies: 9, score: 9 },
+        { href: 'https://www.instagram.com/reel/Zz9/', replies: null, score: 7 }
+      ]
+      await look(t)
+      expect(t.numbers).toEqual([[{ url: 'https://www.instagram.com/p/Abc123', replies: 42, score: null }, { url: 'https://www.instagram.com/reel/Zz9', replies: null, score: 7 }]])
+    })
+
+    it('say nothing for a page that shows none', async () => {
+      const t = setup()
+      await look(t)
+      expect(t.numbers).toEqual([])
+    })
   })
 
   it('keeps nothing of what was read for a skip, and no analysis for a post that gave no summary of it', async () => {

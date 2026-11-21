@@ -407,6 +407,44 @@ describe('what stands around a file input', () => {
   })
 })
 
+describe('the numbers a page shows for its posts', () => {
+  const base = { url: 'https://www.reddit.com/r/x/', title: 'T', text: 'x', alerts: [], humanCheck: '', elements: [{ ref: 'e1', role: 'link', name: 'A' }] }
+
+  it('are parsed as whole numbers with the address of the post, and a post with no usable number is not listed', () => {
+    const parsed = parseSnapshot({
+      ...base,
+      stats: [
+        { href: 'https://www.reddit.com/r/x/comments/1/a/', replies: 12, score: 340 },
+        { href: 'https://www.reddit.com/r/x/comments/2/b/', replies: 5, score: null },
+        { href: 'https://www.reddit.com/r/x/comments/3/c/', replies: null, score: null },
+        { href: 'https://www.reddit.com/r/x/comments/4/d/', replies: -1, score: 1.5 },
+        { href: 'https://www.reddit.com/r/x/comments/5/e/', replies: 'many', score: 2 },
+        { href: 'http://www.reddit.com/r/x/comments/6/f/', replies: 1, score: 1 },
+        { href: 'javascript:alert(1)', replies: 1, score: 1 },
+        { href: 42, replies: 1, score: 1 },
+        null
+      ]
+    })
+    expect(parsed?.stats).toEqual([
+      { href: 'https://www.reddit.com/r/x/comments/1/a/', replies: 12, score: 340 },
+      { href: 'https://www.reddit.com/r/x/comments/2/b/', replies: 5, score: null },
+      { href: 'https://www.reddit.com/r/x/comments/5/e/', replies: null, score: 2 }
+    ])
+  })
+
+  it('are left out of a snapshot that has none, and are at most forty', () => {
+    expect(parseSnapshot({ ...base })).not.toHaveProperty('stats')
+    expect(parseSnapshot({ ...base, stats: [] })).not.toHaveProperty('stats')
+    expect(parseSnapshot({ ...base, stats: 'many' })).not.toHaveProperty('stats')
+    const many = Array.from({ length: 90 }, (_, i) => ({ href: `https://www.reddit.com/r/x/comments/${i}/`, replies: i, score: i }))
+    expect(parseSnapshot({ ...base, stats: many })?.stats).toHaveLength(40)
+  })
+
+  it('refuse a number past a sane size', () => {
+    expect(parseSnapshot({ ...base, stats: [{ href: 'https://www.reddit.com/r/x/comments/1/', replies: 10 ** 12, score: 3 }] })?.stats).toEqual([{ href: 'https://www.reddit.com/r/x/comments/1/', replies: null, score: 3 }])
+  })
+})
+
 describe('the pictures of a page', () => {
   const base = { url: 'https://www.reddit.com/r/x/comments/1', title: 'T', text: 'x', alerts: [], humanCheck: '', elements: [{ ref: 'e1', role: 'link', name: 'A' }] }
 

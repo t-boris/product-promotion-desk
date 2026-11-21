@@ -18,7 +18,7 @@ const watched = (url: string, relation: string): string => {
   new FindingStore(world.core).addWatched(
     world.product.id,
     world.channel.id,
-    { url, title: `Title ${url}`, author: 'poster', label: 'notice', relation, about: '', thread: '', replyTo: '', comment: '', comments: [], analysis: '', topics: [], images: [], own: false },
+    { url, title: `Title ${url}`, author: 'poster', label: 'notice', relation, about: '', thread: '', replyTo: '', comment: '', comments: [], analysis: '', topics: [], images: [], own: false, replies: null, score: null },
     false
   )
   return latestId()

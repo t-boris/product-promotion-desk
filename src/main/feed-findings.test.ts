@@ -70,6 +70,9 @@ function card(seed: Seed): FindingCard {
       analysis: '',
       topics: [],
       readAt: null,
+      replies: null,
+      score: null,
+      statsAt: null,
       createdAt: seed.createdAt ?? '2026-11-15T08:00:00.000Z'
     },
     channelTarget: seed.target ?? 'r/alpha',

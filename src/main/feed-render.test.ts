@@ -5,10 +5,11 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import type { Channel, Finding, FindingCard, FindingComment, OpportunityCard } from '../shared/types'
+import type { Channel, FeedAnalysisView, Finding, FindingCard, FindingComment, OpportunityCard } from '../shared/types'
 import { FeedList } from '../renderer/src/pages/feed/FeedList'
 import { FindingDetail } from '../renderer/src/pages/feed/FindingDetail'
 import { FindingStream } from '../renderer/src/pages/feed/FindingStream'
+import { AnalysisBody, FeedAnalysisCard } from '../renderer/src/pages/feed/FeedAnalysisCard'
 import { ReplyComposer } from '../renderer/src/pages/feed/ReplyComposer'
 import { ThreadTree } from '../renderer/src/pages/feed/FindingThread'
 import { ReadingNotes } from '../renderer/src/pages/feed/ReadingNotes'
@@ -51,6 +52,9 @@ function finding(over: Partial<Finding> = {}): FindingCard {
       analysis: '',
       topics: [],
       readAt: null,
+      replies: null,
+      score: null,
+      statsAt: null,
       createdAt: '2026-11-15T08:00:00.000Z',
       ...over
     },
@@ -465,5 +469,116 @@ describe('ReplyComposer: Send under a post', () => {
     const out = composer(0, [{ position: 0, depth: 0, author: 'anna', text: 'Try a free chart site', url: 'https://www.reddit.com/r/x/comments/1/comment/2' }])
     expect(out).not.toContain('data-testid="reply-send-result"')
     expect(out).not.toContain('data-testid="reply-resolve"')
+  })
+})
+
+describe('the card of the analysis of the Feed', () => {
+  const theme = (over: Partial<FeedAnalysisView['themes'][number]> = {}): FeedAnalysisView['themes'][number] => ({
+    id: 't1',
+    name: 'What the houses mean',
+    summary: 'People ask which house rules what.',
+    idea: 'A short explainer of the twelve houses.',
+    postIds: ['a', 'b', 'c'],
+    posts: 3,
+    before: 1,
+    replies: 42,
+    score: 1300,
+    known: 3,
+    mostAnswered: true,
+    mostPopular: false,
+    growing: true,
+    fading: false,
+    ...over
+  })
+  const view = (over: Partial<FeedAnalysisView> = {}): FeedAnalysisView => ({
+    days: 7,
+    channelId: null,
+    at: '2026-11-15T09:00:00.000Z',
+    summary: 'People ask how to read a chart.',
+    themes: [theme(), theme({ id: 't2', name: 'Which app to use', postIds: ['d'], posts: 1, before: 0, replies: null, score: null, known: 0, mostAnswered: false, growing: false })],
+    questions: [{ postId: 'd', title: 'Which app?', channel: 'r/astrology', question: 'Does any free app show the houses?' }],
+    posts: 4,
+    readInFull: 1,
+    other: 0,
+    total: 4,
+    stale: false,
+    ...over
+  })
+  const body = (v: FeedAnalysisView, stale = false, all = false): string => html(createElement(AnalysisBody, { view: v, stale, all, setAll: () => {}, onFocus: () => {} }))
+
+  it('offers to analyze, and says what it does, before any analysis was made', () => {
+    const out = html(createElement(FeedAnalysisCard, { productId: 'p1', channelId: null, onFocus: () => {} }))
+    expect(out).toContain('data-testid="feed-analysis"')
+    expect(out).toContain('What is going on in your channels')
+    expect(out).toContain('Analyze the feed')
+    expect(out).toMatch(/data-testid="feed-analysis-run"[^>]*btn-primary|btn-primary[^>]*data-testid="feed-analysis-run"/)
+    expect(out).toContain('uses no browser and posts nothing')
+    expect(out).not.toContain('data-testid="feed-themes"')
+  })
+
+  it('names the channel when it is about one', () => {
+    const out = html(createElement(FeedAnalysisCard, { productId: 'p1', channelId: 'c1', onFocus: () => {} }))
+    expect(out).toContain('What is going on in this channel')
+  })
+
+  it('offers the three periods, the week chosen', () => {
+    const out = html(createElement(FeedAnalysisCard, { productId: 'p1', channelId: null, onFocus: () => {} }))
+    for (const label of ['24 hours', '7 days', '30 days']) expect(out).toContain(label)
+    expect(out).toMatch(/segmented-option on[^>]*>[\s\S]*?7 days/)
+  })
+
+  it('lists the themes with their numbers, what stands out and a way to the posts', () => {
+    const out = body(view())
+    expect(out).toContain('People ask how to read a chart.')
+    expect(out).toContain('What the houses mean')
+    expect(out).toContain('3 posts (+2 against before) · 42 comments · score 1,300')
+    expect(out).toContain('Most answered')
+    expect(out).toContain('Growing')
+    expect(out).toContain('Idea for your post: A short explainer of the twelve houses.')
+    expect(out).toContain('Show these posts (3)')
+    expect(out).toContain('1 post (new)')
+    expect(out).not.toContain('1 post (new) ·')
+  })
+
+  it('says what it was made from and when', () => {
+    const out = body(view())
+    expect(out).toContain('4 posts analyzed · 1 read in full')
+    expect(out).toMatch(/Made [^<]*·/)
+  })
+
+  it('lists the questions nobody answered, each with the post it came from', () => {
+    const out = body(view())
+    expect(out).toContain('Questions nobody answered (1)')
+    expect(out).toContain('Does any free app show the houses?')
+    expect(out).toContain('r/astrology · Which app?')
+    expect(out).toContain('Show the post')
+    expect(body(view({ questions: [] }))).not.toContain('Questions nobody answered')
+  })
+
+  it('says when posts came since, and only then', () => {
+    expect(body(view(), true)).toContain('Posts were noted or read since this was made')
+    expect(body(view(), false)).not.toContain('Posts were noted or read since')
+  })
+
+  it('lists four themes and offers the rest', () => {
+    const many = Array.from({ length: 6 }, (_, i) => theme({ id: `t${i}`, name: `Theme ${i}` }))
+    const short = body(view({ themes: many }))
+    expect(short.match(/data-testid="feed-theme"/g)).toHaveLength(4)
+    expect(short).toContain('Show all 6 themes')
+    expect(body(view({ themes: many }), false, true).match(/data-testid="feed-theme"/g)).toHaveLength(6)
+    expect(body(view({ themes: many.slice(0, 3) }))).not.toContain('Show all')
+  })
+
+  it('shows what the AI wrote as text, never as markup', () => {
+    const out = body(view({ summary: '<img src=x onerror=alert(1)>', themes: [theme({ name: '<script>alert(1)</script>', summary: '<b>bold</b>', idea: '<a href="https://evil.test">x</a>' })] }))
+    expect(out).not.toContain('<script>')
+    expect(out).not.toContain('<img src=x')
+    expect(out).not.toContain('<a href="https://evil.test">')
+    expect(out).toContain('&lt;script&gt;')
+  })
+
+  it('says for how many posts the numbers are known, when it is some of them', () => {
+    expect(body(view({ themes: [theme({ known: 2 })] }))).toContain('Comments and score known for 2 of 3 posts.')
+    expect(body(view({ themes: [theme({ known: 3 })] }))).not.toContain('Comments and score known for')
   })
 })

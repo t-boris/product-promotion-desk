@@ -57,6 +57,8 @@ import type {
   LogEvent,
   LogLevel,
   OpportunityCard,
+  FeedAnalysisView,
+  FeedPeriod,
   FindingCard,
   FindingComment,
   FindingPicture,
@@ -380,6 +382,14 @@ export interface ApiMethods {
   'findings.send': [{ id: Id; place: FindingPlace | null; text: string }, FindingSendResult]
   /** What was sent from this post before, place by place, the account that sends, and why a send is not possible now (an empty text when it is). */
   'findings.replies': [{ id: Id }, FindingReplies]
+  /**
+   * The analysis of the whole Feed that was last made for a channel (every channel when absent) and a period (7 days when absent): the themes the noted posts
+   * raise, which draws the most comments and the best score, which grows, the questions nobody answered. The numbers are counted from the posts now; null while
+   * none was made. Read-only.
+   */
+  'feed.analysis': [{ productId: Id; channelId?: Id | null; days?: FeedPeriod }, FeedAnalysisView | null]
+  /** The AI makes the analysis again from the posts the Feed holds (no browser, nothing sent). It resolves when it is kept; refused with too few posts. */
+  'feed.analyze': [{ productId: Id; channelId?: Id | null; days?: FeedPeriod }, FeedAnalysisView]
   'opportunities.get': [{ id: Id }, OpportunityCard]
   'opportunities.prepareDraft': [{ id: Id }, OpportunityCard]
   'opportunities.saveDraft': [{ id: Id; draft: DraftInput }, OpportunityCard]

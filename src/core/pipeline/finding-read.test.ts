@@ -52,6 +52,8 @@ const read = (over: Partial<WatchItem> = {}): WatchItem => ({
   ],
   images: [{ url: 'https://i.redd.it/chart.png', alt: 'A natal chart wheel' }],
   own: false,
+  replies: null,
+  score: null,
   ...over
 })
 
@@ -71,7 +73,7 @@ function setup(): { ai: Reading; id: string; fetched: string[] } {
   new FindingStore(world.core).addWatched(
     world.product.id,
     world.channel.id,
-    { url: URL_, title: 'Which app draws a chart with houses?', author: 'poster', label: 'notice', relation: 'Asks for a chart tool.', about: '', thread: '', replyTo: '', comment: '', comments: [], analysis: '', topics: [], images: [], own: false },
+    { url: URL_, title: 'Which app draws a chart with houses?', author: 'poster', label: 'notice', relation: 'Asks for a chart tool.', about: '', thread: '', replyTo: '', comment: '', comments: [], analysis: '', topics: [], images: [], own: false, replies: null, score: null },
     false
   )
   const id = (world.core.db.prepare('SELECT id FROM findings ORDER BY rowid DESC LIMIT 1').get() as { id: string }).id

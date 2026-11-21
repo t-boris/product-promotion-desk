@@ -293,5 +293,36 @@ CREATE TABLE finding_images (
 ALTER TABLE opportunities ADD COLUMN finding_id TEXT REFERENCES findings(id) ON DELETE SET NULL;
 CREATE INDEX idx_opp_finding ON opportunities(finding_id) WHERE finding_id IS NOT NULL;
 `
+  },
+  {
+    id: 316,
+    name: 'pipeline: a post of the Feed keeps the numbers its site shows for it',
+    sql: `
+-- How many comments a post has and its score, as the SITE said them on a page the AI looked at (the AI has no field to say them itself): \`stats_at\` is when a
+-- page last gave them. Null while no page has: a platform that shows no such numbers (Instagram, Threads) stays null.
+ALTER TABLE findings ADD COLUMN reply_count INTEGER;
+ALTER TABLE findings ADD COLUMN score INTEGER;
+ALTER TABLE findings ADD COLUMN stats_at TEXT;
+`
+  },
+  {
+    id: 317,
+    name: 'pipeline: the analysis of the whole Feed, kept with its date',
+    sql: `
+-- The AI's reading of the posts of a period as a whole: the themes they raise, which posts belong to which, and the questions nobody answered. One row per
+-- product, channel (\`channel_key\` is empty for every channel) and period, replaced by the next analysis. \`signature\` says which posts it was made from, so the Feed
+-- can tell when new posts came since. The counts shown next to a theme are never stored: they are counted from the posts when the card is shown.
+CREATE TABLE feed_analyses (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  channel_id TEXT REFERENCES channels(id) ON DELETE CASCADE,
+  channel_key TEXT NOT NULL DEFAULT '',
+  days INTEGER NOT NULL,
+  signature TEXT NOT NULL,
+  result_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (product_id, channel_key, days)
+);
+`
   }
 ]

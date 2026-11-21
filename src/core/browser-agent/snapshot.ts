@@ -17,6 +17,9 @@ const MAX_ALERTS = 8
 const MAX_HREF = 500
 /** The pictures of a page that are listed: only the ones big enough to be a picture of a post (not an avatar or an icon), the ones on the screen first. */
 const MAX_PICTURES = 12
+/** The most posts whose numbers one snapshot lists. */
+const MAX_STATS = 40
+const STAT_MAX = 100_000_000
 const MIN_PICTURE_WIDTH = 120
 const MIN_PICTURE_HEIGHT = 90
 const MAX_PICTURE_URL = 600
@@ -51,6 +54,13 @@ export interface SnapshotElement {
   near?: string
 }
 
+/** What a site says about one post in its own markup: how many comments it has and its score. Either may be missing. */
+export interface SnapshotStat {
+  href: string
+  replies: number | null
+  score: number | null
+}
+
 /** A picture the page shows: where the site has it (an https address) and what the page says it shows. Only the watch and research missions are shown these. */
 export interface SnapshotPicture {
   src: string
@@ -72,6 +82,8 @@ export interface PageSnapshot {
   elements: SnapshotElement[]
   /** The pictures the page shows, the ones on the screen first. Absent when there are none (or the page did not say). */
   pictures?: SnapshotPicture[]
+  /** The numbers the page shows for the posts on it (comments and score), where the site puts them in its markup. Absent when there are none. */
+  stats?: SnapshotStat[]
   /** How far the page is scrolled (the document, not a box inside it): where the screen is on it. Absent when the page did not say. */
   scroll?: { top: number; max: number }
 }
@@ -196,6 +208,19 @@ export function snapshotScript(): string {
   }
   pictures.sort((a, b) => Number(a.offscreen) - Number(b.offscreen));
 
+  // What the site itself says about each post it lists: its score and how many comments it has. The count of a post is what the site says, never a guess.
+  const stats = [];
+  for (const el of all('shreddit-post, div.thing[data-fullname]', document)) {
+    if (stats.length >= ${MAX_STATS}) break;
+    const link = el.getAttribute('permalink') || el.getAttribute('data-permalink') || '';
+    if (link === '') continue;
+    let href = '';
+    try { href = new URL(link, location.href).href; } catch (e) { continue; }
+    const score = el.getAttribute('score') !== null ? el.getAttribute('score') : el.getAttribute('data-score');
+    const replies = el.getAttribute('comment-count') !== null ? el.getAttribute('comment-count') : el.getAttribute('data-comments-count');
+    stats.push({ href: href, score: score === null ? null : Number(score), replies: replies === null ? null : Number(replies) });
+  }
+
   const seen = new Set();
   const alerts = [];
   for (const el of all('[role=alert],[role=status],[aria-live=assertive],[aria-live=polite],[data-error],[class*=error i],[id*=error i]', document)) {
@@ -220,7 +245,7 @@ export function snapshotScript(): string {
   const text = clean(document.body ? document.body.innerText : '', ${MAX_TEXT});
   if (humanCheck === '' && text.length < 600 && /verify you are (a )?human|are you a robot|not a robot|security check/i.test(text)) humanCheck = 'the page asks to prove you are human';
   const doc = document.scrollingElement || document.documentElement || { scrollTop: 0, scrollHeight: 0 };
-  return { url: location.href, title: clean(document.title, 120), text: text, alerts: alerts, humanCheck: humanCheck, elements: elements, pictures: pictures, scroll: { top: Math.round(doc.scrollTop), max: Math.max(0, Math.round(doc.scrollHeight - window.innerHeight)) } };
+  return { url: location.href, title: clean(document.title, 120), text: text, alerts: alerts, humanCheck: humanCheck, elements: elements, pictures: pictures, stats: stats, scroll: { top: Math.round(doc.scrollTop), max: Math.max(0, Math.round(doc.scrollHeight - window.innerHeight)) } };
 })()`
 }
 
@@ -270,6 +295,7 @@ export function parseSnapshot(raw: unknown): PageSnapshot | null {
     elements.push(element)
   }
   const pictures = picturesOf(page.pictures)
+  const stats = statsOf(page.stats)
   return {
     url: str(page.url, 300),
     title: str(page.title, 120),
@@ -278,8 +304,26 @@ export function parseSnapshot(raw: unknown): PageSnapshot | null {
     humanCheck: str(page.humanCheck, 120),
     elements,
     ...(pictures.length > 0 ? { pictures } : {}),
+    ...(stats.length > 0 ? { stats } : {}),
     ...scrollOf(page.scroll)
   }
+}
+
+/** The numbers a post shows, checked: an https address, whole numbers within reason. The page is untrusted, so anything odd is dropped, and a post with no usable number is not listed. */
+function statsOf(raw: unknown): SnapshotStat[] {
+  if (!Array.isArray(raw)) return []
+  const stats: SnapshotStat[] = []
+  const whole = (value: unknown): number | null => (typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= STAT_MAX ? value : null)
+  for (const entry of raw.slice(0, MAX_STATS)) {
+    if (!entry || typeof entry !== 'object') continue
+    const e = entry as Record<string, unknown>
+    if (typeof e.href !== 'string' || !/^https:\/\//i.test(e.href) || e.href.length > MAX_HREF) continue
+    const replies = whole(e.replies)
+    const score = whole(e.score)
+    if (replies === null && score === null) continue
+    stats.push({ href: e.href, replies, score })
+  }
+  return stats
 }
 
 /** The pictures the page listed, checked: an https address of a sane length, a size, at most `MAX_PICTURES`. The page is untrusted, so anything odd is dropped. */

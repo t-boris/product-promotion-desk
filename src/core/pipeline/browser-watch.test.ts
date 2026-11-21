@@ -33,7 +33,7 @@ class ScriptedWatch implements WatchMissionService {
 }
 
 const done = (over: Partial<WatchOutcome> = {}): WatchOutcome => ({ ended: 'finished', reported: { status: 'done', reason: 'Looked at it all.' }, humanCheck: null, error: null, said: '', outOfCalls: false, ...over })
-const item = (n: number | string, over: Partial<WatchItem> = {}): WatchItem => ({ url: `https://www.instagram.com/p/P${n}`, title: `Post ${n}`, author: 'someone', label: 'notice', relation: 'Astrology fans talk about birth charts.', about: '', thread: '', replyTo: '', comment: '', comments: [], analysis: '', topics: [], images: [], own: false, ...over })
+const item = (n: number | string, over: Partial<WatchItem> = {}): WatchItem => ({ url: `https://www.instagram.com/p/P${n}`, title: `Post ${n}`, author: 'someone', label: 'notice', relation: 'Astrology fans talk about birth charts.', about: '', thread: '', replyTo: '', comment: '', comments: [], analysis: '', topics: [], images: [], own: false, replies: null, score: null, ...over })
 
 interface Watched {
   w: World
