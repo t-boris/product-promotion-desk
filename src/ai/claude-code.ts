@@ -3,6 +3,14 @@ import { parseModelName } from '../shared/engine-model'
 import type { EngineModel } from '../shared/types'
 import { CliEngine, type CliEngineOptions } from './cli-engine'
 
+/**
+ * What a web search may use, and nothing else: the search and the reading of a page. Checked with a real run (Claude Code 2.1.330, `-p` with
+ * `--tools WebSearch,WebFetch --permission-mode dontAsk --allowedTools ...`): it found and opened pages and answered with their addresses. `--tools` names
+ * the only built-in tools there are, `--allowedTools` lets them run without a question, and `dontAsk` refuses anything else. Without a search the run has
+ * no tool at all (`--tools ""`), and `toolFree` is about that run: a search run is never one that answers comments on its own.
+ */
+const SEARCH_TOOLS = 'WebSearch,WebFetch'
+
 /** A server name that is one entry of an allow-list: a space or a comma would make it several, a wildcard would make it more. */
 const PLAIN_SERVER_NAME = /^[A-Za-z0-9_-]+$/
 
@@ -87,10 +95,12 @@ export class ClaudeCodeEngine extends CliEngine {
       '--output-format',
       'text',
       ...this.modelArgs(task),
+      // A web search gives the engine the search and the reading of a page, and nothing else (no shell, no files, no other tool); otherwise no tool at all.
       '--tools',
-      '',
+      task.search ? SEARCH_TOOLS : '',
       '--permission-mode',
       'dontAsk',
+      ...(task.search ? ['--allowedTools', SEARCH_TOOLS] : []),
       '--strict-mcp-config',
       '--disable-slash-commands',
       '--no-session-persistence'

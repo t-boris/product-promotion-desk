@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import type { AssistField } from '../../../shared/types'
+import { AiProgressPanel } from '../AiProgress'
 import { call, useAction } from '../hooks'
 import { Button, ErrorNote, Hint } from '../ui'
 import type { Blocked } from './block'
@@ -28,6 +29,8 @@ export function AiTextField({
   blocked,
   disabled = false,
   around = null,
+  progressSubject,
+  onSettled,
   testId,
   children
 }: {
@@ -44,6 +47,10 @@ export function AiTextField({
    * was checked against it; if it differs when the answer arrives, the answer is dropped.
    */
   around?: string | null
+  /** What the AI run is about: while it works, the lines of its run (what it is doing, and what it searches for) are shown here. */
+  progressSubject?: string
+  /** The answer arrived: whether it was put into the field (false when the owner typed meanwhile or the draft moved on). */
+  onSettled?: (applied: boolean) => void
   testId: string
   /** The input itself; it takes the id that ties it to the label. */
   children: (id: string) => ReactNode
@@ -78,6 +85,7 @@ export function AiTextField({
     setWishOpen(false)
     setWish('')
     const fate = answerFate({ value: before, around: checkedAgainst }, latest.current)
+    onSettled?.(fate === 'apply')
     if (fate !== 'apply') {
       setSkipped(fate) // typing meanwhile wins, and an answer checked against a draft that moved on is dropped, not merged
       return
@@ -147,6 +155,7 @@ export function AiTextField({
           {blocked.text} <a href={blocked.fix.href}>{blocked.fix.label}</a>
         </Hint>
       )}
+      {state.busy && progressSubject && <AiProgressPanel subject={progressSubject} />}
       <ErrorNote error={state.error} />
       {skipped && (
         <p className="hint" role="status" data-testid={`${testId}-skipped`}>

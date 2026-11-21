@@ -1,10 +1,11 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { DraftInput } from '../../../../shared/api'
-import type { Attachment, Draft, Id, PostMarkup } from '../../../../shared/types'
+import type { Attachment, Draft, DraftSource, Id, PostMarkup } from '../../../../shared/types'
 import { AiTextField } from '../../assist/AiField'
 import { useAssistBlock } from '../../assist/useAssistBlock'
 import { call, useQuery } from '../../hooks'
 import { Badge, Button, Field } from '../../ui'
+import { FoundSources } from './FoundSources'
 import { fileName } from './labels'
 import { PostPictures, PostTextBox, usePostEditor } from './PostEditorParts'
 import { PostPreview, type PostAuthor } from './PostPreview'
@@ -75,11 +76,19 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
   const inEditor = withTitle && post !== undefined
   // One editor per open card, so only "is an engine chosen" is asked here; the refusal after a press says why an engine cannot work.
   const { blocked } = useAssistBlock({ engineReady: false })
+  // What the AI found on the web for the last text it wrote (only when it searched): shown while that text is the one in the field.
+  const [found, setFound] = useState<DraftSource[]>([])
+  const foundNow = useRef<DraftSource[]>([])
   // The AI is asked for one field of the draft as the editor holds it now; nothing is stored, the owner saves the draft.
   const askFor = (field: 'title' | 'text') => async ({ instruction }: { current: string; instruction: string | undefined }): Promise<string> => {
+    if (field === 'text') {
+      foundNow.current = []
+      setFound([])
+    }
     const result = await call('drafts.refine', { field, opportunityId: ai?.opportunityId, channelId: ai?.channelId, form: { title: form.title, text: form.text }, instruction })
     const text = result[field]
     if (text === undefined) throw new Error('The AI did not return a text. Try again.')
+    if (field === 'text') foundNow.current = result.sources ?? []
     return text
   }
   // An answer is checked against the other field and the target it was asked for; if either moved on meanwhile, it is dropped (AiTextField).
@@ -97,7 +106,7 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
 
   const textField = (
     ai ? (
-        <AiTextField key={`text-${draft?.id ?? 'new'}`} label={withTitle ? 'Text' : 'Reply'} value={form.text} onChange={(text) => set({ text })} ask={askFor('text')} blocked={blocked} disabled={disabled} around={aroundText} testId="draft-text-help">
+        <AiTextField key={`text-${draft?.id ?? 'new'}`} label={withTitle ? 'Text' : 'Reply'} value={form.text} onChange={(text) => set({ text })} ask={askFor('text')} blocked={blocked} disabled={disabled} around={aroundText} progressSubject={withTitle ? target || undefined : undefined} onSettled={(applied) => setFound(applied ? foundNow.current : [])} testId="draft-text-help">
           {(id) =>
             inEditor ? (
               <PostTextBox id={id} value={form.text} onChange={(text) => set({ text })} disabled={disabled} autoFocus={autoFocus && !withTitle} editor={editor} />
@@ -144,6 +153,7 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
       ) : (
         textField
       )}
+      <FoundSources sources={found} />
       <div className="form-row">
         <Field label="Link (optional)" hint="Links are checked against the product's own website.">
           <input className="input" value={form.link} disabled={disabled} onChange={(e) => set({ link: e.target.value })} placeholder="https://" data-testid="draft-link" />

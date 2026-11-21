@@ -36,3 +36,12 @@ export function postUndoable(now: PostText, applied: PostText | null): boolean {
 export function showPostHelper(form: PostText, applied: PostText | null): boolean {
   return postFormEmpty(form) || postUndoable(form, applied)
 }
+
+/** The site of a source address, for showing it beside the page title ("astro.com"); the address itself when it cannot be read. */
+export function sourceHost(address: string): string {
+  try {
+    return new URL(address).hostname.replace(/^www\./, '')
+  } catch {
+    return address
+  }
+}

@@ -8,7 +8,7 @@ import { suggestionBlock } from '../renderer/src/pages/channels/suggestion-block
 import { around, fieldsFromIdea, hasText } from '../renderer/src/pages/products/goal-ideas'
 import { applySiteProposal, proposalFits, siteProposalNote } from '../renderer/src/pages/products/site-proposal'
 import { approveAnywayLabel, checkForm, countLabel, fingerprint, heldFor, introLine, needsCheck, type Held } from '../renderer/src/pages/review/approve-check'
-import { canApplyPost, postAnswerFate, postFormEmpty, postUndoable, showPostHelper } from '../renderer/src/pages/review/post-draft'
+import { canApplyPost, postAnswerFate, postFormEmpty, postUndoable, showPostHelper, sourceHost } from '../renderer/src/pages/review/post-draft'
 
 const READY = { id: 'claude', ready: true, detail: 'ok', label: 'Claude Code' }
 const base: BlockFacts = { productId: 'p1', needsPassport: false, approved: false, engineId: 'claude', engines: [READY], ready: true }
@@ -273,5 +273,13 @@ describe('the check before an approval', () => {
     expect(introLine({ findings: [finding()], error: null })).toBe("Your text breaks rules the AI's own drafts must follow. Nothing is approved yet.")
     expect(introLine({ findings: [], error: 'The engine is gone' })).toBe('The text could not be checked (The engine is gone). Nothing is approved yet; you can still approve it.')
     expect(introLine({ findings: [finding()], error: 'x' })).toContain('could not be checked')
+  })
+})
+
+describe('what the AI found (the pages a post was built on)', () => {
+  it('shows a source by its site: no www, no path; an address that cannot be read is shown as it is', () => {
+    expect(sourceHost('https://www.astro.com/swisseph/swephinfo_e.htm')).toBe('astro.com')
+    expect(sourceHost('https://en.wikipedia.org/wiki/Ephemeris')).toBe('en.wikipedia.org')
+    expect(sourceHost('not an address')).toBe('not an address')
   })
 })

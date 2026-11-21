@@ -333,6 +333,153 @@ describe('drafts.refine: a post', () => {
   })
 })
 
+describe('drafts.refine: a post is written with the web search of the engine', () => {
+  const FOUND = [
+    { title: 'Swiss Ephemeris', url: 'https://www.astro.com/swisseph/swephinfo_e.htm', fact: 'It was published by Astrodienst and is based on the JPL ephemerides.' },
+    { title: 'Ephemeris - Wikipedia', url: 'https://en.wikipedia.org/wiki/Ephemeris', fact: 'An ephemeris lists the positions of astronomical objects at given times.' }
+  ]
+  const WISH_TEXT = 'An ephemeris is a table of where the planets are. Take the **Moon**: its place at your birth gives a sign.'
+
+  it('asks for the search for the body of a post (a new post or its text), and never for a title or a reply', async () => {
+    world = makeWorld({ mode: 'draft' })
+    world.engine.on('drafts.write', answer({ title: 'T', text: BORING }))
+    world.engine.on('drafts.improve', answer({ text: BORING, title: 'T' }))
+    await help({ field: 'post', channelId: world.channel.id, form: { title: '', text: '' }, about: 'ephemeris' })
+    await help({ field: 'text', channelId: world.channel.id, form: { title: 'T', text: 'A text' }, instruction: 'expand it' })
+    world.engine.on('drafts.improve', answer({ title: 'A title', usedClaimIds: [], statesProductFacts: false }))
+    await help({ field: 'title', channelId: world.channel.id, form: { title: 'chart', text: 'A text' } })
+    const opp = await replyCard()
+    world.engine.on('drafts.improve', answer({ text: BORING }))
+    await help({ field: 'text', opportunityId: opp.id, form: { title: '', text: 'Hi' } })
+
+    const [post, text, title, reply] = world.engine.calls
+    expect(post.search).toBe(true)
+    expect(text.search).toBe(true)
+    expect(title.search).toBeUndefined()
+    expect(reply.search).toBeUndefined()
+    expect(post.system).toContain('Your only tool is a web search')
+    expect(title.system).toContain('You have no tools')
+    expect(title.system).toContain('A title is one plain, honest line')
+    expect(title.system).not.toContain('End with one genuine question')
+    expect(reply.system).toContain('You have no tools')
+    expect(post.timeoutMs).toBeGreaterThan(title.timeoutMs ?? 0)
+  })
+
+  it('tells the model to search only when the wish needs facts, and never for a small change', async () => {
+    world = makeWorld({ mode: 'draft' })
+    world.engine.on('drafts.improve', answer({ text: BORING, sources: [] }))
+    await help({ field: 'text', channelId: world.channel.id, form: { title: 'T', text: 'A text of the owner.' }, instruction: 'shorter' })
+    const task = world.engine.calls[0]
+    expect(task.system).toContain('search the web ONLY when the owner\'s wish, or writing a post from nothing, needs facts you do not have')
+    expect(task.system).toContain('NEVER search to shorten, reword, change the tone, fix, translate, format or make any other small change')
+    expect(task.system).toContain('For a small wish (shorter, friendlier, one word) change only what it asks')
+    expect(block(task.prompt, 'owner_wish')).toBe('shorter')
+    expect(task.prompt).toContain('"sources"')
+  })
+
+  it('does not tell a post to be brief, and does not forbid structure: it must be worth reading', async () => {
+    world = makeWorld({ mode: 'draft' })
+    world.engine.on('drafts.write', answer({ title: 'T', text: BORING }))
+    await help({ field: 'post', channelId: world.channel.id, form: { title: '', text: '' } })
+    const system = world.engine.calls[0].system ?? ''
+    expect(system).not.toContain('Be brief')
+    expect(system).toContain('A post must be worth reading, and it is not an advertisement')
+    expect(system).toContain('End with one genuine question')
+    expect(system).toContain('Never invent a number, a name, a date, a quote or a study')
+    expect(system).toContain('state only those listed in context.knowledge.approvedClaims')
+    // A reply keeps its short, plain rules.
+    const opp = await replyCard()
+    world.engine.on('drafts.write', answer({ text: BORING }))
+    await help({ field: 'text', opportunityId: opp.id, form: { title: '', text: '' } })
+    expect(world.engine.calls.at(-1)?.system).toContain('Be brief, natural and honest')
+    expect(world.engine.calls.at(-1)?.system).not.toContain('Searching:')
+  })
+
+  it('puts the draft and the wish into the run, so the search is for what the owner asked about', async () => {
+    world = makeWorld({ mode: 'draft' })
+    world.engine.on('drafts.improve', answer({ text: WISH_TEXT, sources: FOUND, usedClaimIds: [], statesProductFacts: false }))
+    await help({ field: 'text', channelId: world.channel.id, form: { title: 'What does Swiss Ephemeris do?', text: 'It calculates positions.' }, instruction: 'Rewrite with an explanation of frameworks with focus on Ephemeris' })
+    const task = world.engine.calls[0]
+    expect(block(task.prompt, 'draft')).toContain('It calculates positions.')
+    expect(block(task.prompt, 'owner_wish')).toBe('Rewrite with an explanation of frameworks with focus on Ephemeris')
+    expect(task.subject).toBe(world.channel.id)
+  })
+
+  it('hands over the pages the model used, and only real public https pages with a fact', async () => {
+    world = makeWorld({ mode: 'draft' })
+    const bad = [
+      { title: 'Plain http', url: 'http://astro.com/x', fact: 'A fact.' },
+      { title: 'This computer', url: 'https://localhost/x', fact: 'A fact.' },
+      { title: 'Credentials', url: 'https://me:pw@astro.com/x', fact: 'A fact.' },
+      { title: 'No fact', url: 'https://example.org/x', fact: '' },
+      FOUND[0]
+    ]
+    world.engine.on('drafts.improve', answer({ text: WISH_TEXT, sources: [...FOUND, ...bad], usedClaimIds: [], statesProductFacts: false }))
+    const result = await help({ field: 'text', channelId: world.channel.id, form: { title: 'T', text: 'A text.' }, instruction: 'expand it with real examples' })
+    expect(result).toEqual({ text: WISH_TEXT, sources: FOUND })
+  })
+
+  it('has no sources when the model did not search: a small change comes back as the text alone', async () => {
+    world = makeWorld({ mode: 'draft' })
+    world.engine.on('drafts.improve', answer({ text: BORING, sources: [] }))
+    expect(await help({ field: 'text', channelId: world.channel.id, form: { title: 'T', text: 'A longer text of the owner.' }, instruction: 'shorter' })).toEqual({ text: BORING })
+    world.engine.on('drafts.improve', answer({ text: BORING }))
+    expect(await help({ field: 'text', channelId: world.channel.id, form: { title: 'T', text: 'A longer text of the owner.' }, instruction: 'shorter' })).toEqual({ text: BORING })
+    expect(world.engine.calls).toHaveLength(2)
+  })
+
+  it('never puts the address of a source into the text: a text that links to its source is handed back', async () => {
+    world = makeWorld({ mode: 'draft' })
+    world.engine.on('drafts.improve', answer({ text: `${WISH_TEXT} Source: https://www.astro.com/swisseph/swephinfo_e.htm`, sources: FOUND, usedClaimIds: [], statesProductFacts: false }))
+    world.engine.on('drafts.improve.repair', answer({ text: WISH_TEXT, sources: FOUND, usedClaimIds: [], statesProductFacts: false }))
+    const result = await help({ field: 'text', channelId: world.channel.id, form: { title: 'T', text: 'A text.' }, instruction: 'expand it' })
+    expect(result.text).toBe(WISH_TEXT)
+    expect(world.engine.calls[1].label).toBe('drafts.improve.repair')
+    expect(world.engine.calls[1].prompt).toContain('link')
+  })
+
+  it('a post written from nothing may stand on the pages it found: no approved fact has to be cited, and the pages come back', async () => {
+    world = makeWorld({ mode: 'draft' })
+    world.engine.on('drafts.write', answer({ title: 'Where the Moon was when you were born', text: WISH_TEXT, sources: FOUND, usedClaimIds: [], statesProductFacts: false }))
+    const result = await help({ field: 'post', channelId: world.channel.id, form: { title: '', text: '' }, about: 'how an ephemeris works' })
+    expect(result).toEqual({ title: 'Where the Moon was when you were born', text: WISH_TEXT, sources: FOUND })
+    expect(world.engine.calls).toHaveLength(1)
+  })
+
+  it('a post written from nothing with neither an approved fact nor a page is handed back', async () => {
+    world = makeWorld({ mode: 'draft' })
+    world.engine.on('drafts.write', answer({ title: 'T', text: WISH_TEXT, sources: [], usedClaimIds: [], statesProductFacts: false }))
+    world.engine.on('drafts.write.repair', answer({ title: 'T', text: WISH_TEXT, sources: FOUND, usedClaimIds: [], statesProductFacts: false }))
+    expect((await help({ field: 'post', channelId: world.channel.id, form: { title: '', text: '' } })).sources).toEqual(FOUND)
+    expect(world.engine.calls[1].prompt).toContain('must cite at least one approved fact')
+  })
+
+  it('hands back a text that starts with the label of a field: the title is its own field and the body carries no label', async () => {
+    world = makeWorld({ mode: 'draft' })
+    world.engine.on('drafts.improve', answer({ text: `Title: A new title\n\n${WISH_TEXT}`, usedClaimIds: [], statesProductFacts: false }))
+    world.engine.on('drafts.improve.repair', answer({ text: WISH_TEXT, usedClaimIds: [], statesProductFacts: false }))
+    const result = await help({ field: 'text', channelId: world.channel.id, form: { title: 'T', text: 'A text.' }, instruction: 'expand it' })
+    expect(result.text).toBe(WISH_TEXT)
+    expect(world.engine.calls[1].prompt).toContain('starts with a "Title:" or "Text:" label')
+    expect(world.engine.calls[0].prompt).toContain('no "Title:" or "Text:" label')
+  })
+
+  it('a reply and a title never carry sources, whatever the answer says', async () => {
+    world = makeWorld({ mode: 'draft' })
+    const opp = await replyCard()
+    world.engine.on('drafts.improve', answer({ text: BORING, sources: FOUND }))
+    expect(await help({ field: 'text', opportunityId: opp.id, form: { title: '', text: 'Hi' } })).toEqual({ text: BORING })
+    world.engine.on('drafts.improve', answer({ title: 'A title', sources: FOUND, usedClaimIds: [], statesProductFacts: false }))
+    expect(await help({ field: 'title', channelId: world.channel.id, form: { title: 'chart', text: 'A text' } })).toEqual({ title: 'A title' })
+  })
+
+  it('a search that found nothing or failed is no error here: the engine answers, the text comes back without sources', async () => {
+    world = makeWorld({ mode: 'draft' })
+    world.engine.on('drafts.improve', answer({ text: BORING, sources: [{ title: 'Gone', url: 'not an address', fact: 'x' }] }))
+    expect(await help({ field: 'text', channelId: world.channel.id, form: { title: 'T', text: 'A text.' }, instruction: 'look something up about it' })).toEqual({ text: BORING })
+  })
+})
+
 describe('drafts.refine: what a text written from nothing must stand on', () => {
   it('a reply that states facts about the product must cite an approved fact; a thank-you states none and needs none', async () => {
     world = makeWorld({ mode: 'draft' })

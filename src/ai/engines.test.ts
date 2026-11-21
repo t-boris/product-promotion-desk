@@ -38,6 +38,9 @@ case "$FAKE_MODE" in
     sleep 30 &
     echo $! > "$LOG/childpid"
     wait ;;
+  codexlog)
+    printf 'OpenAI Codex\n--------\nuser\nthe whole prompt\nweb search: \nweb search: swiss ephemeris history\ncodex\n{"x":1}\ntokens used\n12\n' >&2
+    printf '%s\n' '{"x":1}' ;;
   crash) kill -SEGV $$ ;;
   huge) yes x | head -c 200000 ;;
 esac
@@ -352,6 +355,50 @@ describe('Codex run', () => {
     expect(argv.join('')).toContain('[--sandbox][read-only]')
     expect(argv.at(-1)).toBe('[-]')
     expect(argv.join(' ')).not.toMatch(/danger-full-access|workspace-write|dangerously|bypass/i)
+  })
+})
+
+describe('a run that may search the web (a post is written with it)', () => {
+  it('Codex: the global --search goes before exec, and the sandbox stays read-only', async () => {
+    const engine = new CodexEngine({ searchPaths: [binDir], env: env('ok') })
+    await engine.run({ label: 't', prompt: 'x', search: true })
+    const argv = read('argv').split('\n').filter(Boolean)
+    expect(argv.slice(0, 2)).toEqual(['[--search]', '[exec]'])
+    expect(argv.join('')).toContain('[--sandbox][read-only]')
+    expect(argv).toContain('[--ignore-user-config]')
+    expect(argv.join(' ')).not.toMatch(/danger-full-access|workspace-write|dangerously|bypass/i)
+  })
+
+  it('Codex: a run that does not ask for a search has no --search', async () => {
+    await new CodexEngine({ searchPaths: [binDir], env: env('ok') }).run({ label: 't', prompt: 'x' })
+    expect(read('argv')).not.toContain('--search')
+  })
+
+  it('Claude Code: the search and the reading of a page are the only tools, and nothing else is allowed', async () => {
+    const engine = new ClaudeCodeEngine({ searchPaths: [binDir], env: env('ok') })
+    await engine.run({ label: 't', prompt: 'x', system: 'be brief', search: true })
+    const argv = read('argv').split('\n').filter(Boolean).join('')
+    expect(argv).toContain('[--tools][WebSearch,WebFetch]')
+    expect(argv).toContain('[--allowedTools][WebSearch,WebFetch]')
+    expect(argv).toContain('[--permission-mode][dontAsk]')
+    expect(argv).toContain('[--strict-mcp-config]')
+    expect(argv).not.toMatch(/dangerously|bypassPermissions|Bash|Read\]|Edit|Write/)
+  })
+
+  it('Claude Code: a run that does not ask for a search still has no tool at all', async () => {
+    await new ClaudeCodeEngine({ searchPaths: [binDir], env: env('ok') }).run({ label: 't', prompt: 'x' })
+    const argv = read('argv').split('\n').filter(Boolean).join('')
+    expect(argv).toContain('[--tools][]')
+    expect(argv).not.toMatch(/WebSearch|WebFetch|allowedTools/)
+  })
+
+  it('Codex: the searches it makes are shown as progress, and its banner and prompt are not', async () => {
+    const engine = new CodexEngine({ searchPaths: [binDir], env: env('codexlog') })
+    const messages: string[] = []
+    await engine.run({ label: 't', prompt: 'x', search: true }, { onProgress: (m) => messages.push(m) })
+    expect(messages).toContain('web search: swiss ephemeris history')
+    expect(messages.join('\n')).not.toMatch(/whole prompt|OpenAI Codex|tokens used/)
+    expect(messages).not.toContain('web search:')
   })
 })
 

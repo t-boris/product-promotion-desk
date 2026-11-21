@@ -66,6 +66,11 @@ export interface AiTask {
   makeFiles?: { dir: string }
   /** The model the engine is asked for, by the name it knows it. Without it the engine uses the model chosen for it in Settings, or its own default. */
   model?: string
+  /**
+   * The engine may search the web and read the pages it finds during this run, and has no other tool: a post is written with it, and the model decides
+   * from the owner's wish whether to use it. What it reads is untrusted, so what it answers is checked before anything is made of it.
+   */
+  search?: boolean
 }
 
 export type AiErrorKind = 'unavailable' | 'failed' | 'cancelled' | 'timeout' | 'invalid_output'

@@ -25,6 +25,9 @@ import { CliEngine, type CliEngineOptions } from './cli-engine'
  * does not ask for one: the owner decided on 2026-11-20 that any selected engine may work the browser, and it gives Codex a quiet run (nothing the
  * engine printed goes into an error message) with the access of every agent mission.
  *
+ * A web search (`task.search`, the research before a post is written) is the same read-only run with the CLI's global `--search`: the model may search the
+ * web and open the pages it finds, and nothing else changes. What it reads is untrusted, so the caller checks the answer before anything is made of it.
+ *
  * A picture (`task.makeFiles`, DEC-019) runs in the folder named by the caller with `--sandbox workspace-write`: Codex's own image tool
  * (`codex features list`: image_generation, stable) makes the file and writes it there. Checked once with the real CLI (a 1254x1254 PNG in 13k tokens).
  */
@@ -71,6 +74,10 @@ export class CodexEngine extends CliEngine {
     if (task.agent?.confined) throw new AiError('unavailable', 'Codex cannot be held to the browser tools alone (it can also run commands and read files), so it does not publish for you.')
     if (task.agent) return this.agentArgs(task.agent, cwd, this.modelArgs(task))
     return [
+      // A web search is the CLI's own switch and goes before the subcommand: `codex exec --search` is refused ("unexpected argument"), `codex --search exec` is
+      // what runs (Codex 0.171, checked with a real run: the answer came with its sources, and stderr listed "web search: <query>"). It adds the native
+      // `web_search` tool, which the model runs on the server: nothing on this computer is read or run for it, and the sandbox below stays read-only.
+      ...(task.search ? ['--search'] : []),
       'exec',
       ...this.modelArgs(task),
       '--sandbox',
@@ -134,11 +141,12 @@ export class CodexEngine extends CliEngine {
         return
       }
       if (mode === 'prompt') {
-        if (!/^(codex|exec|thinking|tool|mcp\b.*)$/i.test(line)) return
+        if (!/^(codex|exec|thinking|tool|mcp\b.*|web search\b.*)$/i.test(line)) return
         mode = 'work'
       }
       // The answer itself (JSON) is not progress; it is read by the caller.
-      if (line === '' || line.startsWith('{') || /^(codex|thinking|tool)$/i.test(line)) return
+      // "web search:" with no query is only the start of a search; the line that names what is searched for is the progress.
+      if (line === '' || line.startsWith('{') || /^(codex|thinking|tool)$/i.test(line) || /^web search:?$/i.test(line)) return
       forward(line.slice(0, 200))
     }
   }

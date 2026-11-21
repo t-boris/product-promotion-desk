@@ -77,10 +77,19 @@ export type AssistField =
 /** What the AI helps with in a draft: the title, the text, or a whole new post (title and text). */
 export type DraftHelpField = 'title' | 'text' | 'post'
 
+/** A page the AI found on the web and built the text on: the title it has, the address (https, a public site) and the fact it took from it. */
+export interface DraftSource {
+  title: string
+  url: string
+  fact: string
+}
+
 /** What the AI wrote for a draft. Only the asked parts are set. Nothing is stored: the owner reads it and saves the draft. */
 export interface DraftHelpResult {
   title?: string
   text?: string
+  /** The pages the AI searched and used for the text (only when it searched), never put into the text itself. */
+  sources?: DraftSource[]
 }
 
 /** One thing the owner's own text breaks: what the panel before an approval lists. */
