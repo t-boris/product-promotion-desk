@@ -2,6 +2,8 @@ import { useState, type ClipboardEvent, type DragEvent, type ReactNode } from 'r
 import type { Attachment, MediaItem } from '../../../../../shared/types'
 import { pictureRulesText } from '../../../../../shared/post-pictures'
 import { call, useAction, useQuery } from '../../../hooks'
+import { ViewableImage } from '../../../pictures/ViewableImage'
+import { mediaPicture } from '../../../pictures/picture-viewer'
 import { Badge, Button, ErrorNote, Hint } from '../../../ui'
 import { imageFilesOf } from '../editor-marks'
 import { MakePicture } from '../MakePicture'
@@ -14,7 +16,9 @@ function Chosen({ picture }: { picture: Attachment }) {
   const url = useThumb(picture.mediaId, 360)
   return (
     <div className="quick-chosen" data-testid="quick-chosen-picture">
-      <div className="quick-chosen-frame">{url ? <img src={url} alt={picture.name} /> : <span className="muted small">{url === null ? 'Picture removed' : '…'}</span>}</div>
+      <div className="quick-chosen-frame">
+        {url && picture.mediaId ? <ViewableImage src={url} alt={picture.name} picture={mediaPicture({ id: picture.mediaId, name: picture.name })} /> : <span className="muted small">{url === null ? 'Picture removed' : '…'}</span>}
+      </div>
       <span className="quick-chosen-name small" title={picture.name}>
         {picture.name}
       </span>
@@ -186,6 +190,7 @@ export function OwnPicture({
   )
 }
 
+/** A tile of the library: the whole tile is the button that uses the picture, so its thumbnail is a plain picture (a second button inside it would be wrong). */
 function LibraryPicture({ item, onUse }: { item: MediaItem; onUse: () => void }) {
   const url = useThumb(item.id, 128)
   return (

@@ -1,13 +1,18 @@
 import type { Finding, FindingPicture } from '../../../../shared/types'
 import { useQuery } from '../../hooks'
+import { ViewableImage } from '../../pictures/ViewableImage'
+import { postPicture, type ViewerPicture } from '../../pictures/picture-viewer'
 import { pictureColumns } from './stream-card'
 
 /** The longest side, in pixels, of the copy of a picture the card shows. */
 const SINGLE_SIDE = 960
 const SHARED_SIDE = 640
 
-/** One picture of a post: the file the application fetched, a note while it is on its way, or why the site would not give it. */
-function PostPicture({ picture, side }: { picture: FindingPicture; side: number }) {
+/**
+ * One picture of a post: the file the application fetched, a note while it is on its way, or why the site would not give it. A picture that is here opens large when it
+ * is pressed, among the pictures of the same post (`group`, in the order of the post; `place` is this one's number in the post, from 1).
+ */
+function PostPicture({ picture, side, place, group }: { picture: FindingPicture; side: number; place: number; group: readonly FindingPicture[] }) {
   const shown = useQuery('findings.picture', { id: picture.id, side }, [], { skip: picture.state !== 'ready' })
   if (picture.state === 'failed') {
     return (
@@ -30,9 +35,12 @@ function PostPicture({ picture, side }: { picture: FindingPicture; side: number 
       </div>
     )
   }
+  const mine = postPicture(picture, place, shown.data.dataUrl)
+  // The others of the post are listed without a copy on hand: the viewer asks for each large copy itself when it comes to it.
+  const everyone = group.filter((other) => other.state === 'ready').map((other) => (other.id === picture.id ? mine : postPicture(other, group.indexOf(other) + 1)))
   return (
     <figure className="stream-picture" data-testid="stream-picture">
-      <img src={shown.data.dataUrl} alt={picture.alt || 'A picture of the post'} loading="lazy" />
+      <ViewableImage src={shown.data.dataUrl} alt={picture.alt || 'A picture of the post'} loading="lazy" picture={mine} group={everyone} index={everyone.findIndex((other: ViewerPicture) => other.key === picture.id)} />
     </figure>
   )
 }
@@ -47,8 +55,8 @@ export function PostPictures({ findingId }: { findingId: string }) {
   const side = columns === 1 ? SINGLE_SIDE : SHARED_SIDE
   return (
     <div className="stream-pictures" data-testid="stream-pictures" data-columns={columns} aria-label="Pictures of the post">
-      {list.map((picture) => (
-        <PostPicture key={picture.id} picture={picture} side={side} />
+      {list.map((picture, at) => (
+        <PostPicture key={picture.id} picture={picture} side={side} place={at + 1} group={list} />
       ))}
     </div>
   )

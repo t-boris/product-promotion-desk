@@ -1,5 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import type { Attachment } from '../../../../shared/types'
+import { ViewableImage } from '../../pictures/ViewableImage'
+import { mediaPicture } from '../../pictures/picture-viewer'
 import { Badge, type Tone } from '../../ui'
 import { useThumb } from '../review/useMedia'
 import { shortTime } from './short-time'
@@ -8,10 +10,14 @@ import type { PostRow, PostState } from './posts-filter'
 export const STATE_LABEL: Record<PostState, string> = { draft: 'Draft', approved: 'Approved', scheduled: 'Scheduled', sent: 'Sent', deleted: 'Deleted' }
 const STATE_TONE: Record<PostState, Tone> = { draft: 'neutral', approved: 'info', scheduled: 'info', sent: 'good', deleted: 'neutral' }
 
-/** The small picture of a row, or an empty frame of the same size so the rows keep one rhythm. */
+/**
+ * The small picture of a row, or an empty frame of the same size so the rows keep one rhythm. A press of the mouse on it opens the picture large. It is not a button of its own:
+ * the row is one (a list box option), and the same picture is one press away in the pane the row opens, which the keyboard reaches.
+ */
 function Thumb({ attachment }: { attachment: Attachment | null }) {
   const url = useThumb(attachment?.mediaId, 80)
-  return url ? <img className="posts-thumb" src={url} alt="" /> : <span className="posts-thumb posts-thumb-empty" aria-hidden="true" />
+  if (!url || !attachment?.mediaId) return <span className="posts-thumb posts-thumb-empty" aria-hidden="true" />
+  return <ViewableImage className="posts-thumb" src={url} alt="" keyboard={false} picture={mediaPicture({ id: attachment.mediaId, name: attachment.name })} />
 }
 
 /** What the row says about time: when it went out, when it is planned to, or when it was last touched. */

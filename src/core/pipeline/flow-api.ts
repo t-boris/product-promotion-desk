@@ -190,6 +190,7 @@ export function registerFlowApi({ core, store, review, monitor, drafting, sendin
     },
     'findings.pictures': ({ id }) => findings.pictures(requireText(id, 'The post')),
     'findings.picture': ({ id, side }) => pictures.dataUrl(requireText(id, 'The picture'), side),
+    'findings.savePicture': ({ id }) => pictures.save(requireText(id, 'The picture')),
     // "Check with AI" on a post: the AI opens it in the account's browser and reads it in full. Nothing is replied to, sent or approved.
     'findings.readNow': ({ id }) => watcher.readPost(findings.get(requireText(id, 'The post'))),
     'findings.setStarred': ({ id, starred }) => {

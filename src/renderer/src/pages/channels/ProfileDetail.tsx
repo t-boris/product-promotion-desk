@@ -3,6 +3,8 @@ import type { Account, PlatformInfo, Product, Profile, ProfileFields, ProfileGen
 import { fieldsOf, profileLine, sameFields } from '../../../../shared/profile'
 import { AiProgressPanel } from '../../AiProgress'
 import { call, useAction } from '../../hooks'
+import { ViewableImage } from '../../pictures/ViewableImage'
+import { profilePicture } from '../../pictures/picture-viewer'
 import { Badge, Button, Card, ConfirmAction, ErrorNote, Field, ObjectHeader } from '../../ui'
 import { productLabels } from '../products/product-labels'
 import { ProfileAccounts } from './ProfileAccounts'
@@ -230,7 +232,7 @@ export function ProfileDetail({
             {hasPerson && (
               <div className="profile-grid">
                 <div className="profile-picture" data-testid={`profile-picture-${profile.id}`}>
-                  <div className="profile-thumb">{picture ? <img src={picture} alt="Profile" /> : <span className="muted small">No picture yet</span>}</div>
+                  <div className="profile-thumb">{picture ? <ViewableImage src={picture} alt="Profile" picture={profilePicture(profile.id, picture)} /> : <span className="muted small">No picture yet</span>}</div>
                   <Button variant="secondary" onClick={() => void makePicture()} disabled={busy || !draft.fields.pictureIdea.trim()} data-testid={`profile-picture-make-${profile.id}`}>
                     {making.busy ? 'Making it…' : hasPicture ? 'Create new' : 'Create picture'}
                   </Button>

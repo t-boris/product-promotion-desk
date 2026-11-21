@@ -92,6 +92,7 @@ export function register(core: Core): void {
     'profiles.makePicture': (args) => people.makePicture(args),
     'profiles.setPicture': (args) => people.setPicture(args),
     'profiles.picture': (args) => people.picture(args),
+    'profiles.savePicture': (args) => people.savePicture(args),
     'platforms.list': () => listPlatforms(core.connectors),
     'accounts.openBrowser': (args) => accounts.openBrowser(args),
     'accounts.openAddress': (args) => accounts.openAddress(args),

@@ -6,5 +6,5 @@
     "types": []
   },
   // The chart components and the Feed's finding views are rendered to markup by tests that live beside the other renderer-logic tests (vitest excludes src/renderer), so they are compiled with the renderer.
-  "include": ["src/renderer/**/*", "src/shared/**/*", "src/main/charts-render.test.ts", "src/main/feed-render.test.ts", "src/main/channel-render.test.ts", "src/main/feed-page-render.test.ts", "src/main/feed-post-tools-render.test.ts", "src/main/feed-card-render.test.ts"]
+  "include": ["src/renderer/**/*", "src/shared/**/*", "src/main/charts-render.test.ts", "src/main/feed-render.test.ts", "src/main/channel-render.test.ts", "src/main/feed-page-render.test.ts", "src/main/feed-post-tools-render.test.ts", "src/main/feed-card-render.test.ts", "src/main/picture-viewer-render.test.ts"]
 }

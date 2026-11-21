@@ -1,0 +1,98 @@
+/* A picture shown large over the window, with Download. The dark area is a photo viewer's, in both themes; the bars use the sheet's own surface and the shared buttons. */
+
+/* A picture that opens large: the same picture and a zoom-in cursor (it takes the application's own focus ring, as a button does). */
+img.viewable {
+  cursor: zoom-in;
+}
+
+.picture-viewer-backdrop {
+  position: fixed;
+  inset: 0;
+  /* Above a sheet (the modal sits at 50). */
+  z-index: 60;
+  /* Electron draws a drag region over whatever is stacked on it: without this the dark area over the toolbar would drag the window. */
+  -webkit-app-region: no-drag;
+  display: flex;
+  /* Below the title bar, where the window's own buttons are drawn. */
+  padding: var(--toolbar-h) var(--space-4) var(--space-4);
+  background: rgb(8 10 16 / 86%);
+}
+.picture-viewer {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  width: 100%;
+  height: 100%;
+}
+/* The viewer takes the focus itself when it opens, for a screen reader; that is not a control, so it shows no ring. */
+.picture-viewer:focus-visible {
+  outline: none;
+}
+.picture-viewer-bar,
+.picture-viewer-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-3);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+}
+/* A foot with nothing to say takes no room. */
+.picture-viewer-foot:empty {
+  display: none;
+}
+.picture-viewer-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--fw-medium);
+}
+.picture-viewer-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  min-width: 0;
+}
+/* Fitted to the window and never cropped. The size itself is set by the viewer (a small picture is enlarged, at most four times); until it is known the box limits the width and the height. */
+.picture-viewer-stage img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+}
+.picture-viewer-note {
+  color: rgb(230 232 240);
+}
+.picture-viewer-walk {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.picture-viewer-count {
+  min-width: 56px;
+  text-align: center;
+  color: var(--text-2);
+}
+.picture-viewer-saved {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  margin-left: auto;
+}
+.picture-viewer-saved-line {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-2);
+}

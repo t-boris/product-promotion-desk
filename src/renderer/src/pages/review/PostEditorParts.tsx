@@ -4,6 +4,8 @@
 import { useLayoutEffect, useRef, useState, type ClipboardEvent, type Dispatch, type DragEvent, type KeyboardEvent, type RefObject, type SetStateAction } from 'react'
 import type { Attachment, MediaItem } from '../../../../shared/types'
 import { call, useAction, useQuery } from '../../hooks'
+import { ViewableImage } from '../../pictures/ViewableImage'
+import { mediaPicture, type ViewerPicture } from '../../pictures/picture-viewer'
 import { Badge, Button, ErrorNote, Hint } from '../../ui'
 import type { DraftForm } from './DraftEditor'
 import { applyMark, imageFilesOf, insertPicture, placedPictures, withoutPicture, type Mark, type Selection } from './editor-marks'
@@ -199,11 +201,26 @@ export function PostTextBox({ id, value, onChange, disabled, autoFocus, editor }
   )
 }
 
-function Thumb({ id, name }: { id: string | undefined; name: string }) {
+/** What opens a thumbnail large: the picture, the pictures of the same post, and its place among them. */
+interface Viewing {
+  picture: ViewerPicture
+  group: readonly ViewerPicture[]
+  index: number
+}
+
+function Thumb({ id, name, viewing }: { id: string | undefined; name: string; viewing?: Viewing }) {
   const url = useThumb(id, 128)
   // A picture of a post written before the library has no copy yet; saving the post makes one.
   if (id === undefined) return <div className="post-thumb"><span className="muted small">Copied when you save</span></div>
-  return <div className="post-thumb">{url ? <img src={url} alt={name} /> : <span className="muted small">{url === null ? 'Picture removed' : '…'}</span>}</div>
+  // A thumbnail inside a button (a tile of the library that attaches the picture) is not a second button: it stays a plain picture, and the one that is attached opens large.
+  const picture = url ? viewing ? <ViewableImage src={url} alt={name} picture={viewing.picture} group={viewing.group} index={viewing.index} /> : <img src={url} alt={name} /> : null
+  return <div className="post-thumb">{picture ?? <span className="muted small">{url === null ? 'Picture removed' : '…'}</span>}</div>
+}
+
+/** What opens an attachment large: its picture among the pictures of the post; nothing for one that has no copy in the library yet. */
+function viewingOf(a: Attachment, viewable: readonly ViewerPicture[]): Viewing | undefined {
+  const index = viewable.findIndex((picture) => picture.key === a.mediaId)
+  return index < 0 ? undefined : { picture: viewable[index], group: viewable, index }
 }
 
 /** The pictures of the post, and how to add one: choose files, paste or drop, a picture of the library, or have the AI make one. */
@@ -217,6 +234,8 @@ export function PostPictures({ form, productId, disabled, editor }: { form: Draf
     editor.attachMany(await call('media.pick', { productId }), true)
   })
   const unused = (library.data ?? []).filter((item) => !form.attachments.some((a) => a.mediaId === item.id))
+  // The pictures of the post that have a copy in the library open large together, in the order of the post; the size comes from the library when it is known.
+  const viewable = form.attachments.flatMap((a) => (a.mediaId ? [mediaPicture({ id: a.mediaId, name: a.name, ...(library.data ?? []).find((item) => item.id === a.mediaId) })] : []))
   const canPick = status.data?.canPick === true
   const error = picking.error ?? editor.notice
 
@@ -247,7 +266,7 @@ export function PostPictures({ form, productId, disabled, editor }: { form: Draf
         <div className="post-thumbs" data-testid="draft-attachments">
           {form.attachments.map((a) => (
             <div key={keyOf(a)} className="post-picture">
-              <Thumb id={a.mediaId} name={a.name} />
+              <Thumb id={a.mediaId} name={a.name} viewing={viewingOf(a, viewable)} />
               <div className="post-picture-name" title={a.name}>
                 {a.name}
               </div>

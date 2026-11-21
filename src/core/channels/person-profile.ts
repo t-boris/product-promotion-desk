@@ -11,6 +11,7 @@ import { sameFields } from '../../shared/profile'
 import { validateAttachments } from '../pipeline/attachments'
 import type { Core } from '../core'
 import { withMadeImage } from '../media/make'
+import { pictureSaverOf } from '../media/save-picture'
 import { AiError } from '../ports'
 import type { proposeProfile } from './ai-help'
 import { found, requireText } from './errors'
@@ -257,6 +258,15 @@ export class PersonProfileService {
     } catch {
       return null
     }
+  }
+
+  /** Saves the profile's picture where the owner chooses (the Save dialog), as "<name>.<ext>"; null when the dialog was closed. */
+  async savePicture(args: { id: string }): Promise<{ path: string } | null> {
+    const stored = this.store.profile(requireText(args.id, 'The profile'))
+    const file = this.pictureFile(requireText(args.id, 'The profile'))
+    if (!stored || !file) throw new ApiError('not_found', 'This profile has no picture to save yet.')
+    const type = extname(file).toLowerCase() === '.png' ? 'image/png' : extname(file).toLowerCase() === '.webp' ? 'image/webp' : extname(file).toLowerCase() === '.gif' ? 'image/gif' : 'image/jpeg'
+    return pictureSaverOf(this.core).saveFile(file, `${stored.profile.displayName || stored.profile.firstName || 'profile'} picture`, type, 'profile picture')
   }
 
   /** Where the picture is on disk, for a mission that uploads it; null when there is none. */

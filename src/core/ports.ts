@@ -583,5 +583,10 @@ export interface MediaTools {
   thumbnail(path: string, side: number): Promise<string>
   /** Shows the file in the system's file manager. */
   reveal(path: string): void
+  /**
+   * Opens the system's Save dialog with `suggestedName` and writes the picture where the owner chose: a copy of a stored file, or the bytes of a picture drawn on
+   * the screen. Returns the path it wrote, or null when the dialog was closed (nothing is written then).
+   */
+  save(source: { path: string } | { bytes: Buffer }, suggestedName: string): Promise<string | null>
 }
 

@@ -258,10 +258,10 @@ export class FindingStore {
     }))
   }
 
-  /** The stored file of one picture, or null while it has none (or the picture is not there). */
-  pictureFile(id: Id): { file: string; mime: string } | null {
-    const row = this.db.prepare('SELECT file, mime FROM finding_images WHERE id = ?').get(id) as { file: string | null; mime: string | null } | undefined
-    return row && row.file && row.mime ? { file: row.file, mime: row.mime } : null
+  /** The stored file of one picture and its place among the pictures of its post (0 for the first), or null while it has no file (or the picture is not there). */
+  pictureFile(id: Id): { file: string; mime: string; position: number } | null {
+    const row = this.db.prepare('SELECT file, mime, position FROM finding_images WHERE id = ?').get(id) as { file: string | null; mime: string | null; position: number } | undefined
+    return row && row.file && row.mime ? { file: row.file, mime: row.mime, position: row.position } : null
   }
 
   /** The pictures that wait to be fetched (no file, no failure), the oldest first. */

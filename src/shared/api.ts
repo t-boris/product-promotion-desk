@@ -273,6 +273,8 @@ export interface ApiMethods {
   'profiles.makePicture': [{ id: Id }, Profile]
   'profiles.setPicture': [{ id: Id; path: string }, Profile]
   'profiles.picture': [{ id: Id }, { dataUrl: string } | null]
+  /** Saves the profile's picture through the system's Save dialog; null when the dialog was closed. */
+  'profiles.savePicture': [{ id: Id }, { path: string } | null]
   /** What the AI learned from the owner's answers (and the rules the owner wrote): one list, for every platform or one. */
   'lessons.list': [void, AgentLesson[]]
   'lessons.add': [{ rule: string; platform?: string | null }, AgentLesson]
@@ -375,6 +377,8 @@ export interface ApiMethods {
   'findings.pictures': [{ id: Id }, FindingPicture[]]
   /** One picture of a post as a data address, its longest side at most `side` pixels; null while the file is not there. */
   'findings.picture': [{ id: Id; side?: number }, { dataUrl: string } | null]
+  /** Saves the stored file of a picture of a post through the system's Save dialog; null when the dialog was closed. */
+  'findings.savePicture': [{ id: Id }, { path: string } | null]
   /** "Check with AI": the AI opens one post in its account's browser and reads it in full (the post, the comments, the pictures). Resolves when it is over. */
   'findings.readNow': [{ id: Id }, { state: 'read' | 'unavailable' | 'failed' | 'stopped'; message: string }]
   /** The comments under a post the AI read and judged worth a reply, in reading order (at most 25); empty for a post nobody read. Read-only. */
@@ -531,6 +535,12 @@ export interface ApiMethods {
   'media.make': [{ productId: Id; description: string; shape: MediaShape }, MediaItem]
   /** Shows the picture's file in the system's file manager (for a post the owner publishes by hand). */
   'media.reveal': [{ id: Id }, void]
+  /** Saves the stored file of a picture of the library through the system's Save dialog; null when the dialog was closed. */
+  'media.save': [{ id: Id }, { path: string } | null]
+  /** Saves a picture drawn on the screen (a page capture, the card of a quick post) from its bytes; refused when they are not a picture. Null when the dialog was closed. */
+  'pictures.saveDataUrl': [{ dataUrl: string; name: string }, { path: string } | null]
+  /** Shows a picture that was saved just now in the file manager (any other path is refused). */
+  'pictures.revealSaved': [{ path: string }, void]
   'publications.schedule': [{ id: Id; at: IsoTime | null }, OpportunityCard]
 
   // results and logs (REQ-005, REQ-006)

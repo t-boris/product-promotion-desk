@@ -2,6 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { judgedForFit, parseBlocks, platformLabel, renderForPlatform, sendProblems, type Block, type Inline, type PostContent, type RenderedPost } from '../../../../shared/post-format'
 import { PREVIEW_PLATFORMS, counterFor, fold, initialOf, previewKind, sketchNote, sketchNoteLook, visiblePictures, whereLine, type PreviewKind } from '../../../../shared/post-preview'
 import type { CardShape } from '../../../../shared/quick-post'
+import { ViewableImage } from '../../pictures/ViewableImage'
+import { CARD_PICTURE_NAME, drawnPicture, mediaPicture } from '../../pictures/picture-viewer'
 import { CopyButton } from '../channels/CopyButton'
 import { previewPlatformOf } from './quick/preview-model'
 import { useThumbs } from './useMedia'
@@ -101,11 +103,17 @@ function Pictures({ rendered, kind, thumbs, live }: { rendered: RenderedPost; ki
   const { shown, more } = visiblePictures(kind, all.length)
   if (shown === 0) return null
   const items = all.slice(0, shown)
+  // Every picture of the post that is in the library opens large, among the others of the post (also the ones the layout counts as "+N"); the card of a quick post is drawn on the screen.
+  const viewable = all.flatMap((a) => (a.mediaId ? [mediaPicture({ id: a.mediaId, name: a.name }, thumbs[a.mediaId])] : []))
   return (
     <div className={`pv-pictures pv-pictures-${kind} n${Math.min(shown, 4)}`} data-testid="preview-pictures">
       {items.map((a, index) => (
         <div key={a.mediaId ?? a.path} className="pv-picture">
-          {a.mediaId && thumbs[a.mediaId] ? <img src={thumbs[a.mediaId]} alt={a.name} /> : live && index === 0 && !a.mediaId ? <img src={live.url} alt={live.alt} data-testid="preview-live-picture" /> : <span className="muted small">{a.name}</span>}
+          {a.mediaId && thumbs[a.mediaId] ? (
+            <ViewableImage src={thumbs[a.mediaId]} alt={a.name} picture={viewable.find((v) => v.key === a.mediaId) ?? viewable[0]} group={viewable} index={Math.max(0, viewable.findIndex((v) => v.key === a.mediaId))} />
+          ) : live && index === 0 && !a.mediaId ? (
+            <ViewableImage src={live.url} alt={live.alt} picture={drawnPicture(live.url, CARD_PICTURE_NAME, live.alt)} data-testid="preview-live-picture" />
+          ) : <span className="muted small">{a.name}</span>}
           {more > 0 && index === items.length - 1 && kind !== 'instagram' && <span className="pv-more">+{more}</span>}
         </div>
       ))}

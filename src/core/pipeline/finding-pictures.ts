@@ -4,9 +4,11 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { ApiError } from '../../shared/api'
 import type { Id } from '../../shared/types'
 import type { Core } from '../core'
 import { imageSize } from '../media/image-size'
+import { pictureSaverOf } from '../media/save-picture'
 import { EXTENSION_BY_MIME } from './attachments'
 import type { FindingStore } from './findings'
 import { defaultDownloadDeps, downloadPicture } from './picture-download'
@@ -16,7 +18,8 @@ export const PICTURE_FOLDER = 'post-pictures'
 const BATCH = 12
 const THUMB_DEFAULT = 480
 const THUMB_MIN = 96
-const THUMB_MAX = 1200
+/** The most pixels (longest side) of a copy for the screen: the viewer that shows a picture large asks for this much. */
+const THUMB_MAX = 2048
 /** A picture of more pixels than this is not kept: a small file can unpack into gigabytes of memory when it is shown. */
 const MAX_PIXELS = 80_000_000
 /** The largest file shown whole, as it is: the screen's own image tools cannot read every kind of picture (a webp), and the page can. */
@@ -89,6 +92,13 @@ export class FindingPictures {
     }
     if (changed) this.findings.notify()
     return kept
+  }
+
+  /** Saves the stored file of a picture of a post where the owner chooses (the Save dialog), named by its place in the post ("post-picture-2.webp"); null when the dialog was closed. */
+  async save(id: Id): Promise<{ path: string } | null> {
+    const stored = this.findings.pictureFile(typeof id === 'string' ? id : '')
+    if (!stored) throw new ApiError('not_found', 'This picture is not saved on this computer, so it cannot be saved from here.')
+    return pictureSaverOf(this.core).saveFile(join(this.folder(), stored.file), `post-picture-${stored.position + 1}`, stored.mime, 'post-picture')
   }
 
   /** A picture as a data address for the screen, its longest side at most `side` pixels; null when the file is not there. */

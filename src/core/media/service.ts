@@ -11,6 +11,7 @@ import { found, requireText } from '../channels/errors'
 import { EXTENSION_BY_MIME, ATTACHMENT_MAX_BYTES, sniffMime, validateAttachments } from '../pipeline/attachments'
 import { imageEngine, isShape, mediaPrompt, withMadeImage } from './make'
 import { imageSize } from './image-size'
+import { pictureSaverOf } from './save-picture'
 import { MediaStore } from './store'
 
 const MAX_NAME = 120
@@ -19,7 +20,8 @@ const MAX_DESCRIPTION = 600
 const MAX_PIXELS = 80_000_000
 const THUMB_DEFAULT = 240
 const THUMB_MIN = 48
-const THUMB_MAX = 960
+/** The most pixels (longest side) of a copy for the screen: the viewer that shows a picture large asks for this much. */
+const THUMB_MAX = 2048
 /** Without Electron's image support the whole file is shown when it is this small. */
 const WHOLE_FILE_THUMB_MAX = 1_500_000
 const ORPHAN_DAYS = 30
@@ -202,6 +204,12 @@ export class MediaService {
     this.store.delete(item.id)
     await rm(item.path, { force: true })
     this.core.events.changed('media')
+  }
+
+  /** Saves the stored file of a picture of the library where the owner chooses (the Save dialog); null when the dialog was closed. */
+  async save(args: { id: Id }): Promise<{ path: string } | null> {
+    const item = this.item(args.id)
+    return pictureSaverOf(this.core).saveFile(item.path, item.name, item.mime, 'picture')
   }
 
   reveal(args: { id: Id }): void {

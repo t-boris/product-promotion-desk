@@ -1,5 +1,7 @@
 import { useId, type ReactNode } from 'react'
 import type { Attachment } from '../../../../../shared/types'
+import { ViewableImage } from '../../../pictures/ViewableImage'
+import { CARD_PICTURE_NAME, drawnPicture } from '../../../pictures/picture-viewer'
 import { SegmentedControl } from '../../../ui'
 import type { LivePicture } from '../PostPreview'
 import { CardControls } from './CardControls'
@@ -55,7 +57,7 @@ export function PictureSlot({
       {card ? (
         <>
           <div className="quick-card-frame" data-shape={form.card.shape} data-testid="quick-card-frame">
-            {live ? <img src={live.url} alt={live.alt} data-testid="quick-card-picture" /> : <span className="muted small">The card is drawn when you save.</span>}
+            {live ? <ViewableImage src={live.url} alt={live.alt} picture={drawnPicture(live.url, CARD_PICTURE_NAME, live.alt)} data-testid="quick-card-picture" /> : <span className="muted small">The card is drawn when you save.</span>}
           </div>
           <CardControls form={form} onChange={onChange} disabled={disabled} />
           {extras}

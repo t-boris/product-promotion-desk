@@ -1,4 +1,6 @@
 import type { PageReport } from '../../../../shared/types'
+import { ViewableImage } from '../../pictures/ViewableImage'
+import { drawnPicture } from '../../pictures/picture-viewer'
 
 /**
  * What an account's page showed and did when the owner asked (DEC-016): the messages the site shows, the requests it made and the
@@ -55,7 +57,7 @@ export function PageReportView({ report, testId }: { report: PageReport | null; 
           </ul>
         </div>
       )}
-      {report.screenshot ? <img className="page-shot" src={report.screenshot} alt={`Screenshot of ${report.address}`} data-testid={`${testId}-shot`} /> : <span className="muted small">The page could not be captured.</span>}
+      {report.screenshot ? <ViewableImage className="page-shot" src={report.screenshot} alt={`Screenshot of ${report.address}`} picture={drawnPicture(report.screenshot, `Screenshot of ${report.address}`, `Screenshot of ${report.address}`)} data-testid={`${testId}-shot`} /> : <span className="muted small">The page could not be captured.</span>}
       {report.savedAs && <span className="muted small">Saved as {report.savedAs}</span>}
     </div>
   )

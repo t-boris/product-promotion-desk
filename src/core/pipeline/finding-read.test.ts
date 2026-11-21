@@ -1,6 +1,9 @@
 // "Check with AI" on one post of the Feed: the AI opens the post in the channel's account and reads it in full; what it read is kept on the post (the thread,
 // the analysis, the topics, the pictures). Through the API the owner presses (findings.readNow), with the AI's browser replaced by a scripted one.
 
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WatchItem, WatchMissionRequest, WatchMissionService, WatchOutcome } from '../browser-agent/watch'
 import type { DownloadDeps } from './picture-download'
@@ -155,6 +158,38 @@ describe('Check with AI on a post', () => {
     const shown = await world.core.router.call('findings.picture', { id: pictures[0].id })
     expect(shown?.dataUrl).toMatch(/^data:image\/png;base64,/)
     expect(await world.core.router.call('findings.picture', { id: 'no-such-picture' })).toBeNull()
+  })
+
+  it('saves a picture of a post where the owner chooses: the original file, named by its place in the post, nothing when the dialog is closed, a refusal for an unknown picture', async () => {
+    const { ai, id } = setup()
+    ai.script = (request) => {
+      request.record([read()])
+      return finished()
+    }
+    await readNow(id)
+    const [picture] = await world.core.router.call('findings.pictures', { id })
+    const stored = world.core.db.prepare('SELECT file FROM finding_images WHERE id = ?').get(picture.id) as { file: string }
+    const original = readFileSync(join(world.core.dataDir, 'post-pictures', stored.file))
+    const asked: string[] = []
+    let answer: string | null = null
+    ;(world.core as { mediaTools: unknown }).mediaTools = {
+      pick: async () => [],
+      reveal: () => undefined,
+      thumbnail: async () => 'data:image/png;base64,AAAA',
+      save: async (source: { path?: string; bytes?: Buffer }, name: string) => {
+        asked.push(name)
+        if (answer === null) return null
+        writeFileSync(answer, source.path ? readFileSync(source.path) : (source.bytes as Buffer))
+        return answer
+      }
+    }
+    expect(await world.core.router.call('findings.savePicture', { id: picture.id })).toBeNull()
+    answer = join(mkdtempSync(join(tmpdir(), 'ppd-post-picture-')), 'saved.png')
+    expect(await world.core.router.call('findings.savePicture', { id: picture.id })).toEqual({ path: answer })
+    expect(asked).toEqual(['post-picture-1.png', 'post-picture-1.png'])
+    expect(readFileSync(answer).equals(original)).toBe(true)
+    await expect(world.core.router.call('findings.savePicture', { id: 'no-such-picture' })).rejects.toMatchObject({ code: 'not_found', message: expect.stringMatching(/not saved on this computer/) })
+    expect(asked).toHaveLength(2)
   })
 
   it('shows a picture the image tools of the system cannot read (a webp, which Reddit serves) as the file itself', async () => {

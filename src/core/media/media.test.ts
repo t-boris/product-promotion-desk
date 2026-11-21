@@ -89,7 +89,7 @@ describe('adding a picture', () => {
     world = makeWorld()
     const original = join(mkdtempSync(join(tmpdir(), 'ppd-pick-')), 'holiday.png')
     writeFileSync(original, png(10, 10, 'holiday'))
-    const tools: MediaTools = { pick: async () => [original, join(tmpdir(), 'ppd-missing.png')], thumbnail: async () => 'data:image/png;base64,AAAA', reveal: () => undefined }
+    const tools: MediaTools = { pick: async () => [original, join(tmpdir(), 'ppd-missing.png')], thumbnail: async () => 'data:image/png;base64,AAAA', reveal: () => undefined, save: async () => null }
     Object.assign(world.core, { mediaTools: tools })
     const picked = (await call('media.pick', { productId: world.product.id })) as MediaItem[]
     expect(picked).toHaveLength(1)
@@ -102,7 +102,7 @@ describe('adding a picture', () => {
     world = makeWorld()
     expect(await refusal('media.pick', { productId: world.product.id })).toBe('no_picker')
     expect(await call('media.status', {})).toMatchObject({ canPick: false, canMake: null })
-    Object.assign(world.core, { mediaTools: { pick: async () => [], thumbnail: async () => '', reveal: () => undefined } satisfies MediaTools })
+    Object.assign(world.core, { mediaTools: { pick: async () => [], thumbnail: async () => '', reveal: () => undefined, save: async () => null } satisfies MediaTools })
     expect(await call('media.pick', { productId: world.product.id })).toEqual([])
     expect(await call('media.status', {})).toMatchObject({ canPick: true, canReveal: true })
   })
@@ -114,10 +114,10 @@ describe('showing and removing', () => {
     const item = await add()
     expect(((await call('media.thumb', { id: item.id })) as { dataUrl: string }).dataUrl).toMatch(/^data:image\/png;base64,/)
     const sides: number[] = []
-    Object.assign(world.core, { mediaTools: { pick: async () => [], thumbnail: async (_p: string, side: number) => (sides.push(side), 'data:image/png;base64,SMALL'), reveal: () => undefined } satisfies MediaTools })
+    Object.assign(world.core, { mediaTools: { pick: async () => [], thumbnail: async (_p: string, side: number) => (sides.push(side), 'data:image/png;base64,SMALL'), reveal: () => undefined, save: async () => null } satisfies MediaTools })
     expect(await call('media.thumb', { id: item.id, side: 100 })).toEqual({ dataUrl: 'data:image/png;base64,SMALL' })
     await call('media.thumb', { id: item.id, side: 99_999 })
-    expect(sides).toEqual([100, 960])
+    expect(sides).toEqual([100, 2048])
     expect(await call('media.thumb', { id: 'gone' })).toBeNull()
   })
 

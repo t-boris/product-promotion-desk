@@ -4,6 +4,8 @@ import { AiProgressPanel } from '../../AiProgress'
 import { AiTextField } from '../../assist/AiField'
 import { useAssistBlock } from '../../assist/useAssistBlock'
 import { call, useAction, useQuery } from '../../hooks'
+import { ViewableImage } from '../../pictures/ViewableImage'
+import { mediaPicture } from '../../pictures/picture-viewer'
 import { Button, ErrorNote, Hint, SegmentedControl } from '../../ui'
 import { useThumb } from './useMedia'
 
@@ -17,7 +19,7 @@ function Candidate({ item, onUse }: { item: MediaItem; onUse: (item: MediaItem) 
   const url = useThumb(item.id, 240)
   return (
     <div className="post-picture candidate" data-testid="picture-candidate">
-      <div className="post-thumb large">{url ? <img src={url} alt={item.description || item.name} /> : <span className="muted small">{url === null ? 'Picture removed' : '…'}</span>}</div>
+      <div className="post-thumb large">{url ? <ViewableImage src={url} alt={item.description || item.name} picture={mediaPicture(item)} /> : <span className="muted small">{url === null ? 'Picture removed' : '…'}</span>}</div>
       <div className="post-picture-actions">
         <Button onClick={() => onUse(item)} data-testid="picture-use">
           Use this one

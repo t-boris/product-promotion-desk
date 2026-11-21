@@ -1,7 +1,7 @@
 // Profiles (DEC-019): a person the owner makes up once, for a purpose. The AI proposes it, the owner edits and approves it, the picture is made by an
 // engine or chosen by the owner. Accounts are the logins of a profile: one per platform, and an account belongs to one profile.
 
-import { existsSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { AiTask } from '../ports'
@@ -249,6 +249,36 @@ describe('the picture', () => {
     expect(readdirSync(folder(w))).toEqual(['picture.png'])
     expect(await w.refusal('profiles.setPicture', { id: w.profileId, path: join(w.core.dataDir, 'missing.png') })).toBe('invalid_picture')
     expect(await w.refusal('profiles.setPicture', { id: w.profileId, path: 'relative.png' })).toBe('invalid_picture')
+  })
+
+  it('saves its picture where the owner chooses: the stored file as it is, named after the person, nothing when the dialog is closed, a refusal while there is no picture', async () => {
+    const w = await world()
+    await propose(w, 'x')
+    const asked: string[] = []
+    let answer: string | null = null
+    Object.assign(w.core, {
+      mediaTools: {
+        pick: async () => [],
+        reveal: () => undefined,
+        thumbnail: async () => '',
+        save: async (source: { path?: string }, name: string) => {
+          asked.push(name)
+          if (answer === null) return null
+          writeFileSync(answer, readFileSync(source.path as string))
+          return answer
+        }
+      }
+    })
+    expect(await w.refusal('profiles.savePicture', { id: w.profileId })).toBe('not_found')
+    const mine = join(w.core.dataDir, 'mine.png')
+    writeFileSync(mine, PNG)
+    await w.call('profiles.setPicture', { id: w.profileId, path: mine })
+    expect(await w.call('profiles.savePicture', { id: w.profileId })).toBeNull()
+    answer = join(w.core.dataDir, 'saved-copy.png')
+    expect(await w.call('profiles.savePicture', { id: w.profileId })).toEqual({ path: answer })
+    expect(asked).toEqual(['Selena Marlowe picture.png', 'Selena Marlowe picture.png'])
+    expect(readFileSync(answer).equals(PNG)).toBe(true)
+    expect(await w.refusal('profiles.savePicture', { id: 'no-such-profile' })).toBe('not_found')
   })
 
   it('goes with the profile when it is removed, and the profile is removed only when no account belongs to it', async () => {
