@@ -920,3 +920,18 @@ Posts → Deleted had no way out (a delete is a cancel; the purge was deliberate
 - [x] tests: 7 purge tests (review.test.ts), channels.test.ts rewritten for the 24-hour rule (+2); `npm run verify` 5524 tests
 - [ ] commit, push, CI, deploy
 - Trade-off to tell the owner: the old guard ("history stops the same message being sent twice") is kept for the last day only; a channel made again with the same address after removal starts with no memory of what the old one sent.
+
+## Browser windows and focus (owner, 2026-11-21) — PLAN, waits for the owner's approval
+
+Owner: each opening in its own window; a window the app opens by itself closes by itself; never take focus; work even when behind other windows.
+
+Found (Explore agent, code only, nothing run on the Mac): one hidden AI page per account (Electron BaseWindow+WebContentsView / one Chrome window opened in the background) serves every connector read and every AI look; one AI task per account (`agent_running` refuses a second; a watch retries after 5 min; Look around answers "The AI is already working on ..."); the AI window is `showInactive()`-ed at the start of a task and never closed or hidden afterwards; owner windows (`openForUser`) are already one per address, the same address raises the existing one; steps call `contents.focus()` before every key/type/aim/scroll (does it raise the window on macOS? unverified); Chrome keeps a minimised page from receiving keys (`ensureShown`), so a window state can break driving.
+Gaps: connector reads and AI tasks do not exclude each other (a monitor read can move the page under a running look).
+
+Design to propose:
+- [ ] 1. A page per look: `ControlledSession` hands each task its own page (Electron: a window view of its own; Chrome: its own background window) on the account's session (same sign-in); closed when the task ends, unless the owner took it over or pressed Open browser on it.
+- [ ] 2. Connector reads (monitor, assess, membership, login check) get their own short page too, so they never move a page under a look; they stay hidden.
+- [ ] 3. One task per CHANNEL (not per account), at most 2-3 at once per account; pacing (`lastActionAt`) moves to the account so two tasks do not double the speed of one identity; Take control, identity epoch, the post gate stay account-wide and stop/guard every page.
+- [ ] 4. Focus: no `contents.focus()` that activates the app; windows shown inactive; Chrome background pages; owner presses still raise the window they asked for. Real check on the Mac with another app in front (typing and clicking must still work behind other windows).
+- [ ] 5. Tests encoding one page per account (browser-session, accounts, electron/chrome service, agent-runs, browser-watch deferral) are rewritten; real-browser probes for focus and for two looks at once.
+- Smaller alternative (not the right design): keep one AI page, close it after every task, never focus it; looks go one after another. Fixes the focus and the leftover window, not "two channels at once".
