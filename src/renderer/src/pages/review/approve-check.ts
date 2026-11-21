@@ -15,6 +15,13 @@ export function needsCheck(draft: { author: 'ai' | 'user' } | null, dirty: boole
   return dirty || draft?.author === 'user'
 }
 
+/**
+ * Whether there is something to save or approve: some text, a link or a picture, and nothing the form itself stops (`blocked`: a quick post
+ * without a headline on its card, or without the picture the owner chose). A card post always has a picture, so it is the form's own reason that
+ * stops an empty card, never the picture.
+ */
+export const hasContent = (input: DraftInput, blocked: string | null): boolean => (input.text.trim().length > 0 || Boolean(input.link) || (input.attachments?.length ?? 0) > 0) && blocked === null
+
 /** The editor as the core reads it. */
 export function checkForm(input: DraftInput): { title: string; text: string; link: string; markup: PostMarkup } {
   return { title: input.title ?? '', text: input.text, link: input.link ?? '', markup: input.markup === 'markdown' ? 'markdown' : 'legacy' }

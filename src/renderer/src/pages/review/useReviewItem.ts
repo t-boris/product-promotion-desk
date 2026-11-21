@@ -21,6 +21,8 @@ export interface ReviewItem {
   dirty: boolean
   /** The form as it stands; approving saves it first so the approval covers exactly what is on screen. */
   input: DraftInput
+  /** Why the item cannot be saved or approved as it stands, when the form itself says so (a quick post); null otherwise. */
+  blocked: string | null
   /** The owner's actions, for the buttons: busy while the group (`frozen`) works on the item too. */
   actions: ReviewActions
   /** The owner's actions as they are, for what the item itself says about a failure. */
@@ -66,6 +68,7 @@ export function useReviewItem(card: OpportunityCard, options: { frozen?: boolean
     quick,
     dirty,
     input,
+    blocked: quick ? quick.reason : null,
     actions: buttons,
     error: actions.error,
     working,

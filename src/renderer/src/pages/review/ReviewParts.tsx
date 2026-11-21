@@ -116,6 +116,7 @@ export function ReviewActionRow({ item, primaryAction = false, primaryTestId }: 
       actions={actions}
       dirty={dirty}
       input={input}
+      blocked={item.blocked}
       primaryAction={primaryAction}
       primaryTestId={primaryTestId}
       extra={

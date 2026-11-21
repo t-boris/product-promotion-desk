@@ -2,13 +2,15 @@
 // rules of the channel picker are tested without the screen. The words of the two refusals are `mixedKindReason` in the shared contract; this
 // file only asks it for each row of the picker.
 
-import { mixedKindReason, postTypeOfPlatform, type PostType } from '../../../../../shared/quick-post'
+import { mixedKindReasonOfType, postTypeOfPlatform, type PostType } from '../../../../../shared/quick-post'
 import type { Id } from '../../../../../shared/types'
 
 /** A channel as the picker knows it: its id and the platform that decides its kind. */
 export interface KindRow {
   channelId: Id
   platform: string
+  /** The kind of the post that already lives in this channel, when it is not the one the platform makes (an old article in a Facebook channel). */
+  type?: PostType
 }
 
 /**
@@ -40,10 +42,15 @@ export function kindOfChannels(platforms: readonly string[]): PostType {
 export function blockedChannels(rows: readonly KindRow[] | undefined, chosen: readonly Id[], own?: KindRow): Record<Id, string> {
   const blocked: Record<Id, string> = {}
   if (!rows) return blocked
-  const ticked = chosenPlatforms(rows, chosen, own)
+  // The kind of each tick: the screen's own post decides for its own channel, the platform for every other.
+  const ticked = chosen.flatMap((id): PostType[] => {
+    if (own && own.channelId === id) return [own.type ?? postTypeOfPlatform(own.platform)]
+    const platform = rows.find((r) => r.channelId === id)?.platform
+    return platform === undefined ? [] : [postTypeOfPlatform(platform)]
+  })
   for (const row of rows) {
     if (chosen.includes(row.channelId)) continue
-    const reason = mixedKindReason(row.platform, ticked)
+    const reason = mixedKindReasonOfType(postTypeOfPlatform(row.platform), ticked)
     if (reason) blocked[row.channelId] = reason
   }
   return blocked

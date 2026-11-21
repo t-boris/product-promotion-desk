@@ -3,7 +3,7 @@ import type { DraftInput } from '../../../../shared/api'
 import type { OpportunityCard } from '../../../../shared/types'
 import { Button, ConfirmAction, useMainVariant } from '../../ui'
 import { ApproveCheck } from './ApproveCheck'
-import { fingerprint, heldFor, needsCheck, type Approving, type Held } from './approve-check'
+import { fingerprint, hasContent, heldFor, needsCheck, type Approving, type Held } from './approve-check'
 import { approveLabels } from './approve-labels'
 import { PREPARABLE_STATES } from './labels'
 import { mainActionOf } from './main-action'
@@ -17,6 +17,8 @@ interface Props {
   dirty: boolean
   /** The form as it stands; approving saves it first so the approval covers exactly what is on screen. */
   input: DraftInput
+  /** Why the form cannot be saved or approved as it stands (a quick post without a headline or a picture); the buttons are off and this says so. */
+  blocked?: string | null
   /** This card owns the screen's one filled button; on every other card the same main action is a secondary one. */
   primaryAction?: boolean
   /** A secondary action that belongs to the item but not to its decision ("Also post to…"): first in the row of main actions, never filled. */
@@ -31,10 +33,10 @@ interface Props {
  * main actions come first and the rare ones last, so Tab reaches Reject after everything else and never first (BUG-039); the
  * stylesheet puts them at the left. Reject cannot be undone, so it asks first, in its own place.
  */
-export function ReviewButtons({ card, actions, dirty, input, primaryAction = false, extra, primaryTestId }: Props) {
+export function ReviewButtons({ card, actions, dirty, input, blocked = null, primaryAction = false, extra, primaryTestId }: Props) {
   const { opportunity: opp } = card
   const id = opp.id
-  const hasText = input.text.trim().length > 0 || Boolean(input.link) || (input.attachments?.length ?? 0) > 0
+  const hasText = hasContent(input, blocked)
   const main = mainActionOf(opp.state, dirty)
   const removal = removalWords(opp.kind)
   // While a form opened on demand is open on the same screen, it owns the filled button (see `OpenFormsScope`).
@@ -137,7 +139,7 @@ export function ReviewButtons({ card, actions, dirty, input, primaryAction = fal
         {extra}
         {main === 'approve' && !hasText && (
           <span className="muted small" data-testid="approve-reason">
-            Write the text first.
+            {blocked ?? 'Write the text first.'}
           </span>
         )}
         {dirty && (

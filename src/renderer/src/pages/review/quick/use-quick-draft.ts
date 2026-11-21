@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { DraftInput } from '../../../../../shared/api'
 import type { Draft, Id } from '../../../../../shared/types'
-import { cardAttachment, isCardPicture, needsNewCard, quickDirty, quickFormOf, quickInput, type QuickForm } from './quick-form'
+import { cardAttachment, isCardPicture, needsNewCard, quickDirty, quickFormOf, quickInput, quickReason, type QuickForm } from './quick-form'
 import { storeCard } from './store-card'
 
 export interface QuickEdit {
@@ -15,6 +15,8 @@ export interface QuickEdit {
   dirty: boolean
   /** The draft as it stands, with the saved card's picture or a stand-in for a card that is not drawn yet: enough to read and to compare, never to save. */
   input: DraftInput
+  /** Why the post cannot be saved or approved as it stands (no headline on the card, no picture chosen, a headline over the limit), or null. The composer's own rule. */
+  reason: string | null
   /** Draws and stores the card when it must be new, and returns the draft to save. It runs inside the busy step of a save, so the buttons and the form are off meanwhile. */
   settle: () => Promise<DraftInput>
 }
@@ -38,5 +40,5 @@ export function useQuickDraft(draft: Draft | null, productId: Id, active: boolea
     return quickInput(now, needsNewCard(now, saved) ? await storeCard(product, now) : cardAttachment(now, saved))
   }, [])
   if (!active) return null
-  return { form, setForm, dirty: quickDirty(form, draft), input: quickInput(form, cardAttachment(form, draft)), settle }
+  return { form, setForm, dirty: quickDirty(form, draft), reason: quickReason(form), input: quickInput(form, cardAttachment(form, draft)), settle }
 }

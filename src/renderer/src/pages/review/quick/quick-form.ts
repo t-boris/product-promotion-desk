@@ -146,8 +146,13 @@ export function quickSignature(form: QuickForm): string {
   return JSON.stringify([form.caption.trim(), form.link, form.source, form.source === 'card' ? [cardSignature(drawnCard(form)), form.card.headlineEdited] : (form.picture?.mediaId ?? form.picture?.path ?? null)])
 }
 
-/** True when the owner changed something the saved draft does not have. */
-export const quickDirty = (form: QuickForm, saved: Draft | null): boolean => quickSignature(form) !== quickSignature(quickFormOf(saved))
+/**
+ * True when the owner changed something the saved draft does not have, or when what the form would draw is not the picture the draft has: the
+ * caption of a saved card post can change without the owner (the group's "Adapt with AI" rewrites it), and then its headline, which follows the
+ * caption, would no longer be on the card. Such a post is offered for saving, so the picture that is approved is the one that is shown.
+ */
+export const quickDirty = (form: QuickForm, saved: Draft | null): boolean =>
+  quickSignature(form) !== quickSignature(quickFormOf(saved)) || (saved?.postType === 'quick' && needsNewCard(form, saved))
 
 /**
  * True when saving must draw the card again: the picture is a card, and either the saved draft has no card or the card would look different

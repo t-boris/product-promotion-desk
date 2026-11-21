@@ -4,7 +4,7 @@
 // only src/shared (and each other), so they are tested from here, without a screen and without a canvas.
 
 import { describe, expect, it } from 'vitest'
-import { CARD_HEADLINE_MAX, CARD_PIXELS, CARD_COLOURS, CARD_SHAPES, CARD_STYLES, DEFAULT_CARD, cardHeadline, headlineFromCaption, postTypeOfPlatform } from '../shared/quick-post'
+import { CARD_HEADLINE_MAX, CARD_PIXELS, CARD_COLOURS, CARD_SHAPES, CARD_STYLES, DEFAULT_CARD, captionLabel, cardHeadline, headlineFromCaption, postTypeOfPlatform } from '../shared/quick-post'
 import { pictureProblems } from '../shared/post-pictures'
 import { renderForPlatform } from '../shared/post-format'
 import type { Attachment, Draft, GroupChannelOption } from '../shared/types'
@@ -13,6 +13,7 @@ import { rowSummary } from '../renderer/src/pages/inbox/inbox-groups'
 import { buildPostRows, titleOf } from '../renderer/src/pages/posts/posts-filter'
 import { headingOf, nameOf, ownPostSummary } from '../renderer/src/pages/review/quick/labels'
 import type { OpportunityCard, PostGroupCard } from '../shared/types'
+import { hasContent } from '../renderer/src/pages/review/approve-check'
 import { blockedChannels, chosenPlatforms, distinctPlatforms, kindOfChannels, type KindRow } from '../renderer/src/pages/review/quick/kinds'
 import { captionCounter, tightestLimit } from '../renderer/src/pages/review/quick/limits'
 import {
@@ -890,5 +891,83 @@ describe('breaking and cutting a headline never splits a letter the owner sees a
     expect(layout.truncated).toBe(true)
     const body = layout.lines[layout.lines.length - 1].text.slice(0, -1)
     expect(body.length % family.length).toBe(0)
+  })
+})
+
+// ───────────────────────────── the review screens hold a saved quick post to the composer's rules ─────────────────────────────
+
+describe('a saved card post whose caption changed without the owner (the group\'s "Adapt with AI")', () => {
+  const stored = saved({ postType: 'quick', title: null, text: 'Launch day\nWe are live.', markup: 'legacy', card: { style: 'bold', colour: 'sunset', shape: 'portrait', headline: 'Launch day', headlineEdited: false }, attachments: [{ name: 'card-launch-day.png', path: '/c.png', mime: 'image/png', sha256: 'c', mediaId: 'm1' }] })
+
+  it('is not changed while the headline is still the first line of its caption', () => {
+    expect(quickDirty(quickFormOf(stored), stored)).toBe(false)
+  })
+
+  it('is changed once the caption starts with other words, because the card on file says the old ones: it is offered for saving and drawn again', () => {
+    // The draft the adaptation saved: a new caption on the card parameters (and the picture) of the old one.
+    const adapted = { ...stored, text: 'Mercury turns retrograde\nWe are live.' }
+    expect(needsNewCard(quickFormOf(adapted), adapted)).toBe(true)
+    expect(quickDirty(quickFormOf(adapted), adapted)).toBe(true)
+  })
+
+  it('stays unchanged for a headline that is the owner\'s own, and for the owner\'s own picture', () => {
+    const own = { ...stored, text: 'Other words', card: { ...stored.card!, headlineEdited: true } }
+    expect(quickDirty(quickFormOf(own), own)).toBe(false)
+    const picture = { ...stored, card: null, text: 'Other words' }
+    expect(quickDirty(quickFormOf(picture), picture)).toBe(false)
+  })
+})
+
+describe('what stops Save and Approve on the review screens', () => {
+  const input = { text: 'caption', attachments: [{ name: 'a.png', path: '/a.png', mime: 'image/png', sha256: 'a', mediaId: 'm' }] }
+
+  it('is the composer\'s own reason: a card with the headline cleared cannot be approved, though its stand-in picture is there', () => {
+    const cleared = { ...withCaption(emptyQuickForm(), 'caption'), card: { ...DEFAULT_CARD, headline: '', headlineEdited: true } }
+    expect(quickReason(cleared)).toBe(WRITE_A_HEADLINE)
+    expect(hasContent(input, quickReason(cleared))).toBe(false)
+    expect(hasContent(input, null)).toBe(true)
+  })
+
+  it('still needs some text, a link or a picture when nothing else stops it', () => {
+    expect(hasContent({ text: '  ' }, null)).toBe(false)
+    expect(hasContent({ text: '', link: 'https://x.dev' }, null)).toBe(true)
+  })
+
+  it('stops an own-picture post whose picture was not chosen', () => {
+    const none = { ...withCaption(emptyQuickForm(), 'caption'), source: 'picture' as const }
+    expect(quickReason(none)).toBe(CHOOSE_A_PICTURE)
+  })
+})
+
+describe('"Also post to…" asks the kind of the post, not of its channel (DEC-041)', () => {
+  const rows: KindRow[] = [
+    { channelId: 'rd', platform: 'reddit' },
+    { channelId: 'ig', platform: 'instagram' }
+  ]
+  it('keeps an old article in a Facebook channel an article: Reddit may be added, Instagram may not', () => {
+    const own: KindRow = { channelId: 'fb', platform: 'facebook', type: 'article' }
+    const blocked = blockedChannels(rows, ['fb'], own)
+    expect(blocked.rd).toBeUndefined()
+    expect(blocked.ig).toMatch(/picture post and an article cannot go together/i)
+  })
+  it('reads a picture post in a Facebook channel as before: Reddit is refused', () => {
+    expect(blockedChannels(rows, ['fb'], { channelId: 'fb', platform: 'facebook', type: 'quick' }).rd).toBeDefined()
+    expect(blockedChannels(rows, ['fb'], { channelId: 'fb', platform: 'facebook' }).rd).toBeDefined()
+  })
+})
+
+describe('a label is short even without spaces to cut at', () => {
+  it('cuts a caption of one long word and leaves a short one whole', () => {
+    const label = captionLabel('x'.repeat(300))
+    expect([...label]).toHaveLength(81)
+    expect(label.endsWith('…')).toBe(true)
+    expect(captionLabel('short label')).toBe('short label')
+    expect(captionLabel('a'.repeat(80))).toBe('a'.repeat(80))
+  })
+})
+
+describe('the preview offers each platform once', () => {
+  it('names two Instagram channels once', () => {
+    expect(distinctPlatforms(['instagram', 'instagram', 'threads'])).toEqual(['instagram', 'threads'])
   })
 })

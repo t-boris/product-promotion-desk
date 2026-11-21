@@ -7,6 +7,7 @@ import { PostPreview, type PostAuthor } from '../PostPreview'
 import { CaptionField } from './CaptionField'
 import { PictureSlot } from './PictureSlot'
 import { previewContent } from './preview-model'
+import { distinctPlatforms } from './kinds'
 import { tightestLimit } from './limits'
 import { drawnCard, followCaption, isCardPicture, withAngle, withCaption, withHeadline, withIllustrationWish, withLook, type QuickForm } from './quick-form'
 import { useLiveCard } from './use-live-card'
@@ -129,7 +130,7 @@ export function QuickComposer({
             <PostPreview
               content={content}
               channelPlatform={platforms[0]}
-              platforms={platforms}
+              platforms={distinctPlatforms(platforms)}
               author={author}
               aiBrowser={settings.data?.publishWith === 'ai_browser' || !reads}
               noConnector={!reads}

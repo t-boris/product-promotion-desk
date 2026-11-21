@@ -20,7 +20,7 @@ export function AlsoPostPanel({ card, onClose }: { card: OpportunityCard; onClos
   // The channel the post is in is not offered again.
   const rows = whereRows(options.data, chosen, undefined, [opp.channelId])
   // A picture post and an article never go together: the channels of the other kind than this post's are off, with the reason (as in a new post).
-  const blocked = blockedChannels(rows, [opp.channelId, ...chosen], { channelId: opp.channelId, platform: card.channelPlatform })
+  const blocked = blockedChannels(rows, [opp.channelId, ...chosen], { channelId: opp.channelId, platform: card.channelPlatform, type: card.draft?.postType })
   const [save, saving] = useAction(async () => {
     await call('postGroups.extend', { opportunityId: opp.id, channelIds: chosen })
     onClose()

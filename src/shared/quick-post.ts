@@ -19,11 +19,14 @@ export const postTypeOfPlatform = (platform: string): PostType => (QUICK_PLATFOR
  * Channels of the two kinds are never chosen together (DEC-041). `chosen` is the platforms already ticked; the answer is the reason the
  * channel of `platform` cannot be ticked now, or null when it can.
  */
-export function mixedKindReason(platform: string, chosen: readonly string[]): string | null {
-  if (chosen.length === 0) return null
-  const kind = postTypeOfPlatform(platform)
-  const other = chosen.find((p) => postTypeOfPlatform(p) !== kind)
-  if (other === undefined) return null
+export const mixedKindReason = (platform: string, chosen: readonly string[]): string | null => mixedKindReasonOfType(postTypeOfPlatform(platform), chosen.map(postTypeOfPlatform))
+
+/**
+ * The same rule when the kinds are known and not read from the platforms: a draft saved as an article on a Facebook channel (before there was a
+ * picture post) is an article still, and the channels of the other kind are refused for it, not the ones of its channel's platform.
+ */
+export function mixedKindReasonOfType(kind: PostType, chosen: readonly PostType[]): string | null {
+  if (chosen.length === 0 || chosen.every((k) => k === kind)) return null
   return kind === 'quick'
     ? 'A picture post and an article cannot go together. Untick the article channels to choose this one.'
     : 'An article and a picture post cannot go together. Untick the picture channels (Instagram, Threads, Facebook) to choose this one.'
@@ -90,12 +93,17 @@ export const cardHeadline = (card: Pick<QuickCard, 'headline' | 'headlineEdited'
 // ───────────────────────────── naming a quick post ─────────────────────────────
 
 const LABEL_WORDS = 8
+/** A label is never longer than this, even for a caption with no spaces to cut at (a link, or text in a language written without them). */
+const LABEL_CHARS = 80
 
 /** The first words of a caption: the name of a quick post wherever a title would be shown (it has none). */
 export function captionLabel(text: string, words = LABEL_WORDS): string {
   const parts = text.replace(/\s+/g, ' ').trim().split(' ').filter((w) => w !== '')
   if (parts.length === 0) return ''
-  return parts.length > words ? `${parts.slice(0, words).join(' ')}…` : parts.join(' ')
+  const label = parts.slice(0, words).join(' ')
+  const letters = [...label]
+  if (letters.length > LABEL_CHARS) return `${letters.slice(0, LABEL_CHARS).join('').trimEnd()}…`
+  return parts.length > words ? `${label}…` : label
 }
 
 /** The name of a post for a list or a heading: by its type, never by guessing from an empty title. */
