@@ -41,6 +41,8 @@ import type {
   ComposeResult,
   MaterialPreview,
   PostLength,
+  SectionEditResult,
+  SectionQuick,
   Claim,
   ClaimKind,
   ClaimSourceRef,
@@ -480,6 +482,18 @@ export interface ApiMethods {
   'drafts.compose': [
     { channelId?: Id; opportunityId?: Id; material: string[]; exclude?: string[]; brief?: string; length?: PostLength; form: { title: string; text: string } },
     ComposeResult
+  ]
+  /**
+   * "Change a part": the owner selected characters `start` to `end` of the post's text and says what should change (`quick`: shorter, longer, simpler, warmer, rewrite;
+   * and/or `instruction`, up to 600 characters). The AI is shown the title, the words around the section and the section, and returns only the new section, which the
+   * screen shows beside the old one. Pictures of the section (`![alt](media:ID)`) stay; the new part may hold only the pictures the old one held. The text passes the checks every
+   * AI text passes, except that what the old section already said (a price, a link) stays the owner's. Nothing is saved. Refused like every AI help: engine_unavailable;
+   * invalid_input for a malformed call, a selection that is empty, longer than 6000 characters or not inside the text, nothing asked for, or a reply; suggest_failed when
+   * the answer is blocked by the checks after one repair, or the product knowledge changed while the AI wrote.
+   */
+  'drafts.editSection': [
+    { channelId?: Id; opportunityId?: Id; form: { title: string; text: string }; start: number; end: number; quick?: SectionQuick; instruction?: string },
+    SectionEditResult
   ]
   /**
    * The AI in the quick-post composer (REQ-004). Four helps, each the owner's own press, none of them stores or changes anything: the owner reads the

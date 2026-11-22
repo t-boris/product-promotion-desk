@@ -11,6 +11,8 @@ import { foundForAnswer, keepFound, type FoundFor } from './found-sources'
 import { fileName } from './labels'
 import { PostPictures, PostTextBox, usePostEditor } from './PostEditorParts'
 import { PostPreview, type PostAuthor } from './PostPreview'
+import { SectionAssist } from './SectionAssist'
+import { rangeOf, type Range } from './section-assist'
 
 export interface DraftForm {
   title: string
@@ -75,8 +77,11 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
   const settings = useQuery('app.settings.get', undefined, ['settings'])
   const editor = usePostEditor(form, onChange, post?.productId ?? '')
   const inEditor = withTitle && post !== undefined
+  // The part of the text that is selected, for "Change a part" (the AI changes only that part).
+  const [picked, setPicked] = useState<Range | null>(null)
   // One editor per open card, so only "is an engine chosen" is asked here; the refusal after a press says why an engine cannot work.
   const { blocked } = useAssistBlock({ engineReady: false })
+  const section = ai && inEditor ? <SectionAssist form={form} onChange={onChange} ai={ai} range={rangeOf(picked?.start, picked?.end, form.text)} onPick={setPicked} editor={editor} blocked={blocked} disabled={disabled} /> : null
   // What the AI found on the web for the last text it wrote (only when it searched): shown under the text while that text is the one in the field, and gone
   // when the text changes by any hand (the owner types, a tool of the toolbar, Undo): `keepFound` says what stays, and what went does not come back.
   const [found, setFound] = useState<FoundFor | null>(null)
@@ -114,7 +119,7 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
         <AiTextField key={`text-${draft?.id ?? 'new'}`} label={withTitle ? 'Text' : 'Reply'} value={form.text} onChange={(text) => set({ text })} ask={askFor('text')} blocked={blocked} disabled={disabled} around={aroundText} progressSubject={withTitle ? target || undefined : undefined} onSettled={(applied) => setFound(applied ? foundNow.current : null)} testId="draft-text-help">
           {(id) =>
             inEditor ? (
-              <PostTextBox id={id} value={form.text} onChange={(text) => set({ text })} disabled={disabled} autoFocus={autoFocus && !withTitle} editor={editor} />
+              <PostTextBox id={id} value={form.text} onChange={(text) => set({ text })} disabled={disabled} autoFocus={autoFocus && !withTitle} editor={editor} onSelection={(start, end) => setPicked({ start, end })} slot={section} />
             ) : (
               <textarea id={id} className="input draft-text" value={form.text} disabled={disabled} onChange={(e) => set({ text: e.target.value })} autoFocus={autoFocus && !withTitle} data-testid="draft-text" rows={4} />
             )
@@ -123,7 +128,7 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
       ) : (
         <Field label={withTitle ? 'Text' : 'Reply'}>
           {inEditor ? (
-            <PostTextBox id="draft-text-box" value={form.text} onChange={(text) => set({ text })} disabled={disabled} autoFocus={autoFocus && !withTitle} editor={editor} />
+            <PostTextBox id="draft-text-box" value={form.text} onChange={(text) => set({ text })} disabled={disabled} autoFocus={autoFocus && !withTitle} editor={editor} onSelection={(start, end) => setPicked({ start, end })} slot={section} />
           ) : (
             <textarea className="input draft-text" value={form.text} disabled={disabled} onChange={(e) => set({ text: e.target.value })} autoFocus={autoFocus && !withTitle} data-testid="draft-text" rows={4} />
           )}

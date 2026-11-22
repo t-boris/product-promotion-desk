@@ -123,6 +123,20 @@ export interface MaterialPreview {
 }
 
 /** A post the AI made from the owner's material. Nothing is stored: the owner reads it, changes it and saves the post. */
+/** The quick words of "Change a part": what the owner may ask of a selected section without typing. */
+export type SectionQuick = 'shorter' | 'longer' | 'simpler' | 'warmer' | 'rewrite'
+export const SECTION_QUICKS: readonly SectionQuick[] = ['shorter', 'longer', 'simpler', 'warmer', 'rewrite']
+
+/** What "Change a part" hands back: the new section to put in place of the characters `start` to `end` of the text it was asked about. Nothing is stored. */
+export interface SectionEditResult {
+  start: number
+  end: number
+  /** The new section, with the blank space of the old one around it. */
+  replacement: string
+  sources?: DraftSource[]
+  notes: string[]
+}
+
 export interface ComposeResult {
   title: string
   /** Markdown; the pictures the AI placed are already pictures of the library (`![alt](media:ID)`). */

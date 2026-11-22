@@ -1,7 +1,7 @@
 // The post editor (DEC-030): a toolbar over the text, the pictures of the post, and the way to make a picture. Three parts that share the
 // text box: `usePostEditor` holds what they share, `PostTextBox` is the toolbar and the text, `PostPictures` is the strip under it.
 
-import { useLayoutEffect, useRef, useState, type ClipboardEvent, type Dispatch, type DragEvent, type KeyboardEvent, type RefObject, type SetStateAction } from 'react'
+import { useLayoutEffect, useRef, useState, type ClipboardEvent, type Dispatch, type DragEvent, type KeyboardEvent, type ReactNode, type RefObject, type SetStateAction } from 'react'
 import type { Attachment, MediaItem } from '../../../../shared/types'
 import { call, useAction, useQuery } from '../../hooks'
 import { ViewableImage } from '../../pictures/ViewableImage'
@@ -29,6 +29,8 @@ export interface PostEditorState {
   attachMany: (items: MediaItem[], insert: boolean, at?: { start: number; end: number }) => void
   /** Something the owner did that could not be done, in words, under the pictures. */
   tell: (message: string) => void
+  /** Puts the selection on these characters once the next change of the text is on the screen (the part the AI changed). */
+  select: (range: { start: number; end: number }) => void
   detach: (attachment: Attachment) => void
   insertAgain: (attachment: Attachment) => void
   /** `skipped`: files that came with them and are not pictures; the owner is told they were left out. */
@@ -96,6 +98,9 @@ export function usePostEditor(form: DraftForm, onChange: Dispatch<SetStateAction
     attach,
     attachMany,
     tell: (message) => setNotice(message),
+    select: (range) => {
+      after.current = range
+    },
     // A picture is told apart by its library id, or by its file for a post that was written before the library (two of those have no id).
     detach: (attachment) => change((current) => ({ attachments: current.attachments.filter((a) => keyOf(a) !== keyOf(attachment)), text: attachment.mediaId ? withoutPicture(current.text, attachment.mediaId) : current.text })),
     insertAgain: (attachment) => {
@@ -140,7 +145,27 @@ const TOOLS: { mark: Mark; label: string; title: string }[] = [
 const KEYS: Record<string, Mark> = { b: 'bold', i: 'italic', k: 'link' }
 
 /** The toolbar and the text. A picture on the clipboard, or dropped on the text, goes into the post at the cursor. */
-export function PostTextBox({ id, value, onChange, disabled, autoFocus, editor }: { id: string; value: string; onChange: (text: string) => void; disabled: boolean; autoFocus: boolean; editor: PostEditorState }) {
+export function PostTextBox({
+  id,
+  value,
+  onChange,
+  disabled,
+  autoFocus,
+  editor,
+  onSelection,
+  slot
+}: {
+  id: string
+  value: string
+  onChange: (text: string) => void
+  disabled: boolean
+  autoFocus: boolean
+  editor: PostEditorState
+  /** Told where the selection is (the same start and end when nothing is selected), so a part of the text can be changed by the AI. */
+  onSelection?: (start: number, end: number) => void
+  /** Something that belongs between the toolbar and the text (the bar that changes a selected part). */
+  slot?: ReactNode
+}) {
   const [over, setOver] = useState(false)
   const onPaste = (event: ClipboardEvent<HTMLTextAreaElement>): void => {
     const images = imageFilesOf(event.clipboardData.files)
@@ -176,6 +201,7 @@ export function PostTextBox({ id, value, onChange, disabled, autoFocus, editor }
           </Button>
         ))}
       </div>
+      {slot}
       <textarea
         ref={editor.textRef}
         id={id}
@@ -195,6 +221,7 @@ export function PostTextBox({ id, value, onChange, disabled, autoFocus, editor }
         }}
         onDragLeave={() => setOver(false)}
         onKeyDown={onKeyDown}
+        onSelect={(e) => onSelection?.(e.currentTarget.selectionStart, e.currentTarget.selectionEnd)}
         data-testid="draft-text"
       />
     </div>

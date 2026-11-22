@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest'
 import type { ClaimView } from './context'
-import { allowedHostsFor, checkDraftSafety, linksIn } from './safety'
+import { allowedHostsFor, checkDraftSafety, linksIn, moneyTalkIn } from './safety'
 
 const OWN = ['natalmystic.com']
 const check = (text: string, extra: { link?: string | null; allowedHosts?: string[] } = {}): string[] =>
@@ -190,5 +190,15 @@ describe('findings: the same problems, shaped for a screen', () => {
     expect(run('It is $9 a month, on Windows.', { approved }).findings.map((f) => f.rule)).toEqual(['price'])
     // A price no approved fact names is found in the owner's text too.
     expect(run('It is $12 a month.', { mode: 'owner', approved }).findings.map((f) => f.rule)).toEqual(['price'])
+  })
+})
+
+describe('the money talk a text holds, as written', () => {
+  it('lists amounts, discount words and "free" words once each, in lower case', () => {
+    expect(moneyTalkIn('It costs $9 a month, or $9 on sale. Use the PROMO CODE: it is free for a week, 20% off.').sort()).toEqual(['$9', '20% off', 'free', 'on sale', 'promo code'].sort())
+  })
+
+  it('finds nothing in a text without any', () => {
+    expect(moneyTalkIn('A chart is drawn from the moment and the place.')).toEqual([])
   })
 })

@@ -185,6 +185,19 @@ function clauseAround(text: string, match: { index: number; length: number }): s
   return `${head}${before.slice(before.length - takeBefore).join('')}${middle.join('')}${after.slice(0, takeAfterMore).join('')}${tail}`.trim()
 }
 
+/**
+ * The amounts, discount words and "free" words a text holds, as written (lower case, each once). A caller that changes a text the owner wrote uses it to tell what the owner
+ * already said from what something else brought: the owner's own money talk is theirs, a new price is not.
+ */
+export function moneyTalkIn(text: string): string[] {
+  const found = new Set<string>()
+  for (const match of text.matchAll(AMOUNT)) found.add(match[0].trim().toLowerCase())
+  for (const rule of [DISCOUNT, FREE]) {
+    for (const match of text.matchAll(new RegExp(rule.source, `${rule.flags.replace('g', '')}g`))) found.add(match[0].trim().toLowerCase())
+  }
+  return [...found].filter((fragment) => fragment !== '')
+}
+
 export function checkDraftSafety(input: SafetyInput): SafetyReport {
   const violations: string[] = []
   const findings: SafetyFinding[] = []

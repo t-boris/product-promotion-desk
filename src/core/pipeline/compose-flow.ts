@@ -58,6 +58,17 @@ export function cleanBrief(value: unknown): string {
   return brief
 }
 
+/** The card or the channel the post is for. A card wins: its channel is the card's. */
+export function postTarget(core: Core, store: FlowStore, args: { opportunityId?: Id; channelId?: Id }): { opp: Opportunity | null; channel: Channel } {
+  if (args.opportunityId !== undefined && args.channelId !== undefined) throw new ApiError('invalid_input', 'Name the item or the channel, not both.')
+  if (args.opportunityId !== undefined) {
+    const opp = store.requireOpportunity(requireText(args.opportunityId, 'The item'))
+    return { opp, channel: store.requireChannel(opp.channelId) }
+  }
+  const channelId = requireText(args.channelId, 'The channel')
+  return { opp: null, channel: found(() => core.repos.channel(channelId), 'The channel') }
+}
+
 const altOf = (alt: string, name: string): string => (alt.replace(/[\]\n[]/g, ' ').trim() || name.replace(/\.[A-Za-z0-9]+$/, '')).slice(0, 80)
 
 export class PostComposer {
@@ -90,7 +101,7 @@ export class PostComposer {
     if (!POST_LENGTHS.includes(length)) throw new ApiError('invalid_input', 'Say how long the post should be: short, medium or long.')
     const brief = cleanBrief(args.brief)
     const paths = pathList(args.material, 'The material', MAX_PATHS)
-    const { opp, channel } = this.target(args)
+    const { opp, channel } = postTarget(this.core, this.store, args)
     if (opp && opp.kind === 'reply') throw new ApiError('invalid_input', 'A reply is not made from material.')
 
     const material = readMaterial(paths, undefined, new Set(pathList(args.exclude, 'The left-out files', MAX_EXCLUDED)))
@@ -168,17 +179,6 @@ export class PostComposer {
       .replace(/\n{3,}/g, '\n\n')
       .trim()
     return { text, attachments, notes }
-  }
-
-  /** The card or the channel the post is for. A card wins: its channel is the card's. */
-  private target(args: ComposeArgs): { opp: Opportunity | null; channel: Channel } {
-    if (args.opportunityId !== undefined && args.channelId !== undefined) throw new ApiError('invalid_input', 'Name the item or the channel, not both.')
-    if (args.opportunityId !== undefined) {
-      const opp = this.store.requireOpportunity(requireText(args.opportunityId, 'The item'))
-      return { opp, channel: this.store.requireChannel(opp.channelId) }
-    }
-    const channelId = requireText(args.channelId, 'The channel')
-    return { opp: null, channel: found(() => this.core.repos.channel(channelId), 'The channel') }
   }
 }
 

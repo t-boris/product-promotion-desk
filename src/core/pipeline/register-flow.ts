@@ -4,6 +4,7 @@ import { BrowserWatchFlow } from './browser-watch'
 import { DraftCheck } from './draft-check'
 import { DraftHelp } from './draft-help'
 import { PostComposer } from './compose-flow'
+import { SectionEditor } from './section-flow'
 import { FindingPictures } from './finding-pictures'
 import { FeedAnalysis } from './feed-analysis'
 import { FindingAssistant } from './finding-assist'
@@ -66,6 +67,9 @@ export function registerFlow(core: Core): void {
   // A post made from the owner's own material: files or a folder, what the post should be like, how long. Nothing is saved or sent.
   const postComposer = new PostComposer(core, store)
   core.router.register({ 'material.preview': (args) => postComposer.preview(args), 'drafts.compose': (args) => postComposer.compose(args) })
+  // "Change a part": the AI changes the section the owner selected and nothing else; the owner sees old and new and decides.
+  const sectionEditor = new SectionEditor(core, store)
+  core.router.register({ 'drafts.editSection': (args) => sectionEditor.edit(args) })
   // "Reply here" in the Feed: the AI writes the comment for one place of a thread it read. Nothing is stored or sent.
   const findingReply = new FindingReply(core, findings)
   core.router.register({ 'findings.writeReply': (args) => findingReply.write(args) })
