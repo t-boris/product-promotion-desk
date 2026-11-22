@@ -20,6 +20,8 @@ interface Item {
   role: string
   name: string
   near?: string
+  accepts?: string
+  several?: boolean
   disabled?: boolean
   submits?: boolean
 }
@@ -45,6 +47,10 @@ class WizardPage extends FakePage {
   held: string[] = []
   /** A site that reads the files and empties the input at once (a wizard). */
   clearsInput = false
+  /** Which inputs the site reads: a file put into any other changes nothing on the page. Every input, when unset. */
+  readsOnly: string[] | null = null
+  /** How many times the page took files and showed it (a preview, a gallery): a page that took none looks as it did. */
+  taken = 0
   /** The document: a new one starts on every load but a change of the fragment. */
   document = 1
   /** What a form-aware page says about the forms of elements, by ref. */
@@ -61,12 +67,14 @@ class WizardPage extends FakePage {
     this.document += 1
     this.fields.clear()
     this.held = []
+    this.taken = 0
   }
   /** A link that loads a page of its own (the document changes, the form is empty). */
   loadAnotherDocument(): void {
     this.document += 1
     this.fields.clear()
     this.held = []
+    this.taken = 0
   }
   override async read<T>(script: string): Promise<T> {
     if (script.includes('ppd-document')) return String(this.document) as T
@@ -77,7 +85,7 @@ class WizardPage extends FakePage {
       return this.held.map((path) => ({ name: path.split('/').pop(), size: statSync(path).size })) as T
     }
     if (script.includes('ppd-form-text')) return [...this.fields].filter(([, text]) => text.trim() !== '').map(([ref, text]) => ({ ref, text })) as T
-    if (script.includes('agent-snapshot')) return { url: this.currentUrl, title: 'New post', text: 'Create a post', alerts: [], humanCheck: '', elements: this.items.map((i) => ({ ...i, ...(this.forms[i.ref] !== undefined ? { form: this.forms[i.ref] } : {}) })) } as T
+    if (script.includes('agent-snapshot')) return { url: this.currentUrl, title: 'New post', text: this.taken > 0 ? `Create a post (${this.taken} upload${this.taken === 1 ? '' : 's'} shown)` : 'Create a post', alerts: [], humanCheck: '', elements: this.items.map((i) => ({ ...i, ...(this.forms[i.ref] !== undefined ? { form: this.forms[i.ref] } : {}) })) } as T
     const field = /ppd-field (e\d+)/.exec(script)
     if (field) return (this.fields.get(field[1] as string) ?? null) as T
     return undefined as T
@@ -91,6 +99,7 @@ class WizardPage extends FakePage {
       const paths = [step.path, ...(step.also ?? [])]
       this.uploaded.push({ ref: step.ref, paths })
       this.held = this.clearsInput ? [] : paths
+      if (this.readsOnly === null || this.readsOnly.includes(step.ref)) this.taken += 1
       return { status: 'done', detail: 'uploaded' }
     }
     if (step.do === 'type') {
@@ -608,5 +617,108 @@ describe('"Share" publishes a post of a platform with a composer dialog, and sha
     await look(t)
     expect(await share(t)).toMatchObject({ isError: true, text: expect.stringContaining('shares the page') })
     expect(t.page.shared).toEqual([])
+  })
+})
+
+describe('which file input of a page takes the pictures: what each says it takes, and what the page shows', () => {
+  /** A form with several file inputs and none with a label, like the composers of the sites that take pictures and videos. */
+  function crowded(approved: ApprovedContent = content()) {
+    const t = setup(approved)
+    t.page.items = [
+      { ref: 'e1', role: 'input:file', name: '', near: 'post-media-input', accepts: 'image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime', several: true },
+      { ref: 'e2', role: 'input:file', name: '', near: 'toolbar-button-video', accepts: 'video/mp4, video/quicktime', several: false },
+      { ref: 'e3', role: 'input:file', name: '', near: 'toolbar-button-image', accepts: 'image/jpeg, image/png, image/webp, image/gif', several: true },
+      { ref: 'e4', role: 'input:file', name: '', near: 'one-picture', accepts: '.png', several: false },
+      { ref: 'e5', role: 'textarea', name: 'Write a caption' },
+      { ref: 'e6', role: 'button', name: 'Post' }
+    ]
+    return t
+  }
+  const shareHere = (t: Setup) => t.toolbox.call('browser_submit', { text_ref: 'e5', submit_ref: 'e6' })
+
+  it('lists, for each file input, what it takes and where it sits, so the AI can tell them apart', async () => {
+    const t = crowded()
+    const text = (await look(t)).text
+    expect(text).toContain('[e1] input:file "" takes pictures and videos, several files at once in "post-media-input"')
+    expect(text).toContain('[e2] input:file "" takes videos, one file at a time in "toolbar-button-video"')
+    expect(text).toContain('[e3] input:file "" takes pictures, several files at once in "toolbar-button-image"')
+  })
+
+  it('refuses an input that takes videos only, says why, and puts nothing into it', async () => {
+    const t = crowded()
+    await look(t)
+    const result = await attach(t, 'e2')
+    expect(result).toMatchObject({ isError: true, text: expect.stringContaining('e2 takes videos, one file at a time') })
+    expect(result.text).toContain('first.png, second.png are not of a kind it takes')
+    expect(t.page.uploaded).toEqual([])
+    expect(await shareHere(t)).toMatchObject({ isError: true, text: expect.stringContaining('not in the form') })
+  })
+
+  it('refuses an input that takes one file at a time when several pictures are approved, and one that lists another extension', async () => {
+    const t = crowded()
+    await look(t)
+    expect(await attach(t, 'e4')).toMatchObject({ isError: true, text: expect.stringContaining('takes one file at a time and 2 were approved') })
+    const other = crowded(content({ attachments: [approvedFile('first.jpg')] }))
+    await look(other)
+    expect(await attach(other, 'e4')).toMatchObject({ isError: true, text: expect.stringContaining('e4 takes pictures, one file at a time, and first.jpg is not of a kind it takes') })
+    expect(other.page.uploaded).toEqual([])
+    const single = crowded(content({ attachments: [approvedFile('first.png'), approvedFile('second.png')] }))
+    single.page.items[2] = { ref: 'e3', role: 'input:file', name: '', accepts: 'image/png', several: false }
+    await look(single)
+    expect(await attach(single, 'e3')).toMatchObject({ isError: true, text: expect.stringContaining('takes one file at a time and 2 were approved') })
+    expect(single.page.uploaded).toEqual([])
+  })
+
+  it('takes an input that lists the kind by its family or its type, and several files, whatever sits around it', async () => {
+    for (const ref of ['e1', 'e3']) {
+      const t = crowded()
+      await look(t)
+      expect((await attach(t, ref)).isError).toBeUndefined()
+      expect(t.page.uploaded).toEqual([{ ref, paths: pathsOf(t) }])
+    }
+  })
+
+  it('refuses a video for an input that takes pictures, and a picture for one that takes videos', async () => {
+    const video = crowded(content({ attachments: [approvedFile('video-1.mp4')] }))
+    await look(video)
+    expect(await attach(video, 'e3')).toMatchObject({ isError: true, text: expect.stringContaining('video-1.mp4 is not of a kind it takes') })
+    expect((await attach(video, 'e2')).isError).toBeUndefined()
+  })
+
+  it('never refuses on a guess: an input that names no kinds, or does not say whether it takes several files, is tried', async () => {
+    const t = setup()
+    await look(t)
+    expect((await attach(t)).isError).toBeUndefined()
+    const unsaid = crowded()
+    unsaid.page.items[2] = { ref: 'e3', role: 'input:file', name: '' }
+    await look(unsaid)
+    expect((await attach(unsaid, 'e3')).isError).toBeUndefined()
+  })
+
+  it('does not count the pictures as attached when the page shows no sign that it took them: an input the site ignores, emptied or not, proves nothing', async () => {
+    for (const clearsInput of [false, true]) {
+      const t = crowded()
+      t.page.readsOnly = ['e3']
+      t.page.clearsInput = clearsInput
+      await look(t)
+      const ignored = await attach(t, 'e1')
+      expect(ignored).toMatchObject({ isError: true, text: expect.stringContaining('nothing on the page changed') })
+      expect(ignored.text).toContain('try another file input')
+      expect(await shareHere(t)).toMatchObject({ isError: true, text: expect.stringContaining('not in the form') })
+      // another input, the one the site reads, takes them: the first try did not use up the one step
+      expect((await attach(t, 'e3')).isError).toBeUndefined()
+      expect(t.page.uploaded.map((u) => u.ref)).toEqual(['e1', 'e3'])
+      expect((await shareHere(t)).isError).toBeUndefined()
+      expect(t.page.clicked).toContain('e6')
+    }
+  })
+
+  it('gives the page a few seconds to show it, and no more', async () => {
+    const t = crowded()
+    t.page.readsOnly = []
+    await look(t)
+    const before = t.page.steps.length
+    expect(await attach(t, 'e1')).toMatchObject({ isError: true })
+    expect(t.page.steps.length).toBeGreaterThan(before)
   })
 })

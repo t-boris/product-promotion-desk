@@ -11,9 +11,9 @@
 import { stat } from 'node:fs/promises'
 import { SessionChangedError, TakeoverError, type BrowserPage, type PageStep } from '../ports'
 import type { McpTool, McpToolHost, McpToolResult } from '../mcp/protocol'
-import { DOCUMENT_TOKEN_SCRIPT, approvedFileProblem, describeHeld, changesPostSettings, changesProfile, communitiesShown, communityOf, destinationMatches, fieldValueScript, filesHeldScript, formTextScript, isAttachControl, looksLikeProgress, looksLikeSubmit, neverClicked, opensFileChooser, onComposePage, composePageOf, parseHeldFiles, parseHeldText, replyTarget, platformWarning, sameContent, usesComposerDialog, type HeldText, type PostSetup, type SubmitLease } from './post-submit'
+import { DOCUMENT_TOKEN_SCRIPT, approvedFileProblem, describeHeld, changesPostSettings, changesProfile, communitiesShown, communityOf, destinationMatches, fieldValueScript, filesHeldScript, fileInputProblem, formTextScript, isAttachControl, looksLikeProgress, looksLikeSubmit, neverClicked, opensFileChooser, onComposePage, composePageOf, parseHeldFiles, parseHeldText, replyTarget, platformWarning, sameContent, usesComposerDialog, type HeldText, type PostSetup, type SubmitLease } from './post-submit'
 import { isJoinControl, joinNamesCommunity, JOIN_AMBIGUOUS, JOIN_CHANGED, JOIN_CLICK_ONLY, JOIN_INSTRUCTIONS, JOIN_PRESSED, JOIN_WRONG_PAGE, type JoinSetup } from './join'
-import { describeScroll, parseSnapshot, renderElements, renderPictures, snapshotScript, type PageSnapshot, type SnapshotElement } from './snapshot'
+import { describeScroll, parseSnapshot, renderElements, renderPictures, snapshotScript, snapshotSignature, type PageSnapshot, type SnapshotElement } from './snapshot'
 import { RESEARCH_MAX_ITEMS_PER_CALL, readResearchTopics, type ResearchSetup } from './research'
 import { HUMAN_CHECK_LEAD, SITE_WARNING_LEAD, StepTrace, describeCall, type StepSubject } from './trace'
 import { WATCH_ANALYSIS_MAX, WATCH_IDEA_MAX, WATCH_IMAGES_MAX, WATCH_MAX_ITEMS_PER_CALL, WATCH_TOPICS_MAX, canonicalWatchUrl, openProblem, postBodyText, readWatchItems, type WatchSetup, type WatchStat } from './watch'
@@ -123,6 +123,8 @@ const SETTLE_MS = 1000
 const MAX_TEXT_VALUE = 2000
 const MAX_EVALUATE_OUTPUT = 4000
 const MAX_WAIT_MS = 30_000
+/** How long a page is given to show that it took the files put into an input: a site shows its preview, its gallery or its next step within a few seconds. */
+const FILES_REACTION_MS = 6000
 const MIN_SHRINK_KB = 20
 const MAX_SHRINK_KB = 10_000
 const REF = /^e\d{1,4}$/
@@ -208,14 +210,14 @@ const POST_INSTRUCTIONS = [
 const attachTool = (names: string[]): McpTool =>
   tool(
     'browser_attach',
-    `Put ALL the pictures the owner approved (${names.join(', ')}) into one file input of the page, in one step: an element listed as input:file, which a site often hides behind a button (use the input itself and never click a button that opens a file chooser). They go in once, together, before browser_submit; an input without the "multiple" attribute takes one picture, and with several approved the step is refused: then call report_result with needs_owner. Once the pictures are in the form, only the controls named Next or Continue are clicked.`,
+    `Put ALL the pictures the owner approved (${names.join(', ')}) into one file input of the page, in one step: an element listed as input:file, which a site often hides behind a button (use the input itself and never click a button that opens a file chooser). They go in once, together, before browser_submit; each input:file line says what it takes (pictures, videos, several files at once) and where it sits on the page: choose the one that takes pictures and, with several approved, several files at once. The step is refused for an input that cannot take them, and also when the page shows no sign that it took them: then try another input that takes pictures, and call report_result with needs_owner only when none works. Once the pictures are in the form, only the controls named Next or Continue are clicked.`,
     { ref },
     ['ref']
   )
 
 const SHARES_THE_PAGE = /^\s*(?:share|поделиться)\b/i
 const POST_PICTURES =
-  'The owner approved pictures too. Put them into the form with browser_attach (one call, all of them, into a file input listed as input:file), before browser_submit: browser_submit refuses until they are in. After that only controls named Next or Continue are clicked, and the control that publishes (Share, Post) is pressed by browser_submit alone.'
+  'The owner approved pictures too. Put them into the form with browser_attach (one call, all of them, into a file input listed as input:file: its "takes" must say pictures, and several files at once when more than one is approved), before browser_submit: browser_submit refuses until they are in. After that only controls named Next or Continue are clicked, and the control that publishes (Share, Post) is pressed by browser_submit alone.'
 
 const postTools = (pictures: string[]): McpTool[] => [
   TOOLS[0] as McpTool,
@@ -1073,6 +1075,9 @@ export class BrowserToolbox implements McpToolHost {
       if (!seen) return fail(`${reference} was not shown to you by browser_snapshot. Look at the page (browser_snapshot) and use a ref from it.`)
       if (!isAttachControl(fresh) || !isAttachControl(seen)) return fail(`${reference} is not a file input (it is ${fresh.role}). The pictures go into an element listed as input:file; a button that opens a file chooser is never clicked.`)
       if (fresh.name !== seen.name || fresh.role !== seen.role) return fail(`${reference} is not what it was when you looked (the page changed since your browser_snapshot). Look again with browser_snapshot.`)
+      // What the input says it takes: a site keeps one input for pictures and another for videos or its gallery, none with a label.
+      const unfit = fileInputProblem(fresh, files)
+      if (unfit) return fail(`Nothing was attached: ${unfit}`)
       // The input of a profile photo is a file input too: the approved pictures never go where the page says it is for the profile.
       if ([fresh, seen].some((e) => changesProfile(e.name) || changesProfile(e.near ?? ''))) return fail(PROFILE_UNTOUCHED)
       const hands = await this.handsOff(page)
@@ -1085,6 +1090,9 @@ export class BrowserToolbox implements McpToolHost {
       const result = await this.stepOn(page, { do: 'upload', ref: reference, path: first.path, ...(rest.length > 0 ? { also: rest.map((f) => f.path) } : {}) }, `Put ${many} into "${this.labelOf(reference)}"`, true)
       this.touched()
       if (result.isError) return result
+      // Proof comes from the page. An input that was emptied tells nothing (a site empties the one it read, and one that ignored the files empties it too): the
+      // page must show a sign that it took them (a preview, a gallery, the next step). Otherwise the pictures are not in the form, and nothing is counted.
+      if (!(await this.pageReacted(page, now))) return fail(`Nothing was counted as attached: after the files went into ${reference} nothing on the page changed, so the site did not take them. Look at the page again (browser_snapshot) and try another file input that takes the approved files (read each one's "takes" and where it sits); if none works, call report_result with needs_owner.`)
       // What the input holds now. Empty: the site has read the files and cleared it, which is what a wizard does. Anything else must be the approved files.
       const held = parseHeldFiles(await page.read<unknown>(filesHeldScript(reference)).catch(() => null))
       if (held !== null && held.length > 0) {
@@ -1097,6 +1105,17 @@ export class BrowserToolbox implements McpToolHost {
       this.attached = { token: await this.documentToken(page), form: fresh.form }
       return result
     })
+  }
+
+  /** Whether the page shows any change in a few seconds: a page that took files shows them (a preview, a gallery, the next step). A page that cannot be read now is on its way somewhere: it changed. */
+  private async pageReacted(page: BrowserPage, before: PageSnapshot): Promise<boolean> {
+    const was = snapshotSignature(before)
+    for (let waited = 0; waited <= FILES_REACTION_MS; waited += 500) {
+      const after = await this.observe(page)
+      if (after === null || snapshotSignature(after) !== was) return true
+      await this.deps.sleep(500)
+    }
+    return false
   }
 
   /**

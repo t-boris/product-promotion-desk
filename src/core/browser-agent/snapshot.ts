@@ -10,6 +10,8 @@ export const SNAPSHOT_MAX_ELEMENTS = 160
 const MAX_OPTION_ELEMENTS = 70
 const MAX_NAME = 80
 const MAX_NEAR = 120
+/** The `accept` list of a file input, as the page writes it. */
+const MAX_ACCEPT = 160
 const MAX_VALUE = 60
 const MAX_OPTIONS = 40
 const MAX_TEXT = 2500
@@ -54,6 +56,10 @@ export interface SnapshotElement {
   offscreen?: boolean
   /** For a file input: what the page says around it (the label and the heading of the dialog or form it is in), so a profile photo input is not taken for the one of a post. */
   near?: string
+  /** For a file input: the kinds of file it takes, as the page writes them (`accept`: "image/png, .jpg"). Absent when the page names none (it takes any file). */
+  accepts?: string
+  /** For a file input: whether it takes several files in one step (the `multiple` attribute). Set for every file input the script lists; a page that does not say is unknown. */
+  several?: boolean
 }
 
 /** The text of the post a page is about, as the site shows it (without the comments under it). The empty text of a page that is plainly a post means the post has none of its own. */
@@ -183,16 +189,24 @@ export function snapshotScript(): string {
     if (tag === 'input' && type === 'file') {
       // The nearest two containers that say something (a label or a heading): a form with no heading around the input does not hide the dialog around it.
       const says = [];
-      for (let n = above(el), hops = 0; n && n.nodeType === 1 && hops < 40 && says.length < 2; n = above(n), hops++) {
-        if (!n.matches || !n.matches('[role=dialog],dialog,form,section,[role=region],fieldset')) continue;
+      // A site often builds its form of named components (post-composer-toolbar-button-image) and leaves the input with no label of its own: the names of
+      // the two nearest ones say what the input belongs to.
+      const parts = [];
+      for (let n = above(el), hops = 0; n && n.nodeType === 1 && hops < 40 && (says.length < 2 || parts.length < 2); n = above(n), hops++) {
+        if (parts.length < 2 && n.tagName && n.tagName.indexOf('-') > 0) parts.push(n.tagName.toLowerCase());
+        if (says.length >= 2 || !n.matches || !n.matches('[role=dialog],dialog,form,section,[role=region],fieldset')) continue;
         const heading = n.querySelector ? n.querySelector('h1,h2,h3,[role=heading],legend') : null;
         const bit = [n.getAttribute('aria-label'), heading && heading.innerText].filter(Boolean).join(' ');
         if (bit) says.push(bit);
       }
       // What the site named the input in its own code (name, id) is a word of what it is for (profile_pic), and the file it takes is a hint too.
       const code = [el.getAttribute('name'), el.getAttribute('id')].filter((v) => v && /^[A-Za-z][\\w.:-]{2,40}$/.test(v)).join(' ');
-      const near = clean([code, ...says, el.title].filter(Boolean).join(' '), ${MAX_NEAR});
+      const near = clean([code, ...parts, ...says, el.title].filter(Boolean).join(' '), ${MAX_NEAR});
       if (near) item.near = near;
+      // What it takes decides which of several inputs of one form is the one for pictures: a site keeps one for pictures, one for videos, one for its gallery.
+      const accept = clean(el.getAttribute('accept'), ${MAX_ACCEPT});
+      if (accept) item.accepts = accept;
+      item.several = el.multiple === true || el.getAttribute('multiple') !== null;
     }
     const place = placeOf(el);
     if (place.form !== null) item.form = place.form;
@@ -335,6 +349,10 @@ export function parseSnapshot(raw: unknown): PageSnapshot | null {
     if (typeof e.form === 'number' && Number.isInteger(e.form) && e.form >= 1 && e.form <= 999) element.form = e.form
     if (typeof e.parent === 'string' && /^t\d_[a-z0-9]{1,13}$/.test(e.parent)) element.parent = e.parent
     if (typeof e.near === 'string' && e.near.trim() !== '') element.near = str(e.near, MAX_NEAR)
+    if (element.role === 'input:file') {
+      if (typeof e.accepts === 'string' && e.accepts.trim() !== '') element.accepts = str(e.accepts, MAX_ACCEPT)
+      if (typeof e.several === 'boolean') element.several = e.several
+    }
     if (e.offscreen === true) element.offscreen = true
     elements.push(element)
   }
@@ -416,6 +434,7 @@ export function renderElements(snapshot: PageSnapshot, wholeLinks = false): stri
       if (e.checked !== undefined) line += e.checked ? ' [checked]' : ' [unchecked]'
       if (e.value) line += ` value="${e.value}"`
       if (e.options && e.options.length > 0) line += ` options: ${e.options.join(' | ')}`
+      if (e.role === 'input:file') line += ` takes ${takesLine(e)}`
       if (e.near) line += ` in "${e.near}"`
       if (e.offscreen) line += ' (off screen)'
       if (e.required) line += ' (required)'
@@ -423,4 +442,68 @@ export function renderElements(snapshot: PageSnapshot, wholeLinks = false): stri
       return line
     })
     .join('\n')
+}
+
+// ───────────────────────── what a file input takes ─────────────────────────
+
+/** The type of file an extension stands for, for the extensions a post carries; a name with any other extension is of no known type. */
+const MIME_OF: Record<string, string[]> = {
+  png: ['image/png'],
+  jpg: ['image/jpeg'],
+  jpeg: ['image/jpeg'],
+  gif: ['image/gif'],
+  webp: ['image/webp'],
+  heic: ['image/heic'],
+  heif: ['image/heif'],
+  avif: ['image/avif'],
+  mp4: ['video/mp4'],
+  m4v: ['video/mp4', 'video/x-m4v'],
+  mov: ['video/quicktime'],
+  webm: ['video/webm']
+}
+
+/** The tokens of an `accept` list, lower case: "image/png, .JPG" is `["image/png", ".jpg"]`. */
+function acceptTokens(accepts: string | undefined): string[] {
+  return (accepts ?? '')
+    .split(',')
+    .map((t) => t.trim().toLowerCase())
+    .filter((t) => t !== '')
+}
+
+/**
+ * Whether a file input that says it takes `accepts` takes the file called `name`: false only when that is certain. No list, a list that takes everything, a name with no
+ * extension or one this application does not know all say yes: a page is never refused on a guess.
+ */
+export function acceptsFile(accepts: string | undefined, name: string): boolean {
+  const tokens = acceptTokens(accepts)
+  if (tokens.length === 0 || tokens.includes('*/*')) return true
+  const extension = /\.([a-z0-9]{2,5})$/i.exec(name)?.[1]?.toLowerCase()
+  const mimes = extension ? MIME_OF[extension] : undefined
+  if (!extension || !mimes) return true
+  return tokens.some((t) => (t.startsWith('.') ? t === `.${extension}` : t.endsWith('/*') ? mimes.some((m) => m.startsWith(t.slice(0, -1))) : mimes.includes(t)))
+}
+
+/** What a file input takes, in words for the AI: "pictures and videos, several files at once", "videos, one file at a time", "any file". */
+export function takesLine(input: { accepts?: string; several?: boolean }): string {
+  const kinds = new Set<string>()
+  for (const t of acceptTokens(input.accepts)) {
+    if (t === '*/*') return `any file${manyOf(input)}`
+    if (t.startsWith('image/') || /^\.(?:jpe?g|png|gif|webp|avif|heic|heif|bmp|svg|tiff?)$/.test(t)) kinds.add('pictures')
+    else if (t.startsWith('video/') || /^\.(?:mp4|mov|m4v|webm|mkv|avi)$/.test(t)) kinds.add('videos')
+    else kinds.add('other files')
+  }
+  const what = kinds.size === 0 ? 'any file' : [...kinds].join(' and ')
+  return `${what}${manyOf(input)}`
+}
+
+function manyOf(input: { several?: boolean }): string {
+  return input.several === true ? ', several files at once' : input.several === false ? ', one file at a time' : ''
+}
+
+/**
+ * What a look shows, as one string: the elements as listed, the text of the page and how many pictures it holds, not where it is scrolled to. Two looks
+ * with the same string show the same page, so a step that changed nothing a person could see is told by it.
+ */
+export function snapshotSignature(snapshot: PageSnapshot): string {
+  return `${renderElements(snapshot, true)}\n${snapshot.text}\n${snapshot.pictures?.length ?? 0}`
 }

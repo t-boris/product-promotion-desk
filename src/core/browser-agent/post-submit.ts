@@ -10,6 +10,7 @@
 // this content, account and destination, the single use) lives where the gate lives: src/core/pipeline/mission-publisher.ts.
 
 import { sha256OfFile } from '../pipeline/util'
+import { acceptsFile, takesLine } from './snapshot'
 import type { SendTicket } from '../ports'
 
 /** A picture the owner approved, as the mission may put it into a file input: by its name, never by a path the AI gives. */
@@ -414,6 +415,18 @@ export function opensFileChooser(control: { role: string; name: string }): boole
 /** Whether an element of the page takes a file: only a file input, and one that is not disabled. A button that opens a file chooser is not one (the chooser belongs to the person). */
 export function isAttachControl(control: { role: string; disabled?: boolean }): boolean {
   return control.role === 'input:file' && control.disabled !== true
+}
+
+/**
+ * Why a file input cannot take the approved files, as words for the AI, or null when it can (or when the page does not say). A site keeps several
+ * inputs in one form (one for pictures, one for videos, one for its gallery) and none has a label: what each says it takes is the only thing that tells
+ * them apart. Refused only when it is certain: a kind the input does not list, or one file at a time while several were approved.
+ */
+export function fileInputProblem(input: { ref: string; accepts?: string; several?: boolean }, files: readonly { name: string }[]): string | null {
+  const misfit = files.filter((f) => !acceptsFile(input.accepts, f.name))
+  if (misfit.length > 0) return `${input.ref} takes ${takesLine(input)}, and ${misfit.map((f) => f.name).join(', ')} ${misfit.length === 1 ? 'is' : 'are'} not of a kind it takes. Choose a file input whose "takes" says it takes ${files.length === 1 ? 'this file' : 'these files'}.`
+  if (files.length > 1 && input.several === false) return `${input.ref} takes one file at a time and ${files.length} were approved. Choose a file input whose "takes" says several files at once; if there is none, call report_result with needs_owner.`
+  return null
 }
 
 /**

@@ -1,6 +1,6 @@
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
-import { describeScroll, parseSnapshot, renderElements, renderPictures, snapshotScript, type PageSnapshot } from './snapshot'
+import { acceptsFile, describeScroll, parseSnapshot, renderElements, renderPictures, snapshotScript, snapshotSignature, takesLine, type PageSnapshot } from './snapshot'
 
 // A tiny DOM, enough to run the real script and see what it reports.
 interface NodeSpec {
@@ -395,6 +395,59 @@ describe('what stands around a file input, read from the page', () => {
   it('takes two containers at most, nearest first: a page heading far above is not mixed in', () => {
     const s = runSnapshot({ interactive: [file([{ tag: 'form', attrs: { 'aria-label': 'Upload' } }, { tag: 'section', heading: 'New post' }, { tag: 'section', heading: 'Edit profile' }])] })
     expect(s.elements[0]?.near).toBe('Upload New post')
+  })
+})
+
+describe('what a file input takes, read from the page', () => {
+  const file = (attrs: Record<string, string>, within: NonNullable<NodeSpec['within']> = []): NodeSpec => ({ tag: 'input', attrs: { type: 'file', ...attrs }, rect: { width: 0, height: 0 }, top: 5000, within })
+
+  it('carries the kinds it accepts and whether it takes several files, for every file input and for no other element', () => {
+    const s = runSnapshot({ interactive: [file({ accept: 'image/jpeg, image/png', multiple: '' }), file({}), { tag: 'input', attrs: { type: 'text', accept: 'image/png', multiple: '' }, placeholder: 'Title' }] })
+    expect(s.elements[0]).toMatchObject({ role: 'input:file', accepts: 'image/jpeg, image/png', several: true })
+    expect(s.elements[1]).toMatchObject({ role: 'input:file', several: false })
+    expect(s.elements[1]?.accepts).toBeUndefined()
+    expect(s.elements[2]?.accepts).toBeUndefined()
+    expect(s.elements[2]?.several).toBeUndefined()
+  })
+
+  it('names the two nearest components of the page around it, nearest first, before the headings: an input with no label of its own is known by where it sits', () => {
+    const s = runSnapshot({ interactive: [file({}, [{ tag: 'post-composer-toolbar-button-image' }, { tag: 'rte-toolbar' }, { tag: 'post-composer-form' }]), file({}, [{ tag: 'edit-gallery-modal' }, { tag: 'section', heading: 'New post' }])] })
+    expect(s.elements[0]?.near).toBe('post-composer-toolbar-button-image rte-toolbar')
+    expect(s.elements[1]?.near).toBe('edit-gallery-modal New post')
+  })
+
+  it('is said in words to the AI: pictures, videos, several files, one at a time, any file', () => {
+    expect(takesLine({ accepts: 'image/jpeg, image/png', several: true })).toBe('pictures, several files at once')
+    expect(takesLine({ accepts: 'video/mp4,video/quicktime', several: false })).toBe('videos, one file at a time')
+    expect(takesLine({ accepts: 'image/*,video/*' })).toBe('pictures and videos')
+    expect(takesLine({ accepts: '.png, .JPG' })).toBe('pictures')
+    expect(takesLine({ accepts: '.pdf', several: true })).toBe('other files, several files at once')
+    expect(takesLine({})).toBe('any file')
+    expect(takesLine({ accepts: '*/*', several: false })).toBe('any file, one file at a time')
+    const parsed = parseSnapshot({ elements: [{ ref: 'e1', role: 'input:file', name: '', near: 'toolbar', accepts: 'image/png', several: true }, { ref: 'e2', role: 'button', name: 'Next', accepts: 'image/png', several: true }] }) as PageSnapshot
+    expect(renderElements(parsed).split('\n')).toEqual(['[e1] input:file "" takes pictures, several files at once in "toolbar"', '[e2] button "Next"'])
+  })
+
+  it('says whether a file of an approved name is one the input takes, and says yes unless it is certain', () => {
+    expect(acceptsFile('image/jpeg, image/png', 'first.png')).toBe(true)
+    expect(acceptsFile('image/png', 'photo.jpg')).toBe(false)
+    expect(acceptsFile('image/*', 'photo.JPEG')).toBe(true)
+    expect(acceptsFile('video/mp4, video/quicktime', 'picture-1.png')).toBe(false)
+    expect(acceptsFile('video/mp4, video/quicktime', 'video-1.mov')).toBe(true)
+    expect(acceptsFile('.png,.jpg', 'a.webp')).toBe(false)
+    expect(acceptsFile('.png', 'A.PNG')).toBe(true)
+    expect(acceptsFile(undefined, 'a.png')).toBe(true)
+    expect(acceptsFile('*/*', 'a.png')).toBe(true)
+    expect(acceptsFile('image/png', 'noextension')).toBe(true)
+    expect(acceptsFile('image/png', 'a.xyz')).toBe(true)
+  })
+
+  it('is told apart by what the page shows, not by where it is scrolled to', () => {
+    const page = (text: string, scroll = 0) => parseSnapshot({ url: 'https://x.test/', text, elements: [{ ref: 'e1', role: 'button', name: 'Next' }], scroll: { y: scroll, max: 900, height: 700 } }) as PageSnapshot
+    expect(snapshotSignature(page('Create a post', 0))).toBe(snapshotSignature(page('Create a post', 300)))
+    expect(snapshotSignature(page('Create a post'))).not.toBe(snapshotSignature(page('Create a post (1 upload shown)')))
+    const more = parseSnapshot({ url: 'https://x.test/', text: 'Create a post', elements: [{ ref: 'e1', role: 'button', name: 'Next' }, { ref: 'e2', role: 'button', name: 'Remove picture' }] }) as PageSnapshot
+    expect(snapshotSignature(more)).not.toBe(snapshotSignature(page('Create a post')))
   })
 })
 

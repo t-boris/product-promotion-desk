@@ -105,6 +105,8 @@ class ComposerPage extends FakePage {
   /** What a press of the control that publishes put out: the caption as the field held it, and the files the input held. */
   readonly published: { caption: string; files: string[] }[] = []
   private held: string[] = []
+  /** How many times the dialog took files and showed it (a preview, the next step). */
+  private taken = 0
   private readonly fields = new Map<string, string>()
 
   constructor(private readonly shape: Platform) {
@@ -124,7 +126,7 @@ class ComposerPage extends FakePage {
     const files = /ppd-files (e\d+)/.exec(script)
     if (files) return (this.items.find((i) => i.ref === files[1])?.role === 'input:file' ? this.held.map((path) => ({ name: path.split('/').pop(), size: readFileSync(path).length })) : null) as T
     if (script.includes('ppd-form-text')) return [...this.fields].filter(([, text]) => text.trim() !== '').map(([ref, text]) => ({ ref, text })) as T
-    if (script.includes('agent-snapshot')) return { url: this.currentUrl, title: 'New post', text: 'Create new post', alerts: [], humanCheck: '', elements: this.items } as T
+    if (script.includes('agent-snapshot')) return { url: this.currentUrl, title: 'New post', text: this.taken > 0 ? `Create new post (${this.taken} upload shown)` : 'Create new post', alerts: [], humanCheck: '', elements: this.items } as T
     const field = /ppd-field (e\d+)/.exec(script)
     if (field) return (this.fields.get(field[1] as string) ?? null) as T
     return undefined as T
@@ -137,6 +139,7 @@ class ComposerPage extends FakePage {
       const paths = [step.path, ...(step.also ?? [])]
       this.uploaded.push(paths)
       this.held = paths
+      this.taken += 1
     } else if (step.do === 'type') {
       this.typed.push({ ref: step.ref, text: step.text })
       this.fields.set(step.ref, step.text)
