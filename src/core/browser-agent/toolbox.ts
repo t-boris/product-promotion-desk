@@ -125,6 +125,8 @@ const MAX_EVALUATE_OUTPUT = 4000
 const MAX_WAIT_MS = 30_000
 /** How long a page is given to show that it took the files put into an input: a site shows its preview, its gallery or its next step within a few seconds. */
 const FILES_REACTION_MS = 6000
+/** How long the control that publishes is given to turn on after the application typed the fields: a form keeps it off until its required fields hold text and its pictures have been read. */
+const CONTROL_ENABLE_MS = 15_000
 const MIN_SHRINK_KB = 20
 const MAX_SHRINK_KB = 10_000
 const REF = /^e\d{1,4}$/
@@ -1253,7 +1255,7 @@ export class BrowserToolbox implements McpToolHost {
       if (!before) return fail('The page shows nothing usable yet. Wait a moment and look again.')
       const wrong = this.pageProblem(before, true)
       if (wrong) return fail(`Nothing was submitted: ${wrong}`)
-      const problem = this.targetProblem(before, parts, submitRef, true)
+      const problem = this.targetProblem(before, parts, submitRef, true, false)
       if (problem) return fail(`Nothing was submitted: ${problem}`)
       const foreign = await this.foreignText(page, parts)
       if (foreign) return fail(`Nothing was submitted: ${foreign}`)
@@ -1275,7 +1277,7 @@ export class BrowserToolbox implements McpToolHost {
    * that was loaded again (the owner, another flow on the same browser) numbers its elements again, so "e4" may now be another element
    * than the one the AI chose; a field is therefore compared with what the AI saw by role and, when `fieldNames`, by name too.
    */
-  private targetProblem(snapshot: PageSnapshot, parts: Part[], submitRef: string, fieldNames: boolean): string | null {
+  private targetProblem(snapshot: PageSnapshot, parts: Part[], submitRef: string, fieldNames: boolean, typed: boolean): string | null {
     const changed = (ref: string): string => `${ref} is not what it was when you looked (the page changed since your browser_snapshot). Look again with browser_snapshot.`
     const same = (was: SnapshotElement | undefined, is: SnapshotElement, name: boolean): boolean => was !== undefined && was.role === is.role && (!name || was.name === is.name)
     const element = (from: PageSnapshot | null, ref: string): SnapshotElement | undefined => from?.elements.find((e) => e.ref === ref)
@@ -1308,7 +1310,10 @@ export class BrowserToolbox implements McpToolHost {
     const control = element(snapshot, submitRef)
     if (!control) return `${submitRef} is not on the page any more. Look again with browser_snapshot.`
     if (!same(element(this.shown, submitRef), control, true)) return changed(submitRef)
-    if (control.disabled) return `"${control.name}" is disabled. Look at the page for what it waits for.`
+    // A form keeps its control off until the fields it requires hold text (Reddit's Post waits for the title), and the fields are what the application is about
+    // to type: before the typing a control that is off is what a form looks like, so it is refused only when there is nothing to type. After the typing, one that
+    // is still off waits for something else (a picture still being read, a choice, a check) and nothing is pressed.
+    if (control.disabled && (typed || parts.length === 0)) return `"${control.name}" is disabled${typed ? ' although the approved content has been typed into the form' : ''}. Look at the page for what it waits for.`
     if (!SUBMIT_ROLE.test(control.role) || !looksLikeSubmit(control.name)) {
       return `"${control.name || submitRef}" (${control.role}) is not a control that publishes: submit_ref is the button of the form, named like Post, Reply, Comment, Submit, Publish or Save. When the form has none, call report_result with needs_owner and say so.`
     }
@@ -1406,14 +1411,20 @@ export class BrowserToolbox implements McpToolHost {
     }
     const foreign = await this.foreignText(page, parts)
     if (foreign) return { refused: foreign }
-    const now = await this.observe(page)
+    let now = await this.observe(page)
+    // The control may turn on a moment after the last field was typed (the page reacts to the input, a picture finishes being read): it is looked at again
+    // for a few seconds before it is taken to be off. Nothing is committed yet, and the ticket lives for minutes.
+    for (let waited = 0; now && parts.length > 0 && now.elements.find((e) => e.ref === submitRef)?.disabled === true && waited < CONTROL_ENABLE_MS; waited += 500) {
+      await this.deps.sleep(500)
+      now = await this.observe(page)
+    }
     if (!now) return { refused: 'the page showed nothing usable just before the control was pressed.' }
     const wrong = this.pageProblem(now, true)
     if (wrong) return { refused: wrong }
     // The same checks as before the typing, against this look: a ticket is held, and the control is the one the AI chose. A field's name is
     // not compared again: an editor built on a div has no name of its own and is named by what it holds, which is now the typed text (the
     // read-back above has found the text in the field that carries the label).
-    const problem = this.targetProblem(now, parts, submitRef, false)
+    const problem = this.targetProblem(now, parts, submitRef, false, true)
     if (problem) return { refused: problem }
 
     // No wait between this look and the point of no return: whatever ended the mission before it is seen here, and `commit` itself refuses after a seal.

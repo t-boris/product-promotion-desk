@@ -722,3 +722,71 @@ describe('which file input of a page takes the pictures: what each says it takes
     expect(t.page.steps.length).toBeGreaterThan(before)
   })
 })
+
+describe('a form that keeps its control off until its fields hold text (Reddit: the Post button waits for the title)', () => {
+  /** The control is off at the first look; the page turns it on `after` looks that follow the typing (0: at once). */
+  function offUntilTyped(after = 0, approved: ApprovedContent = content()) {
+    const t = setup(approved)
+    t.page.items = [
+      { ref: 'e1', role: 'input:file', name: '', accepts: 'image/png', several: true },
+      { ref: 'e5', role: 'textarea', name: 'Write a caption' },
+      { ref: 'e6', role: 'button', name: 'Post', disabled: true }
+    ]
+    let looks: number | null = null
+    const step = t.page.pageStep.bind(t.page)
+    t.page.pageStep = async (s: PageStep): Promise<PageStepResult> => {
+      const result = await step(s)
+      if (s.do === 'type') looks = after
+      return result
+    }
+    const read = t.page.read.bind(t.page)
+    t.page.read = async <T,>(script: string): Promise<T> => {
+      if (looks !== null && script.includes('agent-snapshot')) {
+        if (looks <= 0) t.page.items = t.page.items.map((i) => (i.ref === 'e6' ? { ...i, disabled: false } : i))
+        looks -= 1
+      }
+      return read<T>(script)
+    }
+    return t
+  }
+  const submitHere = (t: Setup) => t.toolbox.call('browser_submit', { text_ref: 'e5', submit_ref: 'e6' })
+
+  it('types the approved content into the fields first and presses the control once it is on', async () => {
+    const t = offUntilTyped()
+    await look(t)
+    expect((await attach(t)).isError).toBeUndefined()
+    expect((await submitHere(t)).isError).toBeUndefined()
+    expect(t.page.fields.get('e5')).toBe('A caption for the picture.')
+    expect(t.page.clicked).toEqual(['e6'])
+    expect(t.authority.committed).toBe(true)
+  })
+
+  it('gives a page that is slow to turn the control on a few seconds, looking again and not pressing meanwhile', async () => {
+    const t = offUntilTyped(4)
+    await look(t)
+    await attach(t)
+    expect((await submitHere(t)).isError).toBeUndefined()
+    expect(t.page.clicked).toEqual(['e6'])
+  })
+
+  it('does not press a control that stays off after the content was typed, and says the content was typed', async () => {
+    const t = offUntilTyped(10_000)
+    await look(t)
+    await attach(t)
+    const result = await submitHere(t)
+    expect(result).toMatchObject({ isError: true, text: expect.stringContaining('is disabled although the approved content has been typed into the form') })
+    expect(t.page.clicked).toEqual([])
+    expect(t.authority.committed).toBe(false)
+  })
+
+  it('still refuses an off control when there is nothing to type (a post that is only pictures): nothing in the form can turn it on', async () => {
+    const t = offUntilTyped(0, content({ text: '' }))
+    await look(t)
+    await attach(t)
+    const result = await t.toolbox.call('browser_submit', { submit_ref: 'e6' })
+    expect(result).toMatchObject({ isError: true, text: expect.stringContaining('is disabled') })
+    expect(result.text).not.toContain('although')
+    expect(t.page.clicked).toEqual([])
+  })
+})
+
