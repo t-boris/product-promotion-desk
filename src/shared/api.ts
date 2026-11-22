@@ -38,6 +38,9 @@ import type {
   DraftCheckResult,
   DraftHelpField,
   DraftHelpResult,
+  ComposeResult,
+  MaterialPreview,
+  PostLength,
   Claim,
   ClaimKind,
   ClaimSourceRef,
@@ -460,6 +463,24 @@ export interface ApiMethods {
    * (suggest_failed). Like the AI drafts, it works with any ready engine.
    */
   'drafts.refine': [{ field: DraftHelpField; opportunityId?: Id; channelId?: Id; form: { title: string; text: string }; instruction?: string; about?: string }, DraftHelpResult]
+  /**
+   * What is in the material the owner gave for a post (files and folders, full paths): the files in the order they will be read, a count in words, what is left out and
+   * why. Reads files, writes nothing, asks no AI. `exclude` lists files the owner took out of the list.
+   */
+  'material.preview': [{ paths: string[]; exclude?: string[] }, MaterialPreview]
+  /**
+   * The AI makes ONE post from the owner's material (files and folders, read by the application, never by the AI) and what the owner says the post should be like
+   * (`brief`, up to 2000 characters, several lines allowed) and how long it should be. The answer is a title, a Markdown text and the pictures the AI placed, each already a
+   * picture of the library (`![alt](media:ID)`); a picture that could not be kept is left out and named in `notes`. The text passes the checks every AI text passes (nothing
+   * prohibited, no price, discount or free offer without an approved fact, links only to the product's own addresses, no credentials); the owner's material stands where
+   * approved facts stand for a post made from nothing. Nothing is saved: the owner reads and changes the post and saves it like any other. Refused like every AI help:
+   * engine_unavailable; no_knowledge when there is no document, no wish and no approved fact; invalid_input for a malformed call or nothing to work from;
+   * suggest_failed when the answer is blocked by the checks after one repair, or the product knowledge changed while the AI wrote.
+   */
+  'drafts.compose': [
+    { channelId?: Id; opportunityId?: Id; material: string[]; exclude?: string[]; brief?: string; length?: PostLength; form: { title: string; text: string } },
+    ComposeResult
+  ]
   /**
    * The AI in the quick-post composer (REQ-004). Four helps, each the owner's own press, none of them stores or changes anything: the owner reads the
    * answer and presses to use it. All of them stand on the approved product knowledge; with none approved, no_knowledge. engine_unavailable like every AI

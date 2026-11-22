@@ -3,6 +3,7 @@ import type { Core } from '../core'
 import { BrowserWatchFlow } from './browser-watch'
 import { DraftCheck } from './draft-check'
 import { DraftHelp } from './draft-help'
+import { PostComposer } from './compose-flow'
 import { FindingPictures } from './finding-pictures'
 import { FeedAnalysis } from './feed-analysis'
 import { FindingAssistant } from './finding-assist'
@@ -62,6 +63,9 @@ export function registerFlow(core: Core): void {
   registerFlowApi({ core, store, review, monitor, drafting, sending, publications, findings, watcher, pictures })
   const draftHelp = new DraftHelp(core, store)
   core.router.register({ 'drafts.refine': (args) => draftHelp.refine(args) })
+  // A post made from the owner's own material: files or a folder, what the post should be like, how long. Nothing is saved or sent.
+  const postComposer = new PostComposer(core, store)
+  core.router.register({ 'material.preview': (args) => postComposer.preview(args), 'drafts.compose': (args) => postComposer.compose(args) })
   // "Reply here" in the Feed: the AI writes the comment for one place of a thread it read. Nothing is stored or sent.
   const findingReply = new FindingReply(core, findings)
   core.router.register({ 'findings.writeReply': (args) => findingReply.write(args) })

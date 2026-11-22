@@ -19,7 +19,7 @@ export function takesPicturesOnly(purpose: FilePurpose): boolean {
 
 /** Whether the purpose is one thing (a file, a folder, a picture) or may be several files at once. */
 export function takesMany(purpose: FilePurpose): boolean {
-  return purpose === 'pictures'
+  return purpose === 'pictures' || purpose === 'material'
 }
 
 /**
@@ -85,5 +85,7 @@ export function loaderWords(purpose: FilePurpose): LoaderWords {
       return { choose: 'Choose picture…', change: 'Change…', drop: 'Drop a picture here, or', typed: 'Path of the picture' }
     case 'pictures':
       return { choose: 'Choose pictures…', change: 'Choose more…', drop: 'Drop pictures here, or', typed: 'Path of a picture' }
+    case 'material':
+      return { choose: 'Choose files or a folder…', change: 'Add more…', drop: 'Drop files or a folder here, or', typed: 'Path of a file or a folder' }
   }
 }

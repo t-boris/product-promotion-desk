@@ -26,5 +26,8 @@ export function dialogShape(purpose: FilePurpose): DialogShape {
       return { title: 'Choose a picture', properties: ['openFile'], filters: [PICTURES] }
     case 'pictures':
       return { title: 'Choose pictures', properties: ['openFile', 'multiSelections'], filters: [PICTURES] }
+    case 'material':
+      // The material of a post: any mix of documents, pictures, videos and folders (one dialog takes files and folders together on a Mac).
+      return { title: 'Choose files or a folder for the post', properties: ['openFile', 'openDirectory', 'multiSelections'] }
   }
 }

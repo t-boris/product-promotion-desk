@@ -92,6 +92,48 @@ export interface DraftHelpResult {
   sources?: DraftSource[]
 }
 
+/** How long the post made from material is: a few lines, an ordinary post, or an article with headings. */
+export type PostLength = 'short' | 'medium' | 'long'
+
+export const POST_LENGTHS: readonly PostLength[] = ['short', 'medium', 'long']
+
+/** What a file of the material is, to the post: a document the AI reads, a picture or a video it may place, or something it only lists. */
+export type MaterialKind = 'text' | 'picture' | 'video' | 'other'
+
+/** One file found in the material the owner gave. */
+export interface MaterialFileInfo {
+  /** The absolute path: the screen sends it back to leave the file out. */
+  path: string
+  name: string
+  /** Where it is from the folder the owner chose. */
+  relative: string
+  kind: MaterialKind
+  size: number
+}
+
+/** What is in the material the owner gave (files and folders), before anything is written. */
+export interface MaterialPreview {
+  files: MaterialFileInfo[]
+  /** "2 documents, 14 pictures, 1 video". */
+  summary: string
+  /** Left out, and why, in words the owner can read. */
+  skipped: { relative: string; reason: string }[]
+  /** The folder held more than was listed. */
+  cut: boolean
+}
+
+/** A post the AI made from the owner's material. Nothing is stored: the owner reads it, changes it and saves the post. */
+export interface ComposeResult {
+  title: string
+  /** Markdown; the pictures the AI placed are already pictures of the library (`![alt](media:ID)`). */
+  text: string
+  /** The pictures placed in the text, as the post carries them. */
+  attachments: Attachment[]
+  sources?: DraftSource[]
+  /** What the owner should know about what was done, in words (a picture that could not be used, files the AI was not shown). */
+  notes: string[]
+}
+
 /** One thing the owner's own text breaks: what the panel before an approval lists. */
 export interface DraftFinding {
   rule: 'prohibited' | 'price' | 'discount' | 'free' | 'link' | 'unsafe_link' | 'credential'
@@ -810,9 +852,9 @@ export type MediaShape = 'square' | 'wide' | 'tall'
  * What a file is being chosen for (the system's file dialog opens differently for each): a document or an image or a project folder as a source of a product,
  * one picture, or several pictures. The dialog's title, its filters and whether it picks a folder or many files follow from this, never from the screen.
  */
-export type FilePurpose = 'source_document' | 'source_image' | 'source_folder' | 'picture' | 'pictures'
+export type FilePurpose = 'source_document' | 'source_image' | 'source_folder' | 'picture' | 'pictures' | 'material'
 
-export const FILE_PURPOSES: readonly FilePurpose[] = ['source_document', 'source_image', 'source_folder', 'picture', 'pictures']
+export const FILE_PURPOSES: readonly FilePurpose[] = ['source_document', 'source_image', 'source_folder', 'picture', 'pictures', 'material']
 
 /** A picture of a product's library. The file lives in the application's data folder and never changes; a draft that uses it is bound to its bytes. */
 export interface MediaItem {

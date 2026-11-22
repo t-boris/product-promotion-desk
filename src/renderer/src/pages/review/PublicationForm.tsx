@@ -6,6 +6,7 @@ import { call, useAction, useQuery } from '../../hooks'
 import { Button, Card, ErrorNote, useOpenForm } from '../../ui'
 import { DraftEditor, emptyForm, toInput, type DraftForm } from './DraftEditor'
 import { PostDrafter } from './PostDrafter'
+import { PostFromMaterial } from './PostFromMaterial'
 import type { PostAuthor } from './PostPreview'
 import { saveIntent, saveLabel, toggled, whereRows } from './post-group'
 import { WhereToPost, useChannelOptions } from './WhereToPost'
@@ -88,6 +89,7 @@ export function PublicationForm({ productId, channelId, platform, reads, author,
           <QuickComposer {...QUICK_SLOTS} productId={productId} channelId={chosen[0] ?? null} form={quick} onChange={setQuick} platforms={platforms} lookAlso={lookAlso} author={author} disabled={creating.busy} autoFocus={picked === null} />
         ) : (
           <>
+            <PostFromMaterial productId={productId} channelId={channelId} form={form} onChange={setForm} />
             <PostDrafter productId={productId} channelId={channelId} form={form} onChange={setForm} />
             <DraftEditor form={form} onChange={setForm} withTitle disabled={creating.busy} draft={null} autoFocus={picked === null} ai={{ channelId }} post={{ productId, platform, author, reads }} />
           </>

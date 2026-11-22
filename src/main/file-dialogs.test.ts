@@ -6,6 +6,9 @@ describe('the system dialog for each purpose', () => {
   it('opens a folder dialog for a project folder and a file dialog for everything else', () => {
     expect(dialogShape('source_folder').properties).toEqual(['openDirectory'])
     for (const purpose of FILE_PURPOSES.filter((p) => p !== 'source_folder')) expect(dialogShape(purpose).properties).toContain('openFile')
+    // The material of a post is files and folders together.
+    expect(dialogShape('material').properties).toEqual(['openFile', 'openDirectory', 'multiSelections'])
+    expect(dialogShape('material').filters).toBeUndefined()
   })
 
   it('lists every file for a source document and only pictures for the picture purposes', () => {
@@ -15,9 +18,9 @@ describe('the system dialog for each purpose', () => {
     }
   })
 
-  it('lets the owner choose several files only for "pictures", and gives every dialog a title', () => {
+  it('lets the owner choose several files only for "pictures" and the material of a post, and gives every dialog a title', () => {
     for (const purpose of FILE_PURPOSES) {
-      expect(dialogShape(purpose).properties.includes('multiSelections')).toBe(purpose === 'pictures')
+      expect(dialogShape(purpose).properties.includes('multiSelections')).toBe(purpose === 'pictures' || purpose === 'material')
       expect(dialogShape(purpose).title).not.toBe('')
     }
   })
