@@ -185,7 +185,16 @@ export class BaseWindow extends EventEmitter {
   readonly children: WebContentsView[] = []
   readonly contentView = { addChildView: (view: WebContentsView) => void this.children.push(view) }
   private shown = false
+  opacity = 1
+  mouseIgnored = false
+  focusable = true
+  hiddenInMissionControl = false
+  /** Seen by the owner: shown and not transparent. */
   get visible(): boolean {
+    return (this.options.show !== false || this.shown) && this.opacity > 0
+  }
+  /** Drawing: shown at all, seen or not. A window that is not shown draws nothing, and a page that draws on the client stays blank in it. */
+  get rendering(): boolean {
     return this.options.show !== false || this.shown
   }
   showInactive(): void {
@@ -194,6 +203,18 @@ export class BaseWindow extends EventEmitter {
   hide(): void {
     this.shown = false
     this.options.show = false
+  }
+  setOpacity(opacity: number): void {
+    this.opacity = opacity
+  }
+  setIgnoreMouseEvents(ignore: boolean): void {
+    this.mouseIgnored = ignore
+  }
+  setFocusable(focusable: boolean): void {
+    this.focusable = focusable
+  }
+  setHiddenInMissionControl(hidden: boolean): void {
+    this.hiddenInMissionControl = hidden
   }
   destroyed = false
   focused = 0

@@ -530,7 +530,10 @@ export class AccountsService {
     const ctx = this.probeContext(account, connector)
     try {
       const state = await connector.checkLogin(ctx)
-      return this.applyLogin(account, state, options)
+      const checked = this.applyLogin(account, state, options)
+      // What the check saw, in its own words, whenever it did not end "signed in": a status that stays "sign-in needed" gives no other trace of why.
+      if (checked.status !== 'ready') this.core.log.info('accounts', `Sign-in check of ${account.label}: ${loginOutcome(state).detail}`)
+      return checked
     } catch (error) {
       const failure = browserError(error, { code: 'login_check_failed', message: (reason) => `Could not check the sign-in: ${reason}` })
       if (failure.code !== 'browser_busy') this.core.log.warn('accounts', failure.message)

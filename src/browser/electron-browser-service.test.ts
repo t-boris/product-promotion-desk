@@ -94,6 +94,16 @@ describe('agent page', () => {
     expect(agentContents().windowOpenHandler?.({ url: 'https://popup.example/' })).toEqual({ action: 'deny' })
   })
 
+  it('draws the page of a plain call while the owner sees nothing: the window is shown but transparent, click-through, unfocusable (a hidden window draws nothing, and Pinterest stayed blank in it)', async () => {
+    const { service } = setup()
+    await service.session(account('a')).withAgentControl('login:a', async (page) => page.goto('https://www.pinterest.com/login/'))
+    const win = created.windows[0]
+    expect(win.rendering).toBe(true)
+    expect(win.visible).toBe(false)
+    expect(win).toMatchObject({ opacity: 0, mouseIgnored: true, focusable: false, hiddenInMissionControl: true })
+    expect(win.focused).toBe(0)
+  })
+
   it('shows the window of a task to the owner without the focus, brings it forward on request, and closing it only hides it (DEC-018)', async () => {
     const { service } = setup()
     const a = account('a')
@@ -101,6 +111,7 @@ describe('agent page', () => {
     await task.show()
     const win = created.windows[0]
     expect(win.visible).toBe(true)
+    expect(win).toMatchObject({ opacity: 1, mouseIgnored: false, focusable: true, hiddenInMissionControl: false })
     expect(win.focused).toBe(0) // shown beside the owner's work, never in front of it
     expect(win.raised).toBe(0)
     expect(service.session(a).control()).toEqual({ holder: 'none', owner: null })
@@ -109,6 +120,7 @@ describe('agent page', () => {
     win.emit('close', { preventDefault: () => (prevented = true) })
     expect(prevented).toBe(true)
     expect(win.visible).toBe(false)
+    expect(win.rendering).toBe(true) // out of sight, but the page keeps drawing
     expect(win.destroyed).toBe(false)
 
     service.showAgentBrowser(a, true)

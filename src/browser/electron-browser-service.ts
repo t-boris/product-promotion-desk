@@ -37,6 +37,29 @@ interface RequestDetails {
 const BACKGROUND_KINDS = new Set(['xhr', 'ping', 'other', 'subFrame'])
 
 /**
+ * The AI's page lives in a window of its own that the owner does not see until the AI is shown to them. A window that is not shown draws nothing, and a
+ * page that draws on the client (Pinterest's sign-in page: no text and no redirect, for ever) never comes to life in it, so a check of the session
+ * saw a blank page and called a signed-in account signed out. So the window is "shown" from the start but cannot be seen: fully transparent, passing
+ * every mouse event through, taking no focus and out of Mission Control. A transparent window is not an occluded one: the page keeps drawing.
+ */
+function ghost(win: BaseWindow): void {
+  win.setOpacity(0)
+  win.setIgnoreMouseEvents(true)
+  win.setFocusable(false)
+  win.setHiddenInMissionControl(true)
+  win.showInactive()
+}
+
+/** The window as the owner is meant to see it (the AI shown at work): opaque, in front of nothing it should not be in front of, and theirs to click. */
+function seen(win: BaseWindow): void {
+  win.setOpacity(1)
+  win.setIgnoreMouseEvents(false)
+  win.setFocusable(true)
+  win.setHiddenInMissionControl(false)
+  win.showInactive()
+}
+
+/**
  * Electron implementation of the browser service (REQ-002, REQ-004, DEC-038).
  *
  *  - one persistent session per account (`persist:` partition) and exactly one ControlledSession per account,
@@ -281,7 +304,7 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
   }
 
   /**
-   * A page in a window of its own that starts hidden. BaseWindow (not BrowserWindow) keeps it out of
+   * A page in a window of its own that starts out of sight (`ghost`). BaseWindow (not BrowserWindow) keeps it out of
    * BrowserWindow.getAllWindows(), which the main process uses to tell whether an application window is open.
    */
   private createAgentSurface(partition: string, label: string): AgentSurface {
@@ -292,21 +315,22 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
     })
     win.contentView.addChildView(view)
     view.setBounds({ x: 0, y: 0, ...AGENT_VIEWPORT })
+    ghost(win)
 
     const contents = view.webContents
     const dispose = (): void => {
       if (!contents.isDestroyed()) contents.close()
       if (!win.isDestroyed()) win.destroy()
     }
-    // The owner may close the window they watch the AI in: it is only hidden, the page and the AI's work go on.
+    // The owner may close the window they watch the AI in: it only goes out of sight (it keeps drawing), the page and the AI's work go on.
     win.on('close', (event: { preventDefault(): void }) => {
       event.preventDefault()
-      win.hide()
+      ghost(win)
     })
     const reveal = (focus: boolean, title?: string): void => {
       if (win.isDestroyed()) return
       win.setTitle(`${label} — ${title ?? 'the AI is working here'}`)
-      win.showInactive()
+      seen(win)
       if (focus) {
         win.moveTop()
         win.focus()
