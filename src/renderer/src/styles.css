@@ -1714,6 +1714,15 @@ input[type='radio'] {
   box-shadow: var(--shadow-pop);
   white-space: normal;
 }
+/* Opened towards the other side when the default (level with the button's right edge, under it) would be cut off: see placeMenu. */
+.menu-pop[data-align='start'] {
+  left: 0;
+  right: auto;
+}
+.menu-pop[data-side='above'] {
+  top: auto;
+  bottom: calc(100% + var(--space-1));
+}
 .menu-item {
   display: flex;
   flex-direction: column;

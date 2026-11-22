@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type ReactNode, type RefObject } from 'react'
 import { EmptyArtwork, type EmptyArt } from './empty-art'
 import { Icon, type IconName } from './icons'
+import { intersect, placeMenu, type Box, type MenuPlacement } from './menu-placement'
 import { closeForm, mainForm, openForm, type OpenFormIds } from './open-forms'
 import type { Tone } from './tone'
 
@@ -267,9 +268,38 @@ export function usePopover(): { open: boolean; setOpen: (open: boolean) => void;
   return { open, setOpen, box }
 }
 
-/** A button that opens a small menu under it; it closes on a click elsewhere, on Escape, and after a choice. */
+const MENU_DEFAULT: MenuPlacement = { align: 'end', side: 'below' }
+
+/** The part of the window, and of every scrolling or clipping column around `element`, that is not cut off: what a menu opened from it has to fit in. */
+function visibleBoxOf(element: HTMLElement): Box {
+  let box: Box = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }
+  for (let node = element.parentElement; node && node !== document.body; node = node.parentElement) {
+    const style = getComputedStyle(node)
+    if (/(auto|scroll|hidden|clip)/.test(`${style.overflowX} ${style.overflowY}`)) {
+      const { left, top, right, bottom } = node.getBoundingClientRect()
+      box = intersect(box, { left, top, right, bottom })
+    }
+  }
+  return box
+}
+
+/**
+ * A button that opens a small menu under it; it closes on a click elsewhere, on Escape, and after a choice. The menu is level with the right
+ * edge of its button, under it; when that would take it past an edge of the column or the window (a button at the left of a row of buttons,
+ * or at the bottom of the screen) it opens towards the other side instead (`placeMenu`), measured before it is drawn.
+ */
 export function RowMenu({ label, children, testId, variant = 'ghost' }: { label: string; children: (close: () => void) => ReactNode; testId?: string; variant?: 'ghost' | 'quiet' }) {
   const { open, setOpen, box } = usePopover()
+  const pop = useRef<HTMLDivElement>(null)
+  const [placement, setPlacement] = useState<MenuPlacement>(MENU_DEFAULT)
+  useLayoutEffect(() => {
+    const menu = pop.current
+    const holder = box.current
+    if (!open || !menu || !holder) return
+    const { left, top, right, bottom } = holder.getBoundingClientRect()
+    const next = placeMenu({ left, top, right, bottom }, { width: menu.offsetWidth, height: menu.offsetHeight }, visibleBoxOf(holder))
+    setPlacement((now) => (now.align === next.align && now.side === next.side ? now : next))
+  }, [open, box])
   return (
     <div className="menu" ref={box}>
       <Button variant={variant} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} data-testid={testId}>
@@ -277,7 +307,7 @@ export function RowMenu({ label, children, testId, variant = 'ghost' }: { label:
         <Icon name="chevronDown" small />
       </Button>
       {open && (
-        <div className="menu-pop" role="menu">
+        <div className="menu-pop" role="menu" ref={pop} data-align={placement.align} data-side={placement.side}>
           {children(() => setOpen(false))}
         </div>
       )}
