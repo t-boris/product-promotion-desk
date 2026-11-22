@@ -856,6 +856,9 @@ export interface Attachment {
 
 // ───────────────────────────── Pictures and the post editor (DEC-030) ─────────────────────────────
 
+/** A video is kept in the library and carried with a post like a picture, but is judged by its own rules (size, how many, which platforms take it). One answer to "is it a video". */
+export const isVideoMime = (mime: string | null | undefined): boolean => typeof mime === 'string' && mime.startsWith('video/')
+
 /** `card`: the template card of a quick post, drawn by the application (DEC-045). */
 export type MediaOrigin = 'picked' | 'pasted' | 'dropped' | 'generated' | 'card'
 
@@ -866,9 +869,9 @@ export type MediaShape = 'square' | 'wide' | 'tall'
  * What a file is being chosen for (the system's file dialog opens differently for each): a document or an image or a project folder as a source of a product,
  * one picture, or several pictures. The dialog's title, its filters and whether it picks a folder or many files follow from this, never from the screen.
  */
-export type FilePurpose = 'source_document' | 'source_image' | 'source_folder' | 'picture' | 'pictures' | 'material'
+export type FilePurpose = 'source_document' | 'source_image' | 'source_folder' | 'picture' | 'pictures' | 'attachments' | 'material'
 
-export const FILE_PURPOSES: readonly FilePurpose[] = ['source_document', 'source_image', 'source_folder', 'picture', 'pictures', 'material']
+export const FILE_PURPOSES: readonly FilePurpose[] = ['source_document', 'source_image', 'source_folder', 'picture', 'pictures', 'attachments', 'material']
 
 /** A picture of a product's library. The file lives in the application's data folder and never changes; a draft that uses it is bound to its bytes. */
 export interface MediaItem {

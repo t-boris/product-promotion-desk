@@ -1,23 +1,35 @@
-// Attachment validation (REQ-003: images only where the connector verifies them). The file must exist, be a
-// real image of an allowed type and stay under the size cap. The content hash is computed here and never taken
-// from the caller, so an approval bound to it really covers the bytes that will be uploaded.
+// Attachment validation (REQ-003: pictures and videos only, as far as the application can verify them). The file must exist, be a
+// real picture or video of an allowed type and stay under the size cap of its kind. The content hash is computed here and never taken
+// from the caller, so an approval bound to it really covers the bytes that will be uploaded. The hash is read in pieces, so a video of
+// hundreds of megabytes is never held in memory (the digest is the same as for a whole read).
 
-import { open, readFile, stat } from 'node:fs/promises'
+import { open, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute } from 'node:path'
 import { ApiError } from '../../shared/api'
-import type { Attachment } from '../../shared/types'
-import { errorMessage, sha256 } from './util'
+import { isVideoMime, type Attachment } from '../../shared/types'
+import { errorMessage, sha256OfFile } from './util'
 
 export const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
 export const ATTACHMENT_MAX_COUNT = 10
+/** The most a video of a post may be. The platforms' own limits are judged apart (`VIDEO_RULES`). */
+export const VIDEO_MAX_BYTES = 512 * 1024 * 1024
+/** The most a file of this kind may be: a picture ten megabytes, a video 512. */
+export const attachmentLimit = (mime: string): number => (isVideoMime(mime) ? VIDEO_MAX_BYTES : ATTACHMENT_MAX_BYTES)
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.gif': 'image/gif',
-  '.webp': 'image/webp'
+  '.webp': 'image/webp',
+  '.mp4': 'video/mp4',
+  '.m4v': 'video/mp4',
+  '.mov': 'video/quicktime',
+  '.webm': 'video/webm'
 }
+
+/** The boxes a QuickTime file may begin with when it has no `ftyp` (older cameras and editors). */
+const QUICKTIME_FIRST_BOXES = ['ftyp', 'moov', 'mdat', 'wide', 'free', 'skip', 'pnot']
 
 function looksLike(mime: string, head: Buffer): boolean {
   switch (mime) {
@@ -29,6 +41,14 @@ function looksLike(mime: string, head: Buffer): boolean {
       return head.length >= 6 && ['GIF87a', 'GIF89a'].includes(head.subarray(0, 6).toString('latin1'))
     case 'image/webp':
       return head.length >= 12 && head.subarray(0, 4).toString('latin1') === 'RIFF' && head.subarray(8, 12).toString('latin1') === 'WEBP'
+    case 'video/mp4':
+      // An MPEG-4 file begins with a box whose type is `ftyp`, after four bytes of its size.
+      return head.length >= 12 && head.subarray(4, 8).toString('latin1') === 'ftyp'
+    case 'video/quicktime':
+      return head.length >= 12 && QUICKTIME_FIRST_BOXES.includes(head.subarray(4, 8).toString('latin1'))
+    case 'video/webm':
+      // The EBML header of Matroska, whose document type says `webm` (a `.mkv` says `matroska`, and is not taken).
+      return head.length >= 16 && head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3 && head.toString('latin1').includes('webm')
     default:
       return false
   }
@@ -40,13 +60,23 @@ export function sniffMime(head: Buffer): string | null {
   return null
 }
 
-export const EXTENSION_BY_MIME: Record<string, string> = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/gif': '.gif', 'image/webp': '.webp' }
+export const EXTENSION_BY_MIME: Record<string, string> = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
+  'video/mp4': '.mp4',
+  'video/quicktime': '.mov',
+  'video/webm': '.webm'
+}
+
+const HEAD_BYTES = 64
 
 async function readHead(path: string): Promise<Buffer> {
   const handle = await open(path, 'r')
   try {
-    const buffer = Buffer.alloc(16)
-    const { bytesRead } = await handle.read(buffer, 0, 16, 0)
+    const buffer = Buffer.alloc(HEAD_BYTES)
+    const { bytesRead } = await handle.read(buffer, 0, HEAD_BYTES, 0)
     return buffer.subarray(0, bytesRead)
   } finally {
     await handle.close()
@@ -75,12 +105,17 @@ export async function validateAttachments(input: Attachment[] | undefined): Prom
       throw invalid(name, `the file cannot be read (${errorMessage(error)}).`)
     }
     if (size === 0) throw invalid(name, 'the file is empty.')
-    if (size > ATTACHMENT_MAX_BYTES) throw invalid(name, `the file is larger than ${Math.round(ATTACHMENT_MAX_BYTES / 1024 / 1024)} MB.`)
     const mime = MIME_BY_EXTENSION[extname(item.path).toLowerCase()]
-    if (!mime) throw invalid(name, 'only PNG, JPEG, GIF and WebP images are supported.')
+    // A file of a kind that is not taken is said so whatever its size.
+    if (!mime) {
+      if (size > ATTACHMENT_MAX_BYTES) throw invalid(name, `the file is larger than ${Math.round(ATTACHMENT_MAX_BYTES / 1024 / 1024)} MB.`)
+      throw invalid(name, 'only PNG, JPEG, GIF and WebP pictures and MP4, MOV, M4V and WebM videos are supported.')
+    }
+    const limit = attachmentLimit(mime)
+    if (size > limit) throw invalid(name, `the ${isVideoMime(mime) ? 'video' : 'file'} is larger than ${Math.round(limit / 1024 / 1024)} MB.`)
     if (item.mime && item.mime !== mime) throw invalid(name, `declared type ${item.mime} does not match a ${mime} file.`)
-    if (!looksLike(mime, await readHead(item.path))) throw invalid(name, `the content is not a valid ${mime} image.`)
-    result.push({ name, path: item.path, mime, sha256: sha256(await readFile(item.path)) })
+    if (!looksLike(mime, await readHead(item.path))) throw invalid(name, `the content is not a valid ${mime} ${isVideoMime(mime) ? 'video' : 'image'}.`)
+    result.push({ name, path: item.path, mime, sha256: await sha256OfFile(item.path) })
   }
   return result
 }
@@ -92,8 +127,7 @@ export async function validateAttachments(input: Attachment[] | undefined): Prom
 export async function attachmentProblem(attachments: Attachment[]): Promise<string | null> {
   for (const a of attachments) {
     try {
-      const content = await readFile(a.path)
-      if (sha256(content) !== a.sha256) return `Attachment "${a.name}" changed on disk after the draft was saved.`
+      if ((await sha256OfFile(a.path)) !== a.sha256) return `Attachment "${a.name}" changed on disk after the draft was saved.`
     } catch {
       return `Attachment "${a.name}" can no longer be read from ${a.path}.`
     }

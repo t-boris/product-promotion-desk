@@ -182,7 +182,8 @@ export interface ApiMethods {
   'app.settings.update': [Partial<AppSettings>, AppSettings]
   'automation.get': [void, AutomationState]
   'automation.setPaused': [{ paused: boolean }, AutomationState]
-  'attention.list': [void, AttentionItem[]]
+  /** What waits for the owner. With `productId`: only what is about that product (the number beside Inbox is the open product's); without it: everything. */
+  'attention.list': [{ productId?: Id } | undefined, AttentionItem[]]
 
   // AI engines (REQ-006)
   'engines.list': [void, EngineStatus[]]
@@ -566,8 +567,10 @@ export interface ApiMethods {
   'files.choose': [{ purpose: FilePurpose }, string[]]
   /** Adds a picture from bytes: pasted from the clipboard or dropped on the editor. The file is checked like any attachment. */
   'media.add': [{ productId: Id; name: string; base64: string; origin: Exclude<MediaOrigin, 'generated'>; description?: string }, MediaItem]
+  /** Adds a picture or a video from a file on this computer (a file dropped on the editor, which is not read into the screen): copied into the library, the original is not touched. */
+  'media.addPath': [{ productId: Id; path: string; origin: 'picked' | 'dropped' }, MediaItem]
   'media.list': [{ productId: Id }, MediaItem[]]
-  /** A small copy for the screen as a data address (the CSP allows nothing else), or null when the file is gone. */
+  /** A small copy for the screen as a data address (the CSP allows nothing else), or null when the file is gone or, for a video, the system has no frame of it. */
   'media.thumb': [{ id: Id; side?: number }, { dataUrl: string } | null]
   'media.describe': [{ id: Id; description: string }, MediaItem]
   /** Takes a picture out of the library; refused while a draft uses it. */

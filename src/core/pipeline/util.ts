@@ -1,8 +1,20 @@
 // Small helpers shared by the discussion → draft → approval → sending flow.
 
 import { createHash } from 'node:crypto'
+import { createReadStream } from 'node:fs'
 
 export const sha256 = (data: string | Buffer): string => createHash('sha256').update(data).digest('hex')
+
+/** The same digest of a file, read in pieces: a video of hundreds of megabytes is never held in memory. */
+export function sha256OfFile(path: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const hash = createHash('sha256')
+    const stream = createReadStream(path)
+    stream.on('data', (chunk) => hash.update(chunk))
+    stream.on('error', reject)
+    stream.on('end', () => resolve(hash.digest('hex')))
+  })
+}
 
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)

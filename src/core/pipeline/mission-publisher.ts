@@ -18,7 +18,7 @@
 //    writes, and when it ends without a press the application reads the sign-in again and says what is true. Nothing is submitted.
 
 import { renderForPlatform } from '../../shared/post-format'
-import type { Comment, Discussion } from '../../shared/types'
+import { isVideoMime, type Comment, type Discussion } from '../../shared/types'
 import type { Core } from '../core'
 import { TakeoverError, type Connector, type ConnectorContext, type LoginState, type PublishedRef, type PublishRequest } from '../ports'
 import { EXTENSION_BY_MIME } from './attachments'
@@ -179,12 +179,17 @@ export class MissionAuthority implements PostAuthority {
 }
 
 /**
- * The pictures of the approved post as the mission is given them: each by a name the application chose ("picture-1.png", in the order of the
- * post), never the owner's own file name (that is text of someone else's making, and it would be shown to the AI), with the path the AI never
- * sees and the hash the approval was bound to.
+ * The files of the approved post as the mission is given them: each by a name the application chose ("picture-1.png", "video-1.mp4", numbered
+ * in the order of the post within its kind), never the owner's own file name (that is text of someone else's making, and it would be shown to the AI),
+ * with the path the AI never sees and the hash the approval was bound to.
  */
 export function approvedFilesOf(attachments: PublishRequest['attachments']): ApprovedFile[] {
-  return attachments.map((a, index) => ({ name: `picture-${index + 1}${EXTENSION_BY_MIME[a.mime] ?? ''}`, path: a.path, sha256: a.sha256 }))
+  const counts = { picture: 0, video: 0 }
+  return attachments.map((a) => {
+    const kind = isVideoMime(a.mime) ? 'video' : 'picture'
+    counts[kind] += 1
+    return { name: `${kind}-${counts[kind]}${EXTENSION_BY_MIME[a.mime] ?? ''}`, path: a.path, sha256: a.sha256 }
+  })
 }
 
 export class MissionPublisher {

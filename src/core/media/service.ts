@@ -5,10 +5,11 @@
 import { access, copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import { ApiError } from '../../shared/api'
-import { FILE_PURPOSES, type FilePurpose, type Id, type MediaItem, type MediaOrigin, type MediaShape } from '../../shared/types'
+import { FILE_PURPOSES, isVideoMime, type FilePurpose, type Id, type MediaItem, type MediaOrigin, type MediaShape } from '../../shared/types'
 import type { Core } from '../core'
 import { found, requireText } from '../channels/errors'
 import { EXTENSION_BY_MIME, ATTACHMENT_MAX_BYTES, sniffMime, validateAttachments } from '../pipeline/attachments'
+import { sha256OfFile } from '../pipeline/util'
 import { imageEngine, isShape, mediaPrompt, withMadeImage } from './make'
 import { imageSize } from './image-size'
 import { pictureSaverOf } from './save-picture'
@@ -104,17 +105,55 @@ export class MediaService {
     }
   }
 
-  /** A picture from a file on this computer: copied into the library, the original is not touched. */
+  /** A picture or a video from a file on this computer (a dropped file, the file dialog): copied into the library, the original is not touched. */
+  async addPath(args: { productId: Id; path: string; origin: 'picked' | 'dropped' }): Promise<MediaItem> {
+    const productId = this.product(args.productId)
+    if (typeof args.path !== 'string' || args.path === '') throw new ApiError('invalid_attachment', 'Choose a file.')
+    if (args.origin !== 'picked' && args.origin !== 'dropped') throw new ApiError('invalid_input', 'Say where the file came from.')
+    return this.addFile(productId, args.path, cleanName(args.path, 'file'), args.origin, '')
+  }
+
+  /** A picture or a video from a file on this computer: copied into the library, the original is not touched. */
   async addFile(productId: Id, path: string, name: string, origin: MediaOrigin, description: string): Promise<MediaItem> {
     const folder = this.store.folder()
     await mkdir(folder, { recursive: true })
     const [checked] = await validateAttachments([{ name, path, mime: '', sha256: '' }])
+    // A video is not read into memory, copied twice or measured in pixels: it is hashed in pieces and copied once.
+    if (isVideoMime(checked.mime)) return this.keepVideo(productId, path, checked, name, origin, description)
     const incoming = join(folder, `incoming-${this.store.newId()}${EXTENSION_BY_MIME[checked.mime]}`)
     await copyFile(path, incoming)
     try {
       return await this.keepFile(productId, incoming, name, origin, description, false)
     } finally {
       await rm(incoming, { force: true })
+    }
+  }
+
+  /**
+   * A video kept in the library: the file was validated and hashed where it is; it is copied once, and the copy is hashed again, so what is kept is exactly the bytes that
+   * were checked (a file that changes while it is being copied is refused, and nothing of it stays). The same video added again is the one the library has.
+   */
+  private async keepVideo(productId: Id, path: string, checked: { mime: string; sha256: string }, name: string, origin: MediaOrigin, description: string): Promise<MediaItem> {
+    const first = this.store.byHash(productId, checked.sha256)
+    if (first) return this.withItsFile(first, path)
+    const id = this.store.newId()
+    const file = `${id}${EXTENSION_BY_MIME[checked.mime]}`
+    const target = join(this.store.folder(), file)
+    try {
+      await copyFile(path, target)
+      if ((await sha256OfFile(target)) !== checked.sha256) throw new ApiError('invalid_attachment', `"${name}" changed while it was being added. Add it again.`)
+      const raced = this.store.byHash(productId, checked.sha256)
+      if (raced) {
+        await rm(target, { force: true })
+        return raced
+      }
+      const item = this.store.insert(id, { productId, name, file, mime: checked.mime, sha256: checked.sha256, bytes: (await stat(target)).size, width: null, height: null, origin, description })
+      this.core.log.info('pipeline', `A video was added to the library (${origin}): ${name}.`)
+      this.core.events.changed('media')
+      return item
+    } catch (error) {
+      await rm(target, { force: true })
+      throw error
     }
   }
 
@@ -190,6 +229,11 @@ export class MediaService {
     if (!item) return null
     const side = Math.min(THUMB_MAX, Math.max(THUMB_MIN, Math.round(typeof args.side === 'number' && Number.isFinite(args.side) ? args.side : THUMB_DEFAULT)))
     try {
+      // A video is shown by a frame of it (the system makes one); where the system cannot, there is none and the screen draws a tile that says "Video".
+      if (isVideoMime(item.mime)) {
+        const poster = this.core.mediaTools?.poster ? await this.core.mediaTools.poster(item.path, item.mime, side) : null
+        return poster ? { dataUrl: poster } : null
+      }
       if (this.core.mediaTools) return { dataUrl: await this.core.mediaTools.thumbnail(item.path, side) }
       if (item.bytes > WHOLE_FILE_THUMB_MAX) return null
       return { dataUrl: `data:${item.mime};base64,${(await readFile(item.path)).toString('base64')}` }
@@ -217,7 +261,7 @@ export class MediaService {
   /** Saves the stored file of a picture of the library where the owner chooses (the Save dialog); null when the dialog was closed. */
   async save(args: { id: Id }): Promise<{ path: string } | null> {
     const item = this.item(args.id)
-    return pictureSaverOf(this.core).saveFile(item.path, item.name, item.mime, 'picture')
+    return pictureSaverOf(this.core).saveFile(item.path, item.name, item.mime, isVideoMime(item.mime) ? 'video' : 'picture')
   }
 
   reveal(args: { id: Id }): void {

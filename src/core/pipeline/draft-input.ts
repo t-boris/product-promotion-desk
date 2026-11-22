@@ -7,7 +7,7 @@
 
 import { ApiError } from '../../shared/api'
 import type { DraftInput } from '../../shared/api'
-import { pictureIdsIn } from '../../shared/post-format'
+import { kindsOf, pictureIdsIn } from '../../shared/post-format'
 import { parseQuickCard, type PostType, type QuickCard } from '../../shared/quick-post'
 import type { Attachment, Id } from '../../shared/types'
 import type { MediaService } from '../media/service'
@@ -79,7 +79,7 @@ export async function normalizeDraftInput(input: DraftInput, ctx: DraftInputCont
   const checked = await validateAttachments(kept.map(({ mediaId: _id, ...rest }) => rest))
   const attachments = checked.map((a, i) => ({ ...a, mediaId: kept[i].mediaId }))
 
-  if (!text && !title && !link && attachments.length === 0) throw new ApiError('invalid_input', 'The draft is empty: write some text or add a picture.')
+  if (!text && !title && !link && attachments.length === 0) throw new ApiError('invalid_input', 'The draft is empty: write some text or add a picture or a video.')
   if (markup === 'markdown') {
     for (const id of inlineMediaIds(text)) {
       if (!attachments.some((a) => a.mediaId === id)) throw new ApiError('invalid_input', 'A picture in the text is not one of the draft\'s pictures. Add it again from the library, or take it out of the text.')
@@ -98,7 +98,7 @@ export async function normalizeDraftInput(input: DraftInput, ctx: DraftInputCont
  */
 export function assertQuickPost(content: DraftContent): void {
   if (content.title) throw new ApiError('invalid_input', 'A quick post has no title: the caption is the text.')
-  if (content.attachments.length !== 1) throw new ApiError('invalid_input', 'A quick post is one picture and a caption: it needs exactly one picture.')
+  if (content.attachments.length !== 1 || kindsOf(content.attachments).videos > 0) throw new ApiError('invalid_input', 'A quick post is one picture and a caption: it needs exactly one picture, and a video cannot be one.')
 }
 
 /**

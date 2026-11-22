@@ -584,6 +584,8 @@ export interface MediaTools {
   choose(purpose: FilePurpose): Promise<string[]>
   /** A copy of the picture whose longest side is at most `side` pixels, as a data address. */
   thumbnail(path: string, side: number): Promise<string>
+  /** A frame of a video as a picture whose longest side is at most `side` pixels, as a data address; null where the system cannot make one (the container is not one it reads). */
+  poster?(path: string, mime: string, side: number): Promise<string | null>
   /** Shows the file in the system's file manager. */
   reveal(path: string): void
   /**

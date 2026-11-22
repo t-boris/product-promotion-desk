@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { FILE_PURPOSES } from '../shared/types'
-import { acceptDrop, fileParts, loaderWords, pathsOfDrop } from '../renderer/src/file-loader'
+import { acceptDrop, fileParts, loaderWords, pathsOfDrop, takesMany } from '../renderer/src/file-loader'
 
 const file = (name: string): File => ({ name }) as File
 
@@ -62,5 +62,16 @@ describe('the words of the loader', () => {
       expect(words.drop.endsWith(', or')).toBe(true)
       expect(words.typed).not.toBe('')
     }
+  })
+})
+
+describe('pictures and videos for a post (attachments)', () => {
+  it('takes many, keeps only pictures and videos and says what was left out', () => {
+    expect(takesMany('attachments')).toBe(true)
+    const result = acceptDrop('attachments', ['/a/photo.PNG', '/a/clip.mov', '/a/notes.txt', '/a/talk.webm'])
+    expect(result.accepted).toEqual(['/a/photo.PNG', '/a/clip.mov', '/a/talk.webm'])
+    expect(result.notice).toMatch(/Only PNG, JPEG, GIF and WebP pictures and MP4, MOV, M4V and WebM videos/)
+    expect(acceptDrop('attachments', ['/a/clip.mp4']).notice).toBeNull()
+    expect(loaderWords('attachments').choose).toBe('Choose pictures or videos…')
   })
 })

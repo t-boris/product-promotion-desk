@@ -97,8 +97,8 @@ function lastSentAt(core: Core, channelId: Id): string | null {
   return row.at
 }
 
-/** The attention items that are about this product: its opportunities, channels and accounts its channels use. */
-function attentionOf(core: Core, productId: Id): AttentionItem[] {
+/** The attention items that are about this product: its opportunities, channels and accounts its channels use. One answer for the Overview and for the number beside Inbox. */
+export function attentionOf(core: Core, productId: Id): AttentionItem[] {
   const channels = core.repos.listChannels().filter((c) => c.productId === productId)
   const channelIds = new Set(channels.map((c) => c.id))
   const accountIds = new Set(channels.map((c) => c.accountId))

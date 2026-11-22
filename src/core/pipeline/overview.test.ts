@@ -168,6 +168,25 @@ describe('overview.get', () => {
     expect(view.attention.map((i) => i.id)).toEqual(wanted.map((i) => i.id))
   })
 
+  it('counts for the number beside Inbox only what is about the product that is open, and everything when no product is named', async () => {
+    const h = makeHarness()
+    const mine = h.channel()
+    const otherProduct = seedProduct(h.core, { name: 'Other' })
+    const otherAccount = seedAccount(h.core, { label: 'Other login' })
+    const theirs = seedChannel(h.core, { productId: otherProduct, accountId: otherAccount.id })
+    const myOpportunity = seedOpportunity(h.core, mine.id)
+    const theirOpportunity = seedOpportunity(h.core, theirs.id)
+    const item = (refType: AttentionItem['refType'], refId: string): AttentionItem => ({ id: `${refType}:${refId}`, kind: 'question', title: refType, detail: '', refType, refId, createdAt: NOW })
+    const all = [item('opportunity', myOpportunity), item('opportunity', theirOpportunity), item('channel', theirs.id), item('account', otherAccount.id)]
+    vi.spyOn(h.automation.attention, 'list').mockReturnValue(all)
+
+    expect((await h.core.router.call('attention.list', { productId: h.productId })).map((i) => i.id)).toEqual([`opportunity:${myOpportunity}`])
+    expect((await h.core.router.call('attention.list', { productId: otherProduct })).map((i) => i.id)).toEqual(all.slice(1).map((i) => i.id))
+    expect((await h.core.router.call('attention.list', undefined)).map((i) => i.id)).toEqual(all.map((i) => i.id))
+    expect((await h.core.router.call('attention.list', {})).length).toBe(all.length)
+    expect(await h.core.router.call('attention.list', { productId: 'no-such-product' })).toEqual([])
+  })
+
   it('does not count a failed or unfinished send as sent, on a channel or on a day', async () => {
     const h = makeHarness()
     const channel = h.channel()

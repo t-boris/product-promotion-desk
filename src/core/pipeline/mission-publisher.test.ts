@@ -492,6 +492,12 @@ describe('a post with pictures goes through the AI browser when the connector ca
     expect(approvedFilesOf([file('holiday photo of me.JPG', 'image/jpeg'), file('x.png', 'image/png'), file('y', 'image/webp'), file('z', 'application/x-unknown')]).map((f) => f.name)).toEqual(['picture-1.jpg', 'picture-2.png', 'picture-3.webp', 'picture-4'])
     expect(approvedFilesOf([])).toEqual([])
   })
+
+  it('names a video by its kind, numbered apart from the pictures', () => {
+    const file = (name: string, mime: string) => ({ name, path: `/media/${name}`, mime, sha256: name })
+    expect(approvedFilesOf([file('My holiday.MOV', 'video/quicktime')]).map((f) => f.name)).toEqual(['video-1.mov'])
+    expect(approvedFilesOf([file('a.webm', 'video/webm'), file('b.png', 'image/png')]).map((f) => f.name)).toEqual(['video-1.webm', 'picture-1.png'])
+  })
 })
 
 describe('a mission never starts, and never presses, without the gate\'s authorization', () => {

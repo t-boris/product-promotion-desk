@@ -32,7 +32,7 @@ describe('words for the files', () => {
   it('names the kinds and what happens to each', () => {
     expect(kindWord('text')).toBe('Document')
     expect(kindRole('picture')).toMatch(/placed in the post/)
-    expect(kindRole('video')).toMatch(/cannot be placed yet/)
+    expect(kindRole('video')).toMatch(/placed in the post, alone/)
     expect(kindRole('other')).toBe('Not used')
     expect(lengthNote('long')).toMatch(/Headings/)
   })
@@ -53,12 +53,13 @@ describe('words for the files', () => {
 describe('when the post can be written', () => {
   const doc = [{ kind: 'text' as const }]
   const video = [{ kind: 'video' as const }]
-  it('needs a document, a picture or the owner\'s own words', () => {
+  it('needs a document, a picture, a video or the owner\'s own words', () => {
     expect(hasBasis(doc, '')).toBe(true)
     expect(hasBasis([{ kind: 'picture' }], '')).toBe(true)
-    expect(hasBasis(video, '')).toBe(false)
+    expect(hasBasis(video, '')).toBe(true)
+    expect(hasBasis([{ kind: 'other' }], '')).toBe(false)
     expect(hasBasis([], '   ')).toBe(false)
-    expect(hasBasis(video, 'A welcome')).toBe(true)
+    expect(hasBasis([{ kind: 'other' }], 'A welcome')).toBe(true)
   })
 
   it('says why not, and says nothing while it is blocked or busy (those have their own words)', () => {

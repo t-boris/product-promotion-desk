@@ -1,7 +1,8 @@
 import { useEffect, useRef, type ReactNode } from 'react'
-import type { Attachment } from '../../../../shared/types'
+import { isVideoMime, type Attachment } from '../../../../shared/types'
 import { ViewableImage } from '../../pictures/ViewableImage'
 import { mediaPicture } from '../../pictures/picture-viewer'
+import { VideoTile } from '../../pictures/VideoTile'
 import { Badge, type Tone } from '../../ui'
 import { useThumb } from '../review/useMedia'
 import { shortTime } from './short-time'
@@ -16,6 +17,14 @@ const STATE_TONE: Record<PostState, Tone> = { draft: 'neutral', approved: 'info'
  */
 function Thumb({ attachment }: { attachment: Attachment | null }) {
   const url = useThumb(attachment?.mediaId, 80)
+  // A video shows a frame of itself with a play mark; it is not opened large from the list.
+  if (attachment && isVideoMime(attachment.mime)) {
+    return (
+      <span className="posts-thumb posts-thumb-video">
+        <VideoTile poster={url} name={attachment.name} />
+      </span>
+    )
+  }
   if (!url || !attachment?.mediaId) return <span className="posts-thumb posts-thumb-empty" aria-hidden="true" />
   return <ViewableImage className="posts-thumb" src={url} alt="" keyboard={false} picture={mediaPicture({ id: attachment.mediaId, name: attachment.name })} />
 }

@@ -633,6 +633,10 @@ describe('what a version says about how it goes out', () => {
     const unattended = { aiBrowser: false, unattended: true }
     expect(chooseExecutor(unattended, { attachments: [], markup: 'markdown', title: null, text: 'x', link: null }, 'threads')).toBe('connector')
     expect(chooseExecutor({ aiBrowser: true }, { attachments: [], markup: 'markdown', title: null, text: 'x', link: null }, 'threads')).toBe('ai_browser')
+    // A video is never carried by a connector: with the AI browser it goes there, whatever else the post holds.
+    const clip = { name: 'clip.mp4', path: '/data/media/clip.mp4', mime: 'video/mp4', sha256: 'c'.repeat(64) }
+    expect(chooseExecutor({ aiBrowser: true }, { attachments: [clip], markup: 'markdown', title: 'T', text: '', link: null }, 'reddit')).toBe('ai_browser')
+    expect(chooseExecutor({ aiBrowser: true }, { attachments: [clip], markup: 'legacy', title: 'T', text: '', link: null }, 'reddit')).toBe('ai_browser')
     expect(chooseExecutor({ aiBrowser: true }, { attachments: [attach(m) as never], markup: 'legacy', title: 'T', text: '', link: null }, 'reddit')).toBe('connector')
     // a channel no connector can post to goes by the AI browser whatever the draft holds, when it may; when it may not, there is no other way and the connector says so
     const none = { attachments: [attach(m) as never], markup: 'legacy' as const, title: null, text: 'x', link: null }

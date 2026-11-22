@@ -2,15 +2,16 @@
 // text box: `usePostEditor` holds what they share, `PostTextBox` is the toolbar and the text, `PostPictures` is the strip under it.
 
 import { useLayoutEffect, useRef, useState, type ClipboardEvent, type Dispatch, type DragEvent, type KeyboardEvent, type ReactNode, type RefObject, type SetStateAction } from 'react'
-import type { Attachment, MediaItem } from '../../../../shared/types'
+import { isVideoMime, type Attachment, type MediaItem } from '../../../../shared/types'
 import { call, useAction, useQuery } from '../../hooks'
 import { ViewableImage } from '../../pictures/ViewableImage'
 import { mediaPicture, type ViewerPicture } from '../../pictures/picture-viewer'
+import { VideoTile } from '../../pictures/VideoTile'
 import { Badge, Button, ErrorNote, Hint } from '../../ui'
 import type { DraftForm } from './DraftEditor'
 import { applyMark, imageFilesOf, insertPicture, placedPictures, withoutPicture, type Mark, type Selection } from './editor-marks'
 import { MakePicture } from './MakePicture'
-import { addImageFiles, useThumb } from './useMedia'
+import { addImageFiles, addVideoFiles, useThumb, videoFilesOf } from './useMedia'
 
 /** What tells one picture of a post from another: its library id, or its file for a post written before the library. */
 export const keyOf = (a: Attachment): string => a.mediaId ?? a.path
@@ -33,8 +34,8 @@ export interface PostEditorState {
   select: (range: { start: number; end: number }) => void
   detach: (attachment: Attachment) => void
   insertAgain: (attachment: Attachment) => void
-  /** `skipped`: files that came with them and are not pictures; the owner is told they were left out. */
-  addFiles: (files: File[], origin: 'pasted' | 'dropped', skipped?: number) => Promise<void>
+  /** `videos`: dropped videos, copied from where they are (never read into the window). `skipped`: files that came with them and are neither; the owner is told they were left out. */
+  addFiles: (files: File[], origin: 'pasted' | 'dropped', skipped?: number, videos?: File[]) => Promise<void>
   adding: boolean
   notice: string | null
 }
@@ -112,15 +113,18 @@ export function usePostEditor(form: DraftForm, onChange: Dispatch<SetStateAction
         return { text: placed.text }
       })
     },
-    addFiles: async (files, origin, skipped = 0) => {
-      if (files.length === 0) return
+    addFiles: async (files, origin, skipped = 0, videos = []) => {
+      if (files.length + videos.length === 0) return
       // Where the cursor was when the pictures came, not where it is when they have been read and stored.
       const where = caret()
       setAdding(true)
       setNotice(null)
       try {
         const { items, refused } = await addImageFiles(productId, files, origin)
-        if (skipped > 0) refused.push(`${skipped} file${skipped === 1 ? ' that is' : 's that are'} not a picture ${skipped === 1 ? 'was' : 'were'} left out.`)
+        const clips = videos.length > 0 ? await addVideoFiles(productId, videos) : { items: [], refused: [] }
+        items.push(...clips.items)
+        refused.push(...clips.refused)
+        if (skipped > 0) refused.push(`${skipped} file${skipped === 1 ? ' that is' : 's that are'} neither a picture nor a video ${skipped === 1 ? 'was' : 'were'} left out.`)
         // Each goes after the one before it, in the order they came.
         attachMany(items, true, where)
         if (refused.length > 0) setNotice(refused.join(' '))
@@ -182,14 +186,15 @@ export function PostTextBox({
   }
   const onDrop = (event: DragEvent<HTMLTextAreaElement>): void => {
     const images = imageFilesOf(event.dataTransfer.files)
+    const videos = videoFilesOf(event.dataTransfer.files)
     setOver(false)
     // A file that is dropped and not taken would open in this window and lose the post that is being written: it is always taken, and refused in words.
     if (event.dataTransfer.files.length > 0) event.preventDefault()
-    if (images.length === 0) {
-      if (event.dataTransfer.files.length > 0) editor.tell('Only PNG, JPEG, GIF and WebP pictures can be added to a post.')
+    if (images.length + videos.length === 0) {
+      if (event.dataTransfer.files.length > 0) editor.tell('Only PNG, JPEG, GIF and WebP pictures and MP4, MOV, M4V and WebM videos can be added to a post.')
       return
     }
-    void editor.addFiles(images, 'dropped', event.dataTransfer.files.length - images.length)
+    void editor.addFiles(images, 'dropped', event.dataTransfer.files.length - images.length - videos.length, videos)
   }
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
     const mark = event.metaKey || event.ctrlKey ? KEYS[event.key.toLowerCase()] : undefined
@@ -240,10 +245,12 @@ interface Viewing {
   index: number
 }
 
-function Thumb({ id, name, viewing }: { id: string | undefined; name: string; viewing?: Viewing }) {
+function Thumb({ id, name, viewing, mime }: { id: string | undefined; name: string; viewing?: Viewing; mime?: string }) {
   const url = useThumb(id, 128)
   // A picture of a post written before the library has no copy yet; saving the post makes one.
   if (id === undefined) return <div className="post-thumb"><span className="muted small">Copied when you save</span></div>
+  // A video shows a frame of itself (or a plain tile) and is not opened large: the system plays it (Show file).
+  if (isVideoMime(mime)) return <div className="post-thumb"><VideoTile poster={url} name={name} /></div>
   // A thumbnail inside a button (a tile of the library that attaches the picture) is not a second button: it stays a plain picture, and the one that is attached opens large.
   const picture = url ? viewing ? <ViewableImage src={url} alt={name} picture={viewing.picture} group={viewing.group} index={viewing.index} /> : <img src={url} alt={name} /> : null
   return <div className="post-thumb">{picture ?? <span className="muted small">{url === null ? 'Picture removed' : '…'}</span>}</div>
@@ -265,16 +272,20 @@ export function PostPictures({ form, productId, disabled, editor }: { form: Draf
   const [pick, picking] = useAction(async () => {
     editor.attachMany(await call('media.pick', { productId }), true)
   })
+  // A video is played by the system: "Show file" puts it in the Finder, where Space plays it.
+  const [reveal, revealing] = useAction(async (id: string) => {
+    await call('media.reveal', { id })
+  })
   const unused = (library.data ?? []).filter((item) => !form.attachments.some((a) => a.mediaId === item.id))
   // The pictures of the post that have a copy in the library open large together, in the order of the post; the size comes from the library when it is known.
-  const viewable = form.attachments.flatMap((a) => (a.mediaId ? [mediaPicture({ id: a.mediaId, name: a.name, ...(library.data ?? []).find((item) => item.id === a.mediaId) })] : []))
+  const viewable = form.attachments.flatMap((a) => (a.mediaId && !isVideoMime(a.mime) ? [mediaPicture({ id: a.mediaId, name: a.name, ...(library.data ?? []).find((item) => item.id === a.mediaId) })] : []))
   const canPick = status.data?.canPick === true
-  const error = picking.error ?? editor.notice
+  const error = picking.error ?? revealing.error ?? editor.notice
 
   return (
     <div className="post-pictures" data-testid="post-pictures">
       <div className="post-pictures-head">
-        <span className="post-pictures-title">Pictures</span>
+        <span className="post-pictures-title">Pictures and videos</span>
         {!disabled && (
           <div className="post-pictures-actions">
             {canPick && (
@@ -293,16 +304,21 @@ export function PostPictures({ form, productId, disabled, editor }: { form: Draf
           </div>
         )}
       </div>
-      {!disabled && <div className="muted small">{canPick ? 'Paste a picture (⌘V) or drop it on the text, or choose files.' : 'Paste a picture (⌘V) or drop it on the text.'} It is placed in the text where the cursor is.</div>}
+      {!disabled && <div className="muted small">{canPick ? 'Paste a picture (⌘V) or drop a picture or a video on the text, or choose files.' : 'Paste a picture (⌘V) or drop a picture on the text.'} It is placed in the text where the cursor is. A post takes one video, or pictures.</div>}
       {form.attachments.length > 0 && (
         <div className="post-thumbs" data-testid="draft-attachments">
           {form.attachments.map((a) => (
             <div key={keyOf(a)} className="post-picture">
-              <Thumb id={a.mediaId} name={a.name} viewing={viewingOf(a, viewable)} />
+              <Thumb id={a.mediaId} name={a.name} mime={a.mime} viewing={viewingOf(a, viewable)} />
               <div className="post-picture-name" title={a.name}>
                 {a.name}
               </div>
               <div className="post-picture-actions">
+                {isVideoMime(a.mime) && a.mediaId && status.data?.canReveal === true && (
+                  <Button variant="quiet" onClick={() => void reveal(a.mediaId as string)} data-testid="video-reveal">
+                    Show file
+                  </Button>
+                )}
                 {a.mediaId && placed.has(a.mediaId) ? <Badge>In the text</Badge> : !disabled && a.mediaId ? <Button variant="quiet" className="accent" onClick={() => editor.insertAgain(a)}>Place in text</Button> : null}
                 {!disabled && (
                   <Button variant="quiet" className="danger" onClick={() => editor.detach(a)}>
@@ -318,7 +334,7 @@ export function PostPictures({ form, productId, disabled, editor }: { form: Draf
         <div className="post-thumbs post-library" data-testid="pictures-library-list">
           {unused.map((item) => (
             <button key={item.id} type="button" className="post-picture library" onClick={() => editor.attach(item, true)} title={item.description || item.name}>
-              <Thumb id={item.id} name={item.name} />
+              <Thumb id={item.id} name={item.name} mime={item.mime} />
               <div className="post-picture-name">{item.name}</div>
             </button>
           ))}

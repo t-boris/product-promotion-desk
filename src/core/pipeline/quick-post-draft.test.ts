@@ -67,6 +67,14 @@ describe('a quick post is saved with its type, its caption and its card', () => 
     expect((await refusal('publications.create', { channelId: world.channel.id, draft: { postType: 'quick', text: 'x', attachments: [] } }))?.message).toMatch(/exactly one picture/)
     expect((await refusal('publications.create', { channelId: world.channel.id, draft: { postType: 'quick', text: 'x', attachments: [attach(a), attach(b)] } }))?.message).toMatch(/exactly one picture/)
     expect((await refusal('publications.create', { channelId: world.channel.id, draft: { postType: 'quick', text: 'x', attachments: [attach(a)], card: { ...CARD, style: 'neon' } } }))?.message).toMatch(/card parameters/)
+    // A video is not a quick post's picture: it is said in words, and an article may carry it.
+    const { mkdtempSync, writeFileSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const clip = join(mkdtempSync(join(tmpdir(), 'ppd-quick-video-')), 'clip.mp4')
+    writeFileSync(clip, Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from('ftypisom'), Buffer.alloc(40)]))
+    const video = (await call('media.addPath', { productId: world.product.id, path: clip, origin: 'dropped' })) as MediaItem
+    expect((await refusal('publications.create', { channelId: world.channel.id, draft: { postType: 'quick', text: 'x', attachments: [attach(video)] } }))?.message).toMatch(/a video cannot be one/)
     expect((await refusal('publications.create', { channelId: world.channel.id, draft: { title: 'T', text: 'x', card: CARD } }))?.message).toMatch(/belong to a quick post/)
     expect((await refusal('publications.create', { channelId: world.channel.id, draft: { postType: 'story', text: 'x' } }))?.message).toMatch(/"article" or "quick"/)
   })

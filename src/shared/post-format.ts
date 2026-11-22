@@ -6,7 +6,7 @@
 // older draft, every reply, every text the AI wrote) is sent exactly as it is written.
 
 import type { PostType } from './quick-post'
-import type { Attachment, PostMarkup } from './types'
+import { isVideoMime, type Attachment, type PostMarkup } from './types'
 
 /**
  * The version of what a markdown post becomes on a platform. It is part of the approval hash of a markdown post: change a rule of the
@@ -688,9 +688,13 @@ export interface PlatformForm {
   hasTitle: boolean
   titleLimit: number | null
   textLimit: number | null
-  /** `required`: a post without a picture is refused by the platform (Instagram). */
+  /** `required`: a post without a picture is refused by the platform (Instagram). A video can stand in for the picture where the platform takes one (`videos` is not `none`). */
   pictures: 'none' | 'optional' | 'required'
   maxPictures: number
+  /** `none`: the platform takes no video with a post; `required`: a post without a video is refused (TikTok, YouTube). */
+  videos: 'none' | 'optional' | 'required'
+  /** A post carries one video, and a video goes alone: pictures and a video are not mixed in one post. */
+  maxVideos: number
   /**
    * Where a draft's link goes. `field`: the platform's form has a field for it (Reddit), and a site that is not listed is taken to have one.
    * `in_text`: no field, but a link in the text works: it is the last paragraph of the text. `in_bio`: no field, and a link in the text does
@@ -700,20 +704,26 @@ export interface PlatformForm {
   link: 'field' | 'in_text' | 'in_bio'
 }
 
-const OTHER: PlatformForm = { format: 'plain', hasTitle: false, titleLimit: null, textLimit: null, pictures: 'optional', maxPictures: 10, link: 'field' }
+const OTHER: PlatformForm = { format: 'plain', hasTitle: false, titleLimit: null, textLimit: null, pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'field' }
 
 /** What each platform of the application shows and holds. Limits are the platforms' published ones; a site that is not listed has none. */
 export const PLATFORM_FORMS: Record<string, PlatformForm> = {
-  reddit: { format: 'markdown', hasTitle: true, titleLimit: 300, textLimit: 40_000, pictures: 'optional', maxPictures: 20, link: 'field' },
-  instagram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 2_200, pictures: 'required', maxPictures: 10, link: 'in_bio' },
-  facebook: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 63_206, pictures: 'optional', maxPictures: 10, link: 'in_text' },
-  threads: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 500, pictures: 'optional', maxPictures: 10, link: 'in_text' },
-  x: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 280, pictures: 'optional', maxPictures: 4, link: 'in_text' },
-  linkedin: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 3_000, pictures: 'optional', maxPictures: 9, link: 'in_text' },
-  telegram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 4_096, pictures: 'optional', maxPictures: 10, link: 'in_text' },
-  pinterest: { format: 'plain', hasTitle: true, titleLimit: 100, textLimit: 500, pictures: 'required', maxPictures: 1, link: 'field' },
-  tiktok: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 2_200, pictures: 'none', maxPictures: 0, link: 'field' },
-  youtube: { format: 'plain', hasTitle: true, titleLimit: 100, textLimit: 5_000, pictures: 'none', maxPictures: 0, link: 'field' }
+  reddit: { format: 'markdown', hasTitle: true, titleLimit: 300, textLimit: 40_000, pictures: 'optional', maxPictures: 20, videos: 'optional', maxVideos: 1, link: 'field' },
+  instagram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 2_200, pictures: 'required', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_bio' },
+  facebook: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 63_206, pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text' },
+  threads: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 500, pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text' },
+  x: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 280, pictures: 'optional', maxPictures: 4, videos: 'optional', maxVideos: 1, link: 'in_text' },
+  linkedin: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 3_000, pictures: 'optional', maxPictures: 9, videos: 'optional', maxVideos: 1, link: 'in_text' },
+  telegram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 4_096, pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text' },
+  pinterest: { format: 'plain', hasTitle: true, titleLimit: 100, textLimit: 500, pictures: 'required', maxPictures: 1, videos: 'optional', maxVideos: 1, link: 'field' },
+  tiktok: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 2_200, pictures: 'none', maxPictures: 0, videos: 'required', maxVideos: 1, link: 'field' },
+  youtube: { format: 'plain', hasTitle: true, titleLimit: 100, textLimit: 5_000, pictures: 'none', maxPictures: 0, videos: 'required', maxVideos: 1, link: 'field' }
+}
+
+/** How many of the attachments are pictures and how many are videos (every other place that counted "pictures" counts through this). */
+export function kindsOf(attachments: readonly Pick<Attachment, 'mime'>[]): { pictures: number; videos: number } {
+  const videos = attachments.filter((a) => isVideoMime(a.mime)).length
+  return { pictures: attachments.length - videos, videos }
 }
 
 export const formOf = (platform: string): PlatformForm => PLATFORM_FORMS[platform] ?? OTHER
@@ -853,7 +863,7 @@ export function renderForPlatform(content: PostContent, platform: string, option
     // Only what the link caused: a draft that was over the limit without it was never judged here, and is not now.
     const over = placed.text !== content.text && form.textLimit !== null && characterCount(content.text) <= form.textLimit && characterCount(placed.text) > form.textLimit
     // A quick post is judged whole, by the rules of the platform, on the caption as it is written (plus the link where it is placed in the text).
-    const problems = content.postType === 'quick' ? formProblems(form, label, { title: content.title, text: placed.text, link: placed.link, pictures: content.attachments.length }) : over ? [`The text is ${characterCount(placed.text)} characters; ${label} allows ${form.textLimit}.`] : []
+    const problems = content.postType === 'quick' ? formProblems(form, label, { title: content.title, text: placed.text, link: placed.link, ...kindsOf(content.attachments), quick: true }) : over ? [`The text is ${characterCount(placed.text)} characters; ${label} allows ${form.textLimit}.`] : []
     return {
       title: content.title,
       text: placed.text,
@@ -873,19 +883,22 @@ export function renderForPlatform(content: PostContent, platform: string, option
   const linked = placeLink(form, label, words, content.link)
   const text = linked.text
   if (linked.note) notes.push(linked.note)
-  if (form.format === 'plain' && /[*_#>`~]|\]\(|^[ \t]*[-+][ \t]/m.test(content.text)) notes.push(`${label} shows no formatting: the marks are removed and the words stay.`)
+  // A picture or a video in the text is written as ![alt](media:ID), which is not formatting: only the marks of the words count here.
+  if (form.format === 'plain' && /[*_#>`~]|\]\(|^[ \t]*[-+][ \t]/m.test(withoutInlinePictures(content.text))) notes.push(`${label} shows no formatting: the marks are removed and the words stay.`)
   if (form.format === 'plain') {
     const used = marksIn(content.text)
     if (used.spoiler) notes.push(`${label} has no spoilers: the hidden words show as they are.`)
     if (used.table) notes.push(`${label} has no tables: the rows are shown as lines, the cells apart by a bar.`)
     if (used.strike) notes.push(`${label} cannot cross words out: they show as they are.`)
   }
-  if (placed > 0 && options.pictures !== 'keep') notes.push(`${label} takes the pictures beside the text, not inside it: they are shown after the text, in order.`)
+  if (placed > 0 && options.pictures !== 'keep') {
+    notes.push(kindsOf(content.attachments).videos > 0 ? `${label} takes the video beside the text, not inside it: it is shown after the text.` : `${label} takes the pictures beside the text, not inside it: they are shown after the text, in order.`)
+  }
   if (title && !form.hasTitle) {
     notes.push(`${label} has no title: the title is left out.`)
     title = null
   }
-  const problems = formProblems(form, label, { title, text, link: linked.link, pictures: content.attachments.length })
+  const problems = formProblems(form, label, { title, text, link: linked.link, ...kindsOf(content.attachments) })
   return { title, text, link: linked.link, shownLink: linked.shown, attachments: content.attachments, format: form.format, notes, problems }
 }
 
@@ -894,14 +907,26 @@ export function renderForPlatform(content: PostContent, platform: string, option
  * text (`text` is what is typed, the link included where it is placed in the text), a post with nothing in it. One list for a post written in
  * the post editor and for a quick post, so the two cannot be judged by different rules.
  */
-function formProblems(form: PlatformForm, label: string, post: { title: string | null; text: string; link: string | null; pictures: number }): string[] {
+function formProblems(form: PlatformForm, label: string, post: { title: string | null; text: string; link: string | null; pictures: number; videos?: number; quick?: boolean }): string[] {
   const problems: string[] = []
+  const videos = post.videos ?? 0
+  const takesVideos = form.videos !== 'none'
+  // A quick post is a picture and a caption, so what it lacks is a picture; any other post may have a video in its place.
+  const orVideo = takesVideos && !post.quick ? ' or a video' : ''
   if (form.pictures === 'none' && post.pictures > 0) problems.push(`${label} takes no pictures with a post.`)
-  if (form.pictures === 'required' && post.pictures === 0) problems.push(`${label} needs a picture: add one.`)
+  if (form.pictures === 'required' && post.pictures === 0 && videos === 0) problems.push(`${label} needs a picture${orVideo}: add one.`)
   if (post.pictures > form.maxPictures && form.maxPictures > 0) problems.push(`${label} takes at most ${form.maxPictures} picture${form.maxPictures === 1 ? '' : 's'}; this post has ${post.pictures}.`)
+  if (videos > 0) {
+    if (!takesVideos) problems.push(`${label} takes no videos with a post.`)
+    else {
+      if (videos > form.maxVideos) problems.push(`${label} takes ${form.maxVideos === 1 ? 'one video' : `at most ${form.maxVideos} videos`} with a post; this post has ${videos}.`)
+      if (post.pictures > 0) problems.push(`${label} takes a video or pictures with a post, not both: take one kind out.`)
+    }
+  }
+  if (form.videos === 'required' && videos === 0) problems.push(`${label} needs a video: add one.`)
   if (post.title && form.titleLimit !== null && characterCount(post.title) > form.titleLimit) problems.push(`The title is ${characterCount(post.title)} characters; ${label} allows ${form.titleLimit}.`)
   if (form.textLimit !== null && characterCount(post.text) > form.textLimit) problems.push(`The text is ${characterCount(post.text)} characters; ${label} allows ${form.textLimit}.`)
-  if (post.text === '' && post.pictures === 0 && !post.title && !post.link) problems.push('There is nothing to post: no words and no picture.')
+  if (post.text === '' && post.pictures === 0 && videos === 0 && !post.title && !post.link) problems.push(orVideo ? 'There is nothing to post: no words, no picture and no video.' : 'There is nothing to post: no words and no picture.')
   return problems
 }
 
@@ -954,19 +979,22 @@ export function sendProblems(platform: string, rendered: RenderedPost, ways: Sen
   const stopped = noConnectorProblem(ways)
   if (stopped) problems.push(stopped)
   if (rendered.attachments.length > 0 && !ways.aiBrowser) {
-    // What the connector cannot carry: more than one picture, or a picture with words, on Reddit; any picture elsewhere.
-    const connectorCannot = platform === 'reddit' ? rendered.attachments.length > 1 || rendered.text.trim() !== '' || rendered.link !== null : true
+    // A video is carried by the AI browser only: no connector of this application uploads one.
+    const hasVideo = kindsOf(rendered.attachments).videos > 0
+    const things = hasVideo ? 'Videos' : 'Pictures'
+    // What the connector cannot carry: a video anywhere; more than one picture, or a picture with words, on Reddit; any picture elsewhere.
+    const connectorCannot = hasVideo || (platform === 'reddit' ? rendered.attachments.length > 1 || rendered.text.trim() !== '' || rendered.link !== null : true)
     if (ways.noConnector) {
       // Said above when it is the engine or an unattended send; otherwise the AI browser is simply not there (a build without it).
-      if (!ways.engineProblem && !ways.unattended) problems.push(`Pictures go to ${label} only through the AI browser, and only when you press Send yourself. It is not available in this build: use “Copy post” and publish it by hand.`)
+      if (!ways.engineProblem && !ways.unattended) problems.push(`${things} go to ${label} only through the AI browser, and only when you press Send yourself. It is not available in this build: use “Copy post” and publish it by hand.`)
     } else if (connectorCannot && ways.unattended) {
       // The AI browser is chosen, but this send is one it never carries: the owner presses Send, or publishes by hand.
       problems.push(UNATTENDED_MESSAGE)
-    } else if (platform === 'reddit') {
+    } else if (platform === 'reddit' && !hasVideo) {
       if (rendered.attachments.length > 1) problems.push(`From this application Reddit takes one picture as a post by itself; this post has ${rendered.attachments.length}. The AI browser can send more: choose it in the settings and press Send yourself.`)
       else if (rendered.text.trim() || rendered.link) problems.push('From this application Reddit takes a picture only as a post by itself, without text or a link. Choose the AI browser in the settings and press Send yourself, or use “Copy post” and publish it by hand, or post the words without the picture.')
     } else {
-      problems.push(`Pictures go to ${label} only through the AI browser, and only when you press Send yourself: choose it in the settings and send this by hand, or use “Copy post” and publish it by hand.`)
+      problems.push(`${things} go to ${label} only through the AI browser, and only when you press Send yourself: choose it in the settings and send this by hand, or use “Copy post” and publish it by hand.`)
     }
   }
   return problems

@@ -13,7 +13,7 @@
 // Nothing here approves or sends by itself: this file is not reached from the scheduler.
 
 import { ApiError, type DraftInput } from '../../shared/api'
-import { characterCount, formOf, judgedForFit, platformLabel, renderForPlatform, siteLinkFor, type PostContent, type SendWays } from '../../shared/post-format'
+import { characterCount, formOf, judgedForFit, kindsOf, platformLabel, renderForPlatform, siteLinkFor, type PostContent, type SendWays } from '../../shared/post-format'
 import type {
   Channel,
   Draft,
@@ -472,7 +472,9 @@ export class PostGroupsFlow {
   private fitReason(platform: string, text: string, content: PostContent): string {
     const form = formOf(platform)
     const label = platformLabel(platform)
-    if (form.pictures === 'required') return `${label} needs a picture, and this post has ${content.attachments.length === 1 ? 'one' : content.attachments.length}.`
+    const { pictures, videos } = kindsOf(content.attachments)
+    if (form.videos === 'required') return `${label} needs a video, and this post has ${videos === 1 ? 'one' : videos === 0 ? 'none' : videos}.`
+    if (form.pictures === 'required') return videos > 0 && form.videos !== 'none' ? `${label} takes it with its video.` : `${label} needs a picture, and this post has ${pictures === 1 ? 'one' : pictures}.`
     if (form.textLimit !== null && form.textLimit <= WISH_LIMIT_MAX) return `${text.length} of ${form.textLimit} characters.`
     return `${label} takes it as written.`
   }

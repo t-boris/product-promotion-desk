@@ -10,7 +10,7 @@ import { dialogShape } from './file-dialogs'
 
 export class ElectronMediaTools implements MediaTools {
   async pick(): Promise<string[]> {
-    return this.choose('pictures')
+    return this.choose('attachments')
   }
 
   async choose(purpose: FilePurpose): Promise<string[]> {
@@ -27,6 +27,17 @@ export class ElectronMediaTools implements MediaTools {
     const scale = Math.min(1, side / Math.max(width, height))
     const shown = scale < 1 ? image.resize({ width: Math.max(1, Math.round(width * scale)), quality: 'good' }) : image
     return shown.toDataURL()
+  }
+
+  /** A frame of a video, made by the system (QuickLook on a Mac): MP4 and QuickTime files; a WebM file gets the system's file icon from it, which is no frame, so none is made. */
+  async poster(path: string, mime: string, side: number): Promise<string | null> {
+    if (mime === 'video/webm' || typeof nativeImage.createThumbnailFromPath !== 'function') return null
+    try {
+      const image = await nativeImage.createThumbnailFromPath(path, { width: side, height: side })
+      return image.isEmpty() ? null : image.toDataURL()
+    } catch {
+      return null
+    }
   }
 
   reveal(path: string): void {

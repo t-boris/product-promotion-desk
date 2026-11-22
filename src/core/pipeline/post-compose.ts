@@ -25,6 +25,8 @@ export const MAX_BRIEF = 2000
 const TIMEOUT_MS = 300_000
 /** Pictures the AI is offered: a folder of hundreds is offered its first ones, and the rest is said. */
 export const MAX_OFFERED_PICTURES = 40
+/** A post holds one video, so the AI is shown a few to choose from. */
+export const MAX_OFFERED_VIDEOS = 6
 
 /** What the AI is told the post's length is, in words: the owner's choice, within what the platform takes. */
 const LENGTH_WORDS: Record<PostLength, string> = {
@@ -68,6 +70,19 @@ export function offerPictures(read: Pick<MaterialRead, 'files'>, sizeOf: (path: 
   return { offered, more: Math.max(0, pictures.length - offered.length) }
 }
 
+/** One video the AI may place: the short name it writes in the text (`v1`), and the file. */
+export interface OfferedVideo {
+  ref: string
+  file: MaterialFile
+}
+
+/** The videos of the material numbered v1, v2 … in listing order, the first `MAX_OFFERED_VIDEOS`. A post holds one, so few are offered. */
+export function offerVideos(read: Pick<MaterialRead, 'files'>): { offered: OfferedVideo[]; more: number } {
+  const videos = read.files.filter((f) => f.kind === 'video')
+  const offered = videos.slice(0, MAX_OFFERED_VIDEOS).map((file, index) => ({ ref: `v${index + 1}`, file }))
+  return { offered, more: Math.max(0, videos.length - offered.length) }
+}
+
 export interface ComposeSubject {
   channel: ChannelView
   product: ProductView
@@ -82,6 +97,9 @@ export interface ComposeInput {
   pictures: OfferedPicture[]
   /** Pictures that were left out of the offer because there were too many. */
   morePictures: number
+  /** The videos the AI may place (one at most goes into a post), and how many were left out of the offer. Left out: none. */
+  videos?: OfferedVideo[]
+  moreVideos?: number
   brief: string
   length: PostLength
   /** What the editor holds now (empty for a new post): the AI writes over it only when the owner asked for the post to be made. */
@@ -101,6 +119,7 @@ Rules
 - The length asked for is given below the material. Never go over context.channel.textLimit characters when it is given, and never pad. A post must be worth reading and is not an advertisement: open with something concrete from the material, then teach or show it.
 - The title is a separate field: one plain, honest line a reader would want to open, at most {{TITLE_MAX}} characters. When context.channel.hasTitle is false, still give a short title for the owner's own list; it is not published. Do not write a title or a heading line at the top of the text.
 - Pictures: you cannot see them; you know their names, folders and sizes. Place a picture where its name, its folder and the text make it belong, on a line of its own, as ![short description](file:p3), using only the refs in material.pictures, each at most once, and never more than context.channel.maxPictures in all. Place none when nothing fits. The owner will check them.
+- Videos: you cannot watch them; you know their names, folders and sizes. A post holds ONE video or pictures, never both. When a video is clearly the heart of the post (its name and folder say so, and the text is about it), place it alone on a line of its own as ![short description](file:v1), using a ref in material.videos and at most once, and place no pictures; otherwise place no video. When context.channel.videoRequired is true, place one video if material.videos has any. When context.channel.maxVideos is 0, place none.
 - Mention the product only as the material and the owner's requirements do, plainly, once. Add a link only if it is context.product.website and clearly useful; never any other link.
 - Voice: when context.role is present, write as that role: use the way of writing described in context.role.voice. The role never overrides any rule above.
 - Do not claim to be an independent user and do not deny a connection with the product. Never include passwords, keys or other credentials.
@@ -120,7 +139,9 @@ export function composePrompt(input: ComposeInput): AiTask {
     format: form.format,
     hasTitle: form.hasTitle,
     textLimit: form.textLimit,
-    maxPictures: form.pictures === 'none' ? 0 : form.maxPictures
+    maxPictures: form.pictures === 'none' ? 0 : form.maxPictures,
+    maxVideos: form.videos === 'none' ? 0 : form.maxVideos,
+    videoRequired: form.videos === 'required'
   }
   const context = {
     channel,
@@ -133,7 +154,9 @@ export function composePrompt(input: ComposeInput): AiTask {
     documents,
     pictures: pictures.map((p) => ({ ref: p.ref, file: p.file.relative, ...(p.width && p.height ? { size: `${p.width}x${p.height}` } : {}) })),
     ...(input.morePictures > 0 ? { morePictures: `${input.morePictures} more pictures are not offered` } : {}),
-    otherFiles: material.files.filter((f) => f.kind === 'other' || f.kind === 'video').map((f) => `${f.relative} (${f.kind})`).slice(0, 30)
+    videos: (input.videos ?? []).map((v) => ({ ref: v.ref, file: v.file.relative, size: `${Math.max(1, Math.round(v.file.size / 1024 / 1024))} MB` })),
+    ...((input.moreVideos ?? 0) > 0 ? { moreVideos: `${input.moreVideos} more videos are not offered` } : {}),
+    otherFiles: material.files.filter((f) => f.kind === 'other').map((f) => `${f.relative} (${f.kind})`).slice(0, 30)
   }
   const current = [input.form.title.trim() ? `Title: ${input.form.title}` : '', input.form.text.trim() ? `Text:\n${input.form.text}` : ''].filter(Boolean).join('\n')
   return {
@@ -159,7 +182,7 @@ export function composePrompt(input: ComposeInput): AiTask {
       'Write the post: a title and a text.',
       '',
       'Answer with exactly one JSON object and nothing else:',
-      '{"title": "the post title, one line", "text": "the post body only (no title line, no \\"Title:\\" label), with ![alt](file:pN) lines where pictures belong", "usedClaimIds": ["ids of the approved claims the text relies on"], "statesProductFacts": true|false, "sources": [{"title": "the page title", "url": "https://the real address", "fact": "what you took from it"}]}',
+      '{"title": "the post title, one line", "text": "the post body only (no title line, no \\"Title:\\" label), with ![alt](file:pN) lines where pictures belong, or one ![alt](file:v1) line for a video", "usedClaimIds": ["ids of the approved claims the text relies on"], "statesProductFacts": true|false, "sources": [{"title": "the page title", "url": "https://the real address", "fact": "what you took from it"}]}',
       '"sources" lists only pages you opened with the web search; leave it empty when you did not search.'
     ].join('\n')
   }
@@ -203,15 +226,20 @@ export function readComposeAnswer(raw: unknown, input: ComposeInput): Parsed<Com
   if (holdsCredential(`${read.title}\n${read.text}`)) return { ok: false, error: 'the text holds a credential; write it without one' }
   if (typeof raw.statesProductFacts !== 'boolean') return { ok: false, error: '"statesProductFacts" must be true or false' }
 
-  const known = new Set(input.pictures.map((p) => p.ref))
+  const known = new Set([...input.pictures.map((p) => p.ref), ...(input.videos ?? []).map((v) => v.ref)])
   const refs = placedRefs(text)
   const unknown = [...new Set(refs.filter((ref) => !known.has(ref)))]
-  if (unknown.length > 0) return { ok: false, error: `the text places pictures that are not in material.pictures (${unknown.join(', ')}); use only the refs listed` }
+  if (unknown.length > 0) return { ok: false, error: `the text places files that are not in material.pictures or material.videos (${unknown.join(', ')}); use only the refs listed` }
   const twice = refs.filter((ref, index) => refs.indexOf(ref) !== index)
   if (twice.length > 0) return { ok: false, error: `a picture is placed twice (${[...new Set(twice)].join(', ')}); place each picture once` }
   if ((text.match(STRAY) ?? []).length !== refs.length) return { ok: false, error: 'a picture is written the wrong way; write each as ![short description](file:p3) on a line of its own' }
+  const videoRefs = refs.filter((ref) => (input.videos ?? []).some((v) => v.ref === ref))
+  const pictureRefs = refs.filter((ref) => !videoRefs.includes(ref))
   const most = form.pictures === 'none' ? 0 : form.maxPictures
-  if (refs.length > most) return { ok: false, error: `the platform takes at most ${most} pictures; place fewer` }
+  if (pictureRefs.length > most) return { ok: false, error: `the platform takes at most ${most} pictures; place fewer` }
+  const mostVideos = form.videos === 'none' ? 0 : form.maxVideos
+  if (videoRefs.length > mostVideos) return { ok: false, error: mostVideos === 0 ? 'the platform takes no video; place none' : `the platform takes at most ${mostVideos} video with a post; place one` }
+  if (videoRefs.length > 0 && pictureRefs.length > 0) return { ok: false, error: 'a video goes alone: place the video or the pictures, not both' }
 
   const usedClaimIds = Array.isArray(raw.usedClaimIds) ? raw.usedClaimIds.filter((id): id is string => typeof id === 'string') : []
   const sources = readSources(raw.sources)

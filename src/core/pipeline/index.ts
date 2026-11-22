@@ -1,6 +1,6 @@
 import type { Core } from '../core'
 import { getAutomation } from './lifecycle'
-import { buildOverview } from './overview'
+import { attentionOf, buildOverview } from './overview'
 import { buildResultsHistory, buildResultsView } from './results'
 import { listHistory } from './history'
 import { MetricsServiceImpl, refreshTracked } from './metrics'
@@ -23,7 +23,8 @@ export function register(core: Core): void {
   core.router.register({
     'automation.get': () => automation.state(),
     'automation.setPaused': ({ paused }) => automation.setPaused(paused),
-    'attention.list': () => automation.attention.list(),
+    // With a product: only what is about that product (the number beside Inbox); without one, everything.
+    'attention.list': (args) => (args?.productId ? attentionOf(core, args.productId) : automation.attention.list()),
     'runs.list': (args) => core.runs.list({ limit: args?.limit, channelId: args?.channelId }),
     'history.list': (args) => listHistory(core, args?.limit),
     'results.get': (args) => buildResultsView(core, args?.productId),

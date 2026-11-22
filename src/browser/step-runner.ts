@@ -11,7 +11,8 @@ import { isAbsolute } from 'node:path'
 import type { PageStep, PageStepResult } from '../core/ports'
 import { cursorAtScript, cursorScript, fileInputByRefScript, locateScript, markOptionScript, mouseSeenScript, mouseWatchScript, prepareTypingScript, scriptClickScript, scrollIntoViewScript, scrollStateScript, selectOptionScript, setValueScript, typedScript, typingGuardScript, type ActionResult, type LocatedElement, type ScrollState } from './page-scripts'
 
-export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+/** The largest file put into a page: a video the library keeps (512 MB). A picture is far smaller (the library takes up to 10 MB of it). */
+export const MAX_UPLOAD_BYTES = 512 * 1024 * 1024
 
 /** What a back end has to be able to do to a page. Every call is on the one page the agent works in. */
 export interface StepDriver {

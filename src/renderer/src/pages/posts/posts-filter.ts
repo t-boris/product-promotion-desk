@@ -2,6 +2,7 @@
 // are in, and the filter, the search and the sort over them. Pure, so it is tested from src/main/posts-logic.test.ts.
 // The state of a post comes from its opportunity and nothing else; the screen never invents one.
 
+import { kindsOf } from '../../../../shared/post-format'
 import type { Attachment, Id, IsoTime, OpportunityCard, OpportunityState, PostGroupCard } from '../../../../shared/types'
 import { nameOf } from '../review/quick/labels'
 
@@ -97,7 +98,7 @@ export function titleOf(card: OpportunityCard): string {
   const title = draft?.title?.trim()
   if (title) return title
   const first = (draft?.text ?? '').split('\n').map((line) => line.trim()).find((line) => line !== '')
-  if (!first) return draft && draft.attachments.length > 0 ? 'Picture post' : 'Empty draft'
+  if (!first) return draft && draft.attachments.length > 0 ? (kindsOf(draft.attachments).videos > 0 ? 'Video post' : 'Picture post') : 'Empty draft'
   return first.length > TITLE_LIMIT ? `${first.slice(0, TITLE_LIMIT - 1)}…` : first
 }
 

@@ -9,8 +9,7 @@
 // navigation that keeps the document can all leave text in a form). The authority itself (a gate renewal, the binding of the ticket to
 // this content, account and destination, the single use) lives where the gate lives: src/core/pipeline/mission-publisher.ts.
 
-import { createHash } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
+import { sha256OfFile } from '../pipeline/util'
 import type { SendTicket } from '../ports'
 
 /** A picture the owner approved, as the mission may put it into a file input: by its name, never by a path the AI gives. */
@@ -282,8 +281,7 @@ export function parseHeldText(raw: unknown): HeldText[] | null {
  */
 export async function approvedFileProblem(file: ApprovedFile): Promise<string | null> {
   try {
-    const bytes = await readFile(file.path)
-    return createHash('sha256').update(bytes).digest('hex') === file.sha256 ? null : `"${file.name}" is not the picture that was approved (it changed on this computer). The owner must look at the post again.`
+    return (await sha256OfFile(file.path)) === file.sha256 ? null : `"${file.name}" is not the picture that was approved (it changed on this computer). The owner must look at the post again.`
   } catch {
     return `"${file.name}" cannot be read any more. The owner must look at the post again.`
   }

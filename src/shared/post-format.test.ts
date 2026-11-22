@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Attachment } from './types'
-import { RENDER_VERSION, siteLinkFor, judgedForFit, linkPlacementOf, linkRuleOf, pictureIdsIn, removePictures, characterCount, formOf, marksIn, parseBlocks, parseInline, raisedWords, renderForPlatform, sendProblems, toPlainText, withoutInlinePictures, type PostContent, type SendWays } from './post-format'
+import { RENDER_VERSION, siteLinkFor, judgedForFit, linkPlacementOf, linkRuleOf, pictureIdsIn, removePictures, characterCount, formOf, kindsOf, marksIn, parseBlocks, parseInline, raisedWords, renderForPlatform, sendProblems, toPlainText, withoutInlinePictures, type PostContent, type SendWays } from './post-format'
 
 const picture = (id: string): Attachment => ({ name: `${id}.png`, path: `/data/media/${id}.png`, mime: 'image/png', sha256: id.repeat(8), mediaId: id })
 const post = (over: Partial<PostContent> = {}): PostContent => ({ title: 'A title', text: 'Some words', link: null, attachments: [], markup: 'markdown', ...over })
@@ -696,5 +696,66 @@ describe('the marks of Reddit\'s own editor (version 2)', () => {
     expect(marksIn('a >!b!< ~~c~~ x^2')).toEqual({ spoiler: true, table: false, strike: true, superscript: true })
     expect(marksIn('`>!b!<`\n\n```\n~~c~~\n```')).toEqual({ spoiler: false, table: false, strike: false, superscript: false })
     expect(marksIn('| a |\n| - |\n| >!b!< |').spoiler).toBe(true)
+  })
+})
+
+describe('a video in a post', () => {
+  const video = (id: string, mime = 'video/mp4'): Attachment => ({ name: `${id}.mp4`, path: `/data/media/${id}.mp4`, mime, sha256: id.repeat(8), mediaId: id })
+  const problems = (platform: string, over: Partial<PostContent>): string[] => renderForPlatform(post({ title: null, ...over }), platform).problems
+
+  it('does not call a picture or a video in the text "formatting" on a platform that shows none', () => {
+    const only = renderForPlatform(post({ title: null, text: 'Look.\n\n![clip](media:b)', attachments: [video('b')] }), 'telegram')
+    expect(only.notes.join(' ')).not.toMatch(/shows no formatting/)
+    const marked = renderForPlatform(post({ title: null, text: '**Look.**\n\n![clip](media:b)', attachments: [video('b')] }), 'telegram')
+    expect(marked.notes.join(' ')).toMatch(/shows no formatting/)
+  })
+
+  it('says "the video" where a platform takes it beside the text, not "the pictures"', () => {
+    const rendered = renderForPlatform(post({ title: null, text: 'Watch.\n\n![clip](media:b)', attachments: [video('b')] }), 'x')
+    expect(rendered.notes.join(' ')).toMatch(/takes the video beside the text.*it is shown after the text/)
+    expect(rendered.notes.join(' ')).not.toMatch(/pictures/)
+  })
+
+  it('counts pictures and videos apart', () => {
+    expect(kindsOf([picture('a'), video('b'), video('c', 'video/webm')])).toEqual({ pictures: 1, videos: 2 })
+    expect(kindsOf([])).toEqual({ pictures: 0, videos: 0 })
+  })
+
+  it('takes one video where videos are taken, and does not call it a picture', () => {
+    for (const platform of ['reddit', 'facebook', 'threads', 'x', 'linkedin', 'telegram', 'pinterest']) {
+      expect(problems(platform, { title: 'T', attachments: [video('a')] }), platform).toEqual([])
+    }
+    // A video stands in for the picture Instagram needs.
+    expect(problems('instagram', { attachments: [video('a')] })).toEqual([])
+    // The same post with no attachment says what is missing, and now names the video too.
+    expect(problems('instagram', {})).toEqual(['Instagram needs a picture or a video: add one.'])
+  })
+
+  it('refuses more than one video, and a video mixed with pictures', () => {
+    expect(problems('threads', { attachments: [video('a'), video('b')] })).toEqual(['Threads takes one video with a post; this post has 2.'])
+    expect(problems('threads', { attachments: [video('a'), picture('b')] })).toEqual(['Threads takes a video or pictures with a post, not both: take one kind out.'])
+  })
+
+  it('needs a video where the platform is about video, and takes no picture there', () => {
+    expect(problems('tiktok', {})).toEqual(['TikTok needs a video: add one.'])
+    expect(problems('youtube', { title: 'T', attachments: [video('a')] })).toEqual([])
+    expect(problems('tiktok', { attachments: [picture('a')] })).toEqual(['TikTok takes no pictures with a post.', 'TikTok needs a video: add one.'])
+  })
+
+  it('does not change what a picture post is told: the picture rules are as they were', () => {
+    expect(problems('x', { attachments: [picture('a'), picture('b'), picture('c'), picture('d'), picture('e')] })).toEqual(['X takes at most 4 pictures; this post has 5.'])
+    expect(problems('pinterest', { title: 'T', attachments: [picture('a')] })).toEqual([])
+    expect(problems('facebook', { attachments: [picture('a')] })).toEqual([])
+  })
+
+  it('says a video goes only through the AI browser, on every platform, Reddit included', () => {
+    for (const platform of ['reddit', 'facebook', 'x']) {
+      const rendered = renderForPlatform(post({ title: 'T', text: '', attachments: [video('a')] }), platform)
+      expect(sendProblems(platform, rendered, { aiBrowser: false }).join(' '), platform).toMatch(/Videos go to .* only through the AI browser/)
+      expect(sendProblems(platform, rendered, { aiBrowser: true }).filter((p) => /Videos go|takes one picture/.test(p)), platform).toEqual([])
+    }
+    // A picture is told as before.
+    const picturePost = renderForPlatform(post({ title: 'T', text: 'words', attachments: [picture('a')] }), 'facebook')
+    expect(sendProblems('facebook', picturePost, { aiBrowser: false }).join(' ')).toMatch(/Pictures go to Facebook only through the AI browser/)
   })
 })

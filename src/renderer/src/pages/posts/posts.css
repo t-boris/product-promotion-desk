@@ -98,6 +98,19 @@
   object-fit: cover;
   background: var(--surface-2);
 }
+/* A video's frame in the same box: the play mark is smaller to fit. */
+.posts-thumb-video {
+  overflow: hidden;
+}
+.posts-thumb-video .video-tile {
+  min-height: 0;
+}
+.posts-thumb-video .video-tile-play {
+  transform: scale(0.5);
+}
+.posts-thumb-video .video-tile-label {
+  display: none;
+}
 /* A post without a picture keeps the frame, so the titles of all rows start at the same place. */
 .posts-thumb-empty {
   border: 1px dashed var(--line-strong);

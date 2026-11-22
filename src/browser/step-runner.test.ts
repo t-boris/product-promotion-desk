@@ -1,7 +1,7 @@
 // The step runner is shared by every back end of the browser service, so what it refuses, what it does first and what it says are pinned here
 // on a driver that records every call: the host check before any input, real input before scripts, a script only as the fallback.
 
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -313,11 +313,14 @@ describe('an upload', () => {
     expect(result.detail).toContain('no file input matches')
   })
 
-  it('refuses a file over 50 MB', async () => {
+  it('refuses a file over 512 MB (the largest video the library keeps) and takes one of exactly that size', async () => {
     const path = join(dir, 'big.bin')
-    await writeFile(path, Buffer.alloc(50 * 1024 * 1024 + 1))
+    const limit = 512 * 1024 * 1024
+    // Sparse files: the size is set, nothing is written.
+    await writeFile(path, '')
+    await truncate(path, limit + 1)
     await expect(checkUploadable(path)).rejects.toThrow('too large')
-    await writeFile(path, Buffer.alloc(50 * 1024 * 1024))
+    await truncate(path, limit)
     await expect(checkUploadable(path)).resolves.toBeUndefined()
   })
 

@@ -14,6 +14,7 @@ export function register(core: Core): void {
     'media.pick': (args) => media.pick(args),
     'files.choose': (args) => media.choose(args),
     'media.add': (args) => media.add(args),
+    'media.addPath': (args) => media.addPath(args),
     'media.list': (args) => media.list(args),
     'media.thumb': (args) => media.thumb(args),
     'media.describe': (args) => media.describe(args),

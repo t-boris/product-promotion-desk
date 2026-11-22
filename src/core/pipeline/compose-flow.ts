@@ -4,7 +4,7 @@
 
 import { ApiError } from '../../shared/api'
 import { formOf } from '../../shared/post-format'
-import { POST_LENGTHS, type Attachment, type ComposeResult, type Id, type MaterialPreview, type Opportunity, type PostLength, type Channel } from '../../shared/types'
+import { POST_LENGTHS, isVideoMime, type Attachment, type ComposeResult, type Id, type MaterialPreview, type Opportunity, type PostLength, type Channel } from '../../shared/types'
 import { readyEngine } from '../assist/gate'
 import { askWithRepair } from '../assist/kit'
 import { found, requireText } from '../channels/errors'
@@ -13,7 +13,7 @@ import { AiError, type AiEngine, type AiRunOptions } from '../ports'
 import { MAX_CURRENT, knowledgeKey } from './draft-help'
 import { ATTACHMENT_MAX_COUNT } from './attachments'
 import { loadKnowledge, postChannelView, roleView } from './context'
-import { composePrompt, offerPictures, readComposeAnswer, MAX_BRIEF, type ComposeAnswer, type ComposeInput, type ComposeSubject } from './post-compose'
+import { composePrompt, offerPictures, offerVideos, readComposeAnswer, MAX_BRIEF, type ComposeAnswer, type ComposeInput, type ComposeSubject } from './post-compose'
 import { describeMaterial, readMaterial, type MaterialRead } from './post-material'
 import type { FlowStore } from './store'
 
@@ -105,7 +105,7 @@ export class PostComposer {
     if (opp && opp.kind === 'reply') throw new ApiError('invalid_input', 'A reply is not made from material.')
 
     const material = readMaterial(paths, undefined, new Set(pathList(args.exclude, 'The left-out files', MAX_EXCLUDED)))
-    if (material.texts.length === 0 && material.files.every((f) => f.kind !== 'picture') && brief === '') {
+    if (material.texts.length === 0 && material.files.every((f) => f.kind !== 'picture' && f.kind !== 'video') && brief === '') {
       throw new ApiError('invalid_input', 'Give the AI something to work from: a document, some pictures, or a few words about the post.')
     }
     const engine = await readyEngine(this.core)
@@ -123,7 +123,8 @@ export class PostComposer {
       prohibited: knowledge.prohibited
     }
     const { offered, more } = offerPictures(material)
-    const input: ComposeInput = { subject, material, pictures: offered, morePictures: more, brief, length, form: current, progressSubject: args.opportunityId ?? args.channelId }
+    const clips = offerVideos(material)
+    const input: ComposeInput = { subject, material, pictures: offered, morePictures: more, videos: clips.offered, moreVideos: clips.more, brief, length, form: current, progressSubject: args.opportunityId ?? args.channelId }
 
     let answer: ComposeAnswer
     try {
@@ -139,8 +140,8 @@ export class PostComposer {
     }
 
     const resolved = await this.placePictures(channel.productId, answer, input)
-    const notes = [...notesOf(material, more, offered.length), ...resolved.notes]
-    this.core.log.info('pipeline', `The AI made a post from ${material.files.length} file(s) for ${channel.target}, with ${resolved.attachments.length} picture(s). Nothing was saved.`)
+    const notes = [...notesOf(material, more, offered.length, clips.more, clips.offered.length), ...resolved.notes]
+    this.core.log.info('pipeline', `The AI made a post from ${material.files.length} file(s) for ${channel.target}, with ${resolved.attachments.length} picture(s) or video(s). Nothing was saved.`)
     return { title: answer.title, text: resolved.text, attachments: resolved.attachments, ...(answer.sources.length > 0 ? { sources: answer.sources } : {}), notes }
   }
 
@@ -153,22 +154,26 @@ export class PostComposer {
     if (refs.length === 0) return { text: answer.text, attachments: [], notes: [] }
     const media = this.core.services.media
     if (!media) throw new ApiError('no_picker', 'This version cannot keep pictures here.')
-    const byRef = new Map(input.pictures.map((p) => [p.ref, p.file]))
+    const byRef = new Map([...input.pictures.map((p) => [p.ref, p.file] as const), ...(input.videos ?? []).map((v) => [v.ref, v.file] as const)])
     const kept = new Map<string, { id: string; alt: string }>()
     const attachments: Attachment[] = []
     const notes: string[] = []
-    const limit = Math.min(formOf(input.subject.channel.platform).maxPictures, ATTACHMENT_MAX_COUNT)
+    const form = formOf(input.subject.channel.platform)
+    const pictureLimit = Math.min(form.maxPictures, ATTACHMENT_MAX_COUNT)
+    const videoLimit = Math.min(form.maxVideos, ATTACHMENT_MAX_COUNT)
     for (const match of refs) {
       const file = byRef.get(match[2])
       if (!file) continue
+      const isVideo = file.kind === 'video'
+      const limit = isVideo ? videoLimit : pictureLimit
       try {
         const item = await media.addFile(productId, file.path, file.name, 'picked', '')
         kept.set(match[2], { id: item.id, alt: altOf(match[1], item.name) })
-        if (!attachments.some((a) => a.mediaId === item.id) && attachments.length < limit) {
+        if (!attachments.some((a) => a.mediaId === item.id) && attachments.filter((a) => isVideoMime(a.mime) === isVideo).length < limit) {
           attachments.push({ name: item.name, path: item.path, mime: item.mime, sha256: item.sha256, mediaId: item.id })
         }
       } catch (error) {
-        notes.push(`The picture ${file.relative} was left out: ${error instanceof Error ? error.message : String(error)}`)
+        notes.push(`The ${isVideo ? 'video' : 'picture'} ${file.relative} was left out: ${error instanceof Error ? error.message : String(error)}`)
       }
     }
     const text = answer.text
@@ -183,14 +188,13 @@ export class PostComposer {
 }
 
 /** What the owner should know about what the AI was and was not shown, in words. */
-function notesOf(material: MaterialRead, morePictures: number, offered: number): string[] {
+function notesOf(material: MaterialRead, morePictures: number, offered: number, moreVideos: number, offeredVideos: number): string[] {
   const notes: string[] = []
   for (const text of material.texts.filter((t) => t.truncated)) notes.push(`The AI was shown only the beginning of ${text.relative}.`)
   for (const skip of material.skipped.slice(0, 5)) notes.push(`${skip.relative} was not used: ${skip.reason}.`)
   if (material.skipped.length > 5) notes.push(`${material.skipped.length - 5} more files were not used.`)
   if (material.cut) notes.push('The folder holds more than was read (the first files, to a few levels deep, were used).')
   if (morePictures > 0) notes.push(`The AI was offered the first ${offered} pictures; ${morePictures} more were not offered.`)
-  const videos = material.files.filter((f) => f.kind === 'video').length
-  if (videos > 0) notes.push(`${videos === 1 ? 'A video was' : `${videos} videos were`} found; videos cannot be placed in a post yet.`)
+  if (moreVideos > 0) notes.push(`The AI was offered the first ${offeredVideos} videos; ${moreVideos} more were not offered.`)
   return notes
 }

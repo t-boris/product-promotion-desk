@@ -45,6 +45,24 @@ describe('the brief of a quick post (one picture, a caption or none)', () => {
   })
 })
 
+describe('the brief of a video post', () => {
+  const video = [{ name: 'video-1.mp4', path: '/data/media/v.mp4', sha256: 'b'.repeat(64) }]
+  it.each(['instagram', 'facebook', 'threads', 'reddit'])('%s: names the file a video, puts it in with browser_attach, waits for the site to read it and never shrinks it', (platform) => {
+    const text = brief(platform, { attachments: video })
+    expect(text).toContain('1 approved video (video-1.mp4)')
+    expect(text).toContain('ONE call of browser_attach')
+    expect(text).toContain('The approved file is a VIDEO')
+    expect(text).toContain('browser_wait_for')
+    expect(text).toContain('shrink_to_kb is only for pictures')
+  })
+
+  it('a post with pictures is not told about videos', () => {
+    const text = brief('instagram')
+    expect(text).not.toContain('VIDEO')
+    expect(text).toContain('1 approved picture (picture-1.png)')
+  })
+})
+
 describe('what the brief says about clicking (DEC-051)', () => {
   const reply = (): string =>
     brief('reddit', { kind: 'reply', text: 'Thanks for the question.', attachments: [], destination: 'https://www.reddit.com/r/beginnerastrology/comments/1abc/a_post/def/' })

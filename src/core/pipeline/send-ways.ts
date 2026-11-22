@@ -1,7 +1,7 @@
 // How a send can be carried out, decided in one place: the approval's fit check, the gate's re-check at the send and the choice of the
 // executor ask the same question, so what the owner is told can be sent is what is sent (DEC-031).
 
-import { judgedForFit, renderForPlatform, sendProblems, type PostContent, type SendWays } from '../../shared/post-format'
+import { judgedForFit, kindsOf, renderForPlatform, sendProblems, type PostContent, type SendWays } from '../../shared/post-format'
 import type { Channel } from '../../shared/types'
 import type { Core } from '../core'
 import { pictureFitProblems } from './picture-fit'
@@ -51,6 +51,8 @@ export function chooseExecutor(ways: SendWays, draft: PostContent, platform: str
   if (!ways.aiBrowser) return 'connector'
   // No connector can post to this channel: whatever the draft holds, the AI browser is the only way.
   if (ways.noConnector) return 'ai_browser'
+  // No connector uploads a video: it goes with the AI browser or by hand.
+  if (kindsOf(draft.attachments).videos > 0) return 'ai_browser'
   if (draft.attachments.length > 0 && (!judgedForFit(draft) || sendProblems(platform, renderForPlatform(draft, platform), { aiBrowser: false }).length === 0)) return 'connector'
   return 'ai_browser'
 }

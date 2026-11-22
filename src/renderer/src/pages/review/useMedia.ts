@@ -88,3 +88,37 @@ export async function addImageFiles(productId: string, files: File[], origin: Ex
   }
   return { items, refused }
 }
+
+const VIDEO_EXTENSION = /\.(mp4|m4v|mov|webm)$/i
+
+/** The dropped files that are videos the application takes (by their type, or by their extension where the system gives none). */
+export function videoFilesOf(files: ArrayLike<File> | null | undefined): File[] {
+  return Array.from(files ?? []).filter((file) => /^video\/(mp4|quicktime|webm|x-m4v)$/.test(file.type) || VIDEO_EXTENSION.test(file.name))
+}
+
+/**
+ * Adds dropped videos to the library. A video is never read into the window: the application copies it from where it is on this computer, so the file's path is
+ * needed (the application's bridge gives it); a file with no path (dragged out of a browser, or the window is open in a browser) is named and left out.
+ */
+export async function addVideoFiles(productId: string, files: File[]): Promise<{ items: MediaItem[]; refused: string[] }> {
+  const items: MediaItem[] = []
+  const refused: string[] = []
+  for (const file of files) {
+    let path: string
+    try {
+      path = window.ppd?.pathOf?.(file) ?? ''
+    } catch {
+      path = ''
+    }
+    if (!path) {
+      refused.push(`${file.name || 'The video'}: drop it from the Finder, or press “Choose files…”; a video cannot be added from here.`)
+      continue
+    }
+    try {
+      items.push(await call('media.addPath', { productId, path, origin: 'dropped' }))
+    } catch (error) {
+      refused.push(`${file.name || 'The video'}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  return { items, refused }
+}

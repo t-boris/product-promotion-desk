@@ -570,6 +570,9 @@
   height: 100%;
   object-fit: cover;
 }
+.pv-picture .video-tile {
+  min-height: 160px;
+}
 .pv-pictures-reddit {
   grid-template-columns: 1fr;
   gap: var(--space-2);

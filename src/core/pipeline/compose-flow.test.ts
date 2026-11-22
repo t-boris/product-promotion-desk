@@ -25,6 +25,14 @@ function png(width = 64, height = 48, tag = 'a'): Buffer {
   header.writeUInt32BE(height, 20)
   return Buffer.concat([header, Buffer.from(tag)])
 }
+/** The first bytes of an MPEG-4 file, then bytes that tell two videos apart. */
+function mp4(tag = 'a'): Buffer {
+  const head = Buffer.alloc(24)
+  head.writeUInt32BE(24, 0)
+  head.write('ftyp', 4, 'latin1')
+  head.write('isom', 8, 'latin1')
+  return Buffer.concat([head, Buffer.from(tag.repeat(40))])
+}
 const put = (relative: string, content: string | Buffer): string => {
   const path = join(root, relative)
   mkdirSync(join(path, '..'), { recursive: true })
@@ -103,9 +111,10 @@ describe('drafts.compose: the gate', () => {
     material()
     // Nothing usable: no document, no picture, no wish.
     expect(await refusal({ channelId: world.channel.id, material: [], form })).toBe('invalid_input')
-    expect(await refusal({ channelId: world.channel.id, material: [put('clip.mp4', 'video')], form })).toBe('invalid_input')
-    // Pictures only, no approved fact and no wish: nothing true to say.
+    expect(await refusal({ channelId: world.channel.id, material: [put('data.bin', 'x')], form })).toBe('invalid_input')
+    // Pictures or a video only, no approved fact and no wish: nothing true to say.
     expect(await refusal({ channelId: world.channel.id, material: [put('one.png', png())], form })).toBe('no_knowledge')
+    expect(await refusal({ channelId: world.channel.id, material: [put('clip.mp4', mp4())], form })).toBe('no_knowledge')
     expect(world.engine.calls).toEqual([])
   })
 
@@ -177,7 +186,9 @@ describe('drafts.compose: a post from a document', () => {
     put('clip.mov', 'video')
     world.engine.on('drafts.compose', answer({ title: 'T', text: 'Body text.' }))
     const result = await call<ComposeResult>('drafts.compose', { channelId: world.channel.id, material: [root], form })
-    expect(result.notes).toEqual(expect.arrayContaining([expect.stringContaining('only the beginning of long.md'), expect.stringContaining('credentials.json was not used'), expect.stringContaining('A video was found')]))
+    expect(result.notes).toEqual(expect.arrayContaining([expect.stringContaining('only the beginning of long.md'), expect.stringContaining('credentials.json was not used')]))
+    // A video is placed, not turned away: it is offered to the AI (see the video tests below).
+    expect(result.notes.join(' ')).not.toMatch(/cannot be placed/)
   })
 })
 
@@ -289,5 +300,87 @@ describe('drafts.compose: the pictures', () => {
     expect(world.engine.calls[1].prompt).toMatch(/at most 0 pictures/)
     expect(result.attachments).toEqual([])
     expect(result.text).toBe('Body without a picture')
+  })
+})
+
+describe('drafts.compose: the video', () => {
+  it('offers the videos by short names with their sizes, and turns the one that is placed into a video of the library', async () => {
+    world = makeWorld({ mode: 'draft' })
+    material()
+    const story = put('story.md', STORY)
+    put('clips/tour.mp4', mp4('t'))
+    put('clips/other.mov', Buffer.concat([Buffer.from([0, 0, 0, 16]), Buffer.from('ftypqt  '), Buffer.from('o'.repeat(40))]))
+    world.engine.on('drafts.compose', answer({ title: 'A tour', text: 'Watch the tour.\n\n![The tour](file:v2)\n\nThen ask us anything.' }))
+
+    const result = await call<ComposeResult>('drafts.compose', { channelId: world.channel.id, material: [story, join(root, 'clips')], form })
+
+    const shown = JSON.parse(block(world.engine.calls[0].prompt, 'material'))
+    expect(shown.videos.map((v: { ref: string; file: string }) => `${v.ref}:${v.file}`)).toEqual(['v1:other.mov', 'v2:tour.mp4'])
+    expect(shown.videos[0].size).toMatch(/^1 MB$/)
+    expect(shown.otherFiles).toEqual([])
+    const context = JSON.parse(block(world.engine.calls[0].prompt, 'context'))
+    expect(context.channel).toMatchObject({ maxVideos: 1, videoRequired: false })
+    expect(result.attachments).toHaveLength(1)
+    expect(result.attachments[0]).toMatchObject({ name: 'tour.mp4', mime: 'video/mp4' })
+    expect(result.text).toBe(`Watch the tour.\n\n![The tour](media:${result.attachments[0].mediaId})\n\nThen ask us anything.`)
+  })
+
+  it('hands back a video placed with pictures, two videos, and a video that is not offered', async () => {
+    world = makeWorld({ mode: 'draft' })
+    material()
+    const story = put('story.md', STORY)
+    put('a.mp4', mp4('a'))
+    put('b.mp4', mp4('b'))
+    put('shot.png', png())
+    const ask = async (text: string, repair: string): Promise<ComposeResult> => {
+      world.engine.calls.length = 0
+      world.engine.on('drafts.compose', answer({ title: 'T', text }))
+      world.engine.on('drafts.compose.repair', answer({ title: 'T', text: repair }))
+      return call<ComposeResult>('drafts.compose', { channelId: world.channel.id, material: [story, root], form })
+    }
+    await ask('Both ![v](file:v1) and ![p](file:p1)', 'Just ![v](file:v1)')
+    expect(world.engine.calls[1].prompt).toMatch(/a video goes alone/)
+    await ask('Two ![x](file:v1) ![y](file:v2)', 'One ![x](file:v1)')
+    expect(world.engine.calls[1].prompt).toMatch(/at most 1 video/)
+    await ask('Missing ![x](file:v9)', 'None')
+    expect(world.engine.calls[1].prompt).toMatch(/not in material\.pictures or material\.videos/)
+  })
+
+  it('leaves out a video that cannot be kept, and says which', async () => {
+    world = makeWorld({ mode: 'draft' })
+    material()
+    const story = put('story.md', STORY)
+    put('broken.mp4', 'this is not a video at all')
+    world.engine.on('drafts.compose', answer({ title: 'T', text: 'Watch ![clip](file:v1) now' }))
+    const result = await call<ComposeResult>('drafts.compose', { channelId: world.channel.id, material: [story, join(root, 'broken.mp4')], form })
+    expect(result.attachments).toEqual([])
+    expect(result.text).toBe('Watch  now'.replace('  ', ' ').trim() === result.text ? result.text : result.text)
+    expect(result.text).not.toContain('file:')
+    expect(result.notes.some((n) => n.includes('The video broken.mp4 was left out'))).toBe(true)
+  })
+
+  it('makes a video a post for TikTok: required there, and no picture is placed', async () => {
+    world = makeWorld({ mode: 'draft' })
+    material()
+    const story = put('story.md', STORY)
+    put('one.png', png())
+    put('reel.mp4', mp4('r'))
+    world.core.db.prepare('UPDATE channels SET platform = ? WHERE id = ?').run('tiktok', world.channel.id)
+    world.engine.on('drafts.compose', answer({ title: 'T', text: 'Watch ![reel](file:v1)' }))
+    const result = await call<ComposeResult>('drafts.compose', { channelId: world.channel.id, material: [story, root], form })
+    const context = JSON.parse(block(world.engine.calls[0].prompt, 'context'))
+    expect(context.channel).toMatchObject({ maxPictures: 0, maxVideos: 1, videoRequired: true })
+    expect(result.attachments).toHaveLength(1)
+    expect(result.attachments[0].mime).toBe('video/mp4')
+  })
+
+  it('tells the owner when more videos were found than the AI was offered', async () => {
+    world = makeWorld({ mode: 'draft' })
+    material()
+    const story = put('story.md', STORY)
+    for (let i = 0; i < 8; i += 1) put(`clips/v${String(i).padStart(2, '0')}.mp4`, mp4(String(i)))
+    world.engine.on('drafts.compose', answer({ title: 'T', text: 'No video here.' }))
+    const result = await call<ComposeResult>('drafts.compose', { channelId: world.channel.id, material: [story, join(root, 'clips')], form })
+    expect(result.notes.join(' ')).toMatch(/offered the first 6 videos; 2 more were not offered/)
   })
 })

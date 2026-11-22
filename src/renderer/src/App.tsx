@@ -58,7 +58,8 @@ export function App() {
     if (hash) window.location.hash = hash
   })
   const { current: currentProduct } = useCurrentProduct()
-  const attention = useQuery('attention.list', undefined, ['attention', 'opportunities', 'channels', 'accounts'])
+  // The number beside Inbox is the open product's, like the Inbox list: what waits for the owner in another product is not counted here.
+  const attention = useQuery('attention.list', currentProduct ? { productId: currentProduct.id } : undefined, ['attention', 'opportunities', 'channels', 'accounts'], { skip: currentProduct === null })
   const accounts = useQuery('accounts.list', undefined, ['accounts'])
   const info = useQuery('app.info', undefined, [])
   const settings = useQuery('app.settings.get', undefined, ['settings'])
@@ -66,9 +67,9 @@ export function App() {
   const Current = (PAGES.find((p) => p.id === route) ?? PAGES[0]).component
 
   const engine = engines.data?.find((e) => e.id === settings.data?.engineId)
-  const attentionCount = attention.data?.length ?? 0
+  const attentionCount = currentProduct ? (attention.data?.length ?? 0) : 0
   const accountsBadge = accountsSummary(accounts.data ?? [])
-  const countTone = attentionCountTone(attention.data?.map((item) => item.kind) ?? [])
+  const countTone = currentProduct ? attentionCountTone(attention.data?.map((item) => item.kind) ?? []) : null
 
   const navItem = (page: (typeof PAGES)[number]) => (
     <a

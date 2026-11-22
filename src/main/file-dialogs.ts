@@ -13,6 +13,7 @@ export interface DialogShape {
 }
 
 const PICTURES = { name: 'Pictures', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }
+const VIDEOS = { name: 'Videos', extensions: ['mp4', 'm4v', 'mov', 'webm'] }
 
 export function dialogShape(purpose: FilePurpose): DialogShape {
   switch (purpose) {
@@ -26,6 +27,9 @@ export function dialogShape(purpose: FilePurpose): DialogShape {
       return { title: 'Choose a picture', properties: ['openFile'], filters: [PICTURES] }
     case 'pictures':
       return { title: 'Choose pictures', properties: ['openFile', 'multiSelections'], filters: [PICTURES] }
+    case 'attachments':
+      // What a post carries: pictures and videos, many at once; one list shows both kinds.
+      return { title: 'Choose pictures or videos', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Pictures and videos', extensions: [...PICTURES.extensions, ...VIDEOS.extensions] }, PICTURES, VIDEOS] }
     case 'material':
       // The material of a post: any mix of documents, pictures, videos and folders (one dialog takes files and folders together on a Mac).
       return { title: 'Choose files or a folder for the post', properties: ['openFile', 'openDirectory', 'multiSelections'] }

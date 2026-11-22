@@ -11,6 +11,7 @@ export function fileParts(path: string): { name: string; folder: string } {
 }
 
 const PICTURE_EXTENSION = /\.(png|jpe?g|gif|webp)$/i
+const ATTACHMENT_EXTENSION = /\.(png|jpe?g|gif|webp|mp4|m4v|mov|webm)$/i
 
 /** The purposes that take a picture only: a file of another kind is refused in words, not passed on. */
 export function takesPicturesOnly(purpose: FilePurpose): boolean {
@@ -19,7 +20,7 @@ export function takesPicturesOnly(purpose: FilePurpose): boolean {
 
 /** Whether the purpose is one thing (a file, a folder, a picture) or may be several files at once. */
 export function takesMany(purpose: FilePurpose): boolean {
-  return purpose === 'pictures' || purpose === 'material'
+  return purpose === 'pictures' || purpose === 'attachments' || purpose === 'material'
 }
 
 /**
@@ -55,6 +56,11 @@ export function acceptDrop(purpose: FilePurpose, paths: readonly string[], skipp
     if (pictures.length < accepted.length) notes.push('Only PNG, JPEG, GIF and WebP pictures can be chosen here.')
     accepted = pictures
   }
+  if (purpose === 'attachments') {
+    const taken = accepted.filter((path) => ATTACHMENT_EXTENSION.test(path))
+    if (taken.length < accepted.length) notes.push('Only PNG, JPEG, GIF and WebP pictures and MP4, MOV, M4V and WebM videos can be chosen here.')
+    accepted = taken
+  }
   if (!takesMany(purpose) && accepted.length > 1) {
     notes.push('One was taken: the first.')
     accepted = accepted.slice(0, 1)
@@ -85,6 +91,8 @@ export function loaderWords(purpose: FilePurpose): LoaderWords {
       return { choose: 'Choose picture…', change: 'Change…', drop: 'Drop a picture here, or', typed: 'Path of the picture' }
     case 'pictures':
       return { choose: 'Choose pictures…', change: 'Choose more…', drop: 'Drop pictures here, or', typed: 'Path of a picture' }
+    case 'attachments':
+      return { choose: 'Choose pictures or videos…', change: 'Choose more…', drop: 'Drop pictures or videos here, or', typed: 'Path of a picture or a video' }
     case 'material':
       return { choose: 'Choose files or a folder…', change: 'Add more…', drop: 'Drop files or a folder here, or', typed: 'Path of a file or a folder' }
   }

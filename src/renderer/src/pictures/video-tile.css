@@ -1,0 +1,44 @@
+/* A video where a picture would be: its frame (or a plain tile) with a play mark. Sizes come from the box it is put in. */
+.video-tile {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 72px;
+  display: grid;
+  place-items: center;
+  background: var(--hover-fill);
+  color: var(--text-2);
+  overflow: hidden;
+}
+.video-tile img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.video-tile-play {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  /* Over a frame of any picture the mark is the same in every theme: a dark disc, a white triangle. */
+  background: rgb(0 0 0 / 58%);
+  border: 1px solid rgb(255 255 255 / 70%);
+}
+.video-tile-play::after {
+  content: '';
+  position: absolute;
+  left: 13px;
+  top: 9px;
+  border-style: solid;
+  border-width: 7px 0 7px 11px;
+  border-color: transparent transparent transparent #fff;
+}
+.video-tile-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--space-1);
+  text-align: center;
+}

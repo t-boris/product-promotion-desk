@@ -50,15 +50,15 @@ export function kindRole(kind: MaterialKind): string {
     case 'picture':
       return 'Can be placed in the post'
     case 'video':
-      return 'Listed only: videos cannot be placed yet'
+      return 'Can be placed in the post, alone (a post takes one video)'
     case 'other':
       return 'Not used'
   }
 }
 
-/** Whether there is something for the AI to work from: a document or a picture that will be used, or the owner's own words. */
+/** Whether there is something for the AI to work from: a document, a picture or a video that will be used, or the owner's own words. */
 export function hasBasis(files: readonly Pick<MaterialFileInfo, 'kind'>[], brief: string): boolean {
-  return brief.trim() !== '' || files.some((f) => f.kind === 'text' || f.kind === 'picture')
+  return brief.trim() !== '' || files.some((f) => f.kind === 'text' || f.kind === 'picture' || f.kind === 'video')
 }
 
 /** Why "Write the post" is off, in words; null when it can be pressed. */
@@ -66,7 +66,7 @@ export function writeReason(args: { files: readonly Pick<MaterialFileInfo, 'kind
   if (args.blocked) return null
   if (args.busy) return null
   if (args.loading) return 'Reading your files…'
-  if (!hasBasis(args.files, args.brief)) return 'Choose a document or pictures, or say what the post should be about.'
+  if (!hasBasis(args.files, args.brief)) return 'Choose a document, pictures or a video, or say what the post should be about.'
   return null
 }
 
