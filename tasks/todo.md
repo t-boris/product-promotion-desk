@@ -1288,7 +1288,7 @@ Where Natal Mystic is promoted
 - AI-first: the AI's ideas are in the flow, not folded away; the owner says nothing but picks.
 - Accounts stay on their own screen; the flow only links there.
 - [ ] Research the screen as it is (subagent report) and list what each part does.
-- [ ] Propose the layout (text mock-up with the owner's reading of every part) and ask for the owner's yes before building. Until the yes, nothing on this screen changes.
+- [x] Propose the layout: a clickable sketch with both states (a channel open, Add a channel) is published at https://claude.ai/artifact/48zVSFjRJmPoUJKA4qtVHr (2026-11-22). Waiting for the owner's yes; until then nothing on this screen changes.
 - [ ] Build, measure all routes, install, live check.
 
 ### 0.42.0 review — write a post from material (slice A)
