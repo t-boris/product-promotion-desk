@@ -201,6 +201,28 @@ describe('reading what the form holds', () => {
     ])
   })
 
+  it('does not count a text box nobody can see: Reddit keeps "Start now" and "4 hours" in the boxes of the event and poll views of its submit page', () => {
+    expect(
+      read([
+        { tag: 'input', type: 'text', value: 'Start now', hidden: true },
+        { tag: 'input', type: 'text', value: '4 hours', hidden: true },
+        { tag: 'input', type: 'date', value: '2026-11-23', name: 'eventStartDate', hidden: true },
+        { tag: 'input', type: 'search', value: 'left in a closed search', hidden: true }
+      ])
+    ).toEqual([])
+    // A box that can be seen still counts, and so does a hidden one that mirrors a title or a body.
+    expect(
+      read([
+        { tag: 'input', type: 'text', value: 'a prefilled title', ref: 'e3' },
+        { tag: 'input', type: 'text', value: 'mirrored title', name: 'title', hidden: true },
+        { tag: 'input', type: 'text', value: 'Start now', hidden: true }
+      ])
+    ).toEqual([
+      { ref: 'e3', text: 'a prefilled title' },
+      { ref: null, text: 'mirrored title' }
+    ])
+  })
+
   it('does not count a captcha token or any textarea nobody can see: Reddit keeps a hidden g-recaptcha-response of two thousand characters on every thread', () => {
     const token = 'x'.repeat(2361)
     expect(

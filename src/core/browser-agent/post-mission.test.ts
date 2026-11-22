@@ -75,6 +75,14 @@ describe('what the brief says about clicking (DEC-051)', () => {
     expect(text).toContain('look at the page again with browser_snapshot, find the empty reply field and the button that publishes in that form, and name them in browser_submit')
   })
 
+  it('stops for a warning about the account, and not for a notice about the community or its moderation', () => {
+    for (const text of [reply(), newPost()]) {
+      expect(text).toContain('the ACCOUNT may not publish now (a rate limit such as "too many posts", a restriction, a suspension), stop')
+      expect(text).toContain('A notice about the COMMUNITY or its moderation (its rules, that new posts are held for the moderators\' approval, that a flair is advised) is information, not a reason to stop')
+      expect(text).toContain('call browser_submit and let the site hold, accept or remove the post')
+    }
+  })
+
   it('says the true rule: a control that publishes is clicked only while every field is empty, to open a form, and after that only browser_submit presses it', () => {
     for (const text of [reply(), newPost()]) {
       expect(text).toContain('is clicked by you only while every field is empty, to open a form; after that only browser_submit presses it')

@@ -245,6 +245,9 @@ export function formTextScript(): string {
         const type = String(el.type || 'text').toLowerCase();
         if (type === 'hidden') { if (!MIRRORS.test(el.name || el.id || '')) continue; }
         else if (!TYPES.includes(type)) continue;
+        // A text box nobody can see (display: none) belongs to a view of the form that is not shown: Reddit's submit page keeps "Start now" and "4 hours"
+        // in the boxes of its event and poll views. Like a textarea nobody can see, it is not what a press publishes, unless its name says it mirrors the post.
+        if (type !== 'hidden' && !MIRRORS.test(el.name || el.id || '') && el.getClientRects().length === 0) continue;
         text = String(el.value);
       }
       else if (el.isContentEditable) text = String(el.innerText || el.textContent || '');
