@@ -61,6 +61,12 @@ const failed = (error: string): PublishOutcome => ({ status: 'failed', error })
 /** The session check looks at the page this many times, this far apart: Reddit-like sites draw their sign-in form a few seconds after load. */
 const SESSION_LOOKS = 8
 const SESSION_LOOK_MS = 700
+/**
+ * A sign-in signal (a sign-in address, a password field, a "log in" prompt) is a verdict only when the page keeps showing it this many looks in a row.
+ * A session that is in can sit on a sign-in address for a moment before the site moves it on: Pinterest opens /login/ for a signed-in browser and sends it
+ * to the home page a few hundred milliseconds later (a check that gave up at the first look called every signed-in Pinterest account signed out).
+ */
+const SESSION_SETTLE_LOOKS = 3
 /** Less text than this on a page that has had time to draw says nothing about whether the session is in. */
 const SESSION_MIN_TEXT = 100
 
@@ -189,21 +195,32 @@ export class UniversalConnector implements Connector {
 
   /**
    * Account-level check without a site profile: open the platform's page in the account's own browser and look whether it asks
-   * to sign in. Forms are drawn late, so the page is looked at several times; a sign-in prompt ends the wait at once, and a page
-   * that never asks for one is a session that is in. The account's name is not known this way.
+   * to sign in. Forms are drawn late and a signed-in session may be moved on from a sign-in address, so the page is looked at several
+   * times: a sign-in prompt that is still there after `SESSION_SETTLE_LOOKS` looks in a row ends the wait, one that goes away does not
+   * count, and a page that never asks for one is a session that is in. The account's name is not known this way.
    */
   private async checkSession(ctx: ConnectorContext): Promise<LoginState> {
     return ctx.session.withAgentControl(`login:${ctx.account.id}`, async (page) => {
       await page.goto(ctx.channel.url, { timeoutMs: 30_000 })
       let drawn = 0
+      let asking = 0
+      let signal = ''
       for (let look = 0; look < SESSION_LOOKS; look++) {
         const gate = await page.read<GateProbe>(gateProbeScript())
         if (gate.captcha) return { loggedIn: false, identity: null, captcha: true, signal: gate.signal }
         const seen = await page.read<SessionProbe>(sessionProbeScript())
-        if (seen.signedOut) return { loggedIn: false, identity: null, captcha: false, signal: seen.signal }
-        drawn = seen.textLength
+        if (seen.signedOut) {
+          asking += 1
+          signal = seen.signal
+          if (asking >= SESSION_SETTLE_LOOKS) break
+        } else {
+          asking = 0
+          drawn = seen.textLength
+        }
         if (look < SESSION_LOOKS - 1) await this.sleep(SESSION_LOOK_MS)
       }
+      // Still asking at the end (the loop ran out, or it settled): the page is a sign-in page.
+      if (asking > 0) return { loggedIn: false, identity: null, captcha: false, signal }
       if (drawn < SESSION_MIN_TEXT) return { loggedIn: false, identity: null, captcha: false, signal: 'the page stayed empty, so nothing can be said about the session' }
       return { loggedIn: true, identity: null, captcha: false, signal: 'the page does not ask to sign in' }
     })

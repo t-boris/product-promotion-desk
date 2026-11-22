@@ -178,7 +178,29 @@ describe('universal connector: sign-in check of an account that has no site prof
     const { connector, ctx, page } = setup({ profile: null })
     page.session = { signedOut: true, signal: 'a password field is shown', textLength: 500 }
     expect(await connector.checkLogin(ctx)).toEqual({ loggedIn: false, identity: null, captcha: false, signal: 'a password field is shown' })
-    expect(page.sessionLooks).toBe(1) // a sign-in prompt ends the wait at once
+    expect(page.sessionLooks).toBe(3) // a sign-in prompt that stays for three looks in a row ends the wait
+  })
+
+  it('does not call a session signed out for a sign-in address that the site moves it on from (Pinterest: /login/ first, the home page a moment later)', async () => {
+    const { connector, ctx, page } = setup({ profile: null })
+    const login = { signedOut: true, signal: 'the page address is a sign-in page (/login/)', textLength: 0 }
+    const home = { signedOut: false, signal: '', textLength: 132 }
+    page.sessionSequence = [login, home]
+    expect(await connector.checkLogin(ctx)).toMatchObject({ loggedIn: true, identity: null, captcha: false })
+    // Two looks at the sign-in address and then it goes away: still not a verdict.
+    const slower = setup({ profile: null })
+    slower.page.sessionSequence = [login, login, home]
+    expect(await slower.connector.checkLogin(slower.ctx)).toMatchObject({ loggedIn: true })
+  })
+
+  it('still says signed out when the sign-in address is still there at the end of the looks', async () => {
+    const { connector, ctx, page } = setup({ profile: null })
+    const login = { signedOut: true, signal: 'the page address is a sign-in page (/login/)', textLength: 0 }
+    const home = { signedOut: false, signal: '', textLength: 900 }
+    // Home, then the sign-in address for every remaining look: the page ends as a sign-in page.
+    page.sessionSequence = [home, home, home, home, home, home, login, login]
+    expect(await connector.checkLogin(ctx)).toEqual({ loggedIn: false, identity: null, captcha: false, signal: 'the page address is a sign-in page (/login/)' })
+    expect(page.sessionLooks).toBe(8)
   })
 
   it('says the session is in when the page never asks to sign in after it had time to draw', async () => {

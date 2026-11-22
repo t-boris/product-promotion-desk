@@ -88,6 +88,8 @@ export class SiteFakePage extends FakePage {
   gate = { captcha: false, blocked: false, title: 'Forum', signal: '' }
   /** What the session probe sees (a site we have no profile for): by default a drawn page that does not ask to sign in. */
   session = { signedOut: false, signal: '', textLength: 5000 }
+  /** What the n-th look sees, when the page changes while it is looked at (the last entry stays); empty: `session` every time. */
+  sessionSequence: { signedOut: boolean; signal: string; textLength: number }[] = []
   sessionLooks = 0
   errors: string[] = []
   /** URL the page lands on after the last click of a flow (simulates the result page). */
@@ -136,7 +138,8 @@ export class SiteFakePage extends FakePage {
     if (script.includes('recaptcha')) return this.gate as T
     if (script.includes('session-probe')) {
       this.sessionLooks += 1
-      return this.session as T
+      const scripted = this.sessionSequence[Math.min(this.sessionLooks, this.sessionSequence.length) - 1]
+      return (scripted ?? this.session) as T
     }
     if (script.includes('loggedInSelector')) return this.login as T
     if (script.includes('cfg.fields')) {
