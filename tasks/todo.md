@@ -1216,3 +1216,26 @@ Cause (proven on the real session, copy of the account's partition): the app's o
 - [x] M4 (0.40.3). A check that ends "not signed in" logs what the page showed (`Sign-in check of <account>: Not signed in (<signal>)`).
 - [x] M3. Live (done 2026-11-22, 0.40.3, status became ready): press Check sign-in on the Pinterest account in the installed app; the status must become ready ("Signed in, but the site did not reveal the account name").
 Not covered: a signed-in page with under 100 characters of text is still read as "stayed empty" = signed out (no "do not know" state exists).
+
+## 0.41.0 — a real file loader instead of a typed path (owner, 2026-11-22: "во всех местах, где мы загружаем файлы, вместо пути к файлу, сделай нормальный файллоудер")
+
+Where a path is typed today (inventory of the whole renderer; the post editor and the quick post already use the system dialog and are left as they are):
+1. Setup → Sources → Add / Edit a source: "Path" for a file (`document`), an image and a project folder (`code_folder`).
+2. The older draft editor (`DraftEditor`): "Add an image" with "Full path of a PNG…".
+3. Channels → Profile: "Use my own file…" (a typed path and "Use this file").
+The engine's path in Settings is shown, never typed. Nothing else asks for a path.
+
+What the owner sees (one shared loader, `FileLoader`):
+- Empty: a dashed drop area with the words "Drop a file here or" and a "Choose file…" button ("Choose folder…" for a project folder, "Choose image…" for a picture). Dragging a file over it lights the border (as the quick post's picture area does).
+- Chosen (Sources): the same area, solid, shows the file name large, its folder small and muted (full path as a tooltip), and a "Change…" button. A source keeps showing its name and folder; no path is typed anywhere.
+- Pictures that are used at once (the draft's image, the profile's picture): choosing or dropping the file uses it at once; there is no second "Add" / "Use this file" press. "Use my own file…" opens the system dialog itself.
+- No dialog in this build (the loopback web mode: `media.status.canPick` is false): the screen keeps a typed path there, with a hint saying why. That is the only place a typed path remains.
+
+How (no new library, the architecture stays: core knows nothing of Electron):
+- [x] F1. `FilePurpose` in shared types (`source_document`, `source_image`, `source_folder`, `picture`, `pictures`); API `files.choose` `{ purpose } → string[]` (empty when the dialog was closed); port `MediaTools.choose(purpose)`; `MediaService.choose` (refuses with `no_picker` when there is no dialog). Dialog options per purpose in a pure file `src/main/file-dialogs.ts` (title, filters, `openDirectory`, multi-selection) with tests; `ElectronMediaTools.choose` uses it.
+- [x] F2. Preload `pathOf(file)` through Electron's `webUtils.getPathForFile` (a dropped file has no path in a sandboxed page otherwise); the transport type gets it as optional.
+- [x] F3. `src/renderer/src/FileLoader.tsx` + `file-loader.css` + pure `file-loader.ts` (`fileParts`, `pathsOfDrop`, `acceptedPaths`) with tests; a dropped file is always taken (never opens in the window).
+- [x] F4. Screens: AddSource (add and edit), DraftEditor, ProfileDetail; hints reworded ("Full path of…" goes away).
+- [x] F5. Tests (core `files.choose`, dialog options, pure helpers), `npm run verify`, live check with the debug-port screenshots of the three screens, the dialog opened for real once, deploy 0.41.0, lesson, memory.
+
+Review (0.41.0, 2026-11-22): built as planned. `npm run verify` green (5883 tests). Live in the installed app through the debug port: the Add source form for a file, an image and a project folder shows the loader; dropping a real file/folder fills it with the name and the folder (the preload `pathOf` works), a non-picture on the image area is refused in words, "Preview what the AI will see" reads a dropped folder; Edit shows an existing source's file as name + folder; the profile's picture column lights up for a dragged file and "Use my own file…" is one button. NOT seen live: the system's own file dialog (pressing "Choose…" left it pending; the button showed "Opening…", the sheet could not be closed from here without assistive access, so the app was restarted), the older draft editor's "Add an image" (no draft is open in the app to reach it; the same component in its no-value mode), and the typed-path fallback of the loopback web mode.

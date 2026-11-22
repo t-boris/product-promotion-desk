@@ -89,7 +89,7 @@ describe('adding a picture', () => {
     world = makeWorld()
     const original = join(mkdtempSync(join(tmpdir(), 'ppd-pick-')), 'holiday.png')
     writeFileSync(original, png(10, 10, 'holiday'))
-    const tools: MediaTools = { pick: async () => [original, join(tmpdir(), 'ppd-missing.png')], thumbnail: async () => 'data:image/png;base64,AAAA', reveal: () => undefined, save: async () => null }
+    const tools: MediaTools = { pick: async () => [original, join(tmpdir(), 'ppd-missing.png')], choose: async () => [], thumbnail: async () => 'data:image/png;base64,AAAA', reveal: () => undefined, save: async () => null }
     Object.assign(world.core, { mediaTools: tools })
     const picked = (await call('media.pick', { productId: world.product.id })) as MediaItem[]
     expect(picked).toHaveLength(1)
@@ -102,9 +102,29 @@ describe('adding a picture', () => {
     world = makeWorld()
     expect(await refusal('media.pick', { productId: world.product.id })).toBe('no_picker')
     expect(await call('media.status', {})).toMatchObject({ canPick: false, canMake: null })
-    Object.assign(world.core, { mediaTools: { pick: async () => [], thumbnail: async () => '', reveal: () => undefined, save: async () => null } satisfies MediaTools })
+    Object.assign(world.core, { mediaTools: { pick: async () => [], choose: async () => [], thumbnail: async () => '', reveal: () => undefined, save: async () => null } satisfies MediaTools })
     expect(await call('media.pick', { productId: world.product.id })).toEqual([])
     expect(await call('media.status', {})).toMatchObject({ canPick: true, canReveal: true })
+  })
+})
+
+describe('choosing a file for a screen (files.choose)', () => {
+  it('opens the dialog for the purpose the screen named and returns only the paths, reading and copying nothing', async () => {
+    world = makeWorld()
+    const asked: string[] = []
+    Object.assign(world.core, { mediaTools: { pick: async () => [], choose: async (purpose: string) => (asked.push(purpose), ['/Users/you/Documents/notes.md']), thumbnail: async () => '', reveal: () => undefined, save: async () => null } satisfies MediaTools })
+    expect(await call('files.choose', { purpose: 'source_document' })).toEqual(['/Users/you/Documents/notes.md'])
+    expect(await call('files.choose', { purpose: 'source_folder' })).toEqual(['/Users/you/Documents/notes.md'])
+    expect(asked).toEqual(['source_document', 'source_folder'])
+  })
+
+  it('returns an empty list when the dialog is closed, and refuses a purpose it does not know and a build with no dialog', async () => {
+    world = makeWorld()
+    expect(await refusal('files.choose', { purpose: 'source_document' })).toBe('no_picker')
+    Object.assign(world.core, { mediaTools: { pick: async () => [], choose: async () => [], thumbnail: async () => '', reveal: () => undefined, save: async () => null } satisfies MediaTools })
+    expect(await call('files.choose', { purpose: 'pictures' })).toEqual([])
+    expect(await refusal('files.choose', { purpose: 'anything' })).toBe('invalid_input')
+    expect(await refusal('files.choose', {})).toBe('invalid_input')
   })
 })
 
@@ -114,7 +134,7 @@ describe('showing and removing', () => {
     const item = await add()
     expect(((await call('media.thumb', { id: item.id })) as { dataUrl: string }).dataUrl).toMatch(/^data:image\/png;base64,/)
     const sides: number[] = []
-    Object.assign(world.core, { mediaTools: { pick: async () => [], thumbnail: async (_p: string, side: number) => (sides.push(side), 'data:image/png;base64,SMALL'), reveal: () => undefined, save: async () => null } satisfies MediaTools })
+    Object.assign(world.core, { mediaTools: { pick: async () => [], choose: async () => [], thumbnail: async (_p: string, side: number) => (sides.push(side), 'data:image/png;base64,SMALL'), reveal: () => undefined, save: async () => null } satisfies MediaTools })
     expect(await call('media.thumb', { id: item.id, side: 100 })).toEqual({ dataUrl: 'data:image/png;base64,SMALL' })
     await call('media.thumb', { id: item.id, side: 99_999 })
     expect(sides).toEqual([100, 2048])

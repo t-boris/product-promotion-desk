@@ -46,6 +46,7 @@ import type {
   Discussion,
   MediaItem,
   MediaOrigin,
+  FilePurpose,
   MediaShape,
   PostMarkup,
   EngineId,
@@ -523,6 +524,11 @@ export interface ApiMethods {
   'media.status': [{ checkEngine?: boolean }, { canPick: boolean; canReveal: boolean; canMake: boolean | null; makeReason: string | null }]
   /** Opens the system's file dialog (main process) and adds what the owner chose; an empty list when the dialog was closed. */
   'media.pick': [{ productId: Id }, MediaItem[]]
+  /**
+   * Opens the system's file dialog for `purpose` and returns the absolute paths the owner chose (one, unless the purpose takes many); an empty list when the
+   * dialog was closed. The path is only handed to the screen that asked: nothing is read or copied here.
+   */
+  'files.choose': [{ purpose: FilePurpose }, string[]]
   /** Adds a picture from bytes: pasted from the clipboard or dropped on the editor. The file is checked like any attachment. */
   'media.add': [{ productId: Id; name: string; base64: string; origin: Exclude<MediaOrigin, 'generated'>; description?: string }, MediaItem]
   'media.list': [{ productId: Id }, MediaItem[]]

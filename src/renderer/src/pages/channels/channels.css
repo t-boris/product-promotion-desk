@@ -195,6 +195,12 @@ textarea.input.short {
   flex-direction: column;
   gap: var(--space-2);
 }
+/* A picture file is over the picture: the same lit border as the file loader's area. */
+.profile-picture.file-over {
+  outline: 2px dashed var(--accent);
+  outline-offset: 4px;
+  border-radius: var(--radius-md);
+}
 .profile-thumb {
   width: 180px;
   height: 180px;

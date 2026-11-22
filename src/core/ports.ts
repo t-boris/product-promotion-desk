@@ -10,6 +10,7 @@ import type {
   EngineId,
   EngineModel,
   EngineStatus,
+  FilePurpose,
   Id,
   IsoTime,
   MetricReading,
@@ -579,6 +580,8 @@ export interface ImageShrinker {
 export interface MediaTools {
   /** Opens the system's file dialog for pictures; the absolute paths the owner chose, or an empty list when the dialog was closed. */
   pick(): Promise<string[]>
+  /** Opens the system's file dialog the way `purpose` needs it (a file, a picture, several pictures or a folder); the absolute paths chosen, or an empty list when it was closed. */
+  choose(purpose: FilePurpose): Promise<string[]>
   /** A copy of the picture whose longest side is at most `side` pixels, as a data address. */
   thumbnail(path: string, side: number): Promise<string>
   /** Shows the file in the system's file manager. */

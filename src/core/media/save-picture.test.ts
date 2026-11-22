@@ -40,6 +40,7 @@ function dialog(choice: (name: string) => string | null): { tools: MediaTools; a
   const revealed: string[] = []
   const tools: MediaTools = {
     pick: async () => [],
+    choose: async () => [],
     thumbnail: async () => 'data:image/png;base64,AAAA',
     reveal: (path) => void revealed.push(path),
     save: async (source, name) => {

@@ -14,6 +14,8 @@ type Envelope = { ok: true; result: unknown } | { ok: false; error: { code: stri
 interface PreloadBridge {
   invoke(method: string, args: unknown): Promise<Envelope>
   onEvent(handler: (event: ApiEvent) => void): () => void
+  /** The path of a file or folder that was dropped on the window. */
+  pathOf?(file: File): string
 }
 
 declare global {

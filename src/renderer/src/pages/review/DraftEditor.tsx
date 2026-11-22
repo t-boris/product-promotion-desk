@@ -3,6 +3,7 @@ import type { DraftInput } from '../../../../shared/api'
 import type { Attachment, Draft, Id, PostMarkup } from '../../../../shared/types'
 import { AiTextField } from '../../assist/AiField'
 import { useAssistBlock } from '../../assist/useAssistBlock'
+import { FileLoader } from '../../FileLoader'
 import { call, useQuery } from '../../hooks'
 import { Badge, Button, Field } from '../../ui'
 import { FoundSources } from './FoundSources'
@@ -71,7 +72,6 @@ interface Props {
 
 /** Editor for a reply or a publication. Editing never changes what was approved: saving creates a new draft. */
 export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFocus = false, ai, post }: Props) {
-  const [path, setPath] = useState('')
   const settings = useQuery('app.settings.get', undefined, ['settings'])
   const editor = usePostEditor(form, onChange, post?.productId ?? '')
   const inEditor = withTitle && post !== undefined
@@ -103,11 +103,10 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
   const aroundText = JSON.stringify([target, form.title])
   // Anything done to a post in the editor makes it a Markdown post (DEC-030); a reply stays as it was.
   const set = (patch: Partial<DraftForm>): void => onChange((current) => ({ ...current, ...patch, ...(inEditor ? { markup: 'markdown' as const } : {}) }))
-  const addAttachment = (): void => {
-    const trimmed = path.trim()
-    if (!trimmed || form.attachments.some((a) => a.path === trimmed)) return
-    set({ attachments: [...form.attachments, { name: fileName(trimmed), path: trimmed, mime: '', sha256: '' }] })
-    setPath('')
+  const addAttachments = (paths: string[]): void => {
+    const added = paths.map((path) => path.trim()).filter((path, index, all) => path !== '' && all.indexOf(path) === index && !form.attachments.some((a) => a.path === path))
+    if (added.length === 0) return
+    set({ attachments: [...form.attachments, ...added.map((path) => ({ name: fileName(path), path, mime: '', sha256: '' }))] })
   }
 
   const textField = (
@@ -170,14 +169,7 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
           <input className="input" value={form.link} disabled={disabled} onChange={(e) => set({ link: e.target.value })} placeholder="https://" data-testid="draft-link" />
         </Field>
         {!disabled && !inEditor && (
-          <Field label="Add an image" hint="Full path of a PNG, JPEG, GIF or WebP file on this Mac (up to 10 MB). The file is checked when you save, and re-checked before sending.">
-            <div className="draft-image-row">
-              <input className="input" value={path} onChange={(e) => setPath(e.target.value)} placeholder="/Users/you/Pictures/screenshot.png" data-testid="attachment-path" />
-              <Button onClick={addAttachment} disabled={!path.trim()} data-testid="attachment-add">
-                Add
-              </Button>
-            </div>
-          </Field>
+          <FileLoader purpose="pictures" label="Add an image" hint="PNG, JPEG, GIF or WebP, up to 10 MB. The file is checked when you save, and re-checked before sending." onChoose={addAttachments} testId="attachment" />
         )}
       </div>
       {inEditor && post && (

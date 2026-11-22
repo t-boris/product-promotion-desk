@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import type { SourcePreview } from '../../../../shared/api'
-import type { Id, ProductSource, SourceKind } from '../../../../shared/types'
+import type { FilePurpose, Id, ProductSource, SourceKind } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
+import { FileLoader } from '../../FileLoader'
 import { Badge, Button, Card, ErrorNote, Field, Hint, SegmentedControl, useOpenForm } from '../../ui'
 import { SOURCE_LABELS, SOURCE_PLACEHOLDERS } from './labels'
 import { useTabMainVariant } from './LaunchPath'
@@ -13,10 +14,13 @@ const KINDS: SourceKind[] = ['url', 'text', 'document', 'image', 'code_folder']
 const KIND_HINTS: Record<SourceKind, string> = {
   url: 'The page and related pricing, about and terms pages of the same site are read.',
   text: 'Pasted notes, a price list or a description. Kept exactly as you type it.',
-  document: 'Full path of a file on this computer. Text files are read; other files are kept as materials.',
-  image: 'Full path of an image. Images are kept as materials and are not analyzed.',
-  code_folder: 'Full path of the project folder. Files are only read, never run. Secrets, environment files and dependencies are always held back.'
+  document: 'A file on this computer. Text files are read; other files are kept as materials.',
+  image: 'An image. Images are kept as materials and are not analyzed.',
+  code_folder: 'The project folder. Files are only read, never run. Secrets, environment files and dependencies are always held back.'
 }
+
+/** What the file loader opens for a kind of source that is a file or a folder; a website or a text has no file. */
+const FILE_PURPOSE: Partial<Record<SourceKind, FilePurpose>> = { document: 'source_document', image: 'source_image', code_folder: 'source_folder' }
 
 /** What "Edit" says once a source is saved: the passport was drafted from the old text, so it needs a new analysis (BUG-034). */
 export const SOURCE_SAVED_TEXT = 'Saved. Run the analysis again to update the passport.'
@@ -51,6 +55,7 @@ export function SourceForm({ productId, source, onSaved, onCancel }: SourceFormP
   const [exclude, setExclude] = useState(source?.scope?.exclude.join('\n') ?? '')
   const [preview, setPreview] = useState<SourcePreview | null>(null)
 
+  const filePurpose = FILE_PURPOSE[kind]
   const scope = kind === 'code_folder' ? scopeFromText(include, exclude) : null
   const [save, saving] = useAction(async () => {
     const input = { ref: ref.trim(), label: label.trim() || undefined, scope }
@@ -88,20 +93,28 @@ export function SourceForm({ productId, source, onSaved, onCancel }: SourceFormP
           label="Kind of source"
           name="source-kind"
           value={kind}
-          onChange={changed(setKind)}
+          onChange={(next) => {
+            // What was typed or chosen for one kind means nothing for another: a file is not a folder, a folder is not an address.
+            changed(setKind)(next)
+            setRef('')
+          }}
           options={KINDS.map((k) => ({ value: k, label: SOURCE_LABELS[k] }))}
           testIdPrefix="source-kind-"
         />
       )}
       <Hint>{KIND_HINTS[kind]}</Hint>
       <div className={kind === 'text' ? 'stack' : 'source-fields'}>
-        <Field label={kind === 'text' ? 'Text' : kind === 'url' ? 'Address' : 'Path'}>
-          {kind === 'text' ? (
-            <textarea className="input" value={ref} onChange={(e) => changed(setRef)(e.target.value)} placeholder={SOURCE_PLACEHOLDERS[kind]} data-testid={tid('ref')} />
-          ) : (
-            <input className="input" value={ref} onChange={(e) => changed(setRef)(e.target.value)} placeholder={SOURCE_PLACEHOLDERS[kind]} data-testid={tid('ref')} />
-          )}
-        </Field>
+        {filePurpose ? (
+          <FileLoader purpose={filePurpose} label={kind === 'code_folder' ? 'Folder' : kind === 'image' ? 'Image' : 'File'} value={ref} onChoose={([path]) => changed(setRef)(path)} testId={tid('ref')} />
+        ) : (
+          <Field label={kind === 'text' ? 'Text' : 'Address'}>
+            {kind === 'text' ? (
+              <textarea className="input" value={ref} onChange={(e) => changed(setRef)(e.target.value)} placeholder={SOURCE_PLACEHOLDERS.text} data-testid={tid('ref')} />
+            ) : (
+              <input className="input" value={ref} onChange={(e) => changed(setRef)(e.target.value)} placeholder={SOURCE_PLACEHOLDERS.url} data-testid={tid('ref')} />
+            )}
+          </Field>
+        )}
         <Field label="Name (optional)">
           <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} data-testid={tid('label')} />
         </Field>

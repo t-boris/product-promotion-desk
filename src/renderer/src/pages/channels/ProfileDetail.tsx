@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Account, PlatformInfo, Product, Profile, ProfileFields, ProfileGender } from '../../../../shared/types'
 import { fieldsOf, profileLine, sameFields } from '../../../../shared/profile'
 import { AiProgressPanel } from '../../AiProgress'
+import { FileLoader, useFileDrop } from '../../FileLoader'
 import { call, useAction } from '../../hooks'
 import { ViewableImage } from '../../pictures/ViewableImage'
 import { profilePicture } from '../../pictures/picture-viewer'
@@ -57,8 +58,6 @@ export function ProfileDetail({
 }) {
   const [draft, setDraft] = useState<Draft>(() => draftOf(profile))
   const [editing, setEditing] = useState(false)
-  const [picking, setPicking] = useState(false)
-  const [path, setPath] = useState('')
   const [picture, setPicture] = useState<string | null>(null)
   const labels = productLabels(products)
 
@@ -110,11 +109,9 @@ export function ProfileDetail({
     await persist()
     await call('profiles.makePicture', { id: profile.id })
   })
-  const [useFile, usingFile] = useAction(async () => {
+  const [useFile, usingFile] = useAction(async (path: string) => {
     await persist()
     await call('profiles.setPicture', { id: profile.id, path: path.trim() })
-    setPicking(false)
-    setPath('')
   })
   const [remove, removing] = useAction(async () => {
     // The list drops the profile on its next answer and the screen shows the row that took its place.
@@ -122,6 +119,8 @@ export function ProfileDetail({
   })
 
   const busy = proposing.busy || saving.busy || approving.busy || making.busy || usingFile.busy
+  // A picture file dropped anywhere on the picture and its buttons is used at once, like the one chosen with the button.
+  const pictureDrop = useFileDrop('picture', ([path]) => void useFile(path), busy)
   const error = proposing.error ?? saving.error ?? approving.error ?? making.error ?? usingFile.error ?? removing.error
   const approved = profile.status === 'approved'
   const hasPerson = profile.displayName !== '' || profile.strategy !== ''
@@ -231,21 +230,16 @@ export function ProfileDetail({
             )}
             {hasPerson && (
               <div className="profile-grid">
-                <div className="profile-picture" data-testid={`profile-picture-${profile.id}`}>
+                <div className={`profile-picture${pictureDrop.over ? ' file-over' : ''}`} {...pictureDrop.handlers} data-testid={`profile-picture-${profile.id}`}>
                   <div className="profile-thumb">{picture ? <ViewableImage src={picture} alt="Profile" picture={profilePicture(profile.id, picture)} /> : <span className="muted small">No picture yet</span>}</div>
                   <Button variant="secondary" onClick={() => void makePicture()} disabled={busy || !draft.fields.pictureIdea.trim()} data-testid={`profile-picture-make-${profile.id}`}>
                     {making.busy ? 'Making it…' : hasPicture ? 'Create new' : 'Create picture'}
                   </Button>
-                  <Button onClick={() => setPicking(!picking)} disabled={busy} data-testid={`profile-picture-own-${profile.id}`}>
-                    Use my own file…
-                  </Button>
-                  {picking && (
-                    <>
-                      <input className="input" value={path} onChange={(e) => setPath(e.target.value)} placeholder="/Users/you/Pictures/face.png" data-testid={`profile-picture-path-${profile.id}`} />
-                      <Button onClick={() => void useFile()} disabled={busy || !path.trim()} data-testid={`profile-picture-use-${profile.id}`}>
-                        {usingFile.busy ? 'Checking…' : 'Use this file'}
-                      </Button>
-                    </>
+                  <FileLoader purpose="picture" label="Picture" compact buttonLabel={usingFile.busy ? 'Checking…' : 'Use my own file…'} onChoose={([path]) => void useFile(path)} disabled={busy} testId={`profile-picture-own-${profile.id}`} />
+                  {pictureDrop.notice && (
+                    <span className="hint" role="status">
+                      {pictureDrop.notice}
+                    </span>
                   )}
                 </div>
                 <div>

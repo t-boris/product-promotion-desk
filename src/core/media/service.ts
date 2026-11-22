@@ -5,7 +5,7 @@
 import { access, copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import { ApiError } from '../../shared/api'
-import type { Id, MediaItem, MediaOrigin, MediaShape } from '../../shared/types'
+import { FILE_PURPOSES, type FilePurpose, type Id, type MediaItem, type MediaOrigin, type MediaShape } from '../../shared/types'
 import type { Core } from '../core'
 import { found, requireText } from '../channels/errors'
 import { EXTENSION_BY_MIME, ATTACHMENT_MAX_BYTES, sniffMime, validateAttachments } from '../pipeline/attachments'
@@ -55,6 +55,14 @@ export class MediaService {
 
   list(args: { productId: Id }): MediaItem[] {
     return this.store.list(this.product(args.productId))
+  }
+
+  /** The system's file dialog for a purpose (a source's file, image or folder, a picture): only the paths the owner chose; nothing is read or copied here. */
+  async choose(args: { purpose: FilePurpose }): Promise<string[]> {
+    if (!FILE_PURPOSES.includes(args?.purpose)) throw new ApiError('invalid_input', 'Say what the file is for.')
+    const tools = this.core.mediaTools
+    if (!tools) throw new ApiError('no_picker', 'This version cannot open a file dialog here. Type the path instead.')
+    return tools.choose(args.purpose)
   }
 
   /** The file dialog; every file the owner chose is added, the others are named in one refusal. */

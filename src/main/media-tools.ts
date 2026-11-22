@@ -1,18 +1,20 @@
-// What the post editor needs from the operating system (DEC-030): the file dialog for pictures and the Save dialog, a small copy of a picture for the screen
+// What the screens need from the operating system (DEC-030): the file dialog (pictures, a source's file or folder) and the Save dialog, a small copy of a picture for the screen
 // (the page may show only `data:` pictures) and the file manager. Electron's own image support is used; no extra library.
 
 import { copyFile, writeFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import { app, BrowserWindow, dialog, nativeImage, shell } from 'electron'
 import type { MediaTools } from '../core/ports'
+import type { FilePurpose } from '../shared/types'
+import { dialogShape } from './file-dialogs'
 
 export class ElectronMediaTools implements MediaTools {
   async pick(): Promise<string[]> {
-    const options = {
-      title: 'Choose pictures',
-      properties: ['openFile', 'multiSelections'] as ('openFile' | 'multiSelections')[],
-      filters: [{ name: 'Pictures', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }]
-    }
+    return this.choose('pictures')
+  }
+
+  async choose(purpose: FilePurpose): Promise<string[]> {
+    const options = dialogShape(purpose)
     const window = BrowserWindow.getFocusedWindow()
     const result = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options)
     return result.canceled ? [] : result.filePaths

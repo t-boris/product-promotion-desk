@@ -68,12 +68,10 @@ export const SOURCE_LABELS: Record<SourceKind, string> = {
   code_folder: 'Project folder'
 }
 
-export const SOURCE_PLACEHOLDERS: Record<SourceKind, string> = {
+/** The sources that are typed (an address, a text); a file, an image and a folder are chosen with the file loader. */
+export const SOURCE_PLACEHOLDERS: Record<'url' | 'text', string> = {
   url: 'https://example.com',
-  text: 'Describe the product, paste notes or a price list',
-  document: '/Users/you/Documents/product-brief.md',
-  image: '/Users/you/Pictures/screenshot.png',
-  code_folder: '/Users/you/projects/my-product'
+  text: 'Describe the product, paste notes or a price list'
 }
 
 export const STAGE_LABELS: Record<AnalysisStageName, string> = {

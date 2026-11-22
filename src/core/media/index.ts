@@ -12,6 +12,7 @@ export function register(core: Core): void {
   core.router.register({
     'media.status': (args) => media.status(args),
     'media.pick': (args) => media.pick(args),
+    'files.choose': (args) => media.choose(args),
     'media.add': (args) => media.add(args),
     'media.list': (args) => media.list(args),
     'media.thumb': (args) => media.thumb(args),

@@ -806,6 +806,14 @@ export type MediaOrigin = 'picked' | 'pasted' | 'dropped' | 'generated' | 'card'
 /** The shape of a picture the AI makes: a square one, a wide one (landscape) or a tall one (portrait). */
 export type MediaShape = 'square' | 'wide' | 'tall'
 
+/**
+ * What a file is being chosen for (the system's file dialog opens differently for each): a document or an image or a project folder as a source of a product,
+ * one picture, or several pictures. The dialog's title, its filters and whether it picks a folder or many files follow from this, never from the screen.
+ */
+export type FilePurpose = 'source_document' | 'source_image' | 'source_folder' | 'picture' | 'pictures'
+
+export const FILE_PURPOSES: readonly FilePurpose[] = ['source_document', 'source_image', 'source_folder', 'picture', 'pictures']
+
 /** A picture of a product's library. The file lives in the application's data folder and never changes; a draft that uses it is bound to its bytes. */
 export interface MediaItem {
   id: Id
