@@ -13,9 +13,11 @@ import type {
   RemoteComment,
   RemoteDiscussion,
   RemoteInboxItem,
-  SendTicket
+  SendTicket,
+  StandingReading
 } from '../../core/ports'
 import type { Capability, Channel, IsoTime, MetricReading } from '../../shared/types'
+import { LoginRequiredError } from '../errors'
 import { gateProbeScript, type GateProbe } from '../page-scripts'
 import { ensureRedditOrigin, RedditApi } from './api'
 import { refusalError } from './auth'
@@ -23,6 +25,7 @@ import { assessSubreddit } from './assess'
 import { membershipOf, toDiscussion, REDDIT_ORIGIN, type RedditPost } from './mapping'
 import { collectMetrics } from './metrics'
 import { DEFAULT_RUNTIME, findOwnPublication, publishToReddit, type RedditRuntime } from './publish'
+import { OWN_POSTS_READ, standingOfPost } from './standing'
 import { isRedditAddress, normalizeRedditTarget, parseSubreddit } from './target'
 
 export const REDDIT_CONNECTOR_VERSION = '1'
@@ -259,6 +262,19 @@ export class RedditConnector implements Connector {
 
   findPublished(ctx: ConnectorContext, request: PublishRequest): Promise<PublishedRef | null> {
     return findOwnPublication(ctx, request)
+  }
+
+  /** Whether a post the account published is still up: read from the account's own posts, with its own session; nothing is changed. */
+  readStanding(ctx: ConnectorContext, ref: { externalId: string; url: string | null }): Promise<StandingReading | null> {
+    return ctx.session.withAgentControl(`standing:${ctx.channel.id}`, async (page) => {
+      await ensureRedditOrigin(page, ctx.channel.url)
+      const api = new RedditApi(page)
+      const identity = ctx.account.identity ?? (await api.me())
+      if (!identity) throw new LoginRequiredError('the account is not signed in, so its own posts cannot be read.')
+      const own = await api.ownSubmitted(identity, OWN_POSTS_READ)
+      if (!own.ok) throw await refusalError(page, api, own, `Own posts could not be read: ${own.reason}`)
+      return standingOfPost(own.value, ref.externalId)
+    })
   }
 
   private subreddit(ctx: ConnectorContext): string {

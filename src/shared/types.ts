@@ -959,7 +959,15 @@ export interface SendAction {
   authorizationBasis: string
   knowledgeVersionId: Id | null
   error: string | null
+  /** What the platform said when a confirmed post was looked at again: still up, or removed. Null: not read (yet, or the platform cannot be read). */
+  standing: PostStanding | null
+  /** In words, why: "Reddit's filters removed it". Null while `standing` is null. */
+  standingNote: string | null
+  standingCheckedAt: IsoTime | null
 }
+
+/** A confirmed post as the platform shows it now. */
+export type PostStanding = 'live' | 'removed'
 
 // ───────────────────────────── Runs, logs, metrics, attention (REQ-005, REQ-006) ─────────────────────────────
 

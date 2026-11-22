@@ -21,6 +21,8 @@ export interface RedditPost {
   locked: boolean
   archived: boolean
   removed: boolean
+  /** Who removed it, as Reddit names it (`removed_by_category`: "reddit", "moderator", "automod_filtered", "deleted"...). Null when it was not removed, or Reddit does not say. */
+  removedBy: string | null
   subreddit: string
 }
 
@@ -74,6 +76,7 @@ export function mapPost(thing: unknown): RedditPost | null {
     locked: data.locked === true,
     archived: data.archived === true,
     removed: (typeof removedCategory === 'string' && removedCategory !== '') || selftext === '[removed]',
+    removedBy: typeof removedCategory === 'string' && removedCategory !== '' ? removedCategory : null,
     subreddit: str(data.subreddit)
   }
 }

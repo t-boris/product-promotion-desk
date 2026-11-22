@@ -553,6 +553,17 @@ export interface Connector {
   publish(ctx: ConnectorContext, ticket: SendTicket, request: PublishRequest): Promise<PublishOutcome>
   /** Looks for an own publication matching the request, used to resolve an 'unknown' outcome. */
   findPublished(ctx: ConnectorContext, request: PublishRequest): Promise<PublishedRef | null>
+  /**
+   * Optional: whether a post this account published (a confirmed send) is still up, looked at again later: a site may remove a post after it was
+   * published. Read-only. Null: it could not be told (not in the list, not readable), which changes nothing. Absent: the platform is not checked.
+   */
+  readStanding?(ctx: ConnectorContext, ref: { externalId: string; url: string | null }): Promise<StandingReading | null>
+}
+
+/** What a platform says about a confirmed post now: still up, or removed, with why in words. */
+export interface StandingReading {
+  state: 'live' | 'removed'
+  note: string
 }
 
 export interface ConnectorRegistry {

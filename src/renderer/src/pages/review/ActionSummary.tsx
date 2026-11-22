@@ -53,6 +53,15 @@ export function ActionSummary({ card }: { card: OpportunityCard }) {
               <dd>
                 <code>{action.resultExternalId ?? '—'}</code>
               </dd>
+              {action.standing && (
+                <>
+                  <dt>On the site</dt>
+                  <dd data-testid="standing">
+                    <Badge tone={action.standing === 'removed' ? 'bad' : 'good'}>{action.standing === 'removed' ? 'Removed' : 'Up'}</Badge> {action.standingNote}
+                    {action.standingCheckedAt && <span className="muted"> · looked at {formatTime(action.standingCheckedAt)}</span>}
+                  </dd>
+                </>
+              )}
             </>
           )}
           {action.error && (

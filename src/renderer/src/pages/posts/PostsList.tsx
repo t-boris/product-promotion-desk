@@ -53,7 +53,7 @@ export function PostsList({ rows, selectedId, onSelect, footer }: { rows: PostRo
     <div className="posts-list" role="listbox" aria-label="Posts" ref={list} data-testid="posts-list">
       {rows.map((row) => {
         const selected = row.id === selectedId
-        const tone: Tone = row.attention ? (row.attention === 'Failed' ? 'bad' : 'warn') : STATE_TONE[row.state]
+        const tone: Tone = row.attention ? (row.attention === 'Failed' || row.attention === 'Removed' ? 'bad' : 'warn') : STATE_TONE[row.state]
         return (
           <div key={row.id} className="posts-row-wrap">
             <button

@@ -653,6 +653,16 @@ export class FlowStore {
     return (this.db.prepare("SELECT * FROM send_actions WHERE state = 'unknown' ORDER BY attempted_at, rowid").all() as Row[]).map(mapAction)
   }
 
+  /** Confirmed sends that carry the platform's own id and were completed at or after `sinceIso`: the posts that may still be looked at again. */
+  standingCandidates(sinceIso: string): SendAction[] {
+    return (this.db.prepare("SELECT * FROM send_actions WHERE state = 'confirmed' AND result_external_id IS NOT NULL AND completed_at >= ? ORDER BY completed_at, rowid").all(sinceIso) as Row[]).map(mapAction)
+  }
+
+  /** What the platform said when the post was looked at again, and when. A look that could not tell keeps the standing it had and moves only the time. */
+  saveStanding(actionId: Id, standing: SendAction['standing'], note: string | null, checkedAt: string): void {
+    this.db.prepare('UPDATE send_actions SET standing = ?, standing_note = ?, standing_checked_at = ? WHERE id = ?').run(standing, note, checkedAt, actionId)
+  }
+
   sendingActions(): SendAction[] {
     return (this.db.prepare("SELECT * FROM send_actions WHERE state = 'sending' ORDER BY attempted_at, rowid").all() as Row[]).map(mapAction)
   }

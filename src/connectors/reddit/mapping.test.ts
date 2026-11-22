@@ -23,6 +23,11 @@ describe('Reddit listing mapping', () => {
     expect(posts?.[2].removed).toBe(true)
   })
 
+  it('keeps who removed a post, as Reddit names it, and nothing for a post that is up', () => {
+    const posts = mapListing(listing([postThing({ id: 'u1' }), postThing({ id: 'r1', removedByCategory: 'reddit' }), postThing({ id: 'r2', selftext: '[removed]' })]))
+    expect(posts?.map((p) => p.removedBy)).toEqual([null, 'reddit', null])
+  })
+
   it('returns null for something that is not a listing', () => {
     expect(mapListing({ error: 403 })).toBeNull()
     expect(mapListing(null)).toBeNull()

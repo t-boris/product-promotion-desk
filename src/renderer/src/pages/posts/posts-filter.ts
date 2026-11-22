@@ -57,6 +57,11 @@ export function attentionOf(state: OpportunityState): string | null {
   }
 }
 
+/** The flag of a sent post that the site took down after it was published (read again by the application), or null. */
+export function removedFlag(card: OpportunityCard): string | null {
+  return card.opportunity.state === 'confirmed' && card.lastAction?.standing === 'removed' ? 'Removed' : null
+}
+
 /** One post or one group, as a row of the list. */
 export interface PostRow {
   /** The group's id for a group, else the opportunity's id. */
@@ -122,7 +127,8 @@ function rowOf(id: Id, kind: PostRow['kind'], cards: OpportunityCard[], masterTe
     haystack: `${text} ${masterText} ${cards.map((c) => c.channelTarget).join(' ')}`.toLowerCase(),
     states,
     state,
-    attention: cards.map((c) => attentionOf(c.opportunity.state)).find((a) => a !== null) ?? null,
+    // What waits for the owner now comes before a post the site took down earlier.
+    attention: cards.map((c) => attentionOf(c.opportunity.state)).find((a) => a !== null) ?? cards.map(removedFlag).find((a) => a !== null) ?? null,
     channelIds: [...new Set(cards.map((c) => c.opportunity.channelId))],
     targets: cards.map((c) => c.channelTarget),
     platforms: [...new Set(cards.map((c) => c.channelPlatform))],

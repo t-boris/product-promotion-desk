@@ -1,7 +1,7 @@
 // Cross-module service contracts. Modules attach their implementation to `core.services` in `register()`
 // and consume other modules only through these interfaces, so they can be built and tested independently.
 
-import type { AgentAsk, CapabilityKey, Channel, Claim, Id, MetricSnapshot, SendAction } from '../shared/types'
+import type { AgentAsk, CapabilityKey, Channel, Claim, Id, MetricSnapshot, PostStanding, SendAction } from '../shared/types'
 import type { PostMissionService } from './browser-agent/post-submit'
 import type { WatchMissionService } from './browser-agent/watch'
 import type { ResearchMissionService } from './browser-agent/research'
@@ -68,6 +68,21 @@ export interface SendingService {
   reconcileAllUnknown(): Promise<number>
   /** Sends approved standalone publications whose scheduled time has arrived. Returns how many were attempted. */
   sendDuePublications(): Promise<number>
+  /** Looks again at confirmed posts that are due (a site may have removed one). Returns the changes worth telling the owner. `stop` ends the scan between posts. */
+  checkStandings(stop?: () => boolean): Promise<StandingChange[]>
+}
+
+/** A confirmed post whose standing on the platform changed in a way the owner should hear of: taken down, or back up. */
+export interface StandingChange {
+  actionId: Id
+  channelId: Id
+  /** The channel's target, e.g. "r/Laserengraving". */
+  where: string
+  url: string | null
+  from: PostStanding | null
+  to: PostStanding
+  /** Why, in words. */
+  note: string
 }
 
 /** The content mix (DEC-033): prepares the drafts that are due. It prepares drafts and nothing else: never an approval, never a send. */

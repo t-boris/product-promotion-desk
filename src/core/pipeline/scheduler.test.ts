@@ -398,6 +398,32 @@ describe('Scheduler: periodic tasks', () => {
     expect(metrics.calls).toEqual([read.id])
   })
 
+  it('looks again at confirmed posts on the scan interval, and tells the owner once of a post the site removed', async () => {
+    const h = makeHarness()
+    await h.start()
+    expect(h.sending.standingCalls).toBeGreaterThan(0)
+    expect(h.sink.sent.filter((n) => n.id.startsWith('standing:'))).toEqual([])
+
+    h.sending.standingChanges = [{ actionId: 'act-1', channelId: 'c1', where: 'r/Laserengraving', url: 'https://www.reddit.com/r/x/comments/a/p/', from: 'live', to: 'removed', note: "Reddit's own filters removed it." }]
+    await h.elapse(2 * MINUTE_MS)
+    const told = h.sink.sent.filter((n) => n.id.startsWith('standing:'))
+    expect(told).toHaveLength(1)
+    expect(told[0]).toMatchObject({ id: 'standing:act-1:removed', kind: 'attention', title: 'Your post in r/Laserengraving was removed', body: "Reddit's own filters removed it." })
+
+    h.sending.standingChanges = []
+    await h.elapse(10 * MINUTE_MS)
+    expect(h.sink.sent.filter((n) => n.id.startsWith('standing:'))).toHaveLength(1)
+  })
+
+  it('does not look at posts while automation is paused', async () => {
+    const h = makeHarness()
+    h.core.settings.setRaw('automation.paused', true)
+    await h.start()
+    const before = h.sending.standingCalls
+    await h.elapse(10 * MINUTE_MS)
+    expect(h.sending.standingCalls).toBe(before)
+  })
+
   it('survives a failing background task without stopping the loop', async () => {
     const h = makeHarness()
     h.channel()

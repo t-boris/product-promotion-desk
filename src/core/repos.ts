@@ -261,7 +261,10 @@ export const mapAction = (r: Row): SendAction => ({
   resultExternalId: (r.result_external_id as string | null) ?? null,
   authorizationBasis: r.authorization_basis as string,
   knowledgeVersionId: (r.knowledge_version_id as string | null) ?? null,
-  error: (r.error as string | null) ?? null
+  error: (r.error as string | null) ?? null,
+  standing: (r.standing as SendAction['standing']) ?? null,
+  standingNote: (r.standing_note as string | null) ?? null,
+  standingCheckedAt: (r.standing_checked_at as string | null) ?? null
 })
 
 export const mapRun = (r: Row): Run => ({

@@ -476,3 +476,40 @@ describe('Reddit: resolving unknown outcomes', () => {
     await expect(connector.findPublished(h.ctx, reply())).rejects.toBeInstanceOf(LoginRequiredError)
   })
 })
+
+describe('Reddit: is a published post still up (looked at again later)', () => {
+  const ref = (id: string) => ({ externalId: id, url: `https://www.reddit.com/r/test/comments/${id.slice(3)}/post/` })
+
+  it('reads a post that is up from the account\'s own posts', async () => {
+    const h = setup()
+    h.page.route('/user/natal_bot/submitted.json', listing([postThing({ id: 'n1', author: 'natal_bot' })]))
+    expect(await connector.readStanding(h.ctx, ref('t3_n1'))).toEqual({ state: 'live', note: 'The post is up on Reddit.' })
+  })
+
+  it('reads a post that Reddit removed, and says Reddit did it', async () => {
+    const h = setup()
+    h.page.route('/user/natal_bot/submitted.json', listing([postThing({ id: 'n1', author: 'natal_bot', removedByCategory: 'reddit' })]))
+    const reading = await connector.readStanding(h.ctx, ref('t3_n1'))
+    expect(reading?.state).toBe('removed')
+    expect(reading?.note).toMatch(/^Reddit's own filters removed it/)
+  })
+
+  it('cannot tell when the post is not among the newest own posts (never calls that a removal)', async () => {
+    const h = setup()
+    h.page.route('/user/natal_bot/submitted.json', listing([postThing({ id: 'other', author: 'natal_bot' })]))
+    expect(await connector.readStanding(h.ctx, ref('t3_n1'))).toBeNull()
+  })
+
+  it('fails, rather than answering, when the list cannot be read (a refusal is not a removal)', async () => {
+    const h = setup()
+    h.page.route('/user/natal_bot/submitted.json', {}, 403)
+    await expect(connector.readStanding(h.ctx, ref('t3_n1'))).rejects.toThrow()
+  })
+
+  it('changes nothing on the page: it only reads', async () => {
+    const h = setup()
+    h.page.route('/user/natal_bot/submitted.json', listing([postThing({ id: 'n1', author: 'natal_bot' })]))
+    await connector.readStanding(h.ctx, ref('t3_n1'))
+    expect(h.page.writes).toEqual([])
+  })
+})

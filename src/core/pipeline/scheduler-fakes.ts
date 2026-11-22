@@ -2,7 +2,7 @@
 
 import type { Capability, Id, MetricReading } from '../../shared/types'
 import type { Connector, ConnectorContext } from '../ports'
-import type { DraftingService, MetricsService, MonitorOutcome, MonitorService, SendingService } from '../services'
+import type { DraftingService, MetricsService, MonitorOutcome, MonitorService, SendingService, StandingChange } from '../services'
 import type { FakeClock } from '../testing/fakes'
 import type { Timers } from './scheduler-timing'
 
@@ -130,6 +130,13 @@ export class FakeSending implements SendingService {
     if (this.reconcileGate) await this.reconcileGate
     if (this.reconcileFailure) throw this.reconcileFailure
     return this.reconcileResult
+  }
+  /** What the next scan of standings reports, and how many scans were made. */
+  standingChanges: StandingChange[] = []
+  standingCalls = 0
+  async checkStandings(): Promise<StandingChange[]> {
+    this.standingCalls += 1
+    return this.standingChanges
   }
   async sendDuePublications(): Promise<number> {
     this.sendDueCalls += 1

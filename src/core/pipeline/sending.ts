@@ -16,13 +16,14 @@ import { ApiError } from '../../shared/api'
 import type { Id, SendAction } from '../../shared/types'
 import type { Core } from '../core'
 import { TakeoverError, TicketError, type Connector, type ConnectorContext, type PublishOutcome, type PublishedRef } from '../ports'
-import type { SendingService } from '../services'
+import type { SendingService, StandingChange } from '../services'
 import { SendBlockedError, type GateBlock, type GateGrant, type SendGate } from './gate'
 import type { Ingestor } from './ingest'
 import { isLoginError, type LoginWatch } from './login-watch'
 import { AI_BROWSER_BASIS, MissionPublisher, type Executor, type MissionResult } from './mission-publisher'
 import { buildPublishRequest } from './request'
 import type { ReviewFlow } from './review'
+import { StandingChecks } from './standing'
 import { SEND_LOCKED_STATES, type FlowStore } from './store'
 import { KeyedMutex, errorMessage } from './util'
 
@@ -65,6 +66,7 @@ export class SendingFlow implements SendingService {
   private readonly reconciling = new Set<string>()
   private readonly lastHold = new Map<string, string>()
   private readonly missions: MissionPublisher
+  private readonly standings: StandingChecks
 
   constructor(
     private readonly core: Core,
@@ -75,6 +77,12 @@ export class SendingFlow implements SendingService {
     private readonly watch: LoginWatch
   ) {
     this.missions = new MissionPublisher(core, gate, store)
+    this.standings = new StandingChecks(core, store)
+  }
+
+  /** Looks again at the confirmed posts that are due: a site may have removed one since it was published (see standing.ts). */
+  checkStandings(stop?: () => boolean): Promise<StandingChange[]> {
+    return this.standings.checkDue(stop)
   }
 
   // ───────────── sending ─────────────

@@ -32,6 +32,8 @@ interface CardSeed {
   groupId?: string | null
   attachments?: Attachment[]
   completedAt?: string | null
+  /** What the platform said when the sent post was looked at again. */
+  standing?: 'live' | 'removed' | null
 }
 
 function card(seed: CardSeed): OpportunityCard {
@@ -50,7 +52,7 @@ function card(seed: CardSeed): OpportunityCard {
     channelTarget: seed.target ?? 'r/alpha',
     channelPlatform: seed.platform ?? 'reddit',
     draft: { title: seed.title === undefined ? null : seed.title, text: seed.text ?? 'Some text', attachments: seed.attachments ?? [] },
-    lastAction: seed.completedAt ? { completedAt: seed.completedAt } : null
+    lastAction: seed.completedAt || seed.standing ? { completedAt: seed.completedAt ?? null, standing: seed.standing ?? null } : null
   } as unknown as OpportunityCard
 }
 
@@ -135,6 +137,21 @@ describe('buildPostRows', () => {
     expect(rows[0].thumbnail?.name).toBe('one.png')
     expect(rows[0].attention).toBe('Failed')
     expect(rows[0].updatedAt).toBe('2026-11-05T00:00:00.000Z')
+  })
+  it('flags a sent post that the site removed afterwards, and no other', () => {
+    const removed = buildPostRows([card({ id: 'r', state: 'confirmed', standing: 'removed' })], [])
+    expect(removed[0].attention).toBe('Removed')
+    expect(removed[0].state).toBe('sent')
+    expect(buildPostRows([card({ id: 'l', state: 'confirmed', standing: 'live' })], [])[0].attention).toBeNull()
+    expect(buildPostRows([card({ id: 'n', state: 'confirmed' })], [])[0].attention).toBeNull()
+    // A send that is not confirmed carries no such flag whatever an earlier look said.
+    expect(buildPostRows([card({ id: 'd', state: 'draft', standing: 'removed' })], [])[0].attention).toBeNull()
+  })
+  it('lets what needs the owner now come before the removed flag in a group', () => {
+    const rows = buildPostRows([], [group('g', [card({ id: 'a', state: 'confirmed', standing: 'removed' }), card({ id: 'b', state: 'error' })])])
+    expect(rows[0].attention).toBe('Failed')
+    const onlyRemoved = buildPostRows([], [group('h', [card({ id: 'c', state: 'confirmed', standing: 'removed' }), card({ id: 'd', state: 'confirmed' })])])
+    expect(onlyRemoved[0].attention).toBe('Removed')
   })
   it('reports the time a post was sent, from the send and not from the last edit', () => {
     const rows = buildPostRows([card({ id: 's', state: 'confirmed', completedAt: '2026-11-07T09:00:00.000Z', updatedAt: '2026-11-08T09:00:00.000Z' })], [])

@@ -20,7 +20,8 @@ import type {
   RemoteComment,
   RemoteDiscussion,
   RemoteInboxItem,
-  SendTicket
+  SendTicket,
+  StandingReading
 } from '../ports'
 
 export type PublishBehavior =
@@ -324,6 +325,22 @@ export class FakeConnector implements Connector {
       body: request.text,
       url: ref.url,
       postedAt: new Date().toISOString()
+    })
+  }
+
+  /** What the platform says about the confirmed posts, by their platform id: still up, removed, or null (cannot tell). A post not listed cannot be told. */
+  readonly standings = new Map<string, StandingReading | null>()
+  /** The error `readStanding` throws; set to null to heal. */
+  standingError: Error | null = null
+  /** The posts `readStanding` was asked about, in order. */
+  readonly standingRequests: string[] = []
+
+  async readStanding(ctx: ConnectorContext, ref: { externalId: string; url: string | null }): Promise<StandingReading | null> {
+    this.calls.push('readStanding')
+    this.standingRequests.push(ref.externalId)
+    return this.withBrowser(ctx, 'fake-standing', () => {
+      if (this.standingError) throw this.standingError
+      return this.standings.get(ref.externalId) ?? null
     })
   }
 

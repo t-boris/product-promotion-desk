@@ -40,6 +40,7 @@ export class PeriodicTasks {
   private reconcileDueMs = 0
   private gateRetryAtMs = 0
   private metricsScanAtMs = 0
+  private standingScanAtMs = 0
   private digestScanAtMs = 0
   private mixScanAtMs = 0
   private halted = false
@@ -133,6 +134,11 @@ export class PeriodicTasks {
           this.reconcileDueMs = nowMs + this.options.reconcileEveryMs
           this.launch('reconcile', () => this.reconcilePeriodic(sending))
         }
+        // A confirmed post is looked at again for a few days: a site may remove it after it was published. Which post is due is decided by its age.
+        if (nowMs >= this.standingScanAtMs) {
+          this.standingScanAtMs = nowMs + this.options.scanEveryMs
+          this.launch('standing', () => this.checkStandings(sending))
+        }
       }
       // The content mix prepares drafts that are due. Drafts only: it never approves and never sends (DEC-033).
       const { mix } = this.core.services
@@ -182,6 +188,19 @@ export class PeriodicTasks {
       },
       { rethrow: true }
     )
+  }
+
+  private async checkStandings(sending: SendingService): Promise<void> {
+    const changes = await sending.checkStandings(() => this.halted || this.pausedAtTick)
+    for (const change of changes) {
+      const removed = change.to === 'removed'
+      this.sink.notify({
+        id: `standing:${change.actionId}:${change.to}`,
+        kind: 'attention',
+        title: removed ? `Your post in ${change.where} was removed` : `Your post in ${change.where} is back up`,
+        body: change.note
+      })
+    }
   }
 
   private async refreshDueMetrics(nowMs: number): Promise<void> {
