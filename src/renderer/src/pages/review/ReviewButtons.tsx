@@ -19,6 +19,8 @@ interface Props {
   input: DraftInput
   /** Why the form cannot be saved or approved as it stands (a quick post without a headline or a picture); the buttons are off and this says so. */
   blocked?: string | null
+  /** Why the post cannot be approved yet (the community requires a flair and the post has none): the approving buttons are off and this says so; saving stays. */
+  approveBlocked?: string | null
   /** This card owns the screen's one filled button; on every other card the same main action is a secondary one. */
   primaryAction?: boolean
   /** A secondary action that belongs to the item but not to its decision ("Also post to…"): first in the row of main actions, never filled. */
@@ -33,7 +35,7 @@ interface Props {
  * main actions come first and the rare ones last, so Tab reaches Reject after everything else and never first (BUG-039); the
  * stylesheet puts them at the left. Reject cannot be undone, so it asks first, in its own place.
  */
-export function ReviewButtons({ card, actions, dirty, input, blocked = null, primaryAction = false, extra, primaryTestId }: Props) {
+export function ReviewButtons({ card, actions, dirty, input, blocked = null, approveBlocked = null, primaryAction = false, extra, primaryTestId }: Props) {
   const { opportunity: opp } = card
   const id = opp.id
   const hasText = hasContent(input, blocked)
@@ -137,9 +139,9 @@ export function ReviewButtons({ card, actions, dirty, input, blocked = null, pri
     <div className="review-actions" data-testid="review-buttons" ref={here}>
       <div className="review-actions-main">
         {extra}
-        {main === 'approve' && !hasText && (
+        {main === 'approve' && (!hasText || approveBlocked !== null) && (
           <span className="muted small" data-testid="approve-reason">
-            {blocked ?? 'Write the text first.'}
+            {!hasText ? (blocked ?? 'Write the text first.') : approveBlocked}
           </span>
         )}
         {dirty && (
@@ -172,10 +174,10 @@ export function ReviewButtons({ card, actions, dirty, input, blocked = null, pri
           </Button>
         ) : (
           <>
-            <Button onClick={() => void approveWith('approve_send')} disabled={busy || !hasText} data-testid="approve-send">
+            <Button onClick={() => void approveWith('approve_send')} disabled={busy || !hasText || approveBlocked !== null} data-testid="approve-send">
               {label.approveAndSend}
             </Button>
-            <Button variant={mainVariant} onClick={() => void approveWith('approve')} disabled={busy || !hasText} {...mainIds('approve')}>
+            <Button variant={mainVariant} onClick={() => void approveWith('approve')} disabled={busy || !hasText || approveBlocked !== null} {...mainIds('approve')}>
               {label.approve}
             </Button>
           </>

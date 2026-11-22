@@ -224,6 +224,7 @@ export const mapDraft = (r: Row): Draft => ({
   link: (r.link as string | null) ?? null,
   attachments: parseJson(r.attachments_json as string, []),
   markup: (r.markup as Draft['markup'] | undefined) ?? 'legacy',
+  flair: (r.flair as string | null | undefined) ?? null,
   postType: r.post_type === 'quick' ? 'quick' : 'article',
   card: r.post_type === 'quick' && typeof r.card_json === 'string' ? parseQuickCard(parseJson<unknown>(r.card_json, null)) : null,
   knowledgeVersionId: (r.knowledge_version_id as string | null) ?? null,

@@ -1,6 +1,8 @@
 import { useState, type Dispatch, type SetStateAction } from 'react'
 import type { DraftInput } from '../../../../shared/api'
+import { flairApproveReason } from '../../../../shared/flair'
 import type { OpportunityCard } from '../../../../shared/types'
+import { useQuery } from '../../hooks'
 import { useDraftForm, type DraftForm } from './DraftEditor'
 import { useQuickDraft, type QuickEdit } from './quick/use-quick-draft'
 import { LOCKED_STATES, LOGIN_CONFLICT_HINT, isLoginConflict, stateHintFor } from './labels'
@@ -23,6 +25,8 @@ export interface ReviewItem {
   input: DraftInput
   /** Why the item cannot be saved or approved as it stands, when the form itself says so (a quick post); null otherwise. */
   blocked: string | null
+  /** Why the post cannot be approved yet (the community requires a flair and the post has none); saving is not stopped. Null otherwise. */
+  approveBlocked: string | null
   /** The owner's actions, for the buttons: busy while the group (`frozen`) works on the item too. */
   actions: ReviewActions
   /** The owner's actions as they are, for what the item itself says about a failure. */
@@ -60,6 +64,8 @@ export function useReviewItem(card: OpportunityCard, options: { frozen?: boolean
   const buttons = working === actions.busy ? actions : { ...actions, busy: true }
   const [alsoOpen, setAlsoOpen] = useState(false)
   const conflict = isLoginConflict(opp.reason)
+  // Whether the community of a post requires a flair: asked only for a post of the owner's own (the platform answers at once when it has no such form).
+  const community = useQuery('channels.postForm', { channelId: opp.channelId }, [], { skip: !standalone || quick !== null })
   return {
     card,
     standalone,
@@ -69,6 +75,7 @@ export function useReviewItem(card: OpportunityCard, options: { frozen?: boolean
     dirty,
     input,
     blocked: quick ? quick.reason : null,
+    approveBlocked: standalone && !quick ? flairApproveReason(community.data, form.flair) : null,
     actions: buttons,
     error: actions.error,
     working,

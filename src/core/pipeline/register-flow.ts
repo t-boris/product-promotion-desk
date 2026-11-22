@@ -3,6 +3,7 @@ import type { Core } from '../core'
 import { BrowserWatchFlow } from './browser-watch'
 import { DraftCheck } from './draft-check'
 import { DraftHelp } from './draft-help'
+import { FlairHelp } from './flair-help'
 import { PostComposer } from './compose-flow'
 import { SectionEditor } from './section-flow'
 import { FindingPictures } from './finding-pictures'
@@ -64,6 +65,9 @@ export function registerFlow(core: Core): void {
   registerFlowApi({ core, store, review, monitor, drafting, sending, publications, findings, watcher, pictures })
   const draftHelp = new DraftHelp(core, store)
   core.router.register({ 'drafts.refine': (args) => draftHelp.refine(args) })
+  // The Flair line of the post editor: what the community offers (read-only, kept ten minutes) and the AI's proposal from that list.
+  const flairHelp = new FlairHelp(core)
+  core.router.register({ 'channels.postForm': (args) => flairHelp.postForm(args), 'drafts.suggestFlair': (args) => flairHelp.suggest(args) })
   // A post made from the owner's own material: files or a folder, what the post should be like, how long. Nothing is saved or sent.
   const postComposer = new PostComposer(core, store)
   core.router.register({ 'material.preview': (args) => postComposer.preview(args), 'drafts.compose': (args) => postComposer.compose(args) })

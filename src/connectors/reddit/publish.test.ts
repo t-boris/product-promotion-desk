@@ -513,3 +513,39 @@ describe('Reddit: is a published post still up (looked at again later)', () => {
     expect(h.page.writes).toEqual([])
   })
 })
+
+describe('Reddit: the form of a post in a community (read before the owner chooses a flair)', () => {
+  const flairs = [
+    { type: 'text', text: 'Question - Career', mod_only: false, id: 'a' },
+    { type: 'text', text: 'Question - Transits', mod_only: false, id: 'b' },
+    { type: 'text', text: 'Mod announcement', mod_only: true, id: 'c' }
+  ]
+
+  it('reads the flairs the community offers to everyone, and that it requires one', async () => {
+    const h = setup()
+    h.page.route('/r/test/api/link_flair_v2.json', flairs)
+    h.page.route('/api/v1/test/post_requirements.json', { is_flair_required: true })
+    expect(await connector.readPostForm(h.ctx)).toEqual({ flairs: ['Question - Career', 'Question - Transits'], flairRequired: true })
+  })
+
+  it('does not require a flair when the community does not say, and reads the list all the same', async () => {
+    const h = setup()
+    h.page.route('/r/test/api/link_flair_v2.json', flairs)
+    h.page.route('/api/v1/test/post_requirements.json', {}, 403)
+    expect(await connector.readPostForm(h.ctx)).toEqual({ flairs: ['Question - Career', 'Question - Transits'], flairRequired: false })
+  })
+
+  it('fails, rather than answering, when the list cannot be read (an empty form is not a refusal)', async () => {
+    const h = setup()
+    h.page.route('/r/test/api/link_flair_v2.json', {}, 403)
+    await expect(connector.readPostForm(h.ctx)).rejects.toThrow()
+  })
+
+  it('changes nothing on the page: it only reads', async () => {
+    const h = setup()
+    h.page.route('/r/test/api/link_flair_v2.json', flairs)
+    h.page.route('/api/v1/test/post_requirements.json', { is_flair_required: false })
+    await connector.readPostForm(h.ctx)
+    expect(h.page.writes).toEqual([])
+  })
+})

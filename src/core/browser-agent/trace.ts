@@ -56,6 +56,8 @@ export function describeCall(tool: string, subject: StepSubject = {}): string {
       return subject.option ? `chose "${clip(subject.option, TRACE_LABEL_MAX)}"${target ? ` in ${target}` : ''}` : `chose in ${target || 'a list'}`
     case 'browser_attach':
       return 'put the pictures in'
+    case 'browser_flair':
+      return target ? `chose the approved flair through ${target}` : 'chose the approved flair'
     case 'browser_submit':
       return target ? `called browser_submit with ${target}` : 'called browser_submit'
     case 'browser_scroll':

@@ -12,6 +12,7 @@ import { stat } from 'node:fs/promises'
 import { SessionChangedError, TakeoverError, type BrowserPage, type PageStep } from '../ports'
 import type { McpTool, McpToolHost, McpToolResult } from '../mcp/protocol'
 import { DOCUMENT_TOKEN_SCRIPT, approvedFileProblem, describeHeld, changesPostSettings, changesProfile, communitiesShown, communityOf, destinationMatches, fieldValueScript, filesHeldScript, fileInputProblem, formTextScript, isAttachControl, looksLikeProgress, looksLikeSubmit, neverClicked, opensFileChooser, onComposePage, composePageOf, parseHeldFiles, parseHeldText, replyTarget, platformWarning, sameContent, usesComposerDialog, type HeldText, type PostSetup, type SubmitLease } from './post-submit'
+import { choosesFromList, findConfirm, findExpander, findFlairOption, flairShown, offeredFlairs, openerProblem, requiredUnmet } from './flair'
 import { isJoinControl, joinNamesCommunity, JOIN_AMBIGUOUS, JOIN_CHANGED, JOIN_CLICK_ONLY, JOIN_INSTRUCTIONS, JOIN_PRESSED, JOIN_WRONG_PAGE, type JoinSetup } from './join'
 import { describeScroll, parseSnapshot, renderElements, renderPictures, snapshotScript, snapshotSignature, type PageSnapshot, type SnapshotElement } from './snapshot'
 import { RESEARCH_MAX_ITEMS_PER_CALL, readResearchTopics, type ResearchSetup } from './research'
@@ -127,6 +128,8 @@ const MAX_WAIT_MS = 30_000
 const FILES_REACTION_MS = 6000
 /** How long the control that publishes is given to turn on after the application typed the fields: a form keeps it off until its required fields hold text and its pictures have been read. */
 const CONTROL_ENABLE_MS = 15_000
+/** How long the application waits for a picker to open or close after a click on it, in steps of half a second. */
+const PICKER_WAIT_MS = 4000
 const MIN_SHRINK_KB = 20
 const MAX_SHRINK_KB = 10_000
 const REF = /^e\d{1,4}$/
@@ -217,16 +220,28 @@ const attachTool = (names: string[]): McpTool =>
     ['ref']
   )
 
+const flairTool = (flair: string): McpTool =>
+  tool(
+    'browser_flair',
+    `The owner approved the flair "${oneLine(flair, 100).replace(/"/g, "'")}" for this post. Call this once, before browser_attach and browser_submit, with the label of the control that opens the form's flair picker (a button or list named like "Add flair and tags"). The application opens the picker itself, chooses exactly that flair, confirms it and reads back that the form shows it: you never choose or click anything inside the picker, and no other flair is ever chosen.`,
+    { ref },
+    ['ref']
+  )
+
+const POST_FLAIR =
+  'The owner approved a flair for this post. Before anything else in the form (before the pictures and before browser_submit), call browser_flair with the control that opens the flair picker: the application chooses the approved flair itself. browser_submit refuses until the form shows it. If the form has no such control, call report_result with needs_owner and say so.'
+
 const SHARES_THE_PAGE = /^\s*(?:share|поделиться)\b/i
 const POST_PICTURES =
   'The owner approved pictures too. Put them into the form with browser_attach (one call, all of them, into a file input listed as input:file: its "takes" must say pictures, and several files at once when more than one is approved), before browser_submit: browser_submit refuses until they are in. After that only controls named Next or Continue are clicked, and the control that publishes (Share, Post) is pressed by browser_submit alone.'
 
-const postTools = (pictures: string[]): McpTool[] => [
+const postTools = (pictures: string[], flair: string | null): McpTool[] => [
   TOOLS[0] as McpTool,
   TOOLS[1] as McpTool,
   tool('browser_click', 'Click an element, like a person with the mouse, to get to the form (open the thread, the comment box, the reply field: the "Reply" control under a comment, a "Create post" button). A control named like one that publishes is clicked only while every field of the page is empty, to open a form; with text in any field nothing is clicked. The control that publishes the form is pressed by browser_submit alone. Waits for the page to react.', { ref }, ['ref']),
   TOOLS.find((t) => t.name === 'browser_scroll') as McpTool,
   TOOLS.find((t) => t.name === 'browser_select') as McpTool,
+  ...(flair ? [flairTool(flair)] : []),
   ...(pictures.length > 0 ? [attachTool(pictures)] : []),
   TOOLS.find((t) => t.name === 'browser_wait_for') as McpTool,
   tool(
@@ -482,6 +497,8 @@ export class BrowserToolbox implements McpToolHost {
   private taken = false
   private humanCheckSeen: string | null = null
   private warningSeen: string | null = null
+  /** The control of the form that is marked required and that nothing approved answers, when a submit was refused for it. */
+  private requiredSeen: string | null = null
   private last: PageSnapshot | null = null
   /** What the AI was last shown by browser_snapshot: the only labels it can name in browser_submit, and what each of them was. */
   private shown: PageSnapshot | null = null
@@ -495,8 +512,8 @@ export class BrowserToolbox implements McpToolHost {
     const names = Object.keys(deps.files ?? {})
     const withUpload = names.length > 0 ? [...TOOLS.slice(0, 4), uploadTool(names), ...TOOLS.slice(4)] : TOOLS
     if ([deps.post, deps.join, deps.watch, deps.research].filter((mode) => mode !== undefined).length > 1) throw new Error('A mission is a post, a join, a watch or a research, never more than one of them.')
-    this.tools = deps.watch ? watchTools(deps.watch) : deps.research ? researchTools(deps.research) : deps.join ? joinTools(deps.join) : deps.post ? postTools((deps.post.authority.content.attachments ?? []).map((f) => f.name)) : deps.remember ? withUpload : withUpload.filter((t) => t.name !== 'remember_lesson')
-    this.instructions = deps.watch ? WATCH_INSTRUCTIONS : deps.research ? RESEARCH_INSTRUCTIONS : deps.join ? JOIN_INSTRUCTIONS : deps.post ? ((deps.post.authority.content.attachments ?? []).length > 0 ? `${POST_INSTRUCTIONS} ${POST_PICTURES}` : POST_INSTRUCTIONS) : INSTRUCTIONS
+    this.tools = deps.watch ? watchTools(deps.watch) : deps.research ? researchTools(deps.research) : deps.join ? joinTools(deps.join) : deps.post ? postTools((deps.post.authority.content.attachments ?? []).map((f) => f.name), deps.post.authority.content.flair ?? null) : deps.remember ? withUpload : withUpload.filter((t) => t.name !== 'remember_lesson')
+    this.instructions = deps.watch ? WATCH_INSTRUCTIONS : deps.research ? RESEARCH_INSTRUCTIONS : deps.join ? JOIN_INSTRUCTIONS : deps.post ? [POST_INSTRUCTIONS, (deps.post.authority.content.attachments ?? []).length > 0 ? POST_PICTURES : '', deps.post.authority.content.flair ? POST_FLAIR : ''].filter((part) => part !== '').join(' ') : INSTRUCTIONS
     this.maxCalls = deps.maxCalls ?? DEFAULT_MAX_CALLS
     this.trace = deps.post ? new StepTrace() : null
     this.rhythm = deps.rhythm ?? { at: null, reserved: null }
@@ -543,6 +560,8 @@ export class BrowserToolbox implements McpToolHost {
         return { ...shown(str(args.ref)), option: str(args.option) }
       case 'browser_submit':
         return shown(str(args.submit_ref))
+      case 'browser_flair':
+        return shown(str(args.ref))
       case 'report_result':
         return { status: str(args.status) }
       default:
@@ -574,6 +593,8 @@ export class BrowserToolbox implements McpToolHost {
           return await this.submit(args)
         case 'browser_attach':
           return await this.attach(str(args.ref))
+        case 'browser_flair':
+          return await this.chooseFlair(str(args.ref))
         case 'browser_upload':
           return await this.upload(str(args.ref), str(args.file), typeof args.shrink_to_kb === 'number' ? args.shrink_to_kb : 0)
         case 'browser_scroll':
@@ -1037,6 +1058,106 @@ export class BrowserToolbox implements McpToolHost {
     return this.carryOut({ do: 'upload', ref: reference, path }, `Uploaded ${file.describe}${note} into "${this.labelOf(reference)}"`, true)
   }
 
+  /**
+   * What the form asks that the approved content does not answer, or null: the approved flair is not set in it, or a control of the form is marked
+   * required (a star on a picker, a list that is required and empty) and nothing the application fills is an answer to it. Judged on a fresh look,
+   * before anything is typed or pressed, and again after the typing: a press the site is sure to refuse is not made (it would leave a result that
+   * nobody can read back), and the control is named so that the owner can answer it in the post.
+   */
+  private formGaps(snapshot: PageSnapshot, parts: Part[], submitRef: string): string | null {
+    const flair = this.deps.post?.authority.content.flair
+    if (flair && !flairShown(snapshot.elements, flair)) {
+      return `the approved flair "${flair}" is not set in the form. Call browser_flair with the control that opens the flair picker first. Nothing was pressed.`
+    }
+    const unmet = requiredUnmet(snapshot.elements, new Set([submitRef, ...parts.map((p) => p.ref)]))
+    if (unmet) {
+      this.requiredSeen = unmet.name.trim()
+      return `the form marks "${unmet.name.trim()}" as required, and nothing the owner approved answers it, so the site would refuse the post. Nothing was pressed. Do not choose it yourself: call report_result with needs_owner and say which control it is.`
+    }
+    return null
+  }
+
+  /** Looks at the page again, every half second for `PICKER_WAIT_MS`, until `done` holds of what it shows; the last look is answered whatever it shows. */
+  private async lookUntil(page: BrowserPage, done: (snapshot: PageSnapshot) => boolean): Promise<PageSnapshot | null> {
+    let look = await this.observe(page)
+    for (let waited = 0; look && !done(look) && waited < PICKER_WAIT_MS; waited += 500) {
+      await this.deps.sleep(500)
+      look = (await this.observe(page)) ?? look
+    }
+    return look
+  }
+
+  /**
+   * Chooses the approved flair on the form (post missions): the AI names the control that opens the picker and the application does the rest, with
+   * the same real clicks as any step. It opens the picker, finds the option that carries exactly the approved name (showing more of a short list
+   * when it has to), chooses it, confirms it, and reads back that the form shows it. Nothing else is chosen, so the one setting of a post the AI may
+   * not touch stays the owner's: the flair is the one the owner approved. Refused while a field holds text and once the pictures are in the form
+   * (the flair comes first), and on a page that is not the approved destination.
+   */
+  private async chooseFlair(reference: string): Promise<McpToolResult> {
+    const flair = this.deps.post?.authority.content.flair
+    if (!flair) return fail('The approved post has no flair: leave the flair of the form alone.')
+    if (!REF.test(reference)) return fail('ref must be a label from browser_snapshot, like e12.')
+    return this.acting(async (page) => {
+      const hands = await this.handsOff(page)
+      if (hands) return hands
+      const first = await this.observe(page)
+      if (!first) return fail('The page shows nothing usable yet. Wait a moment and look again.')
+      const wrong = this.pageProblem(first)
+      if (wrong) return fail(wrong)
+      if (await this.picturesInForm(page)) return fail('The pictures are in the form already, and the flair is chosen before them. Nothing was changed: if the form still shows no flair, report needs_owner.')
+      if (flairShown(first.elements, flair)) return ok(`The form shows the approved flair "${oneLine(flair, 60)}" already. Go on.`)
+      const opener = first.elements.find((e) => e.ref === reference)
+      const was = this.shown?.elements.find((e) => e.ref === reference)
+      if (!opener || !was) return fail(`${reference} is not on the page you have seen. Look at the page again (browser_snapshot) and use a label from it.`)
+      if (opener.role !== was.role || opener.name !== was.name) return fail(`${reference} is not what it was when you looked (the page changed since your browser_snapshot). Look again with browser_snapshot.`)
+      const problem = openerProblem(opener)
+      if (problem) return fail(problem)
+      const label = opener.name.trim()
+      const failed = (why: string): McpToolResult => fail(`The flair "${oneLine(flair, 60)}" was not set: ${why} Nothing was published. Report needs_owner and say what the picker shows.`)
+      const verify = async (): Promise<McpToolResult> => {
+        const after = await this.lookUntil(page, (snapshot) => flairShown(snapshot.elements, flair))
+        return after && flairShown(after.elements, flair) ? ok(`The application chose the approved flair "${oneLine(flair, 60)}" and the form shows it. Go on.`) : failed('the form does not show it after the choice.')
+      }
+      // A plain list: the application opens it and picks the option itself.
+      if (choosesFromList(opener)) {
+        const chose = await this.stepOn(page, { do: 'select', ref: reference, text: flair }, `Chose the approved flair "${oneLine(flair, 60)}" in "${label}"`, false)
+        this.touched()
+        return chose.isError ? chose : verify()
+      }
+      // A picker that opens on a click: the option, then the control that applies it.
+      const opened = await this.stepOn(page, { do: 'click', ref: reference }, `Opened "${label}"`, false)
+      this.touched()
+      if (opened.isError) return opened
+      const optionIn = (snapshot: PageSnapshot) => findFlairOption(snapshot.elements, flair, reference)
+      let look = await this.lookUntil(page, (snapshot) => optionIn(snapshot) !== null || findExpander(snapshot.elements) !== null)
+      if (look && !optionIn(look)) {
+        const more = findExpander(look.elements)
+        if (more) {
+          await this.pace()
+          const widened = await this.stepOn(page, { do: 'click', ref: more.ref }, `Opened "${more.name.trim()}"`, false)
+          this.touched()
+          if (widened.isError) return widened
+          look = await this.lookUntil(page, (snapshot) => optionIn(snapshot) !== null)
+        }
+      }
+      const option = look ? optionIn(look) : null
+      if (!look || !option) return failed(`the picker does not offer it${look && offeredFlairs(look.elements).length > 0 ? ` (it offers: ${offeredFlairs(look.elements).slice(0, 12).join(', ')})` : ''}.`)
+      await this.pace()
+      const chose = await this.stepOn(page, { do: 'click', ref: option.ref }, `Chose the approved flair "${oneLine(flair, 60)}"`, false)
+      this.touched()
+      if (chose.isError) return chose
+      const confirmed = await this.lookUntil(page, (snapshot) => findConfirm(snapshot.elements) !== null || flairShown(snapshot.elements, flair))
+      if (confirmed && flairShown(confirmed.elements, flair)) return verify()
+      const apply = confirmed ? findConfirm(confirmed.elements) : null
+      if (!apply) return failed('the picker has no control to apply the choice.')
+      await this.pace()
+      const applied = await this.stepOn(page, { do: 'click', ref: apply.ref }, `Pressed "${apply.name.trim()}" to apply the flair`, false)
+      this.touched()
+      return applied.isError ? applied : verify()
+    })
+  }
+
   /** The text that names this document, or 'unknown' when the page cannot say (it is then the same as itself, so nothing is lifted on a guess). */
   private async documentToken(page: BrowserPage): Promise<string> {
     try {
@@ -1178,8 +1299,8 @@ export class BrowserToolbox implements McpToolHost {
   }
 
   /** What the page showed that matters to the send flow after the mission: a human check, a warning of the site. */
-  get observed(): { humanCheck: string | null; warning: string | null } {
-    return { humanCheck: this.humanCheckSeen, warning: this.warningSeen }
+  get observed(): { humanCheck: string | null; warning: string | null; required: string | null } {
+    return { humanCheck: this.humanCheckSeen, warning: this.warningSeen, required: this.requiredSeen }
   }
 
   /**
@@ -1257,6 +1378,8 @@ export class BrowserToolbox implements McpToolHost {
       if (wrong) return fail(`Nothing was submitted: ${wrong}`)
       const problem = this.targetProblem(before, parts, submitRef, true, false)
       if (problem) return fail(`Nothing was submitted: ${problem}`)
+      const gap = this.formGaps(before, parts, submitRef)
+      if (gap) return fail(`Nothing was submitted: ${gap}`)
       const foreign = await this.foreignText(page, parts)
       if (foreign) return fail(`Nothing was submitted: ${foreign}`)
 
@@ -1412,6 +1535,9 @@ export class BrowserToolbox implements McpToolHost {
     const foreign = await this.foreignText(page, parts)
     if (foreign) return { refused: foreign }
     let now = await this.observe(page)
+    // The page may have changed while the text was typed: what the form asks for is judged once more, before anything is pressed.
+    const gap = now ? this.formGaps(now, parts, submitRef) : null
+    if (gap) return { refused: gap }
     // The control may turn on a moment after the last field was typed (the page reacts to the input, a picture finishes being read): it is looked at again
     // for a few seconds before it is taken to be off. Nothing is committed yet, and the ticket lives for minutes.
     for (let waited = 0; now && parts.length > 0 && now.elements.find((e) => e.ref === submitRef)?.disabled === true && waited < CONTROL_ENABLE_MS; waited += 500) {

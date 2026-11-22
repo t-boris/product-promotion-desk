@@ -440,7 +440,7 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
 
     const committed = request.authority.committed
     const reported = live.reported ? { status: live.reported.status, reason: live.reported.reason } : null
-    const observed = toolbox?.observed ?? { humanCheck: null, warning: null }
+    const observed = toolbox?.observed ?? { humanCheck: null, warning: null, required: null }
     if (live.run.status === 'running') {
       if (committed) this.finish(live, 'done', 'The AI pressed the button that publishes. The application is checking that the text is on the site.')
       else if (ended === 'timeout') this.finish(live, 'needs_owner', 'The AI did not finish in a quarter of an hour and was stopped. Nothing was published.')
@@ -449,7 +449,7 @@ export class AgentRunService implements PostMissionService, WatchMissionService,
     }
     // The AI's own words are shown to the owner in the run; the log keeps a fixed phrase and the status it reported.
     this.core.log.info('accounts', `The AI ${committed ? 'pressed the button that publishes' : 'did not publish'} for ${account.label}${reported ? ` (it reported "${reported.status}")` : ''}.`)
-    return { ended, committed, reported, humanCheck: observed.humanCheck, warning: observed.warning, error, steps: toolbox?.steps ?? null }
+    return { ended, committed, reported, humanCheck: observed.humanCheck, warning: observed.warning, required: observed.required, error, steps: toolbox?.steps ?? null }
   }
 
   /** What a look at a channel needs (DEC-042): an account that is signed in, no run going on it, and an engine that can work the browser. */

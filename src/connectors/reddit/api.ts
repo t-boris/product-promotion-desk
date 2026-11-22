@@ -1,9 +1,10 @@
 // Reddit reads. Every call is a same-origin fetch executed inside the account's logged-in page,
 // so the account's cookies apply and nothing leaves the browser session.
 
-import type { BrowserPage } from '../../core/ports'
+import type { BrowserPage, PostForm } from '../../core/ports'
 import { fetchJsonScript, type FetchResult } from '../page-scripts'
 import { asRecord, str } from '../text'
+import { mapPostForm } from './flair'
 import {
   mapAbout,
   mapInbox,
@@ -40,6 +41,7 @@ export type ApiOutcome<T> = { ok: true; value: T } | { ok: false; status: number
 
 const USERNAME = /^[A-Za-z0-9_-]{3,20}$/
 const POST_ID = /^[a-z0-9]{1,12}$/i
+const SUBREDDIT_NAME = /^[A-Za-z0-9_]{2,21}$/
 
 /** Longest stretch of a site's own words that is shown: it ends up in the owner's table, the log and, for a refused ability, a prompt. */
 const MAX_WORDS = 100
@@ -181,6 +183,19 @@ export class RedditApi {
     if (res.status !== 200) return failure(res)
     const posts = mapListing(res.json)
     return posts ? { ok: true, value: posts } : { ok: false, status: res.status, reason: 'unexpected listing format' }
+  }
+
+  /**
+   * The form of a post in a community: the flairs it offers (read from the answer the post form itself is filled from) and whether it requires one. A refusal of
+   * the requirements is not a refusal of the list: a community that does not say is read as not requiring a flair. Read-only.
+   */
+  async postForm(subreddit: string): Promise<ApiOutcome<PostForm>> {
+    if (!SUBREDDIT_NAME.test(subreddit)) return { ok: false, status: 0, reason: 'invalid community name' }
+    const flairs = await this.get(`/r/${subreddit}/api/link_flair_v2.json?raw_json=1`)
+    if (flairs.status !== 200) return failure(flairs)
+    const requirements = await this.get(`/api/v1/${subreddit}/post_requirements.json?raw_json=1`)
+    const form = mapPostForm(flairs.json, requirements.status === 200 ? requirements.json : null)
+    return form ? { ok: true, value: form } : { ok: false, status: flairs.status, reason: 'unexpected flair list format' }
   }
 
   async ownComments(username: string, limit: number): Promise<ApiOutcome<OwnComment[]>> {

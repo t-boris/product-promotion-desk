@@ -89,7 +89,7 @@ export function ReviewBody({ item, notes }: { item: ReviewItem; /** What the own
           disabled={locked || working}
           draft={card.draft}
           ai={locked ? undefined : { opportunityId: opp.id }}
-          post={standalone ? { productId: opp.productId, platform: card.channelPlatform, reads: card.channelReads, author: { name: card.accountLabel, target: card.channelTarget } } : undefined}
+          post={standalone ? { productId: opp.productId, platform: card.channelPlatform, reads: card.channelReads, channelId: opp.channelId, author: { name: card.accountLabel, target: card.channelTarget } } : undefined}
         />
       )}
       {standalone && !locked && card.channelReads !== false && <ScheduleControl opportunity={opp} busy={working} onSchedule={(at) => void actions.schedule(opp.id, at)} />}
@@ -112,6 +112,7 @@ export function ReviewActionRow({ item, primaryAction = false, primaryTestId }: 
       dirty={dirty}
       input={input}
       blocked={item.blocked}
+      approveBlocked={item.approveBlocked}
       primaryAction={primaryAction}
       primaryTestId={primaryTestId}
       extra={

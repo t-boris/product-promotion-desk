@@ -21,6 +21,7 @@ import type {
   RemoteDiscussion,
   RemoteInboxItem,
   SendTicket,
+  PostForm,
   StandingReading
 } from '../ports'
 
@@ -341,6 +342,22 @@ export class FakeConnector implements Connector {
     return this.withBrowser(ctx, 'fake-standing', () => {
       if (this.standingError) throw this.standingError
       return this.standings.get(ref.externalId) ?? null
+    })
+  }
+
+  /** What the platform says a post in the community can carry (flairs, whether one is required); null: the platform did not say. */
+  postForm: PostForm | null = { flairs: [], flairRequired: false }
+  /** The error `readPostForm` throws; set to null to heal. */
+  postFormError: Error | null = null
+  /** How many times the form was read from the platform (a reading kept by the application is not one). */
+  postFormReads = 0
+
+  async readPostForm(ctx: ConnectorContext): Promise<PostForm | null> {
+    this.calls.push('readPostForm')
+    this.postFormReads += 1
+    return this.withBrowser(ctx, 'fake-form', () => {
+      if (this.postFormError) throw this.postFormError
+      return this.postForm
     })
   }
 

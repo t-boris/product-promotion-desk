@@ -419,5 +419,13 @@ WHERE json_valid(capabilities_json)
     OR capabilities_json LIKE '%Rules mention promotion%'
   );
 `
+  },
+  {
+    id: 321,
+    name: 'drafts: the flair of a post',
+    sql: `
+-- The name of the label a community asks of a post (Reddit's flair), chosen from the community's own list; null: none. Part of what an approval binds.
+ALTER TABLE drafts ADD COLUMN flair TEXT;
+`
   }
 ]

@@ -455,6 +455,8 @@ export interface PublishRequest {
   text: string
   link: string | null
   attachments: Attachment[]
+  /** The flair by name (Reddit's label a community asks of a post), chosen by the owner from the community's own list; null or left out: none. */
+  flair?: string | null
   /** When the attempt being reconciled started; findPublished must ignore anything created before it. */
   attemptedAt?: IsoTime
 }
@@ -558,6 +560,18 @@ export interface Connector {
    * published. Read-only. Null: it could not be told (not in the list, not readable), which changes nothing. Absent: the platform is not checked.
    */
   readStanding?(ctx: ConnectorContext, ref: { externalId: string; url: string | null }): Promise<StandingReading | null>
+  /**
+   * Optional: what the place of a new post asks besides its words (the flairs its community offers, and whether one is required), read-only.
+   * Null: the place has no such thing. Absent: the platform has nothing of the kind to read.
+   */
+  readPostForm?(ctx: ConnectorContext): Promise<PostForm | null>
+}
+
+/** What a community asks of a new post besides its words, read from the community itself: the labels it offers and whether one is required. */
+export interface PostForm {
+  /** The names a post may be given (Reddit's flairs a member can choose), in the order the community shows them. */
+  flairs: string[]
+  flairRequired: boolean
 }
 
 /** What a platform says about a confirmed post now: still up, or removed, with why in words. */

@@ -83,6 +83,8 @@ export interface DraftContent {
   markup?: PostMarkup
   /** Left out, the draft is an `article` (DEC-046). */
   postType?: PostType
+  /** The flair by name; left out or null: none. A replacing draft that leaves it out keeps the earlier draft's (`inheritFlair`). */
+  flair?: string | null
   /** The template card of a quick post; left out or null: the picture is not a card. */
   card?: QuickCard | null
 }
@@ -560,8 +562,8 @@ export class FlowStore {
     const id = newId()
     this.db
       .prepare(
-        `INSERT INTO drafts (id, opportunity_id, title, text, link, attachments_json, markup, post_type, card_json, knowledge_version_id, used_claims_json, rationale, author, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO drafts (id, opportunity_id, title, text, link, attachments_json, markup, post_type, card_json, knowledge_version_id, used_claims_json, rationale, author, created_at, flair)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         id,
@@ -577,7 +579,8 @@ export class FlowStore {
         toJson(meta.usedClaimLineageIds),
         meta.rationale,
         meta.author,
-        this.now()
+        this.now(),
+        content.flair ? content.flair : null
       )
     return this.core.repos.draft(id)
   }

@@ -907,6 +907,8 @@ export interface Draft {
   attachments: Attachment[]
   /** How the text is marked up (see `PostMarkup`); part of what an approval binds when it is `markdown`. */
   markup: PostMarkup
+  /** The name of the flair the post goes out with, chosen from the community's own list (Reddit); null: none. Part of what an approval binds when set. */
+  flair: string | null
   /**
    * `article` (every draft before DEC-046) or `quick` (one picture plus a caption; the caption is in `text`, the title is empty). Screens choose their
    * layout by this field, never by guessing from an empty title.

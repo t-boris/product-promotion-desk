@@ -23,6 +23,8 @@ export interface HashableContent {
   attachments: Pick<Attachment, 'name' | 'sha256'>[]
   /** Only `markdown` enters the hash: every approval given before the post editor keeps its hash (the version is raised when a rule changes what a platform receives). */
   markup?: PostMarkup
+  /** The flair by name; part of the hash only when set, so every approval given before flairs keeps its hash. */
+  flair?: string | null
 }
 
 /**
@@ -44,6 +46,7 @@ export function contentHash(content: HashableContent, account: HashedAccount, de
       markup: content.markup === 'markdown' ? `markdown:${RENDER_VERSION}` : undefined,
       // Left out of the hash (as `markup` is) unless the link is placed by a rule, so every hash given before stays as it was.
       linkPlacement: linkPlacementOf(platform, content.link) ?? undefined,
+      flair: content.flair ? content.flair : undefined,
       accountId: account.id,
       identity: hashedIdentity(account.identity),
       destination

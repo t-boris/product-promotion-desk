@@ -227,6 +227,7 @@ describe('how a post mission ends: the authority says whether the control was pr
       reported: { status: 'done', reason: 'The reply shows under the comment.' },
       humanCheck: null,
       warning: null,
+      required: null,
       error: null,
       steps: `The AI's steps: 1. looked at the page | 2. called browser_submit with "Reply" | 3. reported done`
     })

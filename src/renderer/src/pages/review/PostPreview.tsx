@@ -187,7 +187,7 @@ function Words({ rendered, markdown }: { rendered: RenderedPost; markdown: boole
   return markdown ? <div className="pv-words marked">{blocks(parseBlocks(rendered.text))}</div> : rendered.text !== '' ? <div className="pv-words pv-plain">{rendered.text}</div> : null
 }
 
-function Sketch({ rendered, kind, author, thumbs, markdown, live }: { rendered: RenderedPost; kind: PreviewKind; author: PostAuthor; thumbs: Thumbs; markdown: boolean; live?: LivePicture }) {
+function Sketch({ rendered, kind, author, thumbs, markdown, live, flair }: { rendered: RenderedPost; kind: PreviewKind; author: PostAuthor; thumbs: Thumbs; markdown: boolean; live?: LivePicture; flair?: string | null }) {
   const link = rendered.link ? <div className="pv-link small">{rendered.link}</div> : null
   const pictures = <Pictures rendered={rendered} kind={kind} thumbs={thumbs} live={live} />
   switch (kind) {
@@ -196,6 +196,11 @@ function Sketch({ rendered, kind, author, thumbs, markdown, live }: { rendered: 
         <>
           <Author author={author} kind={kind} />
           {rendered.title && <div className="pv-title">{rendered.title}</div>}
+          {flair && (
+            <div className="pv-flair" data-testid="preview-flair">
+              {flair}
+            </div>
+          )}
           <Words rendered={rendered} markdown={markdown} />
           {pictures}
           {link}
@@ -276,7 +281,8 @@ export function PostPreview({
   platforms,
   ticked,
   livePicture,
-  pictureShape
+  pictureShape,
+  flair = null
 }: {
   content: PostContent
   channelPlatform: string
@@ -296,6 +302,8 @@ export function PostPreview({
   livePicture?: LivePicture
   /** The shape of the picture when it is known (the card's): the sketch gives the picture that shape instead of its own. */
   pictureShape?: CardShape
+  /** The flair of the post: Reddit shows it under the title. Nothing for a platform that has none. */
+  flair?: string | null
 }) {
   const [picked, setPicked] = useState(channelPlatform)
   // A different channel starts at its own platform again.
@@ -336,7 +344,7 @@ export function PostPreview({
         )}
       </div>
       <div className={`pv pv-${kind}`} data-testid="preview-sketch" data-kind={kind}>
-        {empty ? <div className="muted small">Nothing to show yet.</div> : <Sketch rendered={rendered} kind={kind} author={author} thumbs={thumbs} markdown={markdown} live={livePicture} />}
+        {empty ? <div className="muted small">Nothing to show yet.</div> : <Sketch rendered={rendered} kind={kind} author={author} thumbs={thumbs} markdown={markdown} live={livePicture} flair={flair} />}
       </div>
       <div className="muted small">{platforms && ticked && !ticked.includes(platform) ? sketchNoteLook(platform) : sketchNote(platform, platforms ? platform : channelPlatform)}</div>
       {!empty && (

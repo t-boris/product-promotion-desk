@@ -1016,3 +1016,28 @@ button.post-picture.library:hover .post-thumb {
 .version-edited > .hint {
   flex: 1 1 100%;
 }
+
+/* The Flair line of a post (a community's own list) and the pill the Reddit sketch shows under the title. */
+.flair-head-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.flair-problem {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.flair-problem .hint {
+  margin: 0;
+}
+.pv-flair {
+  align-self: flex-start;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--panel-2);
+  font-size: 0.85em;
+}

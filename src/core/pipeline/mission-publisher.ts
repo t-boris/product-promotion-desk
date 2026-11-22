@@ -123,7 +123,8 @@ export class MissionAuthority implements PostAuthority {
     this.watch = watch
     const shown = renderForPlatform(grant.draft, grant.channel.platform)
     const same = shown.title === content.title && shown.text === content.text && shown.link === content.link && JSON.stringify(shown.attachments) === JSON.stringify(typed.attachments)
-    if (!same) throw new MissionContentError('What the mission would type is not what was approved for this platform. Nothing was submitted.')
+    // The flair is not rendered into the text: it is compared with the draft's own.
+    if (!same || (content.flair ?? null) !== (grant.draft.flair ?? null)) throw new MissionContentError('What the mission would type is not what was approved for this platform. Nothing was submitted.')
     // A copy nobody can change afterwards: what the mission types is what was checked above, and the ticket must be bound to the approved draft.
     this.content = Object.freeze({ ...content })
     this.typedHash = contentHash(grant.draft, grant.account, content.destination, grant.channel.platform)
@@ -231,7 +232,7 @@ export class MissionPublisher {
     }
 
     const request = grant.request
-    const content: ApprovedContent = { kind: request.kind, title: request.title, text: request.text, link: request.link, destination: request.destination, attachments: approvedFilesOf(request.attachments) }
+    const content: ApprovedContent = { kind: request.kind, title: request.title, text: request.text, link: request.link, destination: request.destination, attachments: approvedFilesOf(request.attachments), flair: request.flair ?? null }
     let authority: MissionAuthority
     try {
       authority = new MissionAuthority(this.core, this.gate, grant, content, { attachments: request.attachments }, automatic, { moved: () => session.identityEpoch() !== checkedAt })
@@ -318,6 +319,8 @@ export class MissionPublisher {
     const none = 'Nothing was submitted.'
     if (outcome?.humanCheck) return { status: 'failed', auth: 'captcha', error: `CAPTCHA required: the site showed a human check. ${none}`, note: `The page shows: ${bounded(outcome.humanCheck, 160)}` }
     if (outcome?.warning) return { status: 'failed', error: `The site shows a warning, so nothing was published. ${none}`, note: `The site says: "${bounded(outcome.warning)}"` }
+    // The application's own finding, not the AI's words: the form asks for something the approved post does not have (a flair), so the site would have refused it.
+    if (outcome?.required) return { status: 'failed', error: `The form requires "${bounded(outcome.required, 80)}", which this post does not answer, so the site would have refused it. ${none} Choose it in the post (a flair is a line of its own in the editor), approve the post again and send it.` }
     if (!outcome) return { status: 'failed', error: `The AI browser stopped with an error. ${none} ${crash ?? ''}`.trim() }
     if (outcome.ended === 'stopped') return { status: 'failed', error: `You stopped the AI before it published. ${none}` }
     if (outcome.ended === 'timeout') return { status: 'failed', error: `The AI did not finish in time. ${none}` }

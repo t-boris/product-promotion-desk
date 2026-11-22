@@ -7,6 +7,7 @@ import type {
   LoginState,
   Membership,
   NormalizedTarget,
+  PostForm,
   PublishedRef,
   PublishOutcome,
   PublishRequest,
@@ -274,6 +275,18 @@ export class RedditConnector implements Connector {
       const own = await api.ownSubmitted(identity, OWN_POSTS_READ)
       if (!own.ok) throw await refusalError(page, api, own, `Own posts could not be read: ${own.reason}`)
       return standingOfPost(own.value, ref.externalId)
+    })
+  }
+
+  /** The flairs the community offers and whether it requires one, read with the account's own session; nothing is changed. */
+  readPostForm(ctx: ConnectorContext): Promise<PostForm | null> {
+    const sub = this.subreddit(ctx)
+    return ctx.session.withAgentControl(`form:${ctx.channel.id}`, async (page) => {
+      await ensureRedditOrigin(page, ctx.channel.url)
+      const api = new RedditApi(page)
+      const form = await api.postForm(sub)
+      if (!form.ok) throw await refusalError(page, api, form, `The flairs of r/${sub} could not be read: ${form.reason}`)
+      return form.value
     })
   }
 

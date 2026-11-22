@@ -16,7 +16,8 @@ export function buildPublishRequest(opp: Opportunity, draft: Draft, parent: { ex
     title: post.title,
     text: post.text,
     link: post.link,
-    attachments: post.attachments
+    attachments: post.attachments,
+    flair: draft.flair
   }
 }
 

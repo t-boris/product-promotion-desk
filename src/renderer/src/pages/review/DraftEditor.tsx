@@ -9,6 +9,7 @@ import { Badge, Button, Field } from '../../ui'
 import { FoundSources } from './FoundSources'
 import { foundForAnswer, keepFound, type FoundFor } from './found-sources'
 import { fileName } from './labels'
+import { PostFlair } from './PostFlair'
 import { PostPictures, PostTextBox, usePostEditor } from './PostEditorParts'
 import { PostPreview, type PostAuthor } from './PostPreview'
 import { SectionAssist } from './SectionAssist'
@@ -21,24 +22,26 @@ export interface DraftForm {
   attachments: Attachment[]
   /** `markdown` once the owner has worked on a post in the editor; an older draft stays `legacy` until then (DEC-030). */
   markup: PostMarkup
+  /** The flair of the post in a community that has them (Reddit): a name from the community's own list, or none. */
+  flair: string | null
 }
 
 /** A new post is written in the post editor, so it is Markdown from the start; a reply is plain text. */
-export const emptyForm = (withTitle: boolean): DraftForm => ({ title: '', text: '', link: '', attachments: [], markup: withTitle ? 'markdown' : 'legacy' })
+export const emptyForm = (withTitle: boolean): DraftForm => ({ title: '', text: '', link: '', attachments: [], markup: withTitle ? 'markdown' : 'legacy', flair: null })
 
 function fromDraft(draft: Draft | null, withTitle: boolean): DraftForm {
   if (!draft) return emptyForm(withTitle)
-  return { title: draft.title ?? '', text: draft.text, link: draft.link ?? '', attachments: draft.attachments, markup: draft.markup ?? 'legacy' }
+  return { title: draft.title ?? '', text: draft.text, link: draft.link ?? '', attachments: draft.attachments, markup: draft.markup ?? 'legacy', flair: draft.flair ?? null }
 }
 
 /** What the core will store for this form: surrounding whitespace is trimmed there too. */
 export function toInput(form: DraftForm, withTitle: boolean): DraftInput {
-  return { title: withTitle ? form.title.trim() || null : null, text: form.text.trim(), link: form.link.trim() || null, attachments: form.attachments, markup: form.markup }
+  return { title: withTitle ? form.title.trim() || null : null, text: form.text.trim(), link: form.link.trim() || null, attachments: form.attachments, markup: form.markup, flair: form.flair }
 }
 
 const signature = (form: DraftForm, withTitle: boolean): string => {
   const input = toInput(form, withTitle)
-  return JSON.stringify([input.title, input.text, input.link, form.attachments.map((a) => a.mediaId ?? a.path), form.markup])
+  return JSON.stringify([input.title, input.text, input.link, form.attachments.map((a) => a.mediaId ?? a.path), form.markup, form.flair])
 }
 
 /** Form state for one draft: resets when a different (newly saved) draft arrives and says whether it was edited. */
@@ -69,7 +72,15 @@ interface Props {
    */
   ai?: { opportunityId?: Id; channelId?: Id }
   /** A post is written in the post editor (DEC-030): the product whose library holds its pictures, and the platform the preview shows it as. */
-  post?: { productId: Id; platform: string; author: PostAuthor; /** The application does not read this channel: the AI browser is its only way, and needs no switch (DEC-035). */ reads: boolean }
+  post?: {
+    productId: Id
+    platform: string
+    author: PostAuthor
+    /** The application does not read this channel: the AI browser is its only way, and needs no switch (DEC-035). */
+    reads: boolean
+    /** The channel this version of the post is for: its community's own form (the flairs it offers) is read for the Flair line. Left out, there is no such line. */
+    channelId?: Id
+  }
 }
 
 /** Editor for a reply or a publication. Editing never changes what was approved: saving creates a new draft. */
@@ -161,7 +172,7 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
             {textField}
             <FoundSources sources={shownFound?.sources ?? []} />
           </div>
-          <PostPreview content={previewContent} channelPlatform={post.platform} author={post.author} aiBrowser={settings.data?.publishWith === 'ai_browser' || !post.reads} noConnector={!post.reads} />
+          <PostPreview content={previewContent} flair={form.flair} channelPlatform={post.platform} author={post.author} aiBrowser={settings.data?.publishWith === 'ai_browser' || !post.reads} noConnector={!post.reads} />
         </div>
       ) : (
         <>
@@ -169,6 +180,7 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
           <FoundSources sources={shownFound?.sources ?? []} />
         </>
       )}
+      {inEditor && post?.channelId && <PostFlair channelId={post.channelId} value={form.flair} onChange={(flair) => onChange((current) => ({ ...current, flair }))} title={form.title} text={form.text} disabled={disabled} blocked={blocked} />}
       <div className="form-row">
         <Field label="Link (optional)" hint="Links are checked against the product's own website.">
           <input className="input" value={form.link} disabled={disabled} onChange={(e) => set({ link: e.target.value })} placeholder="https://" data-testid="draft-link" />

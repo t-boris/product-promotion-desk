@@ -158,6 +158,18 @@ export interface FindingReplies {
   places: FindingReplyPlace[]
 }
 
+/** What the community of a channel offers for a post (the editor's Flair line is filled from it). */
+export interface PostFormInfo {
+  /** Whether the platform has a form with flairs that the application can read (Reddit). Without it the editor shows no Flair line. */
+  supported: boolean
+  /** The names the community offers to everyone, in its own order. */
+  flairs: string[]
+  /** Whether the community refuses a post without a flair. */
+  flairRequired: boolean
+  /** Why the form could not be read now, in words for the owner; null when it was read. */
+  problem: string | null
+}
+
 export interface DraftInput {
   title?: string | null
   text: string
@@ -165,6 +177,8 @@ export interface DraftInput {
   attachments?: Attachment[]
   /** `markdown` for a post written in the post editor; left out, the draft is `legacy` (the text is sent as it is written). */
   markup?: PostMarkup
+  /** The flair of the post, by name, from the community's own list; null takes it off. Left out on a replacing draft, the earlier draft's flair stays (a post's other editors do not know it). */
+  flair?: string | null
   /**
    * `quick` for a post written in the quick-post composer (one picture, a caption in `text`, no title; DEC-046), `article` for the long form. Left out on
    * a draft that replaces an earlier one, it keeps that draft's type (editing never changes the type); on a first draft it is `article`.
@@ -454,6 +468,14 @@ export interface ApiMethods {
    * link) or it was not. Without this an unreachable platform check would lock the item forever.
    */
   'opportunities.resolveUnknown': [{ id: Id; outcome: 'published' | 'not_published'; url?: string }, OpportunityCard]
+  /**
+   * What the community of a channel offers for a post (the flairs and whether it requires one), read from the platform with the account's own session and kept
+   * for ten minutes; `refresh` reads it again. Read-only. A platform with no such form is `supported: false`; a community that could not be read now is
+   * `supported` with a `problem` in words (the post can still be written, and a send that the community would refuse for a missing flair stops before it presses).
+   */
+  'channels.postForm': [{ channelId: Id; refresh?: boolean }, PostFormInfo]
+  /** The AI's proposal of one flair from that list for the post as it is now (the owner presses for it): a name from the list, or null. Nothing is stored. */
+  'drafts.suggestFlair': [{ channelId: Id; title: string; text: string }, { flair: string | null }]
   // The rules an AI draft passes, read against the owner's own text before it is approved. Local: no engine, nothing stored.
   'drafts.check': [{ opportunityId: Id; form?: { title: string; text: string; link: string; markup?: PostMarkup } }, DraftCheckResult]
   /**

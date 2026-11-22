@@ -33,6 +33,8 @@ export interface ApprovedContent {
   destination: string
   /** The pictures of the approved post, in order (none for a reply). Each goes into the form once, by browser_attach, before browser_submit. */
   attachments?: ApprovedFile[]
+  /** The approved flair by name. The application chooses it on the form (browser_flair) and reads it back; the AI never gives or changes it. Null or left out: none. */
+  flair?: string | null
 }
 
 /** One submission: a ticket held only for the length of `PostAuthority.lease`, and the point of no return. */
@@ -115,6 +117,8 @@ export interface PostMissionOutcome {
   humanCheck: string | null
   /** A warning of the site that makes publishing unwise now (a rate limit, a restriction); null when none was seen. */
   warning: string | null
+  /** The control of the form that is marked required and that nothing approved answers (a flair the post has none of), when the application refused to press for it; null otherwise. */
+  required?: string | null
   /** Why the run ended in an error, when it did. */
   error: string | null
   /**

@@ -1188,7 +1188,7 @@ describe('browser_submit refuses before it asks for a ticket', () => {
     t.page.alerts = ["You're doing that too much. Try again in 9 minutes."]
     await refused(t, submitReply(t), 'warning')
     // What the last look showed: the human check was gone by then (see the next test).
-    expect(t.toolbox.observed).toEqual({ humanCheck: null, warning: "You're doing that too much. Try again in 9 minutes." })
+    expect(t.toolbox.observed).toEqual({ humanCheck: null, required: null, warning: "You're doing that too much. Try again in 9 minutes." })
   })
 
   it('reports a human check or a warning only while the last look still shows it: a later failure is not a CAPTCHA once the owner solved it', async () => {
@@ -1196,18 +1196,18 @@ describe('browser_submit refuses before it asks for a ticket', () => {
     t.page.humanCheck = 'a visible check frame (recaptcha)'
     t.page.alerts = ["You're doing that too much."]
     await look(t)
-    expect(t.toolbox.observed).toEqual({ humanCheck: 'a visible check frame (recaptcha)', warning: "You're doing that too much." })
+    expect(t.toolbox.observed).toEqual({ humanCheck: 'a visible check frame (recaptcha)', required: null, warning: "You're doing that too much." })
 
     // The owner solved the check, and the warning went away with the next page.
     t.page.humanCheck = ''
     t.page.alerts = []
     await look(t)
-    expect(t.toolbox.observed).toEqual({ humanCheck: null, warning: null })
+    expect(t.toolbox.observed).toEqual({ humanCheck: null, required: null, warning: null })
 
     // A failure that has nothing to do with them, after that, is classified by what the page shows now.
     t.page.items = t.page.items.filter((i) => i.ref !== 'e4')
     expect((await submitReply(t)).isError).toBe(true)
-    expect(t.toolbox.observed).toEqual({ humanCheck: null, warning: null })
+    expect(t.toolbox.observed).toEqual({ humanCheck: null, required: null, warning: null })
 
     // And one that appears again is seen again.
     t.page.humanCheck = 'a visible check frame (hcaptcha)'
