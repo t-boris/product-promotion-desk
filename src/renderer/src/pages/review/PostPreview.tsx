@@ -19,6 +19,14 @@ function inline(nodes: Inline[], soft: 'space' | 'line', prefix: string): ReactN
         return <strong key={key}>{inline(node.c, soft, `${key}.`)}</strong>
       case 'em':
         return <em key={key}>{inline(node.c, soft, `${key}.`)}</em>
+      case 'strike':
+        return <del key={key}>{inline(node.c, soft, `${key}.`)}</del>
+      case 'sup':
+        return <sup key={key}>{inline(node.c, soft, `${key}.`)}</sup>
+      case 'spoiler':
+        return (
+          <Spoiler key={key}>{inline(node.c, soft, `${key}.`)}</Spoiler>
+        )
       case 'code':
         return <code key={key}>{node.v}</code>
       case 'link':
@@ -33,6 +41,16 @@ function inline(nodes: Inline[], soft: 'space' | 'line', prefix: string): ReactN
         return node.hard || soft === 'line' ? <br key={key} /> : ' '
     }
   })
+}
+
+/** Words that stay hidden until they are pressed, as Reddit shows a spoiler (the sketch hides them the same way). */
+function Spoiler({ children }: { children: ReactNode }) {
+  const [shown, setShown] = useState(false)
+  return (
+    <span className={`post-preview-spoiler${shown ? ' shown' : ''}`} role="button" tabIndex={0} aria-pressed={shown} title="Spoiler: press to show" onClick={() => setShown((v) => !v)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setShown((v) => !v)}>
+      {children}
+    </span>
+  )
 }
 
 function blocks(list: Block[]): ReactNode[] {
@@ -75,6 +93,31 @@ function blocks(list: Block[]): ReactNode[] {
         )
       case 'pre':
         return <pre key={key}>{block.v}</pre>
+      case 'table':
+        return (
+          <table key={key}>
+            <thead>
+              <tr>
+                {block.head.map((cell, i) => (
+                  <th key={i} style={block.align[i] ? { textAlign: block.align[i] ?? undefined } : undefined}>
+                    {inline(cell, 'space', `${key}.h${i}.`)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {block.rows.map((row, r) => (
+                <tr key={r}>
+                  {row.map((cell, i) => (
+                    <td key={i} style={block.align[i] ? { textAlign: block.align[i] ?? undefined } : undefined}>
+                      {inline(cell, 'space', `${key}.${r}.${i}.`)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )
       case 'hr':
         return <hr key={key} />
     }

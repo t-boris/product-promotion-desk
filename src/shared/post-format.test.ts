@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Attachment } from './types'
-import { RENDER_VERSION, siteLinkFor, judgedForFit, linkPlacementOf, linkRuleOf, pictureIdsIn, removePictures, characterCount, formOf, parseBlocks, parseInline, renderForPlatform, sendProblems, toPlainText, withoutInlinePictures, type PostContent, type SendWays } from './post-format'
+import { RENDER_VERSION, siteLinkFor, judgedForFit, linkPlacementOf, linkRuleOf, pictureIdsIn, removePictures, characterCount, formOf, marksIn, parseBlocks, parseInline, raisedWords, renderForPlatform, sendProblems, toPlainText, withoutInlinePictures, type PostContent, type SendWays } from './post-format'
 
 const picture = (id: string): Attachment => ({ name: `${id}.png`, path: `/data/media/${id}.png`, mime: 'image/png', sha256: id.repeat(8), mediaId: id })
 const post = (over: Partial<PostContent> = {}): PostContent => ({ title: 'A title', text: 'Some words', link: null, attachments: [], markup: 'markdown', ...over })
@@ -479,7 +479,11 @@ describe('what a platform receives is pinned to the version of the rules', () =>
     ['facebook', 'snake_case and 5*3 and 2025. a year', 'snake_case and 5*3 and 2025. a year'],
     ['facebook', 'text ![a](media:p1) more\n\n![b](media:p2)', 'text more'],
     ['threads', 'a  \nb\n\n---\n\n```\ncode  \n```', 'a\nb\n\n———\n\ncode  '],
-    ['reddit', 'a **b**\n\n![a](media:p1)\n\nc', 'a **b**\n\nc']
+    ['reddit', 'a **b**\n\n![a](media:p1)\n\nc', 'a **b**\n\nc'],
+    // Version 2: the marks Reddit's own editor has. Reddit keeps them as written; the others get the words.
+    ['reddit', 'a ~~b~~ m^2 >!c!<\n\n| x | y |\n| - | - |\n| 1 | 2 |', 'a ~~b~~ m^2 >!c!<\n\n| x | y |\n| - | - |\n| 1 | 2 |'],
+    ['threads', 'a ~~b~~ m^2 e^(i pi) >!c!<\n\n| x | y |\n| - | - |\n| 1 | 2 |', 'a b m² e^(i pi) c\n\nx | y\n1 | 2'],
+    ['facebook', 'before\n\n>!hidden!<\n\nafter', 'before\n\nhidden\n\nafter']
   ]
 
   it.each(corpus)('%s: %j', (platform, input, output) => {
@@ -499,8 +503,8 @@ describe('what a platform receives is pinned to the version of the rules', () =>
     expect(renderForPlatform(post({ title: null, text, link }), platform).text).toBe(output)
   })
 
-  it('is version 1 for this corpus', () => {
-    expect(RENDER_VERSION).toBe(1)
+  it('is version 2 for this corpus', () => {
+    expect(RENDER_VERSION).toBe(2)
   })
 })
 
@@ -626,5 +630,71 @@ describe('the site of the product at the end of a new post (DEC-044)', () => {
     expect(siteLinkFor('threads', { ...site, websiteUrl: null })).toBeNull()
     expect(siteLinkFor('threads', { ...site, websiteUrl: '   ' })).toBeNull()
     expect(siteLinkFor('threads', { ...site, websiteUrl: ' https://natalmystic.com ' })).toBe('https://natalmystic.com')
+  })
+})
+
+describe('the marks of Reddit\'s own editor (version 2)', () => {
+  const inlineKinds = (source: string): string[] => (parseBlocks(source)[0] as { c: { t: string }[] }).c.map((n) => n.t)
+
+  it('reads strikethrough, superscript and spoilers', () => {
+    expect(inlineKinds('a ~~b~~ c')).toEqual(['text', 'strike', 'text'])
+    expect(inlineKinds('m^2 and e^(i pi)')).toEqual(['text', 'sup', 'text', 'sup'])
+    expect(inlineKinds('see >!the twist!< here')).toEqual(['text', 'spoiler', 'text'])
+  })
+
+  it('leaves what is not a mark as it is: a lone tilde, a caret with nothing to raise, an unclosed spoiler, a fence', () => {
+    expect(inlineKinds('about ~5 minutes, ~~ and ~~~')).toEqual(['text'])
+    expect(inlineKinds('smile ^_^ and 2 ^ 3')).toEqual(['text'])
+    expect(inlineKinds('a >!never closed')).toEqual(['text'])
+    expect(toPlainText('x ~~ y')).toBe('x ~~ y')
+    expect(toPlainText('\\^not raised')).toBe('^not raised')
+  })
+
+  it('does not take a mark inside code', () => {
+    expect(inlineKinds('`~~a~~ ^b >!c!<`')).toEqual(['code'])
+  })
+
+  it('reads a table, with its alignment, a short row filled and a long one cut', () => {
+    const [table] = parseBlocks('| Name | Qty |\n| :--- | ---: |\n| apple | 3 |\n| pear |\n| fig | 1 | extra |')
+    expect(table.t).toBe('table')
+    if (table.t !== 'table') return
+    expect(table.align).toEqual(['left', 'right'])
+    expect(table.head).toHaveLength(2)
+    expect(table.rows.map((row) => row.length)).toEqual([2, 2, 2])
+    expect(toPlainText('| Name | Qty |\n| :--- | ---: |\n| apple | 3 |\n| pear |')).toBe('Name | Qty\napple | 3\npear |')
+  })
+
+  it('does not take a line with a bar for a table unless the row under it is a delimiter row', () => {
+    expect(parseBlocks('a | b\nc | d').map((b) => b.t)).toEqual(['p'])
+    expect(parseBlocks('| a | b |\n| - | - |\n| 1 | 2 |\n\nafter').map((b) => b.t)).toEqual(['table', 'p'])
+  })
+
+  it('takes a spoiler on a line of its own for a spoiler and not for a quote; a real quote stays a quote', () => {
+    expect(parseBlocks('>!hidden words!<').map((b) => b.t)).toEqual(['p'])
+    expect(parseBlocks('> quoted words').map((b) => b.t)).toEqual(['quote'])
+    expect(parseBlocks('> quoted\n>!hidden!<').map((b) => b.t)).toEqual(['quote', 'p'])
+  })
+
+  it('writes superscripts for a platform that has none: raised characters where all have one, else the plain way', () => {
+    expect(raisedWords('2')).toBe('²')
+    expect(raisedWords('n+1')).toBe('ⁿ⁺¹')
+    expect(raisedWords('Q')).toBe('^Q')
+    expect(raisedWords('two words')).toBe('^(two words)')
+  })
+
+  it('names what a platform without these marks does with them, only for what the post uses', () => {
+    const text = 'Plain >!spoiler!< and ~~old~~\n\n| a | b |\n| - | - |\n| 1 | 2 |'
+    const notes = renderForPlatform(post({ title: null, text }), 'threads').notes.join(' ')
+    expect(notes).toMatch(/no spoilers/)
+    expect(notes).toMatch(/no tables/)
+    expect(notes).toMatch(/cannot cross words out/)
+    expect(renderForPlatform(post({ title: null, text: 'Just words' }), 'threads').notes.join(' ')).not.toMatch(/spoiler|table|cross/)
+    expect(renderForPlatform(post({ title: null, text }), 'reddit').notes.join(' ')).not.toMatch(/spoiler|table|cross/)
+  })
+
+  it('knows which marks a text holds', () => {
+    expect(marksIn('a >!b!< ~~c~~ x^2')).toEqual({ spoiler: true, table: false, strike: true, superscript: true })
+    expect(marksIn('`>!b!<`\n\n```\n~~c~~\n```')).toEqual({ spoiler: false, table: false, strike: false, superscript: false })
+    expect(marksIn('| a |\n| - |\n| >!b!< |').spoiler).toBe(true)
   })
 })

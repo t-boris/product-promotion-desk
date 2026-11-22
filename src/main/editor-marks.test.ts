@@ -123,3 +123,56 @@ describe('what the second review found in the toolbar', () => {
     expect(applyMark(at('*word*', 1, 5), 'italic').text).toBe('word')
   })
 })
+
+describe('the marks of Reddit\'s editor: strikethrough, superscript, spoiler, code block, table', () => {
+  it('crosses words out and takes it off again', () => {
+    const on = applyMark(sel('an old price', 3, 6), 'strike')
+    expect(on.text).toBe('an ~~old~~ price')
+    expect(chosen(on)).toBe('old')
+    expect(applyMark(on, 'strike').text).toBe('an old price')
+  })
+
+  it('raises words in brackets, so a phrase stays raised, and takes it off again', () => {
+    const on = applyMark(sel('E = mc2', 4, 7), 'sup')
+    expect(on.text).toBe('E = ^(mc2)')
+    expect(chosen(on)).toBe('mc2')
+    const off = applyMark(on, 'sup')
+    expect(off.text).toBe('E = mc2')
+    expect(chosen(off)).toBe('mc2')
+  })
+
+  it('hides words as a spoiler, each line of a selection on its own, and takes them off again', () => {
+    const on = applyMark(sel('one\ntwo\nthree', 0, 7), 'spoiler')
+    expect(on.text).toBe('>!one!<\n>!two!<\nthree')
+    const off = applyMark(sel(on.text, on.start, on.end), 'spoiler')
+    expect(off.text).toBe('one\ntwo\nthree')
+  })
+
+  it('puts a placeholder where nothing is selected, and selects it', () => {
+    const next = applyMark(sel('go ', 3), 'spoiler')
+    expect(next.text).toBe('go >!hidden words!<')
+    expect(chosen(next)).toBe('hidden words')
+    expect(chosen(applyMark(sel('', 0), 'strike'))).toBe('crossed out')
+  })
+
+  it('makes a code block of the lines the selection touches, and takes the fences off again', () => {
+    const on = applyMark(sel('intro\nlet a = 1\nlet b = 2\nafter', 8, 20), 'codeblock')
+    expect(on.text).toBe('intro\n```\nlet a = 1\nlet b = 2\n```\nafter')
+    expect(chosen(on)).toBe('let a = 1\nlet b = 2')
+    const off = applyMark(on, 'codeblock')
+    expect(off.text).toBe('intro\nlet a = 1\nlet b = 2\nafter')
+  })
+
+  it('makes an empty code block with a placeholder', () => {
+    const next = applyMark(sel('', 0), 'codeblock')
+    expect(next.text).toBe('```\ncode\n```')
+    expect(chosen(next)).toBe('code')
+  })
+
+  it('adds a table on a paragraph of its own and selects its first heading', () => {
+    const next = applyMark(sel('before\nafter', 6), 'table')
+    expect(next.text).toBe('before\n\n| Column 1 | Column 2 |\n| --- | --- |\n| Cell | Cell |\n\nafter')
+    expect(chosen(next)).toBe('Column 1')
+    expect(applyMark(sel('', 0), 'table').text).toBe('| Column 1 | Column 2 |\n| --- | --- |\n| Cell | Cell |')
+  })
+})

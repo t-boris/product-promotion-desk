@@ -440,8 +440,12 @@
 .post-toolbar .post-tool-italic {
   font-style: italic;
 }
-.post-toolbar .post-tool-code {
+.post-toolbar .post-tool-code,
+.post-toolbar .post-tool-codeblock {
   font-family: var(--font-mono, ui-monospace, monospace);
+}
+.post-toolbar .post-tool-strike {
+  text-decoration: line-through;
 }
 .draft-form textarea.input.draft-text.post-text {
   height: 280px;
@@ -703,6 +707,30 @@
 .post-preview-link {
   color: var(--accent-on-tint);
   text-decoration: underline;
+}
+/* A spoiler is hidden until it is pressed, as the platform shows it; pressing again hides it. */
+.post-preview-spoiler {
+  background: var(--text-1);
+  color: transparent;
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+  cursor: pointer;
+}
+.post-preview-spoiler.shown {
+  background: var(--hover-fill);
+  color: inherit;
+}
+.pv-words.marked table {
+  border-collapse: collapse;
+  max-width: 100%;
+}
+.pv-words.marked th,
+.pv-words.marked td {
+  border: 1px solid var(--line-strong);
+  padding: var(--space-1) var(--space-2);
+}
+.pv-words.marked th {
+  font-weight: 600;
 }
 .post-preview-notes,
 .post-preview-problems {

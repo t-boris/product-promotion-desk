@@ -37,7 +37,7 @@ describe('content hash (REQ-004 criterion 1)', () => {
   it('binds a markdown draft to the version of the rules that turn it into what a platform receives', () => {
     // Raise RENDER_VERSION when a rule of the renderer or a limit changes what is sent: every approval of a markdown post then stops matching
     // and the owner approves what the new rule sends. This value changes with it, on purpose.
-    expect(hash({ ...base, markup: 'markdown' })).toBe('c5a23874db15f28b9575626f5b3f63e19fde66888946d2c4ac1db769f1ca5ed7')
+    expect(hash({ ...base, markup: 'markdown' })).toBe('654ea5a5c760b3c2ad0814af8a9e01539572dcbebe8852e5e2f5992eb0db3b3a')
   })
 
   it('binds a draft with a link to where its platform places the link (DEC-036), and leaves every other hash as it was', () => {

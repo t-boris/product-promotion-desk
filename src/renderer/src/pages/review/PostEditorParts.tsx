@@ -134,11 +134,16 @@ export function usePostEditor(form: DraftForm, onChange: Dispatch<SetStateAction
 const TOOLS: { mark: Mark; label: string; title: string }[] = [
   { mark: 'bold', label: 'B', title: 'Bold (⌘B)' },
   { mark: 'italic', label: 'I', title: 'Italic (⌘I)' },
+  { mark: 'strike', label: 'S', title: 'Strikethrough' },
+  { mark: 'sup', label: 'x²', title: 'Superscript' },
   { mark: 'heading', label: 'H', title: 'Heading' },
   { mark: 'bullets', label: '•', title: 'Bulleted list' },
   { mark: 'numbers', label: '1.', title: 'Numbered list' },
   { mark: 'quote', label: '❝', title: 'Quote' },
+  { mark: 'spoiler', label: 'Spoiler', title: 'Spoiler: hidden until the reader presses it (Reddit)' },
   { mark: 'code', label: '</>', title: 'Code' },
+  { mark: 'codeblock', label: '{ }', title: 'Code block' },
+  { mark: 'table', label: 'Table', title: 'Table' },
   { mark: 'link', label: 'Link', title: 'Link (⌘K)' }
 ]
 

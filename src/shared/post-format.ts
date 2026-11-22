@@ -12,8 +12,9 @@ import type { Attachment, PostMarkup } from './types'
  * The version of what a markdown post becomes on a platform. It is part of the approval hash of a markdown post: change a rule of the
  * renderer or a limit of a platform in a way that changes what is sent, and raise this number, so that every approval given under the old
  * rule stops matching and the owner approves what the new rule sends. (A draft that is not markdown is never rendered by these rules, except for where its link goes, which `linkPlacementOf` binds apart.)
+ * Version 2: strikethrough, superscript, spoilers and tables are marks of the post (before, they were sent as the characters they are written with).
  */
-export const RENDER_VERSION = 1
+export const RENDER_VERSION = 2
 
 /** One measure of length for the limits, the counter on the screen and the approval: characters, so an emoji is one. */
 export const characterCount = (text: string): number => [...text].length
@@ -25,6 +26,12 @@ export type Inline =
   | { t: 'strong'; c: Inline[] }
   | { t: 'em'; c: Inline[] }
   | { t: 'code'; v: string }
+  /** `~~words~~`: crossed out. */
+  | { t: 'strike'; c: Inline[] }
+  /** `^word` or `^(some words)`: raised (Reddit's way of writing it). */
+  | { t: 'sup'; c: Inline[] }
+  /** `>!words!<`: hidden until the reader presses it (Reddit's way of writing it). */
+  | { t: 'spoiler'; c: Inline[] }
   | { t: 'link'; href: string; c: Inline[] }
   | { t: 'image'; alt: string; id: string }
   /** A line break inside a paragraph. `hard`: the line ended with two spaces or a backslash; Reddit joins the lines of a soft break. */
@@ -39,6 +46,8 @@ export type Block =
   | { t: 'ol'; items: Inline[][]; depths: number[]; start: number }
   | { t: 'quote'; c: Inline[][] }
   | { t: 'pre'; v: string }
+  /** A table: `align` per column (null: none given), the header cells and the rows of cells. */
+  | { t: 'table'; align: ('left' | 'center' | 'right' | null)[]; head: Inline[][]; rows: Inline[][][] }
   | { t: 'hr' }
 
 /**
@@ -57,7 +66,7 @@ export function pictureIdsIn(text: string): string[] {
 
 const LINK = /^\[([^\]\n]+)\]\((https?:\/\/[^\s()]+)\)/i
 const BARE_URL = /^https?:\/\/[^\s<>]+/i
-const ESCAPABLE = /[\\`*_{}[\]()#+\-.!>~|]/
+const ESCAPABLE = /[\\`*_{}[\]()#+\-.!>~|^]/
 const WORD = /[\p{L}\p{N}]/u
 
 /**
@@ -81,6 +90,22 @@ function urlEnd(source: string, from: number): number {
 /** A mark may open where a word does not run into it, and close where the word it closes does not run on: `5*3 and 2*4` and `snake_case` have no marks. */
 const opens = (source: string, at: number): boolean => at === 0 || !WORD.test(source[at - 1])
 const closes = (source: string, after: number): boolean => after >= source.length || !WORD.test(source[after])
+
+/**
+ * The superscript that starts at `at` (a `^`), Reddit's way: `^word` raises the characters up to the next space or `^`, `^(some words)` raises what is between the
+ * brackets. It must raise a letter or a digit, so `^_^` stays an emoticon. Null when there is none.
+ */
+function superscriptAt(source: string, at: number): { words: string; end: number } | null {
+  if (source[at + 1] === '(') {
+    const close = source.indexOf(')', at + 2)
+    if (close > at + 2 && close - at < 400) return { words: source.slice(at + 2, close), end: close + 1 }
+    return null
+  }
+  let end = at + 1
+  while (end < source.length && !/[\s^]/.test(source[end])) end += 1
+  const words = source.slice(at + 1, end)
+  return /[\p{L}\p{N}]/u.test(words) && words.length <= 200 ? { words, end } : null
+}
 
 /** Inline marks. A mark that is not closed is plain text; nothing here can fail, and no text can make it slow or deep. */
 export function parseInline(source: string): Inline[] {
@@ -126,6 +151,35 @@ function inlines(source: string, depth: number, budget: { left: number }): Inlin
       if (end > i) {
         text += source.slice(i, end)
         i = end
+        continue
+      }
+    }
+    if (ch === '>' && source[i + 1] === '!') {
+      // `>!words!<`: the words are found by the first `!<` after them; no closing mark, no spoiler.
+      const close = source.indexOf('!<', i + 2)
+      if (close > i + 2 && budget.left > 0) {
+        budget.left -= close - i
+        flush()
+        out.push({ t: 'spoiler', c: inlines(source.slice(i + 2, close), depth + 1, budget) })
+        i = close + 2
+        continue
+      }
+    }
+    if (ch === '~' && source[i + 1] === '~' && source[i + 2] !== '~' && opens(source, i) && !/\s/.test(source[i + 2] ?? ' ')) {
+      const close = findClose(source, i + 2, '~~', budget, none)
+      if (close > i + 2 && !/\s/.test(source[close - 1])) {
+        flush()
+        out.push({ t: 'strike', c: inlines(source.slice(i + 2, close), depth + 1, budget) })
+        i = close + 2
+        continue
+      }
+    }
+    if (ch === '^') {
+      const sup = superscriptAt(source, i)
+      if (sup) {
+        flush()
+        out.push({ t: 'sup', c: inlines(sup.words, depth + 1, budget) })
+        i = sup.end
         continue
       }
     }
@@ -264,6 +318,42 @@ const FENCE = /^[ \t]{0,3}(```+|~~~+)/
 /** The width of an indentation, a tab counting as four spaces. */
 const indentWidth = (indent: string): number => [...indent].reduce((width, c) => width + (c === '\t' ? 4 : 1), 0)
 
+/** The cells of a table row: the outer bars are optional, a bar written `\\|` is part of a cell. */
+function splitRow(line: string): string[] {
+  const cells: string[] = []
+  let cell = ''
+  const body = line.trim()
+  for (let i = 0; i < body.length; i += 1) {
+    if (body[i] === '\\' && body[i + 1] === '|') {
+      cell += '|'
+      i += 1
+    } else if (body[i] === '|') {
+      cells.push(cell)
+      cell = ''
+    } else cell += body[i]
+  }
+  cells.push(cell)
+  if (body.startsWith('|')) cells.shift()
+  if (body.endsWith('|') && !body.endsWith('\\|')) cells.pop()
+  return cells.map((c) => c.trim())
+}
+
+/** The row under a table's header: `---`, `:---`, `---:` or `:---:` in each column. */
+const DELIMITER_CELL = /^:?-{1,}:?$/
+function alignmentRow(line: string): ('left' | 'center' | 'right' | null)[] | null {
+  if (!line.includes('-') || !line.includes('|')) return null
+  const cells = splitRow(line)
+  if (cells.length === 0 || !cells.every((c) => DELIMITER_CELL.test(c))) return null
+  return cells.map((c) => (c.startsWith(':') && c.endsWith(':') ? 'center' : c.endsWith(':') ? 'right' : c.startsWith(':') ? 'left' : null))
+}
+
+/** The most columns and rows of a table that are read; what is beyond is ordinary text (nothing a person pastes makes the parse slow). */
+const TABLE_MAX_COLUMNS = 12
+const TABLE_MAX_ROWS = 200
+
+/** A line that is a spoiler on its own line, not a quote: `>!words!<`. */
+const SPOILER_LINE = /^[ \t]{0,3}>!.*!</
+
 export function parseBlocks(source: string): Block[] {
   const lines = source.replace(/\r\n?/g, '\n').split('\n')
   const blocks: Block[] = []
@@ -306,6 +396,23 @@ export function parseBlocks(source: string): Block[] {
       i += 1
       continue
     }
+    if (line.includes('|') && i + 1 < lines.length) {
+      const align = alignmentRow(lines[i + 1])
+      const head = splitRow(line)
+      if (align && head.length === align.length && head.length >= 1 && head.length <= TABLE_MAX_COLUMNS) {
+        endParagraph()
+        const rows: Inline[][][] = []
+        i += 2
+        while (i < lines.length && lines[i].trim() !== '' && lines[i].includes('|') && rows.length < TABLE_MAX_ROWS) {
+          const cells = splitRow(lines[i])
+          // A row is as wide as the header: a short one is filled, a long one is cut.
+          rows.push(head.map((_, column) => parseInline(cells[column] ?? '')))
+          i += 1
+        }
+        blocks.push({ t: 'table', align, head: head.map((cell) => parseInline(cell)), rows })
+        continue
+      }
+    }
     if (BULLET.test(line) || NUMBERED.test(line)) {
       endParagraph()
       const ordered = NUMBERED.test(line) && !BULLET.test(line)
@@ -337,11 +444,11 @@ export function parseBlocks(source: string): Block[] {
       blocks.push(ordered ? { t: 'ol', items, depths, start } : { t: 'ul', items, depths })
       continue
     }
-    if (QUOTE.test(line)) {
+    if (QUOTE.test(line) && !SPOILER_LINE.test(line)) {
       endParagraph()
       const paragraphs: string[][] = [[]]
       while (i < lines.length) {
-        const match = QUOTE.exec(lines[i])
+        const match = SPOILER_LINE.test(lines[i]) ? null : QUOTE.exec(lines[i])
         if (!match) break
         if (match[1].trim() === '') paragraphs.push([])
         else paragraphs[paragraphs.length - 1].push(match[1])
@@ -385,6 +492,19 @@ function closeGaps(line: string): string {
   return out
 }
 
+/** The raised forms of the characters that have one. */
+const RAISED: Record<string, string> = {
+  '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', '+': '⁺', '-': '⁻', '=': '⁼', '(': '⁽', ')': '⁾',
+  a: 'ᵃ', b: 'ᵇ', c: 'ᶜ', d: 'ᵈ', e: 'ᵉ', f: 'ᶠ', g: 'ᵍ', h: 'ʰ', i: 'ⁱ', j: 'ʲ', k: 'ᵏ', l: 'ˡ', m: 'ᵐ', n: 'ⁿ', o: 'ᵒ', p: 'ᵖ', r: 'ʳ', s: 'ˢ', t: 'ᵗ', u: 'ᵘ', v: 'ᵛ', w: 'ʷ', x: 'ˣ', y: 'ʸ', z: 'ᶻ'
+}
+
+/** Raised words for a platform that has no superscript: the raised characters where every one has one (m^2 is m²), else the plain way of writing it, `^(some words)`. */
+export function raisedWords(words: string): string {
+  const raised = [...words].map((c) => RAISED[c])
+  if (raised.length > 0 && raised.every((c) => c !== undefined)) return raised.join('')
+  return /\s/.test(words) ? `^(${words})` : `^${words}`
+}
+
 /** The words of an inline run without its marks: a link shows its address after the words, a picture shows nothing. */
 export function inlineToPlain(inlines: Inline[]): string {
   return inlines
@@ -396,7 +516,11 @@ export function inlineToPlain(inlines: Inline[]): string {
           return node.v
         case 'strong':
         case 'em':
+        case 'strike':
+        case 'spoiler':
           return inlineToPlain(node.c)
+        case 'sup':
+          return raisedWords(inlineToPlain(node.c))
         case 'link': {
           const words = inlineToPlain(node.c)
           return words === node.href || words === '' ? node.href : `${words} (${node.href})`
@@ -408,6 +532,51 @@ export function inlineToPlain(inlines: Inline[]): string {
       }
     })
     .join('')
+}
+
+/** The marks a text uses that not every platform has: what the owner should be told a platform does with them. */
+export interface MarksUsed {
+  spoiler: boolean
+  table: boolean
+  strike: boolean
+  superscript: boolean
+}
+
+/** Which of the less common marks the text holds, read from the parsed text (so a mark inside code or a mark that is not closed does not count). */
+export function marksIn(source: string): MarksUsed {
+  const used: MarksUsed = { spoiler: false, table: false, strike: false, superscript: false }
+  const walk = (nodes: Inline[]): void => {
+    for (const node of nodes) {
+      if (node.t === 'spoiler') used.spoiler = true
+      if (node.t === 'strike') used.strike = true
+      if (node.t === 'sup') used.superscript = true
+      if (node.t === 'strong' || node.t === 'em' || node.t === 'strike' || node.t === 'sup' || node.t === 'spoiler' || node.t === 'link') walk(node.c)
+    }
+  }
+  for (const block of parseBlocks(source)) {
+    switch (block.t) {
+      case 'p':
+      case 'h':
+        walk(block.c)
+        break
+      case 'ul':
+      case 'ol':
+        block.items.forEach(walk)
+        break
+      case 'quote':
+        block.c.forEach(walk)
+        break
+      case 'table':
+        used.table = true
+        block.head.forEach(walk)
+        block.rows.forEach((row) => row.forEach(walk))
+        break
+      case 'pre':
+      case 'hr':
+        break
+    }
+  }
+  return used
 }
 
 /** What a platform that shows no marks receives: the words, with headings as lines, lists as bullets and quotes in quotation marks. */
@@ -437,6 +606,9 @@ export function toPlainText(source: string): string {
         return block.c.map((q) => `“${inlineToPlain(q)}”`).join('\n\n')
       case 'pre':
         return block.v
+      case 'table':
+        // A platform without tables gets the rows as lines, the cells apart by a bar: the header first.
+        return [block.head, ...block.rows].map((row) => row.map((cell) => inlineToPlain(cell)).join(' | ')).join('\n')
       case 'hr':
         return '———'
     }
@@ -702,6 +874,12 @@ export function renderForPlatform(content: PostContent, platform: string, option
   const text = linked.text
   if (linked.note) notes.push(linked.note)
   if (form.format === 'plain' && /[*_#>`~]|\]\(|^[ \t]*[-+][ \t]/m.test(content.text)) notes.push(`${label} shows no formatting: the marks are removed and the words stay.`)
+  if (form.format === 'plain') {
+    const used = marksIn(content.text)
+    if (used.spoiler) notes.push(`${label} has no spoilers: the hidden words show as they are.`)
+    if (used.table) notes.push(`${label} has no tables: the rows are shown as lines, the cells apart by a bar.`)
+    if (used.strike) notes.push(`${label} cannot cross words out: they show as they are.`)
+  }
   if (placed > 0 && options.pictures !== 'keep') notes.push(`${label} takes the pictures beside the text, not inside it: they are shown after the text, in order.`)
   if (title && !form.hasTitle) {
     notes.push(`${label} has no title: the title is left out.`)
