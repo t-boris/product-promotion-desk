@@ -55,17 +55,26 @@ export class SuggestionService {
     private readonly ai: SuggestHelp
   ) {}
 
-  async suggest(args: { productId: string }): Promise<ChannelSuggestion[]> {
+  async suggest(args: { productId: string; platform?: string }): Promise<ChannelSuggestion[]> {
     const { product, engine, claims } = await prepareSuggestion(this.core, args.productId)
+    const platforms = listPlatforms(this.core.connectors)
+    // Ideas for one platform (the add-a-channel flow asks per platform): the key must be one the application knows, or "other".
+    const asked = args.platform
+    if (asked !== undefined && (typeof asked !== 'string' || (asked !== 'other' && !platforms.some((p) => p.platform === asked)))) {
+      throw new ApiError('invalid_input', 'Choose one of the platforms the application can connect.')
+    }
+    // "Other website" is the universal connector's key ("web") in the catalog and "other" in an idea.
+    const only = asked === 'web' ? 'other' : asked
 
     const input = {
       product: { name: product.name, websiteUrl: product.websiteUrl, description: product.description },
       claims,
-      platforms: listPlatforms(this.core.connectors),
+      platforms,
       connected: this.core.repos
         .listChannels()
         .filter((channel) => channel.productId === product.id)
-        .map((channel) => `${channel.platform}: ${channel.target}`)
+        .map((channel) => `${channel.platform}: ${channel.target}`),
+      ...(only !== undefined ? { only } : {})
     }
     try {
       const answered = await this.ai.suggestChannels(engine, input)

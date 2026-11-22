@@ -18,6 +18,7 @@ export function CreateAccount({
   accounts,
   role,
   product,
+  startPlatform = null,
   onCreated,
   onCancel
 }: {
@@ -31,13 +32,15 @@ export function CreateAccount({
   role: AccountRole | null
   /** The product whose Channels screen opened the form: the account is made for it (`name` is absent until the products have loaded). */
   product: { id: string; name: string | undefined } | null
+  /** The platform the form starts on ("Add a Reddit account" on a product's Channels screen); the owner can still change it. */
+  startPlatform?: string | null
   onCreated: (account: Account) => void
   /** Absent while there is no account yet and no product to go back to: the form is then the only thing to do. */
   onCancel?: () => void
 }) {
   // The form is the next step of the screen and owns its one filled button unless a form opened after it does; the account behind it keeps bezels meanwhile.
   const submitVariant = useOpenForm()
-  const [chosen, setChosen] = useState('')
+  const [chosen, setChosen] = useState(startPlatform !== null && platforms.some((p) => p.platform === startPlatform) ? startPlatform : '')
   const [profileId, setProfileId] = useState('')
   const [label, setLabel] = useState(role ? `${role.name} account` : '')
   const [roleName, setRoleName] = useState(role?.name ?? '')

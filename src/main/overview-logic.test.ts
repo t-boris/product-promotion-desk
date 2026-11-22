@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import type { MetricSeries, ProductUpdate, ResultsHistory } from '../shared/types'
 import { NOTE_GIVE_UP, mainMetric, suggestionHref, tileLine, unusedNoteCount, valuesOver } from '../renderer/src/pages/overview/overview-data'
-import { channelHref, parseChannelHash } from '../renderer/src/route'
+import { channelHref, channelsNewHref, parseChannelHash } from '../renderer/src/route'
 
 const DAYS = ['2026-11-04', '2026-11-05', '2026-11-06', '2026-11-07', '2026-11-08']
 
@@ -132,17 +132,28 @@ describe('channel routes', () => {
     expect(channelHref('a/b')).toBe('#/channels/a%2Fb')
   })
   it('reads it back, the tab and the id, and falls back to the first tab', () => {
-    expect(parseChannelHash('#/channels')).toEqual({ channelId: null, tab: 'status' })
-    expect(parseChannelHash('#/channels/c1')).toEqual({ channelId: 'c1', tab: 'status' })
-    expect(parseChannelHash('#/channels/c1/plan')).toEqual({ channelId: 'c1', tab: 'plan' })
-    expect(parseChannelHash('#/channels/c1/mix?x=1')).toEqual({ channelId: 'c1', tab: 'mix' })
-    expect(parseChannelHash('#/channels/c1/bogus')).toEqual({ channelId: 'c1', tab: 'status' })
-    expect(parseChannelHash('#/channels/a%2Fb/settings')).toEqual({ channelId: 'a/b', tab: 'settings' })
-    expect(parseChannelHash('#/posts')).toEqual({ channelId: null, tab: 'status' })
-    expect(parseChannelHash('#/setup/passport')).toEqual({ channelId: null, tab: 'status' })
+    const list = { channelId: null, tab: 'status', adding: false, platform: null, accountId: null }
+    expect(parseChannelHash('#/channels')).toEqual(list)
+    expect(parseChannelHash('#/channels/c1')).toEqual({ ...list, channelId: 'c1' })
+    expect(parseChannelHash('#/channels/c1/plan')).toEqual({ ...list, channelId: 'c1', tab: 'plan' })
+    expect(parseChannelHash('#/channels/c1/mix?x=1')).toEqual({ ...list, channelId: 'c1', tab: 'mix' })
+    expect(parseChannelHash('#/channels/c1/bogus')).toEqual({ ...list, channelId: 'c1' })
+    expect(parseChannelHash('#/channels/a%2Fb/settings')).toEqual({ ...list, channelId: 'a/b', tab: 'settings' })
+    expect(parseChannelHash('#/posts')).toEqual(list)
+    expect(parseChannelHash('#/setup/passport')).toEqual(list)
+  })
+  it('opens the add-a-channel flow at #/channels/new, on a platform when one is named, and for an account just made for it', () => {
+    expect(channelsNewHref()).toBe('#/channels/new')
+    expect(channelsNewHref('reddit')).toBe('#/channels/new?platform=reddit')
+    expect(parseChannelHash('#/channels/new')).toMatchObject({ channelId: null, adding: true, platform: null, accountId: null })
+    expect(parseChannelHash(channelsNewHref('instagram'))).toMatchObject({ channelId: null, adding: true, platform: 'instagram' })
+    // The account made from the flow comes back with its id: the flow is open again and chooses it.
+    expect(parseChannelHash('#/channels?account=a1')).toMatchObject({ channelId: null, adding: true, accountId: 'a1' })
+    // A channel is never taken for the flow, and a channel page keeps its own address.
+    expect(parseChannelHash('#/channels/c1?account=a1')).toMatchObject({ channelId: 'c1', adding: false })
   })
   it('keeps the account asked for beside a channel list, and the old product address', () => {
-    expect(parseChannelHash('#/products/p1/channels?account=a1')).toEqual({ channelId: null, tab: 'status' })
-    for (const tab of ['status', 'plan', 'mix', 'settings'] as const) expect(parseChannelHash(channelHref('c9', tab))).toEqual({ channelId: 'c9', tab })
+    expect(parseChannelHash('#/products/p1/channels?account=a1')).toMatchObject({ channelId: null, adding: true, accountId: 'a1' })
+    for (const tab of ['status', 'plan', 'mix', 'settings'] as const) expect(parseChannelHash(channelHref('c9', tab))).toMatchObject({ channelId: 'c9', tab, adding: false })
   })
 })

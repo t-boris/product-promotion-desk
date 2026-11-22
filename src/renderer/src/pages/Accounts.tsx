@@ -8,6 +8,7 @@ import { AccountsList } from './accounts/AccountsList'
 import { accountKey, displayOrder, groupAccounts, parseKey, profileKey } from './accounts/accounts-groups'
 import { NewProfile } from './accounts/NewProfile'
 import { CreateAccount } from './channels/CreateAccount'
+import { RoleIdeas } from './accounts/RoleIdeas'
 import { ProfileDetail } from './channels/ProfileDetail'
 import { moveSelection, selectionAfterDismiss } from './inbox/inbox-groups'
 import { useListSelection } from '../use-list-selection'
@@ -122,12 +123,13 @@ function AccountsScreen() {
         <div className="accounts-scroll">
           <Card title="New account">
             <CreateAccount
-              key={JSON.stringify(route.role)}
+              key={`${JSON.stringify(route.role)}|${route.platform ?? ''}`}
               platforms={platformList}
               mailboxes={mailboxes.data ?? []}
               profiles={profileList}
               accounts={list}
               role={route.role}
+              startPlatform={route.platform ?? null}
               product={forProduct ? { id: forProduct, name: products.data?.find((p) => p.id === forProduct)?.name } : null}
               onCreated={(account) => {
                 setChosen(accountKey(account.id))
@@ -136,6 +138,11 @@ function AccountsScreen() {
               onCancel={list.length > 0 || profileList.length > 0 || forProduct ? () => closeNew() : undefined}
             />
           </Card>
+          {forProduct && (
+            <Card>
+              <RoleIdeas productId={forProduct} platform={route.platform ?? null} />
+            </Card>
+          )}
         </div>
       )}
       {!adding && !loading && (

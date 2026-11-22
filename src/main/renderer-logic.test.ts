@@ -462,6 +462,10 @@ describe('the main menu can be hidden and the choice is remembered', () => {
 describe('the new-account form of the Accounts section', () => {
   it('is reached by a link, with or without a role', () => {
     expect(accountsNewHref()).toBe('#/accounts/new')
+    // The platform the owner chose in the add-a-channel flow starts the form on it; without one the key is not there at all.
+    expect(accountsNewHref(undefined, 'p1', 'reddit')).toBe('#/accounts/new?product=p1&platform=reddit')
+    expect(parseAccountsHash('#/accounts/new?product=p1&platform=reddit')).toEqual({ adding: true, accountId: null, productId: 'p1', role: null, platform: 'reddit' })
+    expect(parseAccountsHash('#/accounts/a1?platform=reddit')).toEqual({ adding: false, accountId: 'a1', productId: null, role: null })
     expect(parseAccountsHash('#/accounts')).toEqual({ adding: false, accountId: null, productId: null, role: null })
     expect(parseAccountsHash('#/accounts/new')).toEqual({ adding: true, accountId: null, productId: null, role: null })
     expect(parseAccountsHash('#/products/p1/channels')).toEqual({ adding: false, accountId: null, productId: null, role: null })

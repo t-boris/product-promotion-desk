@@ -698,3 +698,206 @@ textarea.input.short {
   resize: vertical;
 }
 
+
+/* ───────────── The Channels page: the list and the open channel (or the add-a-channel flow) beside it ───────────── */
+
+/* The panel fills what the page leaves; the list and the pane beside it scroll on their own, like Accounts. */
+.channels-panel {
+  flex: 1;
+  min-height: 0;
+}
+.channels-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: clamp(248px, 34%, 340px) minmax(0, 1fr);
+  gap: var(--space-3);
+}
+.channels-list-col {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.channels-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+  padding: var(--space-2);
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+/* The platforms as chips: one line that wraps, the chosen one raised like a segmented control's. */
+.channels-chips {
+  align-self: stretch;
+  flex-wrap: wrap;
+}
+.channels-chips .segmented-option {
+  cursor: default;
+  border: 0;
+  font: inherit;
+  font-weight: var(--fw-medium);
+}
+.channels-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-1);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+.channels-row:hover {
+  background: var(--hover-fill);
+}
+.channels-row.selected {
+  /* Selection is neutral; the accent is kept for the one main action of the screen. */
+  background: var(--selection);
+}
+.channels-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+}
+.channels-row-title,
+.channels-row-line {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.channels-row-title {
+  font-weight: var(--fw-medium);
+}
+.channels-row-line {
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+}
+/* How many posts wait for the owner in the channel: a quiet number, not a badge that asks for attention. */
+.channels-row-count {
+  flex: none;
+  min-width: 20px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--segment-track);
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.channels-none {
+  margin: var(--space-2);
+}
+/* Its own scroll, and a container: the channel page's narrow rules follow this pane's width, not the window's. */
+.channels-detail-pane {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  container-type: inline-size;
+}
+.channels-first {
+  flex: 1;
+}
+
+/* The add-a-channel flow: four steps one under another, each with a hairline above; the ones that cannot be done yet are quiet. */
+.add-channel {
+  gap: var(--space-4);
+}
+.add-step {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+.add-step > * {
+  max-width: 100%;
+}
+.add-step > h3 {
+  margin: 0;
+  font-size: var(--fs-title);
+}
+.add-step > p {
+  margin: 0;
+}
+.add-step.off > h3 {
+  color: var(--text-3);
+}
+.add-step .field {
+  align-self: stretch;
+}
+.add-step .row {
+  flex-wrap: wrap;
+}
+.add-platforms {
+  align-self: stretch;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  /* Every choice is as tall as the tallest, so a line that wraps in one does not make its neighbours differ. */
+  grid-auto-rows: 1fr;
+  gap: var(--space-2);
+}
+.add-platform {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-half);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  color: var(--text-1);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+.add-platform:hover {
+  background: var(--hover-fill);
+}
+.add-platform.on {
+  border-color: var(--line-strong);
+  background: var(--selection);
+}
+.add-platform > span {
+  overflow-wrap: anywhere;
+}
+.add-ideas {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+}
+.add-idea {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--line);
+}
+.add-idea:first-child {
+  border-top: 0;
+}
+.add-idea-text {
+  flex: 1 1 240px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+  overflow-wrap: anywhere;
+}

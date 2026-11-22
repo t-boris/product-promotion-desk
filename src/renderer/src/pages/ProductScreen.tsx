@@ -32,19 +32,19 @@ export function NoProduct({ loading, error }: { loading: boolean; error: string 
  * rebuilt when another product is chosen, so nothing typed for one product is carried to the next. With a `tab` the screen is a place of
  * the launch path: it reads the path, so that the path decides whether the screen or the next stage holds the filled button.
  */
-export function ProductScreen({ title, subtitle, tab, actions, withWebsite = false, children }: { title: string; subtitle: string; tab?: ProductTab; /** The header names the product's website after its name (the Overview does). */ withWebsite?: boolean; /** The page header's buttons and controls (a period, a refresh), on the right. */ actions?: ReactNode; children: (product: Product) => ReactNode }) {
+export function ProductScreen({ title, subtitle, tab, actions, fill = false, withWebsite = false, nextStage = true, children }: { title: string; subtitle: string; tab?: ProductTab; /** False on a screen whose own work is the page (Channels): the link to the path's next stage is not drawn above it. */ nextStage?: boolean; /** The page is as tall as the window and its panes scroll on their own (a list with a page beside it). */ fill?: boolean; /** The header names the product's website after its name (the Overview does). */ withWebsite?: boolean; /** The page header's buttons and controls (a period, a refresh), on the right. */ actions?: ReactNode; children: (product: Product) => ReactNode }) {
   const { current, loading, error } = useCurrentProduct()
   return (
     // One scope for the page: a form opened on demand owns the screen's filled button while it is open.
     <OpenFormsScope>
-      <Page title={title} subtitle={current ? [current.name, withWebsite && current.websiteUrl ? websiteHost(current.websiteUrl) : null, subtitle].filter(Boolean).join(' · ') : subtitle} actions={current ? actions : undefined}>
+      <Page title={title} fill={fill} subtitle={current ? [current.name, withWebsite && current.websiteUrl ? websiteHost(current.websiteUrl) : null, subtitle].filter(Boolean).join(' · ') : subtitle} actions={current ? actions : undefined}>
         {current ? (
           <Fragment key={current.id}>
             {tab ? (
               <ProductScope productId={current.id}>
                 {() => (
                   <>
-                    <NextStage tab={tab} />
+                    {nextStage && <NextStage tab={tab} />}
                     {children(current)}
                   </>
                 )}

@@ -98,6 +98,28 @@ describe('channels.suggest', () => {
     })
   })
 
+  it('asks for one platform when the owner is adding a channel on it, keeps only its ideas, and refuses a platform that does not exist', async () => {
+    const w = await world()
+    w.core.services.knowledge = knowledge([claim('c1', 'identity', 'Makes birth chart reports')])
+    w.t.engine.on('channels.suggest', JSON.stringify({ suggestions: [{ platform: 'fake', target: 'r/astrology', reason: 'Good fit; read the rules first.' }, { platform: 'other', target: 'https://forum.example.com/c/charts', reason: 'A forum; read its rules first.' }] }))
+    const ideas = await w.call('channels.suggest', { productId: w.productId, platform: 'fake' })
+    expect(ideas).toEqual([{ platform: 'fake', target: 'r/astrology', reason: 'Good fit; read the rules first.' }])
+    expect(w.t.engine.calls[0].prompt).toContain('Every idea must be on Fake only: use platform "fake" for each of them.')
+    // A site that is no listed platform: the AI is told so, and an idea of a listed platform is dropped (this world has no universal connector, so a site is not connectable either).
+    w.t.engine.calls.length = 0
+    expect(await w.call('channels.suggest', { productId: w.productId, platform: 'other' })).toEqual([])
+    expect(w.t.engine.calls[0].prompt).toContain('NOT one of the listed platforms')
+    // Without a platform nothing is asked of the kind.
+    w.t.engine.calls.length = 0
+    await w.call('channels.suggest', { productId: w.productId })
+    expect(w.t.engine.calls[0].prompt).not.toContain('Every idea must be')
+    // An unknown platform is refused before the AI is asked.
+    w.t.engine.calls.length = 0
+    expect(await w.refusal('channels.suggest', { productId: w.productId, platform: 'myspace' })).toBe('invalid_input')
+    expect(await w.refusal('channels.suggest', { productId: w.productId, platform: 7 } as never)).toBe('invalid_input')
+    expect(w.t.engine.calls).toEqual([])
+  })
+
   it('reports a failure of the AI as a plain error, not a crash', async () => {
     const w = await world()
     w.core.services.knowledge = knowledge([claim('c1', 'identity', 'Makes birth chart reports')])

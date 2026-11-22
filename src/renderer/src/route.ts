@@ -191,14 +191,29 @@ export interface ChannelRoute {
   /** The channel whose page is asked for, or null for the list of channels. */
   channelId: string | null
   tab: ChannelTab
+  /** The add-a-channel flow is open: `#/channels/new`, or the list asked for with an account just made for it (`?account=`, BUG-063). */
+  adding: boolean
+  /** `#/channels/new?platform=reddit`: the platform the flow starts on, or null. */
+  platform: string | null
+  /** `?account=`: the account the flow chooses first, or null. */
+  accountId: string | null
+}
+
+/** Link to the add-a-channel flow, on a platform when one is already chosen. */
+export function channelsNewHref(platform?: string): string {
+  return platform ? `#/channels/new?${new URLSearchParams({ platform }).toString()}` : '#/channels/new'
 }
 
 /** What the Channels screen was asked to show: the list, or one channel on one of its tabs (an unknown tab is the first one). */
 export function parseChannelHash(hash: string): ChannelRoute {
   const route = resolveRoute(hash)
-  if (route.page !== 'channels') return { channelId: null, tab: DEFAULT_CHANNEL_TAB }
-  const [, id, tab] = splitHash(route.hash).segments
-  return { channelId: idOf(id), tab: isChannelTab(tab) ? tab : DEFAULT_CHANNEL_TAB }
+  if (route.page !== 'channels') return { channelId: null, tab: DEFAULT_CHANNEL_TAB, adding: false, platform: null, accountId: null }
+  const { segments, query } = splitHash(route.hash)
+  const [, id, tab] = segments
+  const accountId = query.get('account')?.trim() || null
+  // A channel's id is never "new", so the word cannot hide a channel. An account asked for beside the list is the one just made for the flow.
+  const adding = id === 'new' || (id === undefined && accountId !== null)
+  return { channelId: adding ? null : idOf(id), tab: isChannelTab(tab) ? tab : DEFAULT_CHANNEL_TAB, adding, platform: query.get('platform')?.trim() || null, accountId }
 }
 
 /** What Setup was asked to show: one of its tabs, or the new-product form. */
@@ -223,6 +238,8 @@ export interface AccountsRoute {
   /** `#/accounts/new?product=<productId>`: the product the form was opened from, which the app returns to afterwards. Only the form carries one. */
   productId: string | null
   role: { name: string; voice: string } | null
+  /** `#/accounts/new?platform=reddit`: the platform the form starts on (the owner chose it in the add-a-channel flow); absent otherwise. */
+  platform?: string
 }
 
 /** Link to one account of the Accounts section (the account an Inbox item is about). */
@@ -234,13 +251,14 @@ export function accountHref(accountId: string): string {
  * Link to the new-account form of the Accounts section. "Use this role" on the Channels screen passes the role along; the Channels screen
  * passes the product, so that the new account is made for it and the app returns to that screen afterwards.
  */
-export function accountsNewHref(role?: { name: string; voice: string }, productId?: string): string {
+export function accountsNewHref(role?: { name: string; voice: string }, productId?: string, platform?: string): string {
   const params = new URLSearchParams()
   if (role) {
     params.set('name', role.name)
     params.set('voice', role.voice)
   }
   if (productId) params.set('product', productId)
+  if (platform) params.set('platform', platform)
   const query = params.toString()
   return query ? `#/accounts/new?${query}` : '#/accounts/new'
 }
@@ -258,7 +276,8 @@ export function parseAccountsHash(hash: string): AccountsRoute {
     adding,
     accountId: onAccounts && !adding && segments[1] ? safeDecode(segments[1]) : null,
     productId: adding ? params.get('product')?.trim() || null : null,
-    role: adding && name ? { name, voice: params.get('voice')?.trim() ?? '' } : null
+    role: adding && name ? { name, voice: params.get('voice')?.trim() ?? '' } : null,
+    ...(adding && params.get('platform')?.trim() ? { platform: params.get('platform')!.trim() } : {})
   }
 }
 

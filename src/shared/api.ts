@@ -324,7 +324,8 @@ export interface ApiMethods {
   'channels.connect': [{ productId: Id; accountId: Id; target: string }, Channel]
   /** AI ideas for channels of this product, from its approved passport. Unverified; nothing is connected. */
   'channels.preparePlan': [{ channelId: Id }, Channel]
-  'channels.suggest': [{ productId: Id }, ChannelSuggestion[]]
+  /** `platform`: ideas for that platform only (the add-a-channel flow), a key of `platforms.list` or "other"; without it the AI may name any. */
+  'channels.suggest': [{ productId: Id; platform?: string }, ChannelSuggestion[]]
   /**
    * One AI idea for a promotion goal of this product, from its approved passport; null when the AI had no new safe idea.
    * `avoid` holds the ideas the owner has already seen, `hint` is the owner's own one-line preference. Nothing is saved.

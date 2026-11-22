@@ -1,25 +1,28 @@
-import { useState } from 'react'
-import type { ChannelSuggestion, RoleSuggestion } from '../../../../shared/types'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '../../hooks'
 import { useHash } from '../../use-hash'
-import { accountsNewHref, channelHref, channelsAccountOf, parseChannelHash } from '../../route'
-import { Disclosure, EmptyState, ErrorNote, Loading, useMainVariant } from '../../ui'
+import { channelHref, channelsNewHref, parseChannelHash } from '../../route'
+import { Button, EmptyState, ErrorNote, Loading } from '../../ui'
 import { useTabAccent } from '../products/LaunchPath'
-import { AccountsCard } from './AccountsCard'
-import { ChannelPage } from './ChannelPage'
-import { ChannelTiles } from '../overview/ChannelTiles'
 import { useOverviewData } from '../overview/useOverviewData'
-import { ConnectChannel, type Prefill } from './ConnectChannel'
-import { SuggestRoles } from './SuggestRoles'
-import { SuggestChannels } from './SuggestChannels'
+import { AddChannel } from './AddChannel'
+import { ChannelPage } from './ChannelPage'
+import { ChannelsList } from './ChannelsList'
+import { channelRows, filterRows, neighbour, shownChannelId } from './channels-list'
 import { setupStage, type SetupStage } from './setup-stage'
 import { suggestionBlock } from './suggestion-block'
 import './channels.css'
 
+/** True while the key goes to a field the owner is typing in: the arrow keys then belong to the caret. */
+function isEditable(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null
+  return element !== null && (element.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(element.tagName))
+}
+
 /**
- * Channels of one product and the accounts it works with (DEC-009, DEC-015): the content of the Channels screen of the current product. It is a
- * single column: the accounts line, "Connect a channel", the channel list, the picked
- * channel's group boxes and the AI ideas. Exactly one button is filled, the one of the setup stage (`setupStage`).
+ * The channels of one product (DEC-009, DEC-037, and the Channels page of 0.46.0): a list with a search box and the platforms as chips on the left,
+ * and beside it either the open channel's page or the "Add a channel" flow. Posts live in Posts and accounts in Accounts: this screen is only about
+ * channels. With no channel yet the flow is all there is. The address `#/channels/<id>` opens a channel, `#/channels/new` the flow.
  */
 export function ChannelsPanel({ productId }: { productId: string }) {
   const accounts = useQuery('accounts.list', undefined, ['accounts'])
@@ -29,32 +32,34 @@ export function ChannelsPanel({ productId }: { productId: string }) {
   const platforms = useQuery('platforms.list', undefined, [])
   const settings = useQuery('app.settings.get', undefined, ['settings'])
   const engines = useQuery('engines.list', undefined, ['settings'])
-  // The channel page asked for by the address (`#/channels/<id>/<tab>`); without one this is the list of channels.
   const route = parseChannelHash(useHash())
-  const tiles = useOverviewData(productId, 30)
-  const [prefill, setPrefill] = useState<Prefill | null>(null)
-  // The account just added from this tab comes back in the link and is the one "Connect a channel" starts with (BUG-063).
-  const [firstAccountId] = useState(() => channelsAccountOf(window.location.hash))
+  // How many posts wait in each channel: the Overview's numbers, the same ones the owner saw on the tiles before.
+  const overview = useOverviewData(productId, 30)
+  const [platformFilter, setPlatformFilter] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
 
   const channelList = channels.data ?? []
   const accountList = accounts.data ?? []
-  // One answer to "is there an account?" for the whole tab: any account of the library can serve this product (DEC-015).
-  // Until the list has loaded there is no answer, and the tab does not say "no account" (BUG-030).
-  const accountsKnown = accounts.data !== undefined
-  const hasAccount = accountList.length > 0
-  // The accounts this product works with: those its channels use and those made for it.
-  const productAccounts = accountList.filter((a) => a.productId === productId || channelList.some((c) => c.accountId === a.id))
   const platformList = platforms.data ?? []
   const allProducts = products.data ?? []
   const product = allProducts.find((p) => p.id === productId)
   const productName = (id: string | null): string => allProducts.find((p) => p.id === id)?.name ?? 'another product'
-  const selected = channelList.find((c) => c.id === route.channelId)
-  // On the list the only channel stands for "the one the owner works with", so the stage still says what to do next with it.
-  const stage = setupStage({ hasAccount, channelCount: channelList.length, selected: selected ?? (route.channelId === null && channelList.length === 1 ? channelList[0] : undefined) })
-  // The stage of this tab names its own next step, but the path decides whether that step is the screen's filled button: only while the Channel
-  // stage is the path's next one. A connected channel ends it, so "Assess channel" and "Activate" are bezels and the next stage is filled (BUG-065).
+  const hasAccount = accountList.length > 0
+
+  const waiting = useMemo(() => new Map((overview.view?.channels ?? []).map((c) => [c.channelId, c.waiting])), [overview.view])
+  const rows = useMemo(() => channelRows(channelList, waiting, platformList), [channels.data, waiting, platforms.data])
+  const visible = filterRows(rows, platformFilter, search)
+
+  const loaded = channels.data !== undefined && accounts.data !== undefined && !(channels.loading && !channels.data)
+  // With no channel the flow is all there is (the way into the screen's first use); a channel asked for that is not on the list says so.
+  const adding = route.adding || (loaded && channelList.length === 0)
+  const shownId = adding ? null : shownChannelId(visible, rows, route.channelId)
+  const selected = channelList.find((c) => c.id === shownId)
+  const missing = !adding && route.channelId !== null && loaded && !channels.loading && !rows.some((r) => r.id === route.channelId)
+
+  // The stage of the setup path names the next step of a channel (Assess, Activate); the path decides whether that step is the screen's filled button.
+  const stage = setupStage({ hasAccount, channelCount: channelList.length, selected })
   const filledStage: SetupStage | null = useTabAccent('channels').own ? stage : null
-  const main = useMainVariant()
 
   const blocked = suggestionBlock({
     productId,
@@ -63,106 +68,107 @@ export function ChannelsPanel({ productId }: { productId: string }) {
     engines: engines.data,
     ready: !settings.loading && !engines.loading
   })
-  const blockedReason = blocked?.text ?? null
   const engineLabel = engines.data?.find((e) => e.id === settings.data?.engineId)?.label
 
-  const loadingList = (accounts.loading && !accounts.data) || (channels.loading && !channels.data)
-  // A channel page for a channel that is not there (it was removed, or the link is old) says so and goes back to the list.
-  // It is said only once the list is not being reloaded: a channel that was just connected is in the next answer, not yet in this one.
-  const missing = route.channelId !== null && channels.data !== undefined && !channels.loading && selected === undefined
+  // The flow starts where the link says; an account just made for it names its own platform.
+  const startAccount = route.accountId !== null ? accountList.find((a) => a.id === route.accountId) : undefined
+  const startPlatform = route.platform ?? startAccount?.platform ?? null
+
+  // The arrow keys walk the list; a focused field, button or link of the page beside it keeps its own keys.
+  const latest = useRef({ visible, shownId })
+  latest.current = { visible, shownId }
+  useEffect(() => {
+    if (adding) return
+    const onKey = (event: KeyboardEvent): void => {
+      if ((event.key !== 'ArrowDown' && event.key !== 'ArrowUp') || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || isEditable(event.target)) return
+      const target = event.target as HTMLElement
+      if (target !== document.body && !target.closest('[data-testid="channel-list"]')) return
+      const next = neighbour(latest.current.visible, latest.current.shownId, event.key === 'ArrowDown' ? 1 : -1)
+      if (next === null || next === latest.current.shownId) return
+      event.preventDefault()
+      window.location.hash = channelHref(next)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [adding])
+
+  if (!loaded) {
+    return (
+      <div className="pane channels-panel" data-testid="channels-panel">
+        <ErrorNote error={accounts.error ?? channels.error ?? products.error ?? platforms.error} />
+        <Loading what="Loading channels" />
+      </div>
+    )
+  }
+
+  const flow = product ? (
+    <AddChannel
+      key={`${startPlatform ?? ''}|${route.accountId ?? ''}`}
+      product={product}
+      accounts={accountList}
+      channels={channelList}
+      allChannels={everyChannel.data ?? []}
+      platforms={platformList}
+      productName={productName}
+      startPlatform={startPlatform}
+      firstAccountId={route.accountId}
+      blocked={blocked}
+      engineLabel={engineLabel}
+      onConnected={(channel) => (window.location.hash = channelHref(channel.id))}
+      onCancel={channelList.length > 0 ? () => (window.location.hash = shownId ? channelHref(shownId) : '#/channels') : undefined}
+    />
+  ) : null
 
   return (
-    <div className="pane" data-testid="channels-panel">
-      <ErrorNote error={accounts.error ?? channels.error ?? products.error ?? platforms.error} />
-      {loadingList ? <Loading what="Loading channels" /> : null}
-      {selected && (
-        <ChannelPage
-          key={selected.id}
-          channel={selected}
-          tab={route.tab}
-          products={allProducts}
-          accounts={accountList}
-          platforms={platformList}
-          planBlockedReason={blockedReason}
-          stage={filledStage}
-          onRemoved={() => (window.location.hash = '#/channels')}
-        />
-      )}
-      {missing && (
-        <EmptyState
-          art="channel"
-          title="This channel is not here"
-          action={
-            <a className="btn" href="#/channels" data-testid="channels-back">
-              All channels
-            </a>
-          }
-        >
-          It may have been removed. The channels of this product are on the list.
-        </EmptyState>
-      )}
-      {/* The channels come first once there are some: they are what the screen is about; the accounts and the connect form are what is added to them. */}
-      {route.channelId === null && channelList.length > 0 && (
-        <>
-          <ErrorNote error={tiles.error} />
-          {tiles.view ? <ChannelTiles channels={tiles.view.channels} lines={tiles.lines} days={tiles.view.days} details={tiles.channels} /> : tiles.error ? null : <Loading what="Loading channels" />}
-          {/* With one channel that is still to be assessed or started, its page is the next step: the link is the screen's filled button. */}
-          {filledStage && (filledStage === 'assess' || filledStage === 'activate') && channelList.length === 1 && (
-            <div className="row">
-              <a className={`btn btn-${main}`} href={channelHref(channelList[0].id)} data-testid="open-only-channel">
-                {filledStage === 'assess' ? 'Assess this channel' : 'Activate this channel'}
-              </a>
-            </div>
-          )}
-        </>
-      )}
-      {route.channelId === null && accountsKnown && (
-        <>
-          <AccountsCard productId={productId} accounts={productAccounts} libraryHasAccounts={hasAccount} channels={channelList} platforms={platformList} filled={filledStage === 'account'} />
-          <ConnectChannel
-            product={product}
-            needsAccount={!hasAccount}
-            filled={filledStage === 'connect'}
-            accounts={accountList}
-            firstAccountId={firstAccountId}
-            channels={channelList}
-            allChannels={everyChannel.data ?? []}
-            platforms={platformList}
-            productName={productName}
-            prefill={prefill}
-            onConnected={(channel) => (window.location.hash = channelHref(channel.id))}
-          />
-        </>
-      )}
-      {route.channelId === null && channelList.length === 0 && hasAccount && (
-        // Without an account the strip above already says what to do; an empty "No channels yet" would only repeat it.
-        <EmptyState art="channel" title="No channels yet">
-          Connect your first channel above.
-        </EmptyState>
-      )}
-      {/* Ideas are optional help, so they are folded; the reason they are off stays on the summary line, in view. */}
-      {route.channelId === null && (
-        <Disclosure
-          title="Ideas from the AI"
-          testId="ai-ideas"
-          aside={
-            blocked ? (
-              <span className="dot-line" data-testid="ai-ideas-blocked">
-                <span className="dot warn" aria-hidden="true" />
-                {blocked.text}
-              </span>
-            ) : (
-              <span className="dot-line">
-                <span className="dot good" aria-hidden="true" />
-                Ready · {engineLabel ?? 'AI engine'}
-              </span>
-            )
-          }
-        >
-          <SuggestRoles productId={productId} blocked={blocked} engineLabel={engineLabel} onUse={(suggestion: RoleSuggestion) => (window.location.hash = accountsNewHref({ name: suggestion.name, voice: suggestion.voice }, productId))} />
-          <SuggestChannels productId={productId} accounts={[...productAccounts, ...accountList.filter((a) => !productAccounts.includes(a))]} platforms={platformList} blocked={blocked} engineLabel={engineLabel} onUse={(suggestion: ChannelSuggestion) => setPrefill({ suggestion })} />
-        </Disclosure>
+    <div className="pane channels-panel" data-testid="channels-panel">
+      <ErrorNote error={accounts.error ?? channels.error ?? products.error ?? platforms.error ?? overview.error} />
+      {channelList.length === 0 ? (
+        <div className="channels-detail-pane channels-first">{flow}</div>
+      ) : (
+        <div className="channels-split">
+          <ChannelsList rows={rows} shownId={shownId} platform={platformFilter} search={search} onSelect={(id) => (window.location.hash = channelHref(id, route.channelId === id ? route.tab : undefined))} onPlatform={setPlatformFilter} onSearch={setSearch} />
+          <div className="channels-detail-pane">
+            {adding && flow}
+            {!adding && selected && (
+              <ChannelPage
+                key={selected.id}
+                channel={selected}
+                tab={route.tab}
+                products={allProducts}
+                accounts={accountList}
+                platforms={platformList}
+                planBlockedReason={blocked?.text ?? null}
+                stage={filledStage}
+                listed
+                onRemoved={() => (window.location.hash = '#/channels')}
+              />
+            )}
+            {missing && (
+              <EmptyState art="channel" title="This channel is not here" action={<Button onClick={() => (window.location.hash = '#/channels')}>Show the list</Button>}>
+                It may have been removed. The channels of this product are on the list.
+              </EmptyState>
+            )}
+            {!adding && !missing && selected === undefined && (
+              <EmptyState art="channel" title="No channel fits this search">
+                Change the search or the platform, or add a channel.
+              </EmptyState>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )
 }
+
+/** "Add a channel" in the page header: a bezel (the flow's own Connect button is the filled one), off while the flow is open. */
+export function AddChannelButton({ productId }: { productId: string }) {
+  const channels = useQuery('channels.list', { productId }, ['channels'])
+  const route = parseChannelHash(useHash())
+  const none = channels.data !== undefined && channels.data.length === 0
+  return (
+    <Button icon="plus" onClick={() => (window.location.hash = channelsNewHref())} disabled={route.adding || none} data-testid="channel-add">
+      Add a channel
+    </Button>
+  )
+}
+

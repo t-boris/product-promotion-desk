@@ -30,6 +30,8 @@ export interface SuggestInput {
   claims: { section: PassportSection; text: string }[]
   platforms: PlatformInfo[]
   connected: string[]
+  /** The platform key the owner is adding a channel on: the ideas are for it alone ("other" is any site that is not a listed platform). Absent: any platform. */
+  only?: string
 }
 
 const MAX_SUGGESTIONS = 8
@@ -43,6 +45,13 @@ const SUGGEST_SYSTEM = [
   'You cannot browse, run code or use tools. Do not ask questions.',
   'Reply with a single JSON object and nothing else.'
 ].join(' ')
+
+/** The owner is adding a channel on one platform: every idea is for it (or, for "other", for a site that is none of the listed platforms). */
+function onlyLine(only: string, platforms: PlatformInfo[]): string {
+  if (only === 'other') return 'Every idea must be a site that is NOT one of the listed platforms: use platform "other" and a full "https://..." address.'
+  const label = platforms.find((p) => p.platform === only)?.label ?? only
+  return `Every idea must be on ${oneLine(label, 60)} only: use platform "${only}" for each of them.`
+}
 
 function suggestPrompt(input: SuggestInput): AiTask {
   const platforms = input.platforms.map((p) => `- ${p.platform}: ${oneLine(p.label, 60)}${p.prepared ? '' : ' (any site needs its own profile)'}`)
@@ -60,6 +69,7 @@ function suggestPrompt(input: SuggestInput): AiTask {
       'Already connected (do not suggest these again):',
       connected.length > 0 ? connected.join('\n') : '(none)',
       '',
+      ...(input.only ? [onlyLine(input.only, input.platforms), ''] : []),
       `Suggest at most ${MAX_SUGGESTIONS} places where this product's audience actually talks and asks for help.`,
       'Rules:',
       '- Prefer well-known, active communities where the topic is on topic.',
@@ -131,6 +141,7 @@ function readSuggestions(raw: unknown, input: SuggestInput): Parsed<ChannelSugge
     if (!isRecord(item) || typeof item.platform !== 'string' || typeof item.target !== 'string' || typeof item.reason !== 'string') continue
     const platform = keys.get(item.platform.trim().toLowerCase())
     if (!platform) continue
+    if (input.only && platform !== input.only) continue
     const target = collapseWhitespace(item.target).replace(/^["'`]+|["'`]+$/g, '')
     const reason = plainText(item.reason, MAX_REASON)
     if (!usableTarget(target) || !addressShaped(platform, target) || !reason) continue

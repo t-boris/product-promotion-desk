@@ -31,6 +31,7 @@ export function ChannelPage({
   platforms,
   planBlockedReason,
   stage,
+  listed = false,
   onRemoved
 }: {
   channel: Channel
@@ -41,6 +42,8 @@ export function ChannelPage({
   planBlockedReason: string | null
   /** The setup stage whose button is the screen's filled one: "Assess channel" and "Activate" are filled only at their own stage, and not at all (null) while the path's next stage is elsewhere. */
   stage: SetupStage | null
+  /** The page stands beside the list of channels (the Channels screen): there is nothing to go back to. */
+  listed?: boolean
   onRemoved: () => void
 }) {
   const account = accounts.find((a) => a.id === channel.accountId)
@@ -53,9 +56,11 @@ export function ChannelPage({
 
   return (
     <div className="pane" data-testid={`channel-detail-${channel.id}`}>
-      <a className="back-link" href="#/channels" data-testid="channels-back">
-        All channels
-      </a>
+      {!listed && (
+        <a className="back-link" href="#/channels" data-testid="channels-back">
+          All channels
+        </a>
+      )}
       <ObjectHeader
         title={channel.target}
         meta={`${platformLabel(channel.platform)} · ${account?.label ?? 'Unknown account'}`}
