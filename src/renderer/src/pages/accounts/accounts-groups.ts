@@ -1,6 +1,7 @@
 // What the Accounts screen lists and how its selection behaves (DEC-037, phase C5): one list grouped by profile (the person behind a
-// login), the accounts of a profile beneath its row, and the logins that belong to no profile under "Other logins". The screen is the
-// library of every login, not the current product's. Pure, so the rules are tested from src/main/accounts-logic.test.ts without the interface.
+// login), the accounts of a profile beneath its row, and the logins that belong to no profile under "Other logins". The screen shows the open
+// product's people and logins (`peopleOfProduct` in src/shared/account-scope.ts, owner 2026-11-23); this file groups what it is given. Pure, so the
+// rules are tested from src/main/accounts-logic.test.ts without the interface.
 
 import { profileLine } from '../../../../shared/profile'
 import type { Account, PlatformInfo, Profile } from '../../../../shared/types'

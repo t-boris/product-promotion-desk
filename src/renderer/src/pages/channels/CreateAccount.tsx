@@ -18,6 +18,7 @@ export function CreateAccount({
   accounts,
   role,
   product,
+  madeFor = null,
   startPlatform = null,
   onCreated,
   onCancel
@@ -32,6 +33,8 @@ export function CreateAccount({
   role: AccountRole | null
   /** The product whose Channels screen opened the form: the account is made for it (`name` is absent until the products have loaded). */
   product: { id: string; name: string | undefined } | null
+  /** The product the Accounts screen is open for: the new login is recorded as made for it, so it is listed there (ignored when `product` is set). */
+  madeFor?: string | null
   /** The platform the form starts on ("Add a Reddit account" on a product's Channels screen); the owner can still change it. */
   startPlatform?: string | null
   onCreated: (account: Account) => void
@@ -78,7 +81,7 @@ export function CreateAccount({
     if (!label.trim() || !platform || roleIncomplete || viaProblem) return
     const wanted = !profile && roleName.trim() ? { name: roleName.trim(), voice: roleVoice.trim() } : undefined
     const account = await create({
-      ...(product ? { productId: product.id } : {}),
+      ...(product ? { productId: product.id } : madeFor ? { productId: madeFor } : {}),
       platform,
       label: label.trim(),
       ...(wanted ? { role: wanted } : {}),

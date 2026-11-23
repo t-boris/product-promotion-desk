@@ -6,13 +6,28 @@ import { platformLabel } from '../channels/model'
 import { productLabels } from '../products/product-labels'
 
 /** Names a profile and says what it is for; the AI proposes the person afterwards. */
-export function NewProfile({ platforms, products, freeAccounts, onCreated, onCancel }: { platforms: PlatformInfo[]; products: Product[]; freeAccounts: Account[]; onCreated: (profile: Profile) => void; onCancel?: () => void }) {
+export function NewProfile({
+  platforms,
+  products,
+  startProduct = null,
+  freeAccounts,
+  onCreated,
+  onCancel
+}: {
+  platforms: PlatformInfo[]
+  products: Product[]
+  /** The product the Accounts screen is open for: the new person speaks for it unless the owner changes it. */
+  startProduct?: string | null
+  freeAccounts: Account[]
+  onCreated: (profile: Profile) => void
+  onCancel?: () => void
+}) {
   // The form is the next step of the screen while it is open: "Make the profile" is its one filled button unless a form opened after it owns it.
   const submitVariant = useOpenForm()
   const [label, setLabel] = useState('')
   const [purpose, setPurpose] = useState('')
   const [chosen, setChosen] = useState<string[]>([])
-  const [productId, setProductId] = useState('')
+  const [productId, setProductId] = useState(startProduct !== null && products.some((p) => p.id === startProduct) ? startProduct : '')
   const [taken, setTaken] = useState<string[]>([])
   const [create, state] = useAction((args: { label: string; purpose?: string; platforms: string[]; productId: string | null; accountIds: string[] }) => call('profiles.create', args))
   const takenPlatforms = new Set(freeAccounts.filter((a) => taken.includes(a.id)).map((a) => a.platform))

@@ -1411,15 +1411,15 @@ approval, up to 24 h); r/beginnerastrology has it up.
       "Looked at until Nov 25. If a moderator approves it, you will be told."; the open card's "On the site" row uses the same block.
 - [x] Posts list: a group's community line says "Removed" (red) for the version that was removed, "Sent" for the others.
 - [x] Tests: notice mapping, connector reading, core save/clear, migration, card/list helpers. `npm run verify`.
-- [ ] Release 0.49.0, lesson, deploy, look at the owner's real group in the app (read-only).
+- [x] Release 0.49.0, lesson, deploy, look at the owner's real group in the app (read-only): the list and the cards say Removed only for r/AskAstrologers.
 
 ## B. The Accounts screen shows the chosen product's people (0.50.0)
 
-- [ ] A new decision record (MarkView) that narrows DEC-015: the Accounts screen lists the current product's people; an account can still
+- [x] A new decision record (MarkView) that narrows DEC-015: the Accounts screen lists the current product's people; an account can still
       serve a channel of another product, chosen where the channel is connected (the existing warning stays).
-- [ ] Shared pure rule `accountsOfProduct`: a person belongs to a product when it was made for it or one of its logins serves the product's
+- [x] Shared pure rule `accountsOfProduct`: a person belongs to a product when it was made for it or one of its logins serves the product's
       channels; a login without a person likewise; a person or login tied to no product and no channel is shown in every product.
-- [ ] Accounts screen filters by the current product; "New profile" and "Add account" start on the current product.
-- [ ] Top bar "Accounts · N ready" counts the current product's logins (the number is scoped like the screen, lesson 320).
-- [ ] A link to an account of another product (`#/accounts/<id>`) makes that product current instead of losing the account.
+- [x] Accounts screen filters by the current product; "New profile" and "Add account" start on the current product.
+- [x] Top bar "Accounts · N ready" counts the current product's logins (the number is scoped like the screen, lesson 320).
+- [x] A link to an account of another product (`#/accounts/<id>`) makes that product current instead of losing the account.
 - [ ] Tests, verify, release 0.50.0, lesson, deploy, look at the owner's Accounts screen with Natal Mystic and with Sirius Art.

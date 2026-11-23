@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '../hooks'
 import { accountsNewHref, parseAccountsHash, productHref } from '../route'
 import { useHash } from '../use-hash'
+import { peopleOfProduct, productOfAccount } from '../../../shared/account-scope'
+import { useCurrentProduct } from '../product-context'
 import { Button, Card, EmptyState, ErrorNote, Loading, OpenFormsScope, Page } from '../ui'
 import { AccountDetail } from './accounts/AccountDetail'
 import { AccountsList } from './accounts/AccountsList'
@@ -22,9 +24,9 @@ function isEditable(target: EventTarget | null): boolean {
 }
 
 /**
- * The account library (DEC-015, DEC-037 phase C5, REQ-014): every login the owner promotes from, in one list grouped by the profile (the
- * person) behind it, with the selected profile or login beside the list. It is the library of its own and not the current product's:
- * channels and products are not shown here; an account is chosen where a channel is connected. A login is added here, given a role, an
+ * The accounts of the open product (DEC-015 narrowed on 2026-11-23, DEC-037 phase C5, REQ-014): the people who post for it and their logins, in
+ * one list grouped by the profile (the person) behind a login, with the selected profile or login beside the list (`peopleOfProduct` says who
+ * belongs). An account of another product can still serve a channel here; it is chosen where the channel is connected, and is then listed in both. A login is added here, given a role, an
  * e-mail address and a password, and signed in; the base mailbox it takes its addresses from is a setting.
  *
  * One filled button per screen state (visual-system.md §10.3): "Add account" and "New profile" in the header are bezels, off while their form
@@ -38,17 +40,27 @@ function AccountsScreen() {
   const vault = useQuery('vault.status', undefined, ['accounts'])
   const profiles = useQuery('profiles.list', undefined, ['accounts'])
   const products = useQuery('products.list', undefined, ['products'])
+  const channels = useQuery('channels.list', undefined, ['channels', 'accounts'])
+  const { current, setCurrent } = useCurrentProduct()
   const route = parseAccountsHash(useHash())
   // The product whose Channels screen opened the form: the new account is made for it and the app goes back there. A product that
   // no longer exists is ignored.
   const forProduct = route.productId && (products.data === undefined || products.data.some((p) => p.id === route.productId)) ? route.productId : null
   const [makingProfile, setMakingProfile] = useState(false)
 
-  const list = accounts.data ?? []
-  const profileList = profiles.data ?? []
+  const allAccounts = accounts.data ?? []
+  const allProfiles = profiles.data ?? []
+  const channelList = channels.data ?? []
+  // The open product's people and logins; with no product yet (a first start) there is nothing to narrow, and every login is shown.
+  const scoped = useMemo(
+    () => (current ? peopleOfProduct(current.id, allProfiles, allAccounts, channelList) : { profiles: allProfiles, accounts: allAccounts }),
+    [current?.id, profiles.data, accounts.data, channels.data]
+  )
+  const list = scoped.accounts
+  const profileList = scoped.profiles
   const platformList = platforms.data ?? []
-  const loading = (accounts.loading && !accounts.data) || (profiles.loading && !profiles.data)
-  const groups = useMemo(() => groupAccounts(profileList, list), [profiles.data, accounts.data])
+  const loading = (accounts.loading && !accounts.data) || (profiles.loading && !profiles.data) || (channels.loading && !channels.data)
+  const groups = useMemo(() => groupAccounts(profileList, list), [scoped])
   const order = useMemo(() => displayOrder(groups), [groups])
   // With no login and no profile at all the form is the only useful thing to show.
   const empty = !loading && !accounts.error && !profiles.error && list.length === 0 && profileList.length === 0
@@ -68,6 +80,13 @@ function AccountsScreen() {
       setMakingProfile(false)
     }
   }, [route.accountId])
+  // A link to a login of another product opens that product, so the login is on the screen instead of lost behind the choice.
+  useEffect(() => {
+    if (!route.accountId || !current || !accounts.data || !profiles.data || !channels.data) return
+    if (list.some((a) => a.id === route.accountId)) return
+    const owner = productOfAccount(route.accountId, allProfiles, allAccounts, channelList)
+    if (owner && owner !== current.id) setCurrent(owner)
+  }, [route.accountId, current?.id, accounts.data, profiles.data, channels.data])
 
   // The arrow keys walk the list; a focused field, button or link of the detail keeps its own keys.
   const latest = useRef({ order, selectedKey })
@@ -104,7 +123,7 @@ function AccountsScreen() {
   return (
     <Page
       title="Accounts"
-      subtitle="Your logins on the platforms, grouped by the person behind them: a profile has one login per platform."
+      subtitle={`${current ? `${current.name} · ` : ''}The people who post for it and their logins on the platforms: a profile has one login per platform.`}
       fill
       actions={
         <>
@@ -131,6 +150,7 @@ function AccountsScreen() {
               role={route.role}
               startPlatform={route.platform ?? null}
               product={forProduct ? { id: forProduct, name: products.data?.find((p) => p.id === forProduct)?.name } : null}
+              madeFor={forProduct ? null : (current?.id ?? null)}
               onCreated={(account) => {
                 setChosen(accountKey(account.id))
                 closeNew(account.id)
@@ -154,6 +174,7 @@ function AccountsScreen() {
                 <NewProfile
                   platforms={platformList}
                   products={products.data ?? []}
+                  startProduct={current?.id ?? null}
                   freeAccounts={list.filter((a) => a.profileId === null)}
                   onCreated={(profile) => {
                     setMakingProfile(false)

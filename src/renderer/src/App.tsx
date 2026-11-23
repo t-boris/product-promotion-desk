@@ -10,6 +10,7 @@ import { PAGES } from './pages'
 import { useCurrentProduct } from './product-context'
 import { ProductSwitcher } from './ProductSwitcher'
 import { navigateHashOf, type PageId } from './route'
+import { peopleOfProduct } from '../../shared/account-scope'
 import { NO_ACCOUNTS, NO_ENGINE, accountsGroupName, accountsSummary, automationText, engineGroupName } from './status-labels'
 import { Badge, Button, IconButton } from './ui'
 import type { Tone } from './tone'
@@ -61,6 +62,9 @@ export function App() {
   // The number beside Inbox is the open product's, like the Inbox list: what waits for the owner in another product is not counted here.
   const attention = useQuery('attention.list', currentProduct ? { productId: currentProduct.id } : undefined, ['attention', 'opportunities', 'channels', 'accounts'], { skip: currentProduct === null })
   const accounts = useQuery('accounts.list', undefined, ['accounts'])
+  // The count beside "Accounts" is the open product's, like the Accounts screen (lesson 320): its people and their logins.
+  const profiles = useQuery('profiles.list', undefined, ['accounts'], { skip: currentProduct === null })
+  const channels = useQuery('channels.list', undefined, ['channels', 'accounts'], { skip: currentProduct === null })
   const info = useQuery('app.info', undefined, [])
   const settings = useQuery('app.settings.get', undefined, ['settings'])
   const engines = useQuery('engines.list', undefined, ['settings'])
@@ -68,7 +72,9 @@ export function App() {
 
   const engine = engines.data?.find((e) => e.id === settings.data?.engineId)
   const attentionCount = currentProduct ? (attention.data?.length ?? 0) : 0
-  const accountsBadge = accountsSummary(accounts.data ?? [])
+  const accountsBadge = accountsSummary(
+    currentProduct ? peopleOfProduct(currentProduct.id, profiles.data ?? [], accounts.data ?? [], channels.data ?? []).accounts : (accounts.data ?? [])
+  )
   const countTone = currentProduct ? attentionCountTone(attention.data?.map((item) => item.kind) ?? []) : null
 
   const navItem = (page: (typeof PAGES)[number]) => (
