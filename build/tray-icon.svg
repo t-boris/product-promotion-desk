@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<!-- The menu-bar icon (the source of src/main/tray-icon.ts; run `npm run make:icon` after a change): the star of the application icon inside its orbit,
+     black on transparent, as a macOS template image that the system recolours for a light or a dark menu bar. -->
+<ellipse cx="512" cy="512" rx="452" ry="196" fill="none" stroke="#000" stroke-width="72" transform="rotate(-24 512 512)"/>
+<path d="M512 96 C540 380 644 484 928 512 C644 540 540 644 512 928 C484 644 380 540 96 512 C380 484 484 380 512 96 Z" fill="#000"/>
+</svg>

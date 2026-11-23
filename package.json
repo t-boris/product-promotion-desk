@@ -1,7 +1,7 @@
 {
   "name": "product-promotion-desk",
   "productName": "Product Promotion Desk",
-  "version": "0.48.0",
+  "version": "0.48.1",
   "description": "Personal macOS application that helps promote products using an installed Codex or Claude Code as the AI engine.",
   "private": true,
   "type": "module",
@@ -22,7 +22,8 @@
     "rebuild:electron": "electron-builder install-app-deps",
     "dist": "npm run build && npm run rebuild:electron && electron-builder --mac --arm64 --dir",
     "verify": "npm run typecheck && npm run lint && npm test && npm run build",
-    "deploy:local": "npm run dist && node scripts/deploy-local.mjs"
+    "deploy:local": "npm run dist && node scripts/deploy-local.mjs",
+    "make:icon": "electron scripts/make-icon.mjs"
   },
   "dependencies": {
     "better-sqlite3": "13.0.3",

@@ -267,8 +267,13 @@ export function locateScript(ref: string): string {
   const x = r.left + r.width / 2, y = r.top + r.height / 2;
   const vw = window.innerWidth, vh = window.innerHeight;
   const inView = x >= 8 && x <= vw - 8 && y >= 8 && y <= vh - 8;
-  const top = inView ? document.elementFromPoint(x, y) : null;
-  const hit = !!top && (top === el || el.contains(top) || top.contains(el) || (top.shadowRoot ? top.shadowRoot.contains(el) : false));
+  // What is on top at the point is found through the shadow roots down to the element the pointer would meet (a dialog drawn in a shadow root answers with
+  // its host from the page, and the footer that covers a list in it is only seen from inside), and it must be the element, something inside it or something
+  // around it (a label that wraps a radio): a box that merely sits in the same shadow root as the element does not make a click reach it.
+  const within = (node, root) => { for (let c = node, n = 0; c && n < 300; n++) { if (c === root) return true; c = c.parentNode || (c.getRootNode && c.getRootNode().host) || null; } return false; };
+  let top = inView ? document.elementFromPoint(x, y) : null;
+  for (let i = 0; top && top.shadowRoot && i < 12; i++) { const inner = top.shadowRoot.elementFromPoint(x, y); if (!inner || inner === top) break; top = inner; }
+  const hit = !!top && (top === el || within(top, el) || within(el, top));
   return { ok: true, x: x, y: y, hit: hit, inView: inView, vw: vw, vh: vh, disabled: !!el.disabled, tag: el.tagName.toLowerCase() };
 })()`
 }

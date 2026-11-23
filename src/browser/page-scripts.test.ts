@@ -270,6 +270,32 @@ describe('step scripts of the browser agent (DEC-017)', () => {
     expect(setValueScript('e1', hostile)).toContain(JSON.stringify(hostile))
   })
 
+  it('judge what is under the click point through the shadow roots: a footer in the same dialog that covers the element is not a hit', () => {
+    // A dialog drawn in a shadow root: from the page the point answers with the dialog's host; inside it, the footer lies over the list's last rows.
+    // A loose stand-in for DOM nodes: the script only reads the few fields set here.
+    type Stub = Record<string, unknown>
+    const node = (name: string, parent: unknown = null, extra: Stub = {}): Stub => ({ name, parentNode: parent, getRootNode: () => ({}), ...extra })
+    const host = node('modal')
+    const shadow: Stub = { host, parentNode: null, getRootNode: () => shadow, querySelector: () => null, querySelectorAll: () => [] }
+    host.shadowRoot = shadow
+    const list = node('list', shadow)
+    const radio = node('radio', list, { tagName: 'FACEPLATE-RADIO-INPUT', disabled: false, getBoundingClientRect: () => ({ left: 100, top: 300, width: 300, height: 40 }), getRootNode: () => shadow, contains: () => false })
+    const footer = node('footer', shadow)
+    const label = node('label', shadow)
+    radio.parentNode = label
+    label.parentNode = list
+    const run = (under: Record<string, unknown> | null): { hit: boolean; inView: boolean } => {
+      shadow.elementFromPoint = () => under
+      const document = { querySelector: () => radio, querySelectorAll: () => [], elementFromPoint: () => host }
+      return runInNewContext(locateScript('e5'), { document, window: { innerWidth: 1280, innerHeight: 418 } }) as { hit: boolean; inView: boolean }
+    }
+    expect(run(footer).hit).toBe(false) // the footer is on top of the radio's point
+    expect(run(radio).hit).toBe(true) // the radio itself
+    expect(run(label).hit).toBe(true) // the label that wraps it takes the click for it
+    expect(run(null).hit).toBe(true) // a closed shadow root cannot be looked into: its host stands for what is inside it, which holds the radio
+    expect(run(footer).inView).toBe(true)
+  })
+
   it('count the real mouse presses a page receives, and ignore the ones a script makes', () => {
     const listeners: ((e: { isTrusted: boolean }) => void)[] = []
     const window: Record<string, unknown> = { addEventListener: (_type: string, fn: (e: { isTrusted: boolean }) => void) => listeners.push(fn) }
