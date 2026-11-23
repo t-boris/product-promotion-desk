@@ -966,10 +966,18 @@ export interface SendAction {
   /** In words, why: "Reddit's filters removed it". Null while `standing` is null. */
   standingNote: string | null
   standingCheckedAt: IsoTime | null
+  /** What the community itself wrote under a removed post (its bot's or a moderator's pinned comment); null when there is none or the post is up. */
+  standingNotice: CommunityNotice | null
 }
 
 /** A confirmed post as the platform shows it now. */
 export type PostStanding = 'live' | 'removed'
+
+/** A community's own words under a post it took down: who wrote them (its bot or a moderator) and the text, as the site shows it. */
+export interface CommunityNotice {
+  by: string
+  text: string
+}
 
 // ───────────────────────────── Runs, logs, metrics, attention (REQ-005, REQ-006) ─────────────────────────────
 

@@ -494,6 +494,23 @@ describe('Reddit: is a published post still up (looked at again later)', () => {
     expect(reading?.note).toMatch(/^Reddit's own filters removed it/)
   })
 
+  it("reads what the community wrote under a post it took down, from the post's own page", async () => {
+    const h = setup()
+    h.page.route('/user/natal_bot/submitted.json', listing([postThing({ id: 'n1', author: 'natal_bot', removedByCategory: 'moderator' })]))
+    h.page.route('/r/test/comments/n1.json', threadJson({ id: 'n1', author: 'natal_bot' }, [commentThing({ id: 'm1', postId: 'n1', author: 'AutoModerator', body: 'All posts await mod approval.' })]))
+    const reading = await connector.readStanding(h.ctx, ref('t3_n1'))
+    expect(reading).toMatchObject({ state: 'removed', notice: { by: 'AutoModerator', text: 'All posts await mod approval.' } })
+    expect(reading?.note).toMatch(/^A moderator of r\/test or its bot took it down/)
+    expect(h.page.writes).toEqual([])
+  })
+
+  it("still reports the removal when the community's words cannot be read", async () => {
+    const h = setup()
+    h.page.route('/user/natal_bot/submitted.json', listing([postThing({ id: 'n1', author: 'natal_bot', removedByCategory: 'moderator' })]))
+    h.page.route('/r/test/comments/n1.json', {}, 500)
+    expect(await connector.readStanding(h.ctx, ref('t3_n1'))).toMatchObject({ state: 'removed', notice: null })
+  })
+
   it('cannot tell when the post is not among the newest own posts (never calls that a removal)', async () => {
     const h = setup()
     h.page.route('/user/natal_bot/submitted.json', listing([postThing({ id: 'other', author: 'natal_bot' })]))

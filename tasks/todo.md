@@ -1388,3 +1388,38 @@ Done (all in one release): migration 321 `drafts.flair`; `Draft/DraftInput/Draft
 Proof: 6151 tests green (new: post-flair 16, flair-draft 6, flair-help 13, reddit flair/readPostForm 11, shared flair 6, brief 3), typecheck, eslint, build. The real picker was probed read-only (opener "Add flair and tags *", radios named by flair + "View all flairs"/"Cancel"/"Add", after Add the opener becomes the flair's name + "edit flair") and the toolbox helpers were written to that shape.
 Not proven live: the application's own click path through the picker on the real page (the probe used its own clicks), the Flair line on a real card, the AI proposal with Codex. The owner presses Send; the two earlier unknown sends close themselves as "not found" and return to review.
 
+
+---
+
+# Plan 2026-11-23: per-community "Removed" with the community's words (0.49.0), and Accounts per product (0.50.0)
+
+Both layouts were approved by the owner on 2026-11-23 (the "Метка + слова бота" and "Только люди продукта" options).
+
+## A. "Removed" on the community that removed it (0.49.0)
+
+Owner's report: the group "Sun in Sagittarius in the ninth house…" is marked Removed, while both community lines and both version cards say Sent.
+Facts: r/AskAstrologers removed it (removed_by_category "moderator"; its AutoModerator's pinned comment says every post waits for moderator
+approval, up to 24 h); r/beginnerastrology has it up.
+
+- [x] Reddit: when a post reads as removed, read the pinned comment under it by the community's bot or a moderator (one GET of the thread,
+      read-only) and return it with the reading (`StandingReading.notice`).
+- [x] Wording of `removalWords('moderator')`: a moderator or the community's bot took it down; the moderators can still approve it.
+- [x] Store: `send_actions.standing_notice` + `standing_notice_by` (migration 402); `saveStanding` writes them; a live reading clears them.
+- [x] Shared: the three-day window moves to `src/shared/standing.ts` with "looked at until <date>" words; core imports it from there.
+- [x] Version card (`ReviewIdentity`): a confirmed version whose standing is removed shows a red "Removed" badge instead of "Sent".
+- [x] Version card, closed and open: one standing block (`StandingNote`): Reddit's words, the community's words (excerpt + Show all),
+      "Looked at until Nov 25. If a moderator approves it, you will be told."; the open card's "On the site" row uses the same block.
+- [x] Posts list: a group's community line says "Removed" (red) for the version that was removed, "Sent" for the others.
+- [x] Tests: notice mapping, connector reading, core save/clear, migration, card/list helpers. `npm run verify`.
+- [ ] Release 0.49.0, lesson, deploy, look at the owner's real group in the app (read-only).
+
+## B. The Accounts screen shows the chosen product's people (0.50.0)
+
+- [ ] A new decision record (MarkView) that narrows DEC-015: the Accounts screen lists the current product's people; an account can still
+      serve a channel of another product, chosen where the channel is connected (the existing warning stays).
+- [ ] Shared pure rule `accountsOfProduct`: a person belongs to a product when it was made for it or one of its logins serves the product's
+      channels; a login without a person likewise; a person or login tied to no product and no channel is shown in every product.
+- [ ] Accounts screen filters by the current product; "New profile" and "Add account" start on the current product.
+- [ ] Top bar "Accounts · N ready" counts the current product's logins (the number is scoped like the screen, lesson 320).
+- [ ] A link to an account of another product (`#/accounts/<id>`) makes that product current instead of losing the account.
+- [ ] Tests, verify, release 0.50.0, lesson, deploy, look at the owner's Accounts screen with Natal Mystic and with Sirius Art.

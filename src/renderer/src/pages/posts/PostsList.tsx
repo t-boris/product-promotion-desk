@@ -6,7 +6,7 @@ import { VideoTile } from '../../pictures/VideoTile'
 import { Badge, type Tone } from '../../ui'
 import { useThumb } from '../review/useMedia'
 import { shortTime } from './short-time'
-import type { PostRow, PostState } from './posts-filter'
+import { removedFlag, type PostRow, type PostState } from './posts-filter'
 
 export const STATE_LABEL: Record<PostState, string> = { draft: 'Draft', approved: 'Approved', scheduled: 'Scheduled', sent: 'Sent', deleted: 'Deleted' }
 const STATE_TONE: Record<PostState, Tone> = { draft: 'neutral', approved: 'info', scheduled: 'info', sent: 'good', deleted: 'neutral' }
@@ -78,12 +78,16 @@ export function PostsList({ rows, selectedId, onSelect, footer }: { rows: PostRo
             </button>
             {selected && row.kind === 'group' && (
               <div className="posts-versions" role="group" aria-label="Versions of this post" data-testid="post-versions">
-                {row.cards.map((card, at) => (
-                  <div key={card.opportunity.id} className="posts-version">
-                    <span className="posts-version-target">{card.channelTarget}</span>
-                    <span className="posts-version-state">{STATE_LABEL[row.states[at] ?? row.state]}</span>
-                  </div>
-                ))}
+                {row.cards.map((card, at) => {
+                  // The community that took the post down is the one that says so; the others keep their own state.
+                  const removed = removedFlag(card)
+                  return (
+                    <div key={card.opportunity.id} className="posts-version" data-testid="post-version">
+                      <span className="posts-version-target">{card.channelTarget}</span>
+                      <span className={`posts-version-state${removed ? ' bad' : ''}`}>{removed ?? STATE_LABEL[row.states[at] ?? row.state]}</span>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>

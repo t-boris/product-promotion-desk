@@ -7,11 +7,12 @@ import type { Core } from '../core'
 import { TakeoverError } from '../ports'
 import type { StandingChange } from '../services'
 import type { FlowStore } from './store'
+import { STANDING_WINDOW_MS } from '../../shared/standing'
 import { MINUTE_MS } from './scheduler-timing'
 import { errorMessage } from './util'
 
-/** A post is looked at for this long after it was published; a removal later than that is not followed. */
-export const STANDING_WINDOW_MS = 3 * 24 * 60 * MINUTE_MS
+/** A post is looked at for this long after it was published (the card says until when, so the rule lives in shared code). */
+export { STANDING_WINDOW_MS }
 /** The first look is made this long after the publication: the filters of a site act within minutes. */
 export const FIRST_LOOK_AFTER_MS = 3 * MINUTE_MS
 
@@ -78,15 +79,17 @@ export class StandingChecks {
         this.failureLogged.add(action.id)
         this.core.log.warn('standing', `Could not look at the post again (${errorMessage(error)}); it is tried again later.`, opp.channelId)
       }
-      this.store.saveStanding(action.id, action.standing, action.standingNote, looked)
+      this.store.saveStanding(action.id, action.standing, action.standingNote, action.standingNotice, looked)
       return null
     }
     this.failureLogged.delete(action.id)
     if (reading === null) {
-      this.store.saveStanding(action.id, action.standing, action.standingNote, looked)
+      this.store.saveStanding(action.id, action.standing, action.standingNote, action.standingNotice, looked)
       return null
     }
-    this.store.saveStanding(action.id, reading.state, reading.note, looked)
+    // The community's words belong to a removal: a post that is up again has none, and a look that could not read them keeps what was read before.
+    const notice = reading.state === 'removed' ? (reading.notice ?? (action.standing === 'removed' ? action.standingNotice : null)) : null
+    this.store.saveStanding(action.id, reading.state, reading.note, notice, looked)
     if (reading.state === action.standing) return null
     this.core.log[reading.state === 'removed' ? 'warn' : 'info']('standing', `${channel.target}: ${reading.note}${action.resultUrl ? ` ${action.resultUrl}` : ''}`, opp.channelId)
     // The card and the list show the standing, so they are told; the owner is told only of what matters.

@@ -27,6 +27,7 @@ function action(overrides: Partial<SendAction> = {}): SendAction {
     standing: null,
     standingNote: null,
     standingCheckedAt: null,
+    standingNotice: null,
     ...overrides
   }
 }
@@ -149,6 +150,31 @@ describe('looking at confirmed posts again', () => {
     const changes = await sending().checkStandings()
     expect(changes.map((c) => [c.from, c.to])).toEqual([['removed', 'live']])
     expect(stored(action.id).standing).toBe('live')
+  })
+
+  it("keeps the community's own words with a removal, keeps them when a later look cannot read them, and drops them when the post is up again", async () => {
+    const { action } = await confirmedPost()
+    const id = action.resultExternalId as string
+    const notice = { by: 'AutoModerator', text: 'All posts are removed into a queue to await mod approval (allow 24 hours).' }
+    world.connector.standings.set(id, { state: 'removed', note: 'A moderator of r/x or its bot took it down.', notice })
+    minutes(4)
+    await sending().checkStandings()
+    expect(stored(action.id).standingNotice).toEqual(notice)
+
+    world.connector.standings.set(id, { state: 'removed', note: 'A moderator of r/x or its bot took it down.' })
+    minutes(11)
+    await sending().checkStandings()
+    expect(stored(action.id).standingNotice).toEqual(notice)
+
+    world.connector.standings.set(id, null)
+    minutes(11)
+    await sending().checkStandings()
+    expect(stored(action.id).standingNotice).toEqual(notice)
+
+    world.connector.standings.set(id, { state: 'live', note: 'The post is up on Reddit.', notice })
+    minutes(61)
+    await sending().checkStandings()
+    expect(stored(action.id)).toMatchObject({ standing: 'live', standingNotice: null })
   })
 
   it('tells the owner of a removal through the change event so the card and the list redraw', async () => {

@@ -2,6 +2,7 @@
 // are in, and the filter, the search and the sort over them. Pure, so it is tested from src/main/posts-logic.test.ts.
 // The state of a post comes from its opportunity and nothing else; the screen never invents one.
 
+import { isTakenDown } from '../../../../shared/standing'
 import { kindsOf } from '../../../../shared/post-format'
 import type { Attachment, Id, IsoTime, OpportunityCard, OpportunityState, PostGroupCard } from '../../../../shared/types'
 import { nameOf } from '../review/quick/labels'
@@ -59,7 +60,7 @@ export function attentionOf(state: OpportunityState): string | null {
 
 /** The flag of a sent post that the site took down after it was published (read again by the application), or null. */
 export function removedFlag(card: OpportunityCard): string | null {
-  return card.opportunity.state === 'confirmed' && card.lastAction?.standing === 'removed' ? 'Removed' : null
+  return isTakenDown(card.opportunity.state, card.lastAction) ? 'Removed' : null
 }
 
 /** One post or one group, as a row of the list. */

@@ -2,6 +2,7 @@ import type { OpportunityCard } from '../../../../shared/types'
 import { Badge, formatTime } from '../../ui'
 import { SEND_STATE_LABEL, SEND_STATE_TONE, isHttpUrl } from './labels'
 import { AddressLink } from '../AddressLink'
+import { StandingNote } from './StandingNote'
 
 /**
  * What the owner approved and what happened when it was sent: the exact account and destination the approval
@@ -57,7 +58,8 @@ export function ActionSummary({ card }: { card: OpportunityCard }) {
                 <>
                   <dt>On the site</dt>
                   <dd data-testid="standing">
-                    <Badge tone={action.standing === 'removed' ? 'bad' : 'good'}>{action.standing === 'removed' ? 'Removed' : 'Up'}</Badge> {action.standingNote}
+                    <Badge tone={action.standing === 'removed' ? 'bad' : 'good'}>{action.standing === 'removed' ? 'Removed' : 'Up'}</Badge>{' '}
+                    {action.standing === 'removed' ? <StandingNote action={action} /> : action.standingNote}
                     {action.standingCheckedAt && <span className="muted"> · looked at {formatTime(action.standingCheckedAt)}</span>}
                   </dd>
                 </>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RedditPost } from './mapping'
-import { removalWords, standingOfPost } from './standing'
+import { NOTICE_LIMIT, noticeOf, removalWords, standingOfPost } from './standing'
 
 function post(overrides: Partial<RedditPost> = {}): RedditPost {
   return {
@@ -37,8 +37,10 @@ describe('what Reddit says about a post the account published', () => {
     expect(reading?.note).toContain('modmail')
   })
 
-  it('names the community when a moderator removed it', () => {
-    expect(standingOfPost([post({ removed: true, removedBy: 'moderator' })], 't3_abc123')?.note).toBe('A moderator of r/Laserengraving removed it.')
+  it('names the community when a moderator or its bot took it down, and says the moderators can still approve it (many hold every new post)', () => {
+    expect(standingOfPost([post({ removed: true, removedBy: 'moderator' })], 't3_abc123')?.note).toBe(
+      'A moderator of r/Laserengraving or its bot took it down; the moderators can still approve it.'
+    )
   })
 
   it('says AutoModerator held it back', () => {
@@ -72,5 +74,33 @@ describe('what Reddit says about a post the account published', () => {
 
   it('matches the platform id whatever its letter case', () => {
     expect(standingOfPost([post({ fullname: 't3_ABC123' })], 't3_abc123')?.state).toBe('live')
+  })
+})
+
+describe("what the community wrote under a post it took down", () => {
+  const comment = (data: Record<string, unknown>) => ({ kind: 't1', data: { author: 'someone', body: 'Nice chart', stickied: false, distinguished: null, ...data } })
+  const page = (...comments: unknown[]) => [{ kind: 'Listing', data: { children: [] } }, { kind: 'Listing', data: { children: comments } }]
+  const AUTOMOD = 'ALL POSTS ARE INSTANTLY REMOVED INTO A QUEUE TO AWAIT MOD APPROVAL (allow 24 hours)'
+
+  it("reads the community bot's pinned comment, as r/AskAstrologers leaves one under every new post", () => {
+    expect(noticeOf(page(comment({}), comment({ author: 'AutoModerator', body: `${AUTOMOD}\n`, stickied: true, distinguished: 'moderator' })))).toEqual({ by: 'AutoModerator', text: AUTOMOD })
+  })
+
+  it("reads a moderator speaking as one, and prefers the pinned comment", () => {
+    expect(noticeOf(page(comment({ author: 'mod_a', body: 'Removed: rule 2.', distinguished: 'moderator' })))).toEqual({ by: 'mod_a', text: 'Removed: rule 2.' })
+    expect(noticeOf(page(comment({ author: 'mod_a', body: 'First.', distinguished: 'moderator' }), comment({ author: 'mod_b', body: 'Pinned.', distinguished: 'moderator', stickied: true })))?.by).toBe('mod_b')
+  })
+
+  it('ignores what members wrote, an empty or removed comment, and a page that is not a post page', () => {
+    expect(noticeOf(page(comment({}), comment({ author: 'AutoModerator', body: '[removed]' })))).toBeNull()
+    expect(noticeOf(page())).toBeNull()
+    expect(noticeOf({})).toBeNull()
+    expect(noticeOf([{}])).toBeNull()
+  })
+
+  it('cuts a very long message', () => {
+    const text = noticeOf(page(comment({ author: 'AutoModerator', body: 'x'.repeat(NOTICE_LIMIT + 50) })))?.text ?? ''
+    expect(text.length).toBe(NOTICE_LIMIT)
+    expect(text.endsWith('…')).toBe(true)
   })
 })

@@ -1,9 +1,11 @@
 import { useLayoutEffect, useState, type ReactNode } from 'react'
+import { isTakenDown } from '../../../../shared/standing'
 import type { Id, OpportunityCard } from '../../../../shared/types'
 import { Button, Card, formatTime } from '../../ui'
 import { mainActionOf } from './main-action'
 import { ownPostSummary } from './quick/labels'
 import { ReviewActionRow, ReviewBody, ReviewIdentity } from './ReviewParts'
+import { StandingNote } from './StandingNote'
 import { useReviewItem } from './useReviewItem'
 import './review.css'
 
@@ -88,6 +90,7 @@ export function ReviewCard({ card, collapsible = false, defaultOpen = true, prod
             {excerpt(summary)}
           </div>
         )}
+        {!open && card.lastAction && isTakenDown(opp.state, card.lastAction) && <StandingNote action={card.lastAction} />}
         {!open && item.conflict && (
           <div className="review-conflict" data-testid="card-conflict">
             {opp.reason}

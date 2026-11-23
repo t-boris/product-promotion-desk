@@ -32,5 +32,14 @@ ALTER TABLE send_actions ADD COLUMN standing TEXT;
 ALTER TABLE send_actions ADD COLUMN standing_note TEXT;
 ALTER TABLE send_actions ADD COLUMN standing_checked_at TEXT;
 `
+  },
+  {
+    id: 402,
+    name: "post standing: the community's own words under a removed post",
+    sql: `
+-- What the community wrote under a post it took down (its bot's or a moderator's pinned comment) and who wrote it. Null: none, or the post is up.
+ALTER TABLE send_actions ADD COLUMN standing_notice TEXT;
+ALTER TABLE send_actions ADD COLUMN standing_notice_by TEXT;
+`
   }
 ]

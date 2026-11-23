@@ -2,9 +2,11 @@
 // so the account's cookies apply and nothing leaves the browser session.
 
 import type { BrowserPage, PostForm } from '../../core/ports'
+import type { CommunityNotice } from '../../shared/types'
 import { fetchJsonScript, type FetchResult } from '../page-scripts'
 import { asRecord, str } from '../text'
 import { mapPostForm } from './flair'
+import { noticeOf } from './standing'
 import {
   mapAbout,
   mapInbox,
@@ -138,6 +140,16 @@ export class RedditApi {
     if (res.status !== 200) return failure(res)
     const thread = mapThread(res.json)
     return thread ? { ok: true, value: thread } : { ok: false, status: res.status, reason: 'unexpected thread format' }
+  }
+
+  /** What the community wrote under a post (its bot's or a moderator's top-level comment), read from the post's page; null when there is none. Read-only. */
+  async notice(subreddit: string, postFullnameOrId: string): Promise<ApiOutcome<CommunityNotice | null>> {
+    const id = postFullnameOrId.replace(/^t3_/, '')
+    if (!POST_ID.test(id)) return { ok: false, status: 0, reason: 'invalid post id' }
+    if (!SUBREDDIT_NAME.test(subreddit)) return { ok: false, status: 0, reason: 'invalid community name' }
+    const res = await this.get(`/r/${subreddit}/comments/${id}.json?limit=20&depth=1&raw_json=1`)
+    if (res.status !== 200) return failure(res)
+    return { ok: true, value: noticeOf(res.json) }
   }
 
   /**

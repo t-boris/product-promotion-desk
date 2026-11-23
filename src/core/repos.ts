@@ -265,7 +265,8 @@ export const mapAction = (r: Row): SendAction => ({
   error: (r.error as string | null) ?? null,
   standing: (r.standing as SendAction['standing']) ?? null,
   standingNote: (r.standing_note as string | null) ?? null,
-  standingCheckedAt: (r.standing_checked_at as string | null) ?? null
+  standingCheckedAt: (r.standing_checked_at as string | null) ?? null,
+  standingNotice: typeof r.standing_notice === 'string' ? { by: (r.standing_notice_by as string | null) ?? '', text: r.standing_notice } : null
 })
 
 export const mapRun = (r: Row): Run => ({

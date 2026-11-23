@@ -176,6 +176,9 @@
 .posts-version-state {
   flex: none;
 }
+.posts-version-state.bad {
+  color: var(--bad);
+}
 
 /* The selected post: its content scrolls, its action bar (the shared `.inbox-bar`) stays at the bottom. */
 .posts-detail-pane {

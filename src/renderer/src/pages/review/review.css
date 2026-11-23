@@ -1041,3 +1041,31 @@ button.post-picture.library:hover .post-thumb {
   background: var(--panel-2);
   font-size: 0.85em;
 }
+
+/* A post the site took down after it was published: the site's words, the community's words under the post, and until when it is looked at. */
+.standing-note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.review-card .standing-note {
+  margin-top: var(--space-1);
+}
+.standing-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-half);
+  min-width: 0;
+}
+.standing-notice blockquote {
+  margin: 0;
+  padding-left: var(--space-2);
+  border-left: 2px solid var(--line);
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.standing-notice blockquote.whole {
+  white-space: pre-line;
+}

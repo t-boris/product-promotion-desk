@@ -7,6 +7,7 @@ import type {
   Attachment,
   Capability,
   Channel,
+  CommunityNotice,
   EngineId,
   EngineModel,
   EngineStatus,
@@ -578,6 +579,8 @@ export interface PostForm {
 export interface StandingReading {
   state: 'live' | 'removed'
   note: string
+  /** A removed post: what the community wrote under it (its bot's or a moderator's pinned comment), when there is such a comment and it could be read. */
+  notice?: CommunityNotice | null
 }
 
 export interface ConnectorRegistry {

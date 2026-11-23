@@ -14,6 +14,7 @@ import type {
   Channel,
   ChannelStatus,
   Comment,
+  CommunityNotice,
   CommentCategory,
   Discussion,
   Draft,
@@ -661,9 +662,14 @@ export class FlowStore {
     return (this.db.prepare("SELECT * FROM send_actions WHERE state = 'confirmed' AND result_external_id IS NOT NULL AND completed_at >= ? ORDER BY completed_at, rowid").all(sinceIso) as Row[]).map(mapAction)
   }
 
-  /** What the platform said when the post was looked at again, and when. A look that could not tell keeps the standing it had and moves only the time. */
-  saveStanding(actionId: Id, standing: SendAction['standing'], note: string | null, checkedAt: string): void {
-    this.db.prepare('UPDATE send_actions SET standing = ?, standing_note = ?, standing_checked_at = ? WHERE id = ?').run(standing, note, checkedAt, actionId)
+  /**
+   * What the platform said when the post was looked at again, and when, with the community's own words under a removed post. A look that could not
+   * tell keeps the standing it had and moves only the time.
+   */
+  saveStanding(actionId: Id, standing: SendAction['standing'], note: string | null, notice: CommunityNotice | null, checkedAt: string): void {
+    this.db
+      .prepare('UPDATE send_actions SET standing = ?, standing_note = ?, standing_notice = ?, standing_notice_by = ?, standing_checked_at = ? WHERE id = ?')
+      .run(standing, note, notice?.text ?? null, notice?.by ?? null, checkedAt, actionId)
   }
 
   sendingActions(): SendAction[] {

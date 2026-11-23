@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { isTakenDown } from '../../../../shared/standing'
 import type { OpportunityCard } from '../../../../shared/types'
 import { Badge, Button, ErrorNote } from '../../ui'
 import { ActionSummary } from './ActionSummary'
@@ -19,7 +20,11 @@ export function ReviewIdentity({ card, productName, tags }: { card: OpportunityC
   const opp = card.opportunity
   return (
     <div className="review-id">
-      <Badge tone={STATE_TONE[opp.state]}>{opp.state === 'cancelled' && opp.kind === 'standalone' ? removalWords('standalone').list : STATE_LABEL[opp.state]}</Badge>
+      {isTakenDown(opp.state, card.lastAction) ? (
+        <Badge tone="bad">Removed</Badge>
+      ) : (
+        <Badge tone={STATE_TONE[opp.state]}>{opp.state === 'cancelled' && opp.kind === 'standalone' ? removalWords('standalone').list : STATE_LABEL[opp.state]}</Badge>
+      )}
       <Badge>{KIND_LABEL[opp.kind]}</Badge>
       {opp.category && <Badge>{CATEGORY_LABEL[opp.category]}</Badge>}
       {opp.decision && opp.decision !== 'reply' && <Badge tone="warn">{DECISION_LABEL[opp.decision]}</Badge>}

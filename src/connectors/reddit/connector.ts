@@ -274,7 +274,12 @@ export class RedditConnector implements Connector {
       if (!identity) throw new LoginRequiredError('the account is not signed in, so its own posts cannot be read.')
       const own = await api.ownSubmitted(identity, OWN_POSTS_READ)
       if (!own.ok) throw await refusalError(page, api, own, `Own posts could not be read: ${own.reason}`)
-      return standingOfPost(own.value, ref.externalId)
+      const reading = standingOfPost(own.value, ref.externalId)
+      if (reading?.state !== 'removed') return reading
+      // A removed post: what the community wrote under it says why, often that it waits for a moderator. Not being able to read it changes nothing.
+      const post = own.value.find((p) => p.fullname.toLowerCase() === ref.externalId.toLowerCase())
+      const notice = post ? await api.notice(post.subreddit, ref.externalId) : null
+      return { ...reading, notice: notice?.ok ? notice.value : null }
     })
   }
 
