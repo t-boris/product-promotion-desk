@@ -1461,10 +1461,12 @@ One release per phase; each is verified (`npm run verify`), installed and read o
   - [x] the seasonal calendar (0.61.0, DEC-060): Dates ahead card under the Posts calendar; moon, sign seasons, equinoxes/solstices computed, gift dates listed, the owner's dates; lead time per platform; draft per date and channel on a press; Inbox item; skip
   - [ ] themes and campaigns (a named theme, its main piece, the recap in the weekly review); one post in versions per channel exists as post groups (DEC-032)
 - [ ] 7 conversations: reply window, took-off item, testimonials, people met
+  - [x] took-off Inbox item and the waiting note on comments to the account (0.64.0, DEC-063)
+  - [ ] testimonials with permission and source; the people met
 - [x] 8 wider listening (0.63.0, DEC-062): Heard elsewhere card on Review; name + 5 phrases + 5 competitors; one searching AI request; mention / competitor / place; each address once, dismissed never again; weekly after the first look. Not built: a place turned into a channel by a press; an Inbox item
 - [x] 9 the AI-answer check (0.62.0, DEC-061): card on Review; up to 20 buyer questions (AI may propose); each asked with web search and no word about the product; named / cited worked out by the application; names and sites named most; checks kept and compared; asked again after 30 days. One engine only; no Inbox item
 - [ ] 10 content details
-- [ ] 11 account health
+- [x] 11 account health (0.65.0, DEC-064): Health card on the account page: link share of posts and replies in 30 days, reach of the latest three posts against the ones before. Not built: warm-up plan (the account's age on its platform is unknown)
 - [ ] 12 launch venues
 
 ## Phase A steps
