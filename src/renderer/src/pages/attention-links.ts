@@ -24,6 +24,11 @@ export function fixLinkFor(item: AttentionItem, { channels, products }: LinkSour
     const owner = channels.find((c) => c.id === item.refId)?.productId ?? null
     return { href: `#/channels/${item.refId}/results${owner ? `?product=${owner}` : ''}`, label: 'Open the trial', productName: products.find((p) => p.id === owner)?.name ?? null }
   }
+  // A post that took off is read where its numbers are: the channel's Results tab.
+  if (item.id.startsWith('tookoff:')) {
+    const owner = channels.find((c) => c.id === item.refId)?.productId ?? null
+    return { href: `#/channels/${item.refId}/results${owner ? `?product=${owner}` : ''}`, label: 'Open the results', productName: products.find((p) => p.id === owner)?.name ?? null }
+  }
   // Dates ahead are prepared on the Posts screen, in the calendar.
   if (item.id.startsWith('seasonal:')) {
     return { href: `#/posts?${new URLSearchParams({ product: item.refId, view: 'calendar' }).toString()}`, label: 'Open the dates ahead', productName: products.find((p) => p.id === item.refId)?.name ?? null }

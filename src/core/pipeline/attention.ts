@@ -7,6 +7,7 @@ import type { Db } from '../db/database'
 import { mapAction, mapOpportunity } from '../repos'
 import { trialItems } from './channel-trials'
 import { seasonalItems } from './seasonal'
+import { tookOffItems, waitedNoteFor } from './conversations'
 import { noteRequestItems } from './mix-attention'
 import { sourceWords } from './reply-target'
 import type { ScheduleStore } from './scheduler-state'
@@ -34,14 +35,16 @@ function opportunityItems(core: Core, db: Db, targets: Map<Id, string>): Attenti
     const where = targets.get(opp.channelId) ?? 'a channel'
     const what = sourceWords(opp)
     const draftText = core.repos.latestDraft(opp.id)?.text
-    const detail = draftText ? excerpt(draftText) : excerpt(opp.reason)
+    // A comment addressed to the account says how long it has waited (DEC-063): the reply window is two days.
+    const waited = waitedNoteFor(core, opp)
+    const detail = `${waited}${draftText ? excerpt(draftText) : excerpt(opp.reason)}`
     const base = { refType: 'opportunity' as const, refId: opp.id, createdAt: opp.updatedAt }
     if (opp.state === 'awaiting_approval') return { id: `approval:${opp.id}`, kind: 'approval', title: `Approve ${what} in ${where}`, detail, ...base }
     // Approved but not sent: normally momentary, but a blocked send (gate, limit, sign-in) would otherwise vanish from
     // every list. Its own id keeps it a separate item from the approval request it grew out of.
     if (opp.state === 'ready') return { id: `ready:${opp.id}`, kind: 'approval', title: 'Approved, not sent yet', detail: excerpt(opp.reason) || `The ${what} to ${where} is approved and waiting to be sent.`, ...base }
     if (opp.state === 'draft') return { id: `draft:${opp.id}`, kind: 'draft', title: `Review draft ${what} in ${where}`, detail, ...base }
-    return { id: `question:${opp.id}`, kind: 'question', title: `Needs your input in ${where}`, detail: excerpt(opp.reason) || detail, ...base }
+    return { id: `question:${opp.id}`, kind: 'question', title: `Needs your input in ${where}`, detail: excerpt(opp.reason) ? `${waited}${excerpt(opp.reason)}` : detail, ...base }
   })
 }
 
@@ -181,7 +184,7 @@ export class AttentionWatcher {
 
   list(): AttentionItem[] {
     const targets = this.targets()
-    const items = [...opportunityItems(this.core, this.core.db, targets), ...unknownResultItems(this.core.db, targets), ...accountItems(this.core), ...channelItems(this.core, this.store), ...noteRequestItems(this.core), ...trialItems(this.core), ...seasonalItems(this.core)]
+    const items = [...opportunityItems(this.core, this.core.db, targets), ...unknownResultItems(this.core.db, targets), ...accountItems(this.core), ...channelItems(this.core, this.store), ...noteRequestItems(this.core), ...trialItems(this.core), ...seasonalItems(this.core), ...tookOffItems(this.core)]
     const sorted = this.withStableTimes(items).sort(compare)
     this.count = sorted.length
     return sorted
