@@ -1452,7 +1452,9 @@ One release per phase; each is verified (`npm run verify`), installed and read o
 - [ ] 1 results per post: tagged link, per-post numbers, site analytics, goals with a number and a date
   - [x] slice A (0.56.0, DEC-056): numbers under each sent post read by the application (Reddit), Results tab on the channel, Posts row and card
   - [ ] readers for the channels worked in the browser, the post link there; the tagged site link; the site's analytics (needs the owner's answer: which analytics); goals with a number and a date
-- [ ] 2 weekly review and the learning loop
+  - [x] the tagged site link (0.57.0): product switch, utm tags naming platform and channel, off by default
+- [x] 2 weekly review and the learning loop (0.58.0, DEC-057): Review screen, numbers against the usual of four weeks, AI's words and one change, accept / decline / own, direction for the AI's proposed posts for two weeks, Monday 9:00 job
+  - [ ] owner's answers still open: place in the sidebar, day and hour, whether an accepted change may steer the content mix
 - [ ] 3 channel trials
 - [ ] 4 positioning and the audience's words
 - [ ] 5 themes, campaigns, seasonal calendar
