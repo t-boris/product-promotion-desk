@@ -13,6 +13,7 @@ import { ShowMore } from './ShowMore'
 import { NoProduct } from './ProductScreen'
 import { PostDetail } from './posts/PostDetail'
 import { postsCalendarAsked } from '../route'
+import { Campaigns } from './posts/Campaigns'
 import { DatesAhead } from './posts/DatesAhead'
 import { datesByDay } from './posts/dates-ahead'
 import { PostsCalendar } from './posts/PostsCalendar'
@@ -400,6 +401,7 @@ function PostsScreen({ product }: { product: Product }) {
             onOpen={openRow}
             onWrite={(date) => startWriting(plannedTimeOn(date, offsetOn(date)))}
           />
+          <Campaigns productId={product.id} />
           {seasonal.data && (
             <DatesAhead
               product={product}

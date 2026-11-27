@@ -5,6 +5,7 @@
 
 import { wordsForPrompt } from './audience-words'
 import { approvedPositioning } from './positioning'
+import { themeInForce } from './themes'
 import { directionInForce } from './weekly-review'
 import { ApiError, type DraftInput } from '../../shared/api'
 import { nextFreeSlot } from '../../shared/schedule'
@@ -88,6 +89,7 @@ export class PublicationsFlow {
           recentTitles,
           focus: options.focus,
           direction: directionInForce(this.core, channel.productId),
+          theme: themeInForce(this.core, channel.productId),
           positioning: approvedPositioning(this.core, channel.productId),
           audienceWords: wordsForPrompt(this.core, channel.productId)
         }),

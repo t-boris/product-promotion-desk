@@ -15,6 +15,7 @@ import { AudienceWords } from './audience-words'
 import { Listening } from './listening'
 import { GoalTargets } from './goal-targets'
 import { People } from './people'
+import { Themes } from './themes'
 import { SeasonalCalendar } from './seasonal'
 import { buildCard } from './cards'
 import { ChannelTrials } from './channel-trials'
@@ -179,6 +180,13 @@ export function registerFlow(core: Core): void {
   core.router.register({
     'goals.progress': (args) => goalTargets.progress(args),
     'goals.setTarget': (args) => goalTargets.set(args)
+  })
+  // Themes (DEC-070): the owner's named stretches of days; the running one is given to the AI's proposed posts.
+  const themes = new Themes(core)
+  core.router.register({
+    'themes.list': (args) => themes.list(args),
+    'themes.save': (args) => themes.save(args),
+    'themes.remove': (args) => themes.remove(args)
   })
   // The people met (DEC-066): the owner's own notes; no AI, nothing posted.
   const people = new People(core)

@@ -563,4 +563,22 @@ CREATE TABLE account_warmups (
 );
 `
   }
+  ,
+  {
+    id: 328,
+    name: 'themes: named stretches of days of a product',
+    sql: `
+-- DEC-070: from_day and to_day are local days, both included.
+CREATE TABLE themes (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  message TEXT NOT NULL DEFAULT '',
+  from_day TEXT NOT NULL,
+  to_day TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX themes_by_product ON themes (product_id, from_day);
+`
+  }
 ]
