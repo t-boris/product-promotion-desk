@@ -201,6 +201,32 @@ describe('its own posts', () => {
     expect(action.authorizationBasis).toContain(AI_BROWSER_BASIS)
   })
 
+  it('are confirmed by the app where the connector finds the account\'s own posts without reading the channel (a Reddit community whose list is refused)', async () => {
+    world = ownPostsWorld()
+    world.connector.ownPostsFindable = true
+    const missions = new ScriptedMissions(async (request) => {
+      await request.authority.lease(async (lease) => {
+        lease.commit()
+        return lease.ticket
+      })
+      // What the browser did: the post is now on the site, where the account's own list shows it.
+      const content = request.authority.content
+      world.connector.published.push({
+        request: { kind: 'post', title: content.title, text: content.text, link: content.link, destination: content.destination } as never,
+        ticket: null as never,
+        visible: true,
+        ref: { url: 'https://example.test/own/1', externalId: 'own-1' }
+      })
+    })
+    world.core.services.postMissions = missions
+    await world.core.router.call('channels.activate', { channelId: world.channel.id })
+    const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'Hello', text: 'Our first post. I work on this product.' } })
+    await world.core.router.call('opportunities.approve', { id: opportunity.id })
+    const action = await world.sending.send(opportunity.id)
+    expect(action).toMatchObject({ state: 'confirmed', resultExternalId: 'own-1' })
+    expect(world.connector.calls).toContain('findPublished')
+  })
+
   it('are approved when the engine cannot be held to the browser tools alone (Codex): any selected engine that can work the browser may publish', async () => {
     world = ownPostsWorld()
     world.core.services.postMissions = new ScriptedMissions(async () => undefined)

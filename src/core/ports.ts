@@ -533,6 +533,12 @@ export interface Connector {
    * has a valid site profile for; for any other channel it can neither read nor reply, and the channel is only for the owner's own posts.
    */
   readsChannel?(channel: Channel): boolean
+  /**
+   * Optional: whether `findPublished` can find what the account itself published in a channel the connector does not read (`readsChannel` false). Reddit
+   * can: it looks in the account's own posts and comments, not in the community's list. Absent means it cannot, and a send to such a channel that the AI
+   * browser made stays "unknown" until the owner looks (DEC-034).
+   */
+  findsOwnPosts?(channel: Channel): boolean
   checkLogin(ctx: ConnectorContext): Promise<LoginState>
   /** Inspects the channel without publishing anything. Only actually verified capabilities may be 'verified'. */
   assess(ctx: ConnectorContext): Promise<Capability[]>

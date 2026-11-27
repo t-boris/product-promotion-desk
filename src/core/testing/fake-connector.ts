@@ -101,6 +101,8 @@ export class FakeConnector implements Connector {
   useSession = true
   /** What `readsChannel` answers: false makes every channel of this connector one for the owner's own posts (DEC-034). */
   canRead = true
+  /** What `findsOwnPosts` answers: true lets a send to a channel the connector does not read be looked for in the account's own posts. */
+  ownPostsFindable = false
 
   private counter = 0
 
@@ -227,6 +229,10 @@ export class FakeConnector implements Connector {
 
   readsChannel(): boolean {
     return this.canRead
+  }
+
+  findsOwnPosts(): boolean {
+    return this.ownPostsFindable
   }
 
   async assess(ctx: ConnectorContext): Promise<Capability[]> {

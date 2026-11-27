@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Channel, Draft, MediaItem, PostGroupCard } from '../../shared/types'
 import { adaptInstruction, editedByHand, PostGroupsFlow } from './post-groups'
-import { chooseExecutor, sendWays } from './send-ways'
+import { chooseExecutor, flairProblem, sendWays } from './send-ways'
 import type { DraftHelp } from './draft-help'
 import type { ReviewFlow } from './review'
 import type { SendingFlow } from './sending'
@@ -641,6 +641,16 @@ describe('what a version says about how it goes out', () => {
     // a channel no connector can post to goes by the AI browser whatever the draft holds, when it may; when it may not, there is no other way and the connector says so
     const none = { attachments: [attach(m) as never], markup: 'legacy' as const, title: null, text: 'x', link: null }
     expect(chooseExecutor({ aiBrowser: true, noConnector: true }, none, 'instagram')).toBe('ai_browser')
+    // A flair is set on the site's own form: no connector sets one, so the browser carries the post, and without the browser the approval says so.
+    const flaired = { attachments: [], markup: 'markdown' as const, title: 'T', text: 'x', link: null, flair: 'Discussion' }
+    expect(chooseExecutor({ aiBrowser: true }, flaired, 'reddit')).toBe('ai_browser')
+    // One picture the connector could carry goes by the connector, and by the browser once the post has a flair.
+    expect(chooseExecutor({ aiBrowser: true }, { attachments: [attach(m) as never], markup: 'legacy', title: 'T', text: '', link: null, flair: 'Discussion' } as never, 'reddit')).toBe('ai_browser')
+    expect(chooseExecutor({ aiBrowser: false }, flaired, 'reddit')).toBe('connector')
+    expect(flairProblem(flaired, { aiBrowser: true })).toBeNull()
+    expect(flairProblem({ ...flaired, flair: null }, { aiBrowser: false })).toBeNull()
+    expect(flairProblem(flaired, { aiBrowser: false })).toMatch(/flair “Discussion” is set in the account's browser.*Settings/)
+    expect(flairProblem(flaired, { aiBrowser: false, unattended: true })).toMatch(/automatic send.*give it a time/)
     expect(chooseExecutor({ aiBrowser: false, noConnector: true, unattended: true }, none, 'instagram')).toBe('connector')
   })
 

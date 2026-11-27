@@ -98,6 +98,11 @@ export class RedditConnector implements Connector {
     return !(posts && (posts.status === 'unavailable' || posts.status === 'restricted'))
   }
 
+  /** The account's own posts and comments are read from its own profile, whether or not the community's list is given to the app (DEC-045). */
+  findsOwnPosts(): boolean {
+    return true
+  }
+
   async checkLogin(ctx: ConnectorContext): Promise<LoginState> {
     return ctx.session.withAgentControl(`login:${ctx.account.id}`, async (page) => {
       await page.goto(`${REDDIT_ORIGIN}/`, { timeoutMs: 30_000 })

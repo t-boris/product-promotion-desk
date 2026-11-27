@@ -8,6 +8,21 @@ import { pictureFitProblems } from './picture-fit'
 
 export type Executor = 'connector' | 'ai_browser'
 
+/** A post with the flair chosen for it, when it has one (a `Draft`; the flair is no part of the rendered text). */
+export type FlairedPost = PostContent & { flair?: string | null }
+
+/**
+ * Why a post with a flair cannot go out as it is: the connector fills a form that has no flair, so the post would arrive without it and a
+ * community that requires one would refuse it with nothing for the application to read back (lesson 330). Null when the AI browser carries
+ * the send (it sets the flair), when the post has no flair, and for a channel with no connector, whose own message says what stops it.
+ */
+export function flairProblem(draft: FlairedPost, ways: SendWays): string | null {
+  if (!draft.flair || ways.aiBrowser || ways.noConnector) return null
+  return ways.unattended
+    ? `The flair “${draft.flair}” is set in the account's browser, and this is an automatic send, which never uses it. Press Send on it yourself, or give it a time. Nothing was sent.`
+    : `The flair “${draft.flair}” is set in the account's browser, by the AI. Turn on “Let the AI publish in the account's browser” in Settings (Publishing), or take the flair off the post.`
+}
+
 /**
  * An item the owner put on a schedule: it has a time (`scheduledAt`). Together with the owner's own approval, given before that time, this is the owner's
  * press made ahead of time on exactly the approved content, which is what lets the scheduler send it without a click and lets the AI browser carry it
@@ -46,10 +61,12 @@ export function sendWays(core: Core, send?: { automatic: boolean; approvedBy: st
  * that is known to work. Legacy drafts are judged by their connector, as before: it refuses what it cannot carry. One function for the send
  * (`executorFor`) and for the group view that tells the owner "will go by".
  */
-export function chooseExecutor(ways: SendWays, draft: PostContent, platform: string): Executor {
+export function chooseExecutor(ways: SendWays, draft: FlairedPost, platform: string): Executor {
   if (!ways.aiBrowser) return 'connector'
   // No connector can post to this channel: whatever the draft holds, the AI browser is the only way.
   if (ways.noConnector) return 'ai_browser'
+  // No connector sets a flair (the label a community asks of a post): the application sets it on the site's own form, in the browser.
+  if (draft.flair) return 'ai_browser'
   // No connector uploads a video: it goes with the AI browser or by hand.
   if (kindsOf(draft.attachments).videos > 0) return 'ai_browser'
   if (draft.attachments.length > 0 && (!judgedForFit(draft) || sendProblems(platform, renderForPlatform(draft, platform), { aiBrowser: false }).length === 0)) return 'connector'
@@ -62,8 +79,10 @@ export function chooseExecutor(ways: SendWays, draft: PostContent, platform: str
  * what the platform refuses about its one picture (type, size, shape). The approval, the gate and the group view ask this one function, so what the
  * owner is told fits is what the press accepts (lesson 209). Empty when nothing stops it.
  */
-export function sendFitProblems(core: Core, draft: PostContent, platform: string, ways: SendWays): string[] {
+export function sendFitProblems(core: Core, draft: FlairedPost, platform: string, ways: SendWays): string[] {
   const problems = sendProblems(platform, renderForPlatform(draft, platform), ways)
+  const flair = flairProblem(draft, ways)
+  if (flair) problems.push(flair)
   if (draft.postType === 'quick') problems.push(...pictureFitProblems(core, platform, draft.attachments))
   return problems
 }

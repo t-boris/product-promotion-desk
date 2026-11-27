@@ -340,7 +340,9 @@ export class MissionPublisher {
     const request = { ...grant.request, attemptedAt }
     // A channel the app does not read cannot be read back (DEC-034): say so, and leave the finding to the owner, who looks at the page. The same for the owner's
     // own answer from a post of the Feed: it is made on a page the application cannot read, whatever the channel's connector can do.
-    if (!grant.channel.reads || grant.opportunity.findingId !== null) {
+    // A connector that finds the account's own posts without reading the channel (Reddit, from the account's profile) does look.
+    const canLook = grant.channel.reads || connector.findsOwnPosts?.(grant.channel) === true
+    if (!canLook || grant.opportunity.findingId !== null) {
       return {
         status: 'unknown',
         error: `${pressed} The app does not read this channel, so it cannot check that the post is up. Look at the page and tell the app whether it was published.`,
