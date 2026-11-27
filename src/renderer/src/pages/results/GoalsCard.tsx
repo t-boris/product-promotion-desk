@@ -1,6 +1,7 @@
 import type { ResultsView } from '../../../../shared/types'
 import { productHref } from '../../route'
 import { Card, EmptyState, Hint } from '../../ui'
+import { GoalProgressNote } from '../products/GoalTargetRow'
 
 /** The promotion goals are read-only here; they are edited on the product's Goal tab. */
 export function GoalsCard({ goals }: { goals: ResultsView['goals'] }) {
@@ -22,6 +23,7 @@ export function GoalsCard({ goals }: { goals: ResultsView['goals'] }) {
                   <div>{goal.targetAction}</div>
                   {goal.successMetrics.length > 0 && <Hint>Success measured by: {goal.successMetrics.join(', ')}</Hint>}
                   {goal.notes && <Hint>{goal.notes}</Hint>}
+                  <GoalProgressNote productId={productId} goalId={goal.id} />
                 </div>
               ))
             )}

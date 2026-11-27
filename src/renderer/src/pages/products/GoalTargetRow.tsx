@@ -84,3 +84,17 @@ function TargetForm({ productId, goalId, kept, onClose }: { productId: string; g
     </div>
   )
 }
+
+/** The same line for a read-only place (the Overview): how far the goal's number is, or nothing when it has none. */
+export function GoalProgressNote({ productId, goalId }: { productId: string; goalId: string }) {
+  const all = useQuery('goals.progress', { productId }, ['products', 'results', 'opportunities'])
+  const kept = all.data?.find((p) => p.goalId === goalId)
+  if (!kept) return null
+  return (
+    <div className="row" data-testid={`goal-progress-${goalId}`}>
+      <Badge tone={STATE_TONE[kept.state]}>{STATE_LABEL[kept.state]}</Badge>
+      <span>{progressLine(kept)}</span>
+      <span className="muted">due {kept.by}</span>
+    </div>
+  )
+}

@@ -15,7 +15,7 @@ import { PostDetail } from './posts/PostDetail'
 import { postsCalendarAsked } from '../route'
 import { Campaigns } from './posts/Campaigns'
 import { DatesAhead } from './posts/DatesAhead'
-import { datesByDay } from './posts/dates-ahead'
+import { datesByDay, withCampaignDays } from './posts/dates-ahead'
 import { PostsCalendar } from './posts/PostsCalendar'
 import { PostsList } from './posts/PostsList'
 import { monthOf, offsetOn, plannedTimeOn, rhythmMarkers, monthGrid, type YearMonth } from './posts/posts-calendar'
@@ -138,7 +138,8 @@ function PostsScreen({ product }: { product: Product }) {
 
   // The product's dates ahead (DEC-060): named in the cells of the month and listed under it.
   const seasonal = useQuery('seasonal.get', { productId: product.id }, ['products', 'channels', 'opportunities'])
-  const dateNames = useMemo(() => datesByDay(seasonal.data?.events ?? [], offset), [seasonal.data, offset])
+  const campaigns = useQuery('themes.list', { productId: product.id }, ['products'])
+  const dateNames = useMemo(() => withCampaignDays(datesByDay(seasonal.data?.events ?? [], offset), campaigns.data ?? []), [seasonal.data, campaigns.data, offset])
 
   // Writing and suggesting go to a channel: the one the filter is on, else the first one that can take a post.
   const canPost = (channel: Channel): boolean => {

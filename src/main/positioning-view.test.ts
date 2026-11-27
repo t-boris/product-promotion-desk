@@ -39,3 +39,13 @@ describe('the audience\'s words', () => {
     expect(saidIn(3)).toBe('Said in 3 posts')
   })
 })
+
+describe('campaign days on the calendar', () => {
+  it('name the first and the last day beside the dates already there', async () => {
+    const { withCampaignDays } = await import('../renderer/src/pages/posts/dates-ahead')
+    const days = withCampaignDays(new Map([['2026-12-01', ['New Moon']]]), [{ name: 'First steps', from: '2026-12-01', to: '2026-12-07' }, { name: 'One day', from: '2026-12-03', to: '2026-12-03' }])
+    expect(days.get('2026-12-01')).toEqual(['New Moon', 'First steps starts'])
+    expect(days.get('2026-12-07')).toEqual(['First steps ends'])
+    expect(days.get('2026-12-03')).toEqual(['One day'])
+  })
+})

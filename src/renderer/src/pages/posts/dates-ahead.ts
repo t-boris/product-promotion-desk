@@ -44,3 +44,17 @@ export function ownDateLine(date: { month: number; day: number; year: number | n
   return `${MONTHS[date.month - 1]} ${date.day}, ${date.year === null ? 'every year' : date.year}`
 }
 export { MONTHS }
+
+/** The days a campaign starts and ends on, named for the calendar's cells, added to the names already there. */
+export function withCampaignDays(days: ReadonlyMap<string, string[]>, campaigns: readonly { name: string; from: string; to: string }[]): Map<string, string[]> {
+  const out = new Map([...days].map(([day, names]) => [day, [...names]] as [string, string[]]))
+  const add = (day: string, name: string): void => void out.set(day, [...(out.get(day) ?? []), name])
+  for (const campaign of campaigns) {
+    if (campaign.from === campaign.to) add(campaign.from, campaign.name)
+    else {
+      add(campaign.from, `${campaign.name} starts`)
+      add(campaign.to, `${campaign.name} ends`)
+    }
+  }
+  return out
+}

@@ -1484,7 +1484,7 @@ One release per phase; each is verified (`npm run verify`), installed and read o
   - launch venues: only if the product counts as software
   - Threads topic tag and Pinterest keywords: the open tags question (memory: Reddit editor mode and tags)
   - numbers under posts on browser-worked channels: the application keeps no address of such a post, so there is nothing to open and read
-- Small leftovers: the goal's progress line on the Overview; campaign days drawn on the calendar grid.
+- 0.72.1: the goal progress line on the Overview; a campaign's first and last day named in the calendar cells.
 
 ## Phase A steps
 - [x] `scheduledByOwner`: any item the owner gave a time (not only a Feed answer); `publications.schedule` accepts any channel and replies
