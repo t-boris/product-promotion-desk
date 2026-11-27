@@ -509,6 +509,7 @@ export interface ApiMethods {
    * (suggest_failed). Like the AI drafts, it works with any ready engine.
    */
   /** The owner's own draft put into another language (one of `READING_LANGUAGES`). Nothing is stored: the editor takes the answer and the owner saves. */
+  'drafts.outline': [{ form: { title: string; text: string }; kind: 'carousel' | 'video' }, { kind: 'carousel' | 'video'; parts: { show: string; say: string }[] }]
   'drafts.translate': [{ form: { title: string; text: string }; language: string }, { title: string; text: string }]
   'drafts.refine': [{ field: DraftHelpField; opportunityId?: Id; channelId?: Id; form: { title: string; text: string }; instruction?: string; about?: string }, DraftHelpResult]
   /**
