@@ -1486,6 +1486,14 @@ One release per phase; each is verified (`npm run verify`), installed and read o
   - a topic the AI browser types into the Threads composer: the open tags question
   - numbers under posts on browser-worked channels: only the AI browser could read them there, and DEC-056 says the connector reads and the AI never supplies a number; they come with the API connectors of phases F-H, or need the owner's yes to let the AI read numbers
 
+## Plan after the owner's answers of 2026-11-27
+The owner answered: the kind of an account is asked per account with a guided connection in the internal browser; numbers under posts must be read on every channel; analytics is chosen per product (Google Analytics, Plausible or none).
+- [ ] N1 numbers under the owner's posts on channels worked through the browser (Instagram, Facebook, Threads): the AI browser opens the account's own posts and the numbers are kept like Reddit's (changes DEC-056)
+- [ ] N2 the kind of an account, asked when it is created (Instagram: professional or personal; Facebook: Page or personal profile), kept per account
+- [ ] N3 a connection guide per platform and kind: numbered steps, each link opens the account's own browser at that page; Telegram bot guide in the same form
+- [ ] N4 analytics per product: none, Plausible or Google Analytics; a "site visits" goal measure only when there is one
+- [ ] N5 phases F-H guides per account kind (what a business and a personal account can do through Meta's API), once the Meta proofs T2/T3 are done with the guide
+
 ## Phase A steps
 - [x] `scheduledByOwner`: any item the owner gave a time (not only a Feed answer); `publications.schedule` accepts any channel and replies
 - [x] due-send query covers replies; lateness from the setting `scheduleGraceHours` (default 6, 1-48)

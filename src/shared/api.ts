@@ -7,6 +7,7 @@ import type { TrialMetric } from './channel-trial'
 import type { CalendarKind } from './seasonal'
 import type { Person, PersonFields } from './people'
 import type { ThemeView } from './post-themes'
+import type { SiteVisitsView, VisitSource } from './site-visits'
 import type { ProductChoices, VenueState, VenueStep } from './product-choices'
 import type { GoalMeasure, GoalProgress } from './goal-target'
 import type {
@@ -664,6 +665,9 @@ export interface ApiMethods {
   'listening.dismiss': [{ id: Id }, ListeningView]
   'goals.progress': [{ productId: Id }, GoalProgress[]]
   'goals.setTarget': [{ productId: Id; goalId: Id; target: { measure: GoalMeasure; number: number; by: string } | null }, GoalProgress[]]
+  'visits.get': [{ productId: Id }, SiteVisitsView]
+  'visits.setSource': [{ productId: Id; source: VisitSource; siteId?: string; host?: string; key?: string }, SiteVisitsView]
+  'visits.read': [{ productId: Id }, SiteVisitsView]
   'choices.get': [{ productId: Id }, ProductChoices]
   'choices.set': [{ productId: Id; channelLimit?: number | null; lowTime?: boolean; software?: boolean }, ProductChoices]
   'choices.venues': [{ productId: Id }, VenueState[]]

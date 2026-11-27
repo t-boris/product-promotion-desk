@@ -166,6 +166,8 @@ export class PeriodicTasks {
         this.launch('weekly-review', async () => void (await weekly.prepareDue(() => this.halted || this.pausedAtTick)))
         const { answers } = this.core.services
         const { listening } = this.core.services
+        const { visits } = this.core.services
+        if (visits) this.launch('site-visits', async () => void (await visits.readDue(() => this.halted || this.pausedAtTick)))
         if (listening) this.launch('listening', async () => void (await listening.lookDue(() => this.halted || this.pausedAtTick)))
         if (answers) this.launch('answer-check', async () => void (await answers.askDue(() => this.halted || this.pausedAtTick)))
       }

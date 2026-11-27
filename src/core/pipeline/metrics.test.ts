@@ -165,9 +165,12 @@ describe('Platform metrics (REQ-006, DEC-002)', () => {
     await expect(h.core.router.call('results.refresh', { channelId: channel.id })).rejects.toMatchObject({ code: 'not_available' })
   })
 
-  it('offers no business-event ingestion or analytics connection in version 1 (DEC-002)', () => {
+  // DEC-073 changed DEC-002 in one place: the visitors of a product's site are read, read-only, from the analytics service its owner named
+  // (`visits.*`). Business events are still never taken in, and nothing is connected unless the owner chose it for the product.
+  it('takes in no business events; site visitors come only through the owner\'s per-product choice (DEC-002, DEC-073)', () => {
     const { h } = setup()
     const methods = h.core.router.methods()
     expect(methods.filter((m) => /analytics|conversion|business|ingest|import/i.test(m))).toEqual([])
+    expect(methods.filter((m) => m.startsWith('visits.')).sort()).toEqual(['visits.get', 'visits.read', 'visits.setSource'])
   })
 })

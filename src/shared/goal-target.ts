@@ -1,7 +1,8 @@
 // A goal's number and date (DEC-067): a count the application makes itself from what it sent and what the sites show, how far it is, and by when.
 // Visits, sign-ups and sales are not among the measures: the application has no access to the owner's site.
 
-export const GOAL_MEASURES = ['posts', 'replies', 'likes', 'comments', 'people'] as const
+/** `visits` is offered only for a product whose site visits the application can read (DEC-073). */
+export const GOAL_MEASURES = ['posts', 'replies', 'likes', 'comments', 'people', 'visits'] as const
 export type GoalMeasure = (typeof GOAL_MEASURES)[number]
 
 export const GOAL_MEASURE_LABEL: Record<GoalMeasure, string> = {
@@ -9,7 +10,8 @@ export const GOAL_MEASURE_LABEL: Record<GoalMeasure, string> = {
   replies: 'Replies sent',
   likes: 'Points and likes under what was sent',
   comments: 'Comments received under what was sent',
-  people: 'People added to People'
+  people: 'People added to People',
+  visits: 'Visitors of the site (from its analytics)'
 }
 
 /** The measure inside a sentence: "12 of 40 posts sent". */
@@ -18,7 +20,8 @@ export const GOAL_MEASURE_WORDS: Record<GoalMeasure, string> = {
   replies: 'replies sent',
   likes: 'points and likes',
   comments: 'comments received',
-  people: 'people met'
+  people: 'people met',
+  visits: 'visitors of the site'
 }
 
 export const MAX_GOAL_NUMBER = 1_000_000
@@ -41,6 +44,8 @@ export interface GoalProgress extends GoalTarget {
   state: GoalState
   /** Whole days left, the due day included; 0 once it has passed. */
   daysLeft: number
+  /** Why the count could not be made now (the analytics service did not answer); the count is then the last known one or 0. */
+  problem?: string
 }
 
 const DAY_MS = 86_400_000

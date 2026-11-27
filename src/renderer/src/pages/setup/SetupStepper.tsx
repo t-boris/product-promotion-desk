@@ -1,3 +1,4 @@
+import { SiteVisitsCard } from '../products/SiteVisitsCard'
 import type { ReactNode } from 'react'
 import type { PassportView } from '../../../../shared/types'
 import { OVERVIEW_HREF, setupHref, type SetupTab } from '../../route'
@@ -37,7 +38,12 @@ export function SetupStepper({ view, stages, open }: { view: PassportView; stage
     analysis: () => <AnalysisTab view={view} />,
     positioning: () => <PositioningTab product={view.product} />,
     words: () => <AudienceWordsTab product={view.product} />,
-    goal: () => <GoalTab product={view.product} onOpenResults={() => go(OVERVIEW_HREF)} />
+    goal: () => (
+      <>
+        <GoalTab product={view.product} onOpenResults={() => go(OVERVIEW_HREF)} />
+        <SiteVisitsCard product={view.product} />
+      </>
+    )
   }
   return (
     <ol className="setup-steps" aria-label="Setup steps" data-testid="setup-steps">

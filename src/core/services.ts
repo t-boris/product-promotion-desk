@@ -156,4 +156,6 @@ export interface CoreServices {
   weekly?: WeeklyReviewService
   answers?: AnswerCheckService
   listening?: ListeningService
+  /** Site visits (DEC-073): the scheduler's job reads again when the last reading is old. */
+  visits?: { readDue(stop?: () => boolean): Promise<number>; visitorsBetween(productId: string, from: string, to: string): Promise<number> }
 }

@@ -601,4 +601,22 @@ CREATE TABLE launch_venues (
 );
 `
   }
+  ,
+  {
+    id: 330,
+    name: 'site visits: where a product\'s site is counted and the last reading',
+    sql: `
+-- DEC-073: source is none, plausible or google. The key is in the vault (visits:<product id>), never here.
+CREATE TABLE site_visits (
+  product_id TEXT PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE,
+  source TEXT NOT NULL DEFAULT 'none',
+  site_id TEXT NOT NULL DEFAULT '',
+  host TEXT NOT NULL DEFAULT '',
+  read_at TEXT,
+  error TEXT,
+  total INTEGER,
+  rows_json TEXT NOT NULL DEFAULT '[]'
+);
+`
+  }
 ]

@@ -30,6 +30,7 @@ export function GoalTargetRow({ productId, goalId }: { productId: string; goalId
       <Badge tone={STATE_TONE[kept.state]}>{STATE_LABEL[kept.state]}</Badge>
       <span>{progressLine(kept)}</span>
       <span className="muted">due {kept.by}</span>
+      {kept.problem && <span className="muted">({kept.problem})</span>}
       <Button variant="quiet" onClick={() => setEditing(true)} data-testid={`goal-number-change-${goalId}`}>
         Change the number
       </Button>
@@ -38,6 +39,9 @@ export function GoalTargetRow({ productId, goalId }: { productId: string; goalId
 }
 
 function TargetForm({ productId, goalId, kept, onClose }: { productId: string; goalId: string; kept: GoalProgress | null; onClose: () => void }) {
+  const visits = useQuery('visits.get', { productId }, ['products'])
+  // Visitors of the site are offered only when the application can read them (DEC-073).
+  const measures = GOAL_MEASURES.filter((id) => id !== 'visits' || visits.data?.canRead === true || kept?.measure === 'visits')
   const [measure, setMeasure] = useState<GoalMeasure>(kept?.measure ?? 'comments')
   const [number, setNumber] = useState(kept ? String(kept.number) : '')
   const [by, setBy] = useState(kept?.by ?? '')
@@ -52,7 +56,7 @@ function TargetForm({ productId, goalId, kept, onClose }: { productId: string; g
       <div className="goal-number-fields">
         <Field label="What to count">
           <select className="input" value={measure} onChange={(e) => setMeasure(e.target.value as GoalMeasure)} disabled={saving.busy} data-testid={`goal-number-measure-${goalId}`}>
-            {GOAL_MEASURES.map((id) => (
+            {measures.map((id) => (
               <option key={id} value={id}>
                 {GOAL_MEASURE_LABEL[id]}
               </option>
@@ -66,7 +70,7 @@ function TargetForm({ productId, goalId, kept, onClose }: { productId: string; g
           <input className="input" type="date" value={by} onChange={(e) => setBy(e.target.value)} disabled={saving.busy} data-testid={`goal-number-by-${goalId}`} />
         </Field>
       </div>
-      <Hint>The application counts this itself, from the moment you save: what it sent and what the sites show under it. It cannot count visits, sign-ups or sales. Choosing another thing to count starts the count over.</Hint>
+      <Hint>The application counts this itself, from the moment you save: what it sent and what the sites show under it. Visitors of the site can be counted only when the product has analytics the application reads; sign-ups and sales cannot. Choosing another thing to count starts the count over.</Hint>
       <div className="row">
         <Button variant="primary" onClick={() => void save({ measure, number: n, by })} disabled={saving.busy || !ready} data-testid={`goal-number-save-${goalId}`}>
           {saving.busy ? 'Saving…' : 'Save the number'}

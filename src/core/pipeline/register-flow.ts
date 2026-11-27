@@ -16,6 +16,7 @@ import { Listening } from './listening'
 import { GoalTargets } from './goal-targets'
 import { People } from './people'
 import { Choices } from './product-choices'
+import { SiteVisits } from './site-visits'
 import { Themes } from './themes'
 import { SeasonalCalendar } from './seasonal'
 import { buildCard } from './cards'
@@ -181,6 +182,14 @@ export function registerFlow(core: Core): void {
   core.router.register({
     'goals.progress': (args) => goalTargets.progress(args),
     'goals.setTarget': (args) => goalTargets.set(args)
+  })
+  // Site visits (DEC-073): read-only from the analytics service the owner named for the product; no AI.
+  const visits = new SiteVisits(core)
+  core.services.visits = visits
+  core.router.register({
+    'visits.get': (args) => visits.view(args),
+    'visits.setSource': (args) => visits.setSource(args),
+    'visits.read': (args) => visits.read(args)
   })
   // The owner's choices about how a product is worked (DEC-071): a channel limit shown, a week with no time, launch venues for software.
   const choices = new Choices(core)
