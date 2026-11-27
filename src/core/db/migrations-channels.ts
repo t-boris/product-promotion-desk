@@ -204,4 +204,13 @@ CREATE TABLE telegram_state (
 );
 `
   }
+  ,
+  {
+    id: 211,
+    name: 'channels: the kind of an account on its platform, as the owner said it',
+    sql: `
+-- DEC-074: one of the platform's kinds (Instagram: professional or personal; Facebook: page or profile). NULL = not said, or one kind only.
+ALTER TABLE accounts ADD COLUMN kind TEXT;
+`
+  }
 ]

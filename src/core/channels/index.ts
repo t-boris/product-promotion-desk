@@ -76,6 +76,7 @@ export function register(core: Core): void {
     'accounts.suggestRoles': (args) => roles.suggest(args),
     'accounts.setProfile': (args) => accounts.setProfile(args),
     'accounts.rename': (args) => accounts.rename(args),
+    'accounts.setKind': (args) => accounts.setKind(args),
     'accounts.setBrowser': (args) => accounts.setBrowser(args),
     'accounts.setSignInVia': (args) => accounts.setSignInVia(args),
     'lessons.list': () => lessons.list(),

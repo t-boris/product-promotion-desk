@@ -20,7 +20,7 @@ const account = (id: string, partition = `persist:ppd-${id}`): Account => ({
   id,
   platform: 'reddit',
   browser: 'internal',
-  access: 'browser', signsInVia: null,
+  access: 'browser', signsInVia: null, kind: null,
   label: `Account ${id}`,
   identity: 'natal_bot',
   partition,

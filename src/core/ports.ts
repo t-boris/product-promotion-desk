@@ -12,6 +12,7 @@ import type {
   EngineModel,
   EngineStatus,
   FilePurpose,
+  GuideStep,
   Id,
   IsoTime,
   MetricReading,
@@ -441,8 +442,8 @@ export interface ApiAccess {
   accountKind: string
   /** What the key is called, e.g. "Bot token". */
   keyLabel: string
-  /** What the owner does on the platform's side to get the key and let it work, in order. */
-  steps: string[]
+  /** What the owner does on the platform's side to get the key and let it work, in order; a step with an address opens in the account's own browser (DEC-074). */
+  steps: GuideStep[]
   /** Whether a typed key looks like one, before it is saved. */
   keyLooksValid(key: string): boolean
 }

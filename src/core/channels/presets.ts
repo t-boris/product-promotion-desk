@@ -2,7 +2,7 @@
 // short handle becomes an address, what a post can hold. There is no code per platform, and nothing here claims that a platform works:
 // every channel on these platforms starts as "needs check" until its site profile was prepared and its abilities were actually seen.
 
-import type { PlatformContentKind } from '../../shared/types'
+import type { AccountKindChoice, GuideStep, PlatformContentKind } from '../../shared/types'
 
 export interface PlatformPreset {
   /** Key stored on accounts and channels. */
@@ -28,7 +28,16 @@ export interface PlatformPreset {
   accepts: PlatformContentKind[]
   hint: string
   note: string
+  /** The kinds of account the platform has, asked for each account (DEC-074). */
+  kinds?: AccountKindChoice[]
+  /** How an account is connected, per kind; '' is for a kind not said yet, or a platform with no kinds. Addresses are on the platform's own domains. */
+  guides?: Record<string, GuideStep[]>
 }
+
+const SIGN_IN = (label: string): GuideStep => ({ text: `Sign in to ${label} in this account’s browser (the Sign-in step below), or create the account there.` })
+const INSTAGRAM_SETTINGS = 'https://www.instagram.com/accounts/edit/'
+const INSTAGRAM_CHANNEL: GuideStep = { text: 'Then connect its channel on the Channels screen: the address is the profile, like @yourbrand.' }
+const FACEBOOK_PAGES = 'https://www.facebook.com/pages/'
 
 export const PLATFORM_PRESETS: PlatformPreset[] = [
   {
@@ -43,6 +52,40 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     example: '@yourbrand',
     accepts: ['image', 'video'],
     hint: 'The address of the profile, e.g. https://www.instagram.com/yourbrand/ or @yourbrand.',
+    kinds: [
+      { id: 'professional', label: 'Professional (business or creator)', hint: 'A public account with a category under its name; Instagram shows it the views of each post.' },
+      { id: 'personal', label: 'Personal', hint: 'An ordinary account; it may be private.' }
+    ],
+    guides: {
+      '': [
+        SIGN_IN('Instagram'),
+        {
+          text: 'Find out the kind: in Settings look for “For professionals”, then “Account type and tools”. If it offers “Switch to professional account”, the account is personal; if it offers to switch to a personal account, it is professional. Then choose the kind above.',
+          url: INSTAGRAM_SETTINGS,
+          link: 'Open Instagram’s settings'
+        },
+        INSTAGRAM_CHANNEL
+      ],
+      professional: [
+        SIGN_IN('Instagram'),
+        {
+          text: 'Check the kind: Settings, “For professionals”, “Account type and tools”. If it offers “Switch to professional account”, the account is still personal: press it and choose Creator or Business. It is free, and a professional account is always public.',
+          url: INSTAGRAM_SETTINGS,
+          link: 'Open Instagram’s settings'
+        },
+        INSTAGRAM_CHANNEL
+      ],
+      personal: [
+        SIGN_IN('Instagram'),
+        { text: 'Nothing more is needed on Instagram’s side. If the account is private, only its followers see what is posted.' },
+        {
+          text: 'To make it professional later (free): Settings, “For professionals”, “Account type and tools”, “Switch to professional account”. Then change the kind above.',
+          url: INSTAGRAM_SETTINGS,
+          link: 'Open Instagram’s settings'
+        },
+        INSTAGRAM_CHANNEL
+      ]
+    },
     note: 'A post needs a photo or a video. A picture can be brought by the owner or made by the AI from a description (when Codex is ready); the application does not make video. The platform restricts automation, so expect checks and limits.'
   },
   {
@@ -57,6 +100,31 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     example: 'https://www.facebook.com/groups/yourgroup',
     accepts: ['text', 'image', 'video', 'link'],
     hint: 'The address of a page or a group, e.g. https://www.facebook.com/groups/astrologyclub.',
+    kinds: [
+      { id: 'page', label: 'A Page', hint: 'A public page of a business or a brand. It has no login of its own: a personal profile manages it.' },
+      { id: 'profile', label: 'A personal profile', hint: 'A person’s own profile; it posts to its timeline and to the groups it joined.' }
+    ],
+    guides: {
+      '': [
+        SIGN_IN('Facebook'),
+        { text: 'Say what this account posts as: a Page, or the personal profile itself. The Pages this profile manages are listed here. Then choose the kind above.', url: FACEBOOK_PAGES, link: 'Open your Pages' }
+      ],
+      page: [
+        { text: 'A Page has no login of its own: sign in with the personal profile that manages it (the Sign-in step below).' },
+        { text: 'Create the Page: give it a name and a category. Skip this when the Page exists.', url: 'https://www.facebook.com/pages/create', link: 'Open “Create a Page”' },
+        {
+          text: 'Switch into the Page, so that posts go out as the Page: press your picture at the top right and choose the Page (Facebook also calls it “See all profiles” or “Switch”).',
+          url: FACEBOOK_PAGES,
+          link: 'Open your Pages'
+        },
+        { text: 'Then connect its channel on the Channels screen: the address of the Page, like https://www.facebook.com/yourpage.' }
+      ],
+      profile: [
+        SIGN_IN('Facebook'),
+        { text: 'A personal profile posts to its own timeline and to the groups it has joined. To post in a group, join it first.', url: 'https://www.facebook.com/groups/discover/', link: 'Open Facebook groups' },
+        { text: 'Then connect its channel on the Channels screen: the address of the group, like https://www.facebook.com/groups/yourgroup.' }
+      ]
+    },
     note: 'Groups have their own rules and often need approval of posts. The platform restricts automation.'
   },
   {
@@ -125,6 +193,13 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     example: '@yourchannel',
     accepts: ['text', 'image', 'video', 'link'],
     hint: 'The address of a channel or a group, e.g. https://t.me/yourchannel or @yourchannel.',
+    guides: {
+      '': [
+        { text: 'A Telegram account is made in the Telegram app on your phone, with your phone number.' },
+        { text: 'Sign in here with the code on the screen: in the phone app open Settings, Devices, Link Desktop Device, and scan it.', url: 'https://web.telegram.org/', link: 'Open Telegram Web' },
+        { text: 'Then connect its channel on the Channels screen: a channel or a group, like @yourchannel. To post on a schedule and read comments with no browser, add one more account and choose “Through a bot”.' }
+      ]
+    },
     note: 'Groups and channels set their own rules on who may post.'
   },
   {
@@ -141,6 +216,13 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
     example: '@yourbrand',
     accepts: ['text', 'image', 'video', 'link'],
     hint: 'The address of the profile, e.g. https://www.threads.net/@yourbrand or @yourbrand.',
+    guides: {
+      '': [
+        { text: 'Threads has no login of its own: this account signs in with its Instagram account (the step below). Its kind is the kind of that Instagram account.' },
+        { text: 'Sign in (the Sign-in step below). The first time, Threads asks to make the Threads profile from the Instagram one: confirm it.' },
+        { text: 'Then connect its channel on the Channels screen: the address is the profile, like @yourbrand.' }
+      ]
+    },
     note: 'Short text posts. The platform restricts automation.'
   },
   {

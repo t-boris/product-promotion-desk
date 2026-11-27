@@ -258,7 +258,7 @@ export interface ApiMethods {
   'accounts.health': [{ accountId: Id }, AccountHealthView]
   'accounts.warmUp': [{ accountId: Id; on: boolean }, AccountHealthView]
   /** Creates an account with its own login and browser session. `productId` only records what it was created for. */
-  'accounts.create': [{ productId?: Id; platform: string; label: string; role?: AccountRole | null; email?: string | null; mailboxId?: Id | null; profileId?: Id | null; signsInVia?: Id | null; access?: AccountAccess }, Account]
+  'accounts.create': [{ productId?: Id; platform: string; label: string; role?: AccountRole | null; email?: string | null; mailboxId?: Id | null; profileId?: Id | null; signsInVia?: Id | null; access?: AccountAccess; kind?: string | null }, Account]
   /** Sets or clears (null) the e-mail address of an account. */
   'accounts.setEmail': [{ accountId: Id; email: string | null; mailboxId?: Id | null }, Account]
   /** An address of its own for a new account on `platform`, made from a base mailbox (an alias), different from every address in use. */
@@ -325,6 +325,8 @@ export interface ApiMethods {
   'accounts.setProfile': [{ accountId: Id; profileId: Id | null }, Account]
   /** Renames an account: the name the owner sees in lists and headers. Same rules as at creation. */
   'accounts.rename': [{ accountId: Id; label: string }, Account]
+  /** The kind of the account on its platform, as the owner says it (DEC-074); null takes the answer back. */
+  'accounts.setKind': [{ accountId: Id; kind: string | null }, Account]
   /** Chooses the browser the account works in (DEC-026). Refused while the AI works on it or the owner holds its browser, and for Chrome when Chrome is not installed. */
   'accounts.setBrowser': [{ accountId: Id; browser: BrowserChoice }, Account]
   /** Changes the account this one signs in through (DEC-027): a Threads account through an Instagram account. */

@@ -95,7 +95,9 @@ export const mapAccount = (r: Row): Account => ({
   browser: r.browser === 'chrome' ? 'chrome' : 'internal',
   // accounts.access comes with migration 210 (DEC-055).
   access: r.access === 'api' ? 'api' : 'browser',
-  signsInVia: (r.via_account_id as string | null | undefined) ?? null
+  signsInVia: (r.via_account_id as string | null | undefined) ?? null,
+  // accounts.kind comes with migration 211 (DEC-074).
+  kind: (r.kind as string | null | undefined) ?? null
 })
 
 export const mapMailbox = (r: Row): Mailbox => ({ id: r.id as string, address: r.address as string, kind: 'existing', createdAt: r.created_at as string })

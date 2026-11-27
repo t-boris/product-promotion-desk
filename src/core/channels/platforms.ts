@@ -48,7 +48,9 @@ export function listPlatforms(connectors: ConnectorRegistry): PlatformInfo[] {
         example: p.example,
         handleUrl: p.handleUrl,
         accepts: p.accepts,
-        note: p.note
+        note: p.note,
+        ...(p.kinds ? { kinds: p.kinds } : {}),
+        ...(p.guides ? { guides: p.guides } : {})
       }))
     : []
   const byLabel = (a: PlatformInfo, b: PlatformInfo): number => a.label.localeCompare(b.label)

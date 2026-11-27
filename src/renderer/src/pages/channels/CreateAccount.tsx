@@ -1,3 +1,4 @@
+import { KIND_NOT_SAID } from '../../../../shared/connection-guide'
 import { useState, type FormEvent } from 'react'
 import type { Account, AccountRole, Mailbox, PlatformInfo, Profile, AccountAccess } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
@@ -53,7 +54,8 @@ export function CreateAccount({
   const [fromMailbox, setFromMailbox] = useState<string | null>(null)
   const [viaId, setViaId] = useState('')
   const [access, setAccess] = useState<AccountAccess>('browser')
-  const [create, state] = useAction((args: { productId?: string; platform: string; label: string; role?: AccountRole; email?: string; mailboxId?: string; profileId?: string; signsInVia?: string; access?: AccountAccess }) => call('accounts.create', args))
+  const [kind, setKind] = useState('')
+  const [create, state] = useAction((args: { productId?: string; platform: string; label: string; role?: AccountRole; email?: string; mailboxId?: string; profileId?: string; signsInVia?: string; kind?: string; access?: AccountAccess }) => call('accounts.create', args))
   const mailboxId = mailboxes.some((m) => m.id === chosenMailbox) ? chosenMailbox : (mailboxes[0]?.id ?? '')
   const [propose, proposing] = useAction(async (platformKey: string) => {
     const result = await call('accounts.proposeEmail', { mailboxId, platform: platformKey })
@@ -72,6 +74,8 @@ export function CreateAccount({
   // A platform that can be worked through its own API (a Telegram bot, DEC-055): such an account has a key, no e-mail, password or browser.
   const viaApi = info?.api !== undefined && access === 'api'
   const signsInWith = viaApi ? undefined : info?.signsInWith
+  // The kinds of account the platform has (DEC-074): asked for each account, because one product may have a business account and personal ones.
+  const kinds = viaApi ? [] : (info?.kinds ?? [])
   const wantedLabel = signsInWith ? (platforms.find((p) => p.platform === signsInWith)?.label ?? signsInWith) : ''
   const candidates = signsInWith ? eligibleVia(accounts, signsInWith, profile?.id ?? null) : []
   const via = signsInWith ? chosenVia(candidates, viaId) : ''
@@ -91,6 +95,7 @@ export function CreateAccount({
       ...(profile ? { profileId: profile.id } : {}),
       ...(signsInWith ? { signsInVia: via } : {}),
       ...(viaApi ? { access: 'api' as const } : {}),
+      ...(kinds.length > 0 && kind ? { kind } : {}),
       ...(!signsInWith && !viaApi && email.trim() ? { email: email.trim(), ...(fromMailbox ? { mailboxId: fromMailbox } : {}) } : {})
     })
     if (account) onCreated(account)
@@ -103,6 +108,7 @@ export function CreateAccount({
           <select className="input" value={platform} onChange={(e) => {
               setChosen(e.target.value)
               setViaId('')
+              setKind('')
             }}
             disabled={platforms.length === 0} data-testid="account-platform">
             <option value="">Choose a platform…</option>
@@ -122,6 +128,18 @@ export function CreateAccount({
           <select className="input" value={viaApi ? 'api' : 'browser'} onChange={(e) => setAccess(e.target.value === 'api' ? 'api' : 'browser')} data-testid="account-access">
             <option value="browser">In the account's browser</option>
             <option value="api">{`Through a ${info.api.accountKind} (${info.label}'s own API)`}</option>
+          </select>
+        </Field>
+      )}
+      {kinds.length > 0 && (
+        <Field label="Kind of account" hint={kinds.find((k) => k.id === kind)?.hint ?? 'The steps to connect it depend on the kind. If you are not sure, the account’s page tells you how to find out.'}>
+          <select className="input" value={kind} onChange={(e) => setKind(e.target.value)} data-testid="account-kind">
+            <option value="">{KIND_NOT_SAID}</option>
+            {kinds.map((k) => (
+              <option key={k.id} value={k.id}>
+                {k.label}
+              </option>
+            ))}
           </select>
         </Field>
       )}

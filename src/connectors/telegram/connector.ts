@@ -68,10 +68,17 @@ const API: ApiAccess = {
   accountKind: 'bot',
   keyLabel: 'Bot token',
   steps: [
-    'In Telegram, open @BotFather, send /newbot and follow it: it gives the bot a name and shows the bot token.',
-    'Add the bot to your channel as an administrator with the right to post messages.',
-    'To read and answer comments: the channel needs a discussion group (channel settings, Discussion), the bot must be added to that group, and in @BotFather its group privacy must be turned off (/setprivacy, Disable) so it receives the comments.',
-    'Paste the bot token here. It is kept in the vault of this Mac and is never shown again.'
+    {
+      text: 'Open @BotFather and sign in to Telegram there (in the Telegram app on your phone: Settings, Devices, Link Desktop Device, then scan the code). If the chat does not open by itself, search for @BotFather, the one with the check mark.',
+      url: 'https://web.telegram.org/k/#@BotFather',
+      link: 'Open BotFather'
+    },
+    { text: 'Send /newbot and follow it: it gives the bot a name and shows the bot token.' },
+    { text: 'Add the bot to your channel as an administrator with the right to post messages (open the channel, press its name, Administrators, Add Administrator).' },
+    {
+      text: 'To read and answer comments: the channel needs a discussion group (channel settings, Discussion), the bot must be added to that group, and in @BotFather its group privacy must be turned off (/setprivacy, Disable) so it receives the comments.'
+    },
+    { text: 'Paste the bot token below. It is kept in the vault of this Mac and is never shown again. A new bot needs these steps again: each bot is an account of its own.' }
   ],
   keyLooksValid: looksLikeBotToken
 }

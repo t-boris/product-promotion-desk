@@ -4,6 +4,8 @@ import type { Account, Mailbox, PlatformInfo, VaultStatus } from '../../../../sh
 import { useQuery } from '../../hooks'
 import { tabAfterKey } from '../../tab-keys'
 import { AccountBrowser } from '../channels/AccountBrowser'
+import { ConnectionGuide } from '../channels/ConnectionGuide'
+import { kindLabel } from '../../../../shared/connection-guide'
 import { AccountEmail } from '../channels/AccountEmail'
 import { AccountHeader } from '../channels/AccountHeader'
 import { AccountMore } from '../channels/AccountMore'
@@ -66,6 +68,7 @@ export function AccountDetail({
       info?.api && vault ? <AccountApiKey account={account} api={info.api} unavailable={vault.unavailable} hasKey={hasPassword} /> : null
     ) : (
       <>
+        <ConnectionGuide account={account} info={info} />
         {wantedPlatform ? (
           <AccountViaLine account={account} via={via} wantedPlatform={wantedPlatform} wantedLabel={wantedLabel} accounts={accounts.data ?? []} next={step.block} onOpenAccount={onOpenAccount} />
         ) : (
@@ -101,7 +104,10 @@ export function AccountDetail({
         account={account}
         meta={
           <>
-            <span>{platformLabel(account.platform, platforms)}</span>
+            <span>
+              {platformLabel(account.platform, platforms)}
+              {kindLabel(info, account.kind) ? ` · ${kindLabel(info, account.kind)}` : ''}
+            </span>
             <AccountStatusLine status={account.status} />
           </>
         }

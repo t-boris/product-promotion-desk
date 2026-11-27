@@ -331,6 +331,8 @@ export interface Account {
   access: AccountAccess
   /** The account this one signs in through (DEC-027): a Threads account signs in through its Instagram account. Null for a login with its own credentials. */
   signsInVia: Id | null
+  /** The kind of the account on its platform, as the owner said it (DEC-074): one of the platform's `kinds`. Null when not said, or when the platform has one kind. */
+  kind: string | null
 }
 
 /** A base mailbox (DEC-015): an ordinary mailbox of the owner, from which each account gets an address of its own. */
@@ -554,6 +556,22 @@ export interface RoleSuggestion {
 /** What a post on a platform can contain. */
 export type PlatformContentKind = 'text' | 'image' | 'video' | 'link'
 
+/** A kind of account a platform has (DEC-074): Instagram's professional or personal, Facebook's Page or personal profile. Asked for each account. */
+export interface AccountKindChoice {
+  id: string
+  label: string
+  /** One sentence: what this kind is, so the owner can tell which one the account is. */
+  hint: string
+}
+
+/** One step of connecting an account (DEC-074). A step with an address has a button that opens it in the account's own browser. */
+export interface GuideStep {
+  text: string
+  url?: string
+  /** The words of the button that opens `url`. */
+  link?: string
+}
+
 export interface PlatformInfo {
   /** Connector id, e.g. "reddit" or "universal". */
   connectorId: string
@@ -570,7 +588,11 @@ export interface PlatformInfo {
   /** Where channels of the platform are found and chosen (a list or a search of communities, groups, accounts), opened in the account's own browser (DEC-028); empty when the platform has none. */
   browseUrl?: string
   /** Present when the platform can also be worked through its own API with a key the owner saves (DEC-055): a Telegram bot. */
-  api?: { accountKind: string; keyLabel: string; steps: string[] }
+  api?: { accountKind: string; keyLabel: string; steps: GuideStep[] }
+  /** The kinds of account the platform has (DEC-074); absent when it has one. */
+  kinds?: AccountKindChoice[]
+  /** How a browser account of the platform is connected, per kind; the key '' is for a kind not said yet, or a platform with no kinds (DEC-074). */
+  guides?: Record<string, GuideStep[]>
   /** True when the connector can tell whether the account has joined a channel, so the AI may be asked to join one (DEC-029). */
   canJoin?: boolean
   /** The platform whose account this one signs in through (DEC-027): Threads signs in with Instagram. Such an account has no credentials of its own. */

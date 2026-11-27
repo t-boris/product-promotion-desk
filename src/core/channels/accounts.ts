@@ -77,7 +77,7 @@ export class AccountsService {
   }
 
   /** An account has its own login and browser session and is not tied to a product (DEC-015); `productId` only records what it was made for. */
-  create(args: { productId?: string; platform: string; label: string; role?: AccountRole | null; email?: string | null; mailboxId?: string | null; profileId?: string | null; signsInVia?: string | null; access?: AccountAccess }): Account {
+  create(args: { productId?: string; platform: string; label: string; role?: AccountRole | null; email?: string | null; mailboxId?: string | null; profileId?: string | null; signsInVia?: string | null; access?: AccountAccess; kind?: string | null }): Account {
     const productId = args.productId === undefined || args.productId === null ? null : requireText(args.productId, 'The product')
     const product = productId ? found(() => this.core.repos.product(productId), 'The product') : null
     const platform = requireText(args.platform, 'The platform').toLowerCase()
@@ -94,7 +94,8 @@ export class AccountsService {
     const access: AccountAccess = args.access === 'api' ? 'api' : 'browser'
     if (args.access !== undefined && args.access !== 'api' && args.access !== 'browser') throw new ApiError('invalid_input', 'An account works in its browser or through the platform\'s API.')
     if (access === 'api' && !connectorForPlatform(this.core.connectors, platform, 'api')) throw new ApiError('invalid_input', `The app has no API connection for "${platform}": this account works in its browser.`)
-    const account = this.store.insertAccount(product?.id ?? null, platform, label, role, email, mailboxId, profileId, access === 'api' ? null : via, access)
+    const kind = this.parseKind(platform, access, args.kind)
+    const account = this.store.insertAccount(product?.id ?? null, platform, label, role, email, mailboxId, profileId, access === 'api' ? null : via, access, kind)
     this.core.log.info('accounts', `Account created${product ? ` for "${product.name}"` : ''}: ${label} (${platform})${role ? `, role "${role.name}"` : ''}${email ? `, e-mail ${email}` : ''}${via ? `, signs in through ${this.account(via).label}` : ''}. Sign in through the account browser.`)
     this.core.events.changed('accounts', 'attention')
     return account
@@ -119,6 +120,29 @@ export class AccountsService {
       throw new ApiError('invalid_input', `${via.label} belongs to another profile. A login signs in through an account of its own profile.`)
     }
     return via.id
+  }
+
+  /** The kind the owner said, checked against the kinds the platform has (DEC-074). Nothing said is null: the application never guesses a kind. */
+  private parseKind(platform: string, access: AccountAccess, raw: unknown): string | null {
+    if (raw === undefined || raw === null || raw === '') return null
+    const info = listPlatforms(this.core.connectors).find((p) => p.platform === platform)
+    const kinds = access === 'api' ? [] : (info?.kinds ?? [])
+    const kind = kinds.find((k) => k.id === raw)
+    if (!kind) {
+      throw new ApiError('invalid_input', kinds.length === 0 ? `${info?.label ?? platform} has one kind of account: there is nothing to choose.` : `Choose the kind of the account: ${kinds.map((k) => k.label).join(', or ')}.`)
+    }
+    return kind.id
+  }
+
+  /** Says what kind of account this is on its platform (DEC-074), or takes the answer back (null). It changes the steps shown for the account, nothing else. */
+  setKind(args: { accountId: string; kind: string | null }): Account {
+    const account = this.account(args.accountId)
+    const kind = this.parseKind(account.platform, account.access, args.kind)
+    if (kind === account.kind) return account
+    const updated = this.store.setAccountKind(account.id, kind)
+    this.core.log.info('accounts', `${account.label}: kind of account ${kind ?? 'not said'}.`)
+    this.core.events.changed('accounts')
+    return updated
   }
 
   /** Changes the name of an account (the one the owner reads in lists and headers); the same rules as when it is made. */

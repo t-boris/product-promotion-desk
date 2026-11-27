@@ -39,15 +39,20 @@ export class ChannelsStore {
 
   // ───────────── accounts ─────────────
 
-  insertAccount(productId: string | null, platform: string, label: string, role: AccountRole | null = null, email: string | null = null, mailboxId: string | null = null, profileId: string | null = null, viaAccountId: string | null = null, access: AccountAccess = 'browser'): Account {
+  insertAccount(productId: string | null, platform: string, label: string, role: AccountRole | null = null, email: string | null = null, mailboxId: string | null = null, profileId: string | null = null, viaAccountId: string | null = null, access: AccountAccess = 'browser', kind: string | null = null): Account {
     const id = newId()
     // The prefix makes the browser session persistent: cookies survive restarts.
     const partition = `persist:ppd-account-${id}`
     this.db
       .prepare(
-        "INSERT INTO accounts (id, product_id, platform, label, identity, partition, status, created_at, role_name, role_voice, email, mailbox_id, profile_id, via_account_id, access) VALUES (?, ?, ?, ?, NULL, ?, 'login_required', ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO accounts (id, product_id, platform, label, identity, partition, status, created_at, role_name, role_voice, email, mailbox_id, profile_id, via_account_id, access, kind) VALUES (?, ?, ?, ?, NULL, ?, 'login_required', ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       )
-      .run(id, productId, platform, label, partition, this.clock.now().toISOString(), role?.name ?? null, role?.voice ?? null, email, mailboxId, profileId, viaAccountId, access)
+      .run(id, productId, platform, label, partition, this.clock.now().toISOString(), role?.name ?? null, role?.voice ?? null, email, mailboxId, profileId, viaAccountId, access, kind)
+    return this.repos.account(id)
+  }
+
+  setAccountKind(id: string, kind: string | null): Account {
+    this.db.prepare('UPDATE accounts SET kind = ? WHERE id = ?').run(kind, id)
     return this.repos.account(id)
   }
 

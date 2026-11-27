@@ -4,6 +4,7 @@ import { vaultUnavailableText } from '../../../../shared/vault-message'
 import { call, useAction } from '../../hooks'
 import { Button, ErrorNote, Field, useMainVariant, useOpenForm } from '../../ui'
 import { AccountBlock } from './AccountBlock'
+import { GuideSteps } from './ConnectionGuide'
 
 /**
  * The key of an account that works through its platform's API (a Telegram bot's token, DEC-055): what the owner does on the platform's side,
@@ -69,11 +70,7 @@ export function AccountApiKey({ account, api, unavailable, hasKey }: { account: 
     >
       {editing && (
         <form onSubmit={submit} className="stack" data-testid={`api-key-form-${account.id}`}>
-          <ol className="muted small" data-testid={`api-key-steps-${account.id}`}>
-            {api.steps.map((step) => (
-              <li key={step}>{step}</li>
-            ))}
-          </ol>
+          <GuideSteps account={account} steps={api.steps} testId={`api-key-steps-${account.id}`} />
           <Field label={api.keyLabel} hint="Stored encrypted by the macOS keychain, only on this Mac. It is checked with the platform when you save it.">
             <input className="input" type="password" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" spellCheck={false} data-testid={`api-key-input-${account.id}`} />
           </Field>
