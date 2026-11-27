@@ -131,7 +131,7 @@ describe('hash routes (DEC-037)', () => {
   }
 
   it('lists the screens in the order of the sidebar, Log and Settings last', () => {
-    expect([...PAGE_IDS]).toEqual(['overview', 'review', 'inbox', 'feed', 'posts', 'channels', 'accounts', 'setup', 'logs', 'settings'])
+    expect([...PAGE_IDS]).toEqual(['overview', 'review', 'inbox', 'feed', 'people', 'posts', 'channels', 'accounts', 'setup', 'logs', 'settings'])
   })
 
   it('reads a current address as it is, with no move', () => {

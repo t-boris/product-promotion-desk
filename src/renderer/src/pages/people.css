@@ -1,0 +1,85 @@
+/* People (DEC-066): a list of the people met beside the chosen person's form. */
+.people {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  gap: var(--space-4);
+}
+.people-list,
+.people-detail {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.people-bar,
+.people-filters,
+.people-actions,
+.people-permission,
+.people-marks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.people-bar .input {
+  flex: 1 1 120px;
+  width: auto;
+}
+.people-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.people-row {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+}
+.people-row:hover,
+.people-row.chosen {
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+.people-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.people-handle {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.people-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+.people-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+@media (max-width: 860px) {
+  .people {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+  .people-list,
+  .people-detail {
+    overflow: visible;
+  }
+}

@@ -511,4 +511,27 @@ CREATE TABLE seasonal_skipped (
 );
 `
   }
+  ,
+  {
+    id: 325,
+    name: 'the people met while promoting a product',
+    sql: `
+-- The owner's own notes about people (DEC-066): typed by hand, never given to the AI. owed '' : nothing is owed. permission: none, asked, given.
+CREATE TABLE people (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  handle TEXT NOT NULL,
+  platform TEXT NOT NULL DEFAULT '',
+  where_met TEXT NOT NULL DEFAULT '',
+  note TEXT NOT NULL DEFAULT '',
+  owed TEXT NOT NULL DEFAULT '',
+  testimonial TEXT NOT NULL DEFAULT '',
+  testimonial_source TEXT NOT NULL DEFAULT '',
+  permission TEXT NOT NULL DEFAULT 'none',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX people_by_product ON people (product_id, updated_at);
+`
+  }
 ]

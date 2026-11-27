@@ -22,6 +22,7 @@ const NAV_ICONS: Record<PageId, IconName> = {
   review: 'review',
   inbox: 'inbox',
   feed: 'feed',
+  people: 'people',
   posts: 'posts',
   channels: 'channels',
   accounts: 'accounts',

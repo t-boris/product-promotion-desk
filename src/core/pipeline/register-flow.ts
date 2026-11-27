@@ -12,6 +12,7 @@ import { AnswerCheck } from './answer-check'
 import { translateDraft } from './draft-translate'
 import { AudienceWords } from './audience-words'
 import { Listening } from './listening'
+import { People } from './people'
 import { SeasonalCalendar } from './seasonal'
 import { buildCard } from './cards'
 import { ChannelTrials } from './channel-trials'
@@ -170,6 +171,13 @@ export function registerFlow(core: Core): void {
     'listening.setTerms': (args) => listening.setTerms(args),
     'listening.look': (args) => listening.look(args),
     'listening.dismiss': (args) => listening.dismiss(args)
+  })
+  // The people met (DEC-066): the owner's own notes; no AI, nothing posted.
+  const people = new People(core)
+  core.router.register({
+    'people.list': (args) => people.list(args),
+    'people.save': (args) => people.save(args),
+    'people.remove': (args) => people.remove(args)
   })
   // Translate my post (DEC-065): a translation of the editor's title and text; nothing is stored.
   core.router.register({ 'drafts.translate': (args) => translateDraft(core, args) })

@@ -5,6 +5,7 @@
 import type { PositioningAnswers } from './positioning'
 import type { TrialMetric } from './channel-trial'
 import type { CalendarKind } from './seasonal'
+import type { Person, PersonFields } from './people'
 import type {
   AgentAsk,
   AiTaskState,
@@ -655,6 +656,9 @@ export interface ApiMethods {
   'listening.setTerms': [{ productId: Id; phrases: string[]; competitors: string[] }, ListeningView]
   'listening.look': [{ productId: Id }, ListeningView]
   'listening.dismiss': [{ id: Id }, ListeningView]
+  'people.list': [{ productId: Id }, Person[]]
+  'people.save': [{ productId: Id; id?: Id | null } & Partial<PersonFields>, Person]
+  'people.remove': [{ id: Id }, { removed: true }]
   'seasonal.get': [{ productId: Id }, SeasonalView]
   'seasonal.setKinds': [{ productId: Id; kinds: CalendarKind[] }, SeasonalView]
   'seasonal.addDate': [{ productId: Id; name: string; month: number; day: number; year?: number | null }, SeasonalView]
