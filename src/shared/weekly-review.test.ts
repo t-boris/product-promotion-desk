@@ -59,3 +59,15 @@ describe('the numbers of a week', () => {
     expect(against(5, null)).toBeNull()
   })
 })
+
+describe('one piece in several channels', () => {
+  it('is recapped only when two or more of its versions went out, with the numbers added over the versions that have them', async () => {
+    const { groupRecaps } = await import('./weekly-review')
+    const post = (id: string, groupId: string | null, likes: number | null, comments: number | null) => ({ id, groupId, numbers: likes === null && comments === null ? null : { likes, comments, views: null } })
+    const recaps = groupRecaps([post('a', 'g1', 40, 3), post('b', null, 99, 9), post('c', 'g1', 5, null), post('d', 'g2', 1, 1), post('e', 'g1', null, null)])
+    expect(recaps).toHaveLength(1)
+    expect(recaps[0]).toMatchObject({ groupId: 'g1', sums: { likes: 45, comments: 3, views: null } })
+    expect(recaps[0]!.versions.map((v) => v.id)).toEqual(['a', 'c', 'e'])
+    expect(groupRecaps([post('a', null, 1, 1)])).toEqual([])
+  })
+})

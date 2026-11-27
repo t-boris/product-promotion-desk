@@ -2,6 +2,7 @@ import { AnswerCheckCard } from './weekly/AnswerCheckCard'
 import { ListeningCard } from './weekly/ListeningCard'
 import { useState } from 'react'
 import { numbersLine } from '../../../shared/post-numbers'
+import { groupRecaps } from '../../../shared/weekly-review'
 import type { Product, WeeklyReviewView } from '../../../shared/types'
 import { call, useAction, useQuery } from '../hooks'
 import { Badge, Button, Card, ErrorNote, Hint, Loading } from '../ui'
@@ -53,6 +54,7 @@ function ReviewBody({ product }: { product: Product }) {
       <Words view={view} productId={product.id} />
       <Change view={view} productId={product.id} />
       <PostsOfWeek view={view} />
+      <Pieces view={view} />
       <Earlier view={view} onOpen={setWeek} />
       <AnswerCheckCard product={product} />
       <ListeningCard product={product} />
@@ -233,6 +235,35 @@ function Change({ view, productId }: { view: WeeklyReviewView; productId: string
       )}
       <Hint>An accepted change is given to the AI as your direction when it proposes posts for this product, for the two weeks after this one. It changes no schedule and no content mix, and nothing is posted because of it.</Hint>
       <ErrorNote error={deciding.error} />
+    </Card>
+  )
+}
+
+/** One piece that went to several channels in the week (a post group): its versions side by side, the best first. */
+function Pieces({ view }: { view: WeeklyReviewView }) {
+  const recaps = groupRecaps(view.posts)
+  if (recaps.length === 0) return null
+  return (
+    <Card title="One piece in several channels">
+      <Hint>The same piece in its versions per channel, the best first: where it landed and where it did not.</Hint>
+      <ul className="weekly-pieces" data-testid="weekly-pieces">
+        {recaps.map((recap) => (
+          <li key={recap.groupId}>
+            <strong>{recap.versions[0]?.title || 'Untitled post'}</strong>
+            <ul>
+              {recap.versions.map((post) => {
+                const channel = view.channels[post.channelId]
+                const line = post.numbers ? numbersLine(channel?.platform ?? '', post.numbers) : null
+                return (
+                  <li key={post.actionId}>
+                    {channel?.target ?? 'a channel'}: {line ?? <span className="muted">numbers not read</span>} {post.removed && <Badge tone="bad">Removed</Badge>}
+                  </li>
+                )
+              })}
+            </ul>
+          </li>
+        ))}
+      </ul>
     </Card>
   )
 }

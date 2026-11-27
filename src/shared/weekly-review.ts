@@ -150,3 +150,25 @@ export function weekLabel(weekStart: Date): string {
   const text = (d: Date): string => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   return `${text(weekStart)} – ${text(last)}`
 }
+
+/** One post that went to several channels in the week (a post group, DEC-032): its versions side by side, so the owner sees where the same piece did best. */
+export interface GroupRecap<P> {
+  groupId: string
+  /** The versions sent in the week, the best first. */
+  versions: P[]
+  /** Added up over the versions that have the number; null when none has it. */
+  sums: { likes: number | null; comments: number | null; views: number | null }
+}
+
+/** The posts of the week that are versions of one piece, by piece; a piece with one version sent is not a recap. The order of `posts` is kept inside a piece. */
+export function groupRecaps<P extends { groupId: string | null; numbers: { likes: number | null; comments: number | null; views: number | null } | null }>(posts: readonly P[]): GroupRecap<P>[] {
+  const byGroup = new Map<string, P[]>()
+  for (const post of posts) if (post.groupId) byGroup.set(post.groupId, [...(byGroup.get(post.groupId) ?? []), post])
+  const sum = (versions: P[], key: 'likes' | 'comments' | 'views'): number | null => {
+    const known = versions.flatMap((v) => (v.numbers && v.numbers[key] !== null ? [v.numbers[key] as number] : []))
+    return known.length === 0 ? null : known.reduce((a, b) => a + b, 0)
+  }
+  return [...byGroup.entries()]
+    .filter(([, versions]) => versions.length >= 2)
+    .map(([groupId, versions]) => ({ groupId, versions, sums: { likes: sum(versions, 'likes'), comments: sum(versions, 'comments'), views: sum(versions, 'views') } }))
+}

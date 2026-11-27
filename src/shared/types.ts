@@ -1408,6 +1408,8 @@ export interface WeeklyPost {
   sentAt: IsoTime
   removed: boolean
   numbers: PostNumbers | null
+  /** The piece this post is a version of, when it went to several channels (a post group); null for a post of its own. */
+  groupId: Id | null
 }
 
 /** The AI's words of a week's review: each point rests on the numbers the application counted. */

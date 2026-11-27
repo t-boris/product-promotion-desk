@@ -28,6 +28,7 @@ interface SendRow extends WeekSend {
   opportunityId: Id
   draftId: Id
   url: string | null
+  groupId: Id | null
 }
 
 export interface ReviewInput {
@@ -227,7 +228,7 @@ export class WeeklyReview {
     const to = shiftWeeks(start, 2).toISOString()
     const rows = this.core.db
       .prepare(
-        `SELECT a.id, a.opportunity_id, a.draft_id, a.completed_at, a.standing, a.likes, a.comments, a.views, a.numbers_read_at, a.result_url, o.channel_id, o.kind
+        `SELECT a.id, a.opportunity_id, a.draft_id, a.completed_at, a.standing, a.likes, a.comments, a.views, a.numbers_read_at, a.result_url, o.channel_id, o.kind, o.group_id
          FROM send_actions a JOIN opportunities o ON o.id = a.opportunity_id
          WHERE o.product_id = ? AND a.state = 'confirmed' AND a.completed_at >= ? AND a.completed_at < ? ORDER BY a.completed_at`
       )
@@ -237,6 +238,7 @@ export class WeeklyReview {
       opportunityId: r.opportunity_id as Id,
       draftId: r.draft_id as Id,
       url: (r.result_url as string | null) ?? null,
+      groupId: (r.group_id as Id | null) ?? null,
       channelId: r.channel_id as Id,
       kind: r.kind === 'standalone' ? 'post' : 'reply',
       sentAtMs: Date.parse(r.completed_at as string),
@@ -254,7 +256,7 @@ export class WeeklyReview {
   private postsOf(sends: readonly SendRow[], fromMs: number, toMs: number): WeeklyPost[] {
     return sends
       .filter((s) => s.kind === 'post' && s.sentAtMs >= fromMs && s.sentAtMs < toMs)
-      .map((s) => ({ actionId: s.actionId, opportunityId: s.opportunityId, channelId: s.channelId, title: this.titleOf(s.draftId), url: s.url, sentAt: new Date(s.sentAtMs).toISOString(), removed: s.removed, numbers: s.numbers }))
+      .map((s) => ({ actionId: s.actionId, opportunityId: s.opportunityId, channelId: s.channelId, title: this.titleOf(s.draftId), url: s.url, sentAt: new Date(s.sentAtMs).toISOString(), removed: s.removed, numbers: s.numbers, groupId: s.groupId }))
       .sort((a, b) => (b.numbers?.likes ?? -Infinity) - (a.numbers?.likes ?? -Infinity) || (b.numbers?.comments ?? -Infinity) - (a.numbers?.comments ?? -Infinity) || b.sentAt.localeCompare(a.sentAt))
   }
 
