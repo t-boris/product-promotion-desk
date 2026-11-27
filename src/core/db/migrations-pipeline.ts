@@ -473,4 +473,42 @@ CREATE TABLE audience_word_seen (
 );
 `
   }
+  ,
+  {
+    id: 324,
+    name: 'the seasonal calendar of a product',
+    sql: `
+-- The calendars the owner follows for a product (DEC-060): moon, zodiac, seasons, gifts. The dates themselves are computed, not stored.
+CREATE TABLE product_calendars (
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  PRIMARY KEY (product_id, kind)
+);
+-- The owner's own dates: every year (year NULL) or once.
+CREATE TABLE product_dates (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  month INTEGER NOT NULL,
+  day INTEGER NOT NULL,
+  year INTEGER,
+  created_at TEXT NOT NULL
+);
+-- The post prepared for a date and a channel, and the dates the owner skipped.
+CREATE TABLE seasonal_posts (
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  event_key TEXT NOT NULL,
+  channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+  opportunity_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (product_id, event_key, channel_id)
+);
+CREATE TABLE seasonal_skipped (
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  event_key TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (product_id, event_key)
+);
+`
+  }
 ]

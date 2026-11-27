@@ -1,6 +1,7 @@
 // Domain types shared by the core, the main process and the UI.
 // Everything here is plain serializable data (it crosses IPC / HTTP boundaries).
 
+import type { CalendarKind, OwnDate } from './seasonal'
 import type { PositioningAnswers, WordKind } from './positioning'
 import type { ChannelTrial, TrialMetric, TrialProgress } from './channel-trial'
 import type { WeekNumbers, WeekSums } from './weekly-review'
@@ -1270,6 +1271,36 @@ export interface AudienceWordsView {
   collectedAt: IsoTime | null
   /** Read posts of the Feed no collection has taken yet. */
   waiting: number
+}
+
+/** One date ahead of a product's seasonal calendar, with the channels it is prepared for (DEC-060). */
+export interface SeasonalEventView {
+  key: string
+  kind: CalendarKind | 'own'
+  name: string
+  at: IsoTime
+  /** Whole days from today; 0 is today. */
+  days: number
+  /** The owner said nothing is needed for this date. */
+  skipped: boolean
+  channels: {
+    channelId: Id
+    target: string
+    platform: string
+    /** How many days ahead a post for this platform should be ready. */
+    leadDays: number
+    /** It is time to prepare for this channel. */
+    due: boolean
+    /** The post prepared for this date and channel, or null. */
+    opportunityId: Id | null
+  }[]
+}
+
+export interface SeasonalView {
+  productId: Id
+  kinds: CalendarKind[]
+  own: OwnDate[]
+  events: SeasonalEventView[]
 }
 
 /** The terms of a trial as the AI proposes them for the form. */

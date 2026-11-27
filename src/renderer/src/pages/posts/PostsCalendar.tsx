@@ -27,6 +27,7 @@ export function PostsCalendar({
   today,
   offsetMinutes,
   rhythm,
+  dates,
   day,
   onDay,
   onOpen,
@@ -40,6 +41,8 @@ export function PostsCalendar({
   offsetMinutes: number
   /** The content mix's due days by day, with the names of the kinds. */
   rhythm: ReadonlyMap<string, string[]>
+  /** The names of the product's dates ahead, by day (DEC-060). */
+  dates: ReadonlyMap<string, string[]>
   day: string | null
   onDay: (date: string) => void
   /** Show a post in the list view. */
@@ -95,6 +98,11 @@ export function PostsCalendar({
                     </span>
                   ))}
                   {more > 0 && <span className="posts-cal-more">+{more} more</span>}
+                  {(dates.get(cell.date) ?? []).length > 0 && (
+                    <span className="posts-cal-date" title={(dates.get(cell.date) ?? []).join(', ')}>
+                      {(dates.get(cell.date) ?? []).join(', ')}
+                    </span>
+                  )}
                   {cell.rhythm.length > 0 && (
                     <span className="posts-cal-rhythm" title={`The content mix would prepare: ${cell.rhythm.join(', ')}`}>
                       {cell.rhythm.join(', ')}

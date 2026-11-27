@@ -12,6 +12,9 @@ import { usePaging } from '../list-paging'
 import { ShowMore } from './ShowMore'
 import { NoProduct } from './ProductScreen'
 import { PostDetail } from './posts/PostDetail'
+import { postsCalendarAsked } from '../route'
+import { DatesAhead } from './posts/DatesAhead'
+import { datesByDay } from './posts/dates-ahead'
 import { PostsCalendar } from './posts/PostsCalendar'
 import { PostsList } from './posts/PostsList'
 import { monthOf, offsetOn, plannedTimeOn, rhythmMarkers, monthGrid, type YearMonth } from './posts/posts-calendar'
@@ -74,7 +77,8 @@ function PostsScreen({ product }: { product: Product }) {
   const groups = groupsQuery.data ?? []
   const rows = useMemo(() => buildPostRows(cardsQuery.data ?? [], groups), [cardsQuery.data, groupsQuery.data])
 
-  const [view, setView] = useState<View>('list')
+  // A link may ask for the calendar (the Inbox item about dates ahead does).
+  const [view, setView] = useState<View>(() => (postsCalendarAsked(window.location.hash) ? 'calendar' : 'list'))
   const [state, setState] = useState<PostStateFilter>('all')
   const [channelId, setChannelId] = useState<Id | null>(null)
   const [query, setQuery] = useState('')
@@ -130,6 +134,10 @@ function PostsScreen({ product }: { product: Product }) {
     const grid = monthGrid(month, [], today, offset).flat()
     return rhythmMarkers(mixCards, grid[0].date, grid[grid.length - 1].date, offset)
   }, [mixCards, month, today, offset])
+
+  // The product's dates ahead (DEC-060): named in the cells of the month and listed under it.
+  const seasonal = useQuery('seasonal.get', { productId: product.id }, ['products', 'channels', 'opportunities'])
+  const dateNames = useMemo(() => datesByDay(seasonal.data?.events ?? [], offset), [seasonal.data, offset])
 
   // Writing and suggesting go to a channel: the one the filter is on, else the first one that can take a post.
   const canPost = (channel: Channel): boolean => {
@@ -386,11 +394,22 @@ function PostsScreen({ product }: { product: Product }) {
             today={today}
             offsetMinutes={offset}
             rhythm={rhythm}
+            dates={dateNames}
             day={day}
             onDay={setDay}
             onOpen={openRow}
             onWrite={(date) => startWriting(plannedTimeOn(date, offsetOn(date)))}
           />
+          {seasonal.data && (
+            <DatesAhead
+              product={product}
+              view={seasonal.data}
+              onPrepared={(id) => {
+                setView('list')
+                setChosen(rows.find((row) => row.id === id || row.cards.some((card) => card.opportunity.id === id))?.id ?? id)
+              }}
+            />
+          )}
         </div>
       )}
     </Page>

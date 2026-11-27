@@ -4,6 +4,7 @@
 
 import type { PositioningAnswers } from './positioning'
 import type { TrialMetric } from './channel-trial'
+import type { CalendarKind } from './seasonal'
 import type {
   AgentAsk,
   AiTaskState,
@@ -69,6 +70,7 @@ import type {
   WeeklyReviewView,
   PositioningView,
   AudienceWordsView,
+  SeasonalView,
   TrialProposal,
   TrialView,
   FeedPeriod,
@@ -639,6 +641,12 @@ export interface ApiMethods {
   'positioning.approve': [{ productId: Id; answers: PositioningAnswers }, PositioningView]
   'positioning.dismiss': [{ productId: Id }, PositioningView]
   /** The audience's own words (DEC-059): questions, objections and phrases taken from the posts the Feed read, each with its posts. */
+  'seasonal.get': [{ productId: Id }, SeasonalView]
+  'seasonal.setKinds': [{ productId: Id; kinds: CalendarKind[] }, SeasonalView]
+  'seasonal.addDate': [{ productId: Id; name: string; month: number; day: number; year?: number | null }, SeasonalView]
+  'seasonal.removeDate': [{ id: Id }, SeasonalView]
+  'seasonal.skip': [{ productId: Id; eventKey: string; skipped: boolean }, SeasonalView]
+  'seasonal.prepare': [{ productId: Id; eventKey: string; channelId: Id }, OpportunityCard]
   'words.list': [{ productId: Id }, AudienceWordsView]
   'words.collect': [{ productId: Id }, AudienceWordsView]
   'words.remove': [{ id: Id }, AudienceWordsView]

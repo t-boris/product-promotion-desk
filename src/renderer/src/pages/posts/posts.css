@@ -355,3 +355,75 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Dates ahead (DEC-060): the calendars followed, the owner's dates, and a row per date with its channels. */
+.posts-cal-date {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-caption);
+  color: var(--accent);
+}
+.dates-kinds,
+.dates-add,
+.dates-row-head,
+.dates-channel,
+.dates-own-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+.dates-kinds {
+  margin: var(--space-3) 0;
+}
+.dates-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.dates-add {
+  margin-bottom: var(--space-3);
+}
+.dates-add .input {
+  width: auto;
+  flex: 1 1 220px;
+}
+.dates-add .dates-add-month {
+  flex: 0 0 140px;
+}
+.dates-add .dates-add-num {
+  flex: 0 0 84px;
+}
+.dates-list,
+.dates-own,
+.dates-channels {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.dates-own {
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+}
+.dates-row {
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.dates-row.skipped .dates-name {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+.dates-name {
+  font-weight: 600;
+}
+.dates-channels {
+  gap: var(--space-1);
+  padding-left: var(--space-4);
+}

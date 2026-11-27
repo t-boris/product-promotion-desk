@@ -167,6 +167,11 @@ export function postsHref(productId?: string | null): string {
   return productId ? `#/posts?${new URLSearchParams({ product: productId }).toString()}` : '#/posts'
 }
 
+/** Whether a link to Posts asks for the calendar (the Inbox item about dates ahead does). */
+export function postsCalendarAsked(hash: string): boolean {
+  return splitHash(hash).query.get('view') === 'calendar'
+}
+
 /** The account a link to the Channels screen asks "Connect a channel" to choose first, or null. */
 export function channelsAccountOf(hash: string): string | null {
   const route = resolveRoute(hash)

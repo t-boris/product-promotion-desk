@@ -8,6 +8,7 @@ import { PostComposer } from './compose-flow'
 import { SectionEditor } from './section-flow'
 import { FindingPictures } from './finding-pictures'
 import { AudienceWords } from './audience-words'
+import { SeasonalCalendar } from './seasonal'
 import { buildCard } from './cards'
 import { ChannelTrials } from './channel-trials'
 import { Positioning } from './positioning'
@@ -147,6 +148,16 @@ export function registerFlow(core: Core): void {
     'words.collect': (args) => bank.collect(args),
     'words.remove': (args) => bank.remove(args),
     'words.suggestPost': (args) => bank.suggestPost(args)
+  })
+  // The seasonal calendar (DEC-060): computed and listed dates, the owner's own, and a draft per date and channel on the owner's press.
+  const seasonal = new SeasonalCalendar(core, async (channelId, focus, origin) => buildCard(core, store, await publications.suggest(channelId, { focus, origin })))
+  core.router.register({
+    'seasonal.get': (args) => seasonal.view(args),
+    'seasonal.setKinds': (args) => seasonal.setKinds(args),
+    'seasonal.addDate': (args) => seasonal.addDate(args),
+    'seasonal.removeDate': (args) => seasonal.removeDate(args),
+    'seasonal.skip': (args) => seasonal.skip(args),
+    'seasonal.prepare': (args) => seasonal.prepare(args)
   })
   // Channel trials (DEC-058): the terms written before the weeks are spent, the numbers counted, the owner's verdict.
   const trials = new ChannelTrials(core, store)
