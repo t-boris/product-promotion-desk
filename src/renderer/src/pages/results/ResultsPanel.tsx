@@ -51,7 +51,7 @@ export function ResultsPanel({ productId }: { productId: string }) {
         <MetricsCard key={entry.channel.id} entry={entry} />
       ))}
       {/* A standing caveat, folded to one line: it used to take more room than the goal above it. */}
-      <ConversionsNote />
+      <ConversionsNote productId={productId} />
     </div>
   )
 }

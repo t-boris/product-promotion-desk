@@ -129,7 +129,7 @@ function OverviewBody({ product, days }: { product: Product; days: number }) {
         </>
       )}
       <GoalsCard goals={results.data?.goals ?? []} />
-      <ConversionsNote />
+      <ConversionsNote productId={product.id} />
     </div>
   )
 }

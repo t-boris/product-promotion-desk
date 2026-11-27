@@ -1486,6 +1486,23 @@ One release per phase; each is verified (`npm run verify`), installed and read o
   - a topic the AI browser types into the Threads composer: the open tags question
   - numbers under posts on browser-worked channels: only the AI browser could read them there, and DEC-056 says the connector reads and the AI never supplies a number; they come with the API connectors of phases F-H, or need the owner's yes to let the AI read numbers
 
+## Completion check of the ideal-app document, section 7 (2026-11-27, at 0.79.1)
+Each of the twelve items read against the code, not against the earlier notes.
+- 1 Results per post: tagged link (platform, channel), likes/comments/views per post on every channel (connector or AI browser), Plausible visitors by platform and channel, a goal's number and date: built. NOT built: the post itself in the tag, so visits per post, and sign-ups or sales per post. It waits for the owner's yes: it makes every tagged address longer inside the post's text, it works only for a product whose site has an analytics service, and the owner said a product may have none (lesson of 2026-11-27: a mention is not an order). Google Analytics is noted, not read.
+- 2 Weekly review: built. The accepted change steers the AI's drafts; steering the content mix by itself waits for the owner's answer (asked on the sketch).
+- 3 Channel trials, limit on channels in work: built.
+- 4 Positioning, audience's words, "said in three posts" mark: built.
+- 5 Campaigns, dates ahead with lead times: built.
+- 6 Publishing plan: phases A-E built; F built except a video (0.78.0, 0.79.0); G-J wait for the owner's apps. "A week with no time" (the minimum weekly plan): built, off until set.
+- 7 Waiting note (48 hours), "took off" item, People with testimonials and permission: built.
+- 8 Heard elsewhere (name, phrases, competitors, places), "Add as a channel": built.
+- 9 AI-answer check, monthly: built.
+- 10 Translate, topic and keywords (copied by the owner), carousel and video plan: built. A topic typed into Threads by the AI browser waits for the owner's answer.
+- 11 Warm-up plan, share of posts with the link, reach comparison: built.
+- 12 Launch venues: built, off until set.
+- Found by the check and fixed (0.79.1): the note under Results and Overview said "no analytics service is connected" for every product; it now follows the product's choice ("Site visits": none, read from Plausible, or chosen and not read).
+- Unanswered questions of section 9 that block nothing built: an email list as a channel (4).
+
 ## Plan after the owner's answers of 2026-11-27
 The owner answered: the kind of an account is asked per account with a guided connection in the internal browser; numbers under posts must be read on every channel; analytics is chosen per product (Google Analytics, Plausible or none).
 - [x] N1 (0.77.0, DEC-075; not yet seen on a real site) numbers under the owner's posts on channels worked through the browser (Instagram, Facebook, Threads): the AI browser opens the account's own posts and the numbers are kept like Reddit's (changes DEC-056)

@@ -64,3 +64,14 @@ export function siteIdOf(websiteUrl: string | null): string {
 export function visitRowName(row: Pick<VisitRow, 'source' | 'campaign'>): string {
   return [row.source, row.campaign].filter((part) => part !== '').join(' · ') || '(no tag)'
 }
+
+/**
+ * What a results page may say about the site's analytics, from the product's own choice: none, a service the application reads visitors
+ * from, or one it does not read now (Google Analytics; Plausible with no key or no site). Sign-ups and purchases are measured in none of them.
+ */
+export function analyticsNote(view: Pick<SiteVisitsView, 'source' | 'canRead'> | null | undefined): string {
+  if (!view || view.source === 'none') return 'No analytics is chosen for this product’s site, so nothing here says whether promotion led to them.'
+  const name = VISIT_SOURCE_LABEL[view.source]
+  if (view.canRead) return `Visitors of the site are read from ${name} (the “Site visits” card); they say how many people came, not what they did there.`
+  return `${name} is chosen as this site’s analytics; the application does not read visitors from it now, so nothing here says whether promotion led to them.`
+}
