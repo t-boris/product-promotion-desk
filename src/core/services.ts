@@ -108,6 +108,11 @@ export interface AnswerCheckService {
   askDue(stop?: () => boolean): Promise<number>
 }
 
+/** Wider listening (DEC-062): the scheduler's job looks again when the last look is a week old. */
+export interface ListeningService {
+  lookDue(stop?: () => boolean): Promise<number>
+}
+
 /** Platform metrics snapshots (I-8). */
 export interface MetricsService {
   refresh(channelId: Id): Promise<MetricSnapshot[]>
@@ -150,4 +155,5 @@ export interface CoreServices {
   mix?: MixService
   weekly?: WeeklyReviewService
   answers?: AnswerCheckService
+  listening?: ListeningService
 }

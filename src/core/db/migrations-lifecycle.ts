@@ -148,4 +148,37 @@ CREATE TABLE answer_results (
 );
 `
   }
+  ,
+  {
+    id: 407,
+    name: 'wider listening: watched terms and what was found on the open web',
+    sql: `
+-- The phrases and competitors the owner watches for a product (DEC-062); the product's name is always watched.
+CREATE TABLE listen_terms (
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  text TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  PRIMARY KEY (product_id, kind, position)
+);
+-- One row per address found. dismissed: the owner took it off the list; kept so the address is not offered again.
+CREATE TABLE listen_finds (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  url TEXT NOT NULL,
+  title TEXT NOT NULL,
+  term TEXT NOT NULL,
+  said TEXT NOT NULL,
+  found_at TEXT NOT NULL,
+  dismissed INTEGER NOT NULL DEFAULT 0,
+  UNIQUE (product_id, url)
+);
+CREATE TABLE listen_state (
+  product_id TEXT PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE,
+  last_at TEXT,
+  last_error TEXT
+);
+`
+  }
 ]

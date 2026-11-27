@@ -1,4 +1,5 @@
 import { AnswerCheckCard } from './weekly/AnswerCheckCard'
+import { ListeningCard } from './weekly/ListeningCard'
 import { useState } from 'react'
 import { numbersLine } from '../../../shared/post-numbers'
 import type { Product, WeeklyReviewView } from '../../../shared/types'
@@ -54,6 +55,7 @@ function ReviewBody({ product }: { product: Product }) {
       <PostsOfWeek view={view} />
       <Earlier view={view} onOpen={setWeek} />
       <AnswerCheckCard product={product} />
+      <ListeningCard product={product} />
     </div>
   )
 }

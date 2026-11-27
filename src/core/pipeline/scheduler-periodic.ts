@@ -165,6 +165,8 @@ export class PeriodicTasks {
         this.weeklyScanAtMs = nowMs + this.options.scanEveryMs
         this.launch('weekly-review', async () => void (await weekly.prepareDue(() => this.halted || this.pausedAtTick)))
         const { answers } = this.core.services
+        const { listening } = this.core.services
+        if (listening) this.launch('listening', async () => void (await listening.lookDue(() => this.halted || this.pausedAtTick)))
         if (answers) this.launch('answer-check', async () => void (await answers.askDue(() => this.halted || this.pausedAtTick)))
       }
       if (metrics && nowMs >= this.metricsScanAtMs) {

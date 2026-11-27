@@ -70,6 +70,7 @@ import type {
   WeeklyReviewView,
   PositioningView,
   AudienceWordsView,
+  ListeningView,
   AnswerCheckView,
   SeasonalView,
   TrialProposal,
@@ -646,6 +647,10 @@ export interface ApiMethods {
   'answers.setQuestions': [{ productId: Id; questions: string[] }, AnswerCheckView]
   'answers.propose': [{ productId: Id }, string[]]
   'answers.ask': [{ productId: Id }, AnswerCheckView]
+  'listening.get': [{ productId: Id }, ListeningView]
+  'listening.setTerms': [{ productId: Id; phrases: string[]; competitors: string[] }, ListeningView]
+  'listening.look': [{ productId: Id }, ListeningView]
+  'listening.dismiss': [{ id: Id }, ListeningView]
   'seasonal.get': [{ productId: Id }, SeasonalView]
   'seasonal.setKinds': [{ productId: Id; kinds: CalendarKind[] }, SeasonalView]
   'seasonal.addDate': [{ productId: Id; name: string; month: number; day: number; year?: number | null }, SeasonalView]

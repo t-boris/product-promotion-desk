@@ -9,6 +9,7 @@ import { SectionEditor } from './section-flow'
 import { FindingPictures } from './finding-pictures'
 import { AnswerCheck } from './answer-check'
 import { AudienceWords } from './audience-words'
+import { Listening } from './listening'
 import { SeasonalCalendar } from './seasonal'
 import { buildCard } from './cards'
 import { ChannelTrials } from './channel-trials'
@@ -158,6 +159,15 @@ export function registerFlow(core: Core): void {
     'answers.setQuestions': (args) => answers.setQuestions(args),
     'answers.propose': (args) => answers.propose(args),
     'answers.ask': (args) => answers.ask(args)
+  })
+  // Wider listening (DEC-062): the product's name, phrases and competitors looked for on the open web; the scheduler looks again after a week.
+  const listening = new Listening(core)
+  core.services.listening = listening
+  core.router.register({
+    'listening.get': (args) => listening.view(args),
+    'listening.setTerms': (args) => listening.setTerms(args),
+    'listening.look': (args) => listening.look(args),
+    'listening.dismiss': (args) => listening.dismiss(args)
   })
   // The seasonal calendar (DEC-060): computed and listed dates, the owner's own, and a draft per date and channel on the owner's press.
   const seasonal = new SeasonalCalendar(core, async (channelId, focus, origin) => buildCard(core, store, await publications.suggest(channelId, { focus, origin })))

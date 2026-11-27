@@ -154,3 +154,19 @@
   color: var(--text-2);
   font-size: var(--fs-caption);
 }
+
+/* Heard elsewhere (DEC-062). */
+.listening-terms {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+.listening-box {
+  min-height: 96px;
+  resize: vertical;
+}
+.listening-url {
+  font-size: var(--fs-caption);
+  overflow-wrap: anywhere;
+}

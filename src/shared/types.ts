@@ -2,6 +2,7 @@
 // Everything here is plain serializable data (it crosses IPC / HTTP boundaries).
 
 import type { CalendarKind, OwnDate } from './seasonal'
+import type { FindKind } from './listening'
 import type { PositioningAnswers, WordKind } from './positioning'
 import type { ChannelTrial, TrialMetric, TrialProgress } from './channel-trial'
 import type { WeekNumbers, WeekSums } from './weekly-review'
@@ -1271,6 +1272,22 @@ export interface AudienceWordsView {
   collectedAt: IsoTime | null
   /** Read posts of the Feed no collection has taken yet. */
   waiting: number
+}
+
+/** What a look on the open web found for a product (DEC-062). */
+export interface ListeningView {
+  productId: Id
+  /** Always watched. */
+  productName: string
+  phrases: string[]
+  competitors: string[]
+  running: boolean
+  lookedAt: IsoTime | null
+  /** Why the last look did not finish; null when it did. */
+  lastError: string | null
+  /** When the application looks again by itself; null while the owner never looked. */
+  nextAt: IsoTime | null
+  finds: { id: Id; kind: FindKind; url: string; title: string; term: string; said: string; foundAt: IsoTime; fresh: boolean }[]
 }
 
 /** One question of an AI-answer check and what the engine answered (DEC-061). */
