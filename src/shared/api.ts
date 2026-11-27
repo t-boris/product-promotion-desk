@@ -512,6 +512,7 @@ export interface ApiMethods {
    */
   /** The owner's own draft put into another language (one of `READING_LANGUAGES`). Nothing is stored: the editor takes the answer and the owner saves. */
   'drafts.outline': [{ form: { title: string; text: string }; kind: 'carousel' | 'video' }, { kind: 'carousel' | 'video'; parts: { show: string; say: string }[] }]
+  'drafts.words': [{ form: { title: string; text: string } }, { topic: string; keywords: string[] }]
   'drafts.translate': [{ form: { title: string; text: string }; language: string }, { title: string; text: string }]
   'drafts.refine': [{ field: DraftHelpField; opportunityId?: Id; channelId?: Id; form: { title: string; text: string }; instruction?: string; about?: string }, DraftHelpResult]
   /**

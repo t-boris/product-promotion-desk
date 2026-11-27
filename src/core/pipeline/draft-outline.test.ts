@@ -1,6 +1,6 @@
 // A post as a carousel or a video (DEC-069).
 import { afterEach, describe, expect, it } from 'vitest'
-import { readOutline } from './draft-outline'
+import { readOutline, readWords } from './draft-outline'
 import { closeWorld, makeWorld, type World } from './test-fixture'
 
 let world: World
@@ -36,5 +36,19 @@ describe('a post as a carousel or a video', () => {
     expect(readOutline({ parts: [...PARTS, { show: ' ', say: 'x' }] }, FORM)).toMatchObject({ ok: false })
     expect(readOutline({ parts: [...PARTS, { show: 'More', say: 'https://elsewhere.test/x' }] }, FORM)).toMatchObject({ ok: false })
     expect(readOutline({ slides: [] }, FORM)).toMatchObject({ ok: false })
+  })
+})
+
+describe('the topic and the keywords of a post', () => {
+  it('are named by the AI from the draft, cleaned of # and repeats, and nothing is stored', async () => {
+    world = makeWorld()
+    world.knowledge.version = null
+    world.engine.on('draft.words', JSON.stringify({ topic: '#Birth charts', keywords: ['how to read a birth chart', 'Birth time unknown', 'birth time unknown', 'natal chart basics'] }))
+    expect(await world.core.router.call('drafts.words', { form: FORM })).toEqual({ topic: 'Birth charts', keywords: ['how to read a birth chart', 'Birth time unknown', 'natal chart basics'] })
+    expect(world.engine.calls.at(-1)!.search).toBeUndefined()
+    await expect(world.core.router.call('drafts.words', { form: { title: '', text: '' } })).rejects.toMatchObject({ code: 'invalid_input' })
+    expect(readWords({ topic: 'Charts', keywords: ['one', 'two'] })).toMatchObject({ ok: false })
+    expect(readWords({ topic: '', keywords: ['one', 'two', 'three'] })).toMatchObject({ ok: false })
+    expect(readWords({ topic: 'Charts', keywords: ['one', 'two', 'https://x.test/a'] })).toMatchObject({ ok: false })
   })
 })

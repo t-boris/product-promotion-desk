@@ -9,7 +9,7 @@ import { SectionEditor } from './section-flow'
 import { FindingPictures } from './finding-pictures'
 import { accountHealth, setWarmUp } from './account-health'
 import { AnswerCheck } from './answer-check'
-import { outlineDraft } from './draft-outline'
+import { outlineDraft, wordsOfDraft } from './draft-outline'
 import { translateDraft } from './draft-translate'
 import { AudienceWords } from './audience-words'
 import { Listening } from './listening'
@@ -205,7 +205,7 @@ export function registerFlow(core: Core): void {
     'people.remove': (args) => people.remove(args)
   })
   // Translate my post (DEC-065): a translation of the editor's title and text; nothing is stored.
-  core.router.register({ 'drafts.translate': (args) => translateDraft(core, args), 'drafts.outline': (args) => outlineDraft(core, args) })
+  core.router.register({ 'drafts.translate': (args) => translateDraft(core, args), 'drafts.outline': (args) => outlineDraft(core, args), 'drafts.words': (args) => wordsOfDraft(core, args) })
   // Account health (DEC-064): the share of what an account sent that carries the product's site, and its channels' reach, counted on demand.
   core.router.register({ 'accounts.health': (args) => accountHealth(core, args), 'accounts.warmUp': (args) => setWarmUp(core, args) })
   // The seasonal calendar (DEC-060): computed and listed dates, the owner's own, and a draft per date and channel on the owner's press.

@@ -25,7 +25,13 @@ export function OutlineDraft({ title, text, disabled }: { title: string; text: s
     setPlan({ ...result, of: text })
     setCopied(false)
   })
-  const off = disabled || cutting.busy || text.trim() === ''
+  const [words, setWords] = useState<{ topic: string; keywords: string[] } | null>(null)
+  const [wordsCopied, setWordsCopied] = useState(false)
+  const [name, naming] = useAction(async () => {
+    setWords(await call('drafts.words', { form: { title, text } }))
+    setWordsCopied(false)
+  })
+  const off = disabled || cutting.busy || naming.busy || text.trim() === ''
   return (
     <div className="draft-outline" data-testid="draft-outline">
       <div className="draft-translate">
@@ -36,8 +42,35 @@ export function OutlineDraft({ title, text, disabled }: { title: string; text: s
         <Button variant="secondary" onClick={() => void cut('video')} disabled={off} data-testid="draft-outline-video">
           As a short video
         </Button>
+        <Button variant="secondary" onClick={() => void name()} disabled={off} data-testid="draft-words-run">
+          {naming.busy ? 'Working…' : 'Topic and keywords'}
+        </Button>
       </div>
-      <ErrorNote error={cutting.error} />
+      <ErrorNote error={cutting.error ?? naming.error} />
+      {words && (
+        <div className="stack" data-testid="draft-words">
+          <span>
+            <strong>Topic:</strong> {words.topic}
+          </span>
+          <span>
+            <strong>Keywords:</strong> {words.keywords.join(', ')}
+          </span>
+          <Hint>Named by the AI from this post’s text; check them. Add them yourself where the platform takes them: one topic on Threads, keywords in a pin’s title and description on Pinterest. Nothing is kept and the post is not changed.</Hint>
+          <div className="row">
+            <Button
+              onClick={() => {
+                void navigator.clipboard.writeText(`${words.topic}\n${words.keywords.join(', ')}`).then(() => setWordsCopied(true))
+              }}
+              data-testid="draft-words-copy"
+            >
+              {wordsCopied ? 'Copied' : 'Copy'}
+            </Button>
+            <Button variant="quiet" onClick={() => setWords(null)}>
+              Close
+            </Button>
+          </div>
+        </div>
+      )}
       {plan && (
         <div className="stack" data-testid="draft-outline-plan">
           <strong>{HEAD[plan.kind].title}</strong>
