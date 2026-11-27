@@ -83,5 +83,30 @@ CREATE TABLE weekly_reviews (
   UNIQUE (product_id, week_key)
 );
 `
+  },
+  {
+    id: 405,
+    name: 'channel trials: what is expected of a channel, for how long, and the verdict',
+    sql: `
+-- One running trial per channel (verdict NULL); the earlier ones are kept with their verdict. own_result: the owner's own number, typed with
+-- the verdict when the trial is judged by something the application cannot see. final_measured: the trial's number at the verdict.
+CREATE TABLE channel_trials (
+  id TEXT PRIMARY KEY,
+  channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+  hypothesis TEXT NOT NULL,
+  weeks INTEGER NOT NULL,
+  hours_per_week INTEGER NOT NULL,
+  metric TEXT NOT NULL,
+  own_label TEXT,
+  threshold INTEGER NOT NULL,
+  started_at TEXT NOT NULL,
+  ends_at TEXT NOT NULL,
+  verdict TEXT,
+  decided_at TEXT,
+  own_result INTEGER,
+  final_measured INTEGER
+);
+CREATE INDEX channel_trials_by_channel ON channel_trials (channel_id, started_at);
+`
   }
 ]

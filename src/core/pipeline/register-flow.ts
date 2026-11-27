@@ -7,6 +7,7 @@ import { FlairHelp } from './flair-help'
 import { PostComposer } from './compose-flow'
 import { SectionEditor } from './section-flow'
 import { FindingPictures } from './finding-pictures'
+import { ChannelTrials } from './channel-trials'
 import { FeedAnalysis } from './feed-analysis'
 import { WeeklyReview } from './weekly-review'
 import { FindingAssistant } from './finding-assist'
@@ -124,6 +125,14 @@ export function registerFlow(core: Core): void {
     'postGroups.approve': ({ id, seen }) => groups.approve(id, seen),
     'postGroups.sendAll': ({ id }) => groups.sendAll(id),
     'postGroups.remove': ({ id }) => groups.remove(id)
+  })
+  // Channel trials (DEC-058): the terms written before the weeks are spent, the numbers counted, the owner's verdict.
+  const trials = new ChannelTrials(core, store)
+  core.router.register({
+    'trials.get': ({ channelId }) => trials.view(channelId),
+    'trials.start': (args) => trials.start(args),
+    'trials.decide': (args) => trials.decide(args),
+    'trials.propose': ({ channelId }) => trials.propose(channelId)
   })
   // The weekly review (DEC-057): the numbers are counted, the AI writes the words and one change, the owner answers. The scheduler prepares it on Monday.
   const weekly = new WeeklyReview(core)

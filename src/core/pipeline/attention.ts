@@ -5,6 +5,7 @@ import type { AttentionItem, ChannelStatus, Id, Opportunity, SendAction } from '
 import type { Core } from '../core'
 import type { Db } from '../db/database'
 import { mapAction, mapOpportunity } from '../repos'
+import { trialItems } from './channel-trials'
 import { noteRequestItems } from './mix-attention'
 import { sourceWords } from './reply-target'
 import type { ScheduleStore } from './scheduler-state'
@@ -179,7 +180,7 @@ export class AttentionWatcher {
 
   list(): AttentionItem[] {
     const targets = this.targets()
-    const items = [...opportunityItems(this.core, this.core.db, targets), ...unknownResultItems(this.core.db, targets), ...accountItems(this.core), ...channelItems(this.core, this.store), ...noteRequestItems(this.core)]
+    const items = [...opportunityItems(this.core, this.core.db, targets), ...unknownResultItems(this.core.db, targets), ...accountItems(this.core), ...channelItems(this.core, this.store), ...noteRequestItems(this.core), ...trialItems(this.core)]
     const sorted = this.withStableTimes(items).sort(compare)
     this.count = sorted.length
     return sorted

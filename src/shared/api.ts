@@ -2,6 +2,7 @@
 // The UI only ever calls `Transport.invoke` / `Transport.subscribe`; whether that travels over
 // Electron IPC or over the loopback HTTP server is invisible to it.
 
+import type { TrialMetric } from './channel-trial'
 import type {
   AgentAsk,
   AiTaskState,
@@ -65,6 +66,8 @@ import type {
   OpportunityCard,
   FeedAnalysisView,
   WeeklyReviewView,
+  TrialProposal,
+  TrialView,
   FeedPeriod,
   FindingAssist,
   FindingCard,
@@ -627,6 +630,13 @@ export interface ApiMethods {
   'results.posts': [{ channelId: Id }, PostResultsView]
   /** Reads those numbers from the site now. */
   'results.readPosts': [{ channelId: Id }, PostResultsView]
+  /** The trial of a channel (DEC-058): the running one with its numbers, and the earlier ones with their verdicts. */
+  'trials.get': [{ channelId: Id }, TrialView]
+  'trials.start': [{ channelId: Id; hypothesis: string; weeks: number; hoursPerWeek: number; metric: TrialMetric; ownLabel?: string | null; threshold: number }, TrialView]
+  /** The owner's verdict: keep, stop (the channel is parked) or extend by two weeks. */
+  'trials.decide': [{ channelId: Id; verdict: 'keep' | 'stop' | 'extend'; ownResult?: number | null }, TrialView]
+  /** The AI proposes the terms of a trial for the form. Nothing is stored. */
+  'trials.propose': [{ channelId: Id }, TrialProposal]
   /** The weekly review of a product (DEC-057): the page of a week (the one that ended last when none is named). */
   'weekly.get': [{ productId: Id; week?: string | null }, WeeklyReviewView]
   /** The AI writes what worked, what did not and one change, from the numbers the application counted. Nothing is posted or changed. */

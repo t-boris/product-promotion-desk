@@ -19,6 +19,11 @@ export interface LinkSources {
  * account selected, and the products that use it are named. The attention item carries only the channel or account id, so everything is looked up here.
  */
 export function fixLinkFor(item: AttentionItem, { channels, products }: LinkSources): FixLink | null {
+  // A trial that is over is answered on the channel's Results tab, where its numbers are.
+  if (item.id.startsWith('trial:')) {
+    const owner = channels.find((c) => c.id === item.refId)?.productId ?? null
+    return { href: `#/channels/${item.refId}/results${owner ? `?product=${owner}` : ''}`, label: 'Open the trial', productName: products.find((p) => p.id === owner)?.name ?? null }
+  }
   let productId: string | null = null
   switch (item.refType) {
     case 'channel':

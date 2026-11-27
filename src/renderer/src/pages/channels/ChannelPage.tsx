@@ -15,6 +15,7 @@ import { ModeSelector } from './ModeSelector'
 import { OpenAccountBrowser } from './OpenAccountBrowser'
 import { PostingTimesCard } from './PostingTimesCard'
 import { PostResultsCard } from './PostResultsCard'
+import { TrialCard } from './TrialCard'
 import { SettingsForm } from './SettingsForm'
 import type { SetupStage } from './setup-stage'
 
@@ -116,7 +117,12 @@ export function ChannelPage({
             <CapabilityCard channel={channel} filled={stage === 'assess'} platform={platform} />
           </>
         )}
-        {tab === 'results' && <PostResultsCard channel={channel} />}
+        {tab === 'results' && (
+          <>
+            <TrialCard channel={channel} />
+            <PostResultsCard channel={channel} />
+          </>
+        )}
         {tab === 'plan' && <ChannelPlanCard channel={channel} platforms={platforms} blockedReason={planBlockedReason} />}
         {/* The content mix reads the plan's steps for its proposal; its "Let the AI propose a mix" is off for the same reason the plan's button is, but only when it would need the AI. */}
         {tab === 'mix' && <ChannelMixCard channel={channel} blockedReason={planBlockedReason} />}

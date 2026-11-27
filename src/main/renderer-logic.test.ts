@@ -404,6 +404,8 @@ describe('inbox links to where a problem is fixed (DEC-009, DEC-037)', () => {
 
   it('sends a channel problem to that product\'s Channels screen', () => {
     expect(fixLinkFor(item('channel', 'c2'), sources)).toEqual({ href: '#/channels?product=p2', label: 'Open Other channels', productName: 'Other' })
+    // A trial that is over is answered where its numbers are: the channel's Results tab.
+    expect(fixLinkFor({ ...item('channel', 'c2'), id: 'trial:c2', kind: 'question' }, sources)).toEqual({ href: '#/channels/c2/results?product=p2', label: 'Open the trial', productName: 'Other' })
   })
 
   it('sends a sign-in problem to the account it names in the Accounts section, and names the products that use it (DEC-015, BUG-043)', () => {

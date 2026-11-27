@@ -1,6 +1,7 @@
 // Domain types shared by the core, the main process and the UI.
 // Everything here is plain serializable data (it crosses IPC / HTTP boundaries).
 
+import type { ChannelTrial, TrialMetric, TrialProgress } from './channel-trial'
 import type { WeekNumbers, WeekSums } from './weekly-review'
 import type { PostNumbers } from './post-numbers'
 import type { PostType, QuickCard } from './quick-post'
@@ -1235,6 +1236,32 @@ export interface FeedQuestion {
   title: string
   channel: string
   question: string
+}
+
+/** The terms of a trial as the AI proposes them for the form. */
+export interface TrialProposal {
+  hypothesis: string
+  weeks: number
+  hoursPerWeek: number
+  metric: TrialMetric
+  ownLabel: string | null
+  threshold: number
+  why: string
+}
+
+/** The trial of a channel as its card shows it (DEC-058). */
+export interface TrialView {
+  channelId: Id
+  platform: string
+  /** What this channel can be judged by. */
+  metrics: TrialMetric[]
+  current: { trial: ChannelTrial; progress: TrialProgress } | null
+  past: { trial: ChannelTrial; progress: TrialProgress }[]
+  /** The channel is paused because its last trial ended with "stop". */
+  parked: boolean
+  /** The product's channels that are active now, and how many of its channels have a trial running. */
+  inWork: number
+  onTrial: number
 }
 
 /** A post of the week on the review page. */
