@@ -164,6 +164,8 @@ export class PeriodicTasks {
       if (weekly && (nowMs >= this.weeklyScanAtMs || this.weeklyScanAtMs - nowMs > this.options.scanEveryMs)) {
         this.weeklyScanAtMs = nowMs + this.options.scanEveryMs
         this.launch('weekly-review', async () => void (await weekly.prepareDue(() => this.halted || this.pausedAtTick)))
+        const { answers } = this.core.services
+        if (answers) this.launch('answer-check', async () => void (await answers.askDue(() => this.halted || this.pausedAtTick)))
       }
       if (metrics && nowMs >= this.metricsScanAtMs) {
         this.metricsScanAtMs = nowMs + this.options.scanEveryMs

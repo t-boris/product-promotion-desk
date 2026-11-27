@@ -109,4 +109,43 @@ CREATE TABLE channel_trials (
 CREATE INDEX channel_trials_by_channel ON channel_trials (channel_id, started_at);
 `
   }
+  ,
+  {
+    id: 406,
+    name: 'the AI-answer check: buyer questions, checks over time',
+    sql: `
+-- The questions a buyer would ask (DEC-061), in the owner's order.
+CREATE TABLE answer_questions (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX answer_questions_by_product ON answer_questions (product_id, position);
+-- One check: every question asked once through an engine with web search. finished_at NULL: cut short (the application was closed).
+CREATE TABLE answer_runs (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  engine TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  finished_at TEXT
+);
+CREATE INDEX answer_runs_by_product ON answer_runs (product_id, started_at);
+-- What was answered. product_named and product_cited are worked out by the application, not by the engine.
+CREATE TABLE answer_results (
+  run_id TEXT NOT NULL REFERENCES answer_runs(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  question TEXT NOT NULL,
+  state TEXT NOT NULL,
+  answer TEXT NOT NULL,
+  named_json TEXT NOT NULL,
+  sources_json TEXT NOT NULL,
+  product_named INTEGER NOT NULL,
+  product_cited INTEGER NOT NULL,
+  error TEXT,
+  PRIMARY KEY (run_id, position)
+);
+`
+  }
 ]

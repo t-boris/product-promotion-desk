@@ -1273,6 +1273,46 @@ export interface AudienceWordsView {
   waiting: number
 }
 
+/** One question of an AI-answer check and what the engine answered (DEC-061). */
+export interface AnswerResult {
+  question: string
+  state: 'ok' | 'failed'
+  answer: string
+  /** The names the answer recommends, as the engine reported them. */
+  named: string[]
+  /** The pages the answer rests on. */
+  sources: string[]
+  /** Worked out by the application: the product's name is among the names or in the answer. */
+  productNamed: boolean
+  /** Worked out by the application: a source is a page of the product's site. */
+  productCited: boolean
+  error: string | null
+}
+
+export interface AnswerRun {
+  id: Id
+  /** The engine that was asked, by its name. */
+  engine: string
+  startedAt: IsoTime
+  /** Null while running, or when it was cut short. */
+  finishedAt: IsoTime | null
+  results: AnswerResult[]
+  asked: number
+  named: number
+  cited: number
+}
+
+export interface AnswerCheckView {
+  productId: Id
+  questions: string[]
+  running: boolean
+  /** The check shown: the one asked for, else the latest. */
+  shown: AnswerRun | null
+  history: { id: Id; engine: string; startedAt: IsoTime; finished: boolean; asked: number; named: number; cited: number }[]
+  /** When the questions are asked again by themselves; null while never asked. */
+  nextAt: IsoTime | null
+}
+
 /** One date ahead of a product's seasonal calendar, with the channels it is prepared for (DEC-060). */
 export interface SeasonalEventView {
   key: string

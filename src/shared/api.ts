@@ -70,6 +70,7 @@ import type {
   WeeklyReviewView,
   PositioningView,
   AudienceWordsView,
+  AnswerCheckView,
   SeasonalView,
   TrialProposal,
   TrialView,
@@ -641,6 +642,10 @@ export interface ApiMethods {
   'positioning.approve': [{ productId: Id; answers: PositioningAnswers }, PositioningView]
   'positioning.dismiss': [{ productId: Id }, PositioningView]
   /** The audience's own words (DEC-059): questions, objections and phrases taken from the posts the Feed read, each with its posts. */
+  'answers.get': [{ productId: Id; runId?: Id | null }, AnswerCheckView]
+  'answers.setQuestions': [{ productId: Id; questions: string[] }, AnswerCheckView]
+  'answers.propose': [{ productId: Id }, string[]]
+  'answers.ask': [{ productId: Id }, AnswerCheckView]
   'seasonal.get': [{ productId: Id }, SeasonalView]
   'seasonal.setKinds': [{ productId: Id; kinds: CalendarKind[] }, SeasonalView]
   'seasonal.addDate': [{ productId: Id; name: string; month: number; day: number; year?: number | null }, SeasonalView]

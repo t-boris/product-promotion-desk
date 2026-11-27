@@ -86,3 +86,71 @@
 .weekly-change .weekly-actions {
   margin: var(--space-3) 0;
 }
+
+/* What AI answers (DEC-061). */
+.answers-questions {
+  min-height: 140px;
+  resize: vertical;
+}
+.answers-actions,
+.answers-run-head,
+.answers-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+.answers-actions {
+  margin: var(--space-3) 0;
+}
+.answers-run {
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.answers-history {
+  width: auto;
+  max-width: 320px;
+}
+.answers-most {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-3);
+}
+.answers-most dt {
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+}
+.answers-most dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.answers-list,
+.answers-sources {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.answers-row {
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.answers-question {
+  font-weight: 600;
+}
+.answers-answer {
+  padding-left: var(--space-4);
+  overflow-wrap: anywhere;
+}
+.answers-sources {
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+}

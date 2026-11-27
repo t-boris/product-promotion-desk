@@ -103,6 +103,11 @@ export interface WeeklyReviewService {
   prepareDue(stop?: () => boolean): Promise<number>
 }
 
+/** The AI-answer check (DEC-061): the scheduler's job asks the buyer questions again when the last check is a month old. */
+export interface AnswerCheckService {
+  askDue(stop?: () => boolean): Promise<number>
+}
+
 /** Platform metrics snapshots (I-8). */
 export interface MetricsService {
   refresh(channelId: Id): Promise<MetricSnapshot[]>
@@ -144,4 +149,5 @@ export interface CoreServices {
   metrics?: MetricsService
   mix?: MixService
   weekly?: WeeklyReviewService
+  answers?: AnswerCheckService
 }

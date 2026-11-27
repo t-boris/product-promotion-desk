@@ -7,6 +7,7 @@ import { FlairHelp } from './flair-help'
 import { PostComposer } from './compose-flow'
 import { SectionEditor } from './section-flow'
 import { FindingPictures } from './finding-pictures'
+import { AnswerCheck } from './answer-check'
 import { AudienceWords } from './audience-words'
 import { SeasonalCalendar } from './seasonal'
 import { buildCard } from './cards'
@@ -148,6 +149,15 @@ export function registerFlow(core: Core): void {
     'words.collect': (args) => bank.collect(args),
     'words.remove': (args) => bank.remove(args),
     'words.suggestPost': (args) => bank.suggestPost(args)
+  })
+  // The AI-answer check (DEC-061): buyer questions asked through the engine with web search; the scheduler asks again after a month.
+  const answers = new AnswerCheck(core)
+  core.services.answers = answers
+  core.router.register({
+    'answers.get': (args) => answers.view(args),
+    'answers.setQuestions': (args) => answers.setQuestions(args),
+    'answers.propose': (args) => answers.propose(args),
+    'answers.ask': (args) => answers.ask(args)
   })
   // The seasonal calendar (DEC-060): computed and listed dates, the owner's own, and a draft per date and channel on the owner's press.
   const seasonal = new SeasonalCalendar(core, async (channelId, focus, origin) => buildCard(core, store, await publications.suggest(channelId, { focus, origin })))
