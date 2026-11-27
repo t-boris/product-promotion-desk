@@ -9,18 +9,17 @@ import { pictureFitProblems } from './picture-fit'
 export type Executor = 'connector' | 'ai_browser'
 
 /**
- * An answer from a post of the Feed that the owner put on a schedule: it came from a post (`findingId`) and has a time (`scheduledAt`). Together with the owner's
- * own approval this is the owner's press made ahead of time, which is what lets the scheduler send it without a click and lets the AI browser carry it. An
- * approval made by an automatic rule never counts, and neither does anything that is not an answer from the Feed (a scheduled post keeps its old rules).
+ * An item the owner put on a schedule: it has a time (`scheduledAt`). Together with the owner's own approval, given before that time, this is the owner's
+ * press made ahead of time on exactly the approved content, which is what lets the scheduler send it without a click and lets the AI browser carry it
+ * (DEC-049 for an answer from the Feed; DEC-053 for every post and reply). An approval made by an automatic rule never counts (`sendWays` asks who approved).
  */
-export const scheduledByOwner = (opp: { findingId: string | null; scheduledAt: string | null }): boolean => opp.findingId !== null && opp.scheduledAt !== null
+export const scheduledByOwner = (opp: { scheduledAt: string | null }): boolean => opp.scheduledAt !== null
 
 /**
  * Whether the AI browser may carry a send. It does when the owner chose it in the settings, or the channel is one the application does not read
  * (Instagram, Facebook, Threads...: no connector can post to it, so there is nothing to choose, DEC-035), the build has it, and the send is the
- * owner's own press on an approval the owner gave themselves: a send on an automatic approval never drives a browser, and neither does a scheduled post.
- * The one exception is the owner's own answer from the Feed that they put on a schedule (`scheduled`, see `scheduledByOwner`): the owner pressed ahead of
- * time on exactly this text, so the AI browser carries it when its time comes (DEC-049 of the product-promotion-desk feature, not the quick composer's).
+ * owner's own: a press on an approval the owner gave themselves, or a time the owner set on it (`scheduled`, see `scheduledByOwner`; DEC-053). A send
+ * on an automatic rule's approval never drives a browser.
  * Without `send` (the approval, before anyone presses anything) the question is whether it could, if the owner presses Send. For a channel with
  * no connector the engine is asked too: any engine that can work the browser may carry the send (the owner's decision of 2026-11-20), and the owner is told at the approval when the selected one cannot.
  */

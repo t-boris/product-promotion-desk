@@ -4,6 +4,7 @@
 // verified capabilities, not here.
 
 import { ApiError, type DraftInput } from '../../shared/api'
+import { nextFreeSlot } from '../../shared/schedule'
 import type { Id, IsoTime, Opportunity } from '../../shared/types'
 import type { Core } from '../core'
 import { holdsCredential } from '../assist/kit'
@@ -234,17 +235,15 @@ export class PublicationsFlow {
       .map((d) => d.title || d.text.slice(0, 80))
   }
 
-  /** Sets (or clears) the planned send time. Scheduling does not approve: the item still needs the owner's approval. */
+  /**
+   * Sets (or clears) the planned send time of a post or a reply, on any channel: where no connector can post, the AI browser carries it when the time comes
+   * (DEC-053). Scheduling does not approve: the item still needs the owner's approval, given before that time.
+   */
   schedule(id: Id, at: IsoTime | null): Opportunity {
     const opp = this.store.requireOpportunity(id)
-    if (opp.kind !== 'standalone') throw new ApiError('invalid_state', 'Only standalone publications can be scheduled.')
     if (SEND_LOCKED_STATES.includes(opp.state)) throw new ApiError('invalid_state', 'This publication has already been sent or is being sent.')
     let scheduledAt: string | null = null
     if (at !== null) {
-      // A channel the app cannot read is reached only by the AI browser, which carries a send the owner presses: a scheduled send could never go out.
-      if (!this.store.requireChannel(opp.channelId).reads) {
-        throw new ApiError('invalid_state', 'A post for this channel goes out by the AI browser, which carries only a send you press yourself, so it cannot be scheduled. Press Send on it when you want it out, or use “Copy post” and publish it by hand.')
-      }
       const time = Date.parse(at)
       if (Number.isNaN(time)) throw new ApiError('invalid_input', 'The scheduled time is not a valid date.')
       scheduledAt = new Date(time).toISOString()
@@ -252,5 +251,25 @@ export class PublicationsFlow {
     this.store.updateOpportunity(id, { scheduledAt })
     this.store.notify()
     return this.store.requireOpportunity(id)
+  }
+
+  /**
+   * Puts the item on the channel's next free posting time (DEC-053): the first of the channel's times that no other unsent item of the channel holds.
+   * It is `schedule` with the time chosen by the channel's own times, so nothing else about the item changes and it still needs the owner's approval.
+   */
+  enqueue(id: Id): Opportunity {
+    const opp = this.store.requireOpportunity(id)
+    const channel = this.store.requireChannel(opp.channelId)
+    if (channel.settings.postingSlots.length === 0) {
+      throw new ApiError('invalid_state', `${channel.target} has no posting times yet. Add them on the channel's page (Posting times), or set a time here.`)
+    }
+    const taken = (
+      this.core.db
+        .prepare("SELECT scheduled_at AS at FROM opportunities WHERE channel_id = ? AND id <> ? AND scheduled_at IS NOT NULL AND state NOT IN ('cancelled', 'confirmed', 'failed')")
+        .all(channel.id, id) as { at: string }[]
+    ).map((row) => row.at)
+    const at = nextFreeSlot(channel.settings.postingSlots, taken, this.core.clock.now())
+    if (!at) throw new ApiError('invalid_state', `Every posting time of ${channel.target} within a year is taken.`)
+    return this.schedule(id, at.toISOString())
   }
 }

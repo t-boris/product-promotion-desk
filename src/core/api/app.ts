@@ -3,6 +3,7 @@ import { AiError } from '../ports'
 import { APP_NAME } from '../../shared/app-name'
 import type { AppSettings } from '../../shared/types'
 import { parseModelName } from '../../shared/engine-model'
+import { MAX_SCHEDULE_GRACE_HOURS, MIN_SCHEDULE_GRACE_HOURS, isScheduleGraceHours } from '../../shared/schedule'
 import { isThemeChoice } from '../../shared/themes'
 import { parseWebPort } from '../../shared/web-port'
 import type { Core } from '../core'
@@ -12,6 +13,9 @@ function checkedPatch(patch: Partial<AppSettings>): Partial<AppSettings> {
   // Who publishes is a choice of two: anything else is refused, never stored, so an unknown value can never read as "the AI browser".
   if (patch.publishWith !== undefined && patch.publishWith !== 'connector' && patch.publishWith !== 'ai_browser') {
     throw new ApiError('invalid_input', 'Publishing is done either by the connector or by the AI browser.')
+  }
+  if (patch.scheduleGraceHours !== undefined && !isScheduleGraceHours(patch.scheduleGraceHours)) {
+    throw new ApiError('invalid_input', `A scheduled item may be late by ${MIN_SCHEDULE_GRACE_HOURS} to ${MAX_SCHEDULE_GRACE_HOURS} whole hours.`)
   }
   // The look is one of the themes the application has, and the animated background a plain on/off: anything else is refused and never stored (visual-system.md §33).
   if (patch.theme !== undefined && !isThemeChoice(patch.theme)) {

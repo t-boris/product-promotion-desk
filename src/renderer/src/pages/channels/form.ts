@@ -46,11 +46,11 @@ function wholeNumber(text: string): number | null {
   return /^\d+$/.test(text.trim()) ? Number(text.trim()) : null
 }
 
-/** The settings this form owns: everything except the content mix, which has its own card and is never touched by this form's patch. */
+/** The settings this form owns: everything except the content mix and the posting times, which have their own cards and are never touched by this form's patch. */
 /** The most the core accepts (one week); the same number as the core's, shown at the field so the core's refusal is never the first the owner hears of it. */
 const MAX_INTERVAL_MIN = 7 * 24 * 60
 
-export type ParsedSettings = { ok: true; settings: Omit<ChannelSettings, 'mix'> } | { ok: false; error: string }
+export type ParsedSettings = { ok: true; settings: Omit<ChannelSettings, 'mix' | 'postingSlots'> } | { ok: false; error: string }
 
 /** Quick checks for a clear message at the field; the core validates everything again. */
 export function fromDraft(draft: SettingsDraft): ParsedSettings {

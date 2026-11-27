@@ -26,12 +26,11 @@ import type { ReviewFlow } from './review'
 import { StandingChecks } from './standing'
 import { SEND_LOCKED_STATES, type FlowStore } from './store'
 import { KeyedMutex, errorMessage } from './util'
+import { scheduleGraceMs } from '../../shared/schedule'
 
 /** An unknown result is declared failed only after the platform has been silent for this long. */
 export const UNKNOWN_WAIT_MS = 10 * 60 * 1000
 export const NOT_FOUND_REASON = 'not found on the platform after 10 minutes; safe to retry after review'
-/** A scheduled publication is sent without a click only within this long after its planned time. */
-export const SCHEDULE_GRACE_MS = 60 * 60 * 1000
 export const SCHEDULE_MISSED_REASON = 'The scheduled time passed while the app was not running; confirm to send'
 export const OWNER_NOT_PUBLISHED_ERROR = 'Owner confirmed it was not published'
 
@@ -501,12 +500,12 @@ export class SendingFlow implements SendingService {
   // ───────────── scheduled standalone publications ─────────────
 
   /**
-   * Sends approved publications whose planned time has come, without a click, and the owner's own answers from the Feed that they put on a schedule (the
-   * owner's press made ahead of time, on exactly the text they approved; the gate and `sendWays` let those through, an automatic rule's approval never). Two
+   * Sends, without a click, the approved posts and replies whose planned time has come: a time the owner set is the owner's press made ahead of time, on
+   * exactly the content they approved (the gate and `sendWays` let those through, an automatic rule's approval never; DEC-049, DEC-053). Two
    * guards keep that safe:
    *  - only what was approved BEFORE its planned time is picked up: approving something whose time already passed
    *    is the owner looking at it, and sending it is then the owner's Send, never an immediate side effect;
-   *  - one more than an hour late (the app was not running) goes back to review instead of going out stale.
+   *  - one later than the owner's limit (`scheduleGraceHours`; the app was not running) goes back to review instead of going out stale.
    */
   async sendDuePublications(): Promise<number> {
     // Scheduled publications go out without a click, so the global pause applies to them.
@@ -515,10 +514,12 @@ export class SendingFlow implements SendingService {
     const due = this.core.db
       .prepare(
         `SELECT id, scheduled_at AS at, finding_id AS finding FROM opportunities
-          WHERE (kind = 'standalone' OR (kind = 'reply' AND finding_id IS NOT NULL)) AND state = 'ready' AND scheduled_at IS NOT NULL AND scheduled_at <= ?
+          WHERE state = 'ready' AND scheduled_at IS NOT NULL AND scheduled_at <= ?
           ORDER BY scheduled_at, rowid`
       )
       .all(this.store.now()) as { id: string; at: string; finding: string | null }[]
+    // How late an item may still go out by itself is the owner's setting (DEC-053).
+    const graceMs = scheduleGraceMs(this.core.settings.app().scheduleGraceHours)
     let attempted = 0
     for (const { id, at, finding } of due) {
       try {
@@ -527,7 +528,7 @@ export class SendingFlow implements SendingService {
         if (!approval) continue
         const plannedMs = Date.parse(at)
         if (Date.parse(approval.approvedAt) > plannedMs) continue
-        if (nowMs - plannedMs > SCHEDULE_GRACE_MS) {
+        if (nowMs - plannedMs > graceMs) {
           this.review.returnToReview(id, SCHEDULE_MISSED_REASON)
           // An answer from the Feed is shown in its window as "Scheduled for ...": with the approval gone that line would be a lie.
           if (finding !== null) this.store.updateOpportunity(id, { scheduledAt: null })

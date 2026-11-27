@@ -743,8 +743,9 @@ describe('standalone publications (REQ-003 criterion 5)', () => {
     expect(world.opportunity(gone.id).state).toBe('cancelled')
   })
 
-  it('does not send a publication more than an hour past its planned time; it returns to review', async () => {
+  it('does not send a publication later than the owner\'s limit past its planned time (here one hour); it returns to review', async () => {
     world = makeWorld()
+    world.core.settings.updateApp({ scheduleGraceHours: 1 })
     const late = await scheduledAndApproved('late', 5)
     const barelyOk = await scheduledAndApproved('barely ok', 10)
 
@@ -765,6 +766,48 @@ describe('standalone publications (REQ-003 criterion 5)', () => {
     expect(await sending().sendDuePublications()).toBe(0)
     expect(publishCalls()).toBe(1)
     expect((await sending().send(late.id)).state).toBe('confirmed')
+  })
+
+  it('sends a publication that is hours late while it is within the default limit of six hours, and refuses a limit that is not 1 to 48 whole hours', async () => {
+    world = makeWorld()
+    const fiveHours = await scheduledAndApproved('five hours late', 5)
+    world.clock.advance(5 * 60 * 60_000)
+    expect(await sending().sendDuePublications()).toBe(1)
+    expect(world.opportunity(fiveHours.id).state).toBe('confirmed')
+
+    const sevenHours = await scheduledAndApproved('seven hours late', 5)
+    world.clock.advance(7 * 60 * 60_000)
+    expect(await sending().sendDuePublications()).toBe(0)
+    expect(world.opportunity(sevenHours.id).state).toBe('draft')
+
+    for (const scheduleGraceHours of [0, 49, 2.5, '6']) {
+      await expect(world.core.router.call('app.settings.update', { scheduleGraceHours: scheduleGraceHours as number })).rejects.toMatchObject({ code: 'invalid_input' })
+    }
+    expect((await world.core.router.call('app.settings.update', { scheduleGraceHours: 12 })).scheduleGraceHours).toBe(12)
+  })
+
+  it('puts a publication on the channel\'s next free posting time, one item per time, and says when the channel has none', async () => {
+    world = makeWorld()
+    const create = async (title: string) => (await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title, text: `${title} body` } })).opportunity
+    const first = await create('first')
+    await expect(world.core.router.call('publications.enqueue', { id: first.id })).rejects.toMatchObject({ code: 'invalid_state', message: expect.stringMatching(/no posting times yet/) })
+
+    // every day at 10:00 and 18:00, local time
+    const postingSlots = [0, 1, 2, 3, 4, 5, 6].flatMap((weekday) => [{ weekday, minute: 600 }, { weekday, minute: 1080 }])
+    await world.core.router.call('channels.updateSettings', { channelId: world.channel.id, settings: { postingSlots } })
+    const now = world.clock.now()
+    const local = (iso: string | null) => new Date(iso as string)
+    const a = (await world.core.router.call('publications.enqueue', { id: first.id })).opportunity
+    const b = (await world.core.router.call('publications.enqueue', { id: (await create('second')).id })).opportunity
+    expect(local(a.scheduledAt).getTime()).toBeGreaterThan(now.getTime())
+    expect([600, 1080]).toContain(local(a.scheduledAt).getHours() * 60 + local(a.scheduledAt).getMinutes())
+    expect(local(b.scheduledAt).getTime()).toBeGreaterThan(local(a.scheduledAt).getTime())
+    expect(local(b.scheduledAt).getTime() - local(a.scheduledAt).getTime()).toBeLessThanOrEqual(16 * 60 * 60_000 + 60 * 60_000)
+    // asking again for the same item keeps it where the next free time is: its own time does not count as taken
+    expect((await world.core.router.call('publications.enqueue', { id: first.id })).opportunity.scheduledAt).toBe(a.scheduledAt)
+    // a cancelled item gives its time back
+    await world.core.router.call('opportunities.reject', { id: first.id })
+    expect((await world.core.router.call('publications.enqueue', { id: (await create('third')).id })).opportunity.scheduledAt).toBe(a.scheduledAt)
   })
 
   it('approving a publication whose planned time has already passed does not publish it by itself', async () => {

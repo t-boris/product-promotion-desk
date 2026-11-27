@@ -608,7 +608,10 @@ export interface ApiMethods {
   'pictures.saveDataUrl': [{ dataUrl: string; name: string }, { path: string } | null]
   /** Shows a picture that was saved just now in the file manager (any other path is refused). */
   'pictures.revealSaved': [{ path: string }, void]
+  /** Sets or clears the planned send time of a post or a reply, on any channel. Scheduling never approves. */
   'publications.schedule': [{ id: Id; at: IsoTime | null }, OpportunityCard]
+  /** Puts the item on its channel's next free posting time (the channel's `postingSlots`); refused when the channel has none. */
+  'publications.enqueue': [{ id: Id }, OpportunityCard]
 
   // results and logs (REQ-005, REQ-006)
   'results.get': [{ productId?: Id }, ResultsView]

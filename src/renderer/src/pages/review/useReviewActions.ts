@@ -26,6 +26,8 @@ export interface ReviewActions {
   /** The owner checked the platform themselves and settles an unknown result. */
   resolveUnknown(id: Id, outcome: 'published' | 'not_published', url?: string): Promise<OpportunityCard | undefined>
   schedule(id: Id, at: IsoTime | null): Promise<OpportunityCard | undefined>
+  /** Puts the item on its channel's next free posting time. */
+  enqueue(id: Id): Promise<OpportunityCard | undefined>
   /** Reads the text against the rules of an AI draft (`draft`: the editor as it stands; without it the saved draft). Busy while it runs, so the editor is locked. */
   check(id: Id, draft?: DraftInput): Promise<CheckOutcome>
 }
@@ -68,6 +70,7 @@ export function useReviewActions(onDone?: (card: OpportunityCard) => void, settl
     reconcile: (id) => perform(() => call('opportunities.reconcile', { id })),
     resolveUnknown: (id, outcome, url) => perform(() => call('opportunities.resolveUnknown', { id, outcome, url: url || undefined })),
     schedule: (id, at) => perform(() => call('publications.schedule', { id, at })),
+    enqueue: (id) => perform(() => call('publications.enqueue', { id })),
     check: async (id, draft) => {
       setChecking(true)
       try {

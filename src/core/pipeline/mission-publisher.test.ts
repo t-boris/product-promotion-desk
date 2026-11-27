@@ -448,7 +448,7 @@ describe('a post with pictures goes through the AI browser when the connector ca
     expect(actionRow(action.id).basis).toContain(AI_BROWSER_BASIS)
   })
 
-  it('is not sent by a scheduled send, which never drives a browser: the gate says why, and nothing is sent', async () => {
+  it('is not sent by an automatic send the owner gave no time: the gate says why, and nothing is sent', async () => {
     world = makeWorld()
     const opp = await withPictures(['one'])
     const missions = useMissions(async () => undefined)
@@ -456,7 +456,7 @@ describe('a post with pictures goes through the AI browser when the connector ca
     const error = await sending().send(opp.id, { automatic: true }).then(() => null, (e: unknown) => e)
     expect(error).toBeInstanceOf(SendBlockedError)
     expect((error as SendBlockedError).block.code).toBe('post_does_not_fit')
-    expect((error as SendBlockedError).message).toMatch(/scheduled or automatic send.*press Send on it/)
+    expect((error as SendBlockedError).message).toMatch(/automatic send.*press Send on it/)
     expect(missions.requests).toEqual([])
     expect(publishCalls()).toBe(0)
   })

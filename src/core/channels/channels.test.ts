@@ -91,8 +91,19 @@ describe('channels.updateSettings', () => {
       channelId: channel.id,
       settings: { languages: ['en', 'es'], style: 'warm, short', topics: ['astrology'], queries: ['birth chart app'], checkIntervalMin: 15, limits: { perHour: 1, perDay: 3 }, digestTime: '09:00', notifications: false, autoCategories: ['thanks'] }
     })
-    expect(updated.settings).toEqual({ languages: ['en', 'es'], style: 'warm, short', topics: ['astrology'], queries: ['birth chart app'], checkIntervalMin: 15, lookBackDays: 30, limits: { perHour: 1, perDay: 3 }, autoCategories: ['thanks'], digestTime: '09:00', notifications: false, mix: [] })
+    expect(updated.settings).toEqual({ languages: ['en', 'es'], style: 'warm, short', topics: ['astrology'], queries: ['birth chart app'], checkIntervalMin: 15, lookBackDays: 30, limits: { perHour: 1, perDay: 3 }, autoCategories: ['thanks'], digestTime: '09:00', notifications: false, mix: [], postingSlots: [] })
     expect((await w.call('channels.list', undefined))[0].settings).toEqual(updated.settings)
+  })
+
+  it('keeps posting times in one order without repeats, and refuses what is not a day and a time', async () => {
+    const w = await makeReadyWorld()
+    const channel = await connect(w)
+    const updated = await w.call('channels.updateSettings', { channelId: channel.id, settings: { postingSlots: [{ weekday: 0, minute: 600 }, { weekday: 1, minute: 600 }, { weekday: 1, minute: 600 }] } })
+    expect(updated.settings.postingSlots).toEqual([{ weekday: 1, minute: 600 }, { weekday: 0, minute: 600 }])
+    for (const postingSlots of [[{ weekday: 7, minute: 0 }], [{ weekday: 1, minute: 1440 }], 'monday', [{ weekday: 1 }]]) {
+      expect(await w.refusal('channels.updateSettings', { channelId: channel.id, settings: { postingSlots } as never })).toBe('invalid_input')
+    }
+    expect((await w.call('channels.list', undefined))[0].settings.postingSlots).toEqual(updated.settings.postingSlots)
   })
 
   it('refuses invalid values and leaves the stored settings untouched', async () => {

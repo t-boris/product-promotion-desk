@@ -202,6 +202,7 @@ export function registerFlowApi({ core, store, review, monitor, drafting, sendin
     // ───────────── standalone publications ─────────────
     'publications.suggest': async ({ channelId }) => card((await publications.suggest(channelId)).id),
     'publications.create': async ({ channelId, draft }) => card((await publications.create(channelId, draft)).id),
-    'publications.schedule': ({ id, at }) => card(publications.schedule(id, at).id)
+    'publications.schedule': ({ id, at }) => card(publications.schedule(id, at).id),
+    'publications.enqueue': ({ id }) => card(publications.enqueue(requireText(id, 'The item')).id)
   })
 }

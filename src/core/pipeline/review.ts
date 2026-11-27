@@ -132,7 +132,7 @@ export class ReviewFlow implements PipelineHooks {
       }
       // Approving never publishes by itself. A publication whose planned time is already behind us is not picked
       // up by the scheduler either (it only sends what was approved before its time): the owner presses Send.
-      const lateSchedule = current.kind === 'standalone' && current.scheduledAt !== null && Date.parse(current.scheduledAt) <= this.core.clock.now().getTime()
+      const lateSchedule = current.scheduledAt !== null && Date.parse(current.scheduledAt) <= this.core.clock.now().getTime()
       this.store.updateOpportunity(id, { state: 'ready', reason: lateSchedule ? 'The scheduled time has already passed; press Send to publish it now.' : '' })
     })()
     this.store.notify()

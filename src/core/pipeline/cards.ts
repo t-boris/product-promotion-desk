@@ -29,6 +29,7 @@ export function buildCard(core: Core, store: FlowStore, opp: Opportunity): Oppor
     channelTarget: channel.target,
     channelPlatform: channel.platform,
     channelReads: channel.reads,
+    channelPostingSlots: channel.settings.postingSlots.length,
     accountLabel: account.identity ? `${account.label} (${account.identity})` : account.label,
     comment,
     discussion,

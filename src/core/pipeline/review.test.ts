@@ -438,13 +438,13 @@ describe('standalone publications (REQ-003 criterion 5)', () => {
     expect(cleared.opportunity.scheduledAt).toBeNull()
   })
 
-  it('schedule rejects an invalid date, a reply, and a publication that is already sent', async () => {
+  it('schedule rejects an invalid date and a publication that is already sent, and takes a reply like a post (DEC-053)', async () => {
     world = makeWorld()
     const created = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'T', text: 'B' } })
     await expect(world.core.router.call('publications.schedule', { id: created.opportunity.id, at: 'next tuesday' })).rejects.toMatchObject({ code: 'invalid_input' })
 
     const reply = await world.newOpportunity()
-    await expect(world.core.router.call('publications.schedule', { id: reply.id, at: '2026-12-01T10:00:00Z' })).rejects.toMatchObject({ code: 'invalid_state' })
+    expect((await world.core.router.call('publications.schedule', { id: reply.id, at: '2026-12-01T10:00:00Z' })).opportunity.scheduledAt).toBe('2026-12-01T10:00:00.000Z')
 
     await world.core.router.call('opportunities.approve', { id: created.opportunity.id })
     await world.sending.send(created.opportunity.id)

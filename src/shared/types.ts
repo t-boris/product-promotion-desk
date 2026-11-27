@@ -2,6 +2,7 @@
 // Everything here is plain serializable data (it crosses IPC / HTTP boundaries).
 
 import type { PostType, QuickCard } from './quick-post'
+import type { PostingSlot } from './schedule'
 import type { ThemeChoice } from './themes'
 
 export type Id = string
@@ -649,6 +650,8 @@ export interface ChannelSettings {
   notifications: boolean
   /** The content mix (DEC-033): which kinds of own posts the AI may prepare drafts of on this channel, and how often. Empty = none. */
   mix: MixSetting[]
+  /** The channel's posting times (DEC-053): "Next free time" puts an item on the first one nothing else of the channel holds. Empty = none. */
+  postingSlots: PostingSlot[]
 }
 
 /** What kind of own post a draft of the content mix is. Replies are what the monitor does and are not part of the mix. */
@@ -714,7 +717,8 @@ export const DEFAULT_CHANNEL_SETTINGS: ChannelSettings = {
   autoCategories: [],
   digestTime: null,
   notifications: true,
-  mix: []
+  mix: [],
+  postingSlots: []
 }
 
 // ───────────────────────────── Discussions & comments (REQ-003) ─────────────────────────────
@@ -1065,10 +1069,12 @@ export interface AppSettings {
   notifications: boolean
   webMode: { enabled: boolean; port: number }
   /**
-   * Only for what the owner approved themselves and sends with a click of their own; scheduled and rule-driven sends always use the
-   * connector. The approval, the send ticket and the limits are the same either way.
+   * Only for what the owner approved themselves and sends with a click of their own or with a time they set; rule-driven sends always use
+   * the connector. The approval, the send ticket and the limits are the same either way.
    */
   publishWith: PublishWith
+  /** How many hours after its planned time a scheduled item may still go out by itself; later than that it returns to review (1-48, DEC-053). */
+  scheduleGraceHours: number
   /** The look of the application (visual-system.md §33): `system` follows macOS (light Daylight, dark Graphite); anything else is a theme of its own. */
   theme: ThemeChoice
   /** A slow glow behind the pages. Off unless the owner turns it on, and never while macOS asks for less motion. */
@@ -1100,6 +1106,8 @@ export interface OpportunityCard {
   channelPlatform: string
   /** Whether the application reads the channel; a channel it does not read can be posted to only by the AI browser (DEC-035). */
   channelReads: boolean
+  /** How many posting times the channel has (DEC-053): with none, "Next free time" has nothing to offer. */
+  channelPostingSlots: number
   accountLabel: string
   comment: Comment | null
   discussion: Discussion | null

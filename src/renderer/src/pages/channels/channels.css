@@ -901,3 +901,60 @@ textarea.input.short {
   gap: var(--space-half);
   overflow-wrap: anywhere;
 }
+
+/* Posting times of a channel: the week as rows of times, and the row that adds one. */
+.posting-times {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.posting-times-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.posting-times-day {
+  width: 96px;
+  flex: none;
+}
+.posting-times-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.posting-time {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  min-height: var(--control-h);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  font-variant-numeric: tabular-nums;
+}
+.posting-time-remove {
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+}
+.posting-time-remove:hover {
+  background: var(--surface-3, var(--surface-2));
+}
+.posting-times-add {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.posting-times-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.posting-times-time {
+  width: 120px;
+}

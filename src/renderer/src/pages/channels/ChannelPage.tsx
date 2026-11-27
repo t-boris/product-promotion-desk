@@ -13,6 +13,7 @@ import { LookAroundCard } from './LookAroundCard'
 import { ChannelStatusCard } from './ChannelStatusCard'
 import { ModeSelector } from './ModeSelector'
 import { OpenAccountBrowser } from './OpenAccountBrowser'
+import { PostingTimesCard } from './PostingTimesCard'
 import { SettingsForm } from './SettingsForm'
 import type { SetupStage } from './setup-stage'
 
@@ -122,6 +123,7 @@ export function ChannelPage({
             <ModeSelector channel={channel} />
             {/* Remounted when the saved settings change elsewhere, so the form never shows stale values. */}
             <SettingsForm key={JSON.stringify(channel.settings)} channel={channel} />
+            <PostingTimesCard key={`times:${JSON.stringify(channel.settings.postingSlots)}`} channel={channel} />
           </>
         )}
       </div>

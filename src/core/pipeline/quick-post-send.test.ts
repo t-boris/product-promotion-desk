@@ -321,13 +321,13 @@ describe.each(PLATFORMS.map((p) => p.platform))('%s: an approved quick post is s
     expect(missions.pages[0]!.published).toEqual([{ caption: 'A changed caption.', files: [other.path] }])
   })
 
-  it('is never sent by a scheduled or an automatic send: the AI browser carries only a press of the owner, and Approve says so before', async () => {
+  it('is never sent by an automatic send the owner gave no time: the AI browser carries only the owner\'s own send', async () => {
     const { missions } = setUp(name)
     const picture = await addPicture(png(1080, 1080))
     const { id } = await quick('A caption.', picture)
     await approve(id)
     const sending = world.sending as unknown as { send(id: string, options: { automatic: boolean }): Promise<unknown> }
-    await expect(sending.send(id, { automatic: true })).rejects.toMatchObject({ message: expect.stringMatching(/scheduled or automatic send.*press Send/s) })
+    await expect(sending.send(id, { automatic: true })).rejects.toMatchObject({ message: expect.stringMatching(/automatic send.*press Send/s) })
     expect(missions.requests).toHaveLength(0)
   })
 })

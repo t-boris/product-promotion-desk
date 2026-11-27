@@ -405,7 +405,7 @@ describe('its own posts', () => {
     expect(world.connector.published).toHaveLength(0)
   })
 
-  it.each(['markdown', 'legacy'] as const)('are never sent by an automatic send or a due schedule, whatever the form of the %s draft: no mission is started, nothing is published, and the words say what to do', async (markup) => {
+  it.each(['markdown', 'legacy'] as const)('are never sent by an automatic send the owner gave no time, whatever the form of the %s draft, and go out by the AI browser at a time the owner set (DEC-053)', async (markup) => {
     world = ownPostsWorld()
     const missions = new ScriptedMissions(async () => undefined)
     world.core.services.postMissions = missions
@@ -415,32 +415,34 @@ describe('its own posts', () => {
     const sending = world.sending as unknown as { send(id: string, options: { automatic: boolean }): Promise<unknown> }
 
     await approve()
-    await expect(sending.send(opportunity.id, { automatic: true })).rejects.toMatchObject({ message: expect.stringMatching(/scheduled or automatic send.*press Send/s) })
+    await expect(sending.send(opportunity.id, { automatic: true })).rejects.toMatchObject({ message: expect.stringMatching(/automatic send.*press Send/s) })
     expect(missions.requests).toHaveLength(0)
     expect(world.connector.published).toHaveLength(0)
 
-    // the scheduler: an approved publication whose time has come (set in the database: the API refuses to schedule this channel)
+    // a time that had already passed when the owner approved is not picked up: approving it is the owner looking at it, and the send is then their press
+    world.core.db.prepare('UPDATE opportunities SET scheduled_at = ? WHERE id = ?').run(new Date(world.core.clock.now().getTime() - 60_000).toISOString(), opportunity.id)
     await approve()
-    world.core.db.prepare('UPDATE opportunities SET scheduled_at = ? WHERE id = ?').run(world.core.clock.now().toISOString(), opportunity.id)
-    await world.sending.sendDuePublications()
+    expect(await world.sending.sendDuePublications()).toBe(0)
     expect(missions.requests).toHaveLength(0)
-    expect(world.connector.published).toHaveLength(0)
 
-    // the owner's own press on a fresh approval is carried
-    world.core.db.prepare('UPDATE opportunities SET scheduled_at = NULL WHERE id = ?').run(opportunity.id)
+    // the scheduler: approved before the time the owner set, it goes out by the AI browser when the time comes, with nobody pressing
+    await world.core.router.call('publications.schedule', { id: opportunity.id, at: new Date(world.core.clock.now().getTime() + 10 * 60_000).toISOString() })
     await approve()
-    await expect(world.sending.send(opportunity.id)).resolves.toBeDefined()
+    world.clock.advance(11 * 60_000)
+    expect(await world.sending.sendDuePublications()).toBe(1)
     expect(missions.requests).toHaveLength(1)
+    expect(world.connector.published).toHaveLength(0)
   })
 
-  it('cannot be scheduled: the AI browser carries only a send the owner presses, so the time would pass and nothing would go; clearing a time is still allowed', async () => {
+  it('can be given a time like any post (DEC-053), and the time can be cleared', async () => {
     world = ownPostsWorld()
     world.core.services.postMissions = new ScriptedMissions(async () => undefined)
     await world.core.router.call('channels.activate', { channelId: world.channel.id })
     const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'Hello', text: 'Words.' } })
-    await expect(world.core.router.call('publications.schedule', { id: opportunity.id, at: '2030-01-01T10:00:00.000Z' })).rejects.toMatchObject({ code: 'invalid_state', message: expect.stringMatching(/cannot be scheduled.*Press Send/s) })
+    await world.core.router.call('publications.schedule', { id: opportunity.id, at: '2030-01-01T10:00:00.000Z' })
+    expect(world.core.repos.opportunity(opportunity.id)?.scheduledAt).toBe('2030-01-01T10:00:00.000Z')
+    await world.core.router.call('publications.schedule', { id: opportunity.id, at: null })
     expect(world.core.repos.opportunity(opportunity.id)?.scheduledAt ?? null).toBeNull()
-    await expect(world.core.router.call('publications.schedule', { id: opportunity.id, at: null })).resolves.toBeDefined()
   })
 
   it('go by the connector in a build with no AI browser, and say what is missing for a picture', () => {

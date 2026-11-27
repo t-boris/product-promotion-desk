@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { isTakenDown } from '../../../../shared/standing'
 import type { OpportunityCard } from '../../../../shared/types'
+import { channelHref } from '../../route'
 import { Badge, Button, ErrorNote } from '../../ui'
 import { ActionSummary } from './ActionSummary'
 import { AlsoPostPanel } from './AlsoPostPanel'
@@ -97,7 +98,9 @@ export function ReviewBody({ item, notes }: { item: ReviewItem; /** What the own
           post={standalone ? { productId: opp.productId, platform: card.channelPlatform, reads: card.channelReads, channelId: opp.channelId, author: { name: card.accountLabel, target: card.channelTarget } } : undefined}
         />
       )}
-      {standalone && !locked && card.channelReads !== false && <ScheduleControl opportunity={opp} busy={working} onSchedule={(at) => void actions.schedule(opp.id, at)} />}
+      {!locked && opp.findingId === null && (
+        <ScheduleControl opportunity={opp} slots={card.channelPostingSlots} channelHref={channelHref(opp.channelId, 'settings')} busy={working} onSchedule={(at) => void actions.schedule(opp.id, at)} onEnqueue={() => void actions.enqueue(opp.id)} />
+      )}
 
       {notes}
       <ActionSummary card={card} />

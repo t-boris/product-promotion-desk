@@ -1423,3 +1423,48 @@ approval, up to 24 h); r/beginnerastrology has it up.
 - [x] Top bar "Accounts · N ready" counts the current product's logins (the number is scoped like the screen, lesson 320).
 - [x] A link to an account of another product (`#/accounts/<id>`) makes that product current instead of losing the account.
 - [ ] Tests, verify, release 0.50.0, lesson, deploy, look at the owner's Accounts screen with Natal Mystic and with Sirius Art.
+
+
+---
+
+# Plan 2026-11-27: the two design documents, by the owner's goal
+
+The owner's goal of 2026-11-27: implement `docs/design/publishing-api-and-schedule-plan.md` and `docs/design/ideal-promotion-app.md`.
+As with the UI redesign (DEC-037), the goal answers the plans' questions with the recommended defaults (D1 yes, D2 yes, D3 a setting with
+6 hours, D5 the owner's own bucket, D6 the order given, D7 yes). What needs the owner's own keys, accounts or facts (D4, D8, live proofs
+T1-T4) is built up to that line and listed as waiting.
+
+One release per phase; each is verified (`npm run verify`), installed and read on the real screen before the next.
+
+## Publishing plan
+- [x] A (0.51.0) a time for any channel (AI browser carries an owner-scheduled post), scheduled replies, lateness as a setting, posting times per channel with "Next free time"
+- [ ] B (0.52.0) start at login, keep the Mac awake around a due post
+- [ ] C (0.53.0) Reddit: flair and several pictures on a scheduled post; read-back in communities the app does not read
+- [ ] D (0.54.0) base for API connectors: network port, tokens in the vault, refresh, connect flow, own-post comment tracking, per-post numbers
+- [ ] E (0.55.0) Telegram bot connector
+- [ ] F (0.56.0) Facebook Page connector
+- [ ] G (0.57.0) Threads connector
+- [ ] H (0.58.0) Instagram connector
+- [ ] I (0.59.0) X connector
+- [ ] J (0.60.0) Pinterest and LinkedIn, publishing only
+
+## Ideal-application document (section 7)
+- [ ] 1 results per post: tagged link, per-post numbers, site analytics, goals with a number and a date
+- [ ] 2 weekly review and the learning loop
+- [ ] 3 channel trials
+- [ ] 4 positioning and the audience's words
+- [ ] 5 themes, campaigns, seasonal calendar
+- [ ] 7 conversations: reply window, took-off item, testimonials, people met
+- [ ] 8 wider listening
+- [ ] 9 the AI-answer check
+- [ ] 10 content details
+- [ ] 11 account health
+- [ ] 12 launch venues
+
+## Phase A steps
+- [x] `scheduledByOwner`: any item the owner gave a time (not only a Feed answer); `publications.schedule` accepts any channel and replies
+- [x] due-send query covers replies; lateness from the setting `scheduleGraceHours` (default 6, 1-48)
+- [x] messages: "scheduled" leaves the unattended refusal (it stays for an automatic rule's approval)
+- [x] posting times in the channel's settings (`postingSlots`, no table needed); pure `nextFreeSlot`; API `slots.get`, `slots.set`, `publications.enqueue`
+- [x] screens: Send at + "Next free time" on every unsent item; "Posting times" card on the channel page; lateness in Settings
+- [ ] tests, verify, release, lesson, deploy, read on the real screen

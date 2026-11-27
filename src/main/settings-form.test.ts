@@ -23,7 +23,7 @@ import {
 import { fromDraft, toDraft, type SettingsDraft } from '../renderer/src/pages/channels/form'
 
 const draftOf = (patch: Partial<SettingsDraft> = {}): SettingsDraft => ({ ...toDraft(DEFAULT_CHANNEL_SETTINGS), ...patch })
-const settingsOf = (draft: SettingsDraft): Omit<ChannelSettings, 'mix'> => {
+const settingsOf = (draft: SettingsDraft): Omit<ChannelSettings, 'mix' | 'postingSlots'> => {
   const parsed = fromDraft(draft)
   if (!parsed.ok) throw new Error(parsed.error)
   return parsed.settings

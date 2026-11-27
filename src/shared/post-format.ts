@@ -933,7 +933,7 @@ function formProblems(form: PlatformForm, label: string, post: { title: string |
 /** How this application can publish, as far as it decides what a post may hold: the AI browser carries pictures to any platform, and only on a send the owner presses (DEC-031). */
 export interface SendWays {
   aiBrowser: boolean
-  /** The AI browser is chosen, and this send is one it never carries: a scheduled one, or one on an automatic approval. */
+  /** The AI browser is chosen, and this send is one it never carries: one on an automatic rule's approval, or an automatic one the owner gave no time. */
   unattended?: boolean
   /**
    * The channel is one the application does not read (Instagram, Facebook, Threads...): no connector can post to it, so the AI browser is its
@@ -945,7 +945,7 @@ export interface SendWays {
 }
 
 const UNATTENDED_MESSAGE =
-  'This is a scheduled or automatic send, and the AI browser carries only a send you press yourself: press Send on it, or use “Copy post” and publish it by hand. Nothing was sent.'
+  'This is an automatic send, and the AI browser carries only what you send yourself, with a press or with a time you set: press Send on it, or use “Copy post” and publish it by hand. Nothing was sent.'
 
 /**
  * Why a send to a channel that no connector can post to cannot go by the AI browser right now, when it is something other than the post that
@@ -986,7 +986,7 @@ export function sendProblems(platform: string, rendered: RenderedPost, ways: Sen
     const connectorCannot = hasVideo || (platform === 'reddit' ? rendered.attachments.length > 1 || rendered.text.trim() !== '' || rendered.link !== null : true)
     if (ways.noConnector) {
       // Said above when it is the engine or an unattended send; otherwise the AI browser is simply not there (a build without it).
-      if (!ways.engineProblem && !ways.unattended) problems.push(`${things} go to ${label} only through the AI browser, and only when you press Send yourself. It is not available in this build: use “Copy post” and publish it by hand.`)
+      if (!ways.engineProblem && !ways.unattended) problems.push(`${things} go to ${label} only through the AI browser, on a send of your own (a press of Send, or a time you set). It is not available in this build: use “Copy post” and publish it by hand.`)
     } else if (connectorCannot && ways.unattended) {
       // The AI browser is chosen, but this send is one it never carries: the owner presses Send, or publishes by hand.
       problems.push(UNATTENDED_MESSAGE)
@@ -994,7 +994,7 @@ export function sendProblems(platform: string, rendered: RenderedPost, ways: Sen
       if (rendered.attachments.length > 1) problems.push(`From this application Reddit takes one picture as a post by itself; this post has ${rendered.attachments.length}. The AI browser can send more: choose it in the settings and press Send yourself.`)
       else if (rendered.text.trim() || rendered.link) problems.push('From this application Reddit takes a picture only as a post by itself, without text or a link. Choose the AI browser in the settings and press Send yourself, or use “Copy post” and publish it by hand, or post the words without the picture.')
     } else {
-      problems.push(`${things} go to ${label} only through the AI browser, and only when you press Send yourself: choose it in the settings and send this by hand, or use “Copy post” and publish it by hand.`)
+      problems.push(`${things} go to ${label} only through the AI browser, on a send of your own (a press of Send, or a time you set): choose it in the settings and send this by hand, or use “Copy post” and publish it by hand.`)
     }
   }
   return problems

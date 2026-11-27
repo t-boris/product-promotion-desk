@@ -502,8 +502,9 @@ describe('The scheduler sends the owner\'s scheduled comments from the Feed, and
     expect(missions.requests).toHaveLength(1)
   })
 
-  it('sends nothing more than an hour late: it goes back to review, the plan is gone and the window does not say "scheduled"', async () => {
+  it('sends nothing later than the owner\'s limit (here one hour): it goes back to review, the plan is gone and the window does not say "scheduled"', async () => {
     const { missions, findingId } = setup()
+    world.core.settings.updateApp({ scheduleGraceHours: 1 })
     await schedule(findingId, null, 'Words.', inMinutes(10))
     world.clock.advance(80 * 60_000)
     expect(await world.sending.sendDuePublications()).toBe(0)
@@ -536,13 +537,13 @@ describe('The scheduler sends the owner\'s scheduled comments from the Feed, and
     expect(world.opportunity(opportunityId as string).state).toBe('awaiting_approval')
   })
 
-  it('never takes a reply of the Inbox that has a time on it: only the owner\'s answers from the Feed are planned', async () => {
+  it('takes a reply of the Inbox the owner approved and gave a time, like a post (DEC-053): it goes by the connector when its time comes', async () => {
     setup()
     const opp = await inboxReply()
     world.core.db.prepare('UPDATE opportunities SET scheduled_at = ? WHERE id = ?').run(inMinutes(5), opp.id)
     world.clock.advance(10 * 60_000)
-    expect(await world.sending.sendDuePublications()).toBe(0)
-    expect(world.connector.calls.filter((c) => c === 'publish')).toEqual([])
+    expect(await world.sending.sendDuePublications()).toBe(1)
+    expect(world.connector.calls.filter((c) => c === 'publish')).toEqual(['publish'])
   })
 
   it('does not take a second attempt at the same place: a result nobody knows blocks the next planned send', async () => {
@@ -569,11 +570,9 @@ describe('the one place that says whether a send nobody presses may drive the br
     expect(ways({ automatic: false, approvedBy: 'auto_rule' })).toBe(false)
   })
 
-  it('counts an item as planned by the owner only when it is an answer from the Feed and has a time', () => {
-    expect(scheduledByOwner({ findingId: 'f1', scheduledAt: '2026-11-21T19:00:00.000Z' })).toBe(true)
-    expect(scheduledByOwner({ findingId: 'f1', scheduledAt: null })).toBe(false)
-    // a post of the owner's has a time too, and keeps the rule that a scheduled post never drives a browser
-    expect(scheduledByOwner({ findingId: null, scheduledAt: '2026-11-21T19:00:00.000Z' })).toBe(false)
+  it('counts an item as planned by the owner when it has a time, whether it is an answer from the Feed, a post or a reply (DEC-053)', () => {
+    expect(scheduledByOwner({ scheduledAt: '2026-11-21T19:00:00.000Z' })).toBe(true)
+    expect(scheduledByOwner({ scheduledAt: null })).toBe(false)
   })
 })
 

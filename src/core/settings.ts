@@ -1,4 +1,5 @@
 import type { AppSettings } from '../shared/types'
+import { DEFAULT_SCHEDULE_GRACE_HOURS } from '../shared/schedule'
 import { DEFAULT_THEME, appearanceOf } from '../shared/themes'
 import { DEFAULT_WEB_PORT } from '../shared/web-port'
 import { parseJson, toJson, type Db } from './db/database'
@@ -9,6 +10,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   notifications: true,
   webMode: { enabled: false, port: DEFAULT_WEB_PORT },
   publishWith: 'connector',
+  scheduleGraceHours: DEFAULT_SCHEDULE_GRACE_HOURS,
   theme: DEFAULT_THEME,
   animatedBackground: false
 }

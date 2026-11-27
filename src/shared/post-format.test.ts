@@ -130,15 +130,15 @@ describe('what this application can send of a post', () => {
 
   it('sends no picture to any other platform by the connector, and says how to send it: the AI browser, or by hand', () => {
     for (const platform of ['facebook', 'instagram', 'threads', 'x', 'linkedin']) {
-      expect(sent({ text: 'x', attachments: [picture('a')] }, platform).join(' ')).toMatch(/Pictures go to .* only through the AI browser, and only when you press Send yourself.*Copy post/)
+      expect(sent({ text: 'x', attachments: [picture('a')] }, platform).join(' ')).toMatch(/Pictures go to .* only through the AI browser, on a send of your own.*Copy post/)
     }
   })
 
   it('says why a send the AI browser never carries is refused, when the AI browser is chosen: the owner presses Send', () => {
     const away = { aiBrowser: false, unattended: true }
     const via = (content: Partial<PostContent>, platform: string) => sendProblems(platform, renderForPlatform(post(content), platform), away).join(' ')
-    expect(via({ text: 'words', attachments: [picture('a')] }, 'instagram')).toMatch(/scheduled or automatic send.*press Send on it/)
-    expect(via({ title: 'T', text: 'words', attachments: [picture('a')] }, 'reddit')).toMatch(/scheduled or automatic send/)
+    expect(via({ text: 'words', attachments: [picture('a')] }, 'instagram')).toMatch(/automatic send.*press Send on it/)
+    expect(via({ title: 'T', text: 'words', attachments: [picture('a')] }, 'reddit')).toMatch(/automatic send/)
     // what the connector carries is not refused, and nothing is said when there are no pictures
     expect(via({ title: 'T', text: '', attachments: [picture('a')] }, 'reddit')).toBe('')
     expect(via({ text: 'words' }, 'facebook')).toBe('')
@@ -524,10 +524,10 @@ describe('a channel that no connector can post to (DEC-035): the AI browser is i
     expect(via({ text: 'words', attachments: [picture('a')] }, 'instagram', ways)).toBe(engineProblem) // said once
   })
 
-  it('says a scheduled or automatic send is not carried, for a post with words alone too: nothing else can carry it', () => {
+  it('says an automatic send is not carried, for a post with words alone too: nothing else can carry it', () => {
     const away = { aiBrowser: false, noConnector: true, unattended: true }
-    expect(via({ text: 'words' }, 'facebook', away)).toMatch(/scheduled or automatic send.*press Send on it/)
-    expect(via({ text: 'words', attachments: [picture('a')] }, 'instagram', away).match(/scheduled or automatic/g)).toHaveLength(1)
+    expect(via({ text: 'words' }, 'facebook', away)).toMatch(/automatic send.*press Send on it/)
+    expect(via({ text: 'words', attachments: [picture('a')] }, 'instagram', away).match(/This is an automatic send/g)).toHaveLength(1)
   })
 
   it('says, without a switch to offer, that the AI browser is not in this build', () => {

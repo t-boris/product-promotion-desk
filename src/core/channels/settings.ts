@@ -2,6 +2,7 @@
 // the person can act on.
 
 import { ApiError } from '../../shared/api'
+import { MAX_POSTING_SLOTS, isPostingSlot, normalizeSlots } from '../../shared/schedule'
 import type { AutoCategory, ChannelLimits, ChannelSettings, MixKind, MixSetting } from '../../shared/types'
 
 export const MIN_CHECK_INTERVAL_MIN = 5
@@ -17,7 +18,7 @@ export const MIX_KINDS: readonly MixKind[] = ['product_post', 'own_update', 'sho
 export const MIN_MIX_DAYS = 1
 export const MAX_MIX_DAYS = 90
 
-const KNOWN = ['languages', 'style', 'topics', 'queries', 'checkIntervalMin', 'lookBackDays', 'limits', 'autoCategories', 'digestTime', 'notifications', 'mix']
+const KNOWN = ['languages', 'style', 'topics', 'queries', 'checkIntervalMin', 'lookBackDays', 'limits', 'autoCategories', 'digestTime', 'notifications', 'mix', 'postingSlots']
 
 const invalid = (message: string): ApiError => new ApiError('invalid_input', message)
 
@@ -124,6 +125,12 @@ export function applySettingsPatch(current: ChannelSettings, patch: unknown): Ch
     next.autoCategories = categories
   }
   if (given.digestTime !== undefined) next.digestTime = parseDigestTime(given.digestTime)
+  if (given.postingSlots !== undefined) {
+    if (!Array.isArray(given.postingSlots) || !given.postingSlots.every(isPostingSlot)) throw invalid('A posting time is a day of the week and a time of day.')
+    const slots = normalizeSlots(given.postingSlots)
+    if (slots.length > MAX_POSTING_SLOTS) throw invalid(`A channel has at most ${MAX_POSTING_SLOTS} posting times.`)
+    next.postingSlots = slots
+  }
   if (given.notifications !== undefined) {
     if (typeof given.notifications !== 'boolean') throw invalid('Notifications must be on or off.')
     next.notifications = given.notifications
