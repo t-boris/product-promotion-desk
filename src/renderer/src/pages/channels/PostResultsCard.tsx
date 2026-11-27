@@ -92,7 +92,9 @@ export function PostResultsCard({ channel }: { channel: Channel }) {
           </table>
           {columns.length === 0 && (
             <p className="muted small" data-testid="post-results-waiting">
-              Not read yet. The first reading comes about fifteen minutes after a post goes out, then every hour in its first day.
+              {view.posts.every((post) => post.removed)
+                ? 'Nothing was read: the posts here were taken down, and a post that is not up has no numbers to read.'
+                : 'Not read yet. The first reading comes about fifteen minutes after a post goes out, then every hour in its first day.'}
             </p>
           )}
         </>

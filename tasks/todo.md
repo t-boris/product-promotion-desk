@@ -1450,6 +1450,8 @@ One release per phase; each is verified (`npm run verify`), installed and read o
 
 ## Ideal-application document (section 7)
 - [ ] 1 results per post: tagged link, per-post numbers, site analytics, goals with a number and a date
+  - [x] slice A (0.56.0, DEC-056): numbers under each sent post read by the application (Reddit), Results tab on the channel, Posts row and card
+  - [ ] readers for the channels worked in the browser, the post link there; the tagged site link; the site's analytics (needs the owner's answer: which analytics); goals with a number and a date
 - [ ] 2 weekly review and the learning loop
 - [ ] 3 channel trials
 - [ ] 4 positioning and the audience's words
