@@ -19,6 +19,7 @@ import { useHashRoute } from './use-hash-route'
 /** One glyph per main area; the ids are the ones of `PAGES`. */
 const NAV_ICONS: Record<PageId, IconName> = {
   overview: 'overview',
+  review: 'review',
   inbox: 'inbox',
   feed: 'feed',
   posts: 'posts',

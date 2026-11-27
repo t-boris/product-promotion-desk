@@ -8,6 +8,7 @@ import { PostComposer } from './compose-flow'
 import { SectionEditor } from './section-flow'
 import { FindingPictures } from './finding-pictures'
 import { FeedAnalysis } from './feed-analysis'
+import { WeeklyReview } from './weekly-review'
 import { FindingAssistant } from './finding-assist'
 import { FindingReply } from './finding-reply'
 import { FindingSend } from './finding-send'
@@ -123,6 +124,14 @@ export function registerFlow(core: Core): void {
     'postGroups.approve': ({ id, seen }) => groups.approve(id, seen),
     'postGroups.sendAll': ({ id }) => groups.sendAll(id),
     'postGroups.remove': ({ id }) => groups.remove(id)
+  })
+  // The weekly review (DEC-057): the numbers are counted, the AI writes the words and one change, the owner answers. The scheduler prepares it on Monday.
+  const weekly = new WeeklyReview(core)
+  core.services.weekly = weekly
+  core.router.register({
+    'weekly.get': (args) => weekly.get(args),
+    'weekly.prepare': (args) => weekly.prepare(args),
+    'weekly.decide': (args) => weekly.decide(args)
   })
   // The content mix (DEC-033): drafts only; the scheduler's mix job calls `runDue`.
   const mix = new MixFlow(core, store, publications)

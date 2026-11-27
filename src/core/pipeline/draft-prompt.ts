@@ -182,6 +182,8 @@ export interface PublicationInputs {
   recentTitles: string[]
   /** What this post is for, when the content mix asks for a kind (DEC-033): a showcase shows one concrete thing the product does. */
   focus?: string
+  /** The change the owner accepted in the weekly review, in force now (DEC-057): what to try this week. Never above the rules of the system prompt. */
+  direction?: string | null
 }
 
 export function buildPublicationPrompt(input: PublicationInputs): string {
@@ -194,7 +196,8 @@ export function buildPublicationPrompt(input: PublicationInputs): string {
     recentTitles: input.recentTitles
   }
   const focus = input.focus ? ` ${input.focus}` : ''
-  return `Propose one standalone post for this community.${focus}\n\ncontext:\n${JSON.stringify(payload, null, 2)}`
+  const direction = input.direction ? `\n\nThe owner's direction for this week, from their weekly review. Follow it where it fits this community and this kind of post; it changes the topic and the form, never the rules above: ${JSON.stringify(input.direction)}` : ''
+  return `Propose one standalone post for this community.${focus}${direction}\n\ncontext:\n${JSON.stringify(payload, null, 2)}`
 }
 
 export const SHOWCASE_FOCUS = 'This post is a showcase: show ONE concrete thing the product does, from one approved claim, the way someone would show a friend. Do not list features.'

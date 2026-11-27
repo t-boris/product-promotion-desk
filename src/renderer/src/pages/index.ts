@@ -7,6 +7,7 @@ import { InboxPage } from './Inbox'
 import { LogsPage } from './Logs'
 import { OverviewPage } from './Overview'
 import { PostsPage } from './Posts'
+import { ReviewPage } from './Review'
 import { SettingsPage } from './Settings'
 import { SetupPage } from './Setup'
 
@@ -18,6 +19,7 @@ export interface PageDef {
 
 const SCREENS: Record<PageId, { label: string; component: ComponentType }> = {
   overview: { label: 'Overview', component: OverviewPage },
+  review: { label: 'Review', component: ReviewPage },
   inbox: { label: 'Inbox', component: InboxPage },
   feed: { label: 'Feed', component: FeedPage },
   posts: { label: 'Posts', component: PostsPage },

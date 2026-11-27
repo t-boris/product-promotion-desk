@@ -44,6 +44,7 @@ export class PeriodicTasks {
   private numbersScanAtMs = 0
   private digestScanAtMs = 0
   private mixScanAtMs = 0
+  private weeklyScanAtMs = 0
   private halted = false
   /** Whether automation was paused at the last tick. */
   private pausedAtTick = false
@@ -157,6 +158,12 @@ export class PeriodicTasks {
 
           if (prepared > 0) this.core.log.info('scheduler', `${prepared} draft(s) prepared by the content mix`)
         })
+      }
+      // The review of the week that ended is prepared once it is due (Monday morning): words and one proposed change, nothing else.
+      const { weekly } = this.core.services
+      if (weekly && (nowMs >= this.weeklyScanAtMs || this.weeklyScanAtMs - nowMs > this.options.scanEveryMs)) {
+        this.weeklyScanAtMs = nowMs + this.options.scanEveryMs
+        this.launch('weekly-review', async () => void (await weekly.prepareDue(() => this.halted || this.pausedAtTick)))
       }
       if (metrics && nowMs >= this.metricsScanAtMs) {
         this.metricsScanAtMs = nowMs + this.options.scanEveryMs

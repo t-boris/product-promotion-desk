@@ -1,0 +1,88 @@
+/* The weekly review: a column of cards; totals in a row, tables with right-aligned numbers. */
+.weekly {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.weekly-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.weekly-title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--fs-section);
+}
+.weekly-nav,
+.weekly-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.weekly-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4) var(--space-6);
+  margin: 0 0 var(--space-3);
+}
+.weekly-totals > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 96px;
+}
+.weekly-totals dt {
+  color: var(--text-2);
+}
+.weekly-totals dd {
+  margin: 0;
+  font-size: var(--fs-section);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.weekly-beside {
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+}
+.weekly-beside.good {
+  color: var(--good);
+}
+.weekly-beside.bad {
+  color: var(--bad);
+}
+.weekly-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.weekly-two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-5);
+}
+.weekly-two h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-title);
+}
+.weekly-two ul {
+  margin: 0;
+  padding-left: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.weekly-change-text {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-title);
+  font-weight: 600;
+}
+.weekly-own {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+.weekly-change .weekly-actions {
+  margin: var(--space-3) 0;
+}

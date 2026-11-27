@@ -64,6 +64,7 @@ import type {
   LogLevel,
   OpportunityCard,
   FeedAnalysisView,
+  WeeklyReviewView,
   FeedPeriod,
   FindingAssist,
   FindingCard,
@@ -626,6 +627,12 @@ export interface ApiMethods {
   'results.posts': [{ channelId: Id }, PostResultsView]
   /** Reads those numbers from the site now. */
   'results.readPosts': [{ channelId: Id }, PostResultsView]
+  /** The weekly review of a product (DEC-057): the page of a week (the one that ended last when none is named). */
+  'weekly.get': [{ productId: Id; week?: string | null }, WeeklyReviewView]
+  /** The AI writes what worked, what did not and one change, from the numbers the application counted. Nothing is posted or changed. */
+  'weekly.prepare': [{ productId: Id; week?: string | null }, WeeklyReviewView]
+  /** The owner's answer to the change: accept it, decline it, or write their own. */
+  'weekly.decide': [{ productId: Id; week: string; decision: 'accept' | 'decline' | 'own'; text?: string }, WeeklyReviewView]
   /** The funnel, the channels, the attention items and the sends per day of one product over the last `days` days (1-365); `utcOffsetMinutes` is `-new Date().getTimezoneOffset()`. */
   'overview.get': [{ productId: Id; days: number; utcOffsetMinutes?: number }, OverviewView]
   'runs.list': [{ limit?: number; channelId?: Id }, Run[]]

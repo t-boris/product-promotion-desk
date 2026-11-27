@@ -4,7 +4,7 @@
 import type { ApiEvent } from '../../shared/api'
 
 /** The screens of the main menu in the order of the sidebar; Log and Settings are pinned to its bottom. */
-export const PAGE_IDS = ['overview', 'inbox', 'feed', 'posts', 'channels', 'accounts', 'setup', 'logs', 'settings'] as const
+export const PAGE_IDS = ['overview', 'review', 'inbox', 'feed', 'posts', 'channels', 'accounts', 'setup', 'logs', 'settings'] as const
 export type PageId = (typeof PAGE_IDS)[number]
 
 export function isPageId(value: string | undefined): value is PageId {

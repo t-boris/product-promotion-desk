@@ -1,6 +1,7 @@
 // Domain types shared by the core, the main process and the UI.
 // Everything here is plain serializable data (it crosses IPC / HTTP boundaries).
 
+import type { WeekNumbers, WeekSums } from './weekly-review'
 import type { PostNumbers } from './post-numbers'
 import type { PostType, QuickCard } from './quick-post'
 import type { PostingSlot } from './schedule'
@@ -1234,6 +1235,57 @@ export interface FeedQuestion {
   title: string
   channel: string
   question: string
+}
+
+/** A post of the week on the review page. */
+export interface WeeklyPost {
+  actionId: Id
+  opportunityId: Id
+  channelId: Id
+  title: string
+  url: string | null
+  sentAt: IsoTime
+  removed: boolean
+  numbers: PostNumbers | null
+}
+
+/** The AI's words of a week's review: each point rests on the numbers the application counted. */
+export interface WeeklyWords {
+  worked: string[]
+  didNot: string[]
+  preparedAt: IsoTime
+}
+
+/** The one change of a week: proposed by the AI or written by the owner, and what the owner answered. */
+export interface WeeklyChange {
+  text: string
+  why: string
+  state: 'proposed' | 'accepted' | 'declined'
+  byOwner: boolean
+  decidedAt: IsoTime | null
+}
+
+/** The weekly review of a product as its page shows it (DEC-057). */
+export interface WeeklyReviewView {
+  productId: Id
+  /** The local date of the week's Monday: 2026-11-23. */
+  week: string
+  label: string
+  /** False while the week is still running: its numbers are shown, its review is not prepared yet. */
+  ended: boolean
+  numbers: WeekNumbers
+  /** The names of the channels the numbers speak of. */
+  channels: Record<Id, { target: string; platform: string }>
+  /** The posts of the week, the best first. */
+  posts: WeeklyPost[]
+  /** Too little went out to review. */
+  tooFew: boolean
+  words: WeeklyWords | null
+  change: WeeklyChange | null
+  earlier: { week: string; label: string; change: string | null; state: WeeklyChange['state']; followed: { from: WeekSums; to: WeekSums } | null }[]
+  previousWeek: string
+  /** Null on the week that is running now. */
+  nextWeek: string | null
 }
 
 /** The analysis of the Feed as the card shows it. */

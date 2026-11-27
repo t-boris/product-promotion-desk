@@ -61,5 +61,27 @@ CREATE TABLE post_number_readings (
   PRIMARY KEY (action_id, read_at)
 );
 `
+  },
+  {
+    id: 404,
+    name: 'weekly review: the words and the one change of a week',
+    sql: `
+-- One row per product and week (the local date of its Monday). The numbers of the page are counted from the sends when it is shown; kept here are
+-- the AI's words, the one change and what the owner answered. by_owner: the owner wrote the change themselves.
+CREATE TABLE weekly_reviews (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  week_key TEXT NOT NULL,
+  worked_json TEXT NOT NULL DEFAULT '[]',
+  did_not_json TEXT NOT NULL DEFAULT '[]',
+  change_text TEXT NOT NULL DEFAULT '',
+  change_why TEXT NOT NULL DEFAULT '',
+  change_state TEXT NOT NULL DEFAULT 'proposed',
+  by_owner INTEGER NOT NULL DEFAULT 0,
+  decided_at TEXT,
+  prepared_at TEXT,
+  UNIQUE (product_id, week_key)
+);
+`
   }
 ]

@@ -3,6 +3,7 @@
 // and what the connector can actually post (text, link, images) is decided by the connector and the channel's
 // verified capabilities, not here.
 
+import { directionInForce } from './weekly-review'
 import { ApiError, type DraftInput } from '../../shared/api'
 import { nextFreeSlot } from '../../shared/schedule'
 import type { Id, IsoTime, Opportunity } from '../../shared/types'
@@ -83,7 +84,8 @@ export class PublicationsFlow {
           prohibited: knowledge.prohibited,
           previousPosts,
           recentTitles,
-          focus: options.focus
+          focus: options.focus,
+          direction: directionInForce(this.core, channel.productId)
         }),
         timeoutMs: AI_TIMEOUT_MS
       })

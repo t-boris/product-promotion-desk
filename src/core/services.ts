@@ -98,6 +98,11 @@ export interface MixService {
   runDue(stop?: () => boolean): Promise<number>
 }
 
+/** The weekly review (DEC-057): the scheduler's job prepares the review of the week that ended, once, when it is due. */
+export interface WeeklyReviewService {
+  prepareDue(stop?: () => boolean): Promise<number>
+}
+
 /** Platform metrics snapshots (I-8). */
 export interface MetricsService {
   refresh(channelId: Id): Promise<MetricSnapshot[]>
@@ -138,4 +143,5 @@ export interface CoreServices {
   sending?: SendingService
   metrics?: MetricsService
   mix?: MixService
+  weekly?: WeeklyReviewService
 }
