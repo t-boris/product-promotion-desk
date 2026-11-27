@@ -1507,6 +1507,18 @@ What Meta's documentation says (read 2026-11-27, sources in the plan document): 
 - [x] tests, verify, decision (DEC-076), release, install, the New account form read on the real screen without saving anything
 - [ ] with the owner's Meta app: the eight steps walked for real, a first post seen from another account (proof T2)
 
+## Phase F, second part: Facebook's own schedule and views (0.79.0)
+What Meta's documentation says (checked again 2026-11-27): a Page post made with `published=false` and `scheduled_publish_time` (10 minutes to 30 days ahead; the reference page says 75 days) is published by Facebook itself; its photos are uploaded with `temporary=true` and the post carries `unpublished_content_type=SCHEDULED`; `/{page-id}/scheduled_posts` lists the kept posts, `is_published` tells a kept post from a published one; `post_media_view` (lifetime) is the views metric that replaced impressions, it needs `read_insights` and a Page with 100 or more likes. Not said by Meta: whether a post keeps its number when it is published by the schedule; whether every app may delete a post (the guide says yes, the reference says "only select developers"). Both are handled, not assumed.
+- [x] ports: `Connector.ownSchedule`, `PublishRequest.publishAt`, the answer `scheduled`, `readScheduled`, `withdrawScheduled`, `findScheduled`; only a connector that declares `ownSchedule` takes part, every other channel is untouched
+- [x] table `platform_schedules` (pipeline migration 331): one row while a platform holds a post; not a send attempt
+- [x] `src/core/pipeline/own-schedule.ts`: hand-over through the gate (limits counted at the post's own time, kept posts counted as sends), the look (published → recorded as a confirmed send at its time; changed, moved, deleted or paused → taken back), before any send by this application the kept post is taken back or the send is refused in words
+- [x] a lost answer: the row stays "not known", the platform is asked what it holds; a post no longer known to the platform is looked for on the page before it is called unpublished
+- [x] the scheduler looks at kept posts with automation paused too (the pause takes them back); a platform is asked about one post at most once a minute, after a failure five minutes later
+- [x] Facebook Page: schedule with words, a link, photos; read, delete, find among scheduled posts; views of a post from insights, the fifth permission `read_insights` in the guide's steps
+- [x] tests: 20 on the mechanism with the test connector, 8 on the Facebook connector with the fake Graph API
+- [ ] not built: a video to a Page. Meta's current guide uploads a video through `/{app-id}/uploads` with the app's number and a person's token (the application holds only the Page's token); the one-request form is only in the reference, which does not name the host (the overview calls `graph-video.facebook.com` deprecated, the guide still uses it); no page says how to get from the video's number to the post's number, which the comments, the numbers and the "is it still there" look need. One request with a real token settles each of the three.
+- [ ] with the owner's Meta app: one post scheduled for real, seen kept in Meta Business Suite, taken back by an edit, published at its time; views read on a Page with 100 or more likes
+
 ## Phase A steps
 - [x] `scheduledByOwner`: any item the owner gave a time (not only a Feed answer); `publications.schedule` accepts any channel and replies
 - [x] due-send query covers replies; lateness from the setting `scheduleGraceHours` (default 6, 1-48)

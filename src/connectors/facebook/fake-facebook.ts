@@ -15,6 +15,12 @@ interface FakePost {
   photos: number
   link: string | null
   reactions: number
+  /** False while the Page keeps the post for its time. */
+  published: boolean
+  /** Seconds since 1970 of the time the post is kept for; null for a post published at once. */
+  scheduledFor: number | null
+  /** What Facebook counts as views of the post. */
+  views: number
 }
 
 interface FakeComment {
@@ -37,7 +43,11 @@ export class FakeFacebook implements HttpPort {
   readonly calls: { method: string; path: string; params: Record<string, string>; files: string[] }[] = []
   readonly posts: FakePost[] = []
   readonly comments: FakeComment[] = []
-  private readonly unpublishedPhotos = new Set<string>()
+  /** Views are given only with the permission read_insights and on a Page with enough followers: false makes Facebook refuse them. */
+  givesViews = true
+  /** Facebook's pages disagree on whether every app may delete a post: true makes it refuse. */
+  refusesDelete = false
+  private readonly unpublishedPhotos = new Map<string, { temporary: boolean }>()
   private next = 5000
   nowMs = Date.parse('2026-12-01T10:00:00.000Z')
 
@@ -46,7 +56,7 @@ export class FakeFacebook implements HttpPort {
   }
 
   private newPost(message: string, from: { id: string; name: string }, extra: { photos?: number; link?: string | null } = {}): FakePost {
-    const post: FakePost = { id: `${this.page.id}_${this.next++}`, message, created: this.nowMs, fromId: from.id, fromName: from.name, photos: extra.photos ?? 0, link: extra.link ?? null, reactions: 0 }
+    const post: FakePost = { id: `${this.page.id}_${this.next++}`, message, created: this.nowMs, fromId: from.id, fromName: from.name, photos: extra.photos ?? 0, link: extra.link ?? null, published: true, scheduledFor: null, views: 0, reactions: 0 }
     this.posts.unshift(post)
     return post
   }
@@ -63,6 +73,26 @@ export class FakeFacebook implements HttpPort {
     return comment
   }
 
+  /** The posts the Page keeps for a time. */
+  get kept(): FakePost[] {
+    return this.posts.filter((p) => !p.published)
+  }
+
+  /** Facebook's own clock reaches `nowMs`: every kept post whose time has come is published. `renumbered`: the published post gets a new id. */
+  runSchedule(options: { renumbered?: boolean } = {}): void {
+    for (const post of this.posts) {
+      if (post.published || post.scheduledFor === null || post.scheduledFor * 1000 > this.nowMs) continue
+      post.published = true
+      post.created = post.scheduledFor * 1000
+      if (options.renumbered) post.id = `${this.page.id}_${this.next++}`
+    }
+  }
+
+  seen(postId: string, times: number): void {
+    const post = this.posts.find((p) => p.id === postId)
+    if (post) post.views += times
+  }
+
   react(postId: string, times: number): void {
     const post = this.posts.find((p) => p.id === postId)
     if (post) post.reactions += times
@@ -76,6 +106,8 @@ export class FakeFacebook implements HttpPort {
       created_time: this.time(post.created),
       permalink_url: `https://www.facebook.com/${this.page.username ?? this.page.id}/posts/${post.id.split('_')[1]}`,
       from: { id: post.fromId, name: post.fromName },
+      is_published: post.published,
+      ...(post.scheduledFor !== null ? { scheduled_publish_time: post.scheduledFor } : {}),
       reactions: { data: [], summary: { total_count: post.reactions } },
       comments: { data: [], summary: { total_count: all.length } }
     }
@@ -115,6 +147,13 @@ export class FakeFacebook implements HttpPort {
     }
     if (token !== this.token) return no(190, 'Error validating access token: Session has expired.')
     if (req.method === 'GET') return this.read(path, params, ok, no)
+    if (req.method === 'DELETE') {
+      const at = this.posts.findIndex((p) => p.id === path)
+      if (at < 0) return no(100, `Unsupported delete request. Object with ID '${path}' does not exist`)
+      if (this.refusesDelete) return no(200, '(#200) This app may not delete the post')
+      this.posts.splice(at, 1)
+      return ok({ success: true })
+    }
     if (this.failNext && this.failNext !== 'lost') {
       const failure = this.failNext
       this.failNext = null
@@ -131,7 +170,16 @@ export class FakeFacebook implements HttpPort {
     const limit = Number(params.limit ?? 25)
     if (path === 'me') return ok({ id: this.page.id, name: this.page.name, ...(this.page.username ? { username: this.page.username } : {}), link: `https://www.facebook.com/${this.page.username ?? this.page.id}`, category: 'Astrologist' })
     if (path === this.page.id) return ok({ id: this.page.id, followers_count: 321 })
-    if (path === `${this.page.id}/feed`) return ok({ data: this.posts.slice(0, limit).map((p) => this.postJson(p)) })
+    if (path === `${this.page.id}/feed`) return ok({ data: this.posts.filter((p) => p.published).slice(0, limit).map((p) => this.postJson(p)) })
+    if (path === `${this.page.id}/scheduled_posts`) return ok({ data: this.kept.slice(0, limit).map((p) => this.postJson(p)) })
+    const insights = /^(\d+_\d+)\/insights$/.exec(path)
+    if (insights) {
+      const seen = this.posts.find((p) => p.id === insights[1])
+      if (!seen) return no(100, `Unsupported get request. Object with ID '${insights[1]}' does not exist`)
+      if (!this.givesViews) return no(200, '(#200) Requires the read_insights permission')
+      if (params.metric !== 'post_media_view') return no(100, `(#100) The value must be a valid insights metric`)
+      return ok({ data: [{ name: 'post_media_view', period: 'lifetime', values: [{ value: seen.views }], title: 'Views', description: 'Lifetime', id: `${seen.id}/insights/post_media_view/lifetime` }] })
+    }
     const comments = /^(\d+(?:_\d+)?)\/comments$/.exec(path)
     if (comments) {
       const id = comments[1] as string
@@ -151,18 +199,35 @@ export class FakeFacebook implements HttpPort {
   private make(path: string, params: Record<string, string>, files: string[], ok: (r: unknown) => HttpResponse, no: (c: number, m: string) => HttpResponse): HttpResponse {
     if (path === `${this.page.id}/feed`) {
       const attached = Object.keys(params).filter((k) => k.startsWith('attached_media['))
+      // A post for later: unpublished, with its time between 10 minutes and 30 days ahead; its photos must have been uploaded as temporary.
+      const later = params.published === 'false'
+      const at = Number(params.scheduled_publish_time)
+      if (later) {
+        if (!Number.isInteger(at)) return no(100, '(#100) An unpublished post needs scheduled_publish_time')
+        if (at * 1000 < this.nowMs + 10 * 60_000 || at * 1000 > this.nowMs + 30 * 24 * 3_600_000) return no(100, '(#100) The specified scheduled publish time is invalid.')
+        if (attached.length > 0 && params.unpublished_content_type !== 'SCHEDULED') return no(100, '(#100) A scheduled post with photos needs unpublished_content_type')
+      } else if (params.scheduled_publish_time !== undefined) return no(100, '(#100) scheduled_publish_time needs published=false')
       for (const key of attached) {
         const id = (JSON.parse(params[key] as string) as { media_fbid: string }).media_fbid
-        if (!this.unpublishedPhotos.delete(id)) return no(100, `(#100) Invalid parameter: no unpublished photo ${id}`)
+        const photo = this.unpublishedPhotos.get(id)
+        if (!photo) return no(100, `(#100) Invalid parameter: no unpublished photo ${id}`)
+        if (later && !photo.temporary) return no(100, '(#100) A photo of a scheduled post must be uploaded with temporary=true')
+        this.unpublishedPhotos.delete(id)
       }
       if (!params.message && !params.link && attached.length === 0) return no(100, '(#100) Either link or message must be supplied')
-      return ok({ id: this.newPost(params.message ?? '', this.page, { photos: attached.length, link: params.link ?? null }).id })
+      const post = this.newPost(params.message ?? '', this.page, { photos: attached.length, link: params.link ?? null })
+      if (later) {
+        post.published = false
+        post.scheduledFor = at
+      }
+      return ok({ id: post.id })
     }
     if (path === `${this.page.id}/photos`) {
       if (!files.some((f) => f.startsWith('source:'))) return no(100, '(#100) A photo needs a file or an address')
       const photoId = String(this.next++)
+      if (params.temporary === 'true' && params.published !== 'false') return no(100, '(#100) A temporary photo must be unpublished')
       if (params.published === 'false') {
-        this.unpublishedPhotos.add(photoId)
+        this.unpublishedPhotos.set(photoId, { temporary: params.temporary === 'true' })
         return ok({ id: photoId })
       }
       return ok({ id: photoId, post_id: this.newPost(params.caption ?? '', this.page, { photos: 1 }).id })

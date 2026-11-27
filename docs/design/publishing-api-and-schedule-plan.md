@@ -149,7 +149,7 @@ Versions are proposals; each phase is one release, installed and checked on the 
 | C | built | 0.53.0 | a flair send by schedule; the read-back from the account's own posts |
 | D | built, with E | 0.55.0 (DEC-055) | — (the fake server only) |
 | E | built | 0.55.0 | everything: needs the owner's bot (proof T1) |
-| F | built in part | 0.78.0 (DEC-076) | everything: needs the owner's Meta app and a Page access token. Not built: a video, Facebook's own schedule (`scheduled_publish_time`), views of a post (insights) |
+| F | built except a video | 0.78.0 (DEC-076), 0.79.0 (DEC-077: Facebook's own schedule, views of a post) | everything: needs the owner's Meta app and a Page access token. Not built: a video (see below) |
 | G | waiting | — | Meta's documentation does not say where one owner gets a long-lived Threads token without a server (see "T2 and T3 from the documentation" below); needs the owner's Meta app |
 | H | waiting | — | the same Meta app, a professional account, and D5 (pictures on a public address) |
 | I | waiting | — | needs the owner's paid X app and proof T4 |
@@ -167,6 +167,9 @@ Built differently from the text above, and why:
 - Phase F was built on Meta's documentation before proof T2, as phase E was before T1: the answer to T2 changes what the owner does in Meta's dashboard (the last step of the guide), not the connector. It is one account per Page with a pasted token, checked against the Page's address.
 - From phase D, not built yet because nothing needs it: a job that polls every confirmed post for comments (Telegram receives comments as updates, Reddit through its inbox) and a token refresh job (a bot token does not expire). Phase F did not need them either: the Page's last 25 posts are read with their comments at every reading, and a Page token does not end. They come with the first connector whose token ends (G or H: 60 days).
 - Not built from phase A: scheduling a group of versions as a whole or spread over slots.
+- Facebook's own schedule (0.79.0, DEC-077) is not a state of a send. A post kept by Facebook is a row of `platform_schedules` (`src/core/pipeline/own-schedule.ts`); the send is recorded when Facebook has published it. A post is handed over when its time is a quarter of an hour or more ahead (and at most 30 days: Meta's guide says 30, its reference says 75); anything nearer goes out from this application as before. An edit, another time, a deletion, a paused channel or paused automation takes the kept post back first. Two things Meta's pages do not say are handled, not assumed: a published post that got another number is found on the page by its words; a kept post Facebook will not delete is said on the card and blocks a second send.
+- A video to a Page is not built, for three gaps in Meta's pages (read 2026-11-27): the current guide uploads through `/{app-id}/uploads` with the app's number and a person's token, and the application holds only the Page's token; the one-request form (`source`) is only in the reference, which names no host, while the overview calls `graph-video.facebook.com` deprecated and the guide still uses it; no page says how to get from the video's number to the Page post's number, which the comments, the numbers and the standing look need. One request with a real token settles each.
+- Views of a Page post are `post_media_view` (lifetime) from `/{post-id}/insights`: the metric Meta gives in place of `post_impressions`. Facebook gives it only with the permission `read_insights` and to a Page with 100 or more likes; without it reactions and comments are still read.
 
 ## 7. What does not change
 

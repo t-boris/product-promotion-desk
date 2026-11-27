@@ -154,6 +154,10 @@ export class FakeSending implements SendingService {
     this.standingCalls += 1
     return this.standingChanges
   }
+  async keepOwnSchedules(): Promise<number> {
+    return 0
+  }
+
   async sendDuePublications(): Promise<number> {
     this.sendDueCalls += 1
     this.log.push('sendDue')

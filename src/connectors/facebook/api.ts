@@ -27,6 +27,10 @@ export interface GraphPost {
   created_time?: string
   permalink_url?: string
   from?: GraphFrom
+  /** False while Facebook keeps the post for its time. */
+  is_published?: boolean
+  /** Seconds since 1970, or a written time: Facebook gives either. */
+  scheduled_publish_time?: number | string
 }
 
 export interface GraphComment {
@@ -48,6 +52,11 @@ export interface GraphCounts {
   comments?: { summary?: { total_count?: number } }
 }
 
+/** What `/{post-id}/insights` answers: one entry per metric, the number in `values[0].value`. */
+export interface GraphInsights {
+  data?: { name?: string; period?: string; values?: { value?: unknown }[] }[]
+}
+
 export class GraphApi {
   constructor(
     private readonly http: HttpPort,
@@ -63,6 +72,12 @@ export class GraphApi {
   /** Makes something: every value is a word or a file read from its path. */
   async post<T>(path: string, form: Record<string, string | HttpFile>): Promise<GraphAnswer<T>> {
     return this.read<T>(await this.http.request({ method: 'POST', url: `${GRAPH}/${path}`, form: { ...form, access_token: this.token } }))
+  }
+
+  /** Deletes an object. */
+  async delete<T>(path: string): Promise<GraphAnswer<T>> {
+    const query = new URLSearchParams({ access_token: this.token })
+    return this.read<T>(await this.http.request({ method: 'DELETE', url: `${GRAPH}/${path}?${query.toString()}` }))
   }
 
   private read<T>(response: { status: number; text: string }): GraphAnswer<T> {

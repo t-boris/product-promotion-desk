@@ -125,6 +125,14 @@ export class PeriodicTasks {
       if (nowMs >= this.gateRetryAtMs) this.launch('reconcile-startup', () => this.attemptStartupReconcile())
       return
     }
+    // What a platform holds to publish at its time is looked at whether automation runs or not: the pause takes those posts back (DEC-077).
+    const keeper = this.core.services.sending
+    if (keeper) {
+      this.launch('own-schedule', async () => {
+        const handed = await keeper.keepOwnSchedules()
+        if (handed > 0) this.core.log.info('scheduler', `${handed} scheduled post(s) handed to their platform's own schedule`)
+      })
+    }
     if (!paused) {
       const { sending, metrics } = this.core.services
       if (sending) {

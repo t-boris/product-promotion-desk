@@ -415,7 +415,7 @@ export interface HttpFile {
 }
 
 export interface HttpRequest {
-  method: 'GET' | 'POST'
+  method: 'GET' | 'POST' | 'DELETE'
   url: string
   headers?: Record<string, string>
   /** A JSON body; or `form`, a multipart form whose values are words or files. At most one of the two. */
@@ -507,6 +507,11 @@ export interface PublishRequest {
   flair?: string | null
   /** When the attempt being reconciled started; findPublished must ignore anything created before it. */
   attemptedAt?: IsoTime
+  /**
+   * Given only to a connector with `ownSchedule` (DEC-077): the platform is asked to keep the post and publish it at this time by itself. The
+   * answer is then `scheduled`, never `confirmed`: nothing is published yet.
+   */
+  publishAt?: IsoTime
 }
 
 export type PublishOutcome =
@@ -515,6 +520,11 @@ export type PublishOutcome =
   | { status: 'failed'; error: string }
   /** Submitted but not confirmed: blocks any further attempt until reconciled. */
   | { status: 'unknown'; error: string }
+  /** The platform took the post to publish at `publishAt` by itself (only in answer to a request with `publishAt`). */
+  | { status: 'scheduled'; externalId: string }
+
+/** What became of a post a platform was given to publish at a time: it went out, it is still kept, or the platform no longer has it. */
+export type ScheduledReading = { state: 'published'; url: string; externalId: string } | { state: 'waiting' } | { state: 'gone' }
 
 export interface PublishedRef {
   url: string
@@ -594,6 +604,18 @@ export interface Connector {
   /** Which of the three numbers `readPostNumbers` can ever return here (Reddit shows an author no views). Absent: all three. */
   postNumberKinds?: readonly (keyof PostNumbers)[]
   readPostNumbers?(ctx: ConnectorContext, posts: { externalId: string; url: string | null }[]): Promise<Record<string, PostNumbers>>
+  /**
+   * Present on a connector whose platform keeps a post and publishes it at a given time by itself, with this application closed (DEC-077): how
+   * far ahead of that time the platform takes one. Such a connector answers a request with `publishAt` with `scheduled` and has the three
+   * methods below.
+   */
+  ownSchedule?: { minAheadMs: number; maxAheadMs: number }
+  /** What became of a post the platform was given to publish at a time. Read-only. */
+  readScheduled?(ctx: ConnectorContext, externalId: string): Promise<ScheduledReading>
+  /** Takes a kept post back before its time, so that it is not published. `published`: it had gone out already. It throws when the platform could not be asked or refused. */
+  withdrawScheduled?(ctx: ConnectorContext, externalId: string): Promise<'withdrawn' | 'published'>
+  /** The id of a post the platform keeps for this request's time with this request's words: asked when the answer to the hand-over was lost. Null: it keeps none. */
+  findScheduled?(ctx: ConnectorContext, request: PublishRequest): Promise<string | null>
   /**
    * Present on a connector that works through the platform's own API with a key the owner saves (DEC-055). Such a connector serves only accounts
    * whose access is 'api', is never chosen by an address alone, uses no browser session, and carries every send of its channels itself.

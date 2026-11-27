@@ -65,6 +65,8 @@ export interface GateRequest {
   opportunityId: Id
   /** Initiated by a rule or the scheduler rather than by an explicit click; automatic sends obey the global pause. */
   automatic: boolean
+  /** The post is being handed to its platform to be published at this time (DEC-077): the account's limits are counted at that time, not now. */
+  publishAt?: string
 }
 
 interface Snapshot {
@@ -142,7 +144,7 @@ export class SendGate {
 
     // The owner may have edited or withdrawn the item while the thread was being read: decide on fresh state.
     const now = this.load(req.opportunityId)
-    const late = this.checkApproval(now, req) ?? this.checkSingleLogin(now) ?? this.checkAvailability(now, req, ctx) ?? this.checkLimits(now) ?? this.checkOpenAction(now)
+    const late = this.checkApproval(now, req) ?? this.checkSingleLogin(now) ?? this.checkAvailability(now, req, ctx) ?? this.checkLimits(now, undefined, req.publishAt) ?? this.checkOpenAction(now)
     if (late) return late
 
     const { opp, channel, account } = now
@@ -365,16 +367,20 @@ export class SendGate {
    * that share an account therefore share one budget, and each channel's own limit is the ceiling it is
    * measured against. That keeps one real login within the platform's tolerance.
    */
-  private checkLimits(s: Snapshot, exceptActionId?: Id): GateBlock | null {
+  private checkLimits(s: Snapshot, exceptActionId?: Id, at?: string): GateBlock | null {
     const { channel, account } = s
-    const now = this.core.clock.now().getTime()
+    // A post handed to its platform goes out at its own time: the window is counted back from then, with what the platform already holds for it.
+    const now = at ? Date.parse(at) : this.core.clock.now().getTime()
     const { perHour, perDay } = channel.settings.limits
     const windows = [
       { label: 'hourly', code: 'limit_hour', ms: HOUR_MS, max: perHour },
       { label: 'daily', code: 'limit_day', ms: DAY_MS, max: perDay }
     ]
     for (const w of windows) {
-      const { count, oldest } = this.store.countActions(account.id, new Date(now - w.ms).toISOString(), exceptActionId)
+      const since = new Date(now - w.ms).toISOString()
+      const sent = this.store.countActions(account.id, since, exceptActionId)
+      const oldest = sent.oldest
+      const count = sent.count + this.store.countKept(account.id, since, new Date(now).toISOString(), s.opp.id)
       if (count >= w.max) {
         // All of the account's channels share one allowance: count what was sent anywhere with this account.
         const next = oldest ? new Date(new Date(oldest).getTime() + w.ms).toISOString() : null

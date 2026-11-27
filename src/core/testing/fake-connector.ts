@@ -21,6 +21,7 @@ import type {
   RemoteComment,
   RemoteDiscussion,
   RemoteInboxItem,
+  ScheduledReading,
   SendTicket,
   PostForm,
   StandingReading
@@ -68,6 +69,52 @@ export class FakeConnector implements Connector {
   capabilities: Capability[] = ALL_CAPABILITIES.map((key) => ({ key, status: 'verified', detail: '', checkedAt: null }))
   login: LoginState
   metrics: MetricReading[] = []
+
+  /**
+   * Set by a test for a platform that keeps a post and publishes it at its time by itself (DEC-077); undefined, as on most platforms, unless set.
+   * A request with `publishAt` then lands in `kept` instead of being published; the publish script decides how the hand-over ends
+   * (`unknown`/`throw` with `visible: true`: the platform took it and the answer was lost).
+   */
+  ownSchedule?: { minAheadMs: number; maxAheadMs: number }
+  readonly kept = new Map<string, { request: PublishRequest; ticket: SendTicket }>()
+  /** The error `withdrawScheduled` and `readScheduled` throw; set to null to heal. */
+  withdrawError: Error | null = null
+  readScheduledError: Error | null = null
+  private readonly keptPublished = new Map<string, PublishedRef>()
+
+  /** The platform publishes a kept post at its time. `renumbered`: the published post gets a new id and the kept one is no longer known. */
+  publishKept(externalId: string, at: string, options: { renumbered?: boolean } = {}): PublishedRef {
+    const held = this.kept.get(externalId)
+    if (!held) throw new Error(`no kept post ${externalId}`)
+    this.kept.delete(externalId)
+    const { publishAt: _publishAt, ...request } = held.request
+    const item = this.record(request, held.ticket, true, at)
+    if (!options.renumbered) this.keptPublished.set(externalId, item.ref)
+    return item.ref
+  }
+
+  async readScheduled(_ctx: ConnectorContext, externalId: string): Promise<ScheduledReading> {
+    this.calls.push('readScheduled')
+    if (this.readScheduledError) throw this.readScheduledError
+    const out = this.keptPublished.get(externalId)
+    if (out) return { state: 'published', url: out.url, externalId: out.externalId }
+    return this.kept.has(externalId) ? { state: 'waiting' } : { state: 'gone' }
+  }
+
+  async withdrawScheduled(_ctx: ConnectorContext, externalId: string): Promise<'withdrawn' | 'published'> {
+    this.calls.push('withdrawScheduled')
+    if (this.withdrawError) throw this.withdrawError
+    if (this.keptPublished.has(externalId)) return 'published'
+    this.kept.delete(externalId)
+    return 'withdrawn'
+  }
+
+  async findScheduled(_ctx: ConnectorContext, request: PublishRequest): Promise<string | null> {
+    this.calls.push('findScheduled')
+    if (this.readScheduledError) throw this.readScheduledError
+    for (const [id, held] of this.kept) if (held.request.text === request.text && held.request.publishAt === request.publishAt) return id
+    return null
+  }
 
   /** Script for the next publish calls (consumed in order; default is confirm). */
   readonly publishScript: PublishBehavior[] = []
@@ -298,6 +345,15 @@ export class FakeConnector implements Connector {
       if (this.publishGate) await this.publishGate
       const behavior = this.publishScript.shift() ?? { kind: 'confirm' as const }
       if (behavior.kind === 'fail') return { status: 'failed' as const, error: behavior.error }
+      if (request.publishAt !== undefined) {
+        // Kept for its time, not published: nothing is typed and nothing shows on the platform yet.
+        this.counter += 1
+        const id = `fake-kept-${this.counter}`
+        if (behavior.kind === 'confirm' || (behavior.visible ?? false)) this.kept.set(id, { request, ticket })
+        if (behavior.kind === 'throw') throw behavior.error ?? new Error('Connection lost while sending')
+        if (behavior.kind === 'unknown') return { status: 'unknown' as const, error: behavior.error ?? 'The platform did not answer' }
+        return { status: 'scheduled' as const, externalId: id }
+      }
 
       // Typing into the page is a write action: it needs the ticket, enforced by the session guard.
       if (page) {

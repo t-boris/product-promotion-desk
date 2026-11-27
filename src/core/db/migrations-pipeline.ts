@@ -619,4 +619,31 @@ CREATE TABLE site_visits (
 );
 `
   }
+  ,
+  {
+    id: 331,
+    name: 'posts a platform keeps and publishes at their time by itself',
+    sql: `
+-- DEC-077: one row while a platform holds an approved post for its time. It is not a send attempt: a row of send_actions is written when the
+-- platform has published it. external_id is NULL while the answer to the hand-over is not known. No reference to opportunities: a deleted
+-- item must still be taken back from the platform.
+CREATE TABLE platform_schedules (
+  opportunity_id TEXT PRIMARY KEY,
+  channel_id TEXT NOT NULL,
+  account_id TEXT NOT NULL,
+  draft_id TEXT NOT NULL,
+  approval_id TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  destination TEXT NOT NULL,
+  authorization_basis TEXT NOT NULL,
+  knowledge_version_id TEXT,
+  request_json TEXT NOT NULL,
+  external_id TEXT,
+  publish_at TEXT NOT NULL,
+  handed_at TEXT NOT NULL,
+  problem TEXT
+);
+CREATE INDEX platform_schedules_account ON platform_schedules (account_id, publish_at);
+`
+  }
 ]

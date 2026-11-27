@@ -14,6 +14,7 @@
 
 import { ApiError } from '../../shared/api'
 import type { Id, PostResultsView, SendAction } from '../../shared/types'
+import { OwnSchedule } from './own-schedule'
 import { PostResults } from './post-results'
 import type { Core } from '../core'
 import { TakeoverError, TicketError, type Connector, type ConnectorContext, type PublishOutcome, type PublishedRef } from '../ports'
@@ -68,6 +69,7 @@ export class SendingFlow implements SendingService {
   private readonly missions: MissionPublisher
   private readonly standings: StandingChecks
   private readonly results: PostResults
+  private readonly ownSchedule: OwnSchedule
 
   constructor(
     private readonly core: Core,
@@ -80,6 +82,15 @@ export class SendingFlow implements SendingService {
     this.missions = new MissionPublisher(core, gate, store)
     this.standings = new StandingChecks(core, store)
     this.results = new PostResults(core, store)
+    this.ownSchedule = new OwnSchedule({
+      core,
+      store,
+      gate,
+      review,
+      locks: this.locks,
+      byConnector: (grant) => this.missions.executorFor(grant, true) === 'connector',
+      markVerified: (channelId, standalone, reference) => this.markVerified(channelId, standalone, reference)
+    })
   }
 
   readPostNumbers(stop?: () => boolean): Promise<number> {
@@ -108,6 +119,8 @@ export class SendingFlow implements SendingService {
   }
 
   private async sendLocked(opportunityId: Id, automatic: boolean): Promise<SendAction> {
+    // A post its platform holds for a time is taken back before this application sends it (DEC-077): never both.
+    await this.ownSchedule.release(opportunityId)
     const decision = await this.gate.authorize({ opportunityId, automatic })
     if (!decision.allowed) {
       this.applyBlock(opportunityId, decision)
@@ -514,6 +527,15 @@ export class SendingFlow implements SendingService {
 
   // ───────────── scheduled standalone publications ─────────────
 
+  /**
+   * The posts a platform publishes at their time by itself (DEC-077): what it holds is looked at (published ones are recorded, changed ones are
+   * taken back), then the approved posts far enough ahead are handed over. The look runs with automation paused too: the pause takes them back.
+   */
+  async keepOwnSchedules(): Promise<number> {
+    await this.ownSchedule.look()
+    return this.ownSchedule.handOver()
+  }
+
   /** What the schedule is waiting for: the planned times of the approved items that will go out by themselves, and whether something is being sent now (DEC-054). */
   awaited(): { dueTimes: string[]; sending: boolean } {
     const dueTimes = (this.core.db.prepare("SELECT scheduled_at AS at FROM opportunities WHERE state = 'ready' AND scheduled_at IS NOT NULL ORDER BY scheduled_at").all() as { at: string }[]).map((row) => row.at)
@@ -545,6 +567,8 @@ export class SendingFlow implements SendingService {
     let attempted = 0
     for (const { id, at, finding } of due) {
       try {
+        // A post its platform holds is the platform's to publish; `keepOwnSchedules` asks what became of it.
+        if (this.ownSchedule.kept(id)) continue
         const draft = this.core.repos.latestDraft(id)
         const approval = draft ? this.core.repos.activeApproval(draft.id) : null
         if (!approval) continue

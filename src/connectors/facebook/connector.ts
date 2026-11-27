@@ -16,16 +16,21 @@ import type {
   PublishRequest,
   RemoteComment,
   RemoteDiscussion,
+  ScheduledReading,
   SendTicket
 } from '../../core/ports'
 import { earliestCreation } from '../reconcile'
 import { sameText, wordsWithLink } from '../text'
-import { GraphApi, looksLikeAccessToken, type GraphAnswer, type GraphComment, type GraphCounts, type GraphFrom, type GraphList, type GraphPage, type GraphPost } from './api'
+import { GraphApi, looksLikeAccessToken, type GraphAnswer, type GraphComment, type GraphCounts, type GraphFrom, type GraphInsights, type GraphList, type GraphPage, type GraphPost } from './api'
 
 export const FACEBOOK_PAGE_CONNECTOR_ID = 'facebook-page'
 
 /** How many posts of the Page one reading looks at, and how many comments of each. */
 const FEED_LIMIT = 25
+/** "The number of times your content was played or displayed", counted over the post's whole life: what Meta gives in place of impressions. */
+const VIEWS_METRIC = 'post_media_view'
+/** Facebook takes a post for a time "between 10 minutes and 30 days from the time of the API request"; the far end is kept an hour short of it. */
+const OWN_SCHEDULE = { minAheadMs: 10 * 60_000, maxAheadMs: 30 * 24 * 3_600_000 - 3_600_000 }
 const COMMENTS_LIMIT = 100
 const PAGE_FIELDS = 'id,name,username,link,category'
 const POST_FIELDS = 'id,message,created_time,permalink_url,from{id,name}'
@@ -119,12 +124,12 @@ const API: ApiAccess = {
       link: 'Open “Create an app”'
     },
     {
-      text: 'In the app open “Use cases”, press “Customize” beside “Manage everything on your Page” and add four permissions: pages_manage_posts, pages_read_engagement, pages_manage_engagement and pages_read_user_content.',
+      text: 'In the app open “Use cases”, press “Customize” beside “Manage everything on your Page” and add five permissions: pages_manage_posts, pages_read_engagement, pages_manage_engagement, pages_read_user_content and read_insights (the last one is for the views of each post).',
       url: `${DEVELOPERS}/apps/`,
       link: 'Open your apps'
     },
     {
-      text: 'In the Graph API Explorer choose your app, add the same four permissions and get a token for yourself (“User Token”). Facebook asks which Page to allow: choose yours. Copy the token it shows.',
+      text: 'In the Graph API Explorer choose your app, add the same five permissions and get a token for yourself (“User Token”). Facebook asks which Page to allow: choose yours. Copy the token it shows.',
       url: `${DEVELOPERS}/tools/explorer/`,
       link: 'Open the Graph API Explorer'
     },
@@ -152,8 +157,9 @@ const NO_VIDEO = 'A video is not sent to a Page through the API by this applicat
 
 /**
  * A Facebook Page worked through Meta's Graph API with the Page's own access token (DEC-076): posts with words, a link or photos; the comments
- * under the Page's posts, read from Facebook each time; replies under a comment or a post; reactions and comments counted under a post. Nothing
- * is kept here: Facebook holds the posts and gives them again. Not carried: a video, Facebook's own schedule, the views of a post.
+ * under the Page's posts, read from Facebook each time; replies under a comment or a post; reactions and comments counted under a post; a post
+ * with a time far enough ahead is given to Facebook's own schedule (DEC-077). Nothing is kept here: Facebook holds the posts and gives them
+ * again. Not carried: a video.
  */
 export class FacebookPageConnector implements Connector {
   readonly id = FACEBOOK_PAGE_CONNECTOR_ID
@@ -161,7 +167,8 @@ export class FacebookPageConnector implements Connector {
   readonly version = '1'
   readonly label = 'Facebook'
   readonly api = API
-  readonly postNumberKinds = ['likes', 'comments'] as const
+  readonly postNumberKinds = ['likes', 'comments', 'views'] as const
+  readonly ownSchedule = OWN_SCHEDULE
 
   /** The Page each account's token belongs to, as Facebook named it at the last check. */
   private readonly pages = new Map<string, GraphPage>()
@@ -267,10 +274,10 @@ export class FacebookPageConnector implements Connector {
       cap('read_posts', ...reads),
       cap('read_comments', ...talks),
       cap('detect_changes', ...reads),
-      cap('publish_post', 'verified', `Posts go out as the Page “${name}”: words, a link, photos. It needs the permission pages_manage_posts. Until the app is published (“Go live”), only the people of the app see them.`),
+      cap('publish_post', 'verified', `Posts go out as the Page “${name}”: words, a link, photos. A post with a time a quarter of an hour or more ahead is given to Facebook, which publishes it at that time even with this Mac off. It needs the permission pages_manage_posts. Until the app is published (“Go live”), only the people of the app see them.`),
       cap('publish_reply', 'verified', 'A reply goes under the comment or the post, as the Page. It needs the permission pages_manage_engagement.'),
       cap('verify_send', 'verified', 'Facebook returns the post or the comment it made.'),
-      cap('metrics', 'verified', 'The number of followers; under each post, reactions and comments. Views of a post are not read.'),
+      cap('metrics', 'verified', 'The number of followers; under each post, reactions, comments and views. Facebook gives views only with the permission read_insights, and only for a Page with 100 or more likes.'),
       ...notOffered(cap)
     ]
   }
@@ -345,6 +352,9 @@ export class FacebookPageConnector implements Connector {
     const api = await this.requireClient(ctx)
     const whole = (value: unknown): number | null => (typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null)
     const found: Record<string, PostNumbers> = {}
+    // Views come from the Page's insights, which Facebook gives only with the permission read_insights and to a Page with enough followers.
+    // Refused once, they are not asked for again in this reading: the other two numbers do not depend on them.
+    let viewsGiven = true
     for (const post of posts) {
       const id = parseExternalId(post.externalId)
       if (!id) continue
@@ -353,7 +363,14 @@ export class FacebookPageConnector implements Connector {
         if (counts.code === TOKEN_REFUSED) throw unreadable(counts)
         continue
       }
-      found[post.externalId] = { likes: whole(counts.result.reactions?.summary?.total_count), comments: whole(counts.result.comments?.summary?.total_count), views: null }
+      let views: number | null = null
+      if (viewsGiven) {
+        const insights = await api.get<GraphInsights>(`${id}/insights`, { metric: VIEWS_METRIC })
+        if (insights.ok) views = whole((insights.result.data ?? []).find((entry) => entry.name === VIEWS_METRIC)?.values?.[0]?.value)
+        else if (insights.code === TOKEN_REFUSED) throw unreadable(insights)
+        else viewsGiven = false
+      }
+      found[post.externalId] = { likes: whole(counts.result.reactions?.summary?.total_count), comments: whole(counts.result.comments?.summary?.total_count), views }
     }
     return found
   }
@@ -372,8 +389,11 @@ export class FacebookPageConnector implements Connector {
     }
   }
 
-  /** The request that publishes. No answer to it, or an error of Facebook's own side, leaves it unknown whether Facebook made it. */
-  private async lastStep(api: GraphApi, call: () => Promise<GraphAnswer<{ id?: string; post_id?: string }>>): Promise<PublishOutcome> {
+  /**
+   * The request that publishes, or that gives the post to Facebook's schedule (`kept`). No answer to it, or an error of Facebook's own side,
+   * leaves it unknown whether Facebook made it.
+   */
+  private async lastStep(api: GraphApi, call: () => Promise<GraphAnswer<{ id?: string; post_id?: string }>>, kept = false): Promise<PublishOutcome> {
     let answer: GraphAnswer<{ id?: string; post_id?: string }>
     try {
       answer = await call()
@@ -387,6 +407,7 @@ export class FacebookPageConnector implements Connector {
     }
     const id = answer.result.post_id ?? answer.result.id
     if (!id) return { status: 'unknown', error: 'Facebook accepted it and returned no id, so it is not known whether it was published.' }
+    if (kept) return { status: 'scheduled', externalId: externalIdOf(id) }
     return { status: 'confirmed', url: await this.addressOf(api, id), externalId: externalIdOf(id) }
   }
 
@@ -406,17 +427,60 @@ export class FacebookPageConnector implements Connector {
     if (files.some((file) => isVideoMime(file.mime))) return failed(NO_VIDEO)
     if (files.length === 0 && !words) return failed('The post is empty. Nothing was sent.')
     const part = (file: (typeof files)[number]): HttpFile => ({ path: file.path, name: file.name, mime: file.mime })
-    if (files.length === 0) return this.lastStep(api, () => api.post(`${page.id}/feed`, { message: words, ...(request.link ? { link: request.link } : {}) }))
-    if (files.length === 1) return this.lastStep(api, () => api.post(`${page.id}/photos`, { source: part(files[0] as (typeof files)[number]), ...(words ? { caption: words } : {}) }))
-    // Several photos: each is uploaded unpublished, then one post names them all. A photo that fails leaves nothing published.
-    const form: Record<string, string> = words ? { message: words } : {}
+    // A post for Facebook's own schedule is made unpublished, with its time in seconds; Facebook publishes it then by itself.
+    const kept = request.publishAt !== undefined
+    const later: Record<string, string> = kept ? { published: 'false', scheduled_publish_time: String(Math.floor(Date.parse(request.publishAt as string) / 1000)) } : {}
+    if (files.length === 0) return this.lastStep(api, () => api.post(`${page.id}/feed`, { message: words, ...(request.link ? { link: request.link } : {}), ...later }), kept)
+    if (files.length === 1 && !kept) return this.lastStep(api, () => api.post(`${page.id}/photos`, { source: part(files[0] as (typeof files)[number]), ...(words ? { caption: words } : {}) }))
+    // Several photos, or any photo of a kept post: each is uploaded unpublished, then one post names them all. A photo that fails leaves nothing published.
+    const form: Record<string, string> = { ...(words ? { message: words } : {}), ...later }
     for (const [index, file] of files.entries()) {
-      const photo = await api.post<{ id?: string }>(`${page.id}/photos`, { source: part(file), published: 'false' })
+      // A photo of a post that goes out later is marked so that Facebook keeps it until then.
+      const photo = await api.post<{ id?: string }>(`${page.id}/photos`, { source: part(file), published: 'false', ...(kept ? { temporary: 'true' } : {}) })
       if (!photo.ok) return failed(`${refusal(photo)} Nothing was published.`)
       if (!photo.result.id) return failed('Facebook took a photo and returned no id for it. Nothing was published.')
       form[`attached_media[${index}]`] = JSON.stringify({ media_fbid: photo.result.id })
     }
-    return this.lastStep(api, () => api.post(`${page.id}/feed`, form))
+    if (kept) form.unpublished_content_type = 'SCHEDULED'
+    return this.lastStep(api, () => api.post(`${page.id}/feed`, form), kept)
+  }
+
+  /** What became of a post Facebook was given for a time: it is out, it still waits, or Facebook has it no more. */
+  async readScheduled(ctx: ConnectorContext, externalId: string): Promise<ScheduledReading> {
+    const api = await this.requireClient(ctx)
+    const id = parseExternalId(externalId)
+    if (!id) return { state: 'gone' }
+    const post = await api.get<GraphPost>(id, { fields: 'id,is_published,permalink_url' })
+    if (!post.ok) {
+      if (post.code === 100) return { state: 'gone' }
+      throw unreadable(post)
+    }
+    if (post.result.is_published !== true) return { state: 'waiting' }
+    return { state: 'published', url: post.result.permalink_url ?? `https://www.facebook.com/${post.result.id}`, externalId: externalIdOf(post.result.id) }
+  }
+
+  /** Deletes a post Facebook keeps for a time, unless it went out already. */
+  async withdrawScheduled(ctx: ConnectorContext, externalId: string): Promise<'withdrawn' | 'published'> {
+    const reading = await this.readScheduled(ctx, externalId)
+    if (reading.state === 'published') return 'published'
+    if (reading.state === 'gone') return 'withdrawn'
+    const api = await this.requireClient(ctx)
+    const gone = await api.delete<{ success?: boolean }>(parseExternalId(externalId) as string)
+    if (!gone.ok && gone.code !== 100) throw new Error(refusal(gone))
+    return 'withdrawn'
+  }
+
+  /** The post Facebook keeps for the request's time with the request's words, when the answer to handing it over was lost. */
+  async findScheduled(ctx: ConnectorContext, request: PublishRequest): Promise<string | null> {
+    const api = await this.requireClient(ctx)
+    const page = await this.page(ctx, api)
+    const list = await api.get<GraphList<GraphPost>>(`${page.id}/scheduled_posts`, { fields: 'id,message,scheduled_publish_time', limit: '100' })
+    if (!list.ok) throw unreadable(list)
+    const at = Math.floor(Date.parse(request.publishAt ?? '') / 1000)
+    const seconds = (time: number | string | undefined): number => (typeof time === 'number' ? time : Math.floor(Date.parse(iso(time) ?? '') / 1000))
+    const words = wordsWithLink(request)
+    const hit = (list.result.data ?? []).find((post) => seconds(post.scheduled_publish_time) === at && sameText(post.message ?? '', words))
+    return hit ? externalIdOf(hit.id) : null
   }
 
   private async reply(api: GraphApi, request: PublishRequest, words: string): Promise<PublishOutcome> {

@@ -68,6 +68,8 @@ export interface SendingService {
   reconcileAllUnknown(): Promise<number>
   /** Sends approved standalone publications whose scheduled time has arrived. Returns how many were attempted. */
   sendDuePublications(): Promise<number>
+  /** Looks at the posts platforms hold for their time, and hands over the approved ones far enough ahead (DEC-077). Resolves with how many were handed over. */
+  keepOwnSchedules(): Promise<number>
   /** What the schedule is waiting for (DEC-054): the planned times of the approved items that will go out by themselves, and whether something is being sent now. */
   awaited(): { dueTimes: string[]; sending: boolean }
   /** Looks again at confirmed posts that are due (a site may have removed one). Returns the changes worth telling the owner. `stop` ends the scan between posts. */

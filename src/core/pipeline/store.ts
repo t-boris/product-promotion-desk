@@ -655,6 +655,14 @@ export class FlowStore {
     return { count: row.c, oldest: row.oldest }
   }
 
+  /** How many posts the account's platform holds to publish by itself at a time inside the window (DEC-077): they count against the account's limits like sends. */
+  countKept(accountId: Id, afterIso: string, untilIso: string, exceptOpportunityId: Id): number {
+    const row = this.db
+      .prepare('SELECT COUNT(*) AS n FROM platform_schedules WHERE account_id = ? AND publish_at > ? AND publish_at <= ? AND opportunity_id != ?')
+      .get(accountId, afterIso, untilIso, exceptOpportunityId) as { n: number }
+    return row.n
+  }
+
   unknownActions(): SendAction[] {
     return (this.db.prepare("SELECT * FROM send_actions WHERE state = 'unknown' ORDER BY attempted_at, rowid").all() as Row[]).map(mapAction)
   }
