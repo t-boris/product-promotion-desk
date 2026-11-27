@@ -90,8 +90,9 @@ export interface TabAccent {
  * Passport tab) or not reached yet, shows its actions as bezels and points the filled button at the next stage. When every stage is
  * done there is no next move and no tab holds a filled button.
  */
-export function tabAccent(stages: LaunchStage[], tab: ProductTab): TabAccent {
-  const own = stages.find((stage) => stage.id === TAB_STAGE[tab])?.state === 'current'
+export function tabAccent(stages: LaunchStage[], tab: ProductTab | null): TabAccent {
+  // A step of Setup that is no stage of the path (Positioning, the audience's words) never owns the filled button: it points at the next stage.
+  const own = tab !== null && stages.find((stage) => stage.id === TAB_STAGE[tab])?.state === 'current'
   return own ? { own: true, next: null } : { own: false, next: nextStage(stages) }
 }
 

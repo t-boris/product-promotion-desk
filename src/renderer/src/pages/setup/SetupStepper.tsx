@@ -1,7 +1,10 @@
 import type { ReactNode } from 'react'
 import type { PassportView } from '../../../../shared/types'
 import { OVERVIEW_HREF, setupHref, type SetupTab } from '../../route'
+import { useQuery } from '../../hooks'
 import { AnalysisTab } from '../products/AnalysisTab'
+import { AudienceWordsTab } from '../products/AudienceWordsTab'
+import { PositioningTab } from '../products/PositioningTab'
 import { GoalTab } from '../products/GoalTab'
 import type { LaunchStage } from '../products/launch-path'
 import { PassportTab } from '../products/PassportTab'
@@ -20,11 +23,20 @@ const go = (hash: string): void => {
  * the stepper, the path on the Inbox and the filled button name one next step (BUG-064, BUG-065).
  */
 export function SetupStepper({ view, stages, open }: { view: PassportView; stages: LaunchStage[]; open: SetupTab }) {
-  const steps = setupSteps(stages, setupFacts(view))
+  // Positioning and the audience's words are kept apart from the passport: their one-line summaries are read here.
+  const positioning = useQuery('positioning.get', { productId: view.product.id }, ['products'])
+  const words = useQuery('words.list', { productId: view.product.id }, ['products'])
+  const steps = setupSteps(stages, {
+    ...setupFacts(view),
+    positioning: positioning.data ? (positioning.data.proposed ? 'proposed' : positioning.data.approved ? 'approved' : 'none') : undefined,
+    words: words.data?.entries.length
+  })
   const bodies: Record<SetupTab, () => ReactNode> = {
     sources: () => <SourcesTab view={view} />,
     passport: () => <PassportTab view={view} onOpenAnalysis={() => go(setupHref('analysis'))} />,
     analysis: () => <AnalysisTab view={view} />,
+    positioning: () => <PositioningTab product={view.product} />,
+    words: () => <AudienceWordsTab product={view.product} />,
     goal: () => <GoalTab product={view.product} onOpenResults={() => go(OVERVIEW_HREF)} />
   }
   return (

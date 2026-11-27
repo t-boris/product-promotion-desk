@@ -3,6 +3,8 @@
 // and what the connector can actually post (text, link, images) is decided by the connector and the channel's
 // verified capabilities, not here.
 
+import { wordsForPrompt } from './audience-words'
+import { approvedPositioning } from './positioning'
 import { directionInForce } from './weekly-review'
 import { ApiError, type DraftInput } from '../../shared/api'
 import { nextFreeSlot } from '../../shared/schedule'
@@ -85,7 +87,9 @@ export class PublicationsFlow {
           previousPosts,
           recentTitles,
           focus: options.focus,
-          direction: directionInForce(this.core, channel.productId)
+          direction: directionInForce(this.core, channel.productId),
+          positioning: approvedPositioning(this.core, channel.productId),
+          audienceWords: wordsForPrompt(this.core, channel.productId)
         }),
         timeoutMs: AI_TIMEOUT_MS
       })

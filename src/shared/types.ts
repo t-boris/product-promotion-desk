@@ -1,6 +1,7 @@
 // Domain types shared by the core, the main process and the UI.
 // Everything here is plain serializable data (it crosses IPC / HTTP boundaries).
 
+import type { PositioningAnswers, WordKind } from './positioning'
 import type { ChannelTrial, TrialMetric, TrialProgress } from './channel-trial'
 import type { WeekNumbers, WeekSums } from './weekly-review'
 import type { PostNumbers } from './post-numbers'
@@ -1236,6 +1237,39 @@ export interface FeedQuestion {
   title: string
   channel: string
   question: string
+}
+
+/** The positioning of a product as its Setup step shows it (DEC-059). */
+export interface PositioningView {
+  productId: Id
+  /** What the owner approved: in force for the AI's drafts. Null while nothing is approved. */
+  approved: PositioningAnswers | null
+  approvedAt: IsoTime | null
+  /** The AI's proposal that waits for the owner; null when there is none. */
+  proposed: PositioningAnswers | null
+  proposedAt: IsoTime | null
+  /** The AI proposes from the approved passport: without one it cannot. */
+  passportApproved: boolean
+}
+
+/** One entry of the audience's own words, with the posts it was said in. */
+export interface AudienceWord {
+  id: Id
+  kind: WordKind
+  text: string
+  posts: { findingId: Id; title: string; url: string; channelId: Id; channel: string }[]
+  /** A question or an objection said in three posts or more: worth an answer of its own. */
+  repeated: boolean
+  createdAt: IsoTime
+}
+
+export interface AudienceWordsView {
+  productId: Id
+  entries: AudienceWord[]
+  /** When the Feed's posts were last taken; null while never. */
+  collectedAt: IsoTime | null
+  /** Read posts of the Feed no collection has taken yet. */
+  waiting: number
 }
 
 /** The terms of a trial as the AI proposes them for the form. */

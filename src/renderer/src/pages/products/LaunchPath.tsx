@@ -67,7 +67,7 @@ export function LaunchStagesScope({ stages, children }: { stages: LaunchStage[];
   return <StagesContext.Provider value={stages}>{children}</StagesContext.Provider>
 }
 
-export function useTabAccent(tab: ProductTab): TabAccent {
+export function useTabAccent(tab: ProductTab | null): TabAccent {
   const stages = useContext(StagesContext)
   return stages ? tabAccent(stages, tab) : OWN_ACCENT
 }
@@ -84,7 +84,7 @@ export function useTabMainVariant(tab: ProductTab): 'primary' | 'ghost' {
  * tab owns the accent or the path is complete. While the passport is the next stage the words beside the button name the route that needs
  * no AI, in the open and not only in a tooltip (BUG-064); the Status row of the product header cannot hold them, they wrap that row at 980 px.
  */
-export function NextStage({ tab }: { tab: ProductTab }) {
+export function NextStage({ tab }: { tab: ProductTab | null }) {
   const { next } = useTabAccent(tab)
   const variant = useMainVariant()
   if (!next) return null

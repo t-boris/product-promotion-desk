@@ -9,13 +9,25 @@ import { ANALYSIS_LABELS } from '../products/labels'
 import type { LaunchStage, LaunchStageId, LaunchStageState } from '../products/launch-path'
 import { summarize, type PassportSummary } from '../products/model'
 
-export const SETUP_STEP_LABEL: Record<SetupTab, string> = { sources: 'Sources', passport: 'Passport', analysis: 'Analysis', goal: 'Goal' }
+export const SETUP_STEP_LABEL: Record<SetupTab, string> = { sources: 'Sources', passport: 'Passport', analysis: 'Analysis', positioning: 'Positioning', goal: 'Goal', words: 'Audience’s words' }
 
 /**
  * The launch-path stage a step takes its state from. Analysis has none: it is the AI's way to the passport, and the passport step
- * already holds the path's stage; a second "Next" on the stepper would send the owner two ways.
+ * already holds the path's stage; a second "Next" on the stepper would send the owner two ways. Positioning and the audience's words
+ * (DEC-059) are not stages of the path either: nothing waits for them, so they are never "Next".
  */
-const STEP_STAGE: Record<SetupTab, LaunchStageId | null> = { sources: 'product', passport: 'passport', analysis: null, goal: 'goal' }
+const STEP_STAGE: Record<SetupTab, LaunchStageId | null> = { sources: 'product', passport: 'passport', analysis: null, positioning: null, goal: 'goal', words: null }
+
+/** Where the positioning stands: nothing written, a proposal of the AI waiting, or approved. */
+export type PositioningState = 'none' | 'proposed' | 'approved'
+
+export function positioningSummaryLine(state: PositioningState): { text: string; tone: StepTone } {
+  return state === 'approved' ? { text: 'Approved', tone: 'neutral' } : state === 'proposed' ? { text: 'A proposal to review', tone: 'warn' } : { text: 'Not written yet', tone: 'neutral' }
+}
+
+export function wordsSummary(words: number): string {
+  return words === 0 ? 'Nothing taken yet' : `${words} entr${words === 1 ? 'y' : 'ies'}`
+}
 
 /** Words that need the owner's look are amber, a failure is red, everything else is quiet. */
 export type StepTone = 'neutral' | 'warn' | 'bad'
@@ -37,6 +49,9 @@ export interface SetupFacts {
   passport: PassportSummary
   analysis: AnalysisStatus
   goals: number
+  /** Read apart from the passport view; absent while not loaded. */
+  positioning?: PositioningState
+  words?: number
 }
 
 export function setupFacts(view: PassportView): SetupFacts {
@@ -79,10 +94,12 @@ export function goalsSummary(goals: number): string {
   return goals === 0 ? 'No goal yet' : count(goals, 'goal')
 }
 
-/** The four steps in the order of the stepper. A step whose stage is missing from `stages` is not reached yet. */
+/** The steps in the order of the stepper. A step whose stage is missing from `stages` is not reached yet. */
 export function setupSteps(stages: readonly LaunchStage[], facts: SetupFacts): SetupStep[] {
   const stateOf = (id: SetupTab): LaunchStageState => {
     const stage = STEP_STAGE[id]
+    if (id === 'positioning') return facts.positioning === 'approved' ? 'done' : 'todo'
+    if (id === 'words') return (facts.words ?? 0) > 0 ? 'done' : 'todo'
     if (stage === null) return facts.analysis === 'complete' ? 'done' : 'todo'
     return stages.find((s) => s.id === stage)?.state ?? 'todo'
   }
@@ -94,8 +111,12 @@ export function setupSteps(stages: readonly LaunchStage[], facts: SetupFacts): S
         return passportSummaryLine(facts.passportApproved, facts.passport)
       case 'analysis':
         return analysisSummaryLine(facts.analysis)
+      case 'positioning':
+        return positioningSummaryLine(facts.positioning ?? 'none')
       case 'goal':
         return { text: goalsSummary(facts.goals), tone: 'neutral' }
+      case 'words':
+        return { text: wordsSummary(facts.words ?? 0), tone: 'neutral' }
     }
   }
   return SETUP_TABS.map((id) => ({ id, label: SETUP_STEP_LABEL[id], state: stateOf(id), summary: line(id).text, tone: line(id).tone }))

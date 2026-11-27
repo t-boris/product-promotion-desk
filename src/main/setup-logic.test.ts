@@ -36,24 +36,27 @@ function facts(seed: Partial<SetupFacts> = {}): SetupFacts {
 const pathFacts = (seed: Partial<LaunchFacts> = {}): LaunchFacts => ({ hasSources: true, passportApproved: false, goals: 0, channels: 0, approvedPublications: 0, ...seed })
 const stagesOf = (seed: Partial<LaunchFacts> = {}) => launchStages('p1', pathFacts(seed))
 
+/** The steps that are stages of the launch path (Positioning and the audience's words are steps nothing waits for). */
+const onPath = <T extends { id: string }>(steps: T[]): T[] => steps.filter((s) => s.id !== 'positioning' && s.id !== 'words')
+
 describe('the four steps of Setup', () => {
   it('are Sources, Passport, Analysis and Goal in that order, named as the tabs they open', () => {
     const steps = setupSteps(stagesOf(), facts())
-    expect(steps.map((s) => s.id)).toEqual(['sources', 'passport', 'analysis', 'goal'])
-    expect(steps.map((s) => s.label)).toEqual(['Sources', 'Passport', 'Analysis', 'Goal'])
+    expect(steps.map((s) => s.id)).toEqual(['sources', 'passport', 'analysis', 'positioning', 'goal', 'words'])
+    expect(steps.map((s) => s.label)).toEqual(['Sources', 'Passport', 'Analysis', 'Positioning', 'Goal', 'Audience’s words'])
     expect(steps.map((s) => s.id)).toEqual([...SETUP_TABS])
     expect(SETUP_STEP_LABEL.analysis).toBe('Analysis')
   })
 
   it('take Sources, Passport and Goal from the launch path: done, the path\'s next step, or not reached', () => {
     const fresh = setupSteps(stagesOf(), facts())
-    expect(fresh.map((s) => s.state)).toEqual(['done', 'current', 'todo', 'todo'])
+    expect(onPath(fresh).map((s) => s.state)).toEqual(['done', 'current', 'todo', 'todo'])
     const approved = setupSteps(stagesOf({ passportApproved: true }), facts({ passportApproved: true }))
-    expect(approved.map((s) => s.state)).toEqual(['done', 'done', 'todo', 'current'])
+    expect(onPath(approved).map((s) => s.state)).toEqual(['done', 'done', 'todo', 'current'])
     const goalFirst = setupSteps(stagesOf({ goals: 1 }), facts({ goals: 1 }))
-    expect(goalFirst.map((s) => s.state)).toEqual(['done', 'current', 'todo', 'done'])
+    expect(onPath(goalFirst).map((s) => s.state)).toEqual(['done', 'current', 'todo', 'done'])
     const noSource = setupSteps(stagesOf({ hasSources: false }), facts({ sources: 0 }))
-    expect(noSource.map((s) => s.state)).toEqual(['current', 'todo', 'todo', 'todo'])
+    expect(onPath(noSource).map((s) => s.state)).toEqual(['current', 'todo', 'todo', 'todo'])
   })
 
   it('never mark Analysis as the next step, so the stepper has one "Next" and it is the passport', () => {
@@ -70,17 +73,19 @@ describe('the four steps of Setup', () => {
 
   it('have no step that is the next one once the four are done: the next move is a later stage of the path', () => {
     const steps = setupSteps(stagesOf({ passportApproved: true, goals: 1 }), facts({ passportApproved: true, goals: 1, analysis: 'complete' }))
-    expect(steps.map((s) => s.state)).toEqual(['done', 'done', 'done', 'done'])
+    expect(onPath(steps).map((s) => s.state)).toEqual(['done', 'done', 'done', 'done'])
+    // Positioning and the audience's words are never the next step: nothing waits for them.
+    expect(steps.some((s) => s.state === 'current')).toBe(false)
   })
 
   it('treat a stage missing from the path as not reached', () => {
-    expect(setupSteps([], facts()).map((s) => s.state)).toEqual(['todo', 'todo', 'todo', 'todo'])
+    expect(setupSteps([], facts()).map((s) => s.state)).toEqual(['todo', 'todo', 'todo', 'todo', 'todo', 'todo'])
   })
 
   it('carry the summary and the tone of each step', () => {
     const steps = setupSteps(stagesOf(), facts({ sources: 2, goals: 3, analysis: 'failed' }))
-    expect(steps.map((s) => s.summary)).toEqual(['2 sources', 'No passport yet', 'Analysis failed', '3 goals'])
-    expect(steps.map((s) => s.tone)).toEqual(['neutral', 'neutral', 'bad', 'neutral'])
+    expect(onPath(steps).map((s) => s.summary)).toEqual(['2 sources', 'No passport yet', 'Analysis failed', '3 goals'])
+    expect(onPath(steps).map((s) => s.tone)).toEqual(['neutral', 'neutral', 'bad', 'neutral'])
   })
 })
 

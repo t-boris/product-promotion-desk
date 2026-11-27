@@ -435,5 +435,42 @@ ALTER TABLE drafts ADD COLUMN flair TEXT;
 -- Off unless the owner turns it on: the address that ends a post carries utm tags, so the site's own analytics can tell where a visit came from.
 ALTER TABLE products ADD COLUMN tag_site_link INTEGER NOT NULL DEFAULT 0;
 `
+  },
+  {
+    id: 323,
+    name: 'positioning of a product and the audience\'s own words',
+    sql: `
+-- Five answers about the product's place (DEC-059). The proposal of the AI and what the owner approved are kept apart: a new proposal never
+-- replaces what is in force.
+CREATE TABLE product_positioning (
+  product_id TEXT PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE,
+  proposed_json TEXT,
+  proposed_at TEXT,
+  approved_json TEXT,
+  approved_at TEXT
+);
+-- What the audience asks, objects to and calls things, taken from the posts the Feed read. hidden: the owner took it out; kept so it is not offered again.
+CREATE TABLE audience_words (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  text TEXT NOT NULL,
+  hidden INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX audience_words_by_product ON audience_words (product_id, hidden);
+CREATE TABLE audience_word_posts (
+  word_id TEXT NOT NULL REFERENCES audience_words(id) ON DELETE CASCADE,
+  finding_id TEXT NOT NULL REFERENCES findings(id) ON DELETE CASCADE,
+  PRIMARY KEY (word_id, finding_id)
+);
+-- The read posts a collection has taken already.
+CREATE TABLE audience_word_seen (
+  finding_id TEXT PRIMARY KEY REFERENCES findings(id) ON DELETE CASCADE,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  seen_at TEXT NOT NULL
+);
+`
   }
 ]

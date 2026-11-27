@@ -2,6 +2,7 @@
 // The UI only ever calls `Transport.invoke` / `Transport.subscribe`; whether that travels over
 // Electron IPC or over the loopback HTTP server is invisible to it.
 
+import type { PositioningAnswers } from './positioning'
 import type { TrialMetric } from './channel-trial'
 import type {
   AgentAsk,
@@ -66,6 +67,8 @@ import type {
   OpportunityCard,
   FeedAnalysisView,
   WeeklyReviewView,
+  PositioningView,
+  AudienceWordsView,
   TrialProposal,
   TrialView,
   FeedPeriod,
@@ -630,6 +633,17 @@ export interface ApiMethods {
   'results.posts': [{ channelId: Id }, PostResultsView]
   /** Reads those numbers from the site now. */
   'results.readPosts': [{ channelId: Id }, PostResultsView]
+  /** The positioning of a product (DEC-059): five answers, proposed by the AI from the approved passport, approved by the owner. */
+  'positioning.get': [{ productId: Id }, PositioningView]
+  'positioning.propose': [{ productId: Id }, PositioningView]
+  'positioning.approve': [{ productId: Id; answers: PositioningAnswers }, PositioningView]
+  'positioning.dismiss': [{ productId: Id }, PositioningView]
+  /** The audience's own words (DEC-059): questions, objections and phrases taken from the posts the Feed read, each with its posts. */
+  'words.list': [{ productId: Id }, AudienceWordsView]
+  'words.collect': [{ productId: Id }, AudienceWordsView]
+  'words.remove': [{ id: Id }, AudienceWordsView]
+  /** An AI draft of a post that answers an entry, for one channel. A draft only. */
+  'words.suggestPost': [{ id: Id; channelId: Id }, OpportunityCard]
   /** The trial of a channel (DEC-058): the running one with its numbers, and the earlier ones with their verdicts. */
   'trials.get': [{ channelId: Id }, TrialView]
   'trials.start': [{ channelId: Id; hypothesis: string; weeks: number; hoursPerWeek: number; metric: TrialMetric; ownLabel?: string | null; threshold: number }, TrialView]

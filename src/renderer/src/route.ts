@@ -12,7 +12,7 @@ export function isPageId(value: string | undefined): value is PageId {
 }
 
 /** The tabs of Setup in display order: what is configured once for a product. */
-export const SETUP_TABS = ['sources', 'passport', 'analysis', 'goal'] as const
+export const SETUP_TABS = ['sources', 'passport', 'analysis', 'positioning', 'goal', 'words'] as const
 export type SetupTab = (typeof SETUP_TABS)[number]
 
 export const DEFAULT_SETUP_TAB: SetupTab = 'sources'
@@ -22,10 +22,11 @@ export function isSetupTab(value: string | undefined): value is SetupTab {
 }
 
 /**
- * The places of a product that the launch path points at. The first four are the tabs of Setup, `channels` is the Channels screen and
+ * The places of a product that the launch path points at. The first four are the tabs of Setup that are stages of the path (Positioning and
+ * the audience's words are steps of Setup too, but nothing waits for them, so the path never points at them), `channels` is the Channels screen and
  * `results` the Overview; the launch path (`TAB_STAGE`, `tabAccent`) keys on these names.
  */
-export const PRODUCT_TABS = [...SETUP_TABS, 'channels', 'results'] as const
+export const PRODUCT_TABS = ['sources', 'passport', 'analysis', 'goal', 'channels', 'results'] as const
 export type ProductTab = (typeof PRODUCT_TABS)[number]
 
 export function isProductTab(value: string | undefined): value is ProductTab {

@@ -7,7 +7,10 @@ import { FlairHelp } from './flair-help'
 import { PostComposer } from './compose-flow'
 import { SectionEditor } from './section-flow'
 import { FindingPictures } from './finding-pictures'
+import { AudienceWords } from './audience-words'
+import { buildCard } from './cards'
 import { ChannelTrials } from './channel-trials'
+import { Positioning } from './positioning'
 import { FeedAnalysis } from './feed-analysis'
 import { WeeklyReview } from './weekly-review'
 import { FindingAssistant } from './finding-assist'
@@ -51,9 +54,12 @@ export function registerFlow(core: Core): void {
   const feedAnalysis = new FeedAnalysis(core, findings)
   // The tags of the posts: given by the AI to the noted posts that have none, again after a look.
   const tags = new FindingTags(core, findings)
+  // The audience's own words (DEC-059), taken from the posts the Feed read; `words` is set below, once the publications flow exists.
+  let words: AudienceWords | null = null
   const watcher = new BrowserWatchFlow(core, store, findings, ingestor, pictures, (productId) => {
     tags.refreshSoon(productId)
     feedAnalysis.refreshSoon(productId)
+    words?.refreshSoon(productId)
   })
   const monitor = new MonitorFlow(core, store, ingestor, watch, triage, watcher)
   const drafting = new DraftingFlow(core, store, review, sending)
@@ -125,6 +131,22 @@ export function registerFlow(core: Core): void {
     'postGroups.approve': ({ id, seen }) => groups.approve(id, seen),
     'postGroups.sendAll': ({ id }) => groups.sendAll(id),
     'postGroups.remove': ({ id }) => groups.remove(id)
+  })
+  // Positioning (DEC-059): five answers proposed from the approved passport and approved by the owner; the angle of the AI's proposed posts.
+  const positioning = new Positioning(core)
+  core.router.register({
+    'positioning.get': (args) => positioning.get(args),
+    'positioning.propose': (args) => positioning.propose(args),
+    'positioning.approve': (args) => positioning.approve(args),
+    'positioning.dismiss': (args) => positioning.dismiss(args)
+  })
+  const bank = new AudienceWords(core, findings, async (channelId, focus) => buildCard(core, store, await publications.suggest(channelId, { focus, origin: 'From the audience\'s words' })))
+  words = bank
+  core.router.register({
+    'words.list': (args) => bank.view(args),
+    'words.collect': (args) => bank.collect(args),
+    'words.remove': (args) => bank.remove(args),
+    'words.suggestPost': (args) => bank.suggestPost(args)
   })
   // Channel trials (DEC-058): the terms written before the weeks are spent, the numbers counted, the owner's verdict.
   const trials = new ChannelTrials(core, store)

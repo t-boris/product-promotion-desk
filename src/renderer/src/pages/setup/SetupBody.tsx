@@ -1,5 +1,5 @@
 import type { Id } from '../../../../shared/types'
-import { setupHref, type SetupTab } from '../../route'
+import { isProductTab, setupHref, type SetupTab } from '../../route'
 import { NextStage } from '../products/LaunchPath'
 import { ProductHeader } from '../products/ProductHeader'
 import { ProductScope } from '../products/ProductScope'
@@ -16,7 +16,7 @@ export function SetupBody({ productId, tab, onDeleted }: { productId: Id; tab: S
         <div className="pane" data-testid="product-detail">
           <ProductHeader view={view} channels={counts.channels} onDeleted={onDeleted} onOpenAnalysis={() => (window.location.hash = setupHref('analysis'))} />
           {/* The path decides which step holds the filled button; every other one points at the path's next stage (BUG-065). */}
-          <NextStage tab={tab} />
+          <NextStage tab={isProductTab(tab) ? tab : null} />
           <SetupStepper view={view} stages={stages} open={tab} />
         </div>
       )}
