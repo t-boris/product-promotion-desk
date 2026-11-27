@@ -3,6 +3,7 @@
 import { ApiError } from '../../shared/api'
 import type { Account, CapabilityKey, Channel, ChannelMode, ChannelSettings, Product } from '../../shared/types'
 import { DEFAULT_CHANNEL_SETTINGS } from '../../shared/types'
+import { connectorForPlatform } from './platforms'
 import { nextCheckFor } from '../pipeline/scheduler-timing'
 import type { Core } from '../core'
 import { UNIVERSAL_CONNECTOR_ID } from '../connector-registry'
@@ -55,9 +56,14 @@ export class ChannelService {
     const typed = requireText(args.target, 'The channel address')
     const raw = preset ? expandHandle(preset, typed) : typed
 
-    const connector = this.core.connectors.resolve(raw)
+    // An account connected with a key works through its platform's API connector, whatever else could serve the address (DEC-055).
+    const api = account.access === 'api' ? connectorForPlatform(this.core.connectors, account.platform, 'api') : undefined
+    if (account.access === 'api' && (!api || !api.matches(raw))) {
+      throw new ApiError('platform_mismatch', `${account.label} works through the ${account.platform} API, and this is not an address it can work with.`)
+    }
+    const connector = api ?? this.core.connectors.resolve(raw)
     if (!connector) throw new ApiError('no_connector', 'No connector can handle this address.')
-    if (preset ? connector.id !== UNIVERSAL_CONNECTOR_ID : connector.platform !== account.platform) {
+    if (!api && (preset ? connector.id !== UNIVERSAL_CONNECTOR_ID : connector.platform !== account.platform)) {
       throw new ApiError(
         'platform_mismatch',
         `This address belongs to "${connector.platform}", but ${account.label} is a "${account.platform}" account. Create or choose an account for "${connector.platform}".`

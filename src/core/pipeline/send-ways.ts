@@ -17,7 +17,7 @@ export type FlairedPost = PostContent & { flair?: string | null }
  * the send (it sets the flair), when the post has no flair, and for a channel with no connector, whose own message says what stops it.
  */
 export function flairProblem(draft: FlairedPost, ways: SendWays): string | null {
-  if (!draft.flair || ways.aiBrowser || ways.noConnector) return null
+  if (!draft.flair || ways.aiBrowser || ways.noConnector || ways.api) return null
   return ways.unattended
     ? `The flair “${draft.flair}” is set in the account's browser, and this is an automatic send, which never uses it. Press Send on it yourself, or give it a time. Nothing was sent.`
     : `The flair “${draft.flair}” is set in the account's browser, by the AI. Turn on “Let the AI publish in the account's browser” in Settings (Publishing), or take the flair off the post.`
@@ -38,7 +38,9 @@ export const scheduledByOwner = (opp: { scheduledAt: string | null }): boolean =
  * Without `send` (the approval, before anyone presses anything) the question is whether it could, if the owner presses Send. For a channel with
  * no connector the engine is asked too: any engine that can work the browser may carry the send (the owner's decision of 2026-11-20), and the owner is told at the approval when the selected one cannot.
  */
-export function sendWays(core: Core, send?: { automatic: boolean; approvedBy: string; scheduled?: boolean }, channel?: Pick<Channel, 'reads'>): SendWays {
+export function sendWays(core: Core, send?: { automatic: boolean; approvedBy: string; scheduled?: boolean }, channel?: Pick<Channel, 'reads'> & { connectorId?: string }): SendWays {
+  // A channel that works through its platform's API has one way, its connector, for everything it sends (DEC-055).
+  if (channel?.connectorId && core.connectors.get(channel.connectorId)?.api) return { aiBrowser: false, api: true }
   const noConnector = channel !== undefined && !channel.reads
   const only = noConnector ? { noConnector: true } : {}
   const chosen = (noConnector || core.settings.app().publishWith === 'ai_browser') && core.services.postMissions !== undefined
@@ -62,7 +64,7 @@ export function sendWays(core: Core, send?: { automatic: boolean; approvedBy: st
  * (`executorFor`) and for the group view that tells the owner "will go by".
  */
 export function chooseExecutor(ways: SendWays, draft: FlairedPost, platform: string): Executor {
-  if (!ways.aiBrowser) return 'connector'
+  if (!ways.aiBrowser || ways.api) return 'connector'
   // No connector can post to this channel: whatever the draft holds, the AI browser is the only way.
   if (ways.noConnector) return 'ai_browser'
   // No connector sets a flair (the label a community asks of a post): the application sets it on the site's own form, in the browser.

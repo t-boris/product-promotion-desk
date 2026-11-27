@@ -92,6 +92,8 @@ export const mapAccount = (r: Row): Account => ({
   profileId: (r.profile_id as string | null | undefined) ?? null,
   // accounts.browser / via_account_id come with migration 209 (DEC-026, DEC-027).
   browser: r.browser === 'chrome' ? 'chrome' : 'internal',
+  // accounts.access comes with migration 210 (DEC-055).
+  access: r.access === 'api' ? 'api' : 'browser',
   signsInVia: (r.via_account_id as string | null | undefined) ?? null
 })
 

@@ -8,13 +8,14 @@ import type { Account, VaultStatus } from '../../shared/types'
 import { vaultUnavailableText } from '../../shared/vault-message'
 import type { Core } from '../core'
 import { SecretOpenError } from '../ports'
-import { passwordKey } from '../vault'
+import { passwordKey, apiKeyKey } from '../vault'
 import { requireText } from './errors'
 import type { ChannelsStore } from './store'
 import type { AccountsService } from './accounts'
 
 const MAX_LOGIN_NAME = 200
 const MAX_PASSWORD = 256
+const MAX_API_KEY = 512
 const CLIPBOARD_CLEAR_MS = 30_000
 
 export class VaultService {
@@ -28,7 +29,8 @@ export class VaultService {
   status(): VaultStatus {
     const unavailable = this.core.secrets.blocked()
     const accountIds = this.core.repos.listAccounts().filter((a) => this.core.secrets.has(passwordKey(a.id))).map((a) => a.id)
-    return { available: unavailable === null, unavailable, accountIds }
+    const apiKeyAccountIds = this.core.repos.listAccounts().filter((a) => this.core.secrets.has(apiKeyKey(a.id))).map((a) => a.id)
+    return { available: unavailable === null, unavailable, accountIds, apiKeyAccountIds }
   }
 
   /** Whether a password is saved for the account (no value). Reads the vault file only. */
@@ -79,6 +81,28 @@ export class VaultService {
     this.core.log.info('accounts', `A password was saved for ${account.label} (login name ${loginName}).`)
     this.core.events.changed('accounts')
     return updated
+  }
+
+  /**
+   * Saves the key of an account that works through its platform's API (a bot token, DEC-055) and checks it with the platform at once: the account
+   * becomes ready, with the name the platform gives it, or says why not. The key is kept only in the vault and is never shown again.
+   */
+  async saveApiKey(args: { accountId: string; key: string }): Promise<Account> {
+    const account = this.accounts.account(args.accountId)
+    const api = account.access === 'api' ? this.core.connectors.list().find((c) => c.api !== undefined && c.platform === account.platform)?.api : undefined
+    if (!api) throw new ApiError('invalid_input', `${account.label} works in its browser: it has no API key to save.`)
+    const key = typeof args.key === 'string' ? args.key.trim() : ''
+    if (key === '') throw new ApiError('invalid_input', `The ${api.keyLabel.toLowerCase()} is required.`)
+    if (key.length > MAX_API_KEY || !api.keyLooksValid(key)) throw new ApiError('invalid_input', `This does not look like a ${api.keyLabel.toLowerCase()}. Copy it whole from where the platform shows it.`)
+    await this.requireAvailable()
+    try {
+      await this.core.secrets.set(apiKeyKey(account.id), key)
+    } catch {
+      throw new ApiError('vault_failed', `The ${api.keyLabel.toLowerCase()} could not be saved to the vault.`)
+    }
+    this.core.log.info('accounts', `A ${api.keyLabel.toLowerCase()} was saved for ${account.label}.`)
+    this.core.events.changed('accounts')
+    return this.accounts.checkLogin(account.id, { signInAgain: false })
   }
 
   removePassword(accountId: unknown): Account {

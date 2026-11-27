@@ -5,7 +5,7 @@ import type { Account } from '../../../../shared/types'
 /** The first thing still missing on an account, in the order the owner does things (address, password, sign-in; or, for a login that signs in through another account, that account and the sign-in). */
 export interface NextStep {
   /** The block of the account card to work on; null when the account is ready. */
-  block: 'via' | 'email' | 'password' | 'signin' | null
+  block: 'via' | 'email' | 'password' | 'signin' | 'key' | null
   text: string
 }
 
@@ -19,6 +19,10 @@ export interface SignsInThrough {
 export function nextStep(account: Account, hasPassword: boolean, vaultAvailable: boolean, through?: SignsInThrough): NextStep {
   // A login with no credentials of its own (Threads): the account it signs in through, then the sign-in. It never asks for an address or a password.
   if (through) return nextStepThrough(account, through)
+  // An account that works through its platform's API (a bot) has one thing to do: its key.
+  if (account.access === 'api') {
+    return account.status === 'ready' ? { block: null, text: 'All set. The app works with this account through the platform, with no browser.' } : { block: 'key', text: hasPassword ? 'Next: the platform does not accept the saved key. Save a new one, or check again.' : 'Next: save its key (the steps are below).' }
+  }
   if (!account.email) return { block: 'email', text: 'Next: give this account an e-mail address (step 3). Type one, or let the app propose one from your base mailbox.' }
   if (vaultAvailable && !hasPassword) return { block: 'password', text: 'Next: save its password (step 4). Generate a strong one, or type the one you already use on the site.' }
   if (account.status === 'captcha') return { block: 'signin', text: 'Next: solve the check the site is asking for, in the account’s browser (step 5).' }
@@ -43,7 +47,9 @@ function nextStepThrough(account: Account, through: SignsInThrough): NextStep {
  * product's Channels screen the app returns there, and the address, the password and the sign-in wait (the sign-in is needed before the
  * channel is activated, not to connect it or to write a draft by hand).
  */
-export function afterCreateNote(product: { name: string | undefined } | null, linked = false): string {
+export function afterCreateNote(product: { name: string | undefined } | null, linked = false, keyLabel: string | null = null): string {
+  // An account that works through its platform's API has one thing to set: its key.
+  if (keyLabel) return `After adding it you paste its ${keyLabel.toLowerCase()} on the account's page (Accounts section); the steps are written there. Then connect its channel.`
   // A login that signs in through another account has no address and no password to set.
   if (linked) return product ? `After adding it you go back to the Channels screen of ${product.name ?? 'this product'} to connect a channel with this account. Its sign-in comes later, in the Accounts section: the AI signs in through the account you chose.` : 'After adding it you are told what to do next: let the AI sign in through the account you chose.'
   if (!product) return 'After adding it you are told what to do next: set the address and the password, then create the account on the platform or sign in.'

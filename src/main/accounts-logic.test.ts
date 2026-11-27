@@ -41,7 +41,7 @@ function account(id: string, seed: { platform?: string; label?: string; profileI
     mailboxId: null,
     profileId: seed.profileId === undefined ? null : seed.profileId,
     browser: 'internal',
-    signsInVia: null
+    access: 'browser', signsInVia: null
   }
 }
 

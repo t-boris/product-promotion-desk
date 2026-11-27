@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import type { Account, AccountRole, Mailbox, PlatformInfo, Profile } from '../../../../shared/types'
+import type { Account, AccountRole, Mailbox, PlatformInfo, Profile, AccountAccess } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
 import { Button, ErrorNote, Field, Hint, useOpenForm } from '../../ui'
 import { chosenVia, eligibleVia, viaBlocker, viaOption } from './account-link'
@@ -52,7 +52,8 @@ export function CreateAccount({
   const [chosenMailbox, setChosenMailbox] = useState('')
   const [fromMailbox, setFromMailbox] = useState<string | null>(null)
   const [viaId, setViaId] = useState('')
-  const [create, state] = useAction((args: { productId?: string; platform: string; label: string; role?: AccountRole; email?: string; mailboxId?: string; profileId?: string; signsInVia?: string }) => call('accounts.create', args))
+  const [access, setAccess] = useState<AccountAccess>('browser')
+  const [create, state] = useAction((args: { productId?: string; platform: string; label: string; role?: AccountRole; email?: string; mailboxId?: string; profileId?: string; signsInVia?: string; access?: AccountAccess }) => call('accounts.create', args))
   const mailboxId = mailboxes.some((m) => m.id === chosenMailbox) ? chosenMailbox : (mailboxes[0]?.id ?? '')
   const [propose, proposing] = useAction(async (platformKey: string) => {
     const result = await call('accounts.proposeEmail', { mailboxId, platform: platformKey })
@@ -68,7 +69,9 @@ export function CreateAccount({
   // A platform that signs in with another (Threads with Instagram, DEC-027) has no e-mail or password of its own: it is made with an account
   // of that platform to sign in through, which has to exist first.
   const info = platforms.find((p) => p.platform === platform)
-  const signsInWith = info?.signsInWith
+  // A platform that can be worked through its own API (a Telegram bot, DEC-055): such an account has a key, no e-mail, password or browser.
+  const viaApi = info?.api !== undefined && access === 'api'
+  const signsInWith = viaApi ? undefined : info?.signsInWith
   const wantedLabel = signsInWith ? (platforms.find((p) => p.platform === signsInWith)?.label ?? signsInWith) : ''
   const candidates = signsInWith ? eligibleVia(accounts, signsInWith, profile?.id ?? null) : []
   const via = signsInWith ? chosenVia(candidates, viaId) : ''
@@ -87,7 +90,8 @@ export function CreateAccount({
       ...(wanted ? { role: wanted } : {}),
       ...(profile ? { profileId: profile.id } : {}),
       ...(signsInWith ? { signsInVia: via } : {}),
-      ...(!signsInWith && email.trim() ? { email: email.trim(), ...(fromMailbox ? { mailboxId: fromMailbox } : {}) } : {})
+      ...(viaApi ? { access: 'api' as const } : {}),
+      ...(!signsInWith && !viaApi && email.trim() ? { email: email.trim(), ...(fromMailbox ? { mailboxId: fromMailbox } : {}) } : {})
     })
     if (account) onCreated(account)
   }
@@ -113,6 +117,14 @@ export function CreateAccount({
           <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Brand account" data-testid="account-label" />
         </Field>
       </div>
+      {info?.api && (
+        <Field label="How the app works with it" hint={viaApi ? `The app posts, reads comments and answers through a ${info.api.accountKind} of yours, by itself and with no browser. You paste its ${info.api.keyLabel.toLowerCase()} on the account's page.` : `In the account's own browser, signed in as you. Choose the ${info.api.accountKind} to post on a schedule and read comments without a browser.`}>
+          <select className="input" value={viaApi ? 'api' : 'browser'} onChange={(e) => setAccess(e.target.value === 'api' ? 'api' : 'browser')} data-testid="account-access">
+            <option value="browser">In the account's browser</option>
+            <option value="api">{`Through a ${info.api.accountKind} (${info.label}'s own API)`}</option>
+          </select>
+        </Field>
+      )}
       {signsInWith && (
         <Field label={`Signs in with ${wantedLabel}`} hint={`${info?.label ?? 'This platform'} has no password of its own: the AI signs in through this ${wantedLabel} account, and you are never asked for ${info?.label ?? 'platform'} credentials.`}>
           <select className="input" value={via} onChange={(e) => setViaId(e.target.value)} disabled={candidates.length === 0} data-testid="account-via">
@@ -125,7 +137,7 @@ export function CreateAccount({
           </select>
         </Field>
       )}
-      {!signsInWith && (
+      {!signsInWith && !viaApi && (
         <div className="form-row">
           <Field label="E-mail address (optional)" hint={mailboxes.length > 0 ? 'What the account signs up with. You can also set it later.' : 'What the account signs up with. To get proposed addresses, add your own mailbox in Settings.'}>
             <input
@@ -188,7 +200,7 @@ export function CreateAccount({
         {createBlocker && <Hint data-testid="account-create-reason">{createBlocker}</Hint>}
       </div>
       <p className="muted small" data-testid="account-create-note">
-        {afterCreateNote(product, signsInWith !== undefined)}
+        {afterCreateNote(product, signsInWith !== undefined, viaApi ? (info?.api?.keyLabel ?? null) : null)}
       </p>
       <ErrorNote error={state.error ?? proposing.error} />
     </form>

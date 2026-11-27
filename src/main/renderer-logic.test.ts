@@ -511,7 +511,7 @@ describe('the new-account form of the Accounts section', () => {
 })
 
 describe('the next step of an account', () => {
-  const account = (over: Partial<Account>): Account => ({ id: 'a', platform: 'reddit', label: 'A', identity: null, partition: 'p', status: 'login_required', createdAt: '', productId: null, role: null, loginName: null, email: null, mailboxId: null, browser: 'internal', signsInVia: null, profileId: null, ...over })
+  const account = (over: Partial<Account>): Account => ({ id: 'a', platform: 'reddit', label: 'A', identity: null, partition: 'p', status: 'login_required', createdAt: '', productId: null, role: null, loginName: null, email: null, mailboxId: null, browser: 'internal', access: 'browser', signsInVia: null, profileId: null, ...over })
 
   it('goes through address, password and sign-in, in that order', () => {
     expect(nextStep(account({}), false, true).block).toBe('email')
@@ -519,6 +519,13 @@ describe('the next step of an account', () => {
     expect(nextStep(account({ email: 'a@b.co' }), true, true)).toMatchObject({ block: 'signin' })
     expect(nextStep(account({ email: 'a@b.co', status: 'captcha' }), true, true).text).toMatch(/check/)
     expect(nextStep(account({ email: 'a@b.co', status: 'ready' }), true, true)).toMatchObject({ block: null })
+  })
+
+  it('asks an account that works through an API for its key and nothing else (DEC-055)', () => {
+    expect(nextStep(account({ access: 'api' }), false, true)).toMatchObject({ block: 'key', text: expect.stringMatching(/save its key/) })
+    expect(nextStep(account({ access: 'api' }), true, true).text).toMatch(/does not accept/)
+    expect(nextStep(account({ access: 'api', status: 'ready', identity: '@bot' }), true, true)).toMatchObject({ block: null, text: expect.stringMatching(/no browser/) })
+    expect(afterCreateNote(null, false, 'Bot token')).toMatch(/paste its bot token/)
   })
 
   it('does not ask for a password where the Mac keeps none', () => {
@@ -539,14 +546,14 @@ describe('the next step of an account', () => {
 })
 
 describe('an account that signs in through another account (DEC-027)', () => {
-  const base = { id: 'a', platform: 'reddit', label: 'A', identity: null, partition: 'p', status: 'login_required' as const, createdAt: '', productId: null, role: null, loginName: null, email: null, mailboxId: null, browser: 'internal' as const, signsInVia: null, profileId: null }
+  const base = { id: 'a', platform: 'reddit', label: 'A', identity: null, partition: 'p', status: 'login_required' as const, createdAt: '', productId: null, role: null, loginName: null, email: null, mailboxId: null, browser: 'internal' as const, access: 'browser' as const, signsInVia: null, profileId: null }
   const account = (over: Partial<Account>): Account => ({ ...base, ...over })
   const threads = (over: Partial<Account> = {}): Account => account({ id: 't', platform: 'threads', label: 'Brand on Threads', signsInVia: 'i', ...over })
   const instagram = (over: Partial<Account> = {}): Account => account({ id: 'i', platform: 'instagram', label: 'Brand on Instagram', email: 'brand@example.com', loginName: 'brand', ...over })
 
   describe('nextStep', () => {
     it('asks for the account to sign in through first, and never for an address or a password', () => {
-      const step = nextStep(threads({ signsInVia: null }), false, true, { account: null, label: 'Instagram', hasPassword: false })
+      const step = nextStep(threads({ access: 'browser', signsInVia: null }), false, true, { account: null, label: 'Instagram', hasPassword: false })
       expect(step.block).toBe('via')
       expect(step.text).toMatch(/choose the Instagram account/)
       expect(step.text).not.toMatch(/e-mail address|save its password/)
@@ -632,7 +639,7 @@ describe('an account that signs in through another account (DEC-027)', () => {
       expect(contactLine(account({ email: 'a@b.co' }), false)).toBe('a@b.co')
       expect(contactLine(account({}), false)).toBe('no e-mail address yet')
       expect(contactLine(threads(), true)).toBe('signs in through another account')
-      expect(contactLine(threads({ signsInVia: null }), true)).toBe('no account to sign in through yet')
+      expect(contactLine(threads({ access: 'browser', signsInVia: null }), true)).toBe('no account to sign in through yet')
     })
   })
 })
@@ -1590,7 +1597,7 @@ describe('"Open browser" where channels are chosen or shown (DEC-028)', () => {
   const site = info({ platform: 'web', label: 'Other website', prepared: false })
   const platforms = [reddit, facebook, site]
   const account = (id: string, platform: string): Account =>
-    ({ id, platform, label: id, identity: null, partition: 'p', status: 'ready', createdAt: '', productId: null, role: null, loginName: null, email: null, mailboxId: null, browser: 'internal', signsInVia: null, profileId: null }) as Account
+    ({ id, platform, label: id, identity: null, partition: 'p', status: 'ready', createdAt: '', productId: null, role: null, loginName: null, email: null, mailboxId: null, browser: 'internal', access: 'browser', signsInVia: null, profileId: null }) as Account
 
   describe('the Connect form', () => {
     it('opens a platform that has a browse page with nothing typed', () => {

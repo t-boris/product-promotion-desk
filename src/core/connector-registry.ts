@@ -21,11 +21,19 @@ export class Connectors implements ConnectorRegistry {
     return this.connectors.get(id)
   }
 
-  /** Prepared connectors win; the universal connector is the fallback for unknown sites. */
+  /**
+   * Prepared connectors win; the universal connector is the fallback for unknown sites. A connector that works through a platform's API is
+   * never chosen by an address: it serves the accounts connected with a key (`apiFor`, DEC-055).
+   */
   resolve(input: string): Connector | undefined {
     for (const c of this.connectors.values()) {
-      if (c.id !== UNIVERSAL_CONNECTOR_ID && c.matches(input)) return c
+      if (c.id !== UNIVERSAL_CONNECTOR_ID && !c.api && c.matches(input)) return c
     }
     return this.connectors.get(UNIVERSAL_CONNECTOR_ID)
+  }
+
+  /** The connector that works through the platform's own API, when there is one. */
+  apiFor(platform: string): Connector | undefined {
+    return this.list().find((c) => c.api !== undefined && c.platform === platform)
   }
 }

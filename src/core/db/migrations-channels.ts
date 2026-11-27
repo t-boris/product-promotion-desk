@@ -170,5 +170,38 @@ ALTER TABLE accounts ADD COLUMN browser TEXT NOT NULL DEFAULT 'internal';
 ALTER TABLE accounts ADD COLUMN via_account_id TEXT REFERENCES accounts(id);
 CREATE INDEX accounts_via ON accounts(via_account_id);
 `
+  },
+  {
+    id: 210,
+    name: 'channels: an account that works through a platform API, and what a Telegram bot was delivered',
+    sql: `
+-- DEC-055: 'browser' (a browser session, the default) or 'api' (the platform's own API with a key in the vault).
+ALTER TABLE accounts ADD COLUMN access TEXT NOT NULL DEFAULT 'browser';
+-- A bot cannot read a chat's history: what Telegram delivered to it is kept here. One row per message of a channel ('post') or of its
+-- discussion group ('comment'). root_id is the channel post a comment belongs to; group_message_id is the copy of a post in the discussion group.
+CREATE TABLE telegram_messages (
+  account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  chat_id TEXT NOT NULL,
+  message_id INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  root_chat_id TEXT,
+  root_id INTEGER,
+  parent_id INTEGER,
+  group_chat_id TEXT,
+  group_message_id INTEGER,
+  author TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '',
+  posted_at TEXT,
+  PRIMARY KEY (account_id, chat_id, message_id)
+);
+CREATE INDEX telegram_messages_root ON telegram_messages(account_id, root_chat_id, root_id);
+-- Where the reading of a bot's updates stands, and the chats it has looked up (a channel's id and its discussion group).
+CREATE TABLE telegram_state (
+  account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  key TEXT NOT NULL,
+  value TEXT NOT NULL,
+  PRIMARY KEY (account_id, key)
+);
+`
   }
 ]

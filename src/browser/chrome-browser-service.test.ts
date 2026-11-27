@@ -9,7 +9,7 @@ import { fakeBrowser, fakePage, loseBrowser, navigate, pageAppears, request, typ
 import { profileDirFor } from './chrome-launcher'
 import type { Browser, Page } from 'puppeteer-core'
 
-const account = (id: string, partition = `persist:ppd-${id}`): Account => ({ id, platform: 'facebook', browser: 'chrome', signsInVia: null, label: id, identity: null, partition, status: 'login_required', createdAt: '2026-01-01T00:00:00.000Z', productId: null, role: null, loginName: null, email: null, mailboxId: null, profileId: null }) as Account
+const account = (id: string, partition = `persist:ppd-${id}`): Account => ({ id, platform: 'facebook', browser: 'chrome', access: 'browser', signsInVia: null, label: id, identity: null, partition, status: 'login_required', createdAt: '2026-01-01T00:00:00.000Z', productId: null, role: null, loginName: null, email: null, mailboxId: null, profileId: null }) as Account
 
 let dataDir: string
 let launches: Array<{ executable: string; args: string[]; browser: FakeBrowser & Browser }>

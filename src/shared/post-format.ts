@@ -688,6 +688,8 @@ export interface PlatformForm {
   hasTitle: boolean
   titleLimit: number | null
   textLimit: number | null
+  /** How many characters the platform's API takes as the words under a picture or a video, when that is less than `textLimit` (Telegram). */
+  apiCaptionLimit?: number
   /** `required`: a post without a picture is refused by the platform (Instagram). A video can stand in for the picture where the platform takes one (`videos` is not `none`). */
   pictures: 'none' | 'optional' | 'required'
   maxPictures: number
@@ -714,7 +716,7 @@ export const PLATFORM_FORMS: Record<string, PlatformForm> = {
   threads: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 500, pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text' },
   x: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 280, pictures: 'optional', maxPictures: 4, videos: 'optional', maxVideos: 1, link: 'in_text' },
   linkedin: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 3_000, pictures: 'optional', maxPictures: 9, videos: 'optional', maxVideos: 1, link: 'in_text' },
-  telegram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 4_096, pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text' },
+  telegram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 4_096, apiCaptionLimit: 1_024, pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text' },
   pinterest: { format: 'plain', hasTitle: true, titleLimit: 100, textLimit: 500, pictures: 'required', maxPictures: 1, videos: 'optional', maxVideos: 1, link: 'field' },
   tiktok: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 2_200, pictures: 'none', maxPictures: 0, videos: 'required', maxVideos: 1, link: 'field' },
   youtube: { format: 'plain', hasTitle: true, titleLimit: 100, textLimit: 5_000, pictures: 'none', maxPictures: 0, videos: 'required', maxVideos: 1, link: 'field' }
@@ -940,6 +942,8 @@ export interface SendWays {
    * only way and needs no switch in the settings (DEC-035). Everything else about it is as for any AI-browser send.
    */
   noConnector?: boolean
+  /** The channel works through its platform's own API (DEC-055): its connector carries every send, pictures and video included, and the AI browser is never used. */
+  api?: boolean
   /** The AI browser would carry this send, but the selected engine cannot work the browser: why, in words (only for a channel with no connector). */
   engineProblem?: string
 }
@@ -978,7 +982,12 @@ export function sendProblems(platform: string, rendered: RenderedPost, ways: Sen
   // A channel no connector can post to has the AI browser as its only way: what stops it is said whatever the post holds (DEC-035).
   const stopped = noConnectorProblem(ways)
   if (stopped) problems.push(stopped)
-  if (rendered.attachments.length > 0 && !ways.aiBrowser) {
+  // Through its API a platform may take fewer words with a picture or a video than in a post of words alone.
+  const captionLimit = ways.api ? formOf(platform).apiCaptionLimit : undefined
+  if (captionLimit !== undefined && rendered.attachments.length > 0 && [...rendered.text].length > captionLimit) {
+    problems.push(`${label} takes at most ${captionLimit.toLocaleString('en-US')} characters with a picture or a video; this post has ${[...rendered.text].length.toLocaleString('en-US')}. Shorten the words, or send them without the picture.`)
+  }
+  if (rendered.attachments.length > 0 && !ways.aiBrowser && !ways.api) {
     // A video is carried by the AI browser only: no connector of this application uploads one.
     const hasVideo = kindsOf(rendered.attachments).videos > 0
     const things = hasVideo ? 'Videos' : 'Pictures'

@@ -1,4 +1,5 @@
 import { ApiError } from '../shared/api'
+import type { Account } from '../shared/types'
 import { AiActivity } from './ai-activity'
 import { Connectors } from './connector-registry'
 import { openDatabase, type Db } from './db/database'
@@ -13,13 +14,15 @@ import {
   type Clock,
   type Connector,
   type ConnectorContext,
+  type HttpPort,
   type ImageShrinker,
   type MediaTools,
   type SecretClipboard,
   type SecretStore,
   type TicketVerifier
 } from './ports'
-import { UnavailableSecretStore } from './vault'
+import { UnavailableSecretStore, apiKeyKey } from './vault'
+import { createHttpPort } from './net/http'
 import { Repos } from './repos'
 import { RunRecorder } from './runs'
 import { ApiRouter } from './api/router'
@@ -41,6 +44,8 @@ export interface CoreDeps {
   secret?: Buffer
   /** Where passwords are kept; without one the vault is unavailable and says so (DEC-014). */
   secrets?: SecretStore
+  /** The network for API connectors; absent means the real one. Tests hand in a fake. */
+  http?: HttpPort
   clipboard?: SecretClipboard
   /** Offers the AI's tools to an engine run through the app's MCP server (DEC-018); without it the AI browser agent is unavailable. */
   agentBridge?: AgentBridge
@@ -70,6 +75,7 @@ export class Core {
   readonly connectors: Connectors
   readonly browser: BrowserService
   readonly secrets: SecretStore
+  readonly http: HttpPort
   readonly clipboard: SecretClipboard | null
   readonly agentBridge: AgentBridge | null
   readonly imageShrinker: ImageShrinker | null
@@ -103,6 +109,7 @@ export class Core {
     this.connectors = new Connectors(deps.connectors)
     this.tickets = new TicketAuthority(this.clock, deps.secret)
     this.secrets = deps.secrets ?? new UnavailableSecretStore()
+    this.http = deps.http ?? createHttpPort()
     this.clipboard = deps.clipboard ?? null
     this.agentBridge = deps.agentBridge ?? null
     this.imageShrinker = deps.imageShrinker ?? null
@@ -131,9 +138,15 @@ export class Core {
         session: this.browser.session(account),
         // Only the verifier: the authority's issue() must stay with the SendGate.
         tickets: { assertValid: (ticket, expect) => this.tickets.assertValid(ticket, expect) },
-        clock: this.clock
+        clock: this.clock,
+        ...this.apiAccess(account)
       }
     }
+  }
+
+  /** The network and the account's own key, as a connector context carries them (DEC-055). The key is read when asked, never kept. */
+  apiAccess(account: Account): Pick<ConnectorContext, 'http' | 'apiKey'> {
+    return { http: this.http, apiKey: async () => (account.access === 'api' ? this.secrets.get(apiKeyKey(account.id)) : null) }
   }
 
   onShutdown(hook: () => void | Promise<void>): void {

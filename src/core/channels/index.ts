@@ -114,6 +114,7 @@ export function register(core: Core): void {
     'agent.questions': () => agent.questions(),
     'vault.status': () => vault.status(),
     'vault.savePassword': (args) => vault.savePassword(args),
+    'vault.saveApiKey': (args) => vault.saveApiKey(args),
     'vault.removePassword': (args) => vault.removePassword(args.accountId),
     'vault.revealPassword': (args) => vault.reveal(args.accountId),
     'vault.copyPassword': (args) => vault.copy(args.accountId),

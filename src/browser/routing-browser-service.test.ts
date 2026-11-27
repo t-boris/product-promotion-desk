@@ -3,7 +3,7 @@ import type { BrowserSession } from '../core/ports'
 import type { Account, PageReport } from '../shared/types'
 import { RoutingBrowserService, type FullBrowserService } from './routing-browser-service'
 
-const account = (id: string, browser: 'internal' | 'chrome' = 'internal', platform = 'facebook'): Account => ({ id, platform, browser, signsInVia: null, label: id, identity: null, partition: `persist:${id}`, status: 'login_required', createdAt: '2026-01-01T00:00:00.000Z' }) as Account
+const account = (id: string, browser: 'internal' | 'chrome' = 'internal', platform = 'facebook'): Account => ({ id, platform, browser, access: 'browser', signsInVia: null, label: id, identity: null, partition: `persist:${id}`, status: 'login_required', createdAt: '2026-01-01T00:00:00.000Z' }) as Account
 
 /** A browser service that remembers what it was asked. */
 function fake(name: string): FullBrowserService & { calls: string[] } {

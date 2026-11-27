@@ -2,7 +2,7 @@
 // Passwords are typed by the person on the site's own page; nothing here reads, requests or stores credentials.
 
 import { ApiError } from '../../shared/api'
-import type { Account, AccountRole, BrowserChoice, BrowserState, Channel, PageReport } from '../../shared/types'
+import type { Account, AccountAccess, AccountRole, BrowserChoice, BrowserState, Channel, PageReport } from '../../shared/types'
 import { DEFAULT_CHANNEL_SETTINGS } from '../../shared/types'
 import type { Core } from '../core'
 import { TakeoverError, type BrowserService, type Connector, type ConnectorContext, type PageObserver } from '../ports'
@@ -13,7 +13,7 @@ import { connectorForPlatform, listPlatforms } from './platforms'
 import { addressOnPlatform, expandHandle, hostMatches, presetFor } from './presets'
 import { parseRole, sameRoleName } from './roles'
 import { blankCapabilities } from './capabilities'
-import { passwordKey } from '../vault'
+import { apiKeyKey, passwordKey } from '../vault'
 import type { ChannelsStore } from './store'
 import { parseBrowserUrl, publicAddress } from './urls'
 
@@ -77,7 +77,7 @@ export class AccountsService {
   }
 
   /** An account has its own login and browser session and is not tied to a product (DEC-015); `productId` only records what it was made for. */
-  create(args: { productId?: string; platform: string; label: string; role?: AccountRole | null; email?: string | null; mailboxId?: string | null; profileId?: string | null; signsInVia?: string | null }): Account {
+  create(args: { productId?: string; platform: string; label: string; role?: AccountRole | null; email?: string | null; mailboxId?: string | null; profileId?: string | null; signsInVia?: string | null; access?: AccountAccess }): Account {
     const productId = args.productId === undefined || args.productId === null ? null : requireText(args.productId, 'The product')
     const product = productId ? found(() => this.core.repos.product(productId), 'The product') : null
     const platform = requireText(args.platform, 'The platform').toLowerCase()
@@ -91,7 +91,10 @@ export class AccountsService {
     const mailboxId = email && args.mailboxId ? this.knownMailbox(args.mailboxId) : null
     const profileId = args.profileId ? this.profileFor(args.profileId, platform, null) : null
     const via = this.signInThrough(platform, args.signsInVia, profileId)
-    const account = this.store.insertAccount(product?.id ?? null, platform, label, role, email, mailboxId, profileId, via)
+    const access: AccountAccess = args.access === 'api' ? 'api' : 'browser'
+    if (args.access !== undefined && args.access !== 'api' && args.access !== 'browser') throw new ApiError('invalid_input', 'An account works in its browser or through the platform\'s API.')
+    if (access === 'api' && !connectorForPlatform(this.core.connectors, platform, 'api')) throw new ApiError('invalid_input', `The app has no API connection for "${platform}": this account works in its browser.`)
+    const account = this.store.insertAccount(product?.id ?? null, platform, label, role, email, mailboxId, profileId, access === 'api' ? null : via, access)
     this.core.log.info('accounts', `Account created${product ? ` for "${product.name}"` : ''}: ${label} (${platform})${role ? `, role "${role.name}"` : ''}${email ? `, e-mail ${email}` : ''}${via ? `, signs in through ${this.account(via).label}` : ''}. Sign in through the account browser.`)
     this.core.events.changed('accounts', 'attention')
     return account
@@ -267,6 +270,7 @@ export class AccountsService {
     this.store.deleteAccount(account.id)
     // The password goes with the account: a removed account leaves nothing in the vault.
     this.core.secrets.delete(passwordKey(account.id))
+    this.core.secrets.delete(apiKeyKey(account.id))
     this.core.log.info('accounts', `Account removed: ${account.label}. Its stored browser session was erased.`)
     this.core.events.changed('accounts', 'attention')
   }
@@ -275,7 +279,7 @@ export class AccountsService {
 
   /** The connector responsible for the account's platform. */
   private connectorFor(account: Account): Connector | undefined {
-    return connectorForPlatform(this.core.connectors, account.platform)
+    return connectorForPlatform(this.core.connectors, account.platform, account.access)
   }
 
   private defaultUrl(account: Account): string {
@@ -487,7 +491,8 @@ export class AccountsService {
       session: this.core.browser.session(account),
       // Only the verifier, exactly as core.connectorContext() hands it out: issuing tickets stays with the SendGate.
       tickets: { assertValid: (ticket, expect) => this.core.tickets.assertValid(ticket, expect) },
-      clock: this.core.clock
+      clock: this.core.clock,
+      ...this.core.apiAccess(account)
     }
   }
 

@@ -6,6 +6,9 @@ import type { SecretStore } from './ports'
 /** The key a password is kept under. Keys are not secret; they only say which account a value belongs to. */
 export const passwordKey = (accountId: string): string => `account:${accountId}`
 
+/** The vault entry of an API account's key (a bot token, DEC-055). Never the password entry: the automatic sign-in types a password into a web form. */
+export const apiKeyKey = (accountId: string): string => `apikey:${accountId}`
+
 /** Used when nothing was supplied (web mode in a test, a system without a keychain): says so and stores nothing. */
 export class UnavailableSecretStore implements SecretStore {
   async available(): Promise<boolean> {

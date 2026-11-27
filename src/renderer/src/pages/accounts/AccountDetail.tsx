@@ -15,6 +15,7 @@ import { platformLabel } from '../channels/model'
 import { nextStep, type NextStep } from '../channels/next-step'
 import { platformMismatch } from '../channels/platform-hint'
 import { RoleEditor } from '../channels/RoleEditor'
+import { AccountApiKey } from '../channels/AccountApiKey'
 import { ACCOUNT_TABS, ACCOUNT_TAB_LABEL, DEFAULT_ACCOUNT_TAB, type AccountTab } from './accounts-groups'
 
 /**
@@ -43,7 +44,11 @@ export function AccountDetail({
   const [tab, setTab] = useState<AccountTab>(DEFAULT_ACCOUNT_TAB)
   const info = platforms.find((p) => p.platform === account.platform)
   const accounts = useQuery('accounts.list', undefined, ['accounts'])
-  const hasPassword = vault?.accountIds.includes(account.id) ?? false
+  const viaApi = account.access === 'api'
+  // For an account that works through an API the one secret is its key (DEC-055).
+  const hasPassword = (viaApi ? vault?.apiKeyAccountIds.includes(account.id) : vault?.accountIds.includes(account.id)) ?? false
+  // Such an account has no browser to choose.
+  const tabs = viaApi ? ACCOUNT_TABS.filter((id) => id !== 'browser') : ACCOUNT_TABS
   // The platform this login signs in with, and the account it does so through (null until chosen).
   const wantedPlatform = info?.signsInWith
   const wantedLabel = wantedPlatform ? platformLabel(wantedPlatform, platforms) : ''
@@ -56,7 +61,9 @@ export function AccountDetail({
   const mismatch = platformMismatch(account.label, account.platform, platforms)
 
   const panels: Record<AccountTab, ReactNode> = {
-    signin: (
+    signin: viaApi ? (
+      info?.api && vault ? <AccountApiKey account={account} api={info.api} unavailable={vault.unavailable} hasKey={hasPassword} /> : null
+    ) : (
       <>
         {wantedPlatform ? (
           <AccountViaLine account={account} via={via} wantedPlatform={wantedPlatform} wantedLabel={wantedLabel} accounts={accounts.data ?? []} next={step.block} onOpenAccount={onOpenAccount} />
@@ -107,13 +114,13 @@ export function AccountDetail({
         {step.text}
       </div>
       <div className="tabs" role="tablist" aria-label="Account sections">
-        {ACCOUNT_TABS.map((id) => (
+        {tabs.map((id) => (
           <button key={id} role="tab" id={`account-tab-${id}-${account.id}`} aria-selected={tab === id} aria-controls={`account-panel-${account.id}`}
             tabIndex={tab === id ? 0 : -1}
             className={`tab ${tab === id ? 'active' : ''}`}
             onClick={() => setTab(id)}
             onKeyDown={(event) => {
-              const next = tabAfterKey(ACCOUNT_TABS, id, event.key)
+              const next = tabAfterKey(tabs, id, event.key)
               if (next === null) return
               event.preventDefault()
               setTab(next)

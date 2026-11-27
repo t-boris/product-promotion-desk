@@ -285,6 +285,8 @@ export type AccountStatus = 'ready' | 'login_required' | 'captcha' | 'suspended'
 /** Which browser an account works in (DEC-026): the application's own, or the owner's installed Google Chrome. */
 export type BrowserChoice = 'internal' | 'chrome'
 
+export type AccountAccess = 'browser' | 'api'
+
 export interface Account {
   id: Id
   platform: string
@@ -316,6 +318,8 @@ export interface Account {
   profileId: Id | null
   /** The browser this account's session lives in and every operation on it uses (DEC-026). A session made in one browser is not in the other. */
   browser: BrowserChoice
+  /** How the application works with the account (DEC-055): in its browser session, or through the platform's own API with a key kept in the vault (a Telegram bot). */
+  access: AccountAccess
   /** The account this one signs in through (DEC-027): a Threads account signs in through its Instagram account. Null for a login with its own credentials. */
   signsInVia: Id | null
 }
@@ -343,6 +347,8 @@ export interface VaultStatus {
   /** Why `available` is false; null while it is true. */
   unavailable: VaultUnavailable | null
   accountIds: Id[]
+  /** The accounts that have an API key saved (DEC-055); the key itself is never read for this. */
+  apiKeyAccountIds: Id[]
 }
 
 /** The result of "Sign in with saved password" (DEC-014). */
@@ -554,6 +560,8 @@ export interface PlatformInfo {
   signupNote?: string
   /** Where channels of the platform are found and chosen (a list or a search of communities, groups, accounts), opened in the account's own browser (DEC-028); empty when the platform has none. */
   browseUrl?: string
+  /** Present when the platform can also be worked through its own API with a key the owner saves (DEC-055): a Telegram bot. */
+  api?: { accountKind: string; keyLabel: string; steps: string[] }
   /** True when the connector can tell whether the account has joined a channel, so the AI may be asked to join one (DEC-029). */
   canJoin?: boolean
   /** The platform whose account this one signs in through (DEC-027): Threads signs in with Instagram. Such an account has no credentials of its own. */

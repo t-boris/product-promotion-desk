@@ -96,6 +96,7 @@ import type {
   OverviewView
 } from './types'
 import type { PostType, QuickCard } from './quick-post'
+import type { AccountAccess } from './types'
 import type { QuickAssessArgs, QuickAssessment, QuickCaptionArgs, QuickCaptionResult, QuickPictureArgs, QuickPictureResult, QuickTrendsArgs, QuickTrendsResult } from './quick-ai'
 
 export interface SourcePreview {
@@ -237,7 +238,7 @@ export interface ApiMethods {
   /** Every account: they are one library, not tied to a product (DEC-015). */
   'accounts.list': [void, Account[]]
   /** Creates an account with its own login and browser session. `productId` only records what it was created for. */
-  'accounts.create': [{ productId?: Id; platform: string; label: string; role?: AccountRole | null; email?: string | null; mailboxId?: Id | null; profileId?: Id | null; signsInVia?: Id | null }, Account]
+  'accounts.create': [{ productId?: Id; platform: string; label: string; role?: AccountRole | null; email?: string | null; mailboxId?: Id | null; profileId?: Id | null; signsInVia?: Id | null; access?: AccountAccess }, Account]
   /** Sets or clears (null) the e-mail address of an account. */
   'accounts.setEmail': [{ accountId: Id; email: string | null; mailboxId?: Id | null }, Account]
   /** An address of its own for a new account on `platform`, made from a base mailbox (an alias), different from every address in use. */
@@ -323,6 +324,8 @@ export interface ApiMethods {
   'vault.status': [void, VaultStatus]
   /** Saves the login name and the password of an account. The password goes only to the vault, encrypted by the system keychain. */
   'vault.savePassword': [{ accountId: Id; loginName: string; password: string }, Account]
+  /** Saves the key of an account that works through its platform's API (DEC-055) and checks it; the key is never returned. */
+  'vault.saveApiKey': [{ accountId: Id; key: string }, Account]
   'vault.removePassword': [{ accountId: Id }, Account]
   /** Local only: the saved password, for the owner to read. */
   'vault.revealPassword': [{ accountId: Id }, { password: string }]

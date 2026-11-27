@@ -1,7 +1,7 @@
 // The platform catalog (DEC-009, DEC-013): what the application can connect. Prepared platforms come from the registered connectors;
 // named platforms such as Instagram are presets served by the universal connector; "Other website" is the universal connector itself.
 
-import type { PlatformInfo } from '../../shared/types'
+import type { AccountAccess, PlatformInfo } from '../../shared/types'
 import { UNIVERSAL_CONNECTOR_ID } from '../connector-registry'
 import type { Connector, ConnectorRegistry } from '../ports'
 import { PLATFORM_PRESETS, presetFor } from './presets'
@@ -31,7 +31,7 @@ export function platformInfo(connector: Connector): PlatformInfo {
 export function listPlatforms(connectors: ConnectorRegistry): PlatformInfo[] {
   const all = connectors.list()
   const universal = all.find((c) => c.id === UNIVERSAL_CONNECTOR_ID)
-  const prepared = all.filter((c) => c.id !== UNIVERSAL_CONNECTOR_ID).map(platformInfo)
+  const prepared = all.filter((c) => c.id !== UNIVERSAL_CONNECTOR_ID && !c.api).map(platformInfo)
   // A named platform exists only while the universal connector that serves it does, and never twice: a prepared connector wins.
   const named: PlatformInfo[] = universal
     ? PLATFORM_PRESETS.filter((p) => !prepared.some((info) => info.platform === p.platform)).map((p) => ({
@@ -52,13 +52,19 @@ export function listPlatforms(connectors: ConnectorRegistry): PlatformInfo[] {
       }))
     : []
   const byLabel = (a: PlatformInfo, b: PlatformInfo): number => a.label.localeCompare(b.label)
-  return [...prepared.sort(byLabel), ...named.sort(byLabel), ...(universal ? [platformInfo(universal)] : [])]
+  // A platform that can also be worked through its own API says so (DEC-055): what the key is called and how the owner gets it.
+  const withApi = (info: PlatformInfo): PlatformInfo => {
+    const api = all.find((c) => c.api !== undefined && c.platform === info.platform)?.api
+    return api ? { ...info, api: { accountKind: api.accountKind, keyLabel: api.keyLabel, steps: api.steps } } : info
+  }
+  return [...prepared.sort(byLabel), ...named.sort(byLabel), ...(universal ? [platformInfo(universal)] : [])].map(withApi)
 }
 
 /** The connector that serves a platform key: its own prepared connector, or the universal one for a named platform. */
-export function connectorForPlatform(connectors: ConnectorRegistry, platform: string): Connector | undefined {
+export function connectorForPlatform(connectors: ConnectorRegistry, platform: string, access: AccountAccess = 'browser'): Connector | undefined {
   const all = connectors.list()
-  const own = all.find((c) => c.platform === platform)
+  if (access === 'api') return all.find((c) => c.api !== undefined && c.platform === platform)
+  const own = all.find((c) => c.platform === platform && !c.api)
   if (own) return own
   return presetFor(platform) ? all.find((c) => c.id === UNIVERSAL_CONNECTOR_ID) : undefined
 }

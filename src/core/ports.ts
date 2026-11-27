@@ -399,6 +399,51 @@ export interface ConnectorContext {
   session: BrowserSession
   tickets: TicketVerifier
   clock: Clock
+  /** The network, for a connector that works through a platform's own API (DEC-055). A browser connector never uses it. */
+  http: HttpPort
+  /** The account's API key from the vault (a bot token); null when none is saved. Only an API connector asks, and it never logs or returns it. */
+  apiKey(): Promise<string | null>
+}
+
+/** A file of a multipart form, read from the disk by its path as it is sent. */
+export interface HttpFile {
+  path: string
+  name: string
+  mime: string
+}
+
+export interface HttpRequest {
+  method: 'GET' | 'POST'
+  url: string
+  headers?: Record<string, string>
+  /** A JSON body; or `form`, a multipart form whose values are words or files. At most one of the two. */
+  json?: unknown
+  form?: Record<string, string | HttpFile>
+  timeoutMs?: number
+}
+
+export interface HttpResponse {
+  status: number
+  /** Header names in lower case. */
+  headers: Record<string, string>
+  text: string
+}
+
+/** One request, one answer. It throws only when there was no answer at all (`HttpNoAnswerError`); an error status is an answer. */
+export interface HttpPort {
+  request(request: HttpRequest): Promise<HttpResponse>
+}
+
+/** What a connector that works through a platform's own API says about itself (DEC-055): shown where the owner connects such an account. */
+export interface ApiAccess {
+  /** What the platform calls the account that holds the key, e.g. "bot". */
+  accountKind: string
+  /** What the key is called, e.g. "Bot token". */
+  keyLabel: string
+  /** What the owner does on the platform's side to get the key and let it work, in order. */
+  steps: string[]
+  /** Whether a typed key looks like one, before it is saved. */
+  keyLooksValid(key: string): boolean
 }
 
 export interface RemoteComment {
@@ -539,6 +584,11 @@ export interface Connector {
    * browser made stays "unknown" until the owner looks (DEC-034).
    */
   findsOwnPosts?(channel: Channel): boolean
+  /**
+   * Present on a connector that works through the platform's own API with a key the owner saves (DEC-055). Such a connector serves only accounts
+   * whose access is 'api', is never chosen by an address alone, uses no browser session, and carries every send of its channels itself.
+   */
+  api?: ApiAccess
   checkLogin(ctx: ConnectorContext): Promise<LoginState>
   /** Inspects the channel without publishing anything. Only actually verified capabilities may be 'verified'. */
   assess(ctx: ConnectorContext): Promise<Capability[]>

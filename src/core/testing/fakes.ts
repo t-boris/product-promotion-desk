@@ -381,6 +381,12 @@ export function makeTestCore(overrides: Partial<CoreDeps> & { connectors?: Conne
     clipboard,
     agentBridge: bridge,
     sleep: async () => undefined,
+    // No test reaches the real network: one that needs a platform's API hands in its own fake.
+    http: {
+      request: async () => {
+        throw new Error('This test has no network.')
+      }
+    },
     ...overrides
   })
   browser.attach(core)
