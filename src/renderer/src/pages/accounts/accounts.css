@@ -109,3 +109,21 @@
   overflow-y: auto;
   container-type: inline-size;
 }
+
+/* Health (DEC-064): what the application counts about the account. */
+.account-health {
+  margin: 0 0 var(--space-2);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-3);
+}
+.account-health dt {
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+}
+.account-health dd {
+  margin: 0;
+}
+.account-health .health-fell {
+  color: var(--warn);
+}

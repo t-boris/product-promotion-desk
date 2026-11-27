@@ -3,6 +3,7 @@
 
 import type { CalendarKind, OwnDate } from './seasonal'
 import type { FindKind } from './listening'
+import type { LinkShare, Reach } from './account-health'
 import type { PositioningAnswers, WordKind } from './positioning'
 import type { ChannelTrial, TrialMetric, TrialProgress } from './channel-trial'
 import type { WeekNumbers, WeekSums } from './weekly-review'
@@ -1272,6 +1273,17 @@ export interface AudienceWordsView {
   collectedAt: IsoTime | null
   /** Read posts of the Feed no collection has taken yet. */
   waiting: number
+}
+
+/** What the application counts about one account (DEC-064). */
+export interface AccountHealthView {
+  accountId: Id
+  /** The share is counted over what was sent in this many days. */
+  days: number
+  posts: LinkShare
+  replies: LinkShare
+  /** Per channel of the account: the latest posts against the ones before. */
+  reach: ({ channelId: Id; target: string; platform: string; /** Posts with numbers. */ posts: number } & Reach)[]
 }
 
 /** What a look on the open web found for a product (DEC-062). */

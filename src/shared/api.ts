@@ -70,6 +70,7 @@ import type {
   WeeklyReviewView,
   PositioningView,
   AudienceWordsView,
+  AccountHealthView,
   ListeningView,
   AnswerCheckView,
   SeasonalView,
@@ -249,6 +250,7 @@ export interface ApiMethods {
   // accounts and channels (REQ-002)
   /** Every account: they are one library, not tied to a product (DEC-015). */
   'accounts.list': [void, Account[]]
+  'accounts.health': [{ accountId: Id }, AccountHealthView]
   /** Creates an account with its own login and browser session. `productId` only records what it was created for. */
   'accounts.create': [{ productId?: Id; platform: string; label: string; role?: AccountRole | null; email?: string | null; mailboxId?: Id | null; profileId?: Id | null; signsInVia?: Id | null; access?: AccountAccess }, Account]
   /** Sets or clears (null) the e-mail address of an account. */

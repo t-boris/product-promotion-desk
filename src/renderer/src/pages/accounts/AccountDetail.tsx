@@ -1,3 +1,4 @@
+import { AccountHealth } from './AccountHealth'
 import { useState, type ReactNode } from 'react'
 import type { Account, Mailbox, PlatformInfo, VaultStatus } from '../../../../shared/types'
 import { useQuery } from '../../hooks'
@@ -135,6 +136,7 @@ export function AccountDetail({
       <div className="stack" role="tabpanel" id={`account-panel-${account.id}`} aria-labelledby={`account-tab-${tab}-${account.id}`} data-testid={`account-panel-${tab}`}>
         {panels[tab]}
       </div>
+      <AccountHealth accountId={account.id} />
     </div>
   )
 }
