@@ -211,6 +211,9 @@ export function buildPublicationPrompt(input: PublicationInputs): string {
   return `Propose one standalone post for this community.${focus}${direction}${theme}${positioning}${words}\n\ncontext:\n${JSON.stringify(payload, null, 2)}`
 }
 
+/** A week with no time (DEC-071): one of the channel's earlier posts said again, nothing new. */
+export const RECUT_FOCUS = 'This is a week when the owner has no time. Take ONE of context.previousPosts and say it again in a new form for this community: another angle, shorter, or as a question. Add no new fact and no new claim; it must not read as a repeat of the same text.'
+
 export const SHOWCASE_FOCUS = 'This post is a showcase: show ONE concrete thing the product does, from one approved claim, the way someone would show a friend. Do not list features.'
 
 export interface PublicationProposal {

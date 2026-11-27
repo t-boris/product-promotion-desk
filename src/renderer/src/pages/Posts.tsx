@@ -15,6 +15,8 @@ import { PostDetail } from './posts/PostDetail'
 import { postsCalendarAsked } from '../route'
 import { Campaigns } from './posts/Campaigns'
 import { DatesAhead } from './posts/DatesAhead'
+import { LaunchVenues } from './posts/LaunchVenues'
+import { LowTimeWeek } from './posts/LowTimeWeek'
 import { datesByDay, withCampaignDays } from './posts/dates-ahead'
 import { PostsCalendar } from './posts/PostsCalendar'
 import { PostsList } from './posts/PostsList'
@@ -402,6 +404,7 @@ function PostsScreen({ product }: { product: Product }) {
             onOpen={openRow}
             onWrite={(date) => startWriting(plannedTimeOn(date, offsetOn(date)))}
           />
+          <LowTimeWeek productId={product.id} />
           <Campaigns productId={product.id} />
           {seasonal.data && (
             <DatesAhead
@@ -413,6 +416,7 @@ function PostsScreen({ product }: { product: Product }) {
               }}
             />
           )}
+          <LaunchVenues productId={product.id} />
         </div>
       )}
     </Page>

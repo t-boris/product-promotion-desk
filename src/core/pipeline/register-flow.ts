@@ -15,6 +15,7 @@ import { AudienceWords } from './audience-words'
 import { Listening } from './listening'
 import { GoalTargets } from './goal-targets'
 import { People } from './people'
+import { Choices } from './product-choices'
 import { Themes } from './themes'
 import { SeasonalCalendar } from './seasonal'
 import { buildCard } from './cards'
@@ -180,6 +181,14 @@ export function registerFlow(core: Core): void {
   core.router.register({
     'goals.progress': (args) => goalTargets.progress(args),
     'goals.setTarget': (args) => goalTargets.set(args)
+  })
+  // The owner's choices about how a product is worked (DEC-071): a channel limit shown, a week with no time, launch venues for software.
+  const choices = new Choices(core)
+  core.router.register({
+    'choices.get': (args) => choices.get(args),
+    'choices.set': (args) => choices.set(args),
+    'choices.venues': (args) => choices.venues(args),
+    'choices.tickVenue': (args) => choices.tickVenue(args)
   })
   // Themes (DEC-070): the owner's named stretches of days; the running one is given to the AI's proposed posts.
   const themes = new Themes(core)

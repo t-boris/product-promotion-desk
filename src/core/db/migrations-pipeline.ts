@@ -581,4 +581,24 @@ CREATE TABLE themes (
 CREATE INDEX themes_by_product ON themes (product_id, from_day);
 `
   }
+  ,
+  {
+    id: 329,
+    name: 'the owner\'s choices about how a product is worked, and the launch venues\' ticks',
+    sql: `
+-- DEC-071: all off until the owner sets them. channel_limit NULL: no limit.
+CREATE TABLE product_choices (
+  product_id TEXT PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE,
+  channel_limit INTEGER,
+  low_time INTEGER NOT NULL DEFAULT 0,
+  software INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE launch_venues (
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  venue TEXT NOT NULL,
+  steps_json TEXT NOT NULL DEFAULT '[]',
+  PRIMARY KEY (product_id, venue)
+);
+`
+  }
 ]

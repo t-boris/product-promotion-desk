@@ -1025,3 +1025,8 @@ textarea.input.short {
 .trial-past {
   margin: var(--space-3) 0;
 }
+
+/* The owner's limit on channels in work: a short number field. */
+.channel-limit-input {
+  width: 80px;
+}

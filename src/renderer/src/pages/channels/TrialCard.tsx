@@ -1,3 +1,4 @@
+import { ChannelLimit } from './ChannelLimit'
 import { useState } from 'react'
 import { DEFAULT_TRIAL_HOURS, DEFAULT_TRIAL_WEEKS, EXTEND_WEEKS, TRIAL_WEEKS, metricName, thresholdLine, type ChannelTrial, type TrialMetric, type TrialProgress } from '../../../../shared/channel-trial'
 import { shortCount } from '../../../../shared/post-numbers'
@@ -66,6 +67,7 @@ export function TrialCard({ channel }: { channel: Channel }) {
           </tbody>
         </table>
       )}
+      <ChannelLimit productId={channel.productId} />
       <Hint data-testid="trial-in-work">
         {view.inWork} channel{view.inWork === 1 ? '' : 's'} of this product {view.inWork === 1 ? 'is' : 'are'} in work now{view.onTrial > 0 ? `, ${view.onTrial} on trial` : ''}. One person keeps up one or two well.
       </Hint>

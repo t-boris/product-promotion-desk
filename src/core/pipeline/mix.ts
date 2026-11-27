@@ -12,7 +12,9 @@ import { newId } from '../db/database'
 import type { Core } from '../core'
 import type { MixService } from '../services'
 import { loadKnowledge } from './context'
-import { SHOWCASE_FOCUS } from './draft-prompt'
+import { RECUT_EVERY_DAYS } from '../../shared/product-choices'
+import { RECUT_FOCUS, SHOWCASE_FOCUS } from './draft-prompt'
+import { lowTimeOn } from './product-choices'
 import type { PublicationsFlow } from './publications'
 import { schedulableChannels } from './scheduler-eligibility'
 import type { FlowStore } from './store'
@@ -50,7 +52,7 @@ const unit = (text: string): number => {
  * When the next draft of a kind is due: its rhythm after the last one, moved by a steady jitter of the channel, the kind and the last time
  * (the same inputs give the same time, so it can be shown and tested). 0 when none was prepared yet: a kind the owner just switched on starts at once.
  */
-export function dueAtMs(channelId: Id, kind: MixKind, everyDays: number, lastDraftAt: IsoTime | null, now: number): number {
+export function dueAtMs(channelId: Id, kind: MixKind | 'recut', everyDays: number, lastDraftAt: IsoTime | null, now: number): number {
   if (!lastDraftAt) return 0
   const jitter = (unit(`${channelId}:${kind}:${lastDraftAt}`) * 2 - 1) * JITTER
   // A last draft that lies in the future (the clock was set back) counts as now, or the kind would wait for months.
@@ -232,6 +234,24 @@ export class MixFlow implements MixService {
           .map((entry) => ({ entry, due: dueAtMs(channel.id, entry.kind, entry.everyDays, this.state(channel.id, entry.kind).lastDraftAt, now0) }))
           .sort((a, b) => a.due - b.due)
         let engineDown = false
+        // A week with no time (DEC-071): the usual mix rests for the product; a channel that has sent a post gets one re-cut of an earlier post a week.
+        if (lowTimeOn(this.core, channel.productId)) {
+          const state = this.state(channel.id, 'recut')
+          const due = dueAtMs(channel.id, 'recut', RECUT_EVERY_DAYS, state.lastDraftAt, now0)
+          const sent = (this.core.db.prepare("SELECT COUNT(*) AS n FROM send_actions a JOIN opportunities o ON o.id = a.opportunity_id WHERE o.channel_id = ? AND o.kind = 'standalone' AND a.state = 'confirmed'").get(channel.id) as { n: number }).n
+          if (sent === 0 || now0 < due || now0 < retryAtMs(state.lastAttemptAt, state.failures, now0)) continue
+          try {
+            await this.publications.suggest(channel.id, { origin: `${ORIGIN} (a week with no time)`, focus: RECUT_FOCUS })
+            this.record(channel.id, 'recut', { drafted: true })
+            this.core.log.info('pipeline', `A week with no time: a re-cut of an earlier post is prepared for ${channel.target}. It waits for you.`, channel.id)
+            prepared += 1
+          } catch (error) {
+            this.record(channel.id, 'recut', { drafted: false, error: errorMessage(error) })
+            this.core.log.warn('pipeline', `A week with no time: the re-cut for ${channel.target} could not be prepared: ${errorMessage(error)}`, channel.id)
+            if (error instanceof ApiError && error.code === 'ai_unavailable') break
+          }
+          continue
+        }
         for (const { entry, due } of wanted) {
           const now = this.core.clock.now().getTime()
           const state = this.state(channel.id, entry.kind)
@@ -283,14 +303,14 @@ export class MixFlow implements MixService {
     }
   }
 
-  private state(channelId: Id, kind: MixKind): State {
+  private state(channelId: Id, kind: MixKind | 'recut'): State {
     const row = this.core.db.prepare('SELECT last_draft_at, last_attempt_at, last_error, failures FROM mix_state WHERE channel_id = ? AND kind = ?').get(channelId, kind) as
       | { last_draft_at: string | null; last_attempt_at: string | null; last_error: string | null; failures: number }
       | undefined
     return { lastDraftAt: row?.last_draft_at ?? null, lastAttemptAt: row?.last_attempt_at ?? null, lastError: row?.last_error ?? null, failures: row?.failures ?? 0 }
   }
 
-  private record(channelId: Id, kind: MixKind, outcome: { drafted: true } | { drafted: false; error: string }): void {
+  private record(channelId: Id, kind: MixKind | 'recut', outcome: { drafted: true } | { drafted: false; error: string }): void {
     const at = this.core.clock.now().toISOString()
     const previous = this.state(channelId, kind)
     const lastDraftAt = outcome.drafted ? at : previous.lastDraftAt
