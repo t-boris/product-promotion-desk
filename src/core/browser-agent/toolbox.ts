@@ -1741,6 +1741,14 @@ export class BrowserToolbox implements McpToolHost {
     this.snapshotsSinceRecord = 0
     const read = readNumberItems(raw, this.deps.hosts, numbers.posts, this.bodiesShown)
     if ('error' in read) return fail(read.error)
+    // One post recorded with no address while the AI is on the page of a post: it is that page's post, so the flow can check the page's own text
+    // against what was sent and keep the address (the first live look recorded a post it had opened without naming its address).
+    const only = read.items.length === 1 ? read.items[0] : undefined
+    const here = canonicalWatchUrl(this.last?.url, this.deps.hosts)
+    if (only && only.url === null && here !== null && this.bodiesShown.has(here)) {
+      only.url = here
+      only.body = this.bodiesShown.get(here) ?? null
+    }
     const done = read.items.length > 0 ? numbers.record(read.items) : { stored: 0 }
     this.recorded += done.stored
     const refused = [...read.refused, ...(done.refused ?? [])]

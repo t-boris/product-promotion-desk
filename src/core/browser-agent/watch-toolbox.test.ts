@@ -848,6 +848,21 @@ describe('a numbers look (DEC-075): the watch tools with a record for the number
     expect(t.said.at(-1)).toBe('Read the numbers of 2 posts')
   })
 
+  it('takes one post recorded with no address, while the page of a post is open, as that page\'s post', async () => {
+    const t = numbersSetup()
+    t.page.currentUrl = POST
+    t.page.post = { href: POST, text: 'The moon in the eighth house, explained.' }
+    await look(t)
+    await t.toolbox.call('numbers_record', { items: [{ post: 1, comments: 0 }] })
+    expect(t.kept).toEqual([{ post: 1, likes: null, comments: 0, views: null, url: 'https://www.instagram.com/p/Abc123', body: 'The moon in the eighth house, explained.' }])
+    // On a list page (no post of its own) nothing is added.
+    t.page.currentUrl = LIST
+    t.page.post = null
+    await look(t)
+    await t.toolbox.call('numbers_record', { items: [{ post: 2, likes: 4 }] })
+    expect(t.kept[1]).toEqual({ post: 2, likes: 4, comments: null, views: null, url: null, body: null })
+  })
+
   it('refuses a post that is not in the brief, a count that is not a whole number, no count at all, and an address elsewhere', async () => {
     const t = numbersSetup()
     const out = await t.toolbox.call('numbers_record', {

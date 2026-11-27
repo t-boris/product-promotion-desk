@@ -95,7 +95,7 @@ export function numbersPrompt(brief: WatchBrief, today: Date): string {
     '- Start with watch_open and place 1, then browser_snapshot. The account\'s page lists its posts, the newest first. A post whose address is known has a place of its own: open it there.',
     '- Tell a post by its text (its first words are enough) and its date. Where the page shows only pictures, open the post (watch_open with the label of its link), read its text there, then watch_back. A post you cannot tell with certainty is left out: never give one post the numbers of another.',
     '- Read each count as the page shows it and give a whole number: 1,234 is 1234; 1.2K is 1200; 3.4M is 3400000. A count the page does not show is left out. Never estimate and never write 0 for a count that is not shown ("Be the first to like this" is 0 likes; no like count at all is nothing).',
-    '- Record with numbers_record as you go: post is its number above, url is the post\'s own address when you opened it or the snapshot lists it.',
+    '- Record with numbers_record as you go, best while you are on the post\'s own page: post is its number above, url is the post\'s own address when you opened it or the snapshot lists it.',
     `- You have ${brief.maxCalls} tool calls in all. A post that is not on the page after a few screens is left out: do not scroll through the whole account.`,
     languageRule(brief.languages, 'the sentence of your report'),
     '- You ask the owner nothing. If a sign-in, a CAPTCHA or a security check stops you, call report_result with needs_owner and say what the page shows, and stop.',
