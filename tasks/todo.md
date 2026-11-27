@@ -1456,7 +1456,7 @@ One release per phase; each is verified (`npm run verify`), installed and read o
 - [x] 2 weekly review and the learning loop (0.58.0, DEC-057): Review screen, numbers against the usual of four weeks, AI's words and one change, accept / decline / own, direction for the AI's proposed posts for two weeks, Monday 9:00 job
   - [ ] owner's answers still open: place in the sidebar, day and hour, whether an accepted change may steer the content mix
 - [x] 3 channel trials (0.59.0, DEC-058): Trial card on the channel's Results tab, terms, counted number, Inbox item at the end, keep / stop and park / extend, AI proposes the terms; no hard limit on channels in work (owner's question 3 open)
-- [ ] 4 positioning and the audience's words
+- [x] 4 positioning and the audience's words (0.60.0, DEC-059): two Setup steps; five answers proposed and approved; words bank from read Feed posts with their posts; both feed the AI's proposed posts; a repeated question gets a draft. Not built: an FAQ store with approved answers; use in reply drafts
 - [ ] 5 themes, campaigns, seasonal calendar
 - [ ] 7 conversations: reply window, took-off item, testimonials, people met
 - [ ] 8 wider listening
