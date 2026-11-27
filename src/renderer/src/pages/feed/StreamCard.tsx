@@ -1,11 +1,13 @@
 import { useRef, useState } from 'react'
 import { WATCH_REPLY_PREFIX } from '../../../../shared/finding-reply'
+import { MAX_NOTE } from '../../../../shared/people'
 import { platformLabel } from '../../../../shared/post-format'
 import type { Id } from '../../../../shared/types'
 import { AiProgressPanel } from '../../AiProgress'
 import { Icon } from '../../icons'
 import { call, useAction, useQuery } from '../../hooks'
 import { Badge, Button, ErrorNote, Hint, formatTime } from '../../ui'
+import { peopleNewHref } from '../../route'
 import { OpenChannelBrowser } from '../channels/OpenChannelBrowser'
 import { CardMenu } from './CardMenu'
 import { FIRST_LOOK, type FindingRow } from './finding-rows'
@@ -239,7 +241,7 @@ export function StreamCard({
             <ThreadInsights finding={finding} />
             <div className="stream-thread" data-testid="stream-thread">
               {finding.thread.trim() !== '' && comments.length === 0 && <p className="muted small stream-thread-summary">{finding.thread}</p>}
-              <ThreadTree comments={shownThread} onReply={(position) => openReply(position)} active={typeof place === 'number' ? place : undefined} />
+              <ThreadTree comments={shownThread} onReply={(position) => openReply(position)} onRemember={(comment) => (window.location.hash = peopleNewHref({ handle: comment.author.trim(), platform: channelPlatform, where: channelTarget, note: comment.text.slice(0, MAX_NOTE) }))} active={typeof place === 'number' ? place : undefined} />
             </div>
           </div>
         </details>

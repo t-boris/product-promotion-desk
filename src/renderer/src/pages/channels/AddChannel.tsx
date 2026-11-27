@@ -26,6 +26,7 @@ export function AddChannel({
   platforms,
   productName,
   startPlatform,
+  startTarget,
   firstAccountId,
   blocked,
   engineLabel,
@@ -43,6 +44,8 @@ export function AddChannel({
   productName: (productId: string | null) => string
   /** The platform the flow starts on (an account was just made for it, or a link named it); null: the owner chooses. */
   startPlatform: string | null
+  /** The address the flow starts with (a place found elsewhere); null: empty. */
+  startTarget?: string | null
   /** The account to choose first (the one just made from here). */
   firstAccountId: string | null
   blocked: Blocked | null
@@ -54,7 +57,7 @@ export function AddChannel({
   const submitVariant = useOpenForm()
   const [platformKey, setPlatformKey] = useState<string | null>(startPlatform)
   const [accountId, setAccountId] = useState<string | null>(firstAccountId)
-  const [target, setTarget] = useState('')
+  const [target, setTarget] = useState(startTarget ?? '')
   const [fromIdea, setFromIdea] = useState<string | null>(null)
   const [ideas, setIdeas] = useState<ChannelSuggestion[] | null>(null)
   const targetRef = useRef<HTMLInputElement>(null)
@@ -80,7 +83,8 @@ export function AddChannel({
   function pick(key: string): void {
     if (key === platformKey) return
     setPlatformKey(key)
-    setTarget('')
+    // An address the flow was opened with (a place found elsewhere) is the owner's subject, whatever the platform: it stays.
+    setTarget((current) => (startTarget && current === startTarget ? current : ''))
     setFromIdea(null)
   }
 

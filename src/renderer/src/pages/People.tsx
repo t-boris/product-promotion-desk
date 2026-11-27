@@ -3,6 +3,7 @@ import { MAX_HANDLE, MAX_NOTE, MAX_OWED, MAX_SOURCE, MAX_TESTIMONIAL, MAX_WHERE,
 import type { Product } from '../../../shared/types'
 import { call, useAction, useQuery } from '../hooks'
 import { Badge, Button, Card, ErrorNote, Field, Hint, Loading } from '../ui'
+import { peoplePrefillOf } from '../route'
 import { ProductScreen } from './ProductScreen'
 import './people.css'
 
@@ -26,7 +27,8 @@ function PeopleBody({ product }: { product: Product }) {
   const [filter, setFilter] = useState<PeopleFilter>('all')
   const [query, setQuery] = useState('')
   // The chosen person's id, 'new' for the empty form, null for none.
-  const [chosen, setChosen] = useState<string | null>(null)
+  const [prefill] = useState(() => peoplePrefillOf(window.location.hash))
+  const [chosen, setChosen] = useState<string | null>(prefill ? 'new' : null)
   const people = list.data
   if (!people) return list.error ? <ErrorNote error={list.error} /> : <Loading what="Loading the people" />
   const shown = shownPeople(people, filter, query)
@@ -72,19 +74,19 @@ function PeopleBody({ product }: { product: Product }) {
         {chosen === null || (chosen !== 'new' && !person) ? (
           <Hint>Choose a person, or add one. These are your own notes: the application gives none of them to the AI and posts none of them.</Hint>
         ) : (
-          <PersonForm key={chosen} productId={product.id} person={person} onSaved={(id) => setChosen(id)} onGone={() => setChosen(null)} />
+          <PersonForm key={chosen} productId={product.id} person={person} start={chosen === 'new' ? prefill : null} onSaved={(id) => setChosen(id)} onGone={() => setChosen(null)} />
         )}
       </div>
     </div>
   )
 }
 
-function PersonForm({ productId, person, onSaved, onGone }: { productId: string; person: Person | null; onSaved: (id: string) => void; onGone: () => void }) {
+function PersonForm({ productId, person, start, onSaved, onGone }: { productId: string; person: Person | null; /** What a new person's form starts with (a comment in the Feed); nothing is kept until Add. */ start: Partial<PersonFields> | null; onSaved: (id: string) => void; onGone: () => void }) {
   const kept = person ? fieldsOf(person) : emptyPerson()
-  const [form, setForm] = useState<PersonFields>(kept)
+  const [form, setForm] = useState<PersonFields>(person ? kept : { ...kept, ...start })
   const stamp = person?.updatedAt ?? ''
   useEffect(() => {
-    setForm(person ? fieldsOf(person) : emptyPerson())
+    if (person) setForm(fieldsOf(person))
     // The form follows the kept entry when it changes underneath (a save): only its stamp is watched.
   }, [stamp])
   const [save, saving] = useAction(async (fields: PersonFields) => {

@@ -6,6 +6,7 @@ import { useAssistBlock } from '../../assist/useAssistBlock'
 import { call, useAction } from '../../hooks'
 import { Badge, Button, Card, ConfirmAction, ErrorNote, Hint, More, useOpenForm } from '../../ui'
 import { GoalIdeas } from './GoalIdeas'
+import { GoalTargetRow } from './GoalTargetRow'
 import { around, fieldsFromIdea, hasText, type GoalFields } from './goal-ideas'
 import { useTabMainVariant } from './LaunchPath'
 import { lines } from './model'
@@ -54,6 +55,7 @@ export function GoalTab({ product, onOpenResults }: { product: Product; onOpenRe
         <More label="What a goal does and does not do">
           <Hint>A goal is the one thing you want people to do, and how you will judge it.</Hint>
           <Hint>The AI sees your goals when it plans a channel; they do not change the replies and posts it drafts, and they do not count sign-ups or purchases: the app has no access to your own site’s data.</Hint>
+          <Hint>A saved goal can get a number and a date: the app then counts what it can count itself (posts and replies sent, likes and comments under them, people added) and shows how far it is.</Hint>
         </More>
         <GoalIdeas productId={product.id} blocked={ideaHelp.blocked} engineLabel={ideaHelp.engineLabel} onUse={useIdea} />
       <div className="rows">
@@ -203,6 +205,7 @@ function GoalCard({
           </div>
         )}
         {goal.notes && <Hint>{goal.notes}</Hint>}
+        <GoalTargetRow productId={productId} goalId={goal.id} />
         {saved && (
           <div className="note good" role="status" data-testid={`goal-saved-${id}`}>
             <span>Goal saved. It now appears on the Overview.</span>{' '}

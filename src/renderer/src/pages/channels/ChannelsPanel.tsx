@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '../../hooks'
 import { useHash } from '../../use-hash'
 import { channelHref, channelsNewHref, parseChannelHash } from '../../route'
+import { platformOfAddress } from './add-channel'
 import { Button, EmptyState, ErrorNote, Loading } from '../../ui'
 import { useTabAccent } from '../products/LaunchPath'
 import { useOverviewData } from '../overview/useOverviewData'
@@ -72,7 +73,7 @@ export function ChannelsPanel({ productId }: { productId: string }) {
 
   // The flow starts where the link says; an account just made for it names its own platform.
   const startAccount = route.accountId !== null ? accountList.find((a) => a.id === route.accountId) : undefined
-  const startPlatform = route.platform ?? startAccount?.platform ?? null
+  const startPlatform = route.platform ?? (route.address ? platformOfAddress(route.address, platformList) : null) ?? startAccount?.platform ?? null
 
   // The arrow keys walk the list; a focused field, button or link of the page beside it keeps its own keys.
   const latest = useRef({ visible, shownId })
@@ -103,7 +104,7 @@ export function ChannelsPanel({ productId }: { productId: string }) {
 
   const flow = product ? (
     <AddChannel
-      key={`${startPlatform ?? ''}|${route.accountId ?? ''}`}
+      key={`${startPlatform ?? ''}|${route.accountId ?? ''}|${route.address ?? ''}`}
       product={product}
       accounts={accountList}
       channels={channelList}
@@ -111,6 +112,7 @@ export function ChannelsPanel({ productId }: { productId: string }) {
       platforms={platformList}
       productName={productName}
       startPlatform={startPlatform}
+      startTarget={route.address}
       firstAccountId={route.accountId}
       blocked={blocked}
       engineLabel={engineLabel}

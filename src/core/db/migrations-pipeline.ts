@@ -534,4 +534,21 @@ CREATE TABLE people (
 CREATE INDEX people_by_product ON people (product_id, updated_at);
 `
   }
+  ,
+  {
+    id: 326,
+    name: 'a number and a date on a promotion goal',
+    sql: `
+-- DEC-067: what the application counts for a goal, the number to reach and the local day it is due by; the count starts at since_at.
+CREATE TABLE goal_targets (
+  goal_id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  measure TEXT NOT NULL,
+  number INTEGER NOT NULL,
+  by_day TEXT NOT NULL,
+  since_at TEXT NOT NULL
+);
+CREATE INDEX goal_targets_by_product ON goal_targets (product_id);
+`
+  }
 ]

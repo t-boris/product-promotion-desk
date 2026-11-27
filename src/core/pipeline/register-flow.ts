@@ -12,6 +12,7 @@ import { AnswerCheck } from './answer-check'
 import { translateDraft } from './draft-translate'
 import { AudienceWords } from './audience-words'
 import { Listening } from './listening'
+import { GoalTargets } from './goal-targets'
 import { People } from './people'
 import { SeasonalCalendar } from './seasonal'
 import { buildCard } from './cards'
@@ -171,6 +172,12 @@ export function registerFlow(core: Core): void {
     'listening.setTerms': (args) => listening.setTerms(args),
     'listening.look': (args) => listening.look(args),
     'listening.dismiss': (args) => listening.dismiss(args)
+  })
+  // A goal's number and date (DEC-067): counted by the application; no AI.
+  const goalTargets = new GoalTargets(core)
+  core.router.register({
+    'goals.progress': (args) => goalTargets.progress(args),
+    'goals.setTarget': (args) => goalTargets.set(args)
   })
   // The people met (DEC-066): the owner's own notes; no AI, nothing posted.
   const people = new People(core)

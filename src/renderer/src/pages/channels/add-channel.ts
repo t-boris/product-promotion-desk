@@ -66,3 +66,19 @@ export const needsSiteProfile = (info: Pick<PlatformInfo, 'platform'> | undefine
 
 /** What is said under "Find with AI" before it was pressed. */
 export const FIND_WITH_AI_NOTE = 'The AI suggests places from the approved passport. They are only ideas: nothing is connected until you press Connect channel.'
+
+/** The last two labels of a host: reddit.com for old.reddit.com. Enough to tell the listed platforms apart. */
+const siteOf = (address: string): string | null => {
+  try {
+    return new URL(address).hostname.toLowerCase().split('.').slice(-2).join('.')
+  } catch {
+    return null
+  }
+}
+
+/** The listed platform a web address belongs to, by the site of the platform's own sign-in page; null when it is none of them. */
+export function platformOfAddress(address: string, platforms: readonly Pick<PlatformInfo, 'platform' | 'loginUrl'>[]): string | null {
+  const site = siteOf(address)
+  if (!site) return null
+  return platforms.find((p) => p.loginUrl !== '' && siteOf(p.loginUrl) === site)?.platform ?? null
+}

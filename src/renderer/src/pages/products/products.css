@@ -320,3 +320,10 @@ textarea.input.short {
   gap: var(--space-1);
   padding-left: var(--space-4);
 }
+
+/* A goal's number and date: three fields in a row that wraps. */
+.goal-number-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3);
+}

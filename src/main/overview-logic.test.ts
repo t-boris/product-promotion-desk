@@ -4,7 +4,8 @@
 import { describe, expect, it } from 'vitest'
 import type { MetricSeries, ProductUpdate, ResultsHistory } from '../shared/types'
 import { NOTE_GIVE_UP, mainMetric, suggestionHref, tileLine, unusedNoteCount, valuesOver } from '../renderer/src/pages/overview/overview-data'
-import { channelHref, channelsNewHref, parseChannelHash } from '../renderer/src/route'
+import { channelHref, channelsNewHref, parseChannelHash, peopleNewHref, peoplePrefillOf } from '../renderer/src/route'
+import { platformOfAddress } from '../renderer/src/pages/channels/add-channel'
 
 const DAYS = ['2026-11-04', '2026-11-05', '2026-11-06', '2026-11-07', '2026-11-08']
 
@@ -132,7 +133,7 @@ describe('channel routes', () => {
     expect(channelHref('a/b')).toBe('#/channels/a%2Fb')
   })
   it('reads it back, the tab and the id, and falls back to the first tab', () => {
-    const list = { channelId: null, tab: 'status', adding: false, platform: null, accountId: null }
+    const list = { channelId: null, tab: 'status', adding: false, platform: null, accountId: null, address: null }
     expect(parseChannelHash('#/channels')).toEqual(list)
     expect(parseChannelHash('#/channels/c1')).toEqual({ ...list, channelId: 'c1' })
     expect(parseChannelHash('#/channels/c1/plan')).toEqual({ ...list, channelId: 'c1', tab: 'plan' })
@@ -155,5 +156,24 @@ describe('channel routes', () => {
   it('keeps the account asked for beside a channel list, and the old product address', () => {
     expect(parseChannelHash('#/products/p1/channels?account=a1')).toMatchObject({ channelId: null, adding: true, accountId: 'a1' })
     for (const tab of ['status', 'plan', 'mix', 'settings'] as const) expect(parseChannelHash(channelHref('c9', tab))).toMatchObject({ channelId: 'c9', tab, adding: false })
+  })
+})
+
+describe('links that carry a start for a form', () => {
+  it('open the add-a-channel flow on a found address, with the platform told from the site', () => {
+    const href = channelsNewHref(undefined, 'https://old.reddit.com/r/astrology/')
+    expect(parseChannelHash(href)).toMatchObject({ adding: true, platform: null, address: 'https://old.reddit.com/r/astrology/' })
+    expect(parseChannelHash('#/channels/c1?address=https://x.example/')).toMatchObject({ adding: false, address: null })
+    const platforms = [{ platform: 'reddit', loginUrl: 'https://www.reddit.com/login' }, { platform: 'universal', loginUrl: '' }]
+    expect(platformOfAddress('https://old.reddit.com/r/astrology/', platforms)).toBe('reddit')
+    expect(platformOfAddress('https://forum.example.org/t/1', platforms)).toBeNull()
+    expect(platformOfAddress('not an address', platforms)).toBeNull()
+  })
+
+  it('open the new-person form filled from a comment, and only when asked', () => {
+    const href = peopleNewHref({ handle: 'u/moon_reader', platform: 'reddit', where: 'r/beginnerastrology', note: 'Liked the answer & asked more' })
+    expect(peoplePrefillOf(href)).toEqual({ handle: 'u/moon_reader', platform: 'reddit', where: 'r/beginnerastrology', note: 'Liked the answer & asked more' })
+    expect(peoplePrefillOf('#/people')).toBeNull()
+    expect(peoplePrefillOf('#/feed?new=1&handle=x')).toBeNull()
   })
 })

@@ -203,23 +203,48 @@ export interface ChannelRoute {
   platform: string | null
   /** `?account=`: the account the flow chooses first, or null. */
   accountId: string | null
+  /** `#/channels/new?address=`: the address the flow starts with (a place found elsewhere), or null. */
+  address: string | null
 }
 
 /** Link to the add-a-channel flow, on a platform when one is already chosen. */
-export function channelsNewHref(platform?: string): string {
-  return platform ? `#/channels/new?${new URLSearchParams({ platform }).toString()}` : '#/channels/new'
+export function channelsNewHref(platform?: string, address?: string): string {
+  const query = new URLSearchParams()
+  if (platform) query.set('platform', platform)
+  if (address) query.set('address', address)
+  const text = query.toString()
+  return text ? `#/channels/new?${text}` : '#/channels/new'
+}
+
+/** Link to the People screen with a new person's form filled from a comment: who wrote it, where, and what they said. */
+export function peopleNewHref(fields: { handle: string; platform?: string; where?: string; note?: string }): string {
+  const query = new URLSearchParams({ new: '1', handle: fields.handle })
+  if (fields.platform) query.set('platform', fields.platform)
+  if (fields.where) query.set('where', fields.where)
+  if (fields.note) query.set('note', fields.note)
+  return `#/people?${query.toString()}`
+}
+
+/** What a link to the People screen asks the new person's form to start with, or null when it asks for no new person. */
+export function peoplePrefillOf(hash: string): { handle: string; platform: string; where: string; note: string } | null {
+  const route = resolveRoute(hash)
+  if (route.page !== 'people') return null
+  const { query } = splitHash(route.hash)
+  if (query.get('new') !== '1') return null
+  const text = (key: string): string => query.get(key)?.trim() ?? ''
+  return { handle: text('handle'), platform: text('platform'), where: text('where'), note: text('note') }
 }
 
 /** What the Channels screen was asked to show: the list, or one channel on one of its tabs (an unknown tab is the first one). */
 export function parseChannelHash(hash: string): ChannelRoute {
   const route = resolveRoute(hash)
-  if (route.page !== 'channels') return { channelId: null, tab: DEFAULT_CHANNEL_TAB, adding: false, platform: null, accountId: null }
+  if (route.page !== 'channels') return { channelId: null, tab: DEFAULT_CHANNEL_TAB, adding: false, platform: null, accountId: null, address: null }
   const { segments, query } = splitHash(route.hash)
   const [, id, tab] = segments
   const accountId = query.get('account')?.trim() || null
   // A channel's id is never "new", so the word cannot hide a channel. An account asked for beside the list is the one just made for the flow.
   const adding = id === 'new' || (id === undefined && accountId !== null)
-  return { channelId: adding ? null : idOf(id), tab: isChannelTab(tab) ? tab : DEFAULT_CHANNEL_TAB, adding, platform: query.get('platform')?.trim() || null, accountId }
+  return { channelId: adding ? null : idOf(id), tab: isChannelTab(tab) ? tab : DEFAULT_CHANNEL_TAB, adding, platform: query.get('platform')?.trim() || null, accountId, address: (adding && query.get('address')?.trim()) || null }
 }
 
 /** What Setup was asked to show: one of its tabs, or the new-product form. */

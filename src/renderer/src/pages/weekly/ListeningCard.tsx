@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { FIND_KINDS, FIND_KIND_LABEL, MAX_COMPETITORS, MAX_PHRASES, type FindKind } from '../../../../shared/listening'
 import type { ListeningView, Product } from '../../../../shared/types'
 import { call, useAction, useQuery } from '../../hooks'
+import { channelsNewHref } from '../../route'
 import { Badge, Button, Card, ErrorNote, Hint, formatTime } from '../../ui'
 import { AddressLink } from '../AddressLink'
 import { linesOf, questionsChanged } from './answer-view'
@@ -102,6 +103,9 @@ function FindRow({ find }: { find: ListeningView['finds'][number] }) {
         {find.fresh && <Badge tone="good">New</Badge>}
         <Button onClick={() => void dismiss()} disabled={dismissing.busy} data-testid={`listening-dismiss-${find.id}`}>
           Not useful
+        </Button>
+        <Button variant="quiet" onClick={() => (window.location.hash = channelsNewHref(undefined, find.url))} data-testid={`listening-channel-${find.id}`}>
+          Add as a channel
         </Button>
       </div>
       <span>{find.said}</span>
