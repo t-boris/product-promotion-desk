@@ -150,8 +150,11 @@ export class ChannelTrials {
     return found(() => this.core.repos.channel(id), 'The channel')
   }
 
-  private readsNumbers(channel: Channel): boolean {
-    return typeof this.core.connectors.get(channel.connectorId)?.readPostNumbers === 'function'
+  /** The numbers the application can read under posts on this channel; none where its connector has no reader. */
+  private numberKinds(channel: Channel): readonly ('likes' | 'comments' | 'views')[] {
+    const connector = this.core.connectors.get(channel.connectorId)
+    if (typeof connector?.readPostNumbers !== 'function') return []
+    return connector.postNumberKinds ?? ['likes', 'comments', 'views']
   }
 
   view(channelId: Id): TrialView {
@@ -164,7 +167,7 @@ export class ChannelTrials {
     return {
       channelId: channel.id,
       platform: channel.platform,
-      metrics: metricsFor(this.readsNumbers(channel)),
+      metrics: metricsFor(this.numberKinds(channel)),
       current: current ? { trial: current, progress: trialProgress(current, sends, now) } : null,
       past: rows.filter((t) => t.verdict !== null).map((trial) => ({ trial, progress: trialProgress(trial, sends, Date.parse(trial.decidedAt ?? trial.endsAt)) })),
       parked: channel.status === 'paused' && channel.statusDetail === PARKED_DETAIL,
@@ -180,7 +183,7 @@ export class ChannelTrials {
     if (hypothesis === '') throw new ApiError('invalid_input', 'Say in a sentence what you expect of this channel.')
     if (!TRIAL_WEEKS.includes(args.weeks)) throw new ApiError('invalid_input', `A trial lasts ${TRIAL_WEEKS.join(', ')} weeks.`)
     if (!Number.isInteger(args.hoursPerWeek) || args.hoursPerWeek < 1 || args.hoursPerWeek > 40) throw new ApiError('invalid_input', 'Hours a week must be a whole number from 1 to 40.')
-    if (!metricsFor(this.readsNumbers(channel)).includes(args.metric)) throw new ApiError('invalid_input', 'The application cannot read that number on this channel. Judge the trial by posts that stayed up, or by a number of your own.')
+    if (!metricsFor(this.numberKinds(channel)).includes(args.metric)) throw new ApiError('invalid_input', 'The application cannot read that number on this channel. Judge the trial by posts that stayed up, or by a number of your own.')
     if (!Number.isInteger(args.threshold) || args.threshold < 1) throw new ApiError('invalid_input', 'The number that means "keep" must be a whole number of at least 1.')
     const ownLabel = args.metric === 'own' ? plainText(args.ownLabel ?? '', MAX_LABEL) : ''
     if (args.metric === 'own' && ownLabel === '') throw new ApiError('invalid_input', 'Name your own number in a few words, for example "sales in the shop".')
@@ -222,7 +225,7 @@ export class ChannelTrials {
     const channel = this.channel(channelId)
     const engine = await readyEngine(this.core)
     const product = this.core.repos.product(channel.productId)
-    const metrics = metricsFor(this.readsNumbers(channel))
+    const metrics = metricsFor(this.numberKinds(channel))
     const now = this.core.clock.now().getTime()
     const posts = sendsOfChannel(this.core, channel.id, new Date(now - 28 * DAY_MS).toISOString()).filter((s) => s.kind === 'post')
     const total = (key: 'likes' | 'comments' | 'views'): number | null => {

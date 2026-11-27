@@ -293,6 +293,8 @@ export class RedditConnector implements Connector {
   }
 
   /** Points and comments of the account's own posts, from its own list of posts (one reading serves every post asked for). Reddit shows no views there. */
+  readonly postNumberKinds = ['likes', 'comments'] as const
+
   readPostNumbers(ctx: ConnectorContext, posts: { externalId: string; url: string | null }[]): Promise<Record<string, PostNumbers>> {
     return ctx.session.withAgentControl(`numbers:${ctx.channel.id}`, async (page) => {
       await ensureRedditOrigin(page, ctx.channel.url)

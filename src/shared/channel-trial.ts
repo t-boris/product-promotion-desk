@@ -101,7 +101,7 @@ export function thresholdLine(trial: ChannelTrial, progress: TrialProgress, plat
   return `${shortCount(progress.measured)} of ${shortCount(trial.threshold)} ${name}`
 }
 
-/** The metrics a channel can be judged by: what the application reads there, plus the two it never needs to read. */
-export function metricsFor(readsNumbers: boolean): TrialMetric[] {
-  return readsNumbers ? [...TRIAL_METRICS] : ['posts', 'own']
+/** The metrics a channel can be judged by: the numbers the application reads there (`kinds`), plus the two it never needs to read. */
+export function metricsFor(kinds: readonly ('likes' | 'comments' | 'views')[]): TrialMetric[] {
+  return TRIAL_METRICS.filter((m) => m === 'posts' || m === 'own' || kinds.includes(m))
 }

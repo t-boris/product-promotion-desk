@@ -202,7 +202,7 @@ function TrialForm({ view, onDone }: { view: TrialView; onDone: () => void }) {
         </Field>
       </div>
       {why && <Hint>Why this number, by the AI: {why}</Hint>}
-      {view.metrics.length === 2 && <Hint>The application cannot read likes, comments or views on this channel, so a trial here is judged by posts that stayed up or by a number of your own.</Hint>}
+      {!view.metrics.some((m) => m !== 'posts' && m !== 'own') && <Hint>The application cannot read likes, comments or views on this channel, so a trial here is judged by posts that stayed up or by a number of your own.</Hint>}
       <div className="trial-actions">
         <Button variant="primary" onClick={() => void start()} disabled={busy || !ready} data-testid="trial-start">
           Start the trial

@@ -590,6 +590,8 @@ export interface Connector {
    * anything, for as many of the given posts as it can find in one reading. A post it did not find is left out; a number the site does not
    * show is null. Absent means the connector cannot read them.
    */
+  /** Which of the three numbers `readPostNumbers` can ever return here (Reddit shows an author no views). Absent: all three. */
+  postNumberKinds?: readonly (keyof PostNumbers)[]
   readPostNumbers?(ctx: ConnectorContext, posts: { externalId: string; url: string | null }[]): Promise<Record<string, PostNumbers>>
   /**
    * Present on a connector that works through the platform's own API with a key the owner saves (DEC-055). Such a connector serves only accounts

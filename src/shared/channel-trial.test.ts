@@ -33,7 +33,8 @@ describe('a channel trial', () => {
   it('names the number in the platform\'s words and offers only what the channel can be judged by', () => {
     expect(metricName('likes', 'reddit', null)).toBe('points on your posts')
     expect(metricName('own', 'x', '  ')).toBe('your own number')
-    expect(metricsFor(false)).toEqual(['posts', 'own'])
-    expect(metricsFor(true)).toContain('views')
+    expect(metricsFor([])).toEqual(['posts', 'own'])
+    expect(metricsFor(['likes', 'comments'])).toEqual(['comments', 'likes', 'posts', 'own'])
+    expect(metricsFor(['likes', 'comments', 'views'])).toContain('views')
   })
 })
