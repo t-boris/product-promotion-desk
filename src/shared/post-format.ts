@@ -800,11 +800,31 @@ export function linkPlacementOf(platform: string, link: string | null | undefine
  * (`in_text`, `in_bio`), never into a platform's link field (a Reddit post with a link is another kind of post), and only when the product keeps
  * the setting on and has a site. The one answer for the core, which writes it into the first draft, and for the composer's preview.
  */
-export function siteLinkFor(platform: string, product: { websiteUrl: string | null; addSiteLink: boolean }): string | null {
+export function siteLinkFor(platform: string, product: { websiteUrl: string | null; addSiteLink: boolean; tagSiteLink?: boolean }, channelTarget?: string): string | null {
   const how = formOf(platform).link
   if (how !== 'in_text' && how !== 'in_bio') return null
   const address = product.websiteUrl?.trim() ?? ''
-  return product.addSiteLink && address !== '' ? address : null
+  if (!product.addSiteLink || address === '') return null
+  // On Instagram the address is not printed (the caption says "Link in bio"): there is nothing to tag.
+  return product.tagSiteLink && how === 'in_text' && channelTarget ? taggedLink(address, platform, channelTarget) : address
+}
+
+/**
+ * The site's address with the tags a site's analytics reads (utm_source: the platform, utm_medium: social, utm_campaign: the channel), so a visit
+ * says where it came from. Tags the address already has are kept; an address that is not a web address is returned as it is.
+ */
+export function taggedLink(address: string, platform: string, channelTarget: string): string {
+  let url: URL
+  try {
+    url = new URL(address)
+  } catch {
+    return address
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return address
+  const channel = channelTarget.toLowerCase().replace(/^(@|r\/)/, '').replace(/[^a-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '')
+  const tags: [string, string][] = [['utm_source', platform], ['utm_medium', 'social'], ['utm_campaign', channel]]
+  for (const [key, value] of tags) if (value && !url.searchParams.has(key)) url.searchParams.set(key, value)
+  return url.toString()
 }
 
 const LABELS: Record<string, string> = { reddit: 'Reddit', instagram: 'Instagram', facebook: 'Facebook', threads: 'Threads', x: 'X', linkedin: 'LinkedIn', telegram: 'Telegram', pinterest: 'Pinterest', tiktok: 'TikTok', youtube: 'YouTube' }

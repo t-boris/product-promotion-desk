@@ -105,9 +105,10 @@ export function registerHandlers(core: Core, mod: PassportModule): void {
       const websiteUrl = parseOptionalUrl(args.websiteUrl)
       const description = parseOptionalDescription(args.description)
       if (args.addSiteLink !== undefined && typeof args.addSiteLink !== 'boolean') throw new ApiError('invalid_input', 'The setting for the site\'s address must be on or off.')
+      if (args.tagSiteLink !== undefined && typeof args.tagSiteLink !== 'boolean') throw new ApiError('invalid_input', 'The setting for the tags of the site\'s address must be on or off.')
       const product = tx(core.db, () => {
         syncPrimary(current, { websiteUrl, description })
-        const updated = store.update(id, { name, websiteUrl, description, addSiteLink: args.addSiteLink })
+        const updated = store.update(id, { name, websiteUrl, description, addSiteLink: args.addSiteLink, tagSiteLink: args.tagSiteLink })
         if (!updated.websiteUrl && !updated.description && store.sources(id).length === 0) {
           throw new ApiError('invalid_input', 'A product needs at least a website address or a description.')
         }

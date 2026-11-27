@@ -421,7 +421,7 @@ export class PostGroupsFlow {
 
   /** The site's address that ends a new post on this channel (DEC-044), or null: what the first draft of a version was given besides the master. */
   private siteLinkOf(productId: Id, channel: Channel): string | null {
-    return siteLinkFor(channel.platform, this.core.repos.product(productId))
+    return siteLinkFor(channel.platform, this.core.repos.product(productId), channel.target)
   }
 
   /** A version is an ordinary standalone post of one channel, written from the master and standing on the same facts. */

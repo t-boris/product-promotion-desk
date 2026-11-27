@@ -623,6 +623,14 @@ describe('the site of the product at the end of a new post (DEC-044)', () => {
     for (const platform of ['instagram', 'facebook', 'threads', 'x', 'linkedin', 'telegram']) expect(siteLinkFor(platform, site), platform).toBe('https://natalmystic.com')
     // a platform with a link field of its own gets none: a Reddit post with a link is another kind of post
     for (const platform of ['reddit', 'pinterest', 'tiktok', 'youtube', 'some-new-site']) expect(siteLinkFor(platform, site), platform).toBeNull()
+    // With the tags on, the address names the platform and the channel; Instagram prints no address, so nothing is tagged there.
+    const tagged = { ...site, tagSiteLink: true }
+    expect(siteLinkFor('telegram', tagged, '@NatalMystic')).toBe('https://natalmystic.com/?utm_source=telegram&utm_medium=social&utm_campaign=natalmystic')
+    expect(siteLinkFor('facebook', tagged, 'www.facebook.com/share/19h1Cyg')).toBe('https://natalmystic.com/?utm_source=facebook&utm_medium=social&utm_campaign=www.facebook.com-share-19h1cyg')
+    expect(siteLinkFor('instagram', tagged, '@brand')).toBe('https://natalmystic.com')
+    expect(siteLinkFor('telegram', tagged)).toBe('https://natalmystic.com')
+    expect(siteLinkFor('telegram', { ...tagged, websiteUrl: 'https://natalmystic.com/app?ref=1&utm_source=mine' }, '@x_y')).toBe('https://natalmystic.com/app?ref=1&utm_source=mine&utm_medium=social&utm_campaign=x_y')
+    expect(siteLinkFor('telegram', { ...tagged, websiteUrl: 'natalmystic.com' }, '@x')).toBe('natalmystic.com')
   })
 
   it('needs the setting on and a site', () => {

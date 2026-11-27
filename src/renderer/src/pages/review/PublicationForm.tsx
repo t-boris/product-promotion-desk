@@ -46,7 +46,9 @@ export function PublicationForm({ productId, channelId, platform, reads, author,
   const lookAlso = [...new Set([own.platform, ...(known ?? []).map((row) => row.platform)])].filter((p) => postTypeOfPlatform(p) === kind)
   // A new picture post ends with the product's site, as the core writes it into the first draft (DEC-044): the preview and the limits count it already.
   const product = products.data?.find((p) => p.id === productId)
-  const siteLink = product && platforms.length > 0 ? siteLinkFor(platforms[0]!, product) : null
+  // With the tags on, the address names the channel it stands on: the preview shows the first ticked channel's, as the core writes each version its own.
+  const firstTarget = chosen[0] === undefined || chosen[0] === channelId ? author.target : (known?.find((row) => row.channelId === chosen[0])?.target ?? author.target)
+  const siteLink = product && platforms.length > 0 ? siteLinkFor(platforms[0]!, product, firstTarget) : null
   const quick: QuickForm = typed.link === null && siteLink ? { ...typed, link: siteLink } : typed
   const input = toInput(form, true)
   const options = useChannelOptions(productId, kind === 'quick' ? quickQuestion(quick) : input)

@@ -78,6 +78,7 @@ export function ProductHeader({ view, channels, onDeleted, onOpenAnalysis }: { v
   })
   // The site's address at the end of every new post (DEC-044): one switch that takes effect at once, like the settings switches.
   const [setSiteLink, switching] = useAction((next: boolean) => call('products.update', { id: product.id, addSiteLink: next }))
+  const [setTagged, tagging] = useAction((next: boolean) => call('products.update', { id: product.id, tagSiteLink: next }))
 
   return (
     <div className="obj">
@@ -135,7 +136,17 @@ export function ProductHeader({ view, channels, onDeleted, onOpenAnalysis }: { v
                   note="On Instagram the post ends with “Link in bio” instead, because a link in a caption does not work: keep the address in your profile."
                   testId="site-link-switch"
                 />
-                <ErrorNote error={switching.error} />
+                {product.addSiteLink && (
+                  <Switch
+                    checked={product.tagSiteLink}
+                    disabled={tagging.busy}
+                    onChange={(next) => void setTagged(next)}
+                    label="Name the platform and the channel in that address"
+                    note="The address gets utm tags (for example ?utm_source=telegram&utm_medium=social&utm_campaign=yourchannel), so the analytics of your site can tell which channel a visit came from. The address in the post becomes longer."
+                    testId="site-link-tag-switch"
+                  />
+                )}
+                <ErrorNote error={switching.error ?? tagging.error} />
               </dd>
             </>
           )}

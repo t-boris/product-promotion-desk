@@ -427,5 +427,13 @@ WHERE json_valid(capabilities_json)
 -- The name of the label a community asks of a post (Reddit's flair), chosen from the community's own list; null: none. Part of what an approval binds.
 ALTER TABLE drafts ADD COLUMN flair TEXT;
 `
+  },
+  {
+    id: 322,
+    name: 'products: the site link names the platform and the channel it stands on',
+    sql: `
+-- Off unless the owner turns it on: the address that ends a post carries utm tags, so the site's own analytics can tell where a visit came from.
+ALTER TABLE products ADD COLUMN tag_site_link INTEGER NOT NULL DEFAULT 0;
+`
   }
 ]

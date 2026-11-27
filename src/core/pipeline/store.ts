@@ -555,7 +555,8 @@ export class FlowStore {
     if (this.db.prepare('SELECT 1 FROM drafts WHERE opportunity_id = ? LIMIT 1').get(opportunityId)) return content
     const opp = this.requireOpportunity(opportunityId)
     if (opp.kind !== 'standalone') return content
-    const link = siteLinkFor(this.requireChannel(opp.channelId).platform, this.core.repos.product(opp.productId))
+    const channel = this.requireChannel(opp.channelId)
+    const link = siteLinkFor(channel.platform, this.core.repos.product(opp.productId), channel.target)
     return link ? { ...content, link } : content
   }
 
