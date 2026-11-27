@@ -23,7 +23,7 @@ describe('the Results tab of a channel', () => {
   })
 
   it('says why there is nothing to show', () => {
-    const view = (over: Partial<PostResultsView>): PostResultsView => ({ channelId: 'c', platform: 'reddit', readable: true, posts: [], ...over })
+    const view = (over: Partial<PostResultsView>): PostResultsView => ({ channelId: 'c', platform: 'reddit', readable: true, byAi: false, posts: [], ...over })
     expect(emptyReason(view({ readable: false }))).toMatch(/cannot read the numbers/)
     expect(emptyReason(view({}))).toMatch(/No post of yours/)
     expect(emptyReason(view({ posts: [post('a', null)] }))).toBeNull()

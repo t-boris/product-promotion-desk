@@ -90,8 +90,11 @@ describe('what the site shows under a sent post', () => {
     hours(31 * 24)
     expect(await sending().readPostNumbers()).toBe(0)
 
+    // A connector with no reader: the AI reads the numbers in the account's browser (DEC-075). Only where there is no AI browser is there no way at all.
     Object.assign(world.connector, { readPostNumbers: undefined })
-    expect(sending().postResults(world.channel.id).readable).toBe(false)
+    expect(sending().postResults(world.channel.id)).toMatchObject({ readable: true, byAi: true })
+    world.core.services.watchMissions = undefined
+    expect(sending().postResults(world.channel.id)).toMatchObject({ readable: false, byAi: false })
     await expect(world.core.router.call('results.readPosts', { channelId: world.channel.id })).rejects.toMatchObject({ code: 'invalid_input' })
   })
 })

@@ -1,6 +1,7 @@
 // DEC-042: the tools of a watch mission. The AI has six tools and every one of them only reads: a page is opened by the application itself from a link
 // the AI was shown (a goto, never a click), what it judged is recorded as findings, and nothing can be clicked, typed, selected, run, uploaded or asked.
 
+import type { PostNumbersItem } from './post-numbers'
 import { describe, expect, it } from 'vitest'
 import { ControlledSession } from '../browser-session'
 import type { PageStep, PageStepResult } from '../ports'
@@ -803,3 +804,62 @@ describe('what a post read in full carries: the analysis, the topics and the pic
   })
 })
 
+
+describe('a numbers look (DEC-075): the watch tools with a record for the numbers under the owner\'s own posts', () => {
+  const numbersSetup = () => {
+    const kept: PostNumbersItem[] = []
+    const t = setup({
+      watch: {
+        places: ['https://www.instagram.com/brand/'],
+        record: () => ({ stored: 0, known: 0 }),
+        maxFindings: 60,
+        minGapMs: 2000,
+        now: () => 10_000,
+        numbers: {
+          posts: 2,
+          record: (items) => {
+            kept.push(...items)
+            return { stored: items.length }
+          }
+        }
+      }
+    })
+    return { ...t, kept }
+  }
+
+  it('has numbers_record in place of watch_record, and still no tool that clicks or types', async () => {
+    const t = numbersSetup()
+    const names = t.toolbox.tools.map((tool) => tool.name)
+    expect(names).toEqual(['browser_snapshot', 'browser_scroll', 'watch_open', 'watch_back', 'numbers_record', 'report_result'])
+    expect((await t.toolbox.call('watch_record', { items: [post()] })).isError).toBe(true)
+    expect((await t.toolbox.call('browser_click', { ref: 'e2' })).isError).toBe(true)
+  })
+
+  it('keeps whole counts of a post of the brief, with the text the application read on that post\'s own page', async () => {
+    const t = numbersSetup()
+    t.page.post = { href: POST, text: 'The moon in the eighth house, explained.' }
+    await look(t)
+    const out = await t.toolbox.call('numbers_record', { items: [{ post: 1, likes: 1200, comments: 14, url: POST }, { post: 2, views: 300 }] })
+    expect(out.isError).toBeFalsy()
+    expect(t.kept).toEqual([
+      { post: 1, likes: 1200, comments: 14, views: null, url: 'https://www.instagram.com/p/Abc123', body: 'The moon in the eighth house, explained.' },
+      { post: 2, likes: null, comments: null, views: 300, url: null, body: null }
+    ])
+    expect(t.said.at(-1)).toBe('Read the numbers of 2 posts')
+  })
+
+  it('refuses a post that is not in the brief, a count that is not a whole number, no count at all, and an address elsewhere', async () => {
+    const t = numbersSetup()
+    const out = await t.toolbox.call('numbers_record', {
+      items: [{ post: 3, likes: 1 }, { post: 1, likes: '1.2K' }, { post: 1, likes: 1.5 }, { post: 1, likes: -1 }, { post: 2 }, { post: 2, likes: 4, url: 'https://evil.example/p/1' }]
+    })
+    expect(out.isError).toBe(true)
+    expect(out.text.split('\n')).toHaveLength(7)
+    expect(out.text).toMatch(/post must be the number of a post of your brief, from 1 to 2/)
+    expect(out.text).toMatch(/1\.2K is 1200/)
+    expect(out.text).toMatch(/no count given/)
+    expect(out.text).toMatch(/url must be the post's own address on this site/)
+    expect(t.kept).toEqual([])
+    expect((await t.toolbox.call('numbers_record', { items: [] })).isError).toBe(true)
+  })
+})

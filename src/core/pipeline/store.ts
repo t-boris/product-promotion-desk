@@ -664,6 +664,16 @@ export class FlowStore {
     return (this.db.prepare("SELECT * FROM send_actions WHERE state = 'confirmed' AND result_external_id IS NOT NULL AND completed_at >= ? ORDER BY completed_at, rowid").all(sinceIso) as Row[]).map(mapAction)
   }
 
+  /** Every confirmed send completed at or after `sinceIso`, with or without the platform's own id: a post made in the browser has none (DEC-075). */
+  confirmedSince(sinceIso: string): SendAction[] {
+    return (this.db.prepare("SELECT * FROM send_actions WHERE state = 'confirmed' AND completed_at >= ? ORDER BY completed_at, rowid").all(sinceIso) as Row[]).map(mapAction)
+  }
+
+  /** The address of a sent post, learned after it went out (the AI found the post and the application saw its text there). Never replaces one that is known. */
+  setResultUrl(actionId: Id, url: string): void {
+    this.db.prepare('UPDATE send_actions SET result_url = ? WHERE id = ? AND result_url IS NULL').run(url, actionId)
+  }
+
   /**
    * What the platform said when the post was looked at again, and when, with the community's own words under a removed post. A look that could not
    * tell keeps the standing it had and moves only the time.
@@ -685,12 +695,12 @@ export class FlowStore {
     return this.db.prepare('SELECT read_at AS readAt, likes, comments, views FROM post_number_readings WHERE action_id = ? ORDER BY read_at').all(actionId) as { readAt: string; likes: number | null; comments: number | null; views: number | null }[]
   }
 
-  /** The confirmed sends of a channel that carry the platform's own id, completed at or after `sinceIso`, newest first. */
-  sentPostsOfChannel(channelId: Id, sinceIso: string): SendAction[] {
+  /** The confirmed sends of a channel completed at or after `sinceIso`, newest first: those that carry the platform's own id, or all of them (`anyId`, a channel worked in the browser). */
+  sentPostsOfChannel(channelId: Id, sinceIso: string, anyId = false): SendAction[] {
     return (
       this.db
-        .prepare("SELECT a.* FROM send_actions a JOIN opportunities o ON o.id = a.opportunity_id WHERE o.channel_id = ? AND o.kind = 'standalone' AND a.state = 'confirmed' AND a.result_external_id IS NOT NULL AND a.completed_at >= ? ORDER BY a.completed_at DESC, a.rowid DESC")
-        .all(channelId, sinceIso) as Row[]
+        .prepare("SELECT a.* FROM send_actions a JOIN opportunities o ON o.id = a.opportunity_id WHERE o.channel_id = ? AND o.kind = 'standalone' AND a.state = 'confirmed' AND (a.result_external_id IS NOT NULL OR ?) AND a.completed_at >= ? ORDER BY a.completed_at DESC, a.rowid DESC")
+        .all(channelId, anyId ? 1 : 0, sinceIso) as Row[]
     ).map(mapAction)
   }
 

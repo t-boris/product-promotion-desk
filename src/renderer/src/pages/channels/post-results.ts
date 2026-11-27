@@ -32,7 +32,10 @@ export function lineOf(post: PostResult, key: NumberKey): (number | null)[] {
 
 /** Why the tab has nothing to show, in words; null when it has. */
 export function emptyReason(view: PostResultsView): string | null {
-  if (!view.readable) return 'The application cannot read the numbers under posts on this channel yet. It reads them where it reads the site itself; here the posts are made in the browser and their numbers are on the site.'
-  if (view.posts.length === 0) return 'No post of yours has gone out to this channel yet. When one does, what the site shows under it (views, likes, comments) is read here by itself.'
+  if (!view.readable) return 'The application cannot read the numbers under posts on this channel: it is not worked in a browser on a web address.'
+  if (view.posts.length === 0)
+    return view.byAi
+      ? 'No post of yours has gone out to this channel yet. When one does, the AI opens the account’s page about once a day and reads what the site shows under it (likes, comments, views).'
+      : 'No post of yours has gone out to this channel yet. When one does, what the site shows under it (views, likes, comments) is read here by itself.'
   return null
 }

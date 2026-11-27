@@ -94,7 +94,9 @@ export function PostResultsCard({ channel }: { channel: Channel }) {
             <p className="muted small" data-testid="post-results-waiting">
               {view.posts.every((post) => post.removed)
                 ? 'Nothing was read: the posts here were taken down, and a post that is not up has no numbers to read.'
-                : 'Not read yet. The first reading comes about fifteen minutes after a post goes out, then every hour in its first day.'}
+                : view.byAi
+                  ? 'Not read yet. On this channel the AI opens the account’s page and reads the numbers under your posts, about once a day; “Read now” starts it at once and takes a few minutes.'
+                  : 'Not read yet. The first reading comes about fifteen minutes after a post goes out, then every hour in its first day.'}
             </p>
           )}
         </>

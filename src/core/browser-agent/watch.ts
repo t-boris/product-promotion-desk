@@ -6,6 +6,7 @@
 // no question to the owner), what a recorded post must look like, and the shapes the monitor's watch flow and the AI agent service pass between them.
 // The barrier is the toolbox, not the brief (watch-mission.ts): the brief is a courtesy to the model.
 
+import type { NumbersSetup, OwnPostBrief } from './post-numbers'
 import type { FindingLabel, FindingTopic } from '../../shared/types'
 import { isRecord, oneLine } from '../assist/kit'
 import { hostMatches } from '../channels/presets'
@@ -183,6 +184,8 @@ export interface WatchSetup {
    * to write it), and the flow keeps it only for the finding whose own address the page has. Optional.
    */
   recordBody?: (body: WatchBody) => void
+  /** Makes the look a numbers look (DEC-075): its record tool takes the numbers under the owner's own posts, not posts. */
+  numbers?: NumbersSetup
   maxFindings: number
   /** The least time between two openings of a page. */
   minGapMs: number
@@ -208,9 +211,12 @@ export interface WatchBrief {
   places: { label: string; url: string }[]
   /**
    * `look`: go through the channel's pages and judge the posts (the usual check). `read`: the owner asked for one post to be read in full: `places` holds
-   * that post alone, and the AI records that one post with everything it read. Absent means `look`.
+   * that post alone, and the AI records that one post with everything it read. `numbers`: the AI finds the owner's own posts (`ownPosts`) and records the
+   * numbers the site shows under each (DEC-075). Absent means `look`.
    */
-  mode?: 'look' | 'read'
+  mode?: 'look' | 'read' | 'numbers'
+  /** `numbers` only: the owner's own sent posts whose numbers are read, numbered from 1. */
+  ownPosts?: OwnPostBrief[]
   /** The first check of the channel: it looks back `lookBackDays` days. */
   firstLook: boolean
   lookBackDays: number
@@ -232,6 +238,8 @@ export interface WatchMissionRequest {
   record: WatchSetup['record']
   recordStats?: WatchSetup['recordStats']
   recordBody?: WatchSetup['recordBody']
+  /** A numbers look (DEC-075): where the numbers under the owner's own posts go. */
+  numbers?: NumbersSetup
 }
 
 export interface WatchOutcome {

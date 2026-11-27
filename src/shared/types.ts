@@ -1763,6 +1763,8 @@ export interface PostResultsView {
   platform: string
   /** False when the application has no way to read the numbers on this channel (it then says so instead of showing an empty table). */
   readable: boolean
+  /** The numbers are read by the AI on the account's own page, about once a day (DEC-075): a channel worked in the browser. */
+  byAi: boolean
   posts: PostResult[]
 }
 

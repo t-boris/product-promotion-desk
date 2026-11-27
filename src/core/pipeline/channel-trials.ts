@@ -2,6 +2,7 @@
 // before the weeks are spent. The application counts that number from the channel's sends and from what the site showed under them; the owner
 // gives the verdict: keep, stop (the channel is parked: paused, nothing is deleted) or extend. The AI may propose the trial's terms; it never
 // starts one and never gives a verdict.
+import { readsNumbersInBrowser } from './browser-post-numbers'
 import { ApiError } from '../../shared/api'
 import { DEFAULT_TRIAL_HOURS, DEFAULT_TRIAL_WEEKS, EXTEND_WEEKS, TRIAL_WEEKS, metricName, metricsFor, thresholdLine, trialProgress, type ChannelTrial, type TrialMetric } from '../../shared/channel-trial'
 import { shortCount } from '../../shared/post-numbers'
@@ -150,10 +151,10 @@ export class ChannelTrials {
     return found(() => this.core.repos.channel(id), 'The channel')
   }
 
-  /** The numbers the application can read under posts on this channel; none where its connector has no reader. */
+  /** The numbers the application can read under posts on this channel: its connector's, or likes and comments where the AI reads them in the browser (DEC-075); none otherwise. */
   private numberKinds(channel: Channel): readonly ('likes' | 'comments' | 'views')[] {
     const connector = this.core.connectors.get(channel.connectorId)
-    if (typeof connector?.readPostNumbers !== 'function') return []
+    if (typeof connector?.readPostNumbers !== 'function') return readsNumbersInBrowser(this.core, channel) ? ['likes', 'comments'] : []
     return connector.postNumberKinds ?? ['likes', 'comments', 'views']
   }
 

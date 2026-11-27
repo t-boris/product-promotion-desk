@@ -114,7 +114,7 @@ export class FakeSending implements SendingService {
   }
 
   postResults(channelId: string): PostResultsView {
-    return { channelId, platform: 'fake', readable: false, posts: [] }
+    return { channelId, platform: 'fake', readable: false, byAi: false, posts: [] }
   }
 
   async readPostResultsNow(channelId: string): Promise<PostResultsView> {
