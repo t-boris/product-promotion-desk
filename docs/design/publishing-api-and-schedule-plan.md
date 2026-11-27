@@ -149,15 +149,23 @@ Versions are proposals; each phase is one release, installed and checked on the 
 | C | built | 0.53.0 | a flair send by schedule; the read-back from the account's own posts |
 | D | built, with E | 0.55.0 (DEC-055) | — (the fake server only) |
 | E | built | 0.55.0 | everything: needs the owner's bot (proof T1) |
-| F, G, H | waiting | — | need the owner's Meta app and proofs T2 and T3 (section 5): no product code is written on an unproven answer |
+| F | built in part | 0.78.0 (DEC-076) | everything: needs the owner's Meta app and a Page access token. Not built: a video, Facebook's own schedule (`scheduled_publish_time`), views of a post (insights) |
+| G | waiting | — | Meta's documentation does not say where one owner gets a long-lived Threads token without a server (see "T2 and T3 from the documentation" below); needs the owner's Meta app |
+| H | waiting | — | the same Meta app, a professional account, and D5 (pictures on a public address) |
 | I | waiting | — | needs the owner's paid X app and proof T4 |
 | J | waiting | — | needs Pinterest Standard access and a LinkedIn app |
+
+T2 and T3 from the documentation (Meta's pages read on 2026-11-27; nothing tried with a real app):
+- T2. One general rule, on the page about app modes: "Any data generated while an app is in Development mode, such as test posts, can only be seen by role users. However, that data will be visible to non-role users once the app is switched to Live mode." The Pages, Threads and Instagram pages do not repeat or contradict it. An app used only by people who have a role on it needs Standard Access and no App Review. Going live asks for an app icon, a privacy policy address and a data deletion address; whether it also asks for business verification is said differently on two pages. So the Page guide in the application ends with "Go live", and the real answer is still the owner's first post seen from another account.
+- T3. Facebook Page: a Page access token taken from `me/accounts` with a long-lived token of the person "do not have an expiration date"; the application takes that token pasted, like a bot token. Instagram (Instagram Login): the app dashboard has "Generate token" that gives a 60-day token, refreshed with `GET graph.instagram.com/refresh_access_token` and no app secret. Threads: the documentation names only the Graph API Explorer "while you are testing" and an exchange that needs the app secret; Meta's sample app says Threads accepts no `localhost` redirect and only HTTPS. A loopback sign-in is therefore out for Threads, and where a long-lived Threads token comes from for one owner has to be seen in the dashboard.
+- Instagram's limit of API posts in 24 hours is written as 100 in one place and 50 in two others.
 
 Built differently from the text above, and why:
 - Queue slots are a channel setting (`postingSlots`), not a table: a slot is only how a time is chosen, and nothing refers to a slot.
 - Keeping the Mac awake starts 12 hours before a due item on mains power (15 minutes on battery), not "a few minutes": a Mac that fell asleep an hour before cannot be woken.
 - An API channel belongs to an account of its own kind (a bot), connected with a key the owner pastes; there is no "Connect with the platform's API" step inside Add a channel.
-- From phase D, not built yet because nothing needs it: a job that polls every confirmed post for comments (Telegram receives comments as updates, Reddit through its inbox) and a token refresh job (a bot token does not expire). They come with the first connector that needs them (F).
+- Phase F was built on Meta's documentation before proof T2, as phase E was before T1: the answer to T2 changes what the owner does in Meta's dashboard (the last step of the guide), not the connector. It is one account per Page with a pasted token, checked against the Page's address.
+- From phase D, not built yet because nothing needs it: a job that polls every confirmed post for comments (Telegram receives comments as updates, Reddit through its inbox) and a token refresh job (a bot token does not expire). Phase F did not need them either: the Page's last 25 posts are read with their comments at every reading, and a Page token does not end. They come with the first connector whose token ends (G or H: 60 days).
 - Not built from phase A: scheduling a group of versions as a whole or spread over slots.
 
 ## 7. What does not change

@@ -1492,7 +1492,20 @@ The owner answered: the kind of an account is asked per account with a guided co
 - [x] N2 (0.76.0, DEC-074) the kind of an account, asked when it is created (Instagram: professional or personal; Facebook: Page or personal profile), kept per account
 - [x] N3 (0.76.0, DEC-074) a connection guide per platform and kind: numbered steps, each link opens the account's own browser at that page; Telegram bot guide in the same form
 - [x] N4 (0.75.0, DEC-073; Google Analytics is noted, not read) analytics per product: none, Plausible or Google Analytics; a "site visits" goal measure only when there is one
-- [ ] N5 phases F-H guides per account kind (what a business and a personal account can do through Meta's API), once the Meta proofs T2/T3 are done with the guide
+- [ ] N5 (Facebook Page: 0.78.0, DEC-076; Threads and Instagram not built) phases F-H guides per account kind (what a business and a personal account can do through Meta's API), once the Meta proofs T2/T3 are done with the guide
+
+## Phase F: a Facebook Page through Meta's own API (0.78.0)
+What Meta's documentation says (read 2026-11-27, sources in the plan document): a Page access token made from a long-lived token of the person does not end; a Page post takes words, a link and photos as files; comments are read and answered; a post made while the app is in Development mode is seen only by the people of the app, so the app has to be switched to Live. Nothing of this was tried with a real Page: the owner has no Meta app yet. Built like the Telegram bot (DEC-055): an account of its own with one key.
+- [x] `src/connectors/facebook/`: Graph API client (the token never in an error or a log), `FacebookPageConnector`, a fake Graph API for tests
+- [x] sign-in: the token is checked with Facebook, the account takes the Page's name; a token of a person, or an ended one, is said in words
+- [x] channel: the Page's own address; the check says when the token is of another Page
+- [x] post: words, a link, one photo, several photos; a video is refused before the send, in words
+- [x] comments read as items to answer; a reply under a comment or a post; a lost answer found again in the Page's feed
+- [x] numbers under a post (reactions, comments) through the existing Results reading; followers as the channel's number
+- [x] the steps that get the token, in the account's guide (developer registration, app, permissions, token, Live), each with its address
+- [x] not in this slice, said in the decision: a video, Facebook's own schedule (`scheduled_publish_time`), views of a post (insights)
+- [x] tests, verify, decision (DEC-076), release, install, the New account form read on the real screen without saving anything
+- [ ] with the owner's Meta app: the eight steps walked for real, a first post seen from another account (proof T2)
 
 ## Phase A steps
 - [x] `scheduledByOwner`: any item the owner gave a time (not only a Feed answer); `publications.schedule` accepts any channel and replies

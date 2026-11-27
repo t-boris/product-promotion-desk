@@ -117,7 +117,10 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
           url: FACEBOOK_PAGES,
           link: 'Open your Pages'
         },
-        { text: 'Then connect its channel on the Channels screen: the address of the Page, like https://www.facebook.com/yourpage.' }
+        { text: 'Then connect its channel on the Channels screen: the address of the Page, like https://www.facebook.com/yourpage.' },
+        {
+          text: 'A Page can also be worked with no browser, through Meta’s own API: posts go out by themselves at their time, and comments and the numbers under posts are read from Facebook. That is an account of its own: add an account, and under “How the app works with it” choose “Through a Page (Facebook\'s own API)”.'
+        }
       ],
       profile: [
         SIGN_IN('Facebook'),

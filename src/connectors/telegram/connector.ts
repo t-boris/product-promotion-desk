@@ -19,6 +19,7 @@ import type {
   RemoteDiscussion,
   SendTicket
 } from '../../core/ports'
+import { wordsWithLink as wordsOf } from '../text'
 import { TelegramApi, looksLikeBotToken, type TelegramAnswer, type TgChat, type TgChatMember, type TgMessage, type TgUpdate, type TgUser } from './api'
 import { TelegramStore, bodyOf, type StoredMessage } from './store'
 
@@ -354,12 +355,4 @@ export class TelegramBotConnector implements Connector {
 /** What a bot has no way to do: said, not left out, so the channel's card shows it. */
 function notOffered(cap: (key: CapabilityKey, status: CapabilityStatus, detail: string) => Capability): Capability[] {
   return [cap('membership', 'unavailable', 'A bot is added to a channel by its owner.'), cap('read_inbox', 'unavailable', 'Comments arrive as comments of the channel\'s posts.')]
-}
-
-/** The words Telegram is given: the title first when there is one, then the text, then the link when the text does not hold it. */
-function wordsOf(request: PublishRequest): string {
-  const text = request.text.trim()
-  const title = request.title?.trim()
-  const parts = [title && !text.startsWith(title) ? title : '', text, request.link && !text.includes(request.link) ? request.link : '']
-  return parts.filter(Boolean).join('\n\n')
 }

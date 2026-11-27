@@ -1,0 +1,244 @@
+import { afterEach, describe, expect, it } from 'vitest'
+import { newId } from '../../core/db/database'
+import { FakeKnowledge, makeClaim } from '../../core/pipeline/test-fixture'
+import { makeTestCore, type TestCore } from '../../core/testing/fakes'
+import { apiKeyKey } from '../../core/vault'
+import type { MonitorService, SendingService } from '../../core/services'
+import type { PublishRequest } from '../../core/ports'
+import { guideSteps } from '../../shared/connection-guide'
+import { renderForPlatform, sendProblems } from '../../shared/post-format'
+import { UniversalConnector } from '../universal'
+import { FacebookPageConnector, pageOf, parseExternalId } from './connector'
+import { FAKE_PAGE_TOKEN, FAKE_USER_TOKEN, FakeFacebook, PAGE_ID } from './fake-facebook'
+
+let t: TestCore | null = null
+afterEach(async () => {
+  await t?.core.shutdown()
+  t = null
+})
+
+const PAGE_URL = 'https://www.facebook.com/natalmystic'
+
+/** A core with the Facebook Page connector and a fake Graph API behind the network port; one product. */
+function world(facebook = new FakeFacebook()) {
+  t = makeTestCore({ connectors: [new FacebookPageConnector(), new UniversalConnector()], http: facebook })
+  const core = t.core
+  core.services.knowledge = Object.assign(new FakeKnowledge(), { approved: [makeClaim('c1', 'Natal Mystic builds a natal chart from your birth date, time and place.')] })
+  const productId = newId()
+  const now = core.clock.now().toISOString()
+  core.db
+    .prepare('INSERT INTO products (id, name, website_url, description, goals_json, active_passport_version_id, analysis_status, created_at, updated_at, add_site_link) VALUES (?, ?, ?, ?, json_array(), ?, ?, ?, ?, 0)')
+    .run(productId, 'Natal Mystic', 'https://natalmystic.com', 'Astrology app', 'pv-1', 'complete', now, now)
+  facebook.nowMs = core.clock.now().getTime()
+  return { core, facebook, productId, secrets: t.secrets, clock: t.clock, call: core.router.call.bind(core.router) as typeof core.router.call }
+}
+
+/** A Page account with its token saved and the Page connected, assessed and active. */
+async function connected(facebook = new FakeFacebook()) {
+  const w = world(facebook)
+  const account = await w.call('accounts.create', { productId: w.productId, platform: 'facebook', label: 'Natal Mystic Page', access: 'api' })
+  const ready = await w.call('vault.saveApiKey', { accountId: account.id, key: FAKE_PAGE_TOKEN })
+  const channel = await w.call('channels.connect', { productId: w.productId, accountId: account.id, target: PAGE_URL })
+  await w.call('channels.assess', { channelId: channel.id })
+  const active = await w.call('channels.activate', { channelId: channel.id })
+  const { connector, ctx } = w.core.connectorContext(active.id)
+  const loose = { ...ctx, tickets: { assertValid: () => undefined } }
+  const ticket = { id: 't', actionId: 'a', contentHash: 'h', accountId: ready.id, destination: active.url, expiresAt: 0, signature: '' }
+  const send = (request: Partial<PublishRequest>) => connector.publish(loose, ticket, { kind: 'post', destination: active.url, parentExternalId: null, title: null, text: '', link: null, attachments: [], ...request })
+  return { ...w, account: ready, channel: active, connector, ctx, send, sending: w.core.services.sending as SendingService, monitor: w.core.services.monitor as MonitorService }
+}
+
+const picture = (name: string) => ({ name, path: `/tmp/${name}`, mime: 'image/jpeg', sha256: 'x' })
+
+describe('the address of a Page', () => {
+  it('is the Page\'s own address, by name or by number, and nothing else on Facebook', () => {
+    expect(pageOf('https://www.facebook.com/NatalMystic/')).toBe('natalmystic')
+    expect(pageOf('facebook.com/natal.mystic')).toBe('natal.mystic')
+    expect(pageOf('https://www.facebook.com/profile.php?id=100200300400')).toBe('100200300400')
+    expect(pageOf('https://www.facebook.com/people/Natal-Mystic/100200300400/')).toBe('100200300400')
+    expect(pageOf('https://www.facebook.com/p/Natal-Mystic-100200300400/')).toBe('100200300400')
+    expect(pageOf('https://m.facebook.com/Natal-Mystic-100200300400')).toBe('100200300400')
+    expect(pageOf('https://www.facebook.com/share/19h1CygGyN')).toBeNull()
+    expect(pageOf('https://www.facebook.com/groups/astrologyclub')).toBeNull()
+    expect(pageOf('https://www.facebook.com/natalmystic/posts/123')).toBeNull()
+    expect(pageOf('https://www.instagram.com/natalmystic')).toBeNull()
+    expect(parseExternalId('fb:100200300400_5001')).toBe('100200300400_5001')
+    expect(parseExternalId('tg:-100:5')).toBeNull()
+  })
+})
+
+describe('a Facebook account that works through a Page\'s access token (DEC-076)', () => {
+  it('is offered for Facebook beside the browser account, with the steps that get the token; the Page connector is never chosen by an address alone', async () => {
+    const w = world()
+    const info = (await w.call('platforms.list', undefined as never)).find((p) => p.platform === 'facebook')
+    expect(info).toMatchObject({ connectorId: 'universal', api: { accountKind: 'Page', keyLabel: 'Page access token' } })
+    expect(w.core.connectors.resolve(PAGE_URL)?.id).toBe('universal')
+    const steps = guideSteps(info, { kind: null, access: 'api' })
+    expect(steps.length).toBe(8)
+    expect(steps.filter((s) => s.url).every((s) => s.url?.startsWith('https://developers.facebook.com/') && s.link)).toBe(true)
+    expect(steps.map((s) => s.text).join(' ')).toMatch(/pages_manage_posts.*me\/accounts.*Go live/s)
+    // A browser account of Facebook keeps its browser and the steps of its kind.
+    const browser = await w.call('accounts.create', { productId: w.productId, platform: 'facebook', label: 'My profile', kind: 'profile' })
+    expect(browser).toMatchObject({ access: 'browser', kind: 'profile' })
+    expect(guideSteps(info, browser)[0]?.text).toMatch(/Sign in to Facebook/)
+  })
+
+  it('becomes ready under the Page\'s name when its token is saved; a person\'s token and an ended one are said in words, and no line holds the token', async () => {
+    const w = world()
+    const account = await w.call('accounts.create', { productId: w.productId, platform: 'facebook', label: 'Page', access: 'api' })
+    expect(account).toMatchObject({ access: 'api', status: 'login_required' })
+    await expect(w.call('vault.saveApiKey', { accountId: account.id, key: 'not a token' })).rejects.toMatchObject({ code: 'invalid_input' })
+    const person = await w.call('vault.saveApiKey', { accountId: account.id, key: FAKE_USER_TOKEN })
+    expect(person.status).not.toBe('ready')
+    const ready = await w.call('vault.saveApiKey', { accountId: account.id, key: `  ${FAKE_PAGE_TOKEN} ` })
+    expect(ready).toMatchObject({ status: 'ready', identity: 'Natal Mystic' })
+    expect(w.secrets.values.get(apiKeyKey(account.id))).toBe(FAKE_PAGE_TOKEN)
+    expect(JSON.stringify(ready)).not.toContain(FAKE_PAGE_TOKEN)
+
+    w.facebook.token = 'EAAanotherTokenThatReplacedTheOldOne0123456789abcdefghijklmnopqrstuv'
+    expect((await w.call('accounts.checkLogin', { accountId: account.id })).status).not.toBe('ready')
+    const log = JSON.stringify(w.core.db.prepare('SELECT * FROM log_events').all())
+    expect(log).not.toContain(FAKE_PAGE_TOKEN)
+    expect(log).not.toContain(FAKE_USER_TOKEN)
+    expect(log).toMatch(/not the token of a Page/)
+  })
+
+  it('checks that the token is of the Page that was connected, and reads its posts and comments before saying it can', async () => {
+    const w = world()
+    const account = await w.call('accounts.create', { productId: w.productId, platform: 'facebook', label: 'Page', access: 'api' })
+    await w.call('vault.saveApiKey', { accountId: account.id, key: FAKE_PAGE_TOKEN })
+    await expect(w.call('channels.connect', { productId: w.productId, accountId: account.id, target: 'https://www.facebook.com/share/19h1CygGyN' })).rejects.toMatchObject({ code: 'platform_mismatch' })
+
+    const other = await w.call('channels.connect', { productId: w.productId, accountId: account.id, target: 'https://www.facebook.com/someoneelse' })
+    const wrong = await w.call('channels.assess', { channelId: other.id })
+    expect(wrong.capabilities.find((c) => c.key === 'publish_post')).toMatchObject({ status: 'needs_user', detail: expect.stringMatching(/belongs to the Page “Natal Mystic”/) })
+
+    const channel = await w.call('channels.connect', { productId: w.productId, accountId: account.id, target: `https://www.facebook.com/profile.php?id=${PAGE_ID}` })
+    expect(channel).toMatchObject({ connectorId: 'facebook-page', target: `facebook.com/${PAGE_ID}`, reads: true, watchedInBrowser: false })
+    const cap = async (key: string) => (await w.call('channels.assess', { channelId: channel.id })).capabilities.find((c) => c.key === key)
+    expect(await cap('read_posts')).toMatchObject({ status: 'verified' })
+    expect(await cap('read_comments')).toMatchObject({ status: 'needs_check', detail: expect.stringMatching(/no post yet/) })
+    w.facebook.ownerPosts('Hello.')
+    expect(await cap('read_comments')).toMatchObject({ status: 'verified' })
+    // A send is proven by a send, never by a check.
+    expect(await cap('publish_post')).toMatchObject({ status: 'needs_check', detail: expect.stringMatching(/Go live/) })
+  })
+})
+
+describe('posting as the Page', () => {
+  it('sends an approved post by itself at its time, confirmed with the post Facebook made, with no browser', async () => {
+    const w = await connected()
+    const { opportunity } = await w.call('publications.create', { channelId: w.channel.id, draft: { title: null, text: 'Mercury turns direct today.' } })
+    await w.call('publications.schedule', { id: opportunity.id, at: new Date(w.core.clock.now().getTime() + 60_000).toISOString() })
+    await w.call('opportunities.approve', { id: opportunity.id })
+    w.clock.advance(2 * 60_000)
+    expect(await w.sending.sendDuePublications()).toBe(1)
+    const action = w.core.db.prepare('SELECT state, result_url AS url, result_external_id AS id FROM send_actions').get() as { state: string; url: string; id: string }
+    expect(action).toMatchObject({ state: 'confirmed', url: expect.stringMatching(/^https:\/\/www\.facebook\.com\/natalmystic\/posts\/\d+$/), id: expect.stringMatching(new RegExp(`^fb:${PAGE_ID}_\\d+$`)) })
+    expect(w.facebook.calls.filter((c) => c.method === 'POST')).toEqual([{ method: 'POST', path: `${PAGE_ID}/feed`, params: { message: 'Mercury turns direct today.' }, files: [] }])
+  })
+
+  it('gives Facebook the link as the link of the post, one photo as a photo with the words, and several photos as one post', async () => {
+    const w = await connected()
+    expect(await w.send({ text: 'Read the guide.', link: 'https://natalmystic.com/guide' })).toMatchObject({ status: 'confirmed' })
+    expect(w.facebook.calls.at(-2)).toMatchObject({ path: `${PAGE_ID}/feed`, params: { message: 'Read the guide.\n\nhttps://natalmystic.com/guide', link: 'https://natalmystic.com/guide' } })
+
+    expect(await w.send({ text: 'Chart of the day.', attachments: [picture('a.jpg')] })).toMatchObject({ status: 'confirmed', externalId: expect.stringMatching(new RegExp(`^fb:${PAGE_ID}_`)) })
+    expect(w.facebook.calls.at(-2)).toMatchObject({ path: `${PAGE_ID}/photos`, params: { caption: 'Chart of the day.' }, files: ['source:a.jpg'] })
+
+    const before = w.facebook.posts.length
+    expect(await w.send({ text: 'Three charts.', attachments: [picture('a.jpg'), picture('b.jpg'), picture('c.jpg')] })).toMatchObject({ status: 'confirmed' })
+    expect(w.facebook.posts.length).toBe(before + 1)
+    expect(w.facebook.posts[0]).toMatchObject({ message: 'Three charts.', photos: 3 })
+    expect(w.facebook.calls.filter((c) => c.params.published === 'false')).toHaveLength(3)
+  })
+
+  it('refuses a video and an empty post before anything is asked of Facebook, and says the video before the owner approves', async () => {
+    const w = await connected()
+    const asked = w.facebook.calls.length
+    expect(await w.send({ text: 'A reel.', attachments: [{ name: 'a.mp4', path: '/tmp/a.mp4', mime: 'video/mp4', sha256: 'x' }] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/A video is not sent to a Page through the API/) })
+    expect(await w.send({ text: '  ' })).toMatchObject({ status: 'failed', error: expect.stringMatching(/empty/) })
+    expect(w.facebook.calls.length).toBe(asked)
+    const video = { name: 'a.mp4', path: '/tmp/a.mp4', mime: 'video/mp4', sha256: 'x' }
+    const rendered = { ...renderForPlatform({ title: null, text: 'A reel.', link: null, attachments: [] } as never, 'facebook'), attachments: [video] }
+    expect(sendProblems('facebook', rendered, { aiBrowser: false, api: true }).join(' ')).toMatch(/A video is not sent to Facebook through its API/)
+    expect(sendProblems('telegram', { ...rendered, attachments: [video] }, { aiBrowser: false, api: true }).join(' ')).not.toMatch(/video is not sent/)
+  })
+
+  it('says a refusal as a failure, an error of Facebook\'s own side and a lost answer as unknown, and finds the lost post in the Page\'s feed', async () => {
+    const w = await connected()
+    const make = async (text: string) => {
+      const { opportunity } = await w.call('publications.create', { channelId: w.channel.id, draft: { title: null, text } })
+      await w.call('opportunities.approve', { id: opportunity.id })
+      return opportunity.id
+    }
+    w.facebook.failNext = { code: 200, message: '(#200) The user hasn\'t authorized the application to perform this action' }
+    expect(await w.sending.send(await make('First.'))).toMatchObject({ state: 'failed', error: expect.stringMatching(/no permission for this.*Nothing was sent/) })
+
+    w.facebook.failNext = { status: 500, code: 2, message: 'An unexpected error has occurred. Please retry your request later.' }
+    expect(await w.send({ text: 'Half.' })).toMatchObject({ status: 'unknown', error: expect.stringMatching(/error of its own/) })
+
+    w.facebook.failNext = 'lost'
+    const lostId = await make('Second.')
+    expect(await w.sending.send(lostId)).toMatchObject({ state: 'unknown', error: expect.stringMatching(/did not answer/) })
+    // Facebook did make the post: the re-check finds it among the Page's posts.
+    expect(await w.sending.reconcile(lostId)).toMatchObject({ state: 'confirmed', resultExternalId: expect.stringMatching(/^fb:/) })
+
+    // A photo that fails among several leaves nothing published, and that is a plain failure.
+    const posts = w.facebook.posts.length
+    w.facebook.failNext = { code: 100, message: '(#100) Invalid image' }
+    expect(await w.send({ text: 'Two.', attachments: [picture('a.jpg'), picture('b.jpg')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/Nothing was published/) })
+    expect(w.facebook.posts.length).toBe(posts)
+  })
+})
+
+describe('comments, replies and numbers', () => {
+  it('reads a comment under the Page\'s post as an item to answer, and the Page\'s own words as nobody to answer', async () => {
+    const w = await connected()
+    const post = w.facebook.ownerPosts('What does a natal chart show?')
+    const comment = w.facebook.comment(post.id, 'Does it need the exact birth time?', 'Ann Lee')
+    expect((await w.monitor.runChannel(w.channel.id)).status).toBe('ok')
+    const items = w.core.db.prepare('SELECT c.external_id AS comment, c.author, c.body FROM opportunities o JOIN comments c ON c.id = o.comment_id WHERE o.channel_id = ?').all(w.channel.id)
+    expect(items).toEqual([{ comment: `fb:${comment.id}`, author: 'Ann Lee', body: 'Does it need the exact birth time?' }])
+    expect(w.core.db.prepare('SELECT COUNT(*) AS n FROM opportunities WHERE channel_id = ?').get(w.channel.id)).toEqual({ n: 1 })
+
+    const sent = await w.send({ kind: 'reply', parentExternalId: `fb:${comment.id}`, text: 'An hour either way changes the houses.' })
+    expect(sent).toMatchObject({ status: 'confirmed', url: expect.stringContaining('comment_id=') })
+    expect(w.facebook.calls.at(-2)).toMatchObject({ method: 'POST', path: `${comment.id}/comments`, params: { message: 'An hour either way changes the houses.' } })
+    const thread = await w.connector.fetchThread(w.ctx, `fb:${post.id}`)
+    expect(thread?.comments.map((c) => [c.author, c.parentExternalId])).toEqual([
+      ['Ann Lee', `fb:${post.id}`],
+      ['Natal Mystic', `fb:${comment.id}`]
+    ])
+    // The Page's own answer makes no item at the next reading.
+    await w.monitor.runChannel(w.channel.id)
+    expect(w.core.db.prepare('SELECT COUNT(*) AS n FROM opportunities WHERE channel_id = ?').get(w.channel.id)).toEqual({ n: 1 })
+  })
+
+  it('names nobody when Facebook leaves the commenter out, says a long thread is not whole, and refuses a reply to what it never read', async () => {
+    const w = await connected()
+    const post = w.facebook.ownerPosts('Chart of the day.')
+    w.facebook.namesAuthors = false
+    for (let i = 0; i < 101; i++) w.facebook.comment(post.id, `Comment ${i}`, 'Bo')
+    const thread = await w.connector.fetchThread(w.ctx, `fb:${post.id}`)
+    expect(thread).toMatchObject({ incomplete: true, author: 'Natal Mystic' })
+    expect(thread?.comments).toHaveLength(100)
+    expect(thread?.comments[0]?.author).toBe('Somebody on Facebook')
+    expect(await w.connector.fetchThread(w.ctx, 'fb:100200300400_1')).toBeNull()
+    expect(await w.send({ kind: 'reply', parentExternalId: 't1_abc', text: 'Hi' })).toMatchObject({ status: 'failed', error: expect.stringMatching(/was not read through the Page/) })
+    expect(await w.send({ kind: 'reply', parentExternalId: `fb:${post.id}`, text: 'Hi', attachments: [picture('a.jpg')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/words only/) })
+  })
+
+  it('counts reactions and comments under a post through the Results reading, and followers as the channel\'s number', async () => {
+    const w = await connected()
+    const sent = await w.send({ text: 'Full moon tonight.' })
+    if (sent.status !== 'confirmed') throw new Error('not sent')
+    const graphId = sent.externalId.slice(3)
+    w.facebook.react(graphId, 7)
+    const first = w.facebook.comment(graphId, 'Beautiful.', 'Ann')
+    w.facebook.comment(graphId, 'Agreed.', 'Bo', first.id)
+    expect(await w.connector.readPostNumbers?.(w.ctx, [{ externalId: sent.externalId, url: sent.url }, { externalId: 'fb:100200300400_1', url: null }, { externalId: 't3_x', url: null }])).toEqual({ [sent.externalId]: { likes: 7, comments: 2, views: null } })
+    expect(await w.call('results.posts', { channelId: w.channel.id })).toMatchObject({ readable: true, byAi: false })
+    expect(await w.connector.fetchMetrics(w.ctx)).toEqual([{ key: 'followers', label: 'Followers', value: 321, available: true }])
+  })
+})

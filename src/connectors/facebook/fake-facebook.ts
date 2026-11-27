@@ -1,0 +1,183 @@
+// A Graph API that lives in a test: one Page with its posts and their comments, and the token that speaks for it.
+import type { HttpPort, HttpRequest, HttpResponse } from '../../core/ports'
+import { HttpNoAnswerError } from '../../core/net/http'
+
+export const FAKE_PAGE_TOKEN = 'EAAfakePageTokenForTests0123456789abcdefghijklmnopqrstuvwxyzABCDEFGH'
+export const FAKE_USER_TOKEN = 'EAAfakeUserTokenForTests0123456789abcdefghijklmnopqrstuvwxyzABCDEFGH'
+export const PAGE_ID = '100200300400'
+
+interface FakePost {
+  id: string
+  message: string
+  created: number
+  fromId: string
+  fromName: string
+  photos: number
+  link: string | null
+  reactions: number
+}
+
+interface FakeComment {
+  id: string
+  postId: string
+  parentId: string | null
+  message: string
+  created: number
+  fromId: string
+  fromName: string
+}
+
+export class FakeFacebook implements HttpPort {
+  token = FAKE_PAGE_TOKEN
+  page: { id: string; name: string; username?: string } = { id: PAGE_ID, name: 'Natal Mystic', username: 'natalmystic' }
+  /** Whether the token may read what visitors wrote: without it Facebook leaves the author of a comment out. */
+  namesAuthors = true
+  /** The next request that makes something fails this way, once: an error answer, or no answer at all after Facebook acted. */
+  failNext: { status?: number; code: number; message: string } | 'lost' | null = null
+  readonly calls: { method: string; path: string; params: Record<string, string>; files: string[] }[] = []
+  readonly posts: FakePost[] = []
+  readonly comments: FakeComment[] = []
+  private readonly unpublishedPhotos = new Set<string>()
+  private next = 5000
+  nowMs = Date.parse('2026-12-01T10:00:00.000Z')
+
+  private time(ms: number): string {
+    return new Date(ms).toISOString().replace(/\.\d{3}Z$/, '+0000')
+  }
+
+  private newPost(message: string, from: { id: string; name: string }, extra: { photos?: number; link?: string | null } = {}): FakePost {
+    const post: FakePost = { id: `${this.page.id}_${this.next++}`, message, created: this.nowMs, fromId: from.id, fromName: from.name, photos: extra.photos ?? 0, link: extra.link ?? null, reactions: 0 }
+    this.posts.unshift(post)
+    return post
+  }
+
+  /** The owner writes a post on Facebook by hand, as the Page. */
+  ownerPosts(message: string): FakePost {
+    return this.newPost(message, this.page)
+  }
+
+  /** Somebody comments under a post, or answers a comment. */
+  comment(postId: string, message: string, fromName: string, parentId: string | null = null): FakeComment {
+    const comment: FakeComment = { id: `${postId.split('_')[1]}_${this.next++}`, postId, parentId, message, created: this.nowMs, fromId: `u-${fromName}`, fromName }
+    this.comments.push(comment)
+    return comment
+  }
+
+  react(postId: string, times: number): void {
+    const post = this.posts.find((p) => p.id === postId)
+    if (post) post.reactions += times
+  }
+
+  private postJson(post: FakePost): Record<string, unknown> {
+    const all = this.comments.filter((c) => c.postId === post.id)
+    return {
+      id: post.id,
+      ...(post.message ? { message: post.message } : {}),
+      created_time: this.time(post.created),
+      permalink_url: `https://www.facebook.com/${this.page.username ?? this.page.id}/posts/${post.id.split('_')[1]}`,
+      from: { id: post.fromId, name: post.fromName },
+      reactions: { data: [], summary: { total_count: post.reactions } },
+      comments: { data: [], summary: { total_count: all.length } }
+    }
+  }
+
+  private commentJson(comment: FakeComment): Record<string, unknown> {
+    const own = comment.fromId === this.page.id
+    return {
+      id: comment.id,
+      message: comment.message,
+      created_time: this.time(comment.created),
+      permalink_url: `https://www.facebook.com/${this.page.username ?? this.page.id}/posts/${comment.postId.split('_')[1]}?comment_id=${comment.id.split('_')[1]}`,
+      ...(own || this.namesAuthors ? { from: { id: comment.fromId, name: comment.fromName } } : {}),
+      ...(comment.parentId ? { parent: { id: comment.parentId } } : {})
+    }
+  }
+
+  async request(req: HttpRequest): Promise<HttpResponse> {
+    const url = new URL(req.url)
+    const hit = /^\/v\d+\.\d+\/(.+)$/.exec(url.pathname)
+    if (url.host !== 'graph.facebook.com' || !hit) throw new Error(`Not a Graph API address: ${url.origin}${url.pathname}`)
+    const path = hit[1] as string
+    const params: Record<string, string> = Object.fromEntries(url.searchParams)
+    const files: string[] = []
+    for (const [name, value] of Object.entries(req.form ?? {})) {
+      if (typeof value === 'string') params[name] = value
+      else files.push(`${name}:${value.name}`)
+    }
+    const token = params.access_token
+    delete params.access_token
+    this.calls.push({ method: req.method, path, params, files })
+    const ok = (result: unknown): HttpResponse => ({ status: 200, headers: {}, text: JSON.stringify(result) })
+    const no = (code: number, message: string, status = 400): HttpResponse => ({ status, headers: {}, text: JSON.stringify({ error: { message, type: 'OAuthException', code } }) })
+    if (token === FAKE_USER_TOKEN) {
+      // A person's token: it has no field of a Page.
+      return path === 'me' ? no(100, '(#100) Tried accessing nonexisting field (category) on node type (User)') : no(200, '(#200) This needs a Page access token')
+    }
+    if (token !== this.token) return no(190, 'Error validating access token: Session has expired.')
+    if (req.method === 'GET') return this.read(path, params, ok, no)
+    if (this.failNext && this.failNext !== 'lost') {
+      const failure = this.failNext
+      this.failNext = null
+      return no(failure.code, failure.message, failure.status ?? 400)
+    }
+    const lose = this.failNext === 'lost'
+    if (lose) this.failNext = null
+    const answer = this.make(path, params, files, ok, no)
+    if (lose) throw new HttpNoAnswerError('no answer within 30 seconds')
+    return answer
+  }
+
+  private read(path: string, params: Record<string, string>, ok: (r: unknown) => HttpResponse, no: (c: number, m: string) => HttpResponse): HttpResponse {
+    const limit = Number(params.limit ?? 25)
+    if (path === 'me') return ok({ id: this.page.id, name: this.page.name, ...(this.page.username ? { username: this.page.username } : {}), link: `https://www.facebook.com/${this.page.username ?? this.page.id}`, category: 'Astrologist' })
+    if (path === this.page.id) return ok({ id: this.page.id, followers_count: 321 })
+    if (path === `${this.page.id}/feed`) return ok({ data: this.posts.slice(0, limit).map((p) => this.postJson(p)) })
+    const comments = /^(\d+(?:_\d+)?)\/comments$/.exec(path)
+    if (comments) {
+      const id = comments[1] as string
+      const post = this.posts.find((p) => p.id === id)
+      const under = post ? this.comments.filter((c) => c.postId === id) : this.comments.filter((c) => c.parentId === id)
+      if (!post && !this.comments.some((c) => c.id === id)) return no(100, `Unsupported get request. Object with ID '${id}' does not exist`)
+      const ordered = params.order === 'reverse_chronological' ? [...under].reverse() : under
+      return ok({ data: ordered.slice(0, limit).map((c) => this.commentJson(c)), ...(ordered.length > limit ? { paging: { next: 'https://graph.facebook.com/next' } } : {}) })
+    }
+    const post = this.posts.find((p) => p.id === path)
+    if (post) return ok(this.postJson(post))
+    const comment = this.comments.find((c) => c.id === path)
+    if (comment) return ok(this.commentJson(comment))
+    return no(100, `Unsupported get request. Object with ID '${path}' does not exist`)
+  }
+
+  private make(path: string, params: Record<string, string>, files: string[], ok: (r: unknown) => HttpResponse, no: (c: number, m: string) => HttpResponse): HttpResponse {
+    if (path === `${this.page.id}/feed`) {
+      const attached = Object.keys(params).filter((k) => k.startsWith('attached_media['))
+      for (const key of attached) {
+        const id = (JSON.parse(params[key] as string) as { media_fbid: string }).media_fbid
+        if (!this.unpublishedPhotos.delete(id)) return no(100, `(#100) Invalid parameter: no unpublished photo ${id}`)
+      }
+      if (!params.message && !params.link && attached.length === 0) return no(100, '(#100) Either link or message must be supplied')
+      return ok({ id: this.newPost(params.message ?? '', this.page, { photos: attached.length, link: params.link ?? null }).id })
+    }
+    if (path === `${this.page.id}/photos`) {
+      if (!files.some((f) => f.startsWith('source:'))) return no(100, '(#100) A photo needs a file or an address')
+      const photoId = String(this.next++)
+      if (params.published === 'false') {
+        this.unpublishedPhotos.add(photoId)
+        return ok({ id: photoId })
+      }
+      return ok({ id: photoId, post_id: this.newPost(params.caption ?? '', this.page, { photos: 1 }).id })
+    }
+    const under = /^(\d+(?:_\d+)?)\/comments$/.exec(path)
+    if (under) {
+      const id = under[1] as string
+      const post = this.posts.find((p) => p.id === id)
+      const parent = this.comments.find((c) => c.id === id)
+      if (!post && !parent) return no(100, `Unsupported post request. Object with ID '${id}' does not exist`)
+      const postId = post ? post.id : (parent as FakeComment).postId
+      const made: FakeComment = { id: `${postId.split('_')[1]}_${this.next++}`, postId, parentId: parent ? parent.id : null, message: params.message ?? '', created: this.nowMs, fromId: this.page.id, fromName: this.page.name }
+      this.comments.push(made)
+      return ok({ id: made.id })
+    }
+    return no(100, `Unsupported post request: ${path}`)
+  }
+}

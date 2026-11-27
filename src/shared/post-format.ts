@@ -690,6 +690,8 @@ export interface PlatformForm {
   textLimit: number | null
   /** How many characters the platform's API takes as the words under a picture or a video, when that is less than `textLimit` (Telegram). */
   apiCaptionLimit?: number
+  /** `none`: the platform takes a video, but this application's API connector of it carries none (a Facebook Page). */
+  apiVideos?: 'none'
   /** `required`: a post without a picture is refused by the platform (Instagram). A video can stand in for the picture where the platform takes one (`videos` is not `none`). */
   pictures: 'none' | 'optional' | 'required'
   maxPictures: number
@@ -712,7 +714,7 @@ const OTHER: PlatformForm = { format: 'plain', hasTitle: false, titleLimit: null
 export const PLATFORM_FORMS: Record<string, PlatformForm> = {
   reddit: { format: 'markdown', hasTitle: true, titleLimit: 300, textLimit: 40_000, pictures: 'optional', maxPictures: 20, videos: 'optional', maxVideos: 1, link: 'field' },
   instagram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 2_200, pictures: 'required', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_bio' },
-  facebook: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 63_206, pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text' },
+  facebook: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 63_206, apiVideos: 'none', pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text' },
   threads: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 500, pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text' },
   x: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 280, pictures: 'optional', maxPictures: 4, videos: 'optional', maxVideos: 1, link: 'in_text' },
   linkedin: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 3_000, pictures: 'optional', maxPictures: 9, videos: 'optional', maxVideos: 1, link: 'in_text' },
@@ -1006,6 +1008,9 @@ export function sendProblems(platform: string, rendered: RenderedPost, ways: Sen
   const captionLimit = ways.api ? formOf(platform).apiCaptionLimit : undefined
   if (captionLimit !== undefined && rendered.attachments.length > 0 && [...rendered.text].length > captionLimit) {
     problems.push(`${label} takes at most ${captionLimit.toLocaleString('en-US')} characters with a picture or a video; this post has ${[...rendered.text].length.toLocaleString('en-US')}. Shorten the words, or send them without the picture.`)
+  }
+  if (ways.api && formOf(platform).apiVideos === 'none' && kindsOf(rendered.attachments).videos > 0) {
+    problems.push(`A video is not sent to ${label} through its API by this application. Take the video off, or publish it on ${label} yourself.`)
   }
   if (rendered.attachments.length > 0 && !ways.aiBrowser && !ways.api) {
     // A video is carried by the AI browser only: no connector of this application uploads one.

@@ -27,3 +27,11 @@ export function num(value: unknown): number | null {
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
+
+/** The words a platform's API is given as one text: the title first when there is one, then the text, then the link when the text does not hold it. */
+export function wordsWithLink(request: { title: string | null; text: string; link: string | null }): string {
+  const text = request.text.trim()
+  const title = request.title?.trim()
+  const parts = [title && !text.startsWith(title) ? title : '', text, request.link && !text.includes(request.link) ? request.link : '']
+  return parts.filter(Boolean).join('\n\n')
+}
