@@ -1458,6 +1458,8 @@ One release per phase; each is verified (`npm run verify`), installed and read o
 - [x] 3 channel trials (0.59.0, DEC-058): Trial card on the channel's Results tab, terms, counted number, Inbox item at the end, keep / stop and park / extend, AI proposes the terms; no hard limit on channels in work (owner's question 3 open)
 - [x] 4 positioning and the audience's words (0.60.0, DEC-059): two Setup steps; five answers proposed and approved; words bank from read Feed posts with their posts; both feed the AI's proposed posts; a repeated question gets a draft. Not built: an FAQ store with approved answers; use in reply drafts
 - [ ] 5 themes, campaigns, seasonal calendar
+  - [x] the seasonal calendar (0.61.0, DEC-060): Dates ahead card under the Posts calendar; moon, sign seasons, equinoxes/solstices computed, gift dates listed, the owner's dates; lead time per platform; draft per date and channel on a press; Inbox item; skip
+  - [ ] themes and campaigns (a named theme, its main piece, the recap in the weekly review); one post in versions per channel exists as post groups (DEC-032)
 - [ ] 7 conversations: reply window, took-off item, testimonials, people met
 - [ ] 8 wider listening
 - [ ] 9 the AI-answer check
