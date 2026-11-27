@@ -955,6 +955,8 @@ textarea.input.short {
   flex-wrap: wrap;
   gap: var(--space-3);
 }
-.posting-times-time {
-  width: 120px;
+/* Two classes, so the shared .input rule (full width) does not win. */
+.posting-times-add .posting-times-time {
+  width: 132px;
+  flex: none;
 }
