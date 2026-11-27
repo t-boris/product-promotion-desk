@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 
 import type { DraftInput } from '../../../../shared/api'
 import type { Attachment, Draft, Id, PostMarkup } from '../../../../shared/types'
 import { AiTextField } from '../../assist/AiField'
+import { TranslateDraft } from './TranslateDraft'
 import { useAssistBlock } from '../../assist/useAssistBlock'
 import { FileLoader } from '../../FileLoader'
 import { call, useQuery } from '../../hooks'
@@ -180,6 +181,7 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
           <FoundSources sources={shownFound?.sources ?? []} />
         </>
       )}
+      {ai && <TranslateDraft title={form.title} text={form.text} disabled={disabled || blocked !== null} onTranslated={(translated) => set(withTitle ? translated : { text: translated.text })} />}
       {inEditor && post?.channelId && <PostFlair channelId={post.channelId} value={form.flair} onChange={(flair) => onChange((current) => ({ ...current, flair }))} title={form.title} text={form.text} disabled={disabled} blocked={blocked} />}
       <div className="form-row">
         <Field label="Link (optional)" hint="Links are checked against the product's own website.">

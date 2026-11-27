@@ -1069,3 +1069,14 @@ button.post-picture.library:hover .post-thumb {
 .standing-notice blockquote.whole {
   white-space: pre-line;
 }
+
+/* Translate my post (DEC-065): one row under the text. */
+.draft-translate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.draft-translate .input {
+  width: auto;
+}

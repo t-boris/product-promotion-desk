@@ -505,6 +505,8 @@ export interface ApiMethods {
    * a malformed call or a draft too long to be read whole (never cut). If the product knowledge changes while the AI writes, the text is refused
    * (suggest_failed). Like the AI drafts, it works with any ready engine.
    */
+  /** The owner's own draft put into another language (one of `READING_LANGUAGES`). Nothing is stored: the editor takes the answer and the owner saves. */
+  'drafts.translate': [{ form: { title: string; text: string }; language: string }, { title: string; text: string }]
   'drafts.refine': [{ field: DraftHelpField; opportunityId?: Id; channelId?: Id; form: { title: string; text: string }; instruction?: string; about?: string }, DraftHelpResult]
   /**
    * What is in the material the owner gave for a post (files and folders, full paths): the files in the order they will be read, a count in words, what is left out and
