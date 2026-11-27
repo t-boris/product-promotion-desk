@@ -1472,12 +1472,19 @@ One release per phase; each is verified (`npm run verify`), installed and read o
 - [x] 11 account health (0.65.0, DEC-064): Health card on the account page: link share of posts and replies in 30 days, reach of the latest three posts against the ones before. Not built: warm-up plan (the account's age on its platform is unknown)
 - [ ] 12 launch venues
 
-## Review of the goal's work, 2026-11-27 (0.56.0 - 0.68.0)
-- Built and installed: results per post, tagged link, weekly review, channel trials, positioning, audience's words, dates ahead, AI-answer check, heard elsewhere, took-off item and waiting note, account health, translate my post, People, recap of one piece in several channels. DEC-056 to DEC-066.
-- Every release: `npm run verify` green (6303 tests at 0.68.0), installed, the new screen read on the owner's data without pressing anything that saves or calls the AI.
-- Unproven live: every new button that saves or asks the AI (Prepare the review, Start the trial, Let the AI propose, Take from read posts, Prepare a post, Ask now, Look now, Translate, Add a person).
-- Not built, waits for the owner: phases F-J (developer apps and keys, proofs T2-T4); site analytics (which one); "week with no time" (question 6 of the document); launch venues (only if software); a hard limit on channels in work.
-- Not built, no blocker but not done: readers of post numbers for browser-worked channels; goals with a number and a date; a named theme over several pieces; Threads topic, Pinterest keywords, carousel, shot list; warm-up plan; "Remember this person" on a Feed comment; a found place turned into a channel by a press.
+## Review of the goal's work, 2026-11-27 (0.56.0 - 0.72.0)
+- Built and installed: results per post, tagged link, weekly review, channel trials, positioning, audience's words, dates ahead, AI-answer check, heard elsewhere, took-off item and waiting note, account health, translate my post, People, recap of one piece in several channels (0.68.0), a goal's number and date + "Remember" on a Feed comment + "Add as a channel" on a find (0.69.0, DEC-067), warm-up plan (0.70.0, DEC-068), plan a post as a carousel or a short video (0.71.0, DEC-069), campaigns (0.72.0, DEC-070). DEC-056 to DEC-070.
+- Every release: `npm run verify` green (6317 tests at 0.72.0), installed, the new screen read on the owner's data without pressing anything that saves or calls the AI.
+- Unproven live: every new button that saves or asks the AI.
+- Not built, each waits for the owner:
+  - phases F-J: the owner's developer apps and keys, proofs T2-T4, facts D8 (the plan forbids product code on an unproven answer)
+  - site analytics, visits and sales as goal measures: which analytics the sites use
+  - "week with no time" and the minimum weekly plan: question 6 of the document (send a re-cut, or leave the week empty)
+  - a hard limit on channels in work: the owner's number
+  - launch venues: only if the product counts as software
+  - Threads topic tag and Pinterest keywords: the open tags question (memory: Reddit editor mode and tags)
+  - numbers under posts on browser-worked channels: the application keeps no address of such a post, so there is nothing to open and read
+- Small leftovers: the goal's progress line on the Overview; campaign days drawn on the calendar grid.
 
 ## Phase A steps
 - [x] `scheduledByOwner`: any item the owner gave a time (not only a Feed answer); `publications.schedule` accepts any channel and replies
