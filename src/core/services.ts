@@ -1,7 +1,7 @@
 // Cross-module service contracts. Modules attach their implementation to `core.services` in `register()`
 // and consume other modules only through these interfaces, so they can be built and tested independently.
 
-import type { AgentAsk, CapabilityKey, Channel, Claim, Id, MetricSnapshot, PostStanding, SendAction } from '../shared/types'
+import type { AgentAsk, CapabilityKey, Channel, Claim, Id, MetricSnapshot, PostResultsView, PostStanding, SendAction } from '../shared/types'
 import type { PostMissionService } from './browser-agent/post-submit'
 import type { WatchMissionService } from './browser-agent/watch'
 import type { ResearchMissionService } from './browser-agent/research'
@@ -72,6 +72,10 @@ export interface SendingService {
   awaited(): { dueTimes: string[]; sending: boolean }
   /** Looks again at confirmed posts that are due (a site may have removed one). Returns the changes worth telling the owner. `stop` ends the scan between posts. */
   checkStandings(stop?: () => boolean): Promise<StandingChange[]>
+  /** Reads what the site shows under the sent posts that are due for it (likes, comments, views). Returns how many posts got a reading. */
+  readPostNumbers(stop?: () => boolean): Promise<number>
+  postResults(channelId: Id): PostResultsView
+  readPostResultsNow(channelId: Id): Promise<PostResultsView>
 }
 
 /** A confirmed post whose standing on the platform changed in a way the owner should hear of: taken down, or back up. */

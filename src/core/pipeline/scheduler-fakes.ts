@@ -1,6 +1,6 @@
 // Test doubles for the scheduler and lifecycle tests. Not imported by production code.
 
-import type { Capability, Id, MetricReading } from '../../shared/types'
+import type { Capability, Id, MetricReading, PostResultsView } from '../../shared/types'
 import type { Connector, ConnectorContext } from '../ports'
 import type { DraftingService, MetricsService, MonitorOutcome, MonitorService, SendingService, StandingChange } from '../services'
 import type { FakeClock } from '../testing/fakes'
@@ -109,6 +109,18 @@ export class FakeDrafting implements DraftingService {
 }
 
 export class FakeSending implements SendingService {
+  async readPostNumbers(): Promise<number> {
+    return 0
+  }
+
+  postResults(channelId: string): PostResultsView {
+    return { channelId, platform: 'fake', readable: false, posts: [] }
+  }
+
+  async readPostResultsNow(channelId: string): Promise<PostResultsView> {
+    return this.postResults(channelId)
+  }
+
   awaited(): { dueTimes: string[]; sending: boolean } {
     return { dueTimes: [], sending: false }
   }

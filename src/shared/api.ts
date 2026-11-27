@@ -83,6 +83,7 @@ import type {
   ProductSource,
   PromotionGoalInput,
   ResultsHistory,
+  PostResultsView,
   ResultsView,
   RoleSuggestion,
   TagsView,
@@ -621,6 +622,10 @@ export interface ApiMethods {
   'results.refresh': [{ channelId: Id }, MetricSnapshot[]]
   /** Every kept reading of the product's channels over the last `days` days (1-365). Readings the platform did not give stay null. */
   'results.history': [{ productId: Id; days: number }, ResultsHistory]
+  /** The posts the owner sent to a channel, with what the site shows under each (likes or points, comments, views) and how that changed. */
+  'results.posts': [{ channelId: Id }, PostResultsView]
+  /** Reads those numbers from the site now. */
+  'results.readPosts': [{ channelId: Id }, PostResultsView]
   /** The funnel, the channels, the attention items and the sends per day of one product over the last `days` days (1-365); `utcOffsetMinutes` is `-new Date().getTimezoneOffset()`. */
   'overview.get': [{ productId: Id; days: number; utcOffsetMinutes?: number }, OverviewView]
   'runs.list': [{ limit?: number; channelId?: Id }, Run[]]

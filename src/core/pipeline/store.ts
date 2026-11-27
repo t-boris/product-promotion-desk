@@ -1,6 +1,7 @@
 // SQL access for the discussion → draft → approval → sending flow. Everything that touches the
 // opportunity/draft/approval/action tables goes through here so the other flow modules stay free of SQL.
 
+import type { PostNumbers } from '../../shared/post-numbers'
 import { ApiError } from '../../shared/api'
 import { siteLinkFor } from '../../shared/post-format'
 import type { PostType, QuickCard } from '../../shared/quick-post'
@@ -670,6 +671,26 @@ export class FlowStore {
     this.db
       .prepare('UPDATE send_actions SET standing = ?, standing_note = ?, standing_notice = ?, standing_notice_by = ?, standing_checked_at = ? WHERE id = ?')
       .run(standing, note, notice?.text ?? null, notice?.by ?? null, checkedAt, actionId)
+  }
+
+  /** What the site showed under a sent post at one reading: kept on the send (the latest) and in the history. A reading that found no number at all is not kept. */
+  saveNumbers(actionId: Id, numbers: PostNumbers, readAt: string): void {
+    this.db.prepare('UPDATE send_actions SET likes = ?, comments = ?, views = ?, numbers_read_at = ? WHERE id = ?').run(numbers.likes, numbers.comments, numbers.views, readAt, actionId)
+    this.db.prepare('INSERT OR REPLACE INTO post_number_readings (action_id, read_at, likes, comments, views) VALUES (?, ?, ?, ?, ?)').run(actionId, readAt, numbers.likes, numbers.comments, numbers.views)
+  }
+
+  /** The readings of one sent post, oldest first. */
+  numberReadings(actionId: Id): { readAt: string; likes: number | null; comments: number | null; views: number | null }[] {
+    return this.db.prepare('SELECT read_at AS readAt, likes, comments, views FROM post_number_readings WHERE action_id = ? ORDER BY read_at').all(actionId) as { readAt: string; likes: number | null; comments: number | null; views: number | null }[]
+  }
+
+  /** The confirmed sends of a channel that carry the platform's own id, completed at or after `sinceIso`, newest first. */
+  sentPostsOfChannel(channelId: Id, sinceIso: string): SendAction[] {
+    return (
+      this.db
+        .prepare("SELECT a.* FROM send_actions a JOIN opportunities o ON o.id = a.opportunity_id WHERE o.channel_id = ? AND o.kind = 'standalone' AND a.state = 'confirmed' AND a.result_external_id IS NOT NULL AND a.completed_at >= ? ORDER BY a.completed_at DESC, a.rowid DESC")
+        .all(channelId, sinceIso) as Row[]
+    ).map(mapAction)
   }
 
   sendingActions(): SendAction[] {

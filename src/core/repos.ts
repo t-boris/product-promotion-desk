@@ -268,6 +268,7 @@ export const mapAction = (r: Row): SendAction => ({
   standing: (r.standing as SendAction['standing']) ?? null,
   standingNote: (r.standing_note as string | null) ?? null,
   standingCheckedAt: (r.standing_checked_at as string | null) ?? null,
+  numbers: typeof r.numbers_read_at === 'string' ? { likes: (r.likes as number | null) ?? null, comments: (r.comments as number | null) ?? null, views: (r.views as number | null) ?? null, readAt: r.numbers_read_at } : null,
   standingNotice: typeof r.standing_notice === 'string' ? { by: (r.standing_notice_by as string | null) ?? '', text: r.standing_notice } : null
 })
 

@@ -6,6 +6,7 @@
 //  - a confirmed reply shows up in the thread as the account's own comment, like on a real platform.
 // Not imported by production code.
 
+import type { PostNumbers } from '../../shared/post-numbers'
 import type { Capability, CapabilityKey, MetricReading } from '../../shared/types'
 import type {
   ActivityBatch,
@@ -332,6 +333,21 @@ export class FakeConnector implements Connector {
       body: request.text,
       url: ref.url,
       postedAt: new Date().toISOString()
+    })
+  }
+
+  /** What the platform shows under the account's posts, by their platform id. A post not listed is not found. */
+  readonly postNumbers = new Map<string, PostNumbers>()
+  numbersError: Error | null = null
+  /** The posts each `readPostNumbers` call asked about. */
+  readonly numbersRequests: string[][] = []
+
+  async readPostNumbers(ctx: ConnectorContext, posts: { externalId: string; url: string | null }[]): Promise<Record<string, PostNumbers>> {
+    this.calls.push('readPostNumbers')
+    this.numbersRequests.push(posts.map((p) => p.externalId))
+    return this.withBrowser(ctx, 'fake-numbers', () => {
+      if (this.numbersError) throw this.numbersError
+      return Object.fromEntries(posts.filter((p) => this.postNumbers.has(p.externalId)).map((p) => [p.externalId, this.postNumbers.get(p.externalId) as PostNumbers]))
     })
   }
 

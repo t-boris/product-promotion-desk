@@ -1,6 +1,7 @@
 // Domain types shared by the core, the main process and the UI.
 // Everything here is plain serializable data (it crosses IPC / HTTP boundaries).
 
+import type { PostNumbers } from './post-numbers'
 import type { PostType, QuickCard } from './quick-post'
 import type { PostingSlot } from './schedule'
 import type { ThemeChoice } from './themes'
@@ -979,6 +980,8 @@ export interface SendAction {
   standingNote: string | null
   standingCheckedAt: IsoTime | null
   /** What the community itself wrote under a removed post (its bot's or a moderator's pinned comment); null when there is none or the post is up. */
+  /** What the site shows under the post, as the application last read it (likes or points, comments, views; null where the site shows none), and when. Null until the first reading. */
+  numbers: (PostNumbers & { readAt: IsoTime }) | null
   standingNotice: CommunityNotice | null
 }
 
@@ -1501,6 +1504,27 @@ export interface ResultsView {
 }
 
 /** One reading of one metric. `value` is null where the platform gave none: a missing reading is never drawn as zero. */
+/** One post the owner sent, with what the site shows under it (DEC-056). */
+export interface PostResult {
+  actionId: Id
+  opportunityId: Id
+  title: string
+  url: string | null
+  sentAt: IsoTime
+  /** The site took it down: it is not read any more, and its last numbers stay. */
+  removed: boolean
+  numbers: (PostNumbers & { readAt: IsoTime }) | null
+  readings: { readAt: IsoTime; likes: number | null; comments: number | null; views: number | null }[]
+}
+
+export interface PostResultsView {
+  channelId: Id
+  platform: string
+  /** False when the application has no way to read the numbers on this channel (it then says so instead of showing an empty table). */
+  readable: boolean
+  posts: PostResult[]
+}
+
 export interface MetricPoint {
   capturedAt: IsoTime
   value: number | null

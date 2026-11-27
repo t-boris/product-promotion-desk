@@ -19,6 +19,7 @@ import type {
   VaultUnavailable
 } from '../shared/types'
 import type { McpLaunch } from './mcp/protocol'
+import type { PostNumbers } from '../shared/post-numbers'
 
 export interface Clock {
   now(): Date
@@ -584,6 +585,12 @@ export interface Connector {
    * browser made stays "unknown" until the owner looks (DEC-034).
    */
   findsOwnPosts?(channel: Channel): boolean
+  /**
+   * Optional: what the site shows under posts the account published in this channel (likes or points, comments, views), read without changing
+   * anything, for as many of the given posts as it can find in one reading. A post it did not find is left out; a number the site does not
+   * show is null. Absent means the connector cannot read them.
+   */
+  readPostNumbers?(ctx: ConnectorContext, posts: { externalId: string; url: string | null }[]): Promise<Record<string, PostNumbers>>
   /**
    * Present on a connector that works through the platform's own API with a key the owner saves (DEC-055). Such a connector serves only accounts
    * whose access is 'api', is never chosen by an address alone, uses no browser session, and carries every send of its channels itself.

@@ -1,3 +1,4 @@
+import type { PostNumbers } from '../../shared/post-numbers'
 import type {
   ActivityBatch,
   BrowserPage,
@@ -47,6 +48,9 @@ export interface RedditConnectorOptions extends Partial<RedditRuntime> {
  * Prepared connector for Reddit. Reading uses the site's JSON endpoints from inside the account's logged-in
  * page; writing drives the real forms. All network access goes through the controlled browser session.
  */
+/** Reddit hands out at most this many of an account's own posts in one reading. */
+const OWN_POSTS_NUMBERS = 100
+
 export class RedditConnector implements Connector {
   readonly id = 'reddit'
   readonly platform = 'reddit'
@@ -285,6 +289,25 @@ export class RedditConnector implements Connector {
       const post = own.value.find((p) => p.fullname.toLowerCase() === ref.externalId.toLowerCase())
       const notice = post ? await api.notice(post.subreddit, ref.externalId) : null
       return { ...reading, notice: notice?.ok ? notice.value : null }
+    })
+  }
+
+  /** Points and comments of the account's own posts, from its own list of posts (one reading serves every post asked for). Reddit shows no views there. */
+  readPostNumbers(ctx: ConnectorContext, posts: { externalId: string; url: string | null }[]): Promise<Record<string, PostNumbers>> {
+    return ctx.session.withAgentControl(`numbers:${ctx.channel.id}`, async (page) => {
+      await ensureRedditOrigin(page, ctx.channel.url)
+      const api = new RedditApi(page)
+      const identity = ctx.account.identity ?? (await api.me())
+      if (!identity) throw new LoginRequiredError('the account is not signed in, so its own posts cannot be read.')
+      const own = await api.ownSubmitted(identity, OWN_POSTS_NUMBERS)
+      if (!own.ok) throw await refusalError(page, api, own, `Own posts could not be read: ${own.reason}`)
+      const wanted = new Set(posts.map((p) => p.externalId.toLowerCase()))
+      const found: Record<string, PostNumbers> = {}
+      for (const post of own.value) {
+        const asked = posts.find((p) => p.externalId.toLowerCase() === post.fullname.toLowerCase())
+        if (asked && wanted.has(post.fullname.toLowerCase())) found[asked.externalId] = { likes: post.score, comments: post.numComments, views: null }
+      }
+      return found
     })
   }
 

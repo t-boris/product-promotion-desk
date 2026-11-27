@@ -28,6 +28,7 @@ function action(overrides: Partial<SendAction> = {}): SendAction {
     standingNote: null,
     standingCheckedAt: null,
     standingNotice: null,
+    numbers: null,
     ...overrides
   }
 }

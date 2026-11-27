@@ -42,6 +42,7 @@ function action(over: Partial<SendAction> = {}): SendAction {
     standingNote: 'A moderator of r/AskAstrologers or its bot took it down; the moderators can still approve it.',
     standingCheckedAt: SENT,
     standingNotice: { by: 'AutoModerator', text: AUTOMOD },
+    numbers: null,
     ...over
   }
 }

@@ -41,5 +41,25 @@ ALTER TABLE send_actions ADD COLUMN standing_checked_at TEXT;
 ALTER TABLE send_actions ADD COLUMN standing_notice TEXT;
 ALTER TABLE send_actions ADD COLUMN standing_notice_by TEXT;
 `
+  },
+  {
+    id: 403,
+    name: 'results per post: what the site shows under a sent post, now and over time',
+    sql: `
+-- The latest reading stands on the send itself (what a row and a card show); NULL: the site does not show it, or it was never read.
+ALTER TABLE send_actions ADD COLUMN likes INTEGER;
+ALTER TABLE send_actions ADD COLUMN comments INTEGER;
+ALTER TABLE send_actions ADD COLUMN views INTEGER;
+ALTER TABLE send_actions ADD COLUMN numbers_read_at TEXT;
+-- Every reading, for the line over time.
+CREATE TABLE post_number_readings (
+  action_id TEXT NOT NULL REFERENCES send_actions(id) ON DELETE CASCADE,
+  read_at TEXT NOT NULL,
+  likes INTEGER,
+  comments INTEGER,
+  views INTEGER,
+  PRIMARY KEY (action_id, read_at)
+);
+`
   }
 ]

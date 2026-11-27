@@ -960,3 +960,29 @@ textarea.input.short {
   width: 132px;
   flex: none;
 }
+
+/* The Results tab of a channel: totals in a row, then one row per sent post. */
+.post-results-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  margin: 0 0 var(--space-4);
+}
+.post-results-totals > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 96px;
+}
+.post-results-totals dt {
+  color: var(--text-2);
+}
+.post-results-totals dd {
+  margin: 0;
+  font-size: var(--fs-section);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.post-results-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

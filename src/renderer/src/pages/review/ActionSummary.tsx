@@ -1,4 +1,5 @@
 import type { OpportunityCard } from '../../../../shared/types'
+import { numbersLine } from '../../../../shared/post-numbers'
 import { Badge, formatTime } from '../../ui'
 import { SEND_STATE_LABEL, SEND_STATE_TONE, isHttpUrl } from './labels'
 import { AddressLink } from '../AddressLink'
@@ -54,6 +55,15 @@ export function ActionSummary({ card }: { card: OpportunityCard }) {
               <dd>
                 <code>{action.resultExternalId ?? '—'}</code>
               </dd>
+              {action.numbers && numbersLine(card.channelPlatform, action.numbers) && (
+                <>
+                  <dt>Numbers</dt>
+                  <dd data-testid="post-numbers">
+                    {numbersLine(card.channelPlatform, action.numbers)}
+                    <span className="muted"> · read {formatTime(action.numbers.readAt)}</span>
+                  </dd>
+                </>
+              )}
               {action.standing && (
                 <>
                   <dt>On the site</dt>

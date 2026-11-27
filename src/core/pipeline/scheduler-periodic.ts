@@ -41,6 +41,7 @@ export class PeriodicTasks {
   private gateRetryAtMs = 0
   private metricsScanAtMs = 0
   private standingScanAtMs = 0
+  private numbersScanAtMs = 0
   private digestScanAtMs = 0
   private mixScanAtMs = 0
   private halted = false
@@ -138,6 +139,11 @@ export class PeriodicTasks {
         if (nowMs >= this.standingScanAtMs) {
           this.standingScanAtMs = nowMs + this.options.scanEveryMs
           this.launch('standing', () => this.checkStandings(sending))
+        }
+        // What the site shows under each sent post is read again as the post ages (likes, comments, views).
+        if (nowMs >= this.numbersScanAtMs) {
+          this.numbersScanAtMs = nowMs + this.options.scanEveryMs
+          this.launch('post-numbers', async () => void (await sending.readPostNumbers(() => this.halted || this.pausedAtTick)))
         }
       }
       // The content mix prepares drafts that are due. Drafts only: it never approves and never sends (DEC-033).

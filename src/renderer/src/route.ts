@@ -173,7 +173,7 @@ export function channelsAccountOf(hash: string): string | null {
 }
 
 /** The pages of one channel (DEC-037): where it stands, what the AI plans for it, how often it prepares own posts, and how it is run. */
-export const CHANNEL_TABS = ['status', 'plan', 'mix', 'settings'] as const
+export const CHANNEL_TABS = ['status', 'results', 'plan', 'mix', 'settings'] as const
 export type ChannelTab = (typeof CHANNEL_TABS)[number]
 
 export const DEFAULT_CHANNEL_TAB: ChannelTab = 'status'

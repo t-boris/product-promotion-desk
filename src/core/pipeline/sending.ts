@@ -13,7 +13,8 @@
 // this service must not hold control around the connector call.
 
 import { ApiError } from '../../shared/api'
-import type { Id, SendAction } from '../../shared/types'
+import type { Id, PostResultsView, SendAction } from '../../shared/types'
+import { PostResults } from './post-results'
 import type { Core } from '../core'
 import { TakeoverError, TicketError, type Connector, type ConnectorContext, type PublishOutcome, type PublishedRef } from '../ports'
 import type { SendingService, StandingChange } from '../services'
@@ -66,6 +67,7 @@ export class SendingFlow implements SendingService {
   private readonly lastHold = new Map<string, string>()
   private readonly missions: MissionPublisher
   private readonly standings: StandingChecks
+  private readonly results: PostResults
 
   constructor(
     private readonly core: Core,
@@ -77,6 +79,19 @@ export class SendingFlow implements SendingService {
   ) {
     this.missions = new MissionPublisher(core, gate, store)
     this.standings = new StandingChecks(core, store)
+    this.results = new PostResults(core, store)
+  }
+
+  readPostNumbers(stop?: () => boolean): Promise<number> {
+    return this.results.readDue(stop)
+  }
+
+  postResults(channelId: Id): PostResultsView {
+    return this.results.view(channelId)
+  }
+
+  readPostResultsNow(channelId: Id): Promise<PostResultsView> {
+    return this.results.readNow(channelId)
   }
 
   /** Looks again at the confirmed posts that are due: a site may have removed one since it was published (see standing.ts). */

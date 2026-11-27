@@ -15,6 +15,13 @@ export type { NotificationSink, AppNotification } from './attention-notify'
  * lifecycle/results work (I-7, I-8): automation state and pause, attention items, run log, action history,
  * results and platform metrics.
  */
+/** The sending service, which the flow module registers: asked when a call arrives, not when the handlers are set. */
+function sendingOf(core: Core): NonNullable<Core['services']['sending']> {
+  const sending = core.services.sending
+  if (!sending) throw new ApiError('not_implemented', 'Sending is not available.')
+  return sending
+}
+
 export function register(core: Core): void {
   registerFlow(core)
   core.services.metrics = new MetricsServiceImpl(core)
@@ -29,6 +36,8 @@ export function register(core: Core): void {
     'history.list': (args) => listHistory(core, args?.limit),
     'results.get': (args) => buildResultsView(core, args?.productId),
     'results.history': (args) => buildResultsHistory(core, args),
+    'results.posts': ({ channelId }) => sendingOf(core).postResults(channelId),
+    'results.readPosts': ({ channelId }) => sendingOf(core).readPostResultsNow(channelId),
     'overview.get': (args) => buildOverview(core, args),
     'results.refresh': async ({ channelId }) => {
       try {

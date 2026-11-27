@@ -73,7 +73,10 @@ export function PostsList({ rows, selectedId, onSelect, footer }: { rows: PostRo
                   <Badge tone={tone}>{row.attention ?? STATE_LABEL[row.state]}</Badge>
                 </span>
                 <span className="posts-row-line">{row.targets.join(' · ')}</span>
-                <span className="posts-row-line posts-row-when">{whenOf(row)}</span>
+                <span className="posts-row-line posts-row-when">
+                  {whenOf(row)}
+                  {row.numbers && <span data-testid={`post-row-numbers-${row.id}`}> · {row.numbers}</span>}
+                </span>
               </span>
             </button>
             {selected && row.kind === 'group' && (

@@ -2,6 +2,7 @@
 // are in, and the filter, the search and the sort over them. Pure, so it is tested from src/main/posts-logic.test.ts.
 // The state of a post comes from its opportunity and nothing else; the screen never invents one.
 
+import { numbersLine } from '../../../../shared/post-numbers'
 import { isTakenDown } from '../../../../shared/standing'
 import { kindsOf } from '../../../../shared/post-format'
 import type { Attachment, Id, IsoTime, OpportunityCard, OpportunityState, PostGroupCard } from '../../../../shared/types'
@@ -87,6 +88,8 @@ export interface PostRow {
   scheduledAt: IsoTime | null
   /** When the last version was confirmed sent, if any. */
   sentAt: IsoTime | null
+  /** What the sites show under the sent versions, added up: "1.2k views · 84 likes · 12 comments". Null until something was read. */
+  numbers: string | null
 }
 
 /** Least finished first: a group with a draft in it is shown as a draft. */
@@ -106,6 +109,17 @@ export function titleOf(card: OpportunityCard): string {
   const first = (draft?.text ?? '').split('\n').map((line) => line.trim()).find((line) => line !== '')
   if (!first) return draft && draft.attachments.length > 0 ? (kindsOf(draft.attachments).videos > 0 ? 'Video post' : 'Picture post') : 'Empty draft'
   return first.length > TITLE_LIMIT ? `${first.slice(0, TITLE_LIMIT - 1)}…` : first
+}
+
+/** The numbers of a row: one version's own line in its platform's words; several versions added up, with the plain word for likes. */
+export function numbersOfCards(cards: readonly OpportunityCard[]): string | null {
+  const read = cards.filter((c) => c.lastAction?.numbers)
+  if (read.length === 0) return null
+  const sum = (key: 'likes' | 'comments' | 'views'): number | null => {
+    const values = read.map((c) => c.lastAction?.numbers?.[key]).filter((v): v is number => typeof v === 'number')
+    return values.length > 0 ? values.reduce((a, b) => a + b, 0) : null
+  }
+  return numbersLine(read.length === 1 ? (read[0] as OpportunityCard).channelPlatform : '', { likes: sum('likes'), comments: sum('comments'), views: sum('views') })
 }
 
 function rowOf(id: Id, kind: PostRow['kind'], cards: OpportunityCard[], masterText = ''): PostRow {
@@ -136,7 +150,8 @@ function rowOf(id: Id, kind: PostRow['kind'], cards: OpportunityCard[], masterTe
     thumbnail: cards.flatMap((c) => c.draft?.attachments ?? [])[0] ?? null,
     updatedAt: cards.map((c) => c.opportunity.updatedAt).sort().reverse()[0],
     scheduledAt: scheduled[0] ?? null,
-    sentAt: sent[sent.length - 1] ?? null
+    sentAt: sent[sent.length - 1] ?? null,
+    numbers: numbersOfCards(cards)
   }
 }
 
