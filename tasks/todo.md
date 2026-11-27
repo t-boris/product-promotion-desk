@@ -1459,7 +1459,8 @@ One release per phase; each is verified (`npm run verify`), installed and read o
 - [x] 4 positioning and the audience's words (0.60.0, DEC-059): two Setup steps; five answers proposed and approved; words bank from read Feed posts with their posts; both feed the AI's proposed posts; a repeated question gets a draft. Not built: an FAQ store with approved answers; use in reply drafts
 - [ ] 5 themes, campaigns, seasonal calendar
   - [x] the seasonal calendar (0.61.0, DEC-060): Dates ahead card under the Posts calendar; moon, sign seasons, equinoxes/solstices computed, gift dates listed, the owner's dates; lead time per platform; draft per date and channel on a press; Inbox item; skip
-  - [ ] themes and campaigns (a named theme, its main piece, the recap in the weekly review); one post in versions per channel exists as post groups (DEC-032)
+  - [x] the recap of one piece in several channels on Review (0.68.0), on post groups (DEC-032)
+  - [ ] a named theme over several pieces, with its own calendar
 - [ ] 7 conversations: reply window, took-off item, testimonials, people met
   - [x] took-off Inbox item and the waiting note on comments to the account (0.64.0, DEC-063)
   - [x] testimonials with permission and source; the people met (0.67.0, DEC-066): People screen in the sidebar, the owner's own notes. Not built: "Remember this person" on a Feed comment; testimonials offered in the post editor
@@ -1470,6 +1471,13 @@ One release per phase; each is verified (`npm run verify`), installed and read o
   - [ ] topic tag for Threads, keywords for Pinterest, carousel as a post form, shot list for a video
 - [x] 11 account health (0.65.0, DEC-064): Health card on the account page: link share of posts and replies in 30 days, reach of the latest three posts against the ones before. Not built: warm-up plan (the account's age on its platform is unknown)
 - [ ] 12 launch venues
+
+## Review of the goal's work, 2026-11-27 (0.56.0 - 0.68.0)
+- Built and installed: results per post, tagged link, weekly review, channel trials, positioning, audience's words, dates ahead, AI-answer check, heard elsewhere, took-off item and waiting note, account health, translate my post, People, recap of one piece in several channels. DEC-056 to DEC-066.
+- Every release: `npm run verify` green (6303 tests at 0.68.0), installed, the new screen read on the owner's data without pressing anything that saves or calls the AI.
+- Unproven live: every new button that saves or asks the AI (Prepare the review, Start the trial, Let the AI propose, Take from read posts, Prepare a post, Ask now, Look now, Translate, Add a person).
+- Not built, waits for the owner: phases F-J (developer apps and keys, proofs T2-T4); site analytics (which one); "week with no time" (question 6 of the document); launch venues (only if software); a hard limit on channels in work.
+- Not built, no blocker but not done: readers of post numbers for browser-worked channels; goals with a number and a date; a named theme over several pieces; Threads topic, Pinterest keywords, carousel, shot list; warm-up plan; "Remember this person" on a Feed comment; a found place turned into a channel by a press.
 
 ## Phase A steps
 - [x] `scheduledByOwner`: any item the owner gave a time (not only a Feed answer); `publications.schedule` accepts any channel and replies
