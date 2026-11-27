@@ -1462,7 +1462,7 @@ One release per phase; each is verified (`npm run verify`), installed and read o
   - [ ] themes and campaigns (a named theme, its main piece, the recap in the weekly review); one post in versions per channel exists as post groups (DEC-032)
 - [ ] 7 conversations: reply window, took-off item, testimonials, people met
 - [ ] 8 wider listening
-- [ ] 9 the AI-answer check
+- [x] 9 the AI-answer check (0.62.0, DEC-061): card on Review; up to 20 buyer questions (AI may propose); each asked with web search and no word about the product; named / cited worked out by the application; names and sites named most; checks kept and compared; asked again after 30 days. One engine only; no Inbox item
 - [ ] 10 content details
 - [ ] 11 account health
 - [ ] 12 launch venues
