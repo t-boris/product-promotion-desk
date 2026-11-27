@@ -39,3 +39,23 @@ describe('account health', () => {
     await expect(world.core.router.call('accounts.health', { accountId: 'nobody' })).rejects.toMatchObject({ code: 'not_found' })
   })
 })
+
+describe('the warm-up plan of an account', () => {
+  it('is started and stopped by the owner, counts posts with the site address since its start, and keeps its first day', async () => {
+    world = makeWorld()
+    world.core.db.prepare("UPDATE products SET website_url = 'https://natalmystic.test', add_site_link = 0 WHERE id = ?").run(world.product.id)
+    const accountId = world.channel.accountId
+    await sentPost('Before the plan: https://natalmystic.test/a', null)
+    expect((await world.core.router.call('accounts.health', { accountId })).warmUp).toBeNull()
+    const started = await world.core.router.call('accounts.warmUp', { accountId, on: true })
+    expect(started.warmUp).toMatchObject({ day: 1, replies: 0, postsWithLink: 0, over: false })
+    world.clock.advance(60_000)
+    await sentPost('In the plan: https://natalmystic.test/b', null)
+    await sentPost('In the plan, no address', null)
+    const again = await world.core.router.call('accounts.warmUp', { accountId, on: true })
+    expect(again.warmUp).toMatchObject({ startedAt: started.warmUp!.startedAt, day: 3, replies: 0, postsWithLink: 1 })
+    expect((await world.core.router.call('accounts.warmUp', { accountId, on: false })).warmUp).toBeNull()
+    await expect(world.core.router.call('accounts.warmUp', { accountId: 'nobody', on: true })).rejects.toMatchObject({ code: 'not_found' })
+    expect(world.engine.calls).toHaveLength(0)
+  })
+})

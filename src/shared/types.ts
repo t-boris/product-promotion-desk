@@ -3,7 +3,7 @@
 
 import type { CalendarKind, OwnDate } from './seasonal'
 import type { FindKind } from './listening'
-import type { LinkShare, Reach } from './account-health'
+import type { LinkShare, Reach, WarmUp } from './account-health'
 import type { PositioningAnswers, WordKind } from './positioning'
 import type { ChannelTrial, TrialMetric, TrialProgress } from './channel-trial'
 import type { WeekNumbers, WeekSums } from './weekly-review'
@@ -1284,6 +1284,8 @@ export interface AccountHealthView {
   replies: LinkShare
   /** Per channel of the account: the latest posts against the ones before. */
   reach: ({ channelId: Id; target: string; platform: string; /** Posts with numbers. */ posts: number } & Reach)[]
+  /** The warm-up plan the owner started for this account, with how far it is; null when none. */
+  warmUp: WarmUp | null
 }
 
 /** What a look on the open web found for a product (DEC-062). */

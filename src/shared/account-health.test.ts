@@ -28,3 +28,16 @@ describe('account health: the plain rules', () => {
     expect(reachOf([n(0), n(0), n(0), n(0), n(0), n(0)])).toMatchObject({ standing: 'usual' })
   })
 })
+
+describe('the warm-up plan', () => {
+  it('counts the day and the replies, and is over only with both', async () => {
+    const { warmUpLine, warmUpOf } = await import('./account-health')
+    const start = '2026-11-01T10:00:00.000Z'
+    const at = (days: number): number => Date.parse(start) + days * 86_400_000
+    expect(warmUpLine(warmUpOf(start, at(2.5), 4, 0))).toBe('Day 3 of 14 · 4 of 10 replies sent')
+    expect(warmUpLine(warmUpOf(start, at(2.5), 4, 1))).toBe('Day 3 of 14 · 4 of 10 replies sent · 1 post with your site’s address already sent')
+    expect(warmUpOf(start, at(20), 4, 0)).toMatchObject({ day: 14, over: false })
+    expect(warmUpOf(start, at(3), 12, 0).over).toBe(false)
+    expect(warmUpLine(warmUpOf(start, at(14), 12, 0))).toBe('Done: 12 replies in 14 days')
+  })
+})

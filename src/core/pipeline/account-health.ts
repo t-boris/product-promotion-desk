@@ -1,5 +1,6 @@
 // Account health (DEC-064): counted by the application from what the account sent and what was read under its posts. Nothing is stored.
-import { HEALTH_DAYS, carriesOwnLink, reachOf } from '../../shared/account-health'
+import { ApiError } from '../../shared/api'
+import { HEALTH_DAYS, carriesOwnLink, reachOf, warmUpOf, type WarmUp } from '../../shared/account-health'
 import type { AccountHealthView, Id } from '../../shared/types'
 import { found, requireText } from '../channels/errors'
 import type { Core } from '../core'
@@ -30,6 +31,22 @@ export function accountHealth(core: Core, args: { accountId: Id }): AccountHealt
     const of = sends.filter((s) => (s.kind === 'standalone') === (kind === 'post'))
     return { sent: of.length, withLink: of.filter((s) => carriesOwnLink(s.text, s.link, siteOf(s.product_id))).length }
   }
+  const started = core.db.prepare('SELECT started_at FROM account_warmups WHERE account_id = ?').get(account.id) as { started_at: string } | undefined
+  let warmUp: WarmUp | null = null
+  if (started) {
+    const since = core.db
+      .prepare(
+        `SELECT o.kind, o.product_id, d.text, d.link FROM send_actions a JOIN opportunities o ON o.id = a.opportunity_id JOIN drafts d ON d.id = a.draft_id
+         WHERE a.account_id = ? AND a.state = 'confirmed' AND a.completed_at >= ?`
+      )
+      .all(account.id, started.started_at) as { kind: string; product_id: Id; text: string; link: string | null }[]
+    warmUp = warmUpOf(
+      started.started_at,
+      nowMs,
+      since.filter((s) => s.kind !== 'standalone').length,
+      since.filter((s) => s.kind === 'standalone' && carriesOwnLink(s.text, s.link, siteOf(s.product_id))).length
+    )
+  }
   const channels = core.repos.listChannels().filter((c) => c.accountId === account.id)
   const since = new Date(nowMs - REACH_DAYS * DAY_MS).toISOString()
   return {
@@ -37,6 +54,7 @@ export function accountHealth(core: Core, args: { accountId: Id }): AccountHealt
     days: HEALTH_DAYS,
     posts: count('post'),
     replies: count('reply'),
+    warmUp,
     reach: channels.map((channel) => {
       const numbers = (
         core.db
@@ -48,4 +66,14 @@ export function accountHealth(core: Core, args: { accountId: Id }): AccountHealt
       return { channelId: channel.id, target: channel.target, platform: channel.platform, posts: numbers.length, ...reachOf(numbers) }
     })
   }
+}
+
+/** Starts or stops the warm-up plan of an account (DEC-068). Starting again keeps the day it was started on. It stops nothing and blocks nothing. */
+export function setWarmUp(core: Core, args: { accountId: Id; on: boolean }): AccountHealthView {
+  const account = found(() => core.repos.account(requireText(args.accountId, 'The account')), 'The account')
+  if (typeof args.on !== 'boolean') throw new ApiError('invalid_input', 'Say whether the plan is on.')
+  if (args.on) core.db.prepare('INSERT OR IGNORE INTO account_warmups (account_id, started_at) VALUES (?, ?)').run(account.id, core.clock.now().toISOString())
+  else core.db.prepare('DELETE FROM account_warmups WHERE account_id = ?').run(account.id)
+  core.events.changed('accounts')
+  return accountHealth(core, { accountId: account.id })
 }

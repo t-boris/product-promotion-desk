@@ -551,4 +551,16 @@ CREATE TABLE goal_targets (
 CREATE INDEX goal_targets_by_product ON goal_targets (product_id);
 `
   }
+  ,
+  {
+    id: 327,
+    name: 'a warm-up plan the owner started for an account',
+    sql: `
+-- DEC-068: the day the plan was started; how far it is is counted from what the account sent since.
+CREATE TABLE account_warmups (
+  account_id TEXT PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
+  started_at TEXT NOT NULL
+);
+`
+  }
 ]

@@ -55,3 +55,31 @@ export function reachOf(postsOldestFirst: readonly PostNumbers[]): Reach {
   const standing: ReachStanding = usual <= 0 ? 'usual' : recent <= usual * FELL_AT ? 'fell' : recent >= usual * ROSE_AT ? 'rose' : 'usual'
   return { recent, usual, standing }
 }
+
+/** A warm-up plan for a new account (DEC-068): this many days of replies before the first post with the owner's link. The application's own defaults. */
+export const WARM_UP_DAYS = 14
+export const WARM_UP_REPLIES = 10
+
+export interface WarmUp {
+  startedAt: string
+  /** The day of the plan, from 1; stays at the last day once the days have passed. */
+  day: number
+  /** Replies the account sent through the application since the plan started. */
+  replies: number
+  /** Posts with the product's own site address sent since the plan started. */
+  postsWithLink: number
+  /** The days have passed and the replies are sent. */
+  over: boolean
+}
+
+export function warmUpOf(startedAt: string, nowMs: number, replies: number, postsWithLink: number): WarmUp {
+  const passed = Math.max(0, Math.floor((nowMs - Date.parse(startedAt)) / 86_400_000))
+  return { startedAt, day: Math.min(WARM_UP_DAYS, passed + 1), replies, postsWithLink, over: passed >= WARM_UP_DAYS && replies >= WARM_UP_REPLIES }
+}
+
+/** "Day 3 of 14 · 4 of 10 replies sent" / "Done: 12 replies in 14 days" */
+export function warmUpLine(w: WarmUp): string {
+  if (w.over) return `Done: ${w.replies} replies in ${WARM_UP_DAYS} days`
+  const link = w.postsWithLink === 0 ? '' : ` · ${w.postsWithLink} ${w.postsWithLink === 1 ? 'post' : 'posts'} with your site’s address already sent`
+  return `Day ${w.day} of ${WARM_UP_DAYS} · ${w.replies} of ${WARM_UP_REPLIES} replies sent${link}`
+}
