@@ -25,8 +25,7 @@ const SHUTDOWN_DEADLINE_MS = 15_000
  *  - closing the last window keeps automation running (nothing quits on 'window-all-closed');
  *  - only an explicit Quit (menu-bar item, Cmd+Q, system shutdown/logout) stops it, via the core's shutdown hooks;
  *  - sleep and wake are forwarded to the scheduler, which starts nothing during sleep and spreads overdue work on wake;
- *  - automatic startup at login is deliberately NOT configured (no setLoginItemSettings anywhere): after a restart
- *    or login the user launches the application by hand.
+ *  - starting at login is the owner's switch (DEC-054, `background.ts`); without it the owner launches the application by hand.
  */
 export function installLifecycle({ app, core, showWindow, windowCount, automation, powerMonitor }: LifecycleOptions): { quit: () => void } {
   let quitting = false

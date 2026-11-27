@@ -499,6 +499,13 @@ export class SendingFlow implements SendingService {
 
   // ───────────── scheduled standalone publications ─────────────
 
+  /** What the schedule is waiting for: the planned times of the approved items that will go out by themselves, and whether something is being sent now (DEC-054). */
+  awaited(): { dueTimes: string[]; sending: boolean } {
+    const dueTimes = (this.core.db.prepare("SELECT scheduled_at AS at FROM opportunities WHERE state = 'ready' AND scheduled_at IS NOT NULL ORDER BY scheduled_at").all() as { at: string }[]).map((row) => row.at)
+    const sending = (this.core.db.prepare("SELECT COUNT(*) AS n FROM opportunities WHERE state = 'sending'").get() as { n: number }).n > 0
+    return { dueTimes, sending }
+  }
+
   /**
    * Sends, without a click, the approved posts and replies whose planned time has come: a time the owner set is the owner's press made ahead of time, on
    * exactly the content they approved (the gate and `sendWays` let those through, an automatic rule's approval never; DEC-049, DEC-053). Two

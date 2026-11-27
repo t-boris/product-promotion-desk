@@ -17,6 +17,9 @@ function checkedPatch(patch: Partial<AppSettings>): Partial<AppSettings> {
   if (patch.scheduleGraceHours !== undefined && !isScheduleGraceHours(patch.scheduleGraceHours)) {
     throw new ApiError('invalid_input', `A scheduled item may be late by ${MIN_SCHEDULE_GRACE_HOURS} to ${MAX_SCHEDULE_GRACE_HOURS} whole hours.`)
   }
+  for (const key of ['startAtLogin', 'keepAwake'] as const) {
+    if (patch[key] !== undefined && typeof patch[key] !== 'boolean') throw new ApiError('invalid_input', 'This setting is either on or off.')
+  }
   // The look is one of the themes the application has, and the animated background a plain on/off: anything else is refused and never stored (visual-system.md §33).
   if (patch.theme !== undefined && !isThemeChoice(patch.theme)) {
     throw new ApiError('invalid_input', 'Choose "Follow macOS" or one of the themes the application has.')

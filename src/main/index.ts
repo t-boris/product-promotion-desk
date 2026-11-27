@@ -1,6 +1,6 @@
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { BrowserWindow, Menu, app, clipboard, ipcMain, nativeTheme, powerMonitor, safeStorage } from 'electron'
+import { BrowserWindow, Menu, app, clipboard, ipcMain, nativeTheme, powerMonitor, powerSaveBlocker, safeStorage } from 'electron'
 import { ApiError, IPC_EVENT, IPC_INVOKE, type ApiEvent, type ApiMethod } from '../shared/api'
 import { APP_NAME } from '../shared/app-name'
 import { createEngines } from '../ai'
@@ -12,6 +12,7 @@ import { createConnectors } from '../connectors'
 import { createCore } from '../core/core'
 import { getAutomation, startAutomation } from '../core/pipeline'
 import { appMenuTemplate } from './app-menu'
+import { installBackground, openedAtLogin } from './background'
 import { installLifecycle } from './lifecycle'
 import { McpGateway } from './mcp-gateway'
 import { ElectronImageShrinker } from './image-shrinker'
@@ -178,8 +179,20 @@ async function start(): Promise<void> {
   const lifecycle = installLifecycle({ app, core, showWindow, windowCount: () => BrowserWindow.getAllWindows().length, automation, powerMonitor })
   createTray({ core, automation, showWindow, quit: lifecycle.quit })
   app.on('second-instance', showWindow)
-  core.log.info('app', `${APP_NAME} ${app.getVersion()} started`)
-  showWindow()
+  // Start at login and keeping the Mac awake for the schedule (DEC-054) follow the settings: applied now, on every change of them, and once a minute.
+  const background = installBackground({ app, core, powerMonitor, powerSaveBlocker })
+  const unsubscribeBackground = core.events.subscribe((event) => {
+    if (event.type === 'changed' && (event.scope === 'settings' || event.scope === 'opportunities')) background.apply()
+  })
+  core.onShutdown(() => {
+    unsubscribeBackground()
+    background.stop()
+  })
+  const atLogin = openedAtLogin(app)
+  core.log.info('app', `${APP_NAME} ${app.getVersion()} started${atLogin ? ' at login, in the menu bar' : ''}`)
+  // A start made by the login item opens no window: the application is in the menu bar, and "Open" there shows it.
+  if (atLogin) core.background = true
+  else showWindow()
   // Every AI help needs an engine: with none chosen yet, the first ready one is used (it can be changed in Settings).
   core.engines
     .autoSelect()

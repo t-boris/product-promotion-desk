@@ -786,6 +786,20 @@ describe('standalone publications (REQ-003 criterion 5)', () => {
     expect((await world.core.router.call('app.settings.update', { scheduleGraceHours: 12 })).scheduleGraceHours).toBe(12)
   })
 
+  it('says what the schedule waits for: the times of approved items only, and whether something is being sent (DEC-054)', async () => {
+    world = makeWorld()
+    expect(sending().awaited()).toEqual({ dueTimes: [], sending: false })
+    const approved = await scheduledAndApproved('approved', 30)
+    const { opportunity } = await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title: 'not approved', text: 'body' } })
+    await world.core.router.call('publications.schedule', { id: opportunity.id, at: new Date(world.clock.now().getTime() + 10 * 60_000).toISOString() })
+    expect(sending().awaited()).toEqual({ dueTimes: [world.opportunity(approved.id).scheduledAt], sending: false })
+    world.core.db.prepare("UPDATE opportunities SET state = 'sending' WHERE id = ?").run(opportunity.id)
+    expect(sending().awaited().sending).toBe(true)
+
+    for (const patch of [{ startAtLogin: 'yes' }, { keepAwake: 1 }]) await expect(world.core.router.call('app.settings.update', patch as never)).rejects.toMatchObject({ code: 'invalid_input' })
+    expect(await world.core.router.call('app.settings.update', { startAtLogin: true, keepAwake: false })).toMatchObject({ startAtLogin: true, keepAwake: false })
+  })
+
   it('puts a publication on the channel\'s next free posting time, one item per time, and says when the channel has none', async () => {
     world = makeWorld()
     const create = async (title: string) => (await world.core.router.call('publications.create', { channelId: world.channel.id, draft: { title, text: `${title} body` } })).opportunity

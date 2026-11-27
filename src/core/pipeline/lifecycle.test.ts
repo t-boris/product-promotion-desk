@@ -202,14 +202,14 @@ describe('Shutdown and Quit (DEC-003)', () => {
     expect(h.monitor.calls).toHaveLength(1)
   })
 
-  it('never configures start-at-login: after a restart the user launches the app (DEC-003)', () => {
+  it('configures start-at-login in one place only, and there by the owner\'s setting (DEC-054, changing DEC-003)', () => {
     const dir = join(__dirname, '../../main')
-    const sources = readdirSync(dir)
-      .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))
-      .map((f) => readFileSync(join(dir, f), 'utf8'))
-      .join('\n')
-    const code = sources.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')
-    expect(code).not.toMatch(/setLoginItemSettings|openAtLogin/)
+    const strip = (text: string): string => text.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')
+    const files = readdirSync(dir).filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))
+    const users = files.filter((f) => /setLoginItemSettings|openAtLogin/.test(strip(readFileSync(join(dir, f), 'utf8'))))
+    expect(users).toEqual(['background.ts'])
+    // It is registered with the value of the setting and nothing else.
+    expect(strip(readFileSync(join(dir, 'background.ts'), 'utf8'))).toMatch(/const wanted = core\.settings\.app\(\)\.startAtLogin[\s\S]*setLoginItemSettings\(\{ openAtLogin: wanted \}\)/)
   })
 })
 

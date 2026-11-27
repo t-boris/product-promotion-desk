@@ -109,6 +109,10 @@ export class FakeDrafting implements DraftingService {
 }
 
 export class FakeSending implements SendingService {
+  awaited(): { dueTimes: string[]; sending: boolean } {
+    return { dueTimes: [], sending: false }
+  }
+
   sendDueCalls = 0
   reconcileCalls = 0
   dueResult = 0

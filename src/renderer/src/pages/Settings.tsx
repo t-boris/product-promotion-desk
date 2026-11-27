@@ -168,6 +168,28 @@ A post or a reply you gave a time goes out the same way when its time comes, wit
           </Hint>
         </More>
         {publishWithAi && !current?.engineId && <div className="hint warn">No AI engine is selected, so the AI cannot publish yet: select Claude Code or Codex above, or a send will stop and tell you.</div>}
+        <div className="rows">
+          <div className="group-row">
+            <Switch
+              checked={current?.startAtLogin ?? false}
+              disabled={!current || updating.busy}
+              onChange={(next) => void update({ startAtLogin: next })}
+              label="Start at login"
+              note="The application starts in the menu bar when you log in to this Mac, with no window, so scheduled items go out without you opening it."
+              testId="start-at-login-switch"
+            />
+          </div>
+          <div className="group-row">
+            <Switch
+              checked={current?.keepAwake ?? true}
+              disabled={!current || updating.busy}
+              onChange={(next) => void update({ keepAwake: next })}
+              label="Keep the Mac awake for scheduled items"
+              note="On mains power from 12 hours before an approved item's time, on battery from 15 minutes before, and while something is being sent. A Mac that already sleeps is not woken, and a closed lid still puts a laptop to sleep."
+              testId="keep-awake-switch"
+            />
+          </div>
+        </div>
         <Field label="A scheduled item may be late by" hint="Nothing is sent while the app is closed or the Mac sleeps. An item whose time passed by less than this goes out as soon as the app runs again; a later one comes back to you for review.">
           <select
             className="input"

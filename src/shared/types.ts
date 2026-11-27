@@ -1075,6 +1075,10 @@ export interface AppSettings {
   publishWith: PublishWith
   /** How many hours after its planned time a scheduled item may still go out by itself; later than that it returns to review (1-48, DEC-053). */
   scheduleGraceHours: number
+  /** The application starts by itself when the owner logs in to the Mac, in the menu bar with no window (DEC-054). */
+  startAtLogin: boolean
+  /** The Mac is kept from idle sleep before an approved, scheduled item's time and while something is being sent (DEC-054). */
+  keepAwake: boolean
   /** The look of the application (visual-system.md §33): `system` follows macOS (light Daylight, dark Graphite); anything else is a theme of its own. */
   theme: ThemeChoice
   /** A slow glow behind the pages. Off unless the owner turns it on, and never while macOS asks for less motion. */

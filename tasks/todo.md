@@ -1438,7 +1438,7 @@ One release per phase; each is verified (`npm run verify`), installed and read o
 
 ## Publishing plan
 - [x] A (0.51.0) a time for any channel (AI browser carries an owner-scheduled post), scheduled replies, lateness as a setting, posting times per channel with "Next free time"
-- [ ] B (0.52.0) start at login, keep the Mac awake around a due post
+- [x] B (0.52.0) start at login, keep the Mac awake around a due post
 - [ ] C (0.53.0) Reddit: flair and several pictures on a scheduled post; read-back in communities the app does not read
 - [ ] D (0.54.0) base for API connectors: network port, tokens in the vault, refresh, connect flow, own-post comment tracking, per-post numbers
 - [ ] E (0.55.0) Telegram bot connector

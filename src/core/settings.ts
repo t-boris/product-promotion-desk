@@ -11,6 +11,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   webMode: { enabled: false, port: DEFAULT_WEB_PORT },
   publishWith: 'connector',
   scheduleGraceHours: DEFAULT_SCHEDULE_GRACE_HOURS,
+  startAtLogin: false,
+  keepAwake: true,
   theme: DEFAULT_THEME,
   animatedBackground: false
 }
