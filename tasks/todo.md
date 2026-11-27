@@ -1484,7 +1484,7 @@ One release per phase; each is verified (`npm run verify`), installed and read o
   - site analytics, visits and sales per post and as goal measures: which analytics the sites use
   - an email list as a channel: question 4 of the document
   - a topic the AI browser types into the Threads composer: the open tags question
-  - numbers under posts on browser-worked channels: the application keeps no address of such a post
+  - numbers under posts on browser-worked channels: only the AI browser could read them there, and DEC-056 says the connector reads and the AI never supplies a number; they come with the API connectors of phases F-H, or need the owner's yes to let the AI read numbers
 
 ## Phase A steps
 - [x] `scheduledByOwner`: any item the owner gave a time (not only a Feed answer); `publications.schedule` accepts any channel and replies
