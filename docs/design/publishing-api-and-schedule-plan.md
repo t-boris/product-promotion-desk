@@ -140,6 +140,26 @@ Versions are proposals; each phase is one release, installed and checked on the 
 - `PinterestConnector` after Standard access is granted: pins with picture or video, board choice from the account's own list, analytics. Comments stay with the AI browser.
 - `LinkedInConnector` for a personal profile: text, link, pictures, video. Comments, replies and metrics stay with the AI browser; the 60-day sign-in is raised in Inbox a week ahead.
 
+## 6a. Status (2026-11-27)
+
+| Phase | State | Version | Not proven on a real site |
+|---|---|---|---|
+| A | built | 0.51.0 (DEC-053) | a scheduled send carried by the AI browser |
+| B | built | 0.52.0 (DEC-054) | a real start at login; the sleep blocker over a night |
+| C | built | 0.53.0 | a flair send by schedule; the read-back from the account's own posts |
+| D | built, with E | 0.55.0 (DEC-055) | — (the fake server only) |
+| E | built | 0.55.0 | everything: needs the owner's bot (proof T1) |
+| F, G, H | waiting | — | need the owner's Meta app and proofs T2 and T3 (section 5): no product code is written on an unproven answer |
+| I | waiting | — | needs the owner's paid X app and proof T4 |
+| J | waiting | — | needs Pinterest Standard access and a LinkedIn app |
+
+Built differently from the text above, and why:
+- Queue slots are a channel setting (`postingSlots`), not a table: a slot is only how a time is chosen, and nothing refers to a slot.
+- Keeping the Mac awake starts 12 hours before a due item on mains power (15 minutes on battery), not "a few minutes": a Mac that fell asleep an hour before cannot be woken.
+- An API channel belongs to an account of its own kind (a bot), connected with a key the owner pastes; there is no "Connect with the platform's API" step inside Add a channel.
+- From phase D, not built yet because nothing needs it: a job that polls every confirmed post for comments (Telegram receives comments as updates, Reddit through its inbox) and a token refresh job (a bot token does not expire). They come with the first connector that needs them (F).
+- Not built from phase A: scheduling a group of versions as a whole or spread over slots.
+
 ## 7. What does not change
 
 - Reddit stays on the account's browser session; no Reddit API app is registered.
