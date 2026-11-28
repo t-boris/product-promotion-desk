@@ -197,5 +197,13 @@ ALTER TABLE weekly_reviews ADD COLUMN plan_json TEXT NOT NULL DEFAULT '[]';
 -- Whether the account hid the comment on its platform (DEC-089): set by the owner's press here, and by what the platform says when it is read.
 ALTER TABLE comments ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
 `
+  },
+  {
+    id: 410,
+    name: 'drafts: the form the post\'s video goes out in',
+    sql: `
+-- 'reel' when the owner chose that the post's one video goes out as a Reel (DEC-092); NULL: the usual video post.
+ALTER TABLE drafts ADD COLUMN video_as TEXT;
+`
   }
 ]

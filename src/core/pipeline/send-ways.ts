@@ -1,8 +1,9 @@
 // How a send can be carried out, decided in one place: the approval's fit check, the gate's re-check at the send and the choice of the
 // executor ask the same question, so what the owner is told can be sent is what is sent (DEC-031).
 
-import { judgedForFit, kindsOf, renderForPlatform, sendProblems, type PostContent, type SendWays } from '../../shared/post-format'
+import { judgedForFit, kindsOf, platformLabel, renderForPlatform, sendProblems, type PostContent, type SendWays } from '../../shared/post-format'
 import type { Channel } from '../../shared/types'
+import { reelProblem } from '../../shared/video-as'
 import type { Core } from '../core'
 import { pictureFitProblems } from './picture-fit'
 
@@ -38,9 +39,13 @@ export const scheduledByOwner = (opp: { scheduledAt: string | null }): boolean =
  * Without `send` (the approval, before anyone presses anything) the question is whether it could, if the owner presses Send. For a channel with
  * no connector the engine is asked too: any engine that can work the browser may carry the send (the owner's decision of 2026-11-20), and the owner is told at the approval when the selected one cannot.
  */
+/** Whether a post to the channel may be a Reel: its connector publishes one (asked wherever a draft is stored for a channel, and by the screen through `sendWays`). */
+export const takesReel = (core: Core, channel: Pick<Channel, 'reads'> & { connectorId?: string }): boolean => sendWays(core, undefined, channel).reels === true
+
 export function sendWays(core: Core, send?: { automatic: boolean; approvedBy: string; scheduled?: boolean }, channel?: Pick<Channel, 'reads'> & { connectorId?: string }): SendWays {
   // A channel that works through its platform's API has one way, its connector, for everything it sends (DEC-055).
-  if (channel?.connectorId && core.connectors.get(channel.connectorId)?.api) return { aiBrowser: false, api: true, publicFiles: core.services.publicFiles?.ready() === true }
+  const connector = channel?.connectorId ? core.connectors.get(channel.connectorId) : undefined
+  if (connector?.api) return { aiBrowser: false, api: true, publicFiles: core.services.publicFiles?.ready() === true, ...(connector.reels ? { reels: true } : {}) }
   const noConnector = channel !== undefined && !channel.reads
   const only = noConnector ? { noConnector: true } : {}
   const chosen = (noConnector || core.settings.app().publishWith === 'ai_browser') && core.services.postMissions !== undefined
@@ -85,6 +90,13 @@ export function sendFitProblems(core: Core, draft: FlairedPost, platform: string
   const problems = sendProblems(platform, renderForPlatform(draft, platform), ways)
   const flair = flairProblem(draft, ways)
   if (flair) problems.push(flair)
+  if (draft.videoAs === 'reel') {
+    if (!ways.reels) problems.push(`The application does not publish a Reel on this ${platformLabel(platform)} channel: choose “Video post”.`)
+    else {
+      const notReel = reelProblem(draft.attachments)
+      if (notReel) problems.push(`${notReel} Leave only the video on the post, or choose “Video post”.`)
+    }
+  }
   if (draft.postType === 'quick') problems.push(...pictureFitProblems(core, platform, draft.attachments))
   return problems
 }

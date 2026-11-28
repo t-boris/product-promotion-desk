@@ -18,7 +18,8 @@ export function buildPublishRequest(opp: Opportunity, draft: Draft, parent: { ex
     link: post.link,
     attachments: post.attachments,
     flair: draft.flair,
-    topicTag: draft.topicTag
+    topicTag: draft.topicTag,
+    videoAs: draft.videoAs
   }
 }
 

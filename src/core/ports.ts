@@ -19,6 +19,7 @@ import type {
   PageReport,
   VaultUnavailable
 } from '../shared/types'
+import type { VideoAs } from '../shared/types'
 import type { McpLaunch } from './mcp/protocol'
 import type { PostNumbers } from '../shared/post-numbers'
 
@@ -587,6 +588,8 @@ export interface PublishRequest {
   flair?: string | null
   /** The one topic the post is filed under where the platform's composer has a field for it (Threads), as the owner approved it; null or left out: none. */
   topicTag?: string | null
+  /** `reel`: the owner chose that the post's one video goes out as a Reel (only for a connector that says `reels`); null or left out: the usual video post. */
+  videoAs?: VideoAs | null
   /** When the attempt being reconciled started; findPublished must ignore anything created before it. */
   attemptedAt?: IsoTime
   /**
@@ -694,6 +697,8 @@ export interface Connector {
   hideComment?(ctx: ConnectorContext, externalId: string, hidden: boolean): Promise<void>
   /** With `hideComment`: the platform hides only a comment that answers the post itself, together with everything under it (Threads). */
   hidesTopLevelOnly?: true
+  /** The platform has a second form for a post's one video, a Reel, and the connector publishes it when the request says `videoAs: 'reel'`. */
+  reels?: true
   /**
    * Present on a connector whose platform keeps a post and publishes it at a given time by itself, with this application closed (DEC-077): how
    * far ahead of that time the platform takes one. Such a connector answers a request with `publishAt` with `scheduled` and has the three

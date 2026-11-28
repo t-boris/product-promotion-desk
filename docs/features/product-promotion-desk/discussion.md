@@ -29,3 +29,9 @@ Correction to the previous note: the requirement that carries the criteria of DE
 ### Owner · 2026-11-08
 
 The owner added (2026-11-08, translated from Russian): for each product there is a channel and the credentials to connect with it, but for the same product on a channel such as Reddit one can connect with different credentials, writing as an astrologer in one case, as a developer in another, and so on; the credentials should be thought up, and there can be several per product. Answers to the follow-up questions: (1) a role with its own voice per login, the AI proposes roles and username ideas, the owner creates the real logins; (2) at most one login of a product per discussion, no replies to its own logins; (3) disclose the connection with the product, text editable. Recorded as DEC-010 and a new requirement; the application never registers accounts or handles passwords.
+
+### Answer to Q-002 · 2026-11-28
+
+How does the owner say that a video going to a Facebook Page through its API is a Reel and not a video post?
+
+A: A choice under the video of a post to a Facebook Page: "Video post" (chosen by default) or "Reel", with Facebook's limits for a Reel said beside it. The approval binds the choice. (Owner's decision from 2026-11-28 recorded in docs/design/remaining-work.md.)

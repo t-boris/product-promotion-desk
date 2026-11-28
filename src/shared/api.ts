@@ -116,7 +116,7 @@ import type {
   OverviewView
 } from './types'
 import type { PostType, QuickCard } from './quick-post'
-import type { AccountAccess } from './types'
+import type { AccountAccess, VideoAs } from './types'
 import type { QuickAssessArgs, QuickAssessment, QuickCaptionArgs, QuickCaptionResult, QuickPictureArgs, QuickPictureResult, QuickTrendsArgs, QuickTrendsResult } from './quick-ai'
 
 export interface SourcePreview {
@@ -202,6 +202,8 @@ export interface DraftInput {
   flair?: string | null
   /** The one topic of the post on a platform that has a field for it (Threads); null takes it off. Left out on a replacing draft, the earlier draft's topic stays. */
   topicTag?: string | null
+  /** `reel`: the post's one video goes out as a Reel where the channel takes one (a Facebook Page through its API); null: the usual video post. Left out on a replacing draft, the earlier draft's choice stays while the post is still one video. */
+  videoAs?: VideoAs | null
   /**
    * `quick` for a post written in the quick-post composer (one picture, a caption in `text`, no title; DEC-046), `article` for the long form. Left out on
    * a draft that replaces an earlier one, it keeps that draft's type (editing never changes the type); on a first draft it is `article`.

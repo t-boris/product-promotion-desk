@@ -10,9 +10,9 @@ import { judgedForFit, noConnectorProblem, renderForPlatform } from '../../share
 import type { PipelineHooks } from '../services'
 import type { Core } from '../core'
 import { attachmentProblem } from './attachments'
-import { assertTopicFits, inheritPostType, normalizeDraftInput } from './draft-input'
+import { assertTopicFits, assertVideoAsFits, inheritPostType, normalizeDraftInput } from './draft-input'
 import { contentHash, hashedIdentity } from './hash'
-import { sendFitProblems, sendWays } from './send-ways'
+import { sendFitProblems, sendWays, takesReel } from './send-ways'
 import { OTHER_LOGIN_SPEAKS_REASON, SEND_LOCKED_STATES, SPEAKING_STATES, type FlowStore } from './store'
 
 export const FACTS_CHANGED_REASON = 'Product facts changed; review again'
@@ -61,6 +61,8 @@ export class ReviewFlow implements PipelineHooks {
     const channel = this.store.requireChannel(opp.channelId)
     if (opp.kind === 'reply' && content.topicTag) throw new ApiError('invalid_input', 'A reply has no topic: only a post is filed under one.')
     assertTopicFits(channel.platform, content)
+    if (opp.kind === 'reply' && content.videoAs) throw new ApiError('invalid_input', 'A reply is not a Reel: only a post is.')
+    assertVideoAsFits(channel.platform, takesReel(this.core, channel), content)
 
     this.core.db.transaction(() => {
       // Re-read inside the transaction: the state may have changed while attachments were being checked.

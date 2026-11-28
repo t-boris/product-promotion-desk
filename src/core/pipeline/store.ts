@@ -29,6 +29,7 @@ import type {
   PostMarkup,
   SendAction
 } from '../../shared/types'
+import type { VideoAs } from '../../shared/types'
 import type { Core } from '../core'
 import { newId, toJson, type Db } from '../db/database'
 import { mapAccount, mapAction, mapApproval, mapComment, mapDiscussion, mapOpportunity } from '../repos'
@@ -89,6 +90,8 @@ export interface DraftContent {
   flair?: string | null
   /** The topic of the post (Threads); left out or null: none. A replacing draft that leaves it out keeps the earlier draft's. */
   topicTag?: string | null
+  /** `reel`: the one video goes out as a Reel; left out or null: the usual video post. A replacing draft that leaves it out keeps the earlier draft's. */
+  videoAs?: VideoAs | null
   /** The template card of a quick post; left out or null: the picture is not a card. */
   card?: QuickCard | null
 }
@@ -567,8 +570,8 @@ export class FlowStore {
     const id = newId()
     this.db
       .prepare(
-        `INSERT INTO drafts (id, opportunity_id, title, text, link, attachments_json, markup, post_type, card_json, knowledge_version_id, used_claims_json, rationale, author, created_at, flair, topic_tag)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO drafts (id, opportunity_id, title, text, link, attachments_json, markup, post_type, card_json, knowledge_version_id, used_claims_json, rationale, author, created_at, flair, topic_tag, video_as)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         id,
@@ -586,7 +589,8 @@ export class FlowStore {
         meta.author,
         this.now(),
         content.flair ? content.flair : null,
-        content.topicTag ? content.topicTag : null
+        content.topicTag ? content.topicTag : null,
+        content.videoAs === 'reel' ? 'reel' : null
       )
     return this.core.repos.draft(id)
   }

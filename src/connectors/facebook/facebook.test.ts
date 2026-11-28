@@ -10,6 +10,7 @@ import type { MonitorService, SendingService } from '../../core/services'
 import type { PublishRequest } from '../../core/ports'
 import { guideSteps } from '../../shared/connection-guide'
 import { renderForPlatform, sendProblems } from '../../shared/post-format'
+import { contentHash } from '../../core/pipeline/hash'
 import { UniversalConnector } from '../universal'
 import { FacebookPageConnector, pageOf, parseExternalId } from './connector'
 import { FAKE_PAGE_TOKEN, FAKE_USER_TOKEN, FakeFacebook, PAGE_ID } from './fake-facebook'
@@ -458,5 +459,180 @@ describe('a post given to Facebook\'s own schedule (DEC-077)', () => {
     w.clock.advance(13 * 60_000)
     expect(await w.sending.sendDuePublications()).toBe(1)
     expect(w.facebook.posts.filter((p) => p.published).map((p) => p.message)).toEqual(['Soon.'])
+  })
+})
+
+describe('a Reel on a Facebook Page (DEC-092)', () => {
+  const makeVideoFile = (name = 'vertical.mp4', size = 64) => {
+    const folder = mkdtempSync(join(tmpdir(), 'facebook-reel-test-'))
+    const path = join(folder, name)
+    const content = size === 0 ? Buffer.alloc(0) : Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftypisom'), Buffer.alloc(Math.max(0, size - 12))])
+    writeFileSync(path, content)
+    return { name, path, mime: 'video/mp4', sha256: `${name}-${size}`, bytes: content.length }
+  }
+
+  it('publishes a Reel in three steps (start, upload to rupload, finish) and waits until Facebook says published', async () => {
+    const w = await connected()
+    const clip = makeVideoFile('chart-reel.mp4', 80)
+    w.facebook.reelLooks = 3
+    const { opportunity } = await w.call('publications.create', {
+      channelId: w.channel.id,
+      draft: { title: null, text: 'Watch how a transit shifts.', attachments: [{ name: clip.name, path: clip.path, mime: clip.mime, sha256: clip.sha256 }], videoAs: 'reel' }
+    })
+    expect(w.core.repos.latestDraft(opportunity.id)?.videoAs).toBe('reel')
+    await w.call('opportunities.approve', { id: opportunity.id })
+    const asked = w.facebook.calls.length
+
+    const action = await w.sending.send(opportunity.id)
+    expect(action).toMatchObject({ state: 'confirmed', resultUrl: expect.stringMatching(/^https:\/\/www\.facebook\.com\/reel\/\d+\/$/), resultExternalId: expect.stringMatching(/^fb:\d+$/) })
+    const calls = w.facebook.calls.slice(asked)
+    const videoId = action.resultExternalId!.slice(3)
+    expect(calls.filter((c) => c.method === 'POST')).toEqual([
+      { method: 'POST', path: `${PAGE_ID}/video_reels`, params: { upload_phase: 'start' }, files: [] },
+      { method: 'POST', path: `rupload/${videoId}`, params: { offset: '0', file_size: String(clip.bytes) }, files: ['chart-reel.mp4'] },
+      { method: 'POST', path: `${PAGE_ID}/video_reels`, params: { upload_phase: 'finish', video_id: videoId, video_state: 'PUBLISHED', description: 'Watch how a transit shifts.' }, files: [] }
+    ])
+    expect(calls.filter((c) => c.method === 'GET' && c.path === videoId && c.params.fields === 'status')).toHaveLength(3)
+    expect(JSON.stringify(w.core.db.prepare('SELECT * FROM log_events').all())).not.toContain(FAKE_PAGE_TOKEN)
+  })
+
+  it('fails with Facebook\'s processing error, fails cleanly before finish, and reconciles a slow or lost finish from video_reels', async () => {
+    const w = await connected()
+    const clip = makeVideoFile('bad-ratio.mp4', 72)
+
+    // Facebook refuses the video during processing: named in Facebook's words, nothing published.
+    w.facebook.reelLooks = 2
+    w.facebook.reelError = 'Video aspect ratio must be 9:16 for Reels.'
+    expect(await w.send({ text: 'Wrong shape.', attachments: [clip], videoAs: 'reel' })).toMatchObject({
+      status: 'failed',
+      error: 'Facebook did not publish the Reel: Video aspect ratio must be 9:16 for Reels. Nothing was published.'
+    })
+
+    // Upload fails before finish -> definite failure, nothing sent.
+    w.facebook.reelError = null
+    w.facebook.reelLooks = 1
+    w.facebook.failNext = { code: 100, message: '(#100) Reel start refused' }
+    expect(await w.send({ text: 'Start refused.', attachments: [clip], videoAs: 'reel' })).toMatchObject({ status: 'failed', error: expect.stringMatching(/Nothing was sent/) })
+
+    // Lost answer on finish -> unknown, reconciled via GET /{page-id}/video_reels.
+    const { opportunity } = await w.call('publications.create', {
+      channelId: w.channel.id,
+      draft: { title: null, text: 'Lost finish reel.', attachments: [{ name: clip.name, path: clip.path, mime: clip.mime, sha256: clip.sha256 }], videoAs: 'reel' }
+    })
+    await w.call('opportunities.approve', { id: opportunity.id })
+    const orig = w.facebook.request.bind(w.facebook)
+    let lostOnce = false
+    w.facebook.request = async (req) => {
+      if (!lostOnce && req.method === 'POST' && req.form?.upload_phase === 'finish') {
+        lostOnce = true
+        w.facebook.failNext = 'lost'
+      }
+      return orig(req)
+    }
+    expect(await w.sending.send(opportunity.id)).toMatchObject({ state: 'unknown', error: expect.stringMatching(/not known whether the Reel is published/) })
+    expect(await w.sending.reconcile(opportunity.id)).toMatchObject({ state: 'confirmed', resultUrl: expect.stringMatching(/^https:\/\/www\.facebook\.com\/reel\/\d+\/$/) })
+    w.facebook.request = orig
+
+    // Processing takes longer than 60 looks -> unknown, found on next look.
+    w.facebook.reelLooks = 62
+    const slowReq: PublishRequest = { kind: 'post', destination: w.channel.url, parentExternalId: null, title: null, text: 'Slow reel.', link: null, attachments: [clip], videoAs: 'reel', attemptedAt: w.core.clock.now().toISOString() }
+    expect(await w.send(slowReq)).toMatchObject({ status: 'unknown', error: expect.stringMatching(/Facebook took the Reel and has not published it yet/) })
+    // Still processing (looksLeft is 2 -> not yet ready in video_reels), then after status completes it is found.
+    const slowReel = [...w.facebook.reels.values()].find((r) => r.description === 'Slow reel.')!
+    slowReel.published = true
+    expect(await w.connector.findPublished(w.ctx, slowReq)).toMatchObject({ url: `https://www.facebook.com/reel/${slowReel.id}/`, externalId: `fb:${slowReel.id}` })
+  })
+
+  it('refuses a Reel with a picture beside it, a Reel on a reply, a Reel for Facebook\'s schedule, and unreadable or empty files before asking Facebook', async () => {
+    const w = await connected()
+    const clip = makeVideoFile('ok.mp4', 64)
+    const empty = makeVideoFile('empty.mp4', 0)
+    const asked = w.facebook.calls.length
+
+    expect(await w.send({ text: 'Mix.', attachments: [clip, picture('a.jpg')], videoAs: 'reel' })).toMatchObject({ status: 'failed', error: expect.stringMatching(/A Reel is one video with no picture beside it.*Nothing was sent/) })
+    expect(await w.send({ text: 'No video.', attachments: [picture('a.jpg')], videoAs: 'reel' })).toMatchObject({ status: 'failed', error: expect.stringMatching(/A Reel is one video.*Nothing was sent/) })
+    expect(await w.send({ kind: 'reply', parentExternalId: `fb:${PAGE_ID}_1`, text: 'Hi', videoAs: 'reel' })).toMatchObject({ status: 'failed', error: expect.stringMatching(/A reply is not a Reel.*Nothing was sent/) })
+    expect(await w.send({ text: 'Scheduled.', attachments: [clip], videoAs: 'reel', publishAt: new Date(w.core.clock.now().getTime() + 3_600_000).toISOString() })).toMatchObject({ status: 'failed', error: expect.stringMatching(/not given to Facebook's own schedule/) })
+    expect(await w.send({ text: 'Missing.', attachments: [{ ...clip, path: '/nonexistent/missing.mp4' }], videoAs: 'reel' })).toMatchObject({ status: 'failed', error: expect.stringMatching(/could not be read/) })
+    expect(await w.send({ text: 'Empty.', attachments: [empty], videoAs: 'reel' })).toMatchObject({ status: 'failed', error: expect.stringMatching(/is empty/) })
+    expect(w.facebook.calls.length).toBe(asked)
+    expect(w.connector.ownSchedule?.takes?.({ kind: 'post', destination: w.channel.url, parentExternalId: null, title: null, text: 'Reel.', link: null, attachments: [clip], videoAs: 'reel' })).toBe(false)
+  })
+
+  it('does not give a scheduled Reel to Facebook\'s own schedule and sends it as a Reel from this Mac at its time', async () => {
+    const w = await connected()
+    const clip = makeVideoFile('later-reel.mp4', 64)
+    const at = new Date(w.core.clock.now().getTime() + 3 * 3_600_000).toISOString()
+    const { opportunity } = await w.call('publications.create', {
+      channelId: w.channel.id,
+      draft: { title: null, text: 'Scheduled reel.', attachments: [{ name: clip.name, path: clip.path, mime: clip.mime, sha256: clip.sha256 }], videoAs: 'reel' }
+    })
+    await w.call('publications.schedule', { id: opportunity.id, at })
+    await w.call('opportunities.approve', { id: opportunity.id })
+    const asked = w.facebook.calls.length
+
+    expect(await w.sending.keepOwnSchedules()).toBe(0)
+    expect(w.facebook.calls.length).toBe(asked)
+    w.clock.advance(3 * 3_600_000 + 60_000)
+    w.facebook.nowMs = w.core.clock.now().getTime()
+    expect(await w.sending.sendDuePublications()).toBe(1)
+    expect(w.facebook.calls.slice(asked).some((c) => c.path === `${PAGE_ID}/video_reels` && c.params.upload_phase === 'finish')).toBe(true)
+    expect(w.core.db.prepare('SELECT state FROM opportunities WHERE id = ?').get(opportunity.id)).toEqual({ state: 'confirmed' })
+  })
+
+  it('binds videoAs in the approval hash, carries it across text edits while the video stays, refuses it on other channels and replies, and shows it in the preview', async () => {
+    const w = await connected()
+    const clip = makeVideoFile('keep.mp4', 64)
+    const picFolder = mkdtempSync(join(tmpdir(), 'facebook-pic-test-'))
+    const picPath = join(picFolder, 'p.jpg')
+    writeFileSync(picPath, Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('pic')]))
+    const videoAtt = { name: clip.name, path: clip.path, mime: clip.mime, sha256: clip.sha256 }
+    const picAtt = { name: 'p.jpg', path: picPath, mime: 'image/jpeg', sha256: 'p.jpg' }
+
+    // sendWays exposes reels only for a Facebook Page API channel.
+    expect(await w.call('channels.sendWays', { channelId: w.channel.id })).toMatchObject({ api: true, reels: true })
+    const browserAcc = await w.call('accounts.create', { productId: w.productId, platform: 'facebook', label: 'Profile', kind: 'profile' })
+    const browserCh = await w.call('channels.connect', { productId: w.productId, accountId: browserAcc.id, target: 'https://www.facebook.com/personalprofile' })
+    expect(await w.call('channels.sendWays', { channelId: browserCh.id })).not.toHaveProperty('reels')
+
+    // Refused on a channel that does not publish Reels, and when a picture is beside the video.
+    await expect(w.call('publications.create', { channelId: browserCh.id, draft: { title: null, text: 'No.', attachments: [videoAtt], videoAs: 'reel' } })).rejects.toMatchObject({ code: 'invalid_input', message: expect.stringMatching(/does not publish a Reel/) })
+    await expect(w.call('publications.create', { channelId: w.channel.id, draft: { title: null, text: 'Mix.', attachments: [videoAtt, picAtt], videoAs: 'reel' } })).rejects.toMatchObject({ code: 'invalid_input', message: expect.stringMatching(/A Reel is one video with no picture beside it/) })
+
+    // Refused on a reply.
+    const post = w.facebook.ownerPosts('A post.')
+    w.facebook.comment(post.id, 'A comment?', 'Ann')
+    await w.monitor.runChannel(w.channel.id)
+    const reply = w.core.db.prepare("SELECT id FROM opportunities WHERE kind = 'reply' LIMIT 1").get() as { id: string }
+    await expect(w.call('opportunities.saveDraft', { id: reply.id, draft: { text: 'Answer.', attachments: [videoAtt], videoAs: 'reel' } })).rejects.toMatchObject({ code: 'invalid_input', message: expect.stringMatching(/A reply is not a Reel/) })
+
+    // Kept across a text rewrite while the video stays, cleared when choosing Video post or taking the video off, and invalidates approval on change.
+    const { opportunity } = await w.call('publications.create', { channelId: w.channel.id, draft: { title: null, text: 'First words.', attachments: [videoAtt], videoAs: 'reel' } })
+    await w.call('opportunities.approve', { id: opportunity.id })
+    expect(w.core.repos.latestDraft(opportunity.id)?.videoAs).toBe('reel')
+    await w.call('opportunities.saveDraft', { id: opportunity.id, draft: { title: null, text: 'Rewritten words.', attachments: [videoAtt] } })
+    expect(w.core.repos.latestDraft(opportunity.id)?.videoAs).toBe('reel')
+    await w.call('opportunities.approve', { id: opportunity.id })
+    await w.call('opportunities.saveDraft', { id: opportunity.id, draft: { title: null, text: 'Rewritten words.', attachments: [videoAtt], videoAs: null } })
+    expect(w.core.repos.latestDraft(opportunity.id)?.videoAs).toBeNull()
+    expect((w.core.db.prepare('SELECT state FROM opportunities WHERE id = ?').get(opportunity.id) as { state: string }).state).not.toBe('ready')
+
+    // Re-set to reel, then remove video -> videoAs not carried over.
+    await w.call('opportunities.saveDraft', { id: opportunity.id, draft: { title: null, text: 'Rewritten words.', attachments: [videoAtt], videoAs: 'reel' } })
+    await w.call('opportunities.saveDraft', { id: opportunity.id, draft: { title: null, text: 'Words only.', attachments: [] } })
+    expect(w.core.repos.latestDraft(opportunity.id)?.videoAs).toBeNull()
+
+    // Hash binds videoAs only when set.
+    const base = { title: null, text: 'Clip.', link: null, attachments: [videoAtt] }
+    const acc = { id: w.account.id, identity: w.account.identity }
+    const plain = contentHash(base, acc, w.channel.url, 'facebook')
+    expect(contentHash({ ...base, videoAs: null }, acc, w.channel.url, 'facebook')).toBe(plain)
+    expect(contentHash({ ...base, videoAs: 'reel' }, acc, w.channel.url, 'facebook')).not.toBe(plain)
+
+    // Preview note says Reel on Facebook, nothing for a usual video post, and nothing when previewed as another platform.
+    expect(renderForPlatform({ title: null, text: 'Clip.', link: null, attachments: [videoAtt], markup: 'markdown', videoAs: 'reel' }, 'facebook').notes).toContain('The video goes out as a Reel on Facebook.')
+    expect(renderForPlatform({ title: null, text: 'Clip.', link: null, attachments: [videoAtt], markup: 'legacy', videoAs: 'reel' }, 'facebook').notes).toContain('The video goes out as a Reel on Facebook.')
+    expect(renderForPlatform({ title: null, text: 'Clip.', link: null, attachments: [videoAtt], markup: 'markdown', videoAs: null }, 'facebook').notes).not.toContain('The video goes out as a Reel on Facebook.')
+    expect(renderForPlatform({ title: null, text: 'Clip.', link: null, attachments: [videoAtt], markup: 'markdown', videoAs: 'reel' }, 'reddit').notes.join(' ')).not.toMatch(/Reel/)
   })
 })

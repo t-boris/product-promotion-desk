@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { DraftInput } from '../../../../shared/api'
 import { cleanTopicTag, hasTopicField } from '../../../../shared/topic-tag'
-import type { Attachment, Draft, Id, PostMarkup } from '../../../../shared/types'
+import type { Attachment, Draft, Id, PostMarkup, VideoAs } from '../../../../shared/types'
+import { reelProblem } from '../../../../shared/video-as'
 import { AiTextField } from '../../assist/AiField'
 import { OutlineDraft } from './OutlineDraft'
 import { TranslateDraft } from './TranslateDraft'
@@ -15,6 +16,7 @@ import { foundForAnswer, keepFound, type FoundFor } from './found-sources'
 import { fileName } from './labels'
 import { PostFlair } from './PostFlair'
 import { PostTopic } from './PostTopic'
+import { PostVideoAs } from './PostVideoAs'
 import { PostPictures, PostTextBox, usePostEditor } from './PostEditorParts'
 import { PostPreview, type PostAuthor } from './PostPreview'
 import { SectionAssist } from './SectionAssist'
@@ -31,24 +33,29 @@ export interface DraftForm {
   flair: string | null
   /** The topic of the post on a platform that files a post under one (Threads), as it stands in the field; empty: none. */
   topicTag: string
+  /** `reel` when the owner chose that the post's one video goes out as a Reel; null: the usual video post. */
+  videoAs: VideoAs | null
 }
 
 /** A new post is written in the post editor, so it is Markdown from the start; a reply is plain text. */
-export const emptyForm = (withTitle: boolean): DraftForm => ({ title: '', text: '', link: '', attachments: [], markup: withTitle ? 'markdown' : 'legacy', flair: null, topicTag: '' })
+export const emptyForm = (withTitle: boolean): DraftForm => ({ title: '', text: '', link: '', attachments: [], markup: withTitle ? 'markdown' : 'legacy', flair: null, topicTag: '', videoAs: null })
 
 function fromDraft(draft: Draft | null, withTitle: boolean): DraftForm {
   if (!draft) return emptyForm(withTitle)
-  return { title: draft.title ?? '', text: draft.text, link: draft.link ?? '', attachments: draft.attachments, markup: draft.markup ?? 'legacy', flair: draft.flair ?? null, topicTag: draft.topicTag ?? '' }
+  return { title: draft.title ?? '', text: draft.text, link: draft.link ?? '', attachments: draft.attachments, markup: draft.markup ?? 'legacy', flair: draft.flair ?? null, topicTag: draft.topicTag ?? '', videoAs: draft.videoAs ?? null }
 }
+
+/** The choice of a Reel stands only while the post is one video: with a picture added, or the video taken off, the post is no Reel. */
+const videoAsOf = (form: DraftForm): VideoAs | null => (form.videoAs && reelProblem(form.attachments) === null ? form.videoAs : null)
 
 /** What the core will store for this form: surrounding whitespace is trimmed there too. */
 export function toInput(form: DraftForm, withTitle: boolean): DraftInput {
-  return { title: withTitle ? form.title.trim() || null : null, text: form.text.trim(), link: form.link.trim() || null, attachments: form.attachments, markup: form.markup, flair: form.flair, topicTag: cleanTopicTag(form.topicTag) || null }
+  return { title: withTitle ? form.title.trim() || null : null, text: form.text.trim(), link: form.link.trim() || null, attachments: form.attachments, markup: form.markup, flair: form.flair, topicTag: cleanTopicTag(form.topicTag) || null, videoAs: videoAsOf(form) }
 }
 
 const signature = (form: DraftForm, withTitle: boolean): string => {
   const input = toInput(form, withTitle)
-  return JSON.stringify([input.title, input.text, input.link, form.attachments.map((a) => a.mediaId ?? a.path), form.markup, form.flair, input.topicTag])
+  return JSON.stringify([input.title, input.text, input.link, form.attachments.map((a) => a.mediaId ?? a.path), form.markup, form.flair, input.topicTag, input.videoAs])
 }
 
 /** Form state for one draft: resets when a different (newly saved) draft arrives and says whether it was edited. */
@@ -158,7 +165,7 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
         </Field>
       )
   )
-  const previewContent = { title: form.title.trim() || null, text: form.text.trim(), link: form.link.trim() || null, attachments: form.attachments, markup: form.markup }
+  const previewContent = { title: form.title.trim() || null, text: form.text.trim(), link: form.link.trim() || null, attachments: form.attachments, markup: form.markup, videoAs: ways?.reels ? videoAsOf(form) : null }
 
   return (
     <div className="draft-form" data-testid="draft-editor">
@@ -214,6 +221,9 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
       {inEditor && post && (
         <>
           <PostPictures form={form} productId={post.productId} disabled={disabled} editor={editor} />
+          {post.channelId && ways?.reels && reelProblem(form.attachments) === null && (
+            <PostVideoAs value={form.videoAs} onChange={(videoAs) => onChange((current) => ({ ...current, videoAs }))} disabled={disabled} />
+          )}
         </>
       )}
       {!inEditor && form.attachments.length > 0 && (

@@ -7,7 +7,8 @@
 
 import { NUMBERS_WINDOW_MS } from './post-numbers'
 import type { PostType } from './quick-post'
-import { isVideoMime, type Attachment, type PostMarkup } from './types'
+import { isVideoMime, type Attachment, type PostMarkup, type VideoAs } from './types'
+import { reelProblem, videoAsNote } from './video-as'
 
 /**
  * The version of what a markdown post becomes on a platform. It is part of the approval hash of a markdown post: change a rule of the
@@ -857,6 +858,8 @@ export interface PostContent {
   markup: PostMarkup
   /** `quick`: one picture and a caption, sent as it is written (DEC-046). Left out, the post is an article (an older draft is one). */
   postType?: PostType
+  /** `reel`: the owner chose that the one video goes out as a Reel; the preview says so. */
+  videoAs?: VideoAs | null
 }
 
 /**
@@ -894,15 +897,17 @@ export interface RenderOptions {
  */
 export function renderForPlatform(content: PostContent, platform: string, options: RenderOptions = {}): RenderedPost {
   const form = formOf(platform)
+  const label = platformLabel(platform)
+  const reelNote = platform === 'facebook' && reelProblem(content.attachments) === null ? videoAsNote(content.videoAs, label) : null
   if (content.markup !== 'markdown') {
     // Written as it is, except where the platform has no field for the link (it is the last line of the text, or left out): nothing could carry it otherwise.
     // Nothing else of an older draft is judged here; but a link added to the text can take it over the limit, and that is said (it did not count before).
-    const label = platformLabel(platform)
     const placed = placeLink(form, label, content.text, content.link)
     // Only what the link caused: a draft that was over the limit without it was never judged here, and is not now.
     const over = placed.text !== content.text && form.textLimit !== null && characterCount(content.text) <= form.textLimit && characterCount(placed.text) > form.textLimit
     // A quick post is judged whole, by the rules of the platform, on the caption as it is written (plus the link where it is placed in the text).
     const problems = content.postType === 'quick' ? formProblems(form, label, { title: content.title, text: placed.text, link: placed.link, ...kindsOf(content.attachments), quick: true }) : over ? [`The text is ${characterCount(placed.text)} characters; ${label} allows ${form.textLimit}.`] : []
+    const notes = [placed.note, reelNote].filter((note): note is string => note !== null)
     return {
       title: content.title,
       text: placed.text,
@@ -910,7 +915,7 @@ export function renderForPlatform(content: PostContent, platform: string, option
       shownLink: placed.shown,
       attachments: content.attachments,
       format: 'plain',
-      notes: placed.note ? [placed.note] : [],
+      notes,
       problems
     }
   }
@@ -918,10 +923,10 @@ export function renderForPlatform(content: PostContent, platform: string, option
   const placed = pictureIdsIn(content.text).length
   const words = form.format === 'markdown' ? (options.pictures === 'keep' ? content.text.trim() : withoutInlinePictures(content.text)) : toPlainText(content.text)
   let title = content.title
-  const label = platformLabel(platform)
   const linked = placeLink(form, label, words, content.link)
   const text = linked.text
   if (linked.note) notes.push(linked.note)
+  if (reelNote) notes.push(reelNote)
   // A picture or a video in the text is written as ![alt](media:ID), which is not formatting: only the marks of the words count here.
   if (form.format === 'plain' && /[*_#>`~]|\]\(|^[ \t]*[-+][ \t]/m.test(withoutInlinePictures(content.text))) notes.push(`${label} shows no formatting: the marks are removed and the words stay.`)
   if (form.format === 'plain') {
@@ -981,6 +986,8 @@ export interface SendWays {
   noConnector?: boolean
   /** The channel works through its platform's own API (DEC-055): its connector carries every send, pictures and video included, and the AI browser is never used. */
   api?: boolean
+  /** The channel's connector publishes a video as a Reel when the owner chooses so on the post (a Facebook Page through its API). */
+  reels?: boolean
   /** The owner's place for files on a public address is set up (DEC-081): a platform whose API takes a picture only from an address gets it from there. */
   publicFiles?: boolean
   /** The AI browser would carry this send, but the selected engine cannot work the browser: why, in words (only for a channel with no connector). */

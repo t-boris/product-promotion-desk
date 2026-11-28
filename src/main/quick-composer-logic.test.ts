@@ -158,6 +158,7 @@ function saved(over: Partial<Draft> = {}): Draft {
     markup: 'legacy',
     flair: null,
     topicTag: null,
+    videoAs: null,
     postType: 'quick',
     card: { style: 'bold', colour: 'indigo', shape: 'square', headline: 'First line of the caption', headlineEdited: false },
     knowledgeVersionId: null,

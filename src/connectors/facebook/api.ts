@@ -4,6 +4,19 @@ import type { HttpFile, HttpPort } from '../../core/ports'
 
 /** The version the documentation's examples were written for when this was built (2026-11-27). */
 export const GRAPH = 'https://graph.facebook.com/v27.0'
+/** Where the file of a Reel is sent (Reels Publishing API, step 2): Facebook's upload host, not the Graph. */
+export const REEL_UPLOAD = 'https://rupload.facebook.com/video-upload/v27.0'
+
+/** What Facebook says of a video on its way to being a Reel (`GET /{video-id}?fields=status`): its phases, each with its state and what went wrong. */
+interface GraphPhase {
+  status?: string
+  publish_status?: string
+  error?: { message?: string }
+  errors?: { message?: string }[]
+}
+export interface GraphVideoStatus {
+  status?: { video_status?: string; uploading_phase?: GraphPhase; processing_phase?: GraphPhase; publishing_phase?: GraphPhase }
+}
 
 /** `status` is the HTTP status; `code` and `subcode` are the Graph's own (190: the token is not accepted; 100: a wrong parameter or field). */
 export type GraphAnswer<T> = { ok: true; result: T } | { ok: false; status: number; code: number; subcode: number | null; message: string }
@@ -78,6 +91,22 @@ export class GraphApi {
   async delete<T>(path: string): Promise<GraphAnswer<T>> {
     const query = new URLSearchParams({ access_token: this.token })
     return this.read<T>(await this.http.request({ method: 'DELETE', url: `${GRAPH}/${path}?${query.toString()}` }))
+  }
+
+  /**
+   * Sends the file of a Reel, whole, to Facebook's upload host under the number the Graph gave the video. The address is built here from that
+   * number, never taken from an answer: the token goes in a header, and it goes nowhere but to Facebook.
+   */
+  async uploadReel(videoId: string, file: HttpFile, bytes: number, timeoutMs: number): Promise<GraphAnswer<{ success?: boolean }>> {
+    return this.read(
+      await this.http.request({
+        method: 'POST',
+        url: `${REEL_UPLOAD}/${videoId}`,
+        headers: { authorization: `OAuth ${this.token}`, offset: '0', file_size: String(bytes) },
+        file: { ...file, mime: 'application/octet-stream' },
+        timeoutMs
+      })
+    )
   }
 
   private read<T>(response: { status: number; text: string }): GraphAnswer<T> {

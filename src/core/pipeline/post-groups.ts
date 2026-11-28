@@ -429,6 +429,7 @@ export class PostGroupsFlow {
   /** A version is an ordinary standalone post of one channel, written from the master and standing on the same facts. */
   private addVersion(group: StoredGroup, channel: Channel, topicTag: string | null = null): void {
     const opp = this.store.createStandalone(channel, 'draft', 'Written by you, for several channels', group.id)
+    // A group's master holds no choice of a Reel: that is chosen on the version of a channel that takes one.
     this.store.insertDraft(opp.id, topicTag && hasTopicField(channel.platform) ? { ...group.master, topicTag } : group.master, group.provenance)
   }
 

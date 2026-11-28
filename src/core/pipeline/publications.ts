@@ -15,7 +15,8 @@ import { holdsCredential } from '../assist/kit'
 import { AiError } from '../ports'
 import { loadKnowledge, postChannelView, roleView } from './context'
 import { hasTopicField } from '../../shared/topic-tag'
-import { assertTopicFits, normalizeDraftInput, isHttpUrl } from './draft-input'
+import { assertTopicFits, assertVideoAsFits, normalizeDraftInput, isHttpUrl } from './draft-input'
+import { takesReel } from './send-ways'
 import {
   buildPublicationPrompt,
   buildUpdatePrompt,
@@ -52,6 +53,7 @@ export class PublicationsFlow {
       throw new ApiError('invalid_input', 'A publication needs text, a link or an image.')
     }
     assertTopicFits(channel.platform, content)
+    assertVideoAsFits(channel.platform, takesReel(this.core, channel), content)
     const opp = this.core.db.transaction(() => {
       const created = this.store.createStandalone(channel, 'draft', 'Written by you')
       this.store.insertDraft(created.id, content, { knowledgeVersionId: null, usedClaimLineageIds: [], rationale: '', author: 'user' })

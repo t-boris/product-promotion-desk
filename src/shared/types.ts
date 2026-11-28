@@ -957,6 +957,9 @@ export interface MediaItem {
  */
 export type PostMarkup = 'legacy' | 'markdown'
 
+/** A form a platform gives a video besides the usual video post. */
+export type VideoAs = 'reel'
+
 export interface Draft {
   id: Id
   opportunityId: Id
@@ -970,6 +973,8 @@ export interface Draft {
   flair: string | null
   /** The one topic the post is filed under where the platform has a field for it (Threads); null: none. Typed by the application on the site. Part of what an approval binds when set. */
   topicTag: string | null
+  /** How the post's one video goes out where the platform has two forms for it (a Facebook Page through its API): `reel`, or null for the usual video post. Chosen by the owner on the post. Part of what an approval binds when set. */
+  videoAs: VideoAs | null
   /**
    * `article` (every draft before DEC-046) or `quick` (one picture plus a caption; the caption is in `text`, the title is empty). Screens choose their
    * layout by this field, never by guessing from an empty title.

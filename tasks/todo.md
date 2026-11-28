@@ -1736,3 +1736,15 @@ Why: the plan's phase I says "post with media from local files"; X's guide "Chun
 - [x] DEC-091, plan row I, release 0.92.0
 
 Review: not seen on a screen (the only screen change is a line that no longer appears in the preview; tested through `sendProblems`). Unproven with a real paid X app: the upload, the processing time, X's refusal for a too long video.
+
+## Phase F, Reels on a Facebook Page (2026-11-28, 0.93.0, DEC-092)
+
+Why: the plan's phase F says "video and Reels"; 0.89.0 built video posts, and on 2026-11-28 the owner chose Q-002 option A ("Video post" / "Reel" choice under the video, bound by approval).
+
+- [x] `drafts.video_as` (migration 410), `Draft.videoAs`, `DraftInput.videoAs`, `PublishRequest.videoAs`; bound into `contentHash` when set; carried over across text rewrites while the post still holds one video; refused on replies, non-Reel channels, and posts with a picture beside the video
+- [x] `PostVideoAs` under the video in `DraftEditor` (only on a Facebook Page API channel with one video and no picture), with Facebook's Reel limits beside it; preview notes "The video goes out as a Reel on Facebook." before approval
+- [x] `FacebookPageConnector.reel`: `POST /{page-id}/video_reels` (`upload_phase=start`), raw binary upload to `rupload.facebook.com/video-upload/v27.0/{video-id}` (`Authorization: OAuth <token>`, `offset: 0`, `file_size`), `POST /{page-id}/video_reels` (`upload_phase=finish`, `video_state=PUBLISHED`, `description`), status polling every 5 s up to 5 min (`GET /{video-id}?fields=status`), reconciliation through `GET /{page-id}/video_reels`
+- [x] pre-send refusals (picture beside video, reply, Facebook's own schedule, empty/missing file); a scheduled Reel goes out from this Mac at its time
+- [x] tests on `FakeFacebook` and pipeline (6521 tests), own-instance look at 1280×880 and 980×640, Q-002 answered, DEC-092, plan row F, release 0.93.0
+
+Review: inspected in a scratch Electron instance at 1280×880 and 980×640: "Publish the video as" ("Video post" / "Reel") stands cleanly under "Pictures and videos" with Facebook's limits, selecting "Reel" shows the preview note and enables Save, saving persists `videoAs: 'reel'`, 0 horizontal overflow, 0 small or cut buttons. Unproven on a real Facebook Page: the upload and processing on `rupload.facebook.com`, whether a Reel appears in the Page's feed for comments and numbers, and the 30 Reels/day limit.

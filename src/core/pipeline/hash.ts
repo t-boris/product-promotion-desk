@@ -27,6 +27,8 @@ export interface HashableContent {
   flair?: string | null
   /** The topic of the post (Threads); part of the hash only when set, so every approval given before topics keeps its hash. */
   topicTag?: string | null
+  /** The form the post's video goes out in (a Reel); part of the hash only when set, so every approval given before the choice keeps its hash. */
+  videoAs?: string | null
 }
 
 /**
@@ -50,6 +52,7 @@ export function contentHash(content: HashableContent, account: HashedAccount, de
       linkPlacement: linkPlacementOf(platform, content.link) ?? undefined,
       flair: content.flair ? content.flair : undefined,
       topicTag: content.topicTag ? content.topicTag : undefined,
+      videoAs: content.videoAs ? content.videoAs : undefined,
       accountId: account.id,
       identity: hashedIdentity(account.identity),
       destination

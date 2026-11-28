@@ -33,6 +33,19 @@ interface FakeComment {
   fromName: string
 }
 
+interface FakeReel {
+  id: string
+  uploaded: boolean
+  fileName: string | null
+  fileSize: number | null
+  finished: boolean
+  description: string
+  updatedTime: number
+  looksLeft: number
+  error: string | null
+  published: boolean
+}
+
 export class FakeFacebook implements HttpPort {
   token = FAKE_PAGE_TOKEN
   page: { id: string; name: string; username?: string } = { id: PAGE_ID, name: 'Natal Mystic', username: 'natalmystic' }
@@ -47,8 +60,14 @@ export class FakeFacebook implements HttpPort {
   givesViews = true
   /** How many readings of the Page's posts pass before the post of an uploaded video shows: Facebook processes a video first. */
   videoLooks = 1
+  /** How many status checks of a Reel pass before it is published (or fails with `reelError`). */
+  reelLooks = 1
+  /** When set, the next Reel fails during processing with Facebook's message. */
+  reelError: string | null = null
   /** The videos Facebook took, by their number: the file's name. */
   readonly videos = new Map<string, string>()
+  /** The Reels started on the Page, by their video id. */
+  readonly reels = new Map<string, FakeReel>()
   /** The posts of videos that are still processed, with the readings left before each shows. */
   private readonly processing = new Map<string, number>()
   /** Facebook's pages disagree on whether every app may delete a post: true makes it refuse. */
@@ -133,6 +152,35 @@ export class FakeFacebook implements HttpPort {
 
   async request(req: HttpRequest): Promise<HttpResponse> {
     const url = new URL(req.url)
+    const ok = (result: unknown): HttpResponse => ({ status: 200, headers: {}, text: JSON.stringify(result) })
+    const no = (code: number, message: string, status = 400): HttpResponse => ({ status, headers: {}, text: JSON.stringify({ error: { message, type: 'OAuthException', code } }) })
+    if (url.host === 'rupload.facebook.com') {
+      const upload = /^\/video-upload\/v\d+\.\d+\/(\d+)$/.exec(url.pathname)
+      if (!upload) throw new Error(`Not a Reel upload address: ${url.origin}${url.pathname}`)
+      const videoId = upload[1] as string
+      const headers = Object.fromEntries(Object.entries(req.headers ?? {}).map(([k, v]) => [k.toLowerCase(), v]))
+      const auth = headers.authorization ?? ''
+      const params: Record<string, string> = {}
+      if (headers.offset !== undefined) params.offset = headers.offset
+      if (headers.file_size !== undefined) params.file_size = headers.file_size
+      this.calls.push({ method: req.method, path: `rupload/${videoId}`, params, files: req.file ? [req.file.name] : [] })
+      if (auth !== `OAuth ${this.token}`) return no(190, 'Error validating access token: Session has expired.')
+      if (this.failNext && this.failNext !== 'lost') {
+        const failure = this.failNext
+        this.failNext = null
+        return no(failure.code, failure.message, failure.status ?? 400)
+      }
+      const lose = this.failNext === 'lost'
+      if (lose) this.failNext = null
+      const reel = this.reels.get(videoId)
+      if (!reel) return no(100, `(#100) Unknown Reel upload ${videoId}`)
+      if (!req.file) return no(100, '(#100) No file bytes were sent')
+      reel.uploaded = true
+      reel.fileName = req.file.name
+      reel.fileSize = Number(headers.file_size ?? 0)
+      if (lose) throw new HttpNoAnswerError('no answer within 30 seconds')
+      return ok({ success: true })
+    }
     const hit = /^\/v\d+\.\d+\/(.+)$/.exec(url.pathname)
     if (url.host !== 'graph.facebook.com' || !hit) throw new Error(`Not a Graph API address: ${url.origin}${url.pathname}`)
     const path = hit[1] as string
@@ -145,8 +193,6 @@ export class FakeFacebook implements HttpPort {
     const token = params.access_token
     delete params.access_token
     this.calls.push({ method: req.method, path, params, files })
-    const ok = (result: unknown): HttpResponse => ({ status: 200, headers: {}, text: JSON.stringify(result) })
-    const no = (code: number, message: string, status = 400): HttpResponse => ({ status, headers: {}, text: JSON.stringify({ error: { message, type: 'OAuthException', code } }) })
     if (token === FAKE_USER_TOKEN) {
       // A person's token: it has no field of a Page.
       return path === 'me' ? no(100, '(#100) Tried accessing nonexisting field (category) on node type (User)') : no(200, '(#200) This needs a Page access token')
@@ -186,6 +232,27 @@ export class FakeFacebook implements HttpPort {
       return ok({ data: shown.slice(0, limit).map((p) => this.postJson(p)) })
     }
     if (path === `${this.page.id}/scheduled_posts`) return ok({ data: this.kept.slice(0, limit).map((p) => this.postJson(p)) })
+    if (path === `${this.page.id}/video_reels`) {
+      const shown = [...this.reels.values()].filter((r) => r.finished && !r.error && (r.published || r.looksLeft <= 1)).reverse()
+      return ok({ data: shown.slice(0, limit).map((r) => ({ id: r.id, description: r.description, updated_time: r.updatedTime })) })
+    }
+    const reel = this.reels.get(path)
+    if (reel) {
+      if (params.fields === 'permalink_url') return ok({ permalink_url: `/reel/${reel.id}/` })
+      if (params.fields === 'status') {
+        if (reel.looksLeft > 1) {
+          reel.looksLeft -= 1
+          return ok({ status: { video_status: 'processing', uploading_phase: { status: 'complete' }, processing_phase: { status: 'in_progress' }, publishing_phase: { status: 'not_started' } } })
+        }
+        reel.looksLeft = 0
+        if (reel.error) {
+          return ok({ status: { video_status: 'error', uploading_phase: { status: 'complete' }, processing_phase: { status: 'error', errors: [{ message: reel.error }] }, publishing_phase: { status: 'not_started' } } })
+        }
+        reel.published = true
+        return ok({ status: { video_status: 'ready', uploading_phase: { status: 'complete' }, processing_phase: { status: 'complete' }, publishing_phase: { status: 'complete', publish_status: 'published' } } })
+      }
+      return ok({ id: reel.id, description: reel.description, updated_time: reel.updatedTime })
+    }
     const insights = /^(\d+_\d+)\/insights$/.exec(path)
     if (insights) {
       const seen = this.posts.find((p) => p.id === insights[1])
@@ -235,6 +302,24 @@ export class FakeFacebook implements HttpPort {
         post.scheduledFor = at
       }
       return ok({ id: post.id })
+    }
+    if (path === `${this.page.id}/video_reels`) {
+      if (params.upload_phase === 'start') {
+        const videoId = String(this.next++)
+        this.reels.set(videoId, { id: videoId, uploaded: false, fileName: null, fileSize: null, finished: false, description: '', updatedTime: Math.floor(this.nowMs / 1000), looksLeft: this.reelLooks, error: this.reelError, published: false })
+        return ok({ video_id: videoId, upload_url: `https://rupload.facebook.com/video-upload/v27.0/${videoId}` })
+      }
+      if (params.upload_phase === 'finish') {
+        const reel = params.video_id ? this.reels.get(params.video_id) : undefined
+        if (!reel) return no(100, `(#100) Unknown Reel ${params.video_id ?? ''}`)
+        if (!reel.uploaded) return no(100, '(#100) The video has not been uploaded yet')
+        if (params.video_state !== 'PUBLISHED') return no(100, '(#100) Expected video_state=PUBLISHED')
+        reel.finished = true
+        reel.description = params.description ?? ''
+        reel.updatedTime = Math.floor(this.nowMs / 1000)
+        return ok({ success: true })
+      }
+      return no(100, `(#100) Unsupported upload_phase: ${params.upload_phase ?? ''}`)
     }
     if (path === `${this.page.id}/videos`) {
       const source = files.find((f) => f.startsWith('source:'))

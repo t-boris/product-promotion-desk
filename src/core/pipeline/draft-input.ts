@@ -10,7 +10,8 @@ import type { DraftInput } from '../../shared/api'
 import { kindsOf, pictureIdsIn, platformLabel } from '../../shared/post-format'
 import { parseQuickCard, type PostType, type QuickCard } from '../../shared/quick-post'
 import { cleanTopicTag, hasTopicField, topicTagProblem } from '../../shared/topic-tag'
-import type { Attachment, Id } from '../../shared/types'
+import { reelProblem } from '../../shared/video-as'
+import type { Attachment, Id, VideoAs } from '../../shared/types'
 import type { MediaService } from '../media/service'
 import { ATTACHMENT_MAX_COUNT, validateAttachments } from './attachments'
 import type { DraftContent } from './store'
@@ -74,6 +75,11 @@ export async function normalizeDraftInput(input: DraftInput, ctx: DraftInputCont
   const topicTag = input.topicTag === undefined ? undefined : cleanTopicTag(input.topicTag ?? '') || null
   const topicWrong = topicTag ? topicTagProblem(topicTag) : null
   if (topicWrong) throw new ApiError('invalid_input', topicWrong)
+  // And for the form of the video: left out keeps the earlier draft's choice, null is the usual video post.
+  if (input.videoAs !== undefined && input.videoAs !== null && input.videoAs !== 'reel') {
+    throw new ApiError('invalid_input', 'The video form must be "reel" or empty.')
+  }
+  const videoAs = input.videoAs === undefined ? undefined : input.videoAs
   if ((input.attachments?.length ?? 0) > ATTACHMENT_MAX_COUNT) throw new ApiError('invalid_attachment', `At most ${ATTACHMENT_MAX_COUNT} attachments are allowed.`)
 
   const kept: Attachment[] = []
@@ -100,6 +106,9 @@ export async function normalizeDraftInput(input: DraftInput, ctx: DraftInputCont
   if (card !== undefined) content.card = card
   if (flair !== undefined) content.flair = flair
   if (topicTag !== undefined) content.topicTag = topicTag
+  if (videoAs !== undefined) content.videoAs = videoAs
+  const notReel = content.videoAs ? reelProblem(content.attachments) : null
+  if (notReel) throw new ApiError('invalid_input', `${notReel} Leave only the video on the post, or choose “Video post”.`)
   if (postType === 'quick') assertQuickPost(content)
   return content
 }
@@ -117,12 +126,14 @@ export function assertQuickPost(content: DraftContent): void {
  * A draft that replaces another keeps its post type, card, flair and topic unless the caller says otherwise (editing never changes the type, DEC-046). The type
  * stored is always explicit; this only chooses it when the input did not.
  */
-export function inheritPostType(content: DraftContent, previous: { postType: PostType; card: QuickCard | null; flair?: string | null; topicTag?: string | null } | null): DraftContent {
+export function inheritPostType(content: DraftContent, previous: { postType: PostType; card: QuickCard | null; flair?: string | null; topicTag?: string | null; videoAs?: VideoAs | null } | null): DraftContent {
   const postType = content.postType ?? previous?.postType ?? 'article'
   const next: DraftContent = { ...content, postType }
   // The flair belongs to the channel, not to the words: whoever rewrites the words (the AI's adaptation, an edit of the master) does not say it, and it stays.
   if (content.flair === undefined && previous?.flair) next.flair = previous.flair
   if (content.topicTag === undefined && previous?.topicTag) next.topicTag = previous.topicTag
+  // The choice of a Reel stays with the post while the post is still one video: whoever rewrites the words does not say it.
+  if (content.videoAs === undefined && previous?.videoAs && reelProblem(next.attachments) === null) next.videoAs = previous.videoAs
   if (postType === 'quick') {
     next.markup = 'legacy'
     if (content.card === undefined) next.card = previous?.postType === 'quick' ? previous.card : null
@@ -135,6 +146,14 @@ export function inheritPostType(content: DraftContent, previous: { postType: Pos
  * A topic goes only where the platform's composer has a field for it (Threads): anywhere else nothing would type it, and the post would go out
  * without a part of what was approved. Asked wherever a draft is stored for a channel.
  */
+/**
+ * A Reel goes only where the channel's connector publishes one (`takesReel`): anywhere else the video would go out in another form than the one
+ * approved. Asked wherever a draft is stored for a channel.
+ */
+export function assertVideoAsFits(platform: string, takesReel: boolean, content: Pick<DraftContent, 'videoAs'>): void {
+  if (content.videoAs && !takesReel) throw new ApiError('invalid_input', `The application does not publish a Reel on this ${platformLabel(platform)} channel: choose “Video post”.`)
+}
+
 export function assertTopicFits(platform: string, content: Pick<DraftContent, 'topicTag'>): void {
   if (content.topicTag && !hasTopicField(platform)) throw new ApiError('invalid_input', `${platformLabel(platform)} has no topic field: take the topic off the post.`)
 }
