@@ -36,6 +36,7 @@ import {
 import { activateBlocker, canActivate, canPause, neverAssessed, setupStage } from '../renderer/src/pages/channels/setup-stage'
 import { afterCreateNote, nextStep } from '../renderer/src/pages/channels/next-step'
 import { hideCommentWords } from '../renderer/src/pages/review/hide-comment'
+import { publishingQuotaText } from '../renderer/src/pages/channels/model'
 import { chosenVia, contactLine, eligibleVia, viaBlocker, viaOption } from '../renderer/src/pages/channels/account-link'
 import { ACCOUNT_NAME_LIMIT, normalizeName, renameProblem } from '../renderer/src/pages/channels/account-name'
 import { CAPABILITY_LABEL, CAPABILITY_ORDER, abilityNeedsDecision, abilityStatusLabel, capabilityRows, membershipWord } from '../renderer/src/pages/channels/capability-words'
@@ -2479,11 +2480,32 @@ describe('the model dropdown of an engine card', () => {
   })
 })
 
-describe('the control that hides a comment (DEC-089)', () => {
+describe('the control that hides a comment (DEC-089, DEC-096)', () => {
   it('says what the press does on the platform before it is pressed, and what was done after', () => {
     expect(hideCommentWords('instagram', 'alone', false)).toEqual({ button: 'Hide on Instagram', note: 'Other readers stop seeing it on Instagram. Nothing is deleted, and you can show it again.' })
+    expect(hideCommentWords('facebook', 'alone', false)).toEqual({ button: 'Hide on Facebook', note: 'Other readers stop seeing it on Facebook. Nothing is deleted, and you can show it again.' })
+    expect(hideCommentWords('facebook', 'alone', true)).toEqual({ button: 'Show again', note: 'Hidden on Facebook: other readers do not see it. Nothing was deleted.' })
     expect(hideCommentWords('threads', 'with_replies', false)).toEqual({ button: 'Hide on Threads', note: 'Other readers stop seeing it on Threads, with every reply under it. Nothing is deleted, and you can show it again.' })
     expect(hideCommentWords('threads', 'with_replies', true)).toEqual({ button: 'Show again', note: 'Hidden on Threads: other readers do not see it, nor the replies under it. Nothing was deleted.' })
     expect(hideCommentWords('instagram', 'alone', true).note).toBe('Hidden on Instagram: other readers do not see it. Nothing was deleted.')
+  })
+})
+
+describe('publishing quota wording (DEC-096)', () => {
+  it('formats remaining posts and replies with appropriate tone, and hides unsupported channels', () => {
+    expect(publishingQuotaText({ supported: false, quota: null, problem: null })).toBeNull()
+    expect(publishingQuotaText({ supported: true, quota: { used: 3, limit: 250, windowHours: 24, readAt: '2026-12-01T10:00:00.000Z', replies: { used: 1, limit: 1000 } }, problem: null })).toEqual({
+      text: '247 of 250 posts left (24 h) · 999 of 1000 replies left',
+      tone: 'good'
+    })
+    expect(publishingQuotaText({ supported: true, quota: { used: 95, limit: 100, windowHours: 24, readAt: '2026-12-01T10:00:00.000Z' }, problem: null })).toEqual({
+      text: '5 of 100 posts left (24 h)',
+      tone: 'warn'
+    })
+    expect(publishingQuotaText({ supported: true, quota: { used: 100, limit: 100, windowHours: 24, readAt: '2026-12-01T10:00:00.000Z' }, problem: null })).toEqual({
+      text: '0 of 100 posts left (24 h)',
+      tone: 'bad'
+    })
+    expect(publishingQuotaText({ supported: true, quota: null, problem: 'No token saved.' })).toEqual({ text: 'No token saved.', tone: 'neutral' })
   })
 })

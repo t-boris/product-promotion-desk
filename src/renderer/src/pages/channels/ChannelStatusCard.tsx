@@ -5,7 +5,7 @@ import { Badge, Button, Card, ConfirmAction, ErrorNote, formatTime, Hint, useMai
 import { useWatchingContext } from '../feed/useWatching'
 import { isWatchable, isWatchedInBrowser, watchingLine } from '../feed/watching-line'
 import { JoinChannel } from './JoinChannel'
-import { CHANNEL_STATUS_LABEL, CHANNEL_STATUS_TONE, capabilityOf, membershipWord, nextCheckText } from './model'
+import { CHANNEL_STATUS_LABEL, CHANNEL_STATUS_TONE, capabilityOf, membershipWord, nextCheckText, publishingQuotaText } from './model'
 import { BROWSER_WATCH_READING, OWN_POSTS_READING, activateHint } from './own-posts'
 import { activateBlocker, canActivate, canPause } from './setup-stage'
 
@@ -17,6 +17,8 @@ import { activateBlocker, canActivate, canPause } from './setup-stage'
 export function ChannelStatusCard({ channel, product, account, platform, accountLabel, filled, onRemoved }: { channel: Channel; product: Product | undefined; account: Account | undefined; platform?: PlatformInfo; accountLabel: string; filled: boolean; onRemoved: () => void }) {
   const main = useMainVariant()
   const runs = useQuery('runs.list', { channelId: channel.id, limit: 1 }, ['logs', 'channels'])
+  const quota = useQuery('channels.publishingQuota', { channelId: channel.id }, ['channels', 'accounts', 'opportunities'])
+  const quotaView = quota.data ? publishingQuotaText(quota.data) : null
   const lastRun = runs.data?.[0]
   // How often the channel is looked at, or why it is not (DEC-040). The last and the next check are the rows below; this is the rest of the line.
   const watchingContext = useWatchingContext()
@@ -65,6 +67,14 @@ export function ChannelStatusCard({ channel, product, account, platform, account
         <dd data-testid="channel-status">
           <Badge tone={CHANNEL_STATUS_TONE[channel.status]}>{CHANNEL_STATUS_LABEL[channel.status]}</Badge> <span className="muted">{channel.statusDetail}</span>
         </dd>
+        {quotaView && (
+          <>
+            <dt>Publishing limit</dt>
+            <dd data-testid="channel-publishing-quota">
+              {quota.data?.quota ? <Badge tone={quotaView.tone}>{quotaView.text}</Badge> : <span className="muted">{quotaView.text}</span>}
+            </dd>
+          </>
+        )}
         {/* A channel the app does not read has no runs, no last success and no next check (DEC-034): one row says why. One the AI watches in the browser has them (DEC-042), under a row that says how it is read. */}
         {isWatchable(channel) ? (
           <>

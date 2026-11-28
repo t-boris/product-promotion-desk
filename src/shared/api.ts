@@ -179,6 +179,27 @@ export interface FindingReplies {
   places: FindingReplyPlace[]
 }
 
+/** Remaining daily publishing allowance read from a platform API (Threads, Instagram — DEC-096). */
+export interface PublishingQuota {
+  /** Posts published in the current rolling window. */
+  used: number
+  /** Maximum posts allowed in the rolling window (e.g. 250 on Threads, 100 on Instagram). */
+  limit: number
+  /** Length of the rolling window in hours (typically 24). */
+  windowHours: number
+  /** When this allowance was read from the platform. */
+  readAt: IsoTime
+  /** Separate reply allowance when the platform reports one (Threads). */
+  replies?: { used: number; limit: number }
+}
+
+/** Publishing quota returned by `channels.publishingQuota`: unsupported on platforms without a quota endpoint. */
+export interface PublishingQuotaInfo {
+  supported: boolean
+  quota: PublishingQuota | null
+  problem: string | null
+}
+
 /** What the community of a channel offers for a post (the editor's Flair line is filled from it). */
 export interface PostFormInfo {
   /** Whether the platform has a form with flairs that the application can read (Reddit). Without it the editor shows no Flair line. */
@@ -410,6 +431,8 @@ export interface ApiMethods {
   /** Re-validates the reviewed definition and stores it as a new version for `host`. Only the owner's screen calls it. */
   'channels.saveProfile': [{ host: string; definition: unknown }, SavedSiteProfile]
   'channels.assess': [{ channelId: Id }, Channel]
+  /** Remaining daily publishing allowance from the platform API (Threads, Instagram — DEC-096); `{ supported: false }` on other channels. */
+  'channels.publishingQuota': [{ channelId: Id }, PublishingQuotaInfo]
   /** How a post to the channel would go out if the owner pressed Send: what the approval judges it by, for the preview to judge it the same. */
   'channels.sendWays': [{ channelId: Id }, SendWays]
   /** What the channel's platform charges the owner's developer app for an answer sent now, in words; null where an answer costs nothing. */

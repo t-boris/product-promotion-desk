@@ -55,6 +55,8 @@ export class FakeInstagram implements HttpPort {
   losesCaption = false
   /** False makes Instagram refuse the views of a post (no insights permission). */
   givesInsights = true
+  quotaUsage = 4
+  quotaTotal = 100
   readonly calls: { method: string; path: string; params: Record<string, unknown>; auth: string | null }[] = []
   readonly media: FakeMedia[] = []
   readonly containers: FakeContainer[] = []
@@ -169,6 +171,9 @@ export class FakeInstagram implements HttpPort {
         return this.ok(this.profileInList ? { data: [said] } : said)
       }
       if (mine(first) && second === 'media') return this.ok({ data: this.media.map((m) => this.mediaJson(m, fields)), paging: { cursors: { before: 'b', after: 'a' } } })
+      if (mine(first) && second === 'content_publishing_limit') {
+        return this.ok({ data: [{ quota_usage: this.quotaUsage, config: { quota_total: this.quotaTotal, quota_duration: 86_400 } }] })
+      }
       const container = this.containers.find((c) => c.id === first)
       if (container && second === undefined) {
         const said = this.containerStates.shift() ?? container.status

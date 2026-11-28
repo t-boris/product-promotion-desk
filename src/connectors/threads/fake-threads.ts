@@ -48,6 +48,10 @@ export class FakeThreads implements HttpPort {
   /** Whether Threads can read a file from this address at the moment it is given: an address nobody serves is refused, as the real one's fetch would fail. */
   reads: (url: string) => boolean = () => true
   followers = 120
+  quotaUsage = 3
+  quotaTotal = 250
+  replyQuotaUsage = 1
+  replyQuotaTotal = 1000
   readonly calls: { method: string; path: string; params: Record<string, string> }[] = []
   readonly media: FakeMedia[] = []
   readonly containers: FakeContainer[] = []
@@ -179,6 +183,18 @@ export class FakeThreads implements HttpPort {
       if (mine(first) && second === 'threads') return list(this.posts, Number(params.limit ?? '25'))
       if (mine(first) && second === 'replies') return list(this.media.filter((m) => m.own && m.repliedTo !== null), Number(params.limit ?? '25'))
       if (mine(first) && second === 'threads_insights') return this.ok({ data: [{ name: 'followers_count', period: 'day', total_value: { value: this.followers } }] })
+      if (mine(first) && second === 'threads_publishing_limit') {
+        return this.ok({
+          data: [
+            {
+              quota_usage: this.quotaUsage,
+              config: { quota_total: this.quotaTotal, quota_duration: 86_400 },
+              reply_quota_usage: this.replyQuotaUsage,
+              reply_config: { quota_total: this.replyQuotaTotal, quota_duration: 86_400 }
+            }
+          ]
+        })
+      }
       const container = this.containers.find((c) => c.id === first)
       if (container && second === undefined) {
         const said = this.containerStates.shift() ?? container.status

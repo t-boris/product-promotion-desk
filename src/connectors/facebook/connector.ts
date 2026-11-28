@@ -36,7 +36,7 @@ const OWN_SCHEDULE = { minAheadMs: 10 * 60_000, maxAheadMs: 30 * 24 * 3_600_000 
 const COMMENTS_LIMIT = 100
 const PAGE_FIELDS = 'id,name,username,link,category'
 const POST_FIELDS = 'id,message,created_time,permalink_url,from{id,name}'
-const COMMENT_FIELDS = 'id,message,created_time,permalink_url,from{id,name},parent{id}'
+const COMMENT_FIELDS = 'id,message,created_time,permalink_url,from{id,name},parent{id},is_hidden'
 /** The Graph's own codes for "the token is not accepted" and for "try again, it is on our side". */
 const TOKEN_REFUSED = 190
 const ON_THEIR_SIDE = [1, 2]
@@ -312,7 +312,8 @@ export class FacebookPageConnector implements Connector {
       author: this.author(ctx, page, c.from),
       body: c.message ?? '',
       url: c.permalink_url ?? url,
-      postedAt: iso(c.created_time)
+      postedAt: iso(c.created_time),
+      ...(c.is_hidden === undefined ? {} : { hidden: c.is_hidden })
     }))
     const body = post.message ?? ''
     const firstLine = body.split('\n')[0] ?? ''
@@ -607,6 +608,22 @@ export class FacebookPageConnector implements Connector {
     const parent = parseExternalId(request.parentExternalId)
     if (!parent) return failed('The comment or the post this reply answers was not read through the Page\'s API, so it cannot be answered there. Nothing was sent.')
     return this.lastStep(api, () => api.post(`${parent}/comments`, { message: words }))
+  }
+
+  /** Hides a comment under a Page post from other readers, or shows it again (DEC-096). */
+  async hideComment(ctx: ConnectorContext, externalId: string, hidden: boolean): Promise<void> {
+    const api = await this.requireClient(ctx)
+    const id = parseExternalId(externalId)
+    if (!id) throw new Error('This comment was not read through the Page\'s API, so it cannot be hidden through it.')
+    let answer: GraphAnswer<{ success?: boolean }>
+    try {
+      answer = await api.post<{ success?: boolean }>(id, { is_hidden: String(hidden) })
+    } catch (error) {
+      if (error instanceof HttpNoAnswerError) throw new Error(`Facebook did not answer (${error.message}).`, { cause: error })
+      throw error
+    }
+    if (!answer.ok) throw new Error(refusal(answer))
+    if (answer.result.success !== true) throw new Error('Facebook did not say that it was done.')
   }
 
   /** Looks in the Page's posts, or under the answered comment, for what a send with a lost answer may have made: the Page's own, with the same words, not older than the attempt. */

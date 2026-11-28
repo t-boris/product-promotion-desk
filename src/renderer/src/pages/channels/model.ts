@@ -1,5 +1,6 @@
 // Wording and small pure rules for the Channels screen. Kept apart from the components so they stay easy to read.
 
+import type { PublishingQuotaInfo } from '../../../../shared/api'
 import type { Account, AccountStatus, Capability, CapabilityKey, CapabilityStatus, Channel, ChannelMode, ChannelStatus, PlanFormat, PlatformInfo } from '../../../../shared/types'
 import type { Tone } from '../../tone'
 
@@ -125,6 +126,21 @@ export function modeBlockedReason(channel: Channel, mode: ChannelMode): string |
   if (reply?.status === 'unavailable') return 'Replying is not possible here.'
   if (mode === 'auto' && channel.settings.autoCategories.length === 0) return 'Choose at least one automatic category in the settings first.'
   return null
+}
+
+/** Plain-language summary of a platform API's daily publishing quota (Threads, Instagram — DEC-096). */
+export function publishingQuotaText(info: PublishingQuotaInfo): { text: string; tone: Tone } | null {
+  if (!info.supported) return null
+  if (!info.quota) return { text: info.problem ?? 'Limit unavailable right now.', tone: 'neutral' }
+  const { used, limit, windowHours, replies } = info.quota
+  const left = Math.max(0, limit - used)
+  const parts = [`${left} of ${limit} posts left (${windowHours} h)`]
+  if (replies) {
+    const repliesLeft = Math.max(0, replies.limit - replies.used)
+    parts.push(`${repliesLeft} of ${replies.limit} replies left`)
+  }
+  const tone: Tone = left === 0 ? 'bad' : left <= Math.max(5, Math.floor(limit * 0.1)) ? 'warn' : 'good'
+  return { text: parts.join(' · '), tone }
 }
 
 /** "Next check" for the status line: only an active channel has one. */

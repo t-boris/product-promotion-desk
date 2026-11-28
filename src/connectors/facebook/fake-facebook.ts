@@ -31,6 +31,8 @@ interface FakeComment {
   created: number
   fromId: string
   fromName: string
+  /** Hidden from other readers by the Page. */
+  hidden?: boolean
 }
 
 interface FakeReel {
@@ -146,7 +148,8 @@ export class FakeFacebook implements HttpPort {
       created_time: this.time(comment.created),
       permalink_url: `https://www.facebook.com/${this.page.username ?? this.page.id}/posts/${comment.postId.split('_')[1]}?comment_id=${comment.id.split('_')[1]}`,
       ...(own || this.namesAuthors ? { from: { id: comment.fromId, name: comment.fromName } } : {}),
-      ...(comment.parentId ? { parent: { id: comment.parentId } } : {})
+      ...(comment.parentId ? { parent: { id: comment.parentId } } : {}),
+      is_hidden: comment.hidden === true
     }
   }
 
@@ -351,6 +354,13 @@ export class FakeFacebook implements HttpPort {
       const made: FakeComment = { id: `${postId.split('_')[1]}_${this.next++}`, postId, parentId: parent ? parent.id : null, message: params.message ?? '', created: this.nowMs, fromId: this.page.id, fromName: this.page.name }
       this.comments.push(made)
       return ok({ id: made.id })
+    }
+    if (params.is_hidden === 'true' || params.is_hidden === 'false') {
+      const comment = this.comments.find((c) => c.id === path)
+      if (!comment) return no(100, `Unsupported post request. Object with ID '${path}' does not exist`)
+      if (comment.fromId === this.page.id) return no(200, '(#200) A Page cannot hide its own comment')
+      comment.hidden = params.is_hidden === 'true'
+      return ok({ success: true })
     }
     return no(100, `Unsupported post request: ${path}`)
   }

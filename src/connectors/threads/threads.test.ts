@@ -450,3 +450,24 @@ describe('hiding a reply (DEC-089)', () => {
     expect(await w.call('opportunities.get', { id: item(top.id) })).toMatchObject({ comment: { hidden: true } })
   })
 })
+
+describe('daily publishing limit on Threads (DEC-096)', () => {
+  it('reads posts and replies publishing quota through channels.publishingQuota, and reports auth problems cleanly', async () => {
+    const w = await connected()
+    w.threads.quotaUsage = 12
+    w.threads.quotaTotal = 250
+    w.threads.replyQuotaUsage = 7
+    w.threads.replyQuotaTotal = 1000
+    const info = await w.call('channels.publishingQuota', { channelId: w.channel.id })
+    expect(info).toEqual({
+      supported: true,
+      problem: null,
+      quota: { used: 12, limit: 250, windowHours: 24, readAt: w.core.clock.now().toISOString(), replies: { used: 7, limit: 1000 } }
+    })
+    expect(w.threads.calls.at(-1)).toMatchObject({ method: 'GET', path: `${PROFILE_ID}/threads_publishing_limit` })
+
+    w.threads.tokens.clear()
+    const expired = await w.call('channels.publishingQuota', { channelId: w.channel.id })
+    expect(expired).toMatchObject({ supported: true, quota: null, problem: expect.stringMatching(/does not accept the access token/) })
+  })
+})

@@ -63,6 +63,16 @@ export interface ThreadsTokenFacts {
   data?: { is_valid?: boolean; expires_at?: number; issued_at?: number; scopes?: string[] }
 }
 
+/** Daily publishing allowance from `GET /{user-id}/threads_publishing_limit` (DEC-096). */
+export interface ThreadsPublishingLimit {
+  data?: {
+    quota_usage?: number
+    config?: { quota_total?: number; quota_duration?: number }
+    reply_quota_usage?: number
+    reply_config?: { quota_total?: number; quota_duration?: number }
+  }[]
+}
+
 function read<T>(response: HttpResponse, token: string, secret: string | null): ThreadsAnswer<T> {
   let parsed: unknown
   try {

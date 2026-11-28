@@ -636,3 +636,35 @@ describe('a Reel on a Facebook Page (DEC-092)', () => {
     expect(renderForPlatform({ title: null, text: 'Clip.', link: null, attachments: [videoAtt], markup: 'markdown', videoAs: 'reel' }, 'reddit').notes.join(' ')).not.toMatch(/Reel/)
   })
 })
+
+describe('hiding a comment on a Facebook Page (DEC-096)', () => {
+  it('hides a comment or reply on the owner\'s press, shows it again, refuses errors cleanly, and syncs hidden state from Facebook', async () => {
+    const w = await connected()
+    const post = w.facebook.ownerPosts('What does a natal chart show?')
+    const top = w.facebook.comment(post.id, 'Buy followers at example.com', 'Spam Bot')
+    const reply = w.facebook.comment(post.id, 'Me too.', 'Bo', top.id)
+    expect((await w.monitor.runChannel(w.channel.id)).status).toBe('ok')
+    const item = (commentId: string): string =>
+      (w.core.db.prepare('SELECT o.id FROM opportunities o JOIN comments c ON c.id = o.comment_id WHERE c.external_id = ?').get(`fb:${commentId}`) as { id: string }).id
+
+    expect(await w.call('opportunities.get', { id: item(top.id) })).toMatchObject({ commentHiding: 'alone', comment: { hidden: false } })
+    expect(await w.call('opportunities.get', { id: item(reply.id) })).toMatchObject({ commentHiding: 'alone' })
+
+    expect(await w.call('opportunities.hideComment', { id: item(top.id), hidden: true })).toMatchObject({ comment: { hidden: true } })
+    expect(w.facebook.calls.at(-1)).toMatchObject({ method: 'POST', path: top.id, params: { is_hidden: 'true' } })
+    expect(top.hidden).toBe(true)
+
+    w.facebook.failNext = { code: 200, message: '(#200) Requires pages_manage_engagement' }
+    await expect(w.call('opportunities.hideComment', { id: item(reply.id), hidden: true })).rejects.toThrow(/permission.*The comment is as it was on Facebook\./)
+    expect(reply.hidden).toBeUndefined()
+
+    expect(await w.call('opportunities.hideComment', { id: item(top.id), hidden: false })).toMatchObject({ comment: { hidden: false } })
+    expect(w.facebook.calls.at(-1)).toMatchObject({ method: 'POST', path: top.id, params: { is_hidden: 'false' } })
+    expect(top.hidden).toBe(false)
+
+    // Hidden directly on Facebook: the next reading syncs it here.
+    reply.hidden = true
+    await w.monitor.runChannel(w.channel.id)
+    expect(await w.call('opportunities.get', { id: item(reply.id) })).toMatchObject({ comment: { hidden: true } })
+  })
+})

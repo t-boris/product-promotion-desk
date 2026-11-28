@@ -1,3 +1,4 @@
+import type { PublishingQuota } from '../../shared/api'
 import type { Capability, CapabilityKey, CapabilityStatus, Channel, MetricReading } from '../../shared/types'
 import { isVideoMime } from '../../shared/types'
 import type { PostNumbers } from '../../shared/post-numbers'
@@ -32,7 +33,8 @@ import {
   type InstagramInsights,
   type InstagramList,
   type InstagramMedia,
-  type InstagramProfile
+  type InstagramProfile,
+  type InstagramPublishingLimit
 } from './api'
 
 export const INSTAGRAM_API_CONNECTOR_ID = 'instagram-api'
@@ -399,6 +401,19 @@ export class InstagramApiConnector implements Connector {
     const said = me.ok ? me.result.followers_count : undefined
     const value = typeof said === 'number' && Number.isInteger(said) && said >= 0 ? said : null
     return [{ key: 'followers', label: 'Followers', value, available: value !== null }]
+  }
+
+  /** Reads the account's remaining 24-hour publishing allowance from Instagram (DEC-096). */
+  async readPublishingQuota(ctx: ConnectorContext): Promise<PublishingQuota | null> {
+    const api = await this.requireClient(ctx)
+    const profile = await this.profile(ctx, api)
+    const answer = await api.get<InstagramPublishingLimit>(`${profile.accountId}/content_publishing_limit`, { fields: 'quota_usage,config' })
+    if (!answer.ok) throw unreadable(answer)
+    const entry = answer.result.data?.[0]
+    if (!entry || typeof entry.quota_usage !== 'number') return null
+    const limit = typeof entry.config?.quota_total === 'number' && entry.config.quota_total > 0 ? entry.config.quota_total : 100
+    const duration = typeof entry.config?.quota_duration === 'number' && entry.config.quota_duration > 0 ? entry.config.quota_duration : 86_400
+    return { used: Math.max(0, entry.quota_usage), limit, windowHours: Math.max(1, Math.round(duration / 3600)), readAt: ctx.clock.now().toISOString() }
   }
 
   async readPostNumbers(ctx: ConnectorContext, posts: { externalId: string; url: string | null }[]): Promise<Record<string, PostNumbers>> {

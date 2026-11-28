@@ -399,3 +399,22 @@ describe('hiding a comment (DEC-089)', () => {
     expect(await w.call('opportunities.get', { id: item(under.id) })).toMatchObject({ comment: { hidden: true } })
   })
 })
+
+describe('daily publishing limit on Instagram (DEC-096)', () => {
+  it('reads the 24-hour publishing quota through channels.publishingQuota, and returns supported:false for browser channels', async () => {
+    const w = await connected()
+    w.instagram.quotaUsage = 14
+    w.instagram.quotaTotal = 100
+    const info = await w.call('channels.publishingQuota', { channelId: w.channel.id })
+    expect(info).toEqual({
+      supported: true,
+      problem: null,
+      quota: { used: 14, limit: 100, windowHours: 24, readAt: w.core.clock.now().toISOString() }
+    })
+    expect(w.instagram.calls.at(-1)).toMatchObject({ method: 'GET', path: `${IG_ACCOUNT_ID}/content_publishing_limit` })
+
+    const browserAcc = await w.call('accounts.create', { productId: w.productId, platform: 'instagram', label: 'IG Browser' })
+    const browserCh = await w.call('channels.connect', { productId: w.productId, accountId: browserAcc.id, target: 'https://www.instagram.com/browserbrand/' })
+    expect(await w.call('channels.publishingQuota', { channelId: browserCh.id })).toEqual({ supported: false, quota: null, problem: null })
+  })
+})

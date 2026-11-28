@@ -53,6 +53,8 @@ export interface GraphComment {
   permalink_url?: string
   from?: GraphFrom
   parent?: { id?: string }
+  /** Whether the Page hid this comment from other readers (DEC-096). */
+  is_hidden?: boolean
 }
 
 export interface GraphList<T> {

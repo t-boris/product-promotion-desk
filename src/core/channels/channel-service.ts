@@ -1,6 +1,6 @@
 // Channels: connecting an address, assessing what the account can do there, settings and modes (REQ-002, REQ-003).
 
-import { ApiError } from '../../shared/api'
+import { ApiError, type PublishingQuotaInfo } from '../../shared/api'
 import type { Account, CapabilityKey, Channel, ChannelMode, ChannelSettings, Product } from '../../shared/types'
 import { DEFAULT_CHANNEL_SETTINGS } from '../../shared/types'
 import { connectorForPlatform } from './platforms'
@@ -255,6 +255,27 @@ export class ChannelService {
     const updated = this.save(channel, { mode: args.mode })
     this.core.log.info('channels', `${channel.target} mode: ${channel.mode} -> ${args.mode}.`, channel.id)
     return updated
+  }
+
+  /** Remaining daily publishing allowance from the platform API (Threads, Instagram — DEC-096). Read-only. */
+  async publishingQuota(channelId: unknown): Promise<PublishingQuotaInfo> {
+    const channel = this.channel(channelId)
+    let connector: Connector
+    let ctx: ConnectorContext
+    try {
+      const bound = this.core.connectorContext(channel.id)
+      connector = bound.connector
+      ctx = bound.ctx
+    } catch {
+      return { supported: false, quota: null, problem: null }
+    }
+    if (typeof connector.readPublishingQuota !== 'function') return { supported: false, quota: null, problem: null }
+    try {
+      const quota = await connector.readPublishingQuota(ctx)
+      return { supported: true, quota, problem: quota ? null : 'The platform did not report a publishing limit.' }
+    } catch (error) {
+      return { supported: true, quota: null, problem: error instanceof Error ? error.message : String(error) }
+    }
   }
 
   // ───────────── remove ─────────────

@@ -70,6 +70,14 @@ export interface InstagramToken {
   expires_in?: number
 }
 
+/** Daily publishing allowance from `GET /{user-id}/content_publishing_limit` (DEC-096). */
+export interface InstagramPublishingLimit {
+  data?: {
+    quota_usage?: number
+    config?: { quota_total?: number; quota_duration?: number }
+  }[]
+}
+
 function read<T>(response: HttpResponse, token: string): InstagramAnswer<T> {
   let parsed: unknown
   try {

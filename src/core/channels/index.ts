@@ -126,6 +126,7 @@ export function register(core: Core): void {
     'channels.list': (args) => channels.list(args),
     'channels.connect': (args) => channels.connect(args),
     'channels.assess': (args) => channels.assess(args.channelId),
+    'channels.publishingQuota': (args) => channels.publishingQuota(args.channelId),
     'channels.updateSettings': (args) => channels.updateSettings(args),
     'channels.setMode': (args) => channels.setMode(args),
     'channels.remove': (args) => channels.remove(args.id),

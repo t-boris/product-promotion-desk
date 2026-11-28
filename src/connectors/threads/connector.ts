@@ -1,3 +1,4 @@
+import type { PublishingQuota } from '../../shared/api'
 import type { Capability, CapabilityKey, CapabilityStatus, Channel, MetricReading } from '../../shared/types'
 import { isVideoMime } from '../../shared/types'
 import type { PostNumbers } from '../../shared/post-numbers'
@@ -22,7 +23,7 @@ import type {
 } from '../../core/ports'
 import { earliestCreation } from '../reconcile'
 import { sameText, wordsWithLink } from '../text'
-import { ThreadsApi, looksLikeThreadsToken, type ThreadsAnswer, type ThreadsContainer, type ThreadsInsights, type ThreadsList, type ThreadsMedia, type ThreadsProfile, type ThreadsToken } from './api'
+import { ThreadsApi, looksLikeThreadsToken, type ThreadsAnswer, type ThreadsContainer, type ThreadsInsights, type ThreadsList, type ThreadsMedia, type ThreadsProfile, type ThreadsPublishingLimit, type ThreadsToken } from './api'
 
 export const THREADS_API_CONNECTOR_ID = 'threads-api'
 
@@ -401,6 +402,23 @@ export class ThreadsApiConnector implements Connector {
     const said = count.ok ? (count.result.data ?? []).find((entry) => entry.name === 'followers_count')?.total_value?.value : undefined
     const value = typeof said === 'number' && Number.isInteger(said) && said >= 0 ? said : null
     return [{ key: 'followers', label: 'Followers', value, available: value !== null }]
+  }
+
+  /** Reads the profile's remaining 24-hour publishing allowance (posts and replies) from Threads (DEC-096). */
+  async readPublishingQuota(ctx: ConnectorContext): Promise<PublishingQuota | null> {
+    const api = await this.requireClient(ctx)
+    const profile = await this.profile(ctx, api)
+    const answer = await api.get<ThreadsPublishingLimit>(`${profile.id}/threads_publishing_limit`, { fields: 'quota_usage,config,reply_quota_usage,reply_config' })
+    if (!answer.ok) throw unreadable(answer)
+    const entry = answer.result.data?.[0]
+    if (!entry || typeof entry.quota_usage !== 'number') return null
+    const limit = typeof entry.config?.quota_total === 'number' && entry.config.quota_total > 0 ? entry.config.quota_total : 250
+    const duration = typeof entry.config?.quota_duration === 'number' && entry.config.quota_duration > 0 ? entry.config.quota_duration : 86_400
+    const replies =
+      typeof entry.reply_quota_usage === 'number'
+        ? { used: Math.max(0, entry.reply_quota_usage), limit: typeof entry.reply_config?.quota_total === 'number' && entry.reply_config.quota_total > 0 ? entry.reply_config.quota_total : 1000 }
+        : undefined
+    return { used: Math.max(0, entry.quota_usage), limit, windowHours: Math.max(1, Math.round(duration / 3600)), readAt: ctx.clock.now().toISOString(), ...(replies ? { replies } : {}) }
   }
 
   async readPostNumbers(ctx: ConnectorContext, posts: { externalId: string; url: string | null }[]): Promise<Record<string, PostNumbers>> {

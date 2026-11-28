@@ -2,6 +2,7 @@
 // src/browser (Electron). The core never imports Electron (DEC-005), so everything here is testable
 // with fakes.
 
+import type { PublishingQuota } from '../shared/api'
 import type {
   Account,
   Attachment,
@@ -769,6 +770,11 @@ export interface Connector {
    * Null: the place has no such thing. Absent: the platform has nothing of the kind to read.
    */
   readPostForm?(ctx: ConnectorContext): Promise<PostForm | null>
+  /**
+   * Optional (DEC-096): remaining daily publishing allowance reported by the platform API (Threads, Instagram). Read-only.
+   * Null when the platform gave no usable quota data; throws on refusal so the UI can explain without hiding the row.
+   */
+  readPublishingQuota?(ctx: ConnectorContext): Promise<PublishingQuota | null>
 }
 
 /** What a community asks of a new post besides its words, read from the community itself: the labels it offers and whether one is required. */

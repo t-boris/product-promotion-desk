@@ -192,7 +192,7 @@ describe('an X account that works through X\'s API (DEC-086)', () => {
     expect(caps.read_comments).toMatchObject({ status: 'verified', detail: expect.stringMatching(/Replies to the posts of @NatalMystic are read from X: those that name the account.*tenth of a cent/s) })
     expect(caps.publish_reply).toMatchObject({ status: 'needs_check', detail: expect.stringMatching(/answer goes under a reply as @NatalMystic.*only a post that names the account.*\$0\.01/s) })
     expect(caps.metrics).toMatchObject({ status: 'unavailable', detail: expect.stringMatching(/Under each post.*likes, replies and views for 30 days.*tenth of a cent.*about \$0\.03 a post/s) })
-    expect(caps.read_inbox).toMatchObject({ status: 'unavailable', detail: expect.stringMatching(/arrive as replies to the account's posts.*names the account is not collected/s) })
+    expect(caps.read_inbox).toMatchObject({ status: 'verified', detail: expect.stringMatching(/Other people's posts that mention @NatalMystic are read from X as Inbox items/) })
     // Another's profile is neither read nor posted to.
     const other = await w.call('channels.connect', { productId: w.productId, accountId: w.account.id, target: 'https://x.com/somebody' })
     const others = (await w.call('channels.assess', { channelId: other.id })).capabilities
@@ -392,15 +392,22 @@ describe('replies on X', () => {
     const first = w.x.replies(postId, 'Does it need the exact birth time?', 'ann_lee')
     w.clock.advance(60_000)
     const second = w.x.replies(postId, 'Beautiful.', 'bo')
-    // Not collected: a post of somebody else that names the account. Not read at all: a reply whose writer took the name out.
-    w.x.mentions('Have you seen this app?', 'cy')
+    // Standalone mention by somebody else is collected as an Inbox mention item (DEC-096). A reply whose writer took the name out is not read.
+    const mention = w.x.mentions('Have you seen this app?', 'cy')
     const quiet = w.x.replies(postId, 'No name in this one.', 'dee', { names: false })
     expect((await w.monitor.runChannel(w.channel.id)).status).toBe('ok')
     // X puts the answered name first in a reply; the application keeps the words as X's pages show them.
     expect(itemsOf(w)).toEqual([
       { comment: `x:${first.id}`, author: '@ann_lee', body: 'Does it need the exact birth time?' },
-      { comment: `x:${second.id}`, author: '@bo', body: 'Beautiful.' }
+      { comment: `x:${second.id}`, author: '@bo', body: 'Beautiful.' },
+      { comment: `x:${mention.id}`, author: '@cy', body: 'Have you seen this app? @NatalMystic' }
     ])
+    const mentionSource = w.core.db.prepare('SELECT o.source FROM opportunities o JOIN comments c ON c.id = o.comment_id WHERE c.external_id = ?').get(`x:${mention.id}`) as { source: string }
+    expect(mentionSource).toEqual({ source: 'mention' })
+    // Answering a standalone mention works through X's API because the post named the account.
+    const mentionAnswer = await w.send({ kind: 'reply', parentExternalId: `x:${mention.id}`, destination: `https://x.com/cy/status/${mention.id}`, text: 'Happy to share how it works!' })
+    expect(mentionAnswer).toMatchObject({ status: 'confirmed', url: expect.stringMatching(/^https:\/\/x\.com\/NatalMystic\/status\/\d+$/) })
+    expect(w.x.calls.filter((c) => c.method === 'POST' && c.path === 'tweets').at(-1)?.body).toEqual({ text: 'Happy to share how it works!', reply: { in_reply_to_tweet_id: mention.id } })
 
     const answer = await w.send({ kind: 'reply', parentExternalId: `x:${first.id}`, destination: `https://x.com/ann_lee/status/${first.id}`, text: 'Yes, to the minute.' })
     expect(answer).toMatchObject({ status: 'confirmed', url: expect.stringMatching(/^https:\/\/x\.com\/NatalMystic\/status\/\d+$/) })
@@ -415,9 +422,9 @@ describe('replies on X', () => {
       ['@NatalMystic', 'Yes, to the minute.', `x:${first.id}`]
     ])
     expect(thread?.comments[0]?.url).toBe(`https://x.com/ann_lee/status/${first.id}`)
-    // The account's own answer is nobody to answer.
+    // The account's own answers (under both own posts and mentions) are nobody to answer.
     expect((await w.monitor.runChannel(w.channel.id)).status).toBe('ok')
-    expect(itemsOf(w)).toHaveLength(2)
+    expect(itemsOf(w)).toHaveLength(3)
 
     // X takes an answer only to a post that names the account: its refusal is said with the rule, and nothing is sent.
     const posts = w.x.posts.length

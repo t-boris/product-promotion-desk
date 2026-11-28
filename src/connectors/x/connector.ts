@@ -3,7 +3,7 @@ import { isVideoMime, type Capability, type CapabilityKey, type CapabilityStatus
 import type { PostNumbers } from '../../shared/post-numbers'
 import { HttpNoAnswerError } from '../../core/net/http'
 import { SIGN_IN_CALLBACK } from '../../core/net/sign-in-listener'
-import type { ActivityBatch, ApiAccess, ChannelGuide, Connector, ConnectorContext, HttpPort, KeptKey, KeyTimes, LoginState, NormalizedTarget, PublishedRef, PublishOutcome, PublishRequest, RemoteComment, RemoteDiscussion, SendTicket, SignInAnswer, SignInAsk } from '../../core/ports'
+import type { ActivityBatch, ApiAccess, ChannelGuide, Connector, ConnectorContext, HttpPort, KeptKey, KeyTimes, LoginState, NormalizedTarget, PublishedRef, PublishOutcome, PublishRequest, RemoteComment, RemoteDiscussion, RemoteInboxItem, SendTicket, SignInAnswer, SignInAsk } from '../../core/ports'
 import { earliestCreation } from '../reconcile'
 import { sameText } from '../text'
 import { XApi, X_AUTHORIZE, X_SCOPES, askToken, looksLikeClientId, type XAnswer, type XList, type XPost, type XToken, type XUser } from './api'
@@ -366,11 +366,10 @@ export class XApiConnector implements Connector {
     const cap = (key: CapabilityKey, status: CapabilityStatus, detail: string): Capability => ({ key, status, detail, checkedAt })
     const notOffered = [
       cap('metrics', 'unavailable', 'The account\'s followers are not read here. Under each post the application reads likes, replies and views for 30 days after it went out; X charges a tenth of a cent for a post on each day it is read (about $0.03 a post).'),
-      cap('membership', 'unavailable', 'A profile is not joined: it is the account\'s own.'),
-      cap('read_inbox', 'unavailable', 'Replies arrive as replies to the account\'s posts. A post of somebody else that names the account is not collected.')
+      cap('membership', 'unavailable', 'A profile is not joined: it is the account\'s own.')
     ]
     const all = (status: CapabilityStatus, detail: string): Capability[] =>
-      (['read_posts', 'read_comments', 'detect_changes', 'publish_post', 'publish_reply', 'verify_send'] as CapabilityKey[]).map((key) => cap(key, status, detail)).concat(notOffered)
+      (['read_posts', 'read_comments', 'detect_changes', 'read_inbox', 'publish_post', 'publish_reply', 'verify_send'] as CapabilityKey[]).map((key) => cap(key, status, detail)).concat(notOffered)
     let found: Awaited<ReturnType<XApiConnector['owner']>>
     try {
       if (!(await this.client(ctx))) return all('needs_user', 'Press “Sign in with X” on the account\'s page first.')
@@ -382,17 +381,20 @@ export class XApiConnector implements Connector {
     const name = `@${found.user.username}`
     let reads: [CapabilityStatus, string]
     let talks: [CapabilityStatus, string]
+    let inbox: [CapabilityStatus, string]
     try {
       await this.talk(ctx, found.user)
       reads = ['verified', `The posts of ${name} of the last 30 days are read from X.`]
       talks = ['verified', `Replies to the posts of ${name} are read from X: those that name the account, as a reply does unless its writer took the name out. X charges a tenth of a cent for each.`]
+      inbox = ['verified', `Other people's posts that mention ${name} are read from X as Inbox items so you can answer them.`]
     } catch (error) {
-      reads = talks = ['needs_user', error instanceof Error ? error.message : String(error)]
+      reads = talks = inbox = ['needs_user', error instanceof Error ? error.message : String(error)]
     }
     return [
       cap('read_posts', ...reads),
       cap('read_comments', ...talks),
       cap('detect_changes', ...reads),
+      cap('read_inbox', ...inbox),
       cap(
         'publish_post',
         'needs_check',
@@ -414,7 +416,64 @@ export class XApiConnector implements Connector {
     return { discussions, fetchedAt: ctx.clock.now().toISOString() }
   }
 
-  /** One post of the account with the replies to it. A post older than what is kept is asked of X by its id. */
+  /** Other people's posts that mention the account outside its own threads, collected as Inbox items (DEC-096). */
+  async readInbox(ctx: ConnectorContext, options?: { limit: number }): Promise<RemoteInboxItem[]> {
+    const user = await this.requireOwner(ctx)
+    const talk = await this.talk(ctx, user)
+    const ownRoots = new Set([...talk.own.values()].filter((post) => answered(post) === null).map((post) => post.id))
+    const mentions = [...talk.said.values()].filter((post) => !ownRoots.has(post.conversation_id ?? ''))
+    mentions.sort((a, b) => (BigInt(a.id) > BigInt(b.id) ? -1 : 1))
+    return mentions.slice(0, Math.max(1, options?.limit ?? FEED_LIMIT)).map((post): RemoteInboxItem => {
+      const name = talk.names.get(post.author_id ?? '')
+      const author = name ? `@${name}` : 'Somebody on X'
+      const url = name ? addressOf(name, post.id) : `https://x.com/i/status/${post.id}`
+      const body = withoutNames(post.text ?? '')
+      const firstLine = body.split('\n')[0] ?? ''
+      const convId = post.conversation_id ?? post.id
+      return {
+        kind: 'mention',
+        discussionExternalId: postIdOf(convId),
+        discussionUrl: convId === post.id ? url : `https://x.com/i/status/${convId}`,
+        discussionTitle: firstLine.length > 100 ? `${firstLine.slice(0, 99)}…` : firstLine,
+        comment: {
+          externalId: postIdOf(post.id),
+          parentExternalId: answered(post) ? postIdOf(answered(post) as string) : postIdOf(convId),
+          author,
+          body,
+          url,
+          postedAt: iso(post.created_at)
+        }
+      }
+    })
+  }
+
+  /** A conversation started by somebody else that mentions the account, built from what was already read. */
+  private mentionDiscussion(ctx: ConnectorContext, user: Me, talk: Talk, convId: string, mentions: XPost[]): RemoteDiscussion {
+    const me = ctx.account.identity ?? `@${user.username}`
+    const ownReplies = [...talk.own.values()].filter((post) => post.conversation_id === convId)
+    const all = [...mentions, ...ownReplies].sort((a, b) => (BigInt(a.id) < BigInt(b.id) ? -1 : 1))
+    const root = all.find((post) => post.id === convId) ?? all[0] as XPost
+    const rootName = talk.names.get(root.author_id ?? '')
+    const rootAuthor = talk.own.has(root.id) ? me : rootName ? `@${rootName}` : 'Somebody on X'
+    const rootUrl = rootName ? addressOf(rootName, root.id) : `https://x.com/i/status/${root.id}`
+    const body = withoutNames(root.text ?? '')
+    const firstLine = body.split('\n')[0] ?? ''
+    const comments: RemoteComment[] = all.map((post) => {
+      const mine = talk.own.has(post.id)
+      const name = mine ? user.username : talk.names.get(post.author_id ?? '')
+      return {
+        externalId: postIdOf(post.id),
+        parentExternalId: postIdOf(answered(post) ?? convId),
+        author: mine ? me : name ? `@${name}` : 'Somebody on X',
+        body: withoutNames(post.text ?? ''),
+        url: name ? addressOf(name, post.id) : `https://x.com/i/status/${post.id}`,
+        postedAt: iso(post.created_at)
+      }
+    })
+    return { externalId: postIdOf(convId), url: rootUrl, title: firstLine.length > 100 ? `${firstLine.slice(0, 99)}…` : firstLine, author: rootAuthor, body, postedAt: iso(root.created_at), comments }
+  }
+
+  /** One post of the account (or a mention conversation of somebody else) with the replies in it. */
   async fetchThread(ctx: ConnectorContext, discussionExternalId: string): Promise<RemoteDiscussion | null> {
     const id = parseExternalId(discussionExternalId)
     if (!id) return null
@@ -422,6 +481,8 @@ export class XApiConnector implements Connector {
     const talk = await this.talk(ctx, user)
     let root = talk.own.get(id)
     if (!root) {
+      const mentions = [...talk.said.values()].filter((post) => (post.conversation_id ?? post.id) === id)
+      if (mentions.length > 0) return this.mentionDiscussion(ctx, user, talk, id, mentions)
       const asked = await (await this.requireClient(ctx)).get<{ data?: XPost[] }>('tweets', { ids: id, 'tweet.fields': TALK_FIELDS })
       if (!asked.ok) throw unreadable(asked)
       root = (asked.result.data ?? []).find((post) => post.id === id && post.author_id === user.id)
