@@ -153,13 +153,16 @@ const API: ApiAccess = {
   keyLooksValid: looksLikeAccessToken
 }
 
-const NO_VIDEO = 'A video is not sent to a Page through the API by this application. Publish it on Facebook yourself. Nothing was sent.'
+/** How long the request that carries a video may take, and how the post Facebook makes of it is then looked for: every few seconds, for three minutes. */
+const VIDEO_TIMEOUT_MS = 30 * 60_000
+const VIDEO_LOOK_MS = 5_000
+const VIDEO_LOOKS = 36
 
 /**
  * A Facebook Page worked through Meta's Graph API with the Page's own access token (DEC-076): posts with words, a link or photos; the comments
  * under the Page's posts, read from Facebook each time; replies under a comment or a post; reactions and comments counted under a post; a post
- * with a time far enough ahead is given to Facebook's own schedule (DEC-077). Nothing is kept here: Facebook holds the posts and gives them
- * again. Not carried: a video.
+ * with a time far enough ahead is given to Facebook's own schedule (DEC-077); one video with the post's words (DEC-088). Nothing is kept here:
+ * Facebook holds the posts and gives them again.
  */
 export class FacebookPageConnector implements Connector {
   readonly id = FACEBOOK_PAGE_CONNECTOR_ID
@@ -168,7 +171,11 @@ export class FacebookPageConnector implements Connector {
   readonly label = 'Facebook'
   readonly api = API
   readonly postNumberKinds = ['likes', 'comments', 'views'] as const
-  readonly ownSchedule = OWN_SCHEDULE
+  /**
+   * A post with a video is not given to Facebook's schedule: Facebook answers a video with the video's number, and no page of its documentation
+   * says that the post it will make shows among the posts it keeps, so the application could not tell a kept video from one it never took.
+   */
+  readonly ownSchedule = { ...OWN_SCHEDULE, takes: (request: PublishRequest): boolean => !request.attachments.some((file) => isVideoMime(file.mime)) }
 
   /** The Page each account's token belongs to, as Facebook named it at the last check. */
   private readonly pages = new Map<string, GraphPage>()
@@ -274,7 +281,7 @@ export class FacebookPageConnector implements Connector {
       cap('read_posts', ...reads),
       cap('read_comments', ...talks),
       cap('detect_changes', ...reads),
-      cap('publish_post', 'verified', `Posts go out as the Page “${name}”: words, a link, photos. A post with a time a quarter of an hour or more ahead is given to Facebook, which publishes it at that time even with this Mac off. It needs the permission pages_manage_posts. Until the app is published (“Go live”), only the people of the app see them.`),
+      cap('publish_post', 'verified', `Posts go out as the Page “${name}”: words, a link, photos, or one video (Facebook publishes a video once it has processed it, which can take minutes; a post with a video and a time goes out from this application at that time, with this Mac on). A post with a time a quarter of an hour or more ahead is given to Facebook, which publishes it at that time even with this Mac off. It needs the permission pages_manage_posts. Until the app is published (“Go live”), only the people of the app see them.`),
       cap('publish_reply', 'verified', 'A reply goes under the comment or the post, as the Page. It needs the permission pages_manage_engagement.'),
       cap('verify_send', 'verified', 'Facebook returns the post or the comment it made.'),
       cap('metrics', 'verified', 'The number of followers; under each post, reactions, comments and views. Facebook gives views only with the permission read_insights, and only for a Page with 100 or more likes.'),
@@ -381,7 +388,7 @@ export class FacebookPageConnector implements Connector {
     if (!api) return failed('No Page access token is saved for this account. Nothing was sent.')
     const words = wordsWithLink(request)
     try {
-      return request.kind === 'reply' ? await this.reply(api, request, words) : await this.post(api, await this.page(ctx, api), request, words)
+      return request.kind === 'reply' ? await this.reply(api, request, words) : await this.post(ctx, api, await this.page(ctx, api), request, words)
     } catch (error) {
       // Only the request that publishes can leave a doubt, and it is asked through `lastStep`: anything that fails here failed before it.
       if (error instanceof HttpNoAnswerError) return failed(`Facebook did not answer (${error.message}) before anything was published. Nothing was sent.`)
@@ -422,14 +429,17 @@ export class FacebookPageConnector implements Connector {
     return `https://www.facebook.com/${id}`
   }
 
-  private async post(api: GraphApi, page: GraphPage, request: PublishRequest, words: string): Promise<PublishOutcome> {
+  private async post(ctx: ConnectorContext, api: GraphApi, page: GraphPage, request: PublishRequest, words: string): Promise<PublishOutcome> {
     const files = request.attachments
-    if (files.some((file) => isVideoMime(file.mime))) return failed(NO_VIDEO)
+    const video = files.find((file) => isVideoMime(file.mime))
+    if (video && files.length > 1) return failed('A post to a Page through its API holds photos or one video, not both and not two videos. Nothing was sent.')
     if (files.length === 0 && !words) return failed('The post is empty. Nothing was sent.')
     const part = (file: (typeof files)[number]): HttpFile => ({ path: file.path, name: file.name, mime: file.mime })
     // A post for Facebook's own schedule is made unpublished, with its time in seconds; Facebook publishes it then by itself.
     const kept = request.publishAt !== undefined
     const later: Record<string, string> = kept ? { published: 'false', scheduled_publish_time: String(Math.floor(Date.parse(request.publishAt as string) / 1000)) } : {}
+    if (video && kept) return failed('A post with a video is not given to Facebook\'s own schedule. Nothing was sent.')
+    if (video) return this.video(ctx, api, page, request, { source: part(video), ...(words ? { description: words } : {}) })
     if (files.length === 0) return this.lastStep(api, () => api.post(`${page.id}/feed`, { message: words, ...(request.link ? { link: request.link } : {}), ...later }), kept)
     if (files.length === 1 && !kept) return this.lastStep(api, () => api.post(`${page.id}/photos`, { source: part(files[0] as (typeof files)[number]), ...(words ? { caption: words } : {}) }))
     // Several photos, or any photo of a kept post: each is uploaded unpublished, then one post names them all. A photo that fails leaves nothing published.
@@ -443,6 +453,38 @@ export class FacebookPageConnector implements Connector {
     }
     if (kept) form.unpublished_content_type = 'SCHEDULED'
     return this.lastStep(api, () => api.post(`${page.id}/feed`, form), kept)
+  }
+
+  /**
+   * One video with the post's words, in one request. Facebook answers with the number of the video, not of the post: it makes the post once it
+   * has processed the video, and none of its pages says how the one number leads to the other. So the post is looked for where the application
+   * looks for any post whose answer was lost: among the Page's posts, by its words and its time. A post that
+   * has not appeared within three minutes is left as "not known", and is looked for again like every such send.
+   */
+  private async video(ctx: ConnectorContext, api: GraphApi, page: GraphPage, request: PublishRequest, form: Record<string, string | HttpFile>): Promise<PublishOutcome> {
+    const attempt: PublishRequest = { ...request, attemptedAt: request.attemptedAt ?? ctx.clock.now().toISOString() }
+    let answer: GraphAnswer<{ id?: string }>
+    try {
+      answer = await api.post<{ id?: string }>(`${page.id}/videos`, form, VIDEO_TIMEOUT_MS)
+    } catch (error) {
+      if (error instanceof HttpNoAnswerError) return { status: 'unknown', error: `Facebook did not answer (${error.message}), so it is not known whether it took the video.` }
+      throw error
+    }
+    if (!answer.ok) {
+      if (answer.status >= 500 || ON_THEIR_SIDE.includes(answer.code)) return { status: 'unknown', error: `Facebook answered with an error of its own (${answer.message}), so it is not known whether it took the video.` }
+      return failed(`${refusal(answer)} Nothing was sent.`)
+    }
+    if (!answer.result.id) return { status: 'unknown', error: 'Facebook accepted the video and returned no id, so it is not known whether it will be published.' }
+    for (let look = 0; look < VIDEO_LOOKS; look += 1) {
+      await ctx.pause(VIDEO_LOOK_MS)
+      try {
+        const made = await this.findPublished(ctx, attempt)
+        if (made) return { status: 'confirmed', url: made.url, externalId: made.externalId }
+      } catch {
+        // A look that failed is followed by the next one: the video is with Facebook either way.
+      }
+    }
+    return { status: 'unknown', error: 'Facebook took the video, and the post is not on the Page yet: it publishes a video once it has processed it. The application looks for it again; you can also look at the Page and say whether it is there.' }
   }
 
   /** What became of a post Facebook was given for a time: it is out, it still waits, or Facebook has it no more. */

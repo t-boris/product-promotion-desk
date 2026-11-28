@@ -158,16 +158,64 @@ describe('posting as the Page', () => {
     expect(w.facebook.calls.filter((c) => c.params.published === 'false')).toHaveLength(3)
   })
 
-  it('refuses a video and an empty post before anything is asked of Facebook, and says the video before the owner approves', async () => {
+  it('sends one video with the post\'s words in one request, and takes the post Facebook makes of it from the Page\'s posts', async () => {
+    const w = await connected()
+    const video = { name: 'a.mp4', path: '/tmp/a.mp4', mime: 'video/mp4', sha256: 'x' }
+    // Facebook answers with the number of the video and shows the post only when it has processed it: here, at the third look.
+    w.facebook.videoLooks = 2
+    const asked = w.facebook.calls.length
+    const sent = await w.send({ text: 'A reel.', attachments: [video] })
+    const post = w.facebook.posts[0]
+    expect(sent).toEqual({ status: 'confirmed', url: `https://www.facebook.com/natalmystic/posts/${post?.id.split('_')[1]}`, externalId: `fb:${post?.id}` })
+    const calls = w.facebook.calls.slice(asked)
+    expect(calls.filter((c) => c.method === 'POST')).toEqual([{ method: 'POST', path: `${PAGE_ID}/videos`, params: { description: 'A reel.' }, files: ['source:a.mp4'] }])
+    expect([...w.facebook.videos.values()]).toEqual(['a.mp4'])
+    expect(calls.filter((c) => c.method === 'GET' && c.path === `${PAGE_ID}/feed`)).toHaveLength(3)
+    // The number of the video is never taken for the number of the post.
+    expect([...w.facebook.videos.keys()]).not.toContain(post?.id.split('_')[1])
+  })
+
+  it('leaves a video whose post has not appeared in three minutes as not known, and finds it on the next look; a refusal of the video is a failure', async () => {
+    const w = await connected()
+    const video = { name: 'long.mp4', path: '/tmp/long.mp4', mime: 'video/mp4', sha256: 'x' }
+    const request = { kind: 'post' as const, destination: w.channel.url, parentExternalId: null, title: null, text: 'A long reel.', link: null, attachments: [video], attemptedAt: w.core.clock.now().toISOString() }
+    // Facebook shows the post at the 38th look: the send looks 36 times.
+    w.facebook.videoLooks = 37
+    const asked = w.facebook.calls.length
+    const sent = await w.send(request)
+    expect(sent).toMatchObject({ status: 'unknown', error: expect.stringMatching(/Facebook took the video, and the post is not on the Page yet/) })
+    expect(w.facebook.calls.filter((c) => c.path === `${PAGE_ID}/videos`)).toHaveLength(1)
+    expect(w.facebook.calls.slice(asked).filter((c) => c.method === 'GET' && c.path === `${PAGE_ID}/feed`)).toHaveLength(36)
+    // Not found yet: nothing is concluded from that.
+    expect(await w.connector.findPublished(w.ctx, request)).toBeNull()
+    expect(await w.connector.findPublished(w.ctx, request)).toMatchObject({ externalId: `fb:${w.facebook.posts[0]?.id}` })
+
+    w.facebook.failNext = { code: 100, message: '(#100) The video file is not supported' }
+    const before = w.facebook.posts.length
+    expect(await w.send({ text: 'Another.', attachments: [video] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/Nothing was sent/) })
+    w.facebook.failNext = 'lost'
+    expect(await w.send({ text: 'A third.', attachments: [video] })).toMatchObject({ status: 'unknown', error: expect.stringMatching(/not known whether it took the video/) })
+    expect(w.facebook.posts.length).toBe(before + 1)
+  })
+
+  it('refuses a video with photos, two videos and an empty post before anything is asked of Facebook, and says the mix before the owner approves', async () => {
     const w = await connected()
     const asked = w.facebook.calls.length
-    expect(await w.send({ text: 'A reel.', attachments: [{ name: 'a.mp4', path: '/tmp/a.mp4', mime: 'video/mp4', sha256: 'x' }] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/A video is not sent to a Page through the API/) })
+    const video = { name: 'a.mp4', path: '/tmp/a.mp4', mime: 'video/mp4', sha256: 'x' }
+    expect(await w.send({ text: 'A reel.', attachments: [video, picture('a.jpg')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/photos or one video, not both and not two videos/) })
+    expect(await w.send({ text: 'A reel.', attachments: [video, { ...video, name: 'b.mp4' }] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/not two videos/) })
+    expect(await w.send({ text: 'A reel.', attachments: [video], publishAt: new Date(w.core.clock.now().getTime() + 3_600_000).toISOString() })).toMatchObject({ status: 'failed', error: expect.stringMatching(/not given to Facebook's own schedule/) })
     expect(await w.send({ text: '  ' })).toMatchObject({ status: 'failed', error: expect.stringMatching(/empty/) })
     expect(w.facebook.calls.length).toBe(asked)
-    const video = { name: 'a.mp4', path: '/tmp/a.mp4', mime: 'video/mp4', sha256: 'x' }
     const rendered = { ...renderForPlatform({ title: null, text: 'A reel.', link: null, attachments: [] } as never, 'facebook'), attachments: [video] }
-    expect(sendProblems('facebook', rendered, { aiBrowser: false, api: true }).join(' ')).toMatch(/A video is not sent to Facebook through its API/)
+    // One video goes through the Page's API; a video beside a photo does not, and the preview says so.
+    expect(sendProblems('facebook', rendered, { aiBrowser: false, api: true })).toEqual([])
+    expect(sendProblems('facebook', { ...rendered, attachments: [video, picture('a.jpg')] }, { aiBrowser: false, api: true }).join(' ')).toMatch(/Facebook takes pictures or one video in a post through its API, not both/)
     expect(sendProblems('telegram', { ...rendered, attachments: [video] }, { aiBrowser: false, api: true }).join(' ')).not.toMatch(/video is not sent/)
+    // A post with a video is not given to Facebook's own schedule; one without a video is.
+    const request = { kind: 'post' as const, destination: w.channel.url, parentExternalId: null, title: null, text: 'A reel.', link: null, attachments: [video] }
+    expect(w.connector.ownSchedule?.takes?.(request)).toBe(false)
+    expect(w.connector.ownSchedule?.takes?.({ ...request, attachments: [picture('a.jpg')] })).toBe(true)
   })
 
   it('says a refusal as a failure, an error of Facebook\'s own side and a lost answer as unknown, and finds the lost post in the Page\'s feed', async () => {
@@ -313,6 +361,28 @@ describe('a post given to Facebook\'s own schedule (DEC-077)', () => {
 
     expect(stateOf(w, id).state).toBe('confirmed')
     expect(w.facebook.posts).toHaveLength(1)
+  })
+
+  it('with a video: the post is not given to Facebook, and goes out from this application at its time', async () => {
+    const w = await connected()
+    const at = later(w, 3 * HOUR)
+    const folder = mkdtempSync(join(tmpdir(), 'facebook-test-'))
+    // A draft's video is a real file: the application reads it when the draft is saved.
+    writeFileSync(join(folder, 'a.mp4'), Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftypisom'), Buffer.alloc(64)]))
+    const id = await scheduledPost(w, 'A reel.', at, [{ name: 'a.mp4', path: join(folder, 'a.mp4'), mime: 'video/mp4', sha256: 'a.mp4' }])
+    const asked = w.facebook.calls.length
+
+    expect(await w.sending.keepOwnSchedules()).toBe(0)
+    expect(await w.sending.keepOwnSchedules()).toBe(0)
+    expect(w.facebook.calls.length).toBe(asked)
+    expect(w.core.db.prepare('SELECT COUNT(*) AS n FROM platform_schedules').get()).toEqual({ n: 0 })
+    expect(stateOf(w, id).state).toBe('ready')
+
+    w.clock.advance(3 * HOUR + 60_000)
+    w.facebook.nowMs = w.core.clock.now().getTime()
+    expect(await w.sending.sendDuePublications()).toBe(1)
+    expect(stateOf(w, id).state).toBe('confirmed')
+    expect(w.facebook.calls.slice(asked).filter((c) => c.method === 'POST')).toEqual([{ method: 'POST', path: `${PAGE_ID}/videos`, params: { description: 'A reel.' }, files: ['source:a.mp4'] }])
   })
 
   it('with photos: each photo is uploaded as a temporary unpublished one, and the post names them as a scheduled post', async () => {

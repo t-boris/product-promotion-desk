@@ -45,6 +45,12 @@ export class FakeFacebook implements HttpPort {
   readonly comments: FakeComment[] = []
   /** Views are given only with the permission read_insights and on a Page with enough followers: false makes Facebook refuse them. */
   givesViews = true
+  /** How many readings of the Page's posts pass before the post of an uploaded video shows: Facebook processes a video first. */
+  videoLooks = 1
+  /** The videos Facebook took, by their number: the file's name. */
+  readonly videos = new Map<string, string>()
+  /** The posts of videos that are still processed, with the readings left before each shows. */
+  private readonly processing = new Map<string, number>()
   /** Facebook's pages disagree on whether every app may delete a post: true makes it refuse. */
   refusesDelete = false
   private readonly unpublishedPhotos = new Map<string, { temporary: boolean }>()
@@ -170,7 +176,15 @@ export class FakeFacebook implements HttpPort {
     const limit = Number(params.limit ?? 25)
     if (path === 'me') return ok({ id: this.page.id, name: this.page.name, ...(this.page.username ? { username: this.page.username } : {}), link: `https://www.facebook.com/${this.page.username ?? this.page.id}`, category: 'Astrologist' })
     if (path === this.page.id) return ok({ id: this.page.id, followers_count: 321 })
-    if (path === `${this.page.id}/feed`) return ok({ data: this.posts.filter((p) => p.published).slice(0, limit).map((p) => this.postJson(p)) })
+    if (path === `${this.page.id}/feed`) {
+      // A video's post shows only after Facebook has processed the video: some readings later.
+      const shown = this.posts.filter((p) => p.published && !this.processing.has(p.id))
+      for (const [id, left] of [...this.processing]) {
+        if (left <= 1) this.processing.delete(id)
+        else this.processing.set(id, left - 1)
+      }
+      return ok({ data: shown.slice(0, limit).map((p) => this.postJson(p)) })
+    }
     if (path === `${this.page.id}/scheduled_posts`) return ok({ data: this.kept.slice(0, limit).map((p) => this.postJson(p)) })
     const insights = /^(\d+_\d+)\/insights$/.exec(path)
     if (insights) {
@@ -221,6 +235,16 @@ export class FakeFacebook implements HttpPort {
         post.scheduledFor = at
       }
       return ok({ id: post.id })
+    }
+    if (path === `${this.page.id}/videos`) {
+      const source = files.find((f) => f.startsWith('source:'))
+      if (!source) return no(100, '(#100) A video needs a file or an address')
+      const videoId = String(this.next++)
+      this.videos.set(videoId, source.slice('source:'.length))
+      const post = this.newPost(params.description ?? '', this.page)
+      if (this.videoLooks > 0) this.processing.set(post.id, this.videoLooks)
+      // The answer names the video, never the post.
+      return ok({ id: videoId })
     }
     if (path === `${this.page.id}/photos`) {
       if (!files.some((f) => f.startsWith('source:'))) return no(100, '(#100) A photo needs a file or an address')

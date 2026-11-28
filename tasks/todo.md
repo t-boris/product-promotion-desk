@@ -1442,7 +1442,7 @@ One release per phase; each is verified (`npm run verify`), installed and read o
 - [x] C (0.53.0) Reddit: flair and several pictures on a scheduled post; read-back in communities the app does not read
 - [x] D (0.55.0, with E) base for API connectors: network port, tokens in the vault, refresh, connect flow, own-post comment tracking, per-post numbers
 - [x] E (0.55.0) Telegram bot connector
-- [ ] F (0.56.0) Facebook Page connector
+- [x] F (0.56.0) Facebook Page connector (0.78.0, 0.79.0; a video in 0.89.0)
 - [x] G (0.57.0) Threads connector — built as 0.82.0 (DEC-080), pictures and video as 0.83.0 through the place for files (DEC-081); unproven live (no Meta app)
 - [x] H (0.58.0) Instagram connector — built as 0.84.0 (DEC-082); unproven live (no Meta app, no bucket)
 - [x] I (0.59.0) X connector — built as 0.87.0 (DEC-086): sign-in in X's window, posts with pictures, the numbers of each post, the price before the approval; unproven live (no paid X app). Not built: reading replies and mentions and answering (proof T4 and the owner's word on paid reading), a video, a quote
@@ -1556,7 +1556,7 @@ What Meta's documentation says (checked again 2026-11-27): a Page post made with
 - [x] the scheduler looks at kept posts with automation paused too (the pause takes them back); a platform is asked about one post at most once a minute, after a failure five minutes later
 - [x] Facebook Page: schedule with words, a link, photos; read, delete, find among scheduled posts; views of a post from insights, the fifth permission `read_insights` in the guide's steps
 - [x] tests: 20 on the mechanism with the test connector, 8 on the Facebook connector with the fake Graph API
-- [ ] not built: a video to a Page. Meta's current guide uploads a video through `/{app-id}/uploads` with the app's number and a person's token (the application holds only the Page's token); the one-request form is only in the reference, which does not name the host (the overview calls `graph-video.facebook.com` deprecated, the guide still uses it); no page says how to get from the video's number to the post's number, which the comments, the numbers and the "is it still there" look need. One request with a real token settles each of the three.
+- [x] a video to a Page: built in 0.89.0 (DEC-088), see the section of 0.89.0 below. What stopped it on 2026-11-27 was read again: the host and the one-request form are settled by Meta's overview and reference; the step from the video to its post is in no page and is replaced by the reading of the Page's posts.
 - [ ] with the owner's Meta app: one post scheduled for real, seen kept in Meta Business Suite, taken back by an edit, published at its time; views read on a Page with 100 or more likes
 
 ## Phase A steps
@@ -1686,3 +1686,14 @@ Why: the plan's phase I says "replies read through own mentions", at X's own-dat
 - [x] verify (6505 tests), DEC-087, own-instance look (account page, channel page, the two price lines asked of the application), release 0.88.0
 
 Review: the reading is `XApiConnector.talk` (in memory, by the signed-in user's id). After each start the 30 days are read once in full. Not seen on a screen: the price line on a review card of a reply and in the Feed's answer (no X conversation can be made in an own instance without a real X app); the line's words are tested through the route. Unproven: everything with a real X app, proof T4 included.
+
+## Phase F, the last part: a video to a Facebook Page (2026-11-28, 0.89.0, DEC-088)
+
+- [x] one request to the Page's videos (`source`, `description`) with the Page's token; a long time allowed for the request
+- [x] the post found among the Page's posts by words and time (every 5 s, 3 minutes); not found: "not known", looked for again by the existing check of unknown sends
+- [x] photos or one video, not both: refused before anything is asked, and said by the preview (`apiOneKind`)
+- [x] a post with a video and a time is not given to Facebook's schedule (`ownSchedule.takes`); it goes out from the application at its time
+- [x] tests: the request, the slow video, the refusal and the lost answer, the mix, the schedule through the whole pipeline; verify
+- [x] DEC-088, plan row F, release 0.89.0
+
+Review: `FacebookPageConnector.video`. Not seen on a screen (no Page can be connected in an own instance without a real token); the preview's words are tested through `sendProblems`, the function the preview asks. Unproven with a real Page: that the post of a video carries the description as its words, the processing time, any limit of size. Not built: Reels.

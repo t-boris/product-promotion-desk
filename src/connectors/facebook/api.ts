@@ -69,9 +69,9 @@ export class GraphApi {
     return this.read<T>(await this.http.request({ method: 'GET', url: `${GRAPH}/${path}?${query.toString()}` }))
   }
 
-  /** Makes something: every value is a word or a file read from its path. */
-  async post<T>(path: string, form: Record<string, string | HttpFile>): Promise<GraphAnswer<T>> {
-    return this.read<T>(await this.http.request({ method: 'POST', url: `${GRAPH}/${path}`, form: { ...form, access_token: this.token } }))
+  /** Makes something: every value is a word or a file read from its path. `timeoutMs`: how long a request that carries a large file may take. */
+  async post<T>(path: string, form: Record<string, string | HttpFile>, timeoutMs?: number): Promise<GraphAnswer<T>> {
+    return this.read<T>(await this.http.request({ method: 'POST', url: `${GRAPH}/${path}`, form: { ...form, access_token: this.token }, ...(timeoutMs ? { timeoutMs } : {}) }))
   }
 
   /** Deletes an object. */

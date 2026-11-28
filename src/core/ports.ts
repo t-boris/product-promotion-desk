@@ -687,7 +687,12 @@ export interface Connector {
    * far ahead of that time the platform takes one. Such a connector answers a request with `publishAt` with `scheduled` and has the three
    * methods below.
    */
-  ownSchedule?: { minAheadMs: number; maxAheadMs: number }
+  ownSchedule?: {
+    minAheadMs: number
+    maxAheadMs: number
+    /** Present when the platform is given only some posts to keep: false for a post that goes out from this application at its time instead. */
+    takes?(request: PublishRequest): boolean
+  }
   /** What became of a post the platform was given to publish at a time. Read-only. */
   readScheduled?(ctx: ConnectorContext, externalId: string): Promise<ScheduledReading>
   /** Takes a kept post back before its time, so that it is not published. `published`: it had gone out already. It throws when the platform could not be asked or refused. */

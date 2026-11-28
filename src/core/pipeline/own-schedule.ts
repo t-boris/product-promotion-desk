@@ -197,6 +197,11 @@ export class OwnSchedule {
       const pair = this.connector(decision.channel.id)
       if (!pair.connector.ownSchedule) return false
       const request: PublishRequest = { ...decision.request, publishAt: at }
+      // A post the platform is not given to keep goes out from this application at its time: it is not asked about again.
+      if (pair.connector.ownSchedule.takes?.(request) === false) {
+        this.askAgainAt.set(opportunityId, Date.parse(at))
+        return false
+      }
       // Written before anything leaves the machine: from here on no send of this item can start without asking the platform first.
       this.db
         .prepare(

@@ -729,7 +729,7 @@ const OTHER: PlatformForm = { format: 'plain', hasTitle: false, titleLimit: null
 export const PLATFORM_FORMS: Record<string, PlatformForm> = {
   reddit: { format: 'markdown', hasTitle: true, titleLimit: 300, textLimit: 40_000, pictures: 'optional', maxPictures: 20, videos: 'optional', maxVideos: 1, link: 'field' },
   instagram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 2_200, apiVideos: 'public_address', apiPictures: 'public_address', apiPictureKind: 'jpeg', pictures: 'required', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_bio' },
-  facebook: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 63_206, apiVideos: 'none', pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text' },
+  facebook: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 63_206, apiOneKind: true, pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text' },
   threads: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 500, apiVideos: 'public_address', apiPictures: 'public_address', pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text', topic: 'field' },
   x: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 280, apiVideos: 'none', apiPrice: { post: 0.015, withLink: 0.2, reply: 0.01, numbersADay: 0.001, asOf: '28 November 2026' }, pictures: 'optional', maxPictures: 4, videos: 'optional', maxVideos: 1, link: 'in_text' },
   linkedin: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 3_000, apiOneKind: true, pictures: 'optional', maxPictures: 9, videos: 'optional', maxVideos: 1, link: 'in_text' },
