@@ -7,6 +7,7 @@
 
 import { NUMBERS_WINDOW_MS } from './post-numbers'
 import type { PostType } from './quick-post'
+import { instagramMediaNotes, type InstagramPostForm, type InstagramUserTag } from './instagram-media'
 import { isVideoMime, type Attachment, type PostMarkup, type VideoAs } from './types'
 import { reelProblem, videoAsNote } from './video-as'
 
@@ -735,7 +736,7 @@ export const PLATFORM_FORMS: Record<string, PlatformForm> = {
   x: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 280, apiOneKind: true, apiPrice: { post: 0.015, withLink: 0.2, reply: 0.01, numbersADay: 0.001, asOf: '28 November 2026' }, pictures: 'optional', maxPictures: 4, videos: 'optional', maxVideos: 1, link: 'in_text' },
   linkedin: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 3_000, apiOneKind: true, pictures: 'optional', maxPictures: 9, videos: 'optional', maxVideos: 1, link: 'in_text' },
   telegram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 4_096, apiCaptionLimit: 1_024, pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text' },
-  pinterest: { format: 'plain', hasTitle: true, titleLimit: 100, textLimit: 500, pictures: 'required', maxPictures: 1, videos: 'optional', maxVideos: 1, link: 'field' },
+  pinterest: { format: 'plain', hasTitle: true, titleLimit: 100, textLimit: 500, pictures: 'required', maxPictures: 5, videos: 'optional', maxVideos: 1, link: 'field' },
   tiktok: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 2_200, pictures: 'none', maxPictures: 0, videos: 'required', maxVideos: 1, link: 'field' },
   youtube: { format: 'plain', hasTitle: true, titleLimit: 100, textLimit: 5_000, pictures: 'none', maxPictures: 0, videos: 'required', maxVideos: 1, link: 'field' }
 }
@@ -860,6 +861,12 @@ export interface PostContent {
   postType?: PostType
   /** `reel`: the owner chose that the one video goes out as a Reel; the preview says so. */
   videoAs?: VideoAs | null
+  /** `story`: publish a single picture or video as a 24-hour Instagram Story; the preview says so. */
+  postForm?: InstagramPostForm | null
+  /** Custom picture alt text for an Instagram API post; the preview notes it. */
+  altText?: string | null
+  /** People tagged on an Instagram API picture post; the preview notes them. */
+  userTags?: readonly InstagramUserTag[]
 }
 
 /**
@@ -899,15 +906,17 @@ export function renderForPlatform(content: PostContent, platform: string, option
   const form = formOf(platform)
   const label = platformLabel(platform)
   const reelNote = platform === 'facebook' && reelProblem(content.attachments) === null ? videoAsNote(content.videoAs, label) : null
+  const igStory = platform === 'instagram' && content.postForm === 'story'
   if (content.markup !== 'markdown') {
     // Written as it is, except where the platform has no field for the link (it is the last line of the text, or left out): nothing could carry it otherwise.
     // Nothing else of an older draft is judged here; but a link added to the text can take it over the limit, and that is said (it did not count before).
-    const placed = placeLink(form, label, content.text, content.link)
+    const placed = igStory ? { text: content.text, link: null, shown: null, note: null } : placeLink(form, label, content.text, content.link)
     // Only what the link caused: a draft that was over the limit without it was never judged here, and is not now.
     const over = placed.text !== content.text && form.textLimit !== null && characterCount(content.text) <= form.textLimit && characterCount(placed.text) > form.textLimit
     // A quick post is judged whole, by the rules of the platform, on the caption as it is written (plus the link where it is placed in the text).
     const problems = content.postType === 'quick' ? formProblems(form, label, { title: content.title, text: placed.text, link: placed.link, ...kindsOf(content.attachments), quick: true }) : over ? [`The text is ${characterCount(placed.text)} characters; ${label} allows ${form.textLimit}.`] : []
-    const notes = [placed.note, reelNote].filter((note): note is string => note !== null)
+    const igNotes = platform === 'instagram' ? instagramMediaNotes(content, placed.text) : []
+    const notes = [placed.note, reelNote, ...igNotes].filter((note): note is string => note !== null)
     return {
       title: content.title,
       text: placed.text,
@@ -923,10 +932,11 @@ export function renderForPlatform(content: PostContent, platform: string, option
   const placed = pictureIdsIn(content.text).length
   const words = form.format === 'markdown' ? (options.pictures === 'keep' ? content.text.trim() : withoutInlinePictures(content.text)) : toPlainText(content.text)
   let title = content.title
-  const linked = placeLink(form, label, words, content.link)
+  const linked = igStory ? { text: words, link: null, shown: null, note: null } : placeLink(form, label, words, content.link)
   const text = linked.text
   if (linked.note) notes.push(linked.note)
   if (reelNote) notes.push(reelNote)
+  if (platform === 'instagram') notes.push(...instagramMediaNotes(content, text))
   // A picture or a video in the text is written as ![alt](media:ID), which is not formatting: only the marks of the words count here.
   if (form.format === 'plain' && /[*_#>`~]|\]\(|^[ \t]*[-+][ \t]/m.test(withoutInlinePictures(content.text))) notes.push(`${label} shows no formatting: the marks are removed and the words stay.`)
   if (form.format === 'plain') {
@@ -988,6 +998,8 @@ export interface SendWays {
   api?: boolean
   /** The channel's connector publishes a video as a Reel when the owner chooses so on the post (a Facebook Page through its API). */
   reels?: boolean
+  /** The channel's connector supports Instagram API publishing options: Stories, picture alt text, and people tags (DEC-097). */
+  instagramMedia?: boolean
   /** The owner's place for files on a public address is set up (DEC-081): a platform whose API takes a picture only from an address gets it from there. */
   publicFiles?: boolean
   /** The AI browser would carry this send, but the selected engine cannot work the browser: why, in words (only for a channel with no connector). */

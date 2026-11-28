@@ -10,8 +10,11 @@ import type { ChannelTrial, TrialMetric, TrialProgress } from './channel-trial'
 import type { WeekNumbers, WeekSums } from './weekly-review'
 import type { PostNumbers } from './post-numbers'
 import type { PostType, QuickCard } from './quick-post'
+import type { InstagramPostForm, InstagramUserTag } from './instagram-media'
 import type { PostingSlot } from './schedule'
 import type { ThemeChoice } from './themes'
+
+export type { InstagramPostForm, InstagramUserTag } from './instagram-media'
 
 export type Id = string
 export type IsoTime = string
@@ -979,6 +982,12 @@ export interface Draft {
   topicTag: string | null
   /** How the post's one video goes out where the platform has two forms for it (a Facebook Page through its API): `reel`, or null for the usual video post. Chosen by the owner on the post. Part of what an approval binds when set. */
   videoAs: VideoAs | null
+  /** Instagram API post form (`story` for a 24-hour Story, null for a feed post/reel/carousel — DEC-097). Part of what an approval binds when set. */
+  postForm: InstagramPostForm | null
+  /** Custom accessibility alt text sent on an Instagram API picture post (DEC-097). Part of what an approval binds when set. */
+  altText: string | null
+  /** People tagged on an Instagram API picture post (`[{ username, x, y }]`, DEC-097). Part of what an approval binds when non-empty. */
+  userTags: InstagramUserTag[]
   /**
    * `article` (every draft before DEC-046) or `quick` (one picture plus a caption; the caption is in `text`, the title is empty). Screens choose their
    * layout by this field, never by guessing from an empty title.

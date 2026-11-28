@@ -1,7 +1,7 @@
 // Content hashing for approval binding (REQ-004 criterion 1) and for detecting edited comments.
 
 import { RENDER_VERSION, linkPlacementOf } from '../../shared/post-format'
-import type { Attachment, Id, PostMarkup } from '../../shared/types'
+import type { Attachment, Id, InstagramUserTag, PostMarkup } from '../../shared/types'
 import { normalizeIdentity, sha256 } from './util'
 
 /** The account an approval is bound to: its id AND who is signed in to it right now (null when unknown). */
@@ -29,6 +29,12 @@ export interface HashableContent {
   topicTag?: string | null
   /** The form the post's video goes out in (a Reel); part of the hash only when set, so every approval given before the choice keeps its hash. */
   videoAs?: string | null
+  /** Instagram post form (`story`); part of the hash only when set. */
+  postForm?: string | null
+  /** Custom picture alt text (Instagram); part of the hash only when set. */
+  altText?: string | null
+  /** People tagged on a picture (Instagram); part of the hash only when non-empty. */
+  userTags?: readonly InstagramUserTag[]
 }
 
 /**
@@ -53,6 +59,9 @@ export function contentHash(content: HashableContent, account: HashedAccount, de
       flair: content.flair ? content.flair : undefined,
       topicTag: content.topicTag ? content.topicTag : undefined,
       videoAs: content.videoAs ? content.videoAs : undefined,
+      postForm: content.postForm ? content.postForm : undefined,
+      altText: content.altText ? content.altText : undefined,
+      userTags: content.userTags && content.userTags.length > 0 ? content.userTags : undefined,
       accountId: account.id,
       identity: hashedIdentity(account.identity),
       destination

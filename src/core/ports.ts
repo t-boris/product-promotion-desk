@@ -20,7 +20,7 @@ import type {
   PageReport,
   VaultUnavailable
 } from '../shared/types'
-import type { VideoAs } from '../shared/types'
+import type { InstagramPostForm, InstagramUserTag, VideoAs } from '../shared/types'
 import type { McpLaunch } from './mcp/protocol'
 import type { PostNumbers } from '../shared/post-numbers'
 
@@ -591,6 +591,12 @@ export interface PublishRequest {
   topicTag?: string | null
   /** `reel`: the owner chose that the post's one video goes out as a Reel (only for a connector that says `reels`); null or left out: the usual video post. */
   videoAs?: VideoAs | null
+  /** `story`: publish a single picture or video as a 24-hour Instagram Story (only for a connector that says `instagramMedia`). */
+  postForm?: InstagramPostForm | null
+  /** Custom accessibility alt text sent on an Instagram API picture post (DEC-097). */
+  altText?: string | null
+  /** People tagged on an Instagram API picture post (`[{ username, x, y }]`, DEC-097). */
+  userTags?: InstagramUserTag[]
   /** When the attempt being reconciled started; findPublished must ignore anything created before it. */
   attemptedAt?: IsoTime
   /**
@@ -700,6 +706,8 @@ export interface Connector {
   hidesTopLevelOnly?: true
   /** The platform has a second form for a post's one video, a Reel, and the connector publishes it when the request says `videoAs: 'reel'`. */
   reels?: true
+  /** The connector publishes Instagram API Stories (`postForm: 'story'`), custom picture `alt_text`, and picture `user_tags` (DEC-097). */
+  instagramMedia?: true
   /**
    * Present on a connector whose platform keeps a post and publishes it at a given time by itself, with this application closed (DEC-077): how
    * far ahead of that time the platform takes one. Such a connector answers a request with `publishAt` with `scheduled` and has the three

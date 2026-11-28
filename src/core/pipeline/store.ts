@@ -21,6 +21,8 @@ import type {
   Draft,
   Finding,
   Id,
+  InstagramPostForm,
+  InstagramUserTag,
   Opportunity,
   OpportunityDecision,
   OpportunityKind,
@@ -92,6 +94,12 @@ export interface DraftContent {
   topicTag?: string | null
   /** `reel`: the one video goes out as a Reel; left out or null: the usual video post. A replacing draft that leaves it out keeps the earlier draft's. */
   videoAs?: VideoAs | null
+  /** `story`: publish as a 24-hour Instagram Story; left out or null: feed post. */
+  postForm?: InstagramPostForm | null
+  /** Custom accessibility alt text for an Instagram API picture post; left out or null: none. */
+  altText?: string | null
+  /** People tagged on an Instagram API picture post; left out: inherit earlier draft's. */
+  userTags?: InstagramUserTag[]
   /** The template card of a quick post; left out or null: the picture is not a card. */
   card?: QuickCard | null
 }
@@ -570,8 +578,8 @@ export class FlowStore {
     const id = newId()
     this.db
       .prepare(
-        `INSERT INTO drafts (id, opportunity_id, title, text, link, attachments_json, markup, post_type, card_json, knowledge_version_id, used_claims_json, rationale, author, created_at, flair, topic_tag, video_as)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO drafts (id, opportunity_id, title, text, link, attachments_json, markup, post_type, card_json, knowledge_version_id, used_claims_json, rationale, author, created_at, flair, topic_tag, video_as, post_form, alt_text, user_tags_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         id,
@@ -590,7 +598,10 @@ export class FlowStore {
         this.now(),
         content.flair ? content.flair : null,
         content.topicTag ? content.topicTag : null,
-        content.videoAs === 'reel' ? 'reel' : null
+        content.videoAs === 'reel' ? 'reel' : null,
+        content.postForm === 'story' ? 'story' : null,
+        content.altText ? content.altText : null,
+        toJson(content.userTags ?? [])
       )
     return this.core.repos.draft(id)
   }

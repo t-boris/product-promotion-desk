@@ -3,6 +3,7 @@ import type { CardColour, CardShape, CardStyle } from '../../../../../shared/qui
 import type { Draft, Id } from '../../../../../shared/types'
 import { useSendWays } from '../send-ways'
 import { Badge } from '../../../ui'
+import { PostInstagramOptions } from '../PostInstagramOptions'
 import { PostPreview, type PostAuthor } from '../PostPreview'
 import { CaptionField } from './CaptionField'
 import { PictureSlot } from './PictureSlot'
@@ -124,6 +125,16 @@ export function QuickComposer({
         <div className="quick-fields">
           <CaptionField value={form.caption} onChange={context.setCaption} platforms={platforms} disabled={disabled} autoFocus={autoFocus} extras={captionExtras?.(context)} />
           <PictureSlot productId={productId} form={form} onChange={onChange} platforms={platforms} live={live} disabled={disabled} extras={pictureExtras?.(context)} />
+          {channelId && ways?.instagramMedia && platforms.length === 1 && platforms[0] === 'instagram' && (
+            <PostInstagramOptions
+              attachments={content.attachments}
+              postForm={form.postForm}
+              altText={form.altText}
+              userTags={form.userTags}
+              onChange={(patch) => onChange((current) => ({ ...current, ...patch }))}
+              disabled={disabled}
+            />
+          )}
         </div>
         <div className="quick-side">
           {platforms.length > 0 && (

@@ -5,6 +5,7 @@ import { newId } from '../../core/db/database'
 import { FAKE_STORE_PLACE, FAKE_STORE_SECRET, FakeStore, byHost } from '../../core/net/fake-s3'
 import { FakeKnowledge, makeClaim } from '../../core/pipeline/test-fixture'
 import { sendWays } from '../../core/pipeline/send-ways'
+import { contentHash } from '../../core/pipeline/hash'
 import { makeTestCore, type TestCore } from '../../core/testing/fakes'
 import { apiKeyKey } from '../../core/vault'
 import type { MonitorService } from '../../core/services'
@@ -416,5 +417,133 @@ describe('daily publishing limit on Instagram (DEC-096)', () => {
     const browserAcc = await w.call('accounts.create', { productId: w.productId, platform: 'instagram', label: 'IG Browser' })
     const browserCh = await w.call('channels.connect', { productId: w.productId, accountId: browserAcc.id, target: 'https://www.instagram.com/browserbrand/' })
     expect(await w.call('channels.publishingQuota', { channelId: browserCh.id })).toEqual({ supported: false, quota: null, problem: null })
+  })
+})
+
+describe('Instagram Stories, alt_text, and user_tags (DEC-097)', () => {
+  it('publishes an image or video Story (media_type=STORIES) without caption/alt_text/user_tags and finds it via /stories', async () => {
+    const w = await connected()
+    const picStory = await w.send({ text: 'Ignored caption', attachments: [picture('sky.jpg')], postForm: 'story' })
+    expect(picStory).toMatchObject({ status: 'confirmed', externalId: expect.stringMatching(/^ig:m:\d+$/) })
+    const storyMedia = w.instagram.media[0]
+    expect(storyMedia).toMatchObject({ kind: 'IMAGE', story: true, caption: null, inFeed: false })
+    expect(w.instagram.containers.at(-1)?.body).toMatchObject({ media_type: 'STORIES', image_url: expect.stringMatching(/^https:\/\/store\.example\.com\//) })
+    expect(w.instagram.containers.at(-1)?.body).not.toHaveProperty('caption')
+    expect(w.instagram.containers.at(-1)?.body).not.toHaveProperty('share_to_feed')
+
+    // Reconciles a Story when publish response is lost via GET /{accountId}/stories.
+    const found = await w.connector.findPublished?.(w.ctx, {
+      kind: 'post',
+      destination: w.channel.url,
+      parentExternalId: null,
+      title: null,
+      text: '',
+      link: null,
+      attachments: [picture('sky.jpg')],
+      postForm: 'story',
+      attemptedAt: w.core.clock.now().toISOString()
+    })
+    expect(found).toMatchObject({ externalId: `ig:m:${storyMedia?.id}` })
+
+    // Video Story
+    const vidStory = await w.send({ text: '', attachments: [video('clip.mp4')], postForm: 'story' })
+    expect(vidStory).toMatchObject({ status: 'confirmed' })
+    expect(w.instagram.media[0]).toMatchObject({ kind: 'VIDEO', story: true, inFeed: false })
+    expect(w.instagram.containers.at(-1)?.body).toMatchObject({ media_type: 'STORIES', video_url: expect.stringMatching(/^https:\/\/store\.example\.com\//) })
+  })
+
+  it('sends alt_text and user_tags on single image posts and on carousel image items, and refuses invalid combinations before uploading', async () => {
+    const w = await connected()
+    const single = await w.send({
+      text: 'Charts with friends',
+      attachments: [picture('chart.jpg')],
+      altText: 'A minimalist natal chart illustration',
+      userTags: [{ username: '@astro_alice', x: 0.25, y: 0.75 }]
+    })
+    expect(single).toMatchObject({ status: 'confirmed' })
+    expect(w.instagram.media[0]).toMatchObject({
+      altText: 'A minimalist natal chart illustration',
+      userTags: [{ username: 'astro_alice', x: 0.25, y: 0.75 }]
+    })
+
+    const carousel = await w.send({
+      text: 'Two slides',
+      attachments: [picture('one.jpg'), picture('two.jpg')],
+      altText: 'Carousel slide alt',
+      userTags: [{ username: 'bob.stars', x: 0.5, y: 0.5 }]
+    })
+    expect(carousel).toMatchObject({ status: 'confirmed' })
+    expect(w.instagram.media[0]).toMatchObject({
+      kind: 'CAROUSEL_ALBUM',
+      altText: 'Carousel slide alt',
+      userTags: [{ username: 'bob.stars', x: 0.5, y: 0.5 }]
+    })
+
+    // Refusals happen before uploading to storage or calling Instagram API.
+    const callsBefore = made(w).length
+    expect(await w.send({ attachments: [picture('a.jpg'), picture('b.jpg')], postForm: 'story' })).toMatchObject({ status: 'failed', error: expect.stringMatching(/Story is one picture or one video.*Nothing was sent/) })
+    expect(await w.send({ attachments: [picture('a.jpg')], postForm: 'story', altText: 'Nope' })).toMatchObject({ status: 'failed', error: expect.stringMatching(/Story cannot carry alt text.*Nothing was sent/) })
+    expect(await w.send({ attachments: [picture('a.jpg')], postForm: 'story', userTags: [{ username: 'alice', x: 0.5, y: 0.5 }] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/Story cannot carry people tags.*Nothing was sent/) })
+    expect(await w.send({ attachments: [video('clip.mp4')], altText: 'Video alt' })).toMatchObject({ status: 'failed', error: expect.stringMatching(/Alt text applies to a picture post.*Nothing was sent/) })
+    expect(await w.send({ attachments: [video('clip.mp4')], userTags: [{ username: 'alice', x: 0.5, y: 0.5 }] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/People tags apply to a picture post.*Nothing was sent/) })
+    expect(await w.send({ kind: 'reply', parentExternalId: 'ig:m:1', text: 'Hi', altText: 'No' })).toMatchObject({ status: 'failed', error: expect.stringMatching(/comment on Instagram cannot use Story, alt text or people tags/) })
+    expect(made(w).length).toBe(callsBefore)
+  })
+
+  it('persists options on drafts, binds them in contentHash, preserves across word edits, and blocks non-API channels and replies', async () => {
+    const w = await connected()
+    const jpgPath = join(w.core.dataDir, 'sample.jpg')
+    writeFileSync(jpgPath, Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xff, 0xd9]))
+    const picAtt = { name: 'sample.jpg', path: jpgPath, mime: 'image/jpeg', sha256: '' }
+
+    // Non-API Instagram channel rejects Instagram API media options.
+    const browserAcc = await w.call('accounts.create', { productId: w.productId, platform: 'instagram', label: 'IG Browser' })
+    const browserCh = await w.call('channels.connect', { productId: w.productId, accountId: browserAcc.id, target: 'https://www.instagram.com/browseronly/' })
+    await expect(w.call('publications.create', { channelId: browserCh.id, draft: { text: 'Story', attachments: [picAtt], postForm: 'story' } })).rejects.toMatchObject({
+      code: 'invalid_input',
+      message: expect.stringMatching(/only through an Instagram API channel/)
+    })
+
+    // Save with altText + userTags, verify persistence and inheritance across a word-only edit.
+    const { opportunity } = await w.call('publications.create', {
+      channelId: w.channel.id,
+      draft: {
+        text: 'First caption',
+        attachments: [picAtt],
+        markup: 'markdown',
+        altText: 'Chart wheel',
+        userTags: [{ username: '@Luna_Dev', x: 0.3, y: 0.6 }]
+      }
+    })
+    const first = w.core.repos.latestDraft(opportunity.id)
+    expect(first).toMatchObject({ postForm: null, altText: 'Chart wheel', userTags: [{ username: 'Luna_Dev', x: 0.3, y: 0.6 }] })
+
+    await w.call('opportunities.saveDraft', { id: opportunity.id, draft: { text: 'Edited caption', attachments: first!.attachments, markup: 'markdown' } })
+    const edited = w.core.repos.latestDraft(opportunity.id)
+    expect(edited).toMatchObject({ altText: 'Chart wheel', userTags: [{ username: 'Luna_Dev', x: 0.3, y: 0.6 }] })
+
+    // Switch to Story: clears altText and userTags and changes approval hash.
+    await w.call('opportunities.saveDraft', { id: opportunity.id, draft: { text: 'Story words', attachments: first!.attachments, markup: 'markdown', postForm: 'story', altText: null, userTags: [] } })
+    const asStory = w.core.repos.latestDraft(opportunity.id)
+    expect(asStory).toMatchObject({ postForm: 'story', altText: null, userTags: [] })
+
+    // Content hash binds all 3 fields without changing hashes when unset.
+    const acc = { id: w.account.id, identity: w.account.identity }
+    const base = { title: null, text: 'Cap', link: null, attachments: first!.attachments, markup: 'markdown' as const }
+    const plain = contentHash(base, acc, w.channel.url, 'instagram')
+    expect(contentHash({ ...base, postForm: null, altText: null, userTags: [] }, acc, w.channel.url, 'instagram')).toBe(plain)
+    expect(contentHash({ ...base, postForm: 'story' }, acc, w.channel.url, 'instagram')).not.toBe(plain)
+    expect(contentHash({ ...base, altText: 'Alt' }, acc, w.channel.url, 'instagram')).not.toBe(plain)
+    expect(contentHash({ ...base, userTags: [{ username: 'a', x: 0.5, y: 0.5 }] }, acc, w.channel.url, 'instagram')).not.toBe(plain)
+
+    // Preview notes reflect Story (no Link in bio), altText, and userTags.
+    const storyPreview = renderForPlatform({ title: null, text: 'Words', link: 'https://natalmystic.com', attachments: first!.attachments, markup: 'markdown', postForm: 'story' }, 'instagram')
+    expect(storyPreview.text).toBe('Words')
+    expect(storyPreview.notes.join(' ')).toMatch(/24-hour Instagram Story/)
+    expect(storyPreview.notes.join(' ')).toMatch(/do not show captions/)
+    const feedPreview = renderForPlatform({ title: null, text: 'Words', link: null, attachments: first!.attachments, markup: 'markdown', altText: 'Nice wheel', userTags: [{ username: 'luna', x: 0.5, y: 0.5 }] }, 'instagram')
+    expect(feedPreview.notes.join(' ')).toMatch(/custom alt text/)
+    expect(feedPreview.notes.join(' ')).toMatch(/@luna/)
+    expect(sendWays(w.core, undefined, w.channel).instagramMedia).toBe(true)
   })
 })

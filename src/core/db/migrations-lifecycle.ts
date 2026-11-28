@@ -205,5 +205,15 @@ ALTER TABLE comments ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
 -- 'reel' when the owner chose that the post's one video goes out as a Reel (DEC-092); NULL: the usual video post.
 ALTER TABLE drafts ADD COLUMN video_as TEXT;
 `
+  },
+  {
+    id: 411,
+    name: 'drafts: Instagram Stories, alt text and people tags',
+    sql: `
+-- Instagram API publishing options (DEC-097): 'story' for a 24-hour Story (NULL: feed post/reel/carousel), optional picture alt_text, and picture user_tags JSON.
+ALTER TABLE drafts ADD COLUMN post_form TEXT;
+ALTER TABLE drafts ADD COLUMN alt_text TEXT;
+ALTER TABLE drafts ADD COLUMN user_tags_json TEXT NOT NULL DEFAULT '[]';
+`
   }
 ]

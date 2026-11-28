@@ -116,7 +116,7 @@ import type {
   OverviewView
 } from './types'
 import type { PostType, QuickCard } from './quick-post'
-import type { AccountAccess, VideoAs } from './types'
+import type { AccountAccess, InstagramPostForm, InstagramUserTag, VideoAs } from './types'
 import type { QuickAssessArgs, QuickAssessment, QuickCaptionArgs, QuickCaptionResult, QuickPictureArgs, QuickPictureResult, QuickTrendsArgs, QuickTrendsResult } from './quick-ai'
 
 export interface SourcePreview {
@@ -225,6 +225,12 @@ export interface DraftInput {
   topicTag?: string | null
   /** `reel`: the post's one video goes out as a Reel where the channel takes one (a Facebook Page through its API); null: the usual video post. Left out on a replacing draft, the earlier draft's choice stays while the post is still one video. */
   videoAs?: VideoAs | null
+  /** `story`: publish a single picture or video as a 24-hour Instagram Story through the Instagram API; null: feed post. Left out on a replacing draft, the earlier draft's choice stays while the attachments still fit. */
+  postForm?: InstagramPostForm | null
+  /** Custom accessibility alt text for an Instagram API picture post (up to 1000 chars); null clears it. Left out on a replacing draft, the earlier draft's text stays while pictures remain. */
+  altText?: string | null
+  /** People tagged on an Instagram API picture post (`[{ username, x, y }]`, up to 20); null or [] clears them. Left out on a replacing draft, earlier tags stay while pictures remain. */
+  userTags?: InstagramUserTag[] | null
   /**
    * `quick` for a post written in the quick-post composer (one picture, a caption in `text`, no title; DEC-046), `article` for the long form. Left out on
    * a draft that replaces an earlier one, it keeps that draft's type (editing never changes the type); on a first draft it is `article`.

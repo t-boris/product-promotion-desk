@@ -2,6 +2,7 @@
 // executor ask the same question, so what the owner is told can be sent is what is sent (DEC-031).
 
 import { judgedForFit, kindsOf, platformLabel, renderForPlatform, sendProblems, type PostContent, type SendWays } from '../../shared/post-format'
+import { hasInstagramMediaOptions, instagramMediaFitProblems } from '../../shared/instagram-media'
 import type { Channel } from '../../shared/types'
 import { reelProblem } from '../../shared/video-as'
 import type { Core } from '../core'
@@ -42,10 +43,21 @@ export const scheduledByOwner = (opp: { scheduledAt: string | null }): boolean =
 /** Whether a post to the channel may be a Reel: its connector publishes one (asked wherever a draft is stored for a channel, and by the screen through `sendWays`). */
 export const takesReel = (core: Core, channel: Pick<Channel, 'reads'> & { connectorId?: string }): boolean => sendWays(core, undefined, channel).reels === true
 
+/** Whether a post to the channel supports Instagram API media options (Stories, alt text, people tags — DEC-097). */
+export const takesInstagramMedia = (core: Core, channel: Pick<Channel, 'reads'> & { connectorId?: string }): boolean => sendWays(core, undefined, channel).instagramMedia === true
+
 export function sendWays(core: Core, send?: { automatic: boolean; approvedBy: string; scheduled?: boolean }, channel?: Pick<Channel, 'reads'> & { connectorId?: string }): SendWays {
   // A channel that works through its platform's API has one way, its connector, for everything it sends (DEC-055).
   const connector = channel?.connectorId ? core.connectors.get(channel.connectorId) : undefined
-  if (connector?.api) return { aiBrowser: false, api: true, publicFiles: core.services.publicFiles?.ready() === true, ...(connector.reels ? { reels: true } : {}) }
+  if (connector?.api) {
+    return {
+      aiBrowser: false,
+      api: true,
+      publicFiles: core.services.publicFiles?.ready() === true,
+      ...(connector.reels ? { reels: true } : {}),
+      ...(connector.instagramMedia ? { instagramMedia: true } : {})
+    }
+  }
   const noConnector = channel !== undefined && !channel.reads
   const only = noConnector ? { noConnector: true } : {}
   const chosen = (noConnector || core.settings.app().publishWith === 'ai_browser') && core.services.postMissions !== undefined
@@ -96,6 +108,10 @@ export function sendFitProblems(core: Core, draft: FlairedPost, platform: string
       const notReel = reelProblem(draft.attachments)
       if (notReel) problems.push(`${notReel} Leave only the video on the post, or choose “Video post”.`)
     }
+  }
+  if (hasInstagramMediaOptions(draft)) {
+    if (!ways.instagramMedia) problems.push(`Instagram Stories, alt text and people tags are published only through an Instagram API channel.`)
+    else problems.push(...instagramMediaFitProblems(draft))
   }
   if (draft.postType === 'quick') problems.push(...pictureFitProblems(core, platform, draft.attachments))
   return problems

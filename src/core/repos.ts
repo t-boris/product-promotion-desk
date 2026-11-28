@@ -20,6 +20,7 @@ import type {
   Run,
   SendAction
 } from '../shared/types'
+import { parseInstagramUserTags } from '../shared/instagram-media'
 import { parseQuickCard } from '../shared/quick-post'
 import { DEFAULT_CHANNEL_SETTINGS } from '../shared/types'
 import { parseJson, type Db } from './db/database'
@@ -240,6 +241,9 @@ export const mapDraft = (r: Row): Draft => ({
   flair: (r.flair as string | null | undefined) ?? null,
   topicTag: (r.topic_tag as string | null | undefined) ?? null,
   videoAs: r.video_as === 'reel' ? 'reel' : null,
+  postForm: r.post_form === 'story' ? 'story' : null,
+  altText: (r.alt_text as string | null | undefined) ?? null,
+  userTags: typeof r.user_tags_json === 'string' ? parseInstagramUserTags(parseJson<unknown>(r.user_tags_json, [])).tags : [],
   postType: r.post_type === 'quick' ? 'quick' : 'article',
   card: r.post_type === 'quick' && typeof r.card_json === 'string' ? parseQuickCard(parseJson<unknown>(r.card_json, null)) : null,
   knowledgeVersionId: (r.knowledge_version_id as string | null) ?? null,

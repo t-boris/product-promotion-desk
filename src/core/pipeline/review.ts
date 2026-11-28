@@ -9,10 +9,11 @@ import type { Approval, Draft, Id, Opportunity, OpportunityState } from '../../s
 import { judgedForFit, noConnectorProblem, renderForPlatform } from '../../shared/post-format'
 import type { PipelineHooks } from '../services'
 import type { Core } from '../core'
+import { hasInstagramMediaOptions } from '../../shared/instagram-media'
 import { attachmentProblem } from './attachments'
-import { assertQuickPlatformFits, assertTopicFits, assertVideoAsFits, inheritPostType, normalizeDraftInput } from './draft-input'
+import { assertInstagramMediaFits, assertQuickPlatformFits, assertTopicFits, assertVideoAsFits, inheritPostType, normalizeDraftInput } from './draft-input'
 import { contentHash, hashedIdentity } from './hash'
-import { sendFitProblems, sendWays, takesReel } from './send-ways'
+import { sendFitProblems, sendWays, takesInstagramMedia, takesReel } from './send-ways'
 import { OTHER_LOGIN_SPEAKS_REASON, SEND_LOCKED_STATES, SPEAKING_STATES, type FlowStore } from './store'
 
 export const FACTS_CHANGED_REASON = 'Product facts changed; review again'
@@ -65,6 +66,8 @@ export class ReviewFlow implements PipelineHooks {
     assertTopicFits(channel.platform, content)
     if (opp.kind === 'reply' && content.videoAs) throw new ApiError('invalid_input', 'A reply is not a Reel: only a post is.')
     assertVideoAsFits(channel.platform, takesReel(this.core, channel), content)
+    if (opp.kind === 'reply' && hasInstagramMediaOptions(content)) throw new ApiError('invalid_input', 'A reply cannot use Instagram Story, alt text or people tags: only a post can.')
+    assertInstagramMediaFits(channel.platform, takesInstagramMedia(this.core, channel), content)
 
     this.core.db.transaction(() => {
       // Re-read inside the transaction: the state may have changed while attachments were being checked.

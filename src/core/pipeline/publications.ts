@@ -15,8 +15,8 @@ import { holdsCredential } from '../assist/kit'
 import { AiError } from '../ports'
 import { loadKnowledge, postChannelView, roleView } from './context'
 import { hasTopicField } from '../../shared/topic-tag'
-import { assertQuickPlatformFits, assertTopicFits, assertVideoAsFits, normalizeDraftInput, isHttpUrl } from './draft-input'
-import { takesReel } from './send-ways'
+import { assertInstagramMediaFits, assertQuickPlatformFits, assertTopicFits, assertVideoAsFits, normalizeDraftInput, isHttpUrl } from './draft-input'
+import { takesInstagramMedia, takesReel } from './send-ways'
 import {
   buildPublicationPrompt,
   buildUpdatePrompt,
@@ -55,6 +55,7 @@ export class PublicationsFlow {
     assertQuickPlatformFits(channel.platform, content)
     assertTopicFits(channel.platform, content)
     assertVideoAsFits(channel.platform, takesReel(this.core, channel), content)
+    assertInstagramMediaFits(channel.platform, takesInstagramMedia(this.core, channel), content)
     const opp = this.core.db.transaction(() => {
       const created = this.store.createStandalone(channel, 'draft', 'Written by you')
       this.store.insertDraft(created.id, content, { knowledgeVersionId: null, usedClaimLineageIds: [], rationale: '', author: 'user' })

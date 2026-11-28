@@ -15,6 +15,8 @@ interface FakePin {
   created_at: string
   /** The kind and the size of the picture that came with it: the pin's picture, or the cover of its video. */
   picture: { type: string; bytes: number }
+  /** All pictures of a carousel pin (2–5 items), when sent via `multiple_image_base64`. */
+  pictures?: { type: string; bytes: number }[]
   /** The name of the uploaded video file, for a video pin. */
   video?: string
 }
@@ -155,15 +157,39 @@ export class FakePinterest implements HttpPort {
         title?: string
         description?: string
         link?: string
-        media_source?: { source_type?: string; content_type?: string; data?: string; media_id?: string; cover_image_content_type?: string; cover_image_data?: string }
+        media_source?: {
+          source_type?: string
+          content_type?: string
+          data?: string
+          media_id?: string
+          cover_image_content_type?: string
+          cover_image_data?: string
+          index?: number
+          items?: { content_type?: string; data?: string; title?: string; description?: string; link?: string }[]
+        }
       }
       if (!this.boards.some((board) => board.id === body.board_id)) return this.error(404, 40, 'Board not found.')
       const sent = body.media_source
-      // A video pin names an upload that has succeeded and carries its cover; a picture pin carries the picture.
+      // A video pin names an upload that has succeeded and carries its cover; a picture pin carries 1 picture or 2–5 carousel items.
       const uploaded = sent?.source_type === 'video_id' ? this.media.get(sent.media_id ?? '') : undefined
       if (sent?.source_type === 'video_id' && (!uploaded || uploaded.file === null || uploaded.looks > 0 || this.failsVideo)) return this.error(400, 1, 'Invalid request: the video is not ready')
-      const media = sent?.source_type === 'video_id' ? { source_type: 'image_base64', content_type: sent.cover_image_content_type, data: sent.cover_image_data } : sent
-      if (media?.source_type !== 'image_base64' || !['image/jpeg', 'image/png'].includes(media.content_type ?? '') || !/^[a-zA-Z0-9+/=]+$/.test(media.data ?? '')) return this.error(400, 1, 'Invalid request: media_source')
+      let picture: { type: string; bytes: number }
+      let pictures: { type: string; bytes: number }[] | undefined
+      if (sent?.source_type === 'multiple_image_base64') {
+        const items = sent.items
+        if (!Array.isArray(items) || items.length < 2 || items.length > 5) return this.error(400, 1, 'Invalid request: multiple_image_base64 needs 2 to 5 items')
+        if (sent.index !== undefined && (!Number.isInteger(sent.index) || sent.index < 0 || sent.index >= items.length)) return this.error(400, 1, 'Invalid request: index')
+        pictures = []
+        for (const item of items) {
+          if (!['image/jpeg', 'image/png'].includes(item.content_type ?? '') || !/^[a-zA-Z0-9+/=]+$/.test(item.data ?? '')) return this.error(400, 1, 'Invalid request: media_source item')
+          pictures.push({ type: item.content_type as string, bytes: Buffer.from(item.data as string, 'base64').length })
+        }
+        picture = pictures[0] as { type: string; bytes: number }
+      } else {
+        const media = sent?.source_type === 'video_id' ? { source_type: 'image_base64', content_type: sent.cover_image_content_type, data: sent.cover_image_data } : sent
+        if (media?.source_type !== 'image_base64' || !['image/jpeg', 'image/png'].includes(media.content_type ?? '') || !/^[a-zA-Z0-9+/=]+$/.test(media.data ?? '')) return this.error(400, 1, 'Invalid request: media_source')
+        picture = { type: media.content_type as string, bytes: Buffer.from(media.data as string, 'base64').length }
+      }
       if ([...(body.title ?? '')].length > 100 || [...(body.description ?? '')].length > 800) return this.error(400, 1, 'Invalid request: title or description is too long')
       const pin: FakePin = {
         id: `81346${this.next++}`,
@@ -172,7 +198,8 @@ export class FakePinterest implements HttpPort {
         description: body.description ?? null,
         link: body.link ?? null,
         created_at: this.now().toISOString(),
-        picture: { type: media.content_type as string, bytes: Buffer.from(media.data as string, 'base64').length },
+        picture,
+        ...(pictures ? { pictures } : {}),
         ...(uploaded?.file ? { video: uploaded.file } : {})
       }
       this.pins.unshift(pin)

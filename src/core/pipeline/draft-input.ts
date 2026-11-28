@@ -8,10 +8,18 @@
 import { ApiError } from '../../shared/api'
 import type { DraftInput } from '../../shared/api'
 import { kindsOf, pictureIdsIn, platformLabel } from '../../shared/post-format'
+import {
+  altTextProblem,
+  hasInstagramMediaOptions,
+  instagramMediaFitProblems,
+  normalizeAltText,
+  parseInstagramUserTags,
+  storyProblem
+} from '../../shared/instagram-media'
 import { parseQuickCard, QUICK_PLATFORMS, type PostType, type QuickCard } from '../../shared/quick-post'
 import { cleanTopicTag, hasTopicField, topicTagProblem } from '../../shared/topic-tag'
 import { reelProblem } from '../../shared/video-as'
-import type { Attachment, Id, VideoAs } from '../../shared/types'
+import type { Attachment, Id, InstagramPostForm, InstagramUserTag, VideoAs } from '../../shared/types'
 import type { MediaService } from '../media/service'
 import { ATTACHMENT_MAX_COUNT, validateAttachments } from './attachments'
 import type { DraftContent } from './store'
@@ -80,6 +88,20 @@ export async function normalizeDraftInput(input: DraftInput, ctx: DraftInputCont
     throw new ApiError('invalid_input', 'The video form must be "reel" or empty.')
   }
   const videoAs = input.videoAs === undefined ? undefined : input.videoAs
+  // Instagram API publishing options (DEC-097): Stories, picture alt text, and people tags.
+  if (input.postForm !== undefined && input.postForm !== null && input.postForm !== 'story') {
+    throw new ApiError('invalid_input', 'The Instagram post form must be "story" or empty.')
+  }
+  const postForm = input.postForm === undefined ? undefined : input.postForm
+  const altText = input.altText === undefined ? undefined : normalizeAltText(input.altText)
+  const altErr = altText ? altTextProblem(altText) : null
+  if (altErr) throw new ApiError('invalid_input', altErr)
+  let userTags: InstagramUserTag[] | undefined
+  if (input.userTags !== undefined) {
+    const parsed = parseInstagramUserTags(input.userTags)
+    if (parsed.error) throw new ApiError('invalid_input', parsed.error)
+    userTags = parsed.tags
+  }
   if ((input.attachments?.length ?? 0) > ATTACHMENT_MAX_COUNT) throw new ApiError('invalid_attachment', `At most ${ATTACHMENT_MAX_COUNT} attachments are allowed.`)
 
   const kept: Attachment[] = []
@@ -107,8 +129,13 @@ export async function normalizeDraftInput(input: DraftInput, ctx: DraftInputCont
   if (flair !== undefined) content.flair = flair
   if (topicTag !== undefined) content.topicTag = topicTag
   if (videoAs !== undefined) content.videoAs = videoAs
+  if (postForm !== undefined) content.postForm = postForm
+  if (altText !== undefined) content.altText = altText
+  if (userTags !== undefined) content.userTags = userTags
   const notReel = content.videoAs ? reelProblem(content.attachments) : null
   if (notReel) throw new ApiError('invalid_input', `${notReel} Leave only the video on the post, or choose “Video post”.`)
+  const igIssues = hasInstagramMediaOptions(content) ? instagramMediaFitProblems(content) : []
+  if (igIssues.length > 0) throw new ApiError('invalid_input', igIssues[0] as string)
   if (postType === 'quick') assertQuickPost(content)
   return content
 }
@@ -126,7 +153,19 @@ export function assertQuickPost(content: DraftContent): void {
  * A draft that replaces another keeps its post type, card, flair and topic unless the caller says otherwise (editing never changes the type, DEC-046). The type
  * stored is always explicit; this only chooses it when the input did not.
  */
-export function inheritPostType(content: DraftContent, previous: { postType: PostType; card: QuickCard | null; flair?: string | null; topicTag?: string | null; videoAs?: VideoAs | null } | null): DraftContent {
+export function inheritPostType(
+  content: DraftContent,
+  previous: {
+    postType: PostType
+    card: QuickCard | null
+    flair?: string | null
+    topicTag?: string | null
+    videoAs?: VideoAs | null
+    postForm?: InstagramPostForm | null
+    altText?: string | null
+    userTags?: InstagramUserTag[]
+  } | null
+): DraftContent {
   const postType = content.postType ?? previous?.postType ?? 'article'
   const next: DraftContent = { ...content, postType }
   // The flair belongs to the channel, not to the words: whoever rewrites the words (the AI's adaptation, an edit of the master) does not say it, and it stays.
@@ -134,6 +173,15 @@ export function inheritPostType(content: DraftContent, previous: { postType: Pos
   if (content.topicTag === undefined && previous?.topicTag) next.topicTag = previous.topicTag
   // The choice of a Reel stays with the post while the post is still one video: whoever rewrites the words does not say it.
   if (content.videoAs === undefined && previous?.videoAs && reelProblem(next.attachments) === null) next.videoAs = previous.videoAs
+  // Instagram Story, alt text and people tags stay across word rewrites while the attachments still fit and nothing conflicts.
+  if (content.postForm === undefined && previous?.postForm === 'story' && storyProblem(next.attachments) === null && !next.altText && (next.userTags?.length ?? 0) === 0) {
+    next.postForm = previous.postForm
+  }
+  const hasPictures = kindsOf(next.attachments).pictures > 0
+  if (next.postForm !== 'story' && hasPictures) {
+    if (content.altText === undefined && previous?.altText) next.altText = previous.altText
+    if (content.userTags === undefined && (previous?.userTags?.length ?? 0) > 0) next.userTags = previous?.userTags
+  }
   if (postType === 'quick') {
     next.markup = 'legacy'
     if (content.card === undefined) next.card = previous?.postType === 'quick' ? previous.card : null
@@ -165,5 +213,19 @@ export function assertTopicFits(platform: string, content: Pick<DraftContent, 't
 export function assertQuickPlatformFits(platform: string, content: Pick<DraftContent, 'postType'>): void {
   if (content.postType === 'quick' && !QUICK_PLATFORMS.includes(platform)) {
     throw new ApiError('invalid_input', `${platformLabel(platform)} takes an article, not a picture post (picture posts are for Instagram, Threads and Facebook).`)
+  }
+}
+
+/**
+ * Instagram Stories, custom picture alt text and people tags go only through an Instagram API channel (`takesInstagramMedia`):
+ * anywhere else nothing would send them and the post would differ from what was approved (DEC-097).
+ */
+export function assertInstagramMediaFits(
+  platform: string,
+  takesIgMedia: boolean,
+  content: Pick<DraftContent, 'postForm' | 'altText' | 'userTags'>
+): void {
+  if (hasInstagramMediaOptions(content) && !takesIgMedia) {
+    throw new ApiError('invalid_input', `The application publishes Instagram Stories, alt text and people tags only through an Instagram API channel, not on this ${platformLabel(platform)} channel.`)
   }
 }

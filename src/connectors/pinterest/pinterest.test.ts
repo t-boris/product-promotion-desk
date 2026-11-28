@@ -135,7 +135,7 @@ describe('a Pinterest account that works through Pinterest\'s API (DEC-085)', ()
     const w = await connected()
     expect(w.channel).toMatchObject({ status: 'active', connectorId: 'pinterest-api', target: 'pinterest.com/natalmystic/natal-charts', url: BOARD_URL, reads: false, watchedInBrowser: false, baselineDoneAt: null })
     const caps = Object.fromEntries((await w.call('channels.assess', { channelId: w.channel.id })).capabilities.map((c) => [c.key, c]))
-    expect(caps.publish_post).toMatchObject({ status: 'needs_check', detail: expect.stringMatching(/board “Natal Charts” as @natalmystic.*one JPEG or PNG picture.*or one MP4, MOV or M4V video up to 2 GB with a picture as its cover.*Standard access.*seen only by you/s) })
+    expect(caps.publish_post).toMatchObject({ status: 'needs_check', detail: expect.stringMatching(/board “Natal Charts” as @natalmystic.*1 to 5 JPEG or PNG pictures.*carousel pin.*or one MP4, MOV or M4V video up to 2 GB with one picture as its cover.*Standard access.*seen only by you/s) })
     for (const key of ['read_posts', 'read_comments', 'publish_reply']) expect(caps[key]).toMatchObject({ status: 'unavailable', detail: expect.stringMatching(/Pinterest's API has no comments/) })
     expect(caps.metrics).toMatchObject({ status: 'unavailable', detail: expect.stringMatching(/Under each pin.*reactions and comments.*shown in the last 90 days/s) })
     await expect(w.call('channels.connect', { productId: w.productId, accountId: w.account.id, target: 'https://www.pinterest.com/natalmystic/' })).rejects.toMatchObject({
@@ -245,14 +245,23 @@ describe('creating a pin', () => {
   it('refuses before asking Pinterest what a pin cannot be, and says it before the approval', async () => {
     const w = await connected()
     const pins = () => w.pinterest.calls.filter((c) => c.method === 'POST' && c.path === 'pins').length
-    expect(await w.send({ title: 'No picture' })).toMatchObject({ status: 'failed', error: expect.stringMatching(/is one picture, or one video with one picture as its cover; this post has no picture\./) })
-    expect(await w.send({ attachments: [picture('a.png'), picture('b.png')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/this post has 2 pictures\./) })
+    expect(await w.send({ title: 'No picture' })).toMatchObject({ status: 'failed', error: expect.stringMatching(/is 1 to 5 pictures.*this post has no picture\./) })
+    // 2 to 5 pictures go out as a carousel pin (multiple_image_base64); 6 pictures or a video with 2 pictures are refused before sending.
+    expect(await w.send({ attachments: [picture('a.png'), picture('b.png'), picture('c.png'), picture('d.png'), picture('e.png'), picture('f.png')] })).toMatchObject({
+      status: 'failed',
+      error: expect.stringMatching(/this post has 6 pictures\./)
+    })
+    expect(await w.send({ attachments: [picture('a.png'), picture('b.png'), file('clip.mp4', 'video/mp4')] })).toMatchObject({
+      status: 'failed',
+      error: expect.stringMatching(/this post has 2 pictures and one video\./)
+    })
     // A video needs a picture as its cover; two videos, or a kind of video Pinterest does not take, are refused.
     expect(await w.send({ attachments: [file('clip.mp4', 'video/mp4')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/this post has no picture and one video\./) })
     expect(await w.send({ attachments: [picture(), file('a.mp4', 'video/mp4'), file('b.mp4', 'video/mp4')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/this post has one picture and 2 videos\./) })
     expect(await w.send({ attachments: [picture(), file('clip.webm', 'video/webm')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/takes an MP4, MOV or M4V video; “clip.webm” is none of them/) })
     expect(await w.send({ attachments: [picture(), { name: 'gone.mp4', path: '/nonexistent/gone.mp4', mime: 'video/mp4', sha256: 'x' }] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/The video “gone.mp4” could not be read from this Mac/) })
     expect(await w.send({ attachments: [picture('anim.gif', 'image/gif')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/“anim.gif” is neither/) })
+    expect(await w.send({ attachments: [picture('ok.png'), picture('anim.gif', 'image/gif')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/“anim.gif” is neither/) })
     expect(await w.send({ title: 'x'.repeat(101), attachments: [picture()] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/at most 100 characters in a pin's title; this one has 101/) })
     expect(await w.send({ text: 'x'.repeat(801), attachments: [picture()] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/at most 800 characters in a pin's description; this one has 801/) })
     expect(await w.send({ link: 'natalmystic.com', attachments: [picture()] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/starts with http/) })
@@ -308,5 +317,50 @@ describe('creating a pin', () => {
     expect(call?.path).toContain('pin_metrics=true')
     // The channel's page counts them as numbers the application reads itself.
     expect(await w.call('results.posts', { channelId: w.channel.id })).toMatchObject({ readable: true, byAi: false })
+  })
+
+  it('publishes 2 to 5 JPEG or PNG pictures as a carousel pin via multiple_image_base64 (DEC-097)', async () => {
+    const w = await connected()
+    const sent = await w.send({
+      title: 'Five natal placements',
+      text: 'Swipe through all slides.',
+      link: 'https://natalmystic.com/guide',
+      attachments: [picture('one.png', 'image/png', 100), picture('two.jpg', 'image/jpeg', 200), picture('three.png', 'image/png', 300)]
+    })
+    expect(sent).toMatchObject({ status: 'confirmed', externalId: expect.stringMatching(/^pin:\d+$/) })
+    expect(w.pinterest.pins[0]).toMatchObject({
+      title: 'Five natal placements',
+      description: 'Swipe through all slides.',
+      link: 'https://natalmystic.com/guide',
+      pictures: [
+        { type: 'image/png', bytes: 100 },
+        { type: 'image/jpeg', bytes: 200 },
+        { type: 'image/png', bytes: 300 }
+      ]
+    })
+    // Markdown fit check accepts up to 5 pictures on Pinterest and rejects 6.
+    const ways = sendWays(w.core, undefined, w.channel)
+    const five = renderForPlatform(
+      {
+        title: 'Five',
+        text: 'Words',
+        link: null,
+        markup: 'markdown',
+        attachments: [1, 2, 3, 4, 5].map((n) => ({ name: `${n}.png`, path: `/${n}.png`, mime: 'image/png', sha256: `s${n}` }))
+      },
+      'pinterest'
+    )
+    expect(sendProblems('pinterest', five, ways)).toEqual([])
+    const six = renderForPlatform(
+      {
+        title: 'Six',
+        text: 'Words',
+        link: null,
+        markup: 'markdown',
+        attachments: [1, 2, 3, 4, 5, 6].map((n) => ({ name: `${n}.png`, path: `/${n}.png`, mime: 'image/png', sha256: `s${n}` }))
+      },
+      'pinterest'
+    )
+    expect(sendProblems('pinterest', six, ways).join(' ')).toMatch(/at most 5 pictures; this post has 6/)
   })
 })

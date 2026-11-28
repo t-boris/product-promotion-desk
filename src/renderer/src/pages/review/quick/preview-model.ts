@@ -17,7 +17,17 @@ export function previewPlatformOf(picked: string | null, platforms: readonly str
 export function previewContent(form: QuickForm): { content: PostContent; live: boolean } {
   const input = quickInput(form)
   return {
-    content: { title: null, text: input.text, link: input.link ?? null, attachments: input.attachments ?? [], markup: 'legacy', postType: 'quick' },
+    content: {
+      title: null,
+      text: input.text,
+      link: input.link ?? null,
+      attachments: input.attachments ?? [],
+      markup: 'legacy',
+      postType: 'quick',
+      postForm: input.postForm ?? null,
+      altText: input.altText ?? null,
+      userTags: input.userTags ?? []
+    },
     live: isCardPicture(form)
   }
 }

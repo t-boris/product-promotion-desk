@@ -14,6 +14,7 @@ const MOST_TITLE = 100
 const MOST_DESCRIPTION = 800
 const MOST_LINK = 2_048
 const MOST_PICTURE_BYTES = 20 * 1024 * 1024
+const MOST_CAROUSEL_PICTURES = 5
 const PICTURES = new Set(['image/jpeg', 'image/png'])
 /** A video of a pin, by Pinterest's pages: MP4, MOV or M4V, up to 2 GB. */
 const VIDEOS = new Set(['video/mp4', 'video/quicktime', 'video/x-m4v'])
@@ -299,7 +300,7 @@ export class PinterestApiConnector implements Connector {
       cap(
         'publish_post',
         'needs_check',
-        `Pins are created on the board “${found.board.name}” as @${found.account.username}: one JPEG or PNG picture up to 20 MB with a title, a description and a link, or one MP4, MOV or M4V video up to 2 GB with a picture as its cover. Until Pinterest gives the app Standard access, a pin it creates is seen only by you (Trial access). Tried with the first pin.`
+        `Pins are created on the board “${found.board.name}” as @${found.account.username}: 1 to ${MOST_CAROUSEL_PICTURES} JPEG or PNG pictures (2–${MOST_CAROUSEL_PICTURES} as a carousel pin), each up to 20 MB, with a title, a description and a link, or one MP4, MOV or M4V video up to 2 GB with one picture as its cover. Until Pinterest gives the app Standard access, a pin it creates is seen only by you (Trial access). Tried with the first pin.`
       ),
       cap('verify_send', 'needs_check', 'Pinterest returns the pin it made. Tried with the first pin.'),
       ...closed
@@ -351,24 +352,29 @@ export class PinterestApiConnector implements Connector {
     const videos = request.attachments.filter((file) => isVideoMime(file.mime))
     const pictures = request.attachments.filter((file) => !isVideoMime(file.mime))
     const count = (n: number, one: string, many: string): string => (n === 0 ? `no ${one}` : n === 1 ? `one ${one}` : `${n} ${many}`)
-    if (pictures.length !== 1 || videos.length > 1) {
+    const validPictures = videos.length === 0 && pictures.length >= 1 && pictures.length <= MOST_CAROUSEL_PICTURES
+    const validVideo = videos.length === 1 && pictures.length === 1
+    if (!validPictures && !validVideo) {
       const has = `${count(pictures.length, 'picture', 'pictures')}${videos.length > 0 ? ` and ${count(videos.length, 'video', 'videos')}` : ''}`
-      return failed(`A pin made through Pinterest's API is one picture, or one video with one picture as its cover; this post has ${has}. Nothing was sent.`)
+      return failed(`A pin made through Pinterest's API is 1 to ${MOST_CAROUSEL_PICTURES} pictures (carousel for 2–${MOST_CAROUSEL_PICTURES}), or one video with one picture as its cover; this post has ${has}. Nothing was sent.`)
     }
-    const picture = pictures[0] as (typeof pictures)[number]
     const video = videos[0]
-    if (!PICTURES.has(picture.mime)) return failed(`Pinterest takes a JPEG or PNG picture through its API; “${picture.name}” is neither. Nothing was sent.`)
+    for (const picture of pictures) {
+      if (!PICTURES.has(picture.mime)) return failed(`Pinterest takes a JPEG or PNG picture through its API; “${picture.name}” is neither. Nothing was sent.`)
+    }
     if (video && !VIDEOS.has(video.mime)) return failed(`Pinterest takes an MP4, MOV or M4V video; “${video.name}” is none of them. Nothing was sent.`)
     if ([...title].length > MOST_TITLE) return failed(`Pinterest takes at most ${MOST_TITLE} characters in a pin's title; this one has ${[...title].length}. Nothing was sent.`)
     if ([...words].length > MOST_DESCRIPTION) return failed(`Pinterest takes at most ${MOST_DESCRIPTION} characters in a pin's description; this one has ${[...words].length}. Nothing was sent.`)
     if (link.length > MOST_LINK || (link !== '' && !/^https?:\/\//i.test(link))) return failed('The link of a pin is an address that starts with http:// or https://, at most 2048 characters. Nothing was sent.')
-    let data: string
-    try {
-      const bytes = statSync(picture.path).size
-      if (bytes > MOST_PICTURE_BYTES) return failed(`Pinterest takes a picture up to 20 MB; “${picture.name}” is ${Math.round(bytes / (1024 * 1024))} MB. Nothing was sent.`)
-      data = readFileSync(picture.path).toString('base64')
-    } catch {
-      return failed(`The picture “${picture.name}” could not be read from this Mac. Nothing was sent.`)
+    const encoded: { mime: string; data: string }[] = []
+    for (const picture of pictures) {
+      try {
+        const bytes = statSync(picture.path).size
+        if (bytes > MOST_PICTURE_BYTES) return failed(`Pinterest takes a picture up to 20 MB; “${picture.name}” is ${Math.round(bytes / (1024 * 1024))} MB. Nothing was sent.`)
+        encoded.push({ mime: picture.mime, data: readFileSync(picture.path).toString('base64') })
+      } catch {
+        return failed(`The picture “${picture.name}” could not be read from this Mac. Nothing was sent.`)
+      }
     }
     if (video) {
       try {
@@ -387,12 +393,26 @@ export class PinterestApiConnector implements Connector {
       if (error instanceof HttpNoAnswerError) return failed(`No answer came (${error.message}) before anything was created. Nothing was sent.`)
       return failed(`${error instanceof Error ? error.message : String(error)} Nothing was sent.`)
     }
-    // A video is uploaded first and named by its number; the post's picture is its cover. Until the pin is created nothing is published.
-    let source: Record<string, unknown> = { source_type: 'image_base64', content_type: picture.mime, data }
+    // A video is uploaded first and named by its number; 2–5 pictures go as a carousel pin (multiple_image_base64).
+    const first = encoded[0] as (typeof encoded)[number]
+    let source: Record<string, unknown> =
+      encoded.length === 1
+        ? { source_type: 'image_base64', content_type: first.mime, data: first.data }
+        : {
+            source_type: 'multiple_image_base64',
+            index: 0,
+            items: encoded.map(({ mime, data }) => ({
+              content_type: mime,
+              data,
+              ...(title ? { title } : {}),
+              ...(words ? { description: words } : {}),
+              ...(link ? { link } : {})
+            }))
+          }
     if (video) {
       const uploaded = await this.upload(ctx, video)
       if ('problem' in uploaded) return failed(`${uploaded.problem} Nothing was sent.`)
-      source = { source_type: 'video_id', media_id: uploaded.mediaId, cover_image_content_type: picture.mime, cover_image_data: data }
+      source = { source_type: 'video_id', media_id: uploaded.mediaId, cover_image_content_type: first.mime, cover_image_data: first.data }
     }
     const body = {
       board_id: boardId,

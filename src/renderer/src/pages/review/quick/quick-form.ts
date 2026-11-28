@@ -3,9 +3,10 @@
 // card, what a save sends, what stops it) is tested without the screen.
 
 import type { DraftInput } from '../../../../../shared/api'
+import { normalizeAltText } from '../../../../../shared/instagram-media'
 import { characterCount } from '../../../../../shared/post-format'
 import { CARD_HEADLINE_MAX, cardHeadline, DEFAULT_CARD, type CardColour, type CardShape, type CardStyle, type QuickCard } from '../../../../../shared/quick-post'
-import type { Attachment, Draft } from '../../../../../shared/types'
+import type { Attachment, Draft, InstagramPostForm, InstagramUserTag } from '../../../../../shared/types'
 
 /** `card`: the app draws the picture from the headline (the default). `picture`: the owner's own, an AI illustration, a file or a library picture. */
 export type PictureSource = 'card' | 'picture'
@@ -26,9 +27,24 @@ export interface QuickForm {
    */
   angle: string
   illustrationWish: string
+  /** Instagram API options (DEC-097): Story vs Feed post, picture alt text, and people tags (shown on single-channel Instagram API posts). */
+  postForm: InstagramPostForm | null
+  altText: string
+  userTags: InstagramUserTag[]
 }
 
-export const emptyQuickForm = (): QuickForm => ({ caption: '', card: { ...DEFAULT_CARD }, source: 'card', picture: null, link: null, angle: '', illustrationWish: '' })
+export const emptyQuickForm = (): QuickForm => ({
+  caption: '',
+  card: { ...DEFAULT_CARD },
+  source: 'card',
+  picture: null,
+  link: null,
+  angle: '',
+  illustrationWish: '',
+  postForm: null,
+  altText: '',
+  userTags: []
+})
 
 /**
  * A saved quick post as the form: its card parameters when the picture is a card, its picture otherwise. A draft that is not a quick post (or none)
@@ -44,7 +60,10 @@ export function quickFormOf(draft: Draft | null): QuickForm {
     picture: draft.card ? null : picture,
     link: draft.link,
     angle: '',
-    illustrationWish: ''
+    illustrationWish: '',
+    postForm: draft.postForm ?? null,
+    altText: draft.altText ?? '',
+    userTags: draft.userTags ?? []
   }
 }
 
@@ -112,14 +131,19 @@ export const CARD_TO_DRAW: Attachment = { name: 'card.png', path: '', mime: 'ima
  */
 export function quickInput(form: QuickForm, drawn: Attachment = CARD_TO_DRAW): DraftInput {
   const card = isCardPicture(form)
+  const attachments = card ? [drawn] : form.picture ? [form.picture] : []
+  const isStory = form.postForm === 'story' && attachments.length === 1
   return {
     title: null,
     text: form.caption.trim(),
     link: form.link,
-    attachments: card ? [drawn] : form.picture ? [form.picture] : [],
+    attachments,
     markup: 'legacy',
     postType: 'quick',
-    card: card ? drawnCard(form) : null
+    card: card ? drawnCard(form) : null,
+    postForm: isStory ? 'story' : null,
+    altText: isStory ? null : normalizeAltText(form.altText),
+    userTags: isStory ? [] : form.userTags
   }
 }
 
@@ -143,7 +167,16 @@ export const cardSignature = (card: QuickCard): string => JSON.stringify([card.s
 
 /** The whole form as one string, to tell a changed form from the saved one. */
 export function quickSignature(form: QuickForm): string {
-  return JSON.stringify([form.caption.trim(), form.link, form.source, form.source === 'card' ? [cardSignature(drawnCard(form)), form.card.headlineEdited] : (form.picture?.mediaId ?? form.picture?.path ?? null)])
+  const isStory = form.postForm === 'story'
+  return JSON.stringify([
+    form.caption.trim(),
+    form.link,
+    form.source,
+    form.source === 'card' ? [cardSignature(drawnCard(form)), form.card.headlineEdited] : (form.picture?.mediaId ?? form.picture?.path ?? null),
+    isStory ? 'story' : null,
+    isStory ? null : normalizeAltText(form.altText),
+    isStory ? [] : form.userTags
+  ])
 }
 
 /**

@@ -23,6 +23,12 @@ interface FakeMedia {
   id: string
   caption: string | null
   kind: 'IMAGE' | 'VIDEO' | 'CAROUSEL_ALBUM'
+  /** True when published as a 24-hour Story (`media_type=STORIES`). */
+  story?: boolean
+  /** Custom picture alt text passed on creation, if any. */
+  altText?: string | null
+  /** Tagged people passed on creation, if any. */
+  userTags?: { username: string; x: number; y: number }[]
   created: number
   likes: number
   views: number
@@ -170,7 +176,8 @@ export class FakeInstagram implements HttpPort {
         const said = Object.fromEntries(Object.entries(this.profile).filter(([name]) => fields.includes(name)))
         return this.ok(this.profileInList ? { data: [said] } : said)
       }
-      if (mine(first) && second === 'media') return this.ok({ data: this.media.map((m) => this.mediaJson(m, fields)), paging: { cursors: { before: 'b', after: 'a' } } })
+      if (mine(first) && second === 'media') return this.ok({ data: this.media.filter((m) => !m.story).map((m) => this.mediaJson(m, fields)), paging: { cursors: { before: 'b', after: 'a' } } })
+      if (mine(first) && second === 'stories') return this.ok({ data: this.media.filter((m) => m.story).map((m) => this.mediaJson(m, fields)) })
       if (mine(first) && second === 'content_publishing_limit') {
         return this.ok({ data: [{ quota_usage: this.quotaUsage, config: { quota_total: this.quotaTotal, quota_duration: 86_400 } }] })
       }
@@ -223,10 +230,23 @@ export class FakeInstagram implements HttpPort {
           const children = String(body.children ?? '').split(',').filter(Boolean)
           if (children.length < 2 || children.length > 20) return this.error(400, 100, 'A carousel takes 2 to 20 children')
           if (children.some((id) => this.containers.find((c) => c.id === id)?.body.is_carousel_item !== true)) return this.error(400, 100, 'A child is not a carousel item')
+          if (body.alt_text !== undefined || body.user_tags !== undefined) return this.error(400, 100, 'alt_text and user_tags belong on image containers, not CAROUSEL parent')
+        } else if (kind === 'STORIES') {
+          const hasImage = typeof body.image_url === 'string'
+          const hasVideo = typeof body.video_url === 'string'
+          if (hasImage === hasVideo) return this.error(400, 100, 'STORIES requires either image_url or video_url')
+          if (body.caption !== undefined || body.alt_text !== undefined || body.user_tags !== undefined || body.share_to_feed !== undefined) {
+            return this.error(400, 100, 'STORIES does not accept caption, alt_text, user_tags, or share_to_feed')
+          }
         } else if (kind === undefined) {
           if (typeof body.image_url !== 'string') return this.error(400, 100, 'The parameter image_url is required')
+          if (body.alt_text !== undefined && (typeof body.alt_text !== 'string' || [...body.alt_text].length > 1000)) {
+            return this.error(400, 100, 'alt_text must be a string up to 1000 characters')
+          }
+          if (body.user_tags !== undefined && !Array.isArray(body.user_tags)) return this.error(400, 100, 'user_tags must be an array')
         } else if (kind === 'REELS' || (kind === 'VIDEO' && body.is_carousel_item === true)) {
           if (typeof body.video_url !== 'string') return this.error(400, 100, 'The parameter video_url is required')
+          if (body.alt_text !== undefined || body.user_tags !== undefined) return this.error(400, 100, 'alt_text and user_tags are only supported on image containers here')
         } else return this.error(400, 100, `The media_type ${String(kind)} is not supported`)
         if (fileUrl !== null && !this.reads(fileUrl)) return this.error(400, 9004, 'Only photo or video can be accepted as media type.', 'The media could not be fetched from this URI')
         const container: FakeContainer = { id: String(this.next++), body, status: 'FINISHED' }
@@ -243,16 +263,23 @@ export class FakeInstagram implements HttpPort {
         const fileOf = (c: FakeContainer): FakeMedia['files'] =>
           typeof c.body.image_url === 'string' ? [{ kind: 'IMAGE', url: c.body.image_url }] : typeof c.body.video_url === 'string' ? [{ kind: 'VIDEO', url: c.body.video_url }] : []
         const carousel = container.body.media_type === 'CAROUSEL'
-        const files = carousel ? String(container.body.children).split(',').flatMap((id) => fileOf(this.containers.find((c) => c.id === id) as FakeContainer)) : fileOf(container)
+        const story = container.body.media_type === 'STORIES'
+        const childContainers = carousel ? String(container.body.children).split(',').map((id) => this.containers.find((c) => c.id === id) as FakeContainer) : []
+        const files = carousel ? childContainers.flatMap((c) => fileOf(c)) : fileOf(container)
+        const altSource = carousel ? childContainers.find((c) => typeof c.body.alt_text === 'string')?.body.alt_text : container.body.alt_text
+        const tagsSource = carousel ? childContainers.find((c) => Array.isArray(c.body.user_tags))?.body.user_tags : container.body.user_tags
         const made: FakeMedia = {
           id: String(this.next++),
           caption: this.losesCaption || typeof container.body.caption !== 'string' ? null : container.body.caption,
-          kind: carousel ? 'CAROUSEL_ALBUM' : container.body.media_type === 'REELS' ? 'VIDEO' : 'IMAGE',
+          kind: carousel ? 'CAROUSEL_ALBUM' : container.body.media_type === 'REELS' || (story && typeof container.body.video_url === 'string') ? 'VIDEO' : 'IMAGE',
+          ...(story ? { story: true } : {}),
+          ...(typeof altSource === 'string' ? { altText: altSource } : {}),
+          ...(Array.isArray(tagsSource) ? { userTags: tagsSource as { username: string; x: number; y: number }[] } : {}),
           created: this.nowMs,
           likes: 0,
           views: 0,
           files,
-          inFeed: container.body.media_type !== 'REELS' || container.body.share_to_feed === true,
+          inFeed: !story && (container.body.media_type !== 'REELS' || container.body.share_to_feed === true),
           comments: []
         }
         this.media.unshift(made)

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { DraftInput } from '../../../../shared/api'
 import { cleanTopicTag, hasTopicField } from '../../../../shared/topic-tag'
-import type { Attachment, Draft, Id, PostMarkup, VideoAs } from '../../../../shared/types'
+import { normalizeAltText, storyProblem } from '../../../../shared/instagram-media'
+import { kindsOf } from '../../../../shared/post-format'
+import type { Attachment, Draft, Id, InstagramPostForm, InstagramUserTag, PostMarkup, VideoAs } from '../../../../shared/types'
 import { reelProblem } from '../../../../shared/video-as'
 import { AiTextField } from '../../assist/AiField'
 import { OutlineDraft } from './OutlineDraft'
@@ -15,6 +17,7 @@ import { FoundSources } from './FoundSources'
 import { foundForAnswer, keepFound, type FoundFor } from './found-sources'
 import { fileName } from './labels'
 import { PostFlair } from './PostFlair'
+import { PostInstagramOptions } from './PostInstagramOptions'
 import { PostTopic } from './PostTopic'
 import { PostVideoAs } from './PostVideoAs'
 import { PostPictures, PostTextBox, usePostEditor } from './PostEditorParts'
@@ -35,27 +38,72 @@ export interface DraftForm {
   topicTag: string
   /** `reel` when the owner chose that the post's one video goes out as a Reel; null: the usual video post. */
   videoAs: VideoAs | null
+  /** Instagram API post form (`story` or null). */
+  postForm: InstagramPostForm | null
+  /** Custom picture alt text for an Instagram API post. */
+  altText: string
+  /** People tagged on an Instagram API picture post. */
+  userTags: InstagramUserTag[]
 }
 
 /** A new post is written in the post editor, so it is Markdown from the start; a reply is plain text. */
-export const emptyForm = (withTitle: boolean): DraftForm => ({ title: '', text: '', link: '', attachments: [], markup: withTitle ? 'markdown' : 'legacy', flair: null, topicTag: '', videoAs: null })
+export const emptyForm = (withTitle: boolean): DraftForm => ({
+  title: '',
+  text: '',
+  link: '',
+  attachments: [],
+  markup: withTitle ? 'markdown' : 'legacy',
+  flair: null,
+  topicTag: '',
+  videoAs: null,
+  postForm: null,
+  altText: '',
+  userTags: []
+})
 
 function fromDraft(draft: Draft | null, withTitle: boolean): DraftForm {
   if (!draft) return emptyForm(withTitle)
-  return { title: draft.title ?? '', text: draft.text, link: draft.link ?? '', attachments: draft.attachments, markup: draft.markup ?? 'legacy', flair: draft.flair ?? null, topicTag: draft.topicTag ?? '', videoAs: draft.videoAs ?? null }
+  return {
+    title: draft.title ?? '',
+    text: draft.text,
+    link: draft.link ?? '',
+    attachments: draft.attachments,
+    markup: draft.markup ?? 'legacy',
+    flair: draft.flair ?? null,
+    topicTag: draft.topicTag ?? '',
+    videoAs: draft.videoAs ?? null,
+    postForm: draft.postForm ?? null,
+    altText: draft.altText ?? '',
+    userTags: draft.userTags ?? []
+  }
 }
 
 /** The choice of a Reel stands only while the post is one video: with a picture added, or the video taken off, the post is no Reel. */
 const videoAsOf = (form: DraftForm): VideoAs | null => (form.videoAs && reelProblem(form.attachments) === null ? form.videoAs : null)
+const postFormOf = (form: DraftForm): InstagramPostForm | null => (form.postForm === 'story' && storyProblem(form.attachments) === null ? 'story' : null)
+const altTextOf = (form: DraftForm): string | null => (postFormOf(form) === 'story' || kindsOf(form.attachments).pictures === 0 ? null : normalizeAltText(form.altText))
+const userTagsOf = (form: DraftForm): InstagramUserTag[] => (postFormOf(form) === 'story' || kindsOf(form.attachments).pictures === 0 ? [] : form.userTags)
 
 /** What the core will store for this form: surrounding whitespace is trimmed there too. */
 export function toInput(form: DraftForm, withTitle: boolean): DraftInput {
-  return { title: withTitle ? form.title.trim() || null : null, text: form.text.trim(), link: form.link.trim() || null, attachments: form.attachments, markup: form.markup, flair: form.flair, topicTag: cleanTopicTag(form.topicTag) || null, videoAs: videoAsOf(form) }
+  return {
+    title: withTitle ? form.title.trim() || null : null,
+    text: form.text.trim(),
+    link: form.link.trim() || null,
+    attachments: form.attachments,
+    markup: form.markup,
+    flair: form.flair,
+    topicTag: cleanTopicTag(form.topicTag) || null,
+    videoAs: videoAsOf(form),
+    postForm: postFormOf(form),
+    altText: altTextOf(form),
+    userTags: userTagsOf(form)
+  }
 }
 
 const signature = (form: DraftForm, withTitle: boolean): string => {
   const input = toInput(form, withTitle)
-  return JSON.stringify([input.title, input.text, input.link, form.attachments.map((a) => a.mediaId ?? a.path), form.markup, form.flair, input.topicTag, input.videoAs])
+  return JSON.stringify([input.title, input.text, input.link, form.attachments.map((a) => a.mediaId ?? a.path), form.markup, form.flair, input.topicTag, input.videoAs, input.postForm, input.altText, input.userTags])
 }
 
 /** Form state for one draft: resets when a different (newly saved) draft arrives and says whether it was edited. */
@@ -165,7 +213,17 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
         </Field>
       )
   )
-  const previewContent = { title: form.title.trim() || null, text: form.text.trim(), link: form.link.trim() || null, attachments: form.attachments, markup: form.markup, videoAs: ways?.reels ? videoAsOf(form) : null }
+  const previewContent = {
+    title: form.title.trim() || null,
+    text: form.text.trim(),
+    link: form.link.trim() || null,
+    attachments: form.attachments,
+    markup: form.markup,
+    videoAs: ways?.reels ? videoAsOf(form) : null,
+    postForm: ways?.instagramMedia ? postFormOf(form) : null,
+    altText: ways?.instagramMedia ? altTextOf(form) : null,
+    userTags: ways?.instagramMedia ? userTagsOf(form) : []
+  }
 
   return (
     <div className="draft-form" data-testid="draft-editor">
@@ -223,6 +281,16 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
           <PostPictures form={form} productId={post.productId} disabled={disabled} editor={editor} />
           {post.channelId && ways?.reels && reelProblem(form.attachments) === null && (
             <PostVideoAs value={form.videoAs} onChange={(videoAs) => onChange((current) => ({ ...current, videoAs }))} disabled={disabled} />
+          )}
+          {post.channelId && ways?.instagramMedia && (
+            <PostInstagramOptions
+              attachments={form.attachments}
+              postForm={form.postForm}
+              altText={form.altText}
+              userTags={form.userTags}
+              onChange={(patch) => onChange((current) => ({ ...current, ...patch }))}
+              disabled={disabled}
+            />
           )}
         </>
       )}

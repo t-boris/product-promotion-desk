@@ -159,6 +159,9 @@ function saved(over: Partial<Draft> = {}): Draft {
     flair: null,
     topicTag: null,
     videoAs: null,
+    postForm: null,
+    altText: null,
+    userTags: [],
     postType: 'quick',
     card: { style: 'bold', colour: 'indigo', shape: 'square', headline: 'First line of the caption', headlineEdited: false },
     knowledgeVersionId: null,
@@ -232,7 +235,10 @@ describe('when the picture is a card', () => {
       attachments: [drawn],
       markup: 'legacy',
       postType: 'quick',
-      card: { style: 'bold', colour: 'ocean', shape: 'square', headline: 'Mercury is in retrograde', headlineEdited: false }
+      card: { style: 'bold', colour: 'ocean', shape: 'square', headline: 'Mercury is in retrograde', headlineEdited: false },
+      postForm: null,
+      altText: null,
+      userTags: []
     })
   })
 

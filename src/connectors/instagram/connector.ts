@@ -1,4 +1,5 @@
 import type { PublishingQuota } from '../../shared/api'
+import { hasInstagramMediaOptions, instagramMediaFitProblems, normalizeAltText, parseInstagramUserTags } from '../../shared/instagram-media'
 import type { Capability, CapabilityKey, CapabilityStatus, Channel, MetricReading } from '../../shared/types'
 import { isVideoMime } from '../../shared/types'
 import type { PostNumbers } from '../../shared/post-numbers'
@@ -186,6 +187,7 @@ export class InstagramApiConnector implements Connector {
   readonly label = 'Instagram'
   readonly api = API
   readonly postNumberKinds = ['likes', 'comments', 'views'] as const
+  readonly instagramMedia = true
 
   /** The account each token belongs to, as Instagram named it at the last check. */
   private readonly profiles = new Map<string, InstagramProfile>()
@@ -313,7 +315,7 @@ export class InstagramApiConnector implements Connector {
       cap(
         'publish_post',
         'verified',
-        `Posts go out as ${name}: one picture, one video (a reel, shown in the feed as well) or up to ${MOST_FILES} of them, with the caption. Every file goes through your place for files (Settings): Instagram takes one only from an address on the internet, and a picture only as JPEG, so the application sends a JPEG copy of a PNG. It needs the permission instagram_business_content_publish. Until the app is published in Meta's dashboard (“Go live”), only the people of the app may see what it posts.`
+        `Posts go out as ${name}: one picture, one video (a reel, shown in the feed as well), a 24-hour Story (one picture or video), or up to ${MOST_FILES} items in a carousel, with optional caption, picture alt text and people tags. Every file goes through your place for files (Settings): Instagram takes one only from an address on the internet, and a picture only as JPEG, so the application sends a JPEG copy of a PNG. It needs the permission instagram_business_content_publish. Until the app is published in Meta's dashboard (“Go live”), only the people of the app may see what it posts.`
       ),
       cap('publish_reply', 'verified', 'A reply goes under a comment, and a comment under the account\'s own post, as the account. It needs the permission instagram_business_manage_comments.'),
       cap('verify_send', 'verified', 'Instagram returns the post or the comment it made.'),
@@ -447,8 +449,17 @@ export class InstagramApiConnector implements Connector {
     const unfit = files.find((file) => (isVideoMime(file.mime) ? !VIDEOS.has(file.mime) : !file.mime.startsWith('image/')))
     if (unfit) return failed(`Instagram takes a picture and an MP4 or MOV video through its API; “${unfit.name}” is neither. Nothing was sent.`)
     if (files.length > MOST_FILES) return failed(`Instagram takes at most ${MOST_FILES} pictures and videos in one post; this one has ${files.length}. Nothing was sent.`)
-    const tags = words.match(/#[\p{L}\p{N}_]+/gu)?.length ?? 0
-    if (tags > MOST_HASHTAGS) return failed(`Instagram takes at most ${MOST_HASHTAGS} hashtags in a caption; this one has ${tags}. Nothing was sent.`)
+    const parsedTags = parseInstagramUserTags(request.userTags ?? [])
+    if (parsedTags.error) return failed(`${parsedTags.error} Nothing was sent.`)
+    const altText = normalizeAltText(request.altText)
+    const userTags = parsedTags.tags
+    const postForm = request.postForm === 'story' ? 'story' : null
+    const igProblems = instagramMediaFitProblems({ postForm, altText, userTags, attachments: files })
+    if (igProblems.length > 0) return failed(`${igProblems[0]} Nothing was sent.`)
+    if (postForm !== 'story') {
+      const tags = words.match(/#[\p{L}\p{N}_]+/gu)?.length ?? 0
+      if (tags > MOST_HASHTAGS) return failed(`Instagram takes at most ${MOST_HASHTAGS} hashtags in a caption; this one has ${tags}. Nothing was sent.`)
+    }
     const place = await ctx.publicFiles()
     if (!place) return failed(NO_PLACE)
     // Every file put on its public address for this send; each is deleted when the send ends, whatever its end.
@@ -460,6 +471,8 @@ export class InstagramApiConnector implements Connector {
       const isVideo = (index: number): boolean => isVideoMime((files[index] as (typeof files)[number]).mime)
       const urlOf = (index: number): string => (put[index] as PublicFile).url
       const caption: Record<string, unknown> = words ? { caption: words } : {}
+      const altField: Record<string, unknown> = altText ? { alt_text: altText } : {}
+      const tagsField: Record<string, unknown> = userTags.length > 0 ? { user_tags: userTags } : {}
       // Instagram makes a post in two requests: a container that holds it, then the request that publishes the container.
       const make = async (body: Record<string, unknown>, video: boolean): Promise<{ id: string } | { error: string }> => {
         const container = await api.post<{ id?: string }>(`${profile.accountId}/media`, body)
@@ -469,14 +482,22 @@ export class InstagramApiConnector implements Connector {
         return ready === null ? { id: container.result.id } : { error: ready }
       }
       let whole: { id: string } | { error: string }
-      if (files.length === 1) {
+      if (postForm === 'story') {
+        whole = isVideo(0) ? await make({ media_type: 'STORIES', video_url: urlOf(0) }, true) : await make({ media_type: 'STORIES', image_url: urlOf(0) }, false)
+      } else if (files.length === 1) {
         // One video is a reel; `share_to_feed` keeps it in the profile's feed as well, where a post is expected.
-        whole = isVideo(0) ? await make({ media_type: 'REELS', video_url: urlOf(0), share_to_feed: true, ...caption }, true) : await make({ image_url: urlOf(0), ...caption }, false)
+        whole = isVideo(0)
+          ? await make({ media_type: 'REELS', video_url: urlOf(0), share_to_feed: true, ...caption }, true)
+          : await make({ image_url: urlOf(0), ...caption, ...altField, ...tagsField }, false)
       } else {
         // Several: each is a container of its own, and one more container names them all. One that fails leaves nothing published.
         const children: string[] = []
+        let taggedFirstImage = false
         for (let index = 0; index < files.length; index += 1) {
-          const item = isVideo(index) ? await make({ media_type: 'VIDEO', video_url: urlOf(index), is_carousel_item: true }, true) : await make({ image_url: urlOf(index), is_carousel_item: true }, false)
+          const item = isVideo(index)
+            ? await make({ media_type: 'VIDEO', video_url: urlOf(index), is_carousel_item: true }, true)
+            : await make({ image_url: urlOf(index), is_carousel_item: true, ...altField, ...(!taggedFirstImage ? tagsField : {}) }, false)
+          if (!isVideo(index)) taggedFirstImage = true
           if ('error' in item) return failed(item.error)
           children.push(item.id)
         }
@@ -498,6 +519,7 @@ export class InstagramApiConnector implements Connector {
   private async reply(api: InstagramApi, request: PublishRequest, words: string): Promise<PublishOutcome> {
     if (!words) return failed('The reply is empty. Nothing was sent.')
     if (request.attachments.length > 0) return failed('A comment on Instagram is words only: take the picture off the reply. Nothing was sent.')
+    if (hasInstagramMediaOptions(request)) return failed('A comment on Instagram cannot use Story, alt text or people tags. Nothing was sent.')
     const parent = parseExternalId(request.parentExternalId)
     if (!parent) return failed('The post or the comment this answers was not read through the Instagram API, so it cannot be answered there. Nothing was sent.')
     const path = parent.kind === 'comment' ? `${parent.id}/replies` : `${parent.id}/comments`
@@ -578,6 +600,12 @@ export class InstagramApiConnector implements Connector {
     const words = request.text.trim()
     const recent = (time: string | undefined): boolean => Date.parse(iso(time) ?? '') >= floor
     if (request.kind === 'post') {
+      if (request.postForm === 'story') {
+        const stories = await api.get<InstagramList<InstagramMedia>>(`${profile.accountId}/stories`, { fields: 'id,media_type,permalink,timestamp' })
+        if (!stories.ok) throw unreadable(stories)
+        const hit = (stories.result.data ?? []).find((item) => recent(item.timestamp))
+        return hit ? { url: hit.permalink ?? this.address(profile), externalId: postIdOf(hit.id) } : null
+      }
       const feed = await api.get<InstagramList<InstagramMedia>>(`${profile.accountId}/media`, { fields: POST_FIELDS })
       if (!feed.ok) throw unreadable(feed)
       const hit = (feed.result.data ?? []).slice(0, FEED_LIMIT).find((item) => sameText(item.caption ?? '', words) && recent(item.timestamp))
