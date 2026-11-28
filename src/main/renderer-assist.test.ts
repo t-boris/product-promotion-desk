@@ -236,14 +236,28 @@ describe('the check before an approval', () => {
     expect(needsCheck({ author: 'user' }, true)).toBe(true)
   })
 
-  it('sends the editor to the core with every field set', () => {
+  it('sends the editor to the core with every field set, including cardHeadline on a quick card', () => {
     expect(checkForm({ text: 'Hi' })).toEqual({ title: '', text: 'Hi', link: '', markup: 'legacy' })
     expect(checkForm({ text: 'Hi', markup: 'markdown' })).toEqual({ title: '', text: 'Hi', link: '', markup: 'markdown' })
     expect(checkForm({ title: 'T', text: 'Hi', link: 'https://x.test' })).toEqual({ title: 'T', text: 'Hi', link: 'https://x.test', markup: 'legacy' })
     expect(checkForm({ title: null, text: 'Hi', link: null })).toEqual({ title: '', text: 'Hi', link: '', markup: 'legacy' })
+    expect(
+      checkForm({
+        postType: 'quick',
+        text: 'Caption line\nSecond line',
+        card: { style: 'bold', colour: 'indigo', shape: 'square', headline: 'Custom headline', headlineEdited: true }
+      })
+    ).toEqual({ title: '', text: 'Caption line\nSecond line', link: '', markup: 'legacy', cardHeadline: 'Custom headline' })
+    expect(
+      checkForm({
+        postType: 'quick',
+        text: 'First line\nSecond line',
+        card: { style: 'bold', colour: 'indigo', shape: 'square', headline: '', headlineEdited: false }
+      })
+    ).toEqual({ title: '', text: 'First line\nSecond line', link: '', markup: 'legacy', cardHeadline: 'First line' })
   })
 
-  it('knows a text by its title, text and link, and by nothing else', () => {
+  it('knows a text by its title, text, link and card headline, and by nothing else', () => {
     const base = { title: 'T', text: 'Hello', link: 'https://x.test' }
     expect(fingerprint(base)).toBe(fingerprint({ ...base }))
     expect(fingerprint({ text: 'Hello' })).toBe(fingerprint({ title: null, text: 'Hello', link: null }))
@@ -251,6 +265,8 @@ describe('the check before an approval', () => {
     expect(fingerprint({ ...base, text: 'Hello!' })).not.toBe(fingerprint(base))
     expect(fingerprint({ ...base, link: 'https://y.test' })).not.toBe(fingerprint(base))
     expect(fingerprint({ ...base, attachments: [{ name: 'a.png', path: '/a.png', mime: 'image/png', sha256: 'x' }] })).toBe(fingerprint(base))
+    const quickCard = { postType: 'quick' as const, text: 'Caption', card: { style: 'bold' as const, colour: 'indigo' as const, shape: 'square' as const, headline: 'A', headlineEdited: true } }
+    expect(fingerprint(quickCard)).not.toBe(fingerprint({ ...quickCard, card: { ...quickCard.card, headline: 'B' } }))
   })
 
   it('shows the panel only while the text it was made for is on the screen', () => {

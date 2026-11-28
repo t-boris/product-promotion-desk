@@ -214,9 +214,20 @@ export class ChannelsStore {
   /**
    * Records the outcome of a login check. A logout clears `identity` (nobody is signed in) but keeps `last_identity`:
    * the account that is expected to be signed in, so a later sign-in as somebody else is still noticed.
+   * `check`: when provided, stores when the check ran and what was seen; `null` clears them (e.g. after switching browser).
    */
-  setLogin(id: string, status: AccountStatus, identity: string | null): Account {
-    this.db.prepare('UPDATE accounts SET status = ?, identity = ?, last_identity = COALESCE(?, last_identity) WHERE id = ?').run(status, identity, identity, id)
+  setLogin(id: string, status: AccountStatus, identity: string | null, check?: { checkedAt: string; signal: string } | null): Account {
+    if (check === null) {
+      this.db
+        .prepare('UPDATE accounts SET status = ?, identity = ?, last_identity = COALESCE(?, last_identity), last_checked_at = NULL, last_check_signal = NULL WHERE id = ?')
+        .run(status, identity, identity, id)
+    } else if (check !== undefined) {
+      this.db
+        .prepare('UPDATE accounts SET status = ?, identity = ?, last_identity = COALESCE(?, last_identity), last_checked_at = ?, last_check_signal = ? WHERE id = ?')
+        .run(status, identity, identity, check.checkedAt, check.signal.slice(0, 300), id)
+    } else {
+      this.db.prepare('UPDATE accounts SET status = ?, identity = ?, last_identity = COALESCE(?, last_identity) WHERE id = ?').run(status, identity, identity, id)
+    }
     return this.repos.account(id)
   }
 

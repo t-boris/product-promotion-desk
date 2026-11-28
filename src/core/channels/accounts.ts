@@ -8,7 +8,7 @@ import type { Core } from '../core'
 import { TakeoverError, type BrowserService, type Connector, type ConnectorContext, type PageObserver } from '../ports'
 import { BROWSER_BUSY, browserError, found, requireText } from './errors'
 import { parseEmail } from './mailboxes'
-import { loginOutcome } from './login'
+import { loginCheckNote, loginOutcome } from './login'
 import { connectorForPlatform, listPlatforms } from './platforms'
 import { addressOnPlatform, expandHandle, hostMatches, presetFor } from './presets'
 import { parseRole, sameRoleName } from './roles'
@@ -195,7 +195,7 @@ export class AccountsService {
     // The new setting is stored first: from here every call routes to the new browser, so nothing can start a page in the one that is being let go of.
     this.store.setAccountBrowser(account.id, args.browser)
     // Nothing is known about the sign-in in the new browser until it is looked at there; the last identity is kept to notice another person.
-    const updated = this.store.setLogin(account.id, 'login_required', null)
+    const updated = this.store.setLogin(account.id, 'login_required', null, null)
     try {
       // `account` still carries the old setting, which is how the old browser is told apart from the new one.
       await this.core.browser.releaseAccount?.(account)
@@ -586,7 +586,10 @@ export class AccountsService {
     const outcome = loginOutcome(state)
     // The account that is expected to be signed in: the last one seen, which survives a logout in between.
     const expected = this.store.lastIdentity(account.id) ?? account.identity
-    const updated = this.store.setLogin(account.id, outcome.status, outcome.identity)
+    const updated = this.store.setLogin(account.id, outcome.status, outcome.identity, {
+      checkedAt: this.core.clock.now().toISOString(),
+      signal: loginCheckNote(state, account.access)
+    })
     const switched = Boolean(expected && outcome.identity && expected !== outcome.identity)
     if (switched) {
       this.core.log.warn('accounts', `${account.label} is now signed in as ${outcome.identity} (it was ${expected}).`)

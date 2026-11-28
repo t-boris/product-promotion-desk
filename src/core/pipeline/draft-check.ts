@@ -11,6 +11,7 @@
 
 import { ApiError } from '../../shared/api'
 import { renderForPlatform } from '../../shared/post-format'
+import { cardHeadline } from '../../shared/quick-post'
 import type { DraftCheckResult, DraftFinding, Id, PostMarkup } from '../../shared/types'
 import { holdsCredential, isRecord } from '../assist/kit'
 import { requireText } from '../channels/errors'
@@ -30,7 +31,7 @@ const MAX_LINK = MAX_TEXT_LENGTH
 export interface DraftCheckArgs {
   opportunityId: Id
   /** The editor as it stands (the owner changed something and has not saved); without it the saved draft is read. */
-  form?: { title: string; text: string; link: string; markup?: PostMarkup }
+  form?: { title: string; text: string; link: string; markup?: PostMarkup; cardHeadline?: string }
 }
 
 /** The safety rules that can be broken by a text that cites nothing; the two that are about citing never are, in the owner's mode. */
@@ -49,7 +50,9 @@ export class DraftCheck {
     // a platform has no place for is not read at all (DEC-030). A text that is not markdown is read as it is.
     const written = this.contentOf(opp.id, args.form)
     const shown = renderForPlatform({ title: written.title || null, text: written.text, link: written.link || null, attachments: [], markup: written.markup }, channel.platform)
-    const content = { title: shown.title ?? '', text: shown.text, link: shown.shownLink ?? '' }
+    // Q-008 / DEC-095: a quick post's card headline is drawn on the picture, so it is checked under the same rules as the caption even where the platform has no title field.
+    const titleToCheck = [shown.title ?? '', written.cardHeadline].filter((part) => part.trim() !== '').join('\n')
+    const content = { title: titleToCheck, text: shown.text, link: shown.shownLink ?? '' }
     const product = this.core.repos.product(channel.productId)
     const knowledge = loadKnowledge(this.core, channel.productId)
 
@@ -83,19 +86,25 @@ export class DraftCheck {
   }
 
   /** The text the owner is about to approve: the editor's, when it was sent, else the draft saved for this item. */
-  private contentOf(opportunityId: Id, form: DraftCheckArgs['form']): { title: string; text: string; link: string; markup: PostMarkup } {
+  private contentOf(opportunityId: Id, form: DraftCheckArgs['form']): { title: string; text: string; link: string; markup: PostMarkup; cardHeadline: string } {
     if (form !== undefined) {
       const raw = form as unknown
       if (!isRecord(raw) || typeof raw.title !== 'string' || typeof raw.text !== 'string' || typeof raw.link !== 'string') {
         throw new ApiError('invalid_input', 'The draft is missing its title, text or link.')
       }
+      if (raw.cardHeadline !== undefined && typeof raw.cardHeadline !== 'string') {
+        throw new ApiError('invalid_input', 'The card headline must be text.')
+      }
       if (raw.text.length > MAX_TEXT) throw new ApiError('invalid_input', `The text is longer than ${MAX_TEXT} characters and cannot be checked whole.`)
       if (raw.title.length > MAX_TITLE) throw new ApiError('invalid_input', `The title is longer than ${MAX_TITLE} characters and cannot be checked whole.`)
       if (raw.link.length > MAX_LINK) throw new ApiError('invalid_input', `The link is longer than ${MAX_LINK} characters and cannot be checked whole.`)
-      return { title: raw.title, text: raw.text, link: raw.link, markup: raw.markup === 'markdown' ? 'markdown' : 'legacy' }
+      const headline = typeof raw.cardHeadline === 'string' ? raw.cardHeadline : ''
+      if (headline.length > MAX_TITLE) throw new ApiError('invalid_input', `The card headline is longer than ${MAX_TITLE} characters and cannot be checked whole.`)
+      return { title: raw.title, text: raw.text, link: raw.link, markup: raw.markup === 'markdown' ? 'markdown' : 'legacy', cardHeadline: headline }
     }
     const draft = this.core.repos.latestDraft(opportunityId)
     if (!draft) throw new ApiError('no_draft', 'There is no draft to check. Write one first.')
-    return { title: draft.title ?? '', text: draft.text, link: draft.link ?? '', markup: draft.markup }
+    const headline = draft.postType === 'quick' && draft.card ? cardHeadline(draft.card, draft.text) : ''
+    return { title: draft.title ?? '', text: draft.text, link: draft.link ?? '', markup: draft.markup, cardHeadline: headline }
   }
 }

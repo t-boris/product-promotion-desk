@@ -13,6 +13,7 @@
 // Nothing here approves or sends by itself: this file is not reached from the scheduler.
 
 import { ApiError, type DraftInput } from '../../shared/api'
+import { mixedKindReasonOfType, postTypeOfPlatform, type PostType } from '../../shared/quick-post'
 import { hasTopicField } from '../../shared/topic-tag'
 import { characterCount, formOf, judgedForFit, kindsOf, platformLabel, renderForPlatform, siteLinkFor, type PostContent, type SendWays } from '../../shared/post-format'
 import type {
@@ -32,7 +33,7 @@ import type {
 import { newId, toJson } from '../db/database'
 import type { Core } from '../core'
 import { buildCard } from './cards'
-import { normalizeDraftInput } from './draft-input'
+import { assertQuickPlatformFits, normalizeDraftInput } from './draft-input'
 import type { DraftHelp } from './draft-help'
 import { SendBlockedError } from './gate'
 import type { PublicationsFlow } from './publications'
@@ -121,6 +122,13 @@ export class PostGroupsFlow {
     const channels = this.channelsOf(productId, channelIds, 2)
     const content = await normalizeDraftInput(input, { productId, media: this.core.services.media! })
     if (!content.text && !content.link && content.attachments.length === 0) throw new ApiError('invalid_input', 'A post needs text, a link or a picture.')
+    // Q-008 / DEC-041 / DEC-095: picture channels and article channels are never mixed in one group, and a quick post stays on picture platforms.
+    const kinds = channels.map((c) => postTypeOfPlatform(c.platform))
+    for (const kind of kinds) {
+      const mixed = mixedKindReasonOfType(kind, kinds)
+      if (mixed) throw new ApiError('invalid_input', mixed)
+    }
+    for (const channel of channels) assertQuickPlatformFits(channel.platform, content)
     const master: PostMaster = { title: content.title, text: content.text, link: content.link, attachments: content.attachments, markup: content.markup ?? 'legacy' }
     // A quick post's group carries its type and card, so every version is a quick post with the same picture (DEC-046).
     if (content.postType === 'quick') {
@@ -160,6 +168,13 @@ export class PostGroupsFlow {
       }
       const taken = new Set(this.liveVersions(group.id).map((v) => v.channelId))
       const channels = this.channelsOf(opp.productId, channelIds.filter((c) => !taken.has(c)), 1)
+      // Q-008 / DEC-095: the existing post's own type decides (an older article on Facebook stays an article and extends to article channels, not picture channels).
+      const groupKind: PostType = group.master.postType ?? 'article'
+      for (const channel of channels) {
+        const mixed = mixedKindReasonOfType(postTypeOfPlatform(channel.platform), [groupKind])
+        if (mixed) throw new ApiError('invalid_input', mixed)
+        assertQuickPlatformFits(channel.platform, { postType: groupKind })
+      }
       for (const channel of channels) this.addVersion(group, channel, draft.topicTag)
       return group.id
     })()

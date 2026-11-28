@@ -1,5 +1,6 @@
-// What the Channels and Feed screens say about a channel the app cannot read (DEC-034): it takes the owner's own posts and the AI watches it in the browser (DEC-042,
-// DEC-045: every such channel, on any site, so the words for one that is not watched are never reached from a channel the core makes).
+// What the Channels and Feed screens say about a channel the app cannot read (DEC-034): a browser account's unread channel is watched in
+// the browser by the AI (DEC-042, DEC-045), while an API-only publish channel with no browser (LinkedIn, Pinterest — DEC-084, DEC-086) takes
+// only the owner's own posts and reaches the non-watched wording below.
 // Words only, in a module without components, so they are tested apart from the interface.
 
 import { isWatchedInBrowser, type ReadingWays } from '../feed/watching-line'

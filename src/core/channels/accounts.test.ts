@@ -376,6 +376,36 @@ describe('accounts.checkLogin', () => {
     const w = await makeReadyWorld({ fake: new NoLoginPage() })
     expect(await w.refusal('accounts.checkLogin', { accountId: w.account.id })).toBe('invalid_input')
   })
+
+  it('persists when sign-in was last checked and what was seen across signed-in, signed-out, CAPTCHA and API checks, and clears it on browser switch (DEC-095)', async () => {
+    const w = await makeReadyWorld()
+    expect(w.core.repos.account(w.account.id)).toMatchObject({ lastCheckedAt: null, lastCheckSignal: null })
+
+    // Signed out with a signal
+    w.fake.login = { loggedIn: false, identity: null, captcha: false, signal: 'a password field is shown' }
+    const out = await w.call('accounts.checkLogin', { accountId: w.account.id })
+    expect(out.lastCheckedAt).toBe(w.t.clock.now().toISOString())
+    expect(out.lastCheckSignal).toBe('Not signed in (a password field is shown)')
+
+    // CAPTCHA with a signal
+    w.t.clock.advance(60_000)
+    w.fake.login = { loggedIn: false, identity: null, captcha: true, signal: 'recaptcha widget' }
+    const cap = await w.call('accounts.checkLogin', { accountId: w.account.id })
+    expect(cap.lastCheckedAt).toBe(w.t.clock.now().toISOString())
+    expect(cap.lastCheckSignal).toBe('CAPTCHA requested (recaptcha widget)')
+
+    // Signed in with identity
+    w.t.clock.advance(60_000)
+    w.fake.login = { loggedIn: true, identity: 'natal_bot', captcha: false }
+    const ok = await w.call('accounts.checkLogin', { accountId: w.account.id })
+    expect(ok.lastCheckedAt).toBe(w.t.clock.now().toISOString())
+    expect(ok.lastCheckSignal).toBe('Signed in as natal_bot')
+    expect(w.core.repos.account(w.account.id)).toMatchObject({ lastCheckedAt: ok.lastCheckedAt, lastCheckSignal: 'Signed in as natal_bot' })
+
+    // Switching browser clears last-checked history until checked in the new browser
+    const switched = await w.call('accounts.setBrowser', { accountId: w.account.id, browser: 'chrome' })
+    expect(switched).toMatchObject({ lastCheckedAt: null, lastCheckSignal: null })
+  })
 })
 
 describe('accounts.remove', () => {

@@ -334,6 +334,10 @@ export interface Account {
   signsInVia: Id | null
   /** The kind of the account on its platform, as the owner said it (DEC-074): one of the platform's `kinds`. Null when not said, or when the platform has one kind. */
   kind: string | null
+  /** When sign-in (or the API key) was last checked, or null if it has not been checked yet (DEC-095). */
+  lastCheckedAt: IsoTime | null
+  /** Plain-language summary of what the last sign-in check saw; never holds credentials (DEC-095). */
+  lastCheckSignal: string | null
 }
 
 /** A base mailbox (DEC-015): an ordinary mailbox of the owner, from which each account gets an address of its own. */

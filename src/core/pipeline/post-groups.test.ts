@@ -26,7 +26,7 @@ interface Helper {
 }
 
 /** A world with a Reddit channel (the world's own), then one channel per further platform, each on a login of its own. */
-function setup(platforms: string[] = ['reddit', 'threads', 'instagram']) {
+function setup(platforms: string[] = ['reddit', 'x', 'pinterest']) {
   world = makeWorld()
   const channels: Channel[] = [world.channel]
   for (let i = 1; i < platforms.length; i += 1) {
@@ -104,7 +104,7 @@ describe('making a post for several channels', () => {
   })
 
   it('leaves nothing half-made when a version cannot be written', async () => {
-    const { channels, flow } = setup(['reddit', 'threads'])
+    const { channels, flow } = setup(['reddit', 'x'])
     const real = world.store.insertDraft.bind(world.store)
     let calls = 0
     world.store.insertDraft = (...args: Parameters<typeof real>) => {
@@ -118,7 +118,7 @@ describe('making a post for several channels', () => {
   })
 
   it('holds one live version per channel in the database itself, and lets a deleted one be made again', async () => {
-    const { channels, flow } = setup(['reddit', 'threads'])
+    const { channels, flow } = setup(['reddit', 'x'])
     const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
     expect(() => world.store.createStandalone(channels[0]!, 'draft', 'again', card.group.id)).toThrow(/UNIQUE/)
     world.store.updateOpportunity(card.versions[0]!.card.opportunity.id, { state: 'cancelled' })
@@ -156,7 +156,7 @@ describe('"also post to…" for a post that exists', () => {
   })
 
   it('hands the facts a post stands on to every copy, so a withdrawn fact returns all of them to review', async () => {
-    const { channels, flow } = setup(['reddit', 'threads'])
+    const { channels, flow } = setup(['reddit', 'x'])
     const single = (await call('publications.create', { channelId: channels[0]!.id, draft: { ...MASTER } })) as { opportunity: { id: string } }
     world.core.db.prepare("UPDATE drafts SET used_claims_json = ?, knowledge_version_id = ?, rationale = ?, author = 'ai' WHERE opportunity_id = ?").run(JSON.stringify(['lineage-1']), 'kv-1', 'Because.', single.opportunity.id)
     const card = await flow.extend(single.opportunity.id, [channels[1]!.id])
@@ -170,7 +170,7 @@ describe('"also post to…" for a post that exists', () => {
   })
 
   it('adds to a group that exists, once per channel, and refuses a reply or a deleted post', async () => {
-    const { channels, flow } = setup(['reddit', 'threads', 'instagram'])
+    const { channels, flow } = setup(['reddit', 'x', 'linkedin'])
     const first = await flow.create(world.product.id, [channels[0]!.id, channels[1]!.id], MASTER)
     const opp = first.versions[0]!.card.opportunity.id
     const more = await flow.extend(opp, [channels[1]!.id, channels[2]!.id])
@@ -185,7 +185,7 @@ describe('"also post to…" for a post that exists', () => {
 
 describe('which channels the post fits', () => {
   it('says for each channel whether the post fits as it is, and why not; the app suggests what fits and chooses nothing', async () => {
-    const { channels, flow } = setup()
+    const { channels, flow } = setup(['reddit', 'threads', 'instagram'])
     const long = { title: 'T', text: 'x'.repeat(900), markup: 'markdown' as const }
     const options = flow.channels(world.product.id, long, [channels[0]!.id])
     const by = (platform: string) => options.find((o) => o.platform === platform)
@@ -203,13 +203,13 @@ describe('which channels the post fits', () => {
   })
 
   it('tells what the approval would refuse for an older post too, and has nothing to say about a post that names the product', async () => {
-    const { channels, flow } = setup(['reddit', 'threads'])
-    const legacy = flow.channels(world.product.id, { text: 'x'.repeat(520) })
-    expect(legacy.find((o) => o.platform === 'threads')).toMatchObject({ fits: false })
-    expect(legacy.find((o) => o.platform === 'threads')?.reason).toMatch(/longer than Threads takes \(520 of 500/)
+    const { channels, flow } = setup(['reddit', 'x'])
+    const legacy = flow.channels(world.product.id, { text: 'x'.repeat(300) })
+    expect(legacy.find((o) => o.platform === 'x')).toMatchObject({ fits: false })
+    expect(legacy.find((o) => o.platform === 'x')?.reason).toMatch(/longer than X takes \(300 of 280/)
     expect(legacy.find((o) => o.platform === 'reddit')?.fits).toBe(true)
-    const card = await flow.create(world.product.id, channels.map((c) => c.id), { text: 'x'.repeat(520) })
-    expect(card.versions[1]?.problems.join(' ')).toMatch(/longer than Threads takes/)
+    const card = await flow.create(world.product.id, channels.map((c) => c.id), { text: 'x'.repeat(300) })
+    expect(card.versions[1]?.problems.join(' ')).toMatch(/longer than X takes/)
     // the product is named and nobody says who is speaking: that is not a reason for any channel to refuse it
     const named = flow.channels(world.product.id, { title: 'T', text: 'Natal Mystic builds your chart.', markup: 'markdown' })
     expect(named.every((o) => o.fits)).toBe(true)
@@ -228,7 +228,7 @@ describe('which channels the post fits', () => {
   })
 
   it('knows a picture makes Instagram fit, and leaves out a channel that cannot post at all; a paused one is shown with the reason', async () => {
-    const { channels, flow } = setup()
+    const { channels, flow } = setup(['reddit', 'threads', 'instagram'])
     const m = await picture()
     const withPicture = flow.channels(world.product.id, { ...MASTER, attachments: [attach(m)] })
     expect(withPicture.find((o) => o.platform === 'instagram')?.fits).toBe(false) // pictures on Instagram go only through the AI browser
@@ -255,30 +255,30 @@ describe('adapting for each platform with the AI', () => {
       expect(v.edited).toBe(false)
     }
     expect(out.card.group.master.text).toBe(MASTER.text)
-    expect(helper.asked.map((a) => a.instruction)).toEqual(channels.map((_, i) => adaptInstruction(['reddit', 'threads', 'instagram'][i]!)))
+    expect(helper.asked.map((a) => a.instruction)).toEqual(channels.map((_, i) => adaptInstruction(['reddit', 'x', 'pinterest'][i]!)))
     expect(helper.asked.every((a) => a.text === MASTER.text)).toBe(true)
   })
 
   it('asks in the words of the limit that is left when the link is added to the end of the text, and only where it is', async () => {
-    const { channels, flow, helper } = setup()
+    const { channels, flow, helper } = setup(['threads', 'instagram'])
     const card = await flow.create(world.product.id, channels.map((c) => c.id), { ...MASTER, link: 'https://natalmystic.com' })
     await flow.adapt(card.group.id, undefined, false)
-    const wishes = Object.fromEntries(helper.asked.map((a, i) => [['reddit', 'threads', 'instagram'][i]!, a.instruction ?? '']))
+    const wishes = Object.fromEntries(helper.asked.map((a, i) => [['threads', 'instagram'][i]!, a.instruction ?? '']))
     expect(wishes.threads).toMatch(/At most 475 characters, because the link is added after the text \(aim for 427\)/)
     expect(wishes.instagram).toMatch(/At most 2200 characters \(aim for 1980\)/)
-    expect(wishes.reddit).not.toMatch(/At most/)
+    expect(adaptInstruction('reddit', 'https://natalmystic.com')).not.toMatch(/At most/)
   })
 
   it('leaves a version the owner changed by hand, unless asked to start over', async () => {
     const { channels, flow } = setup()
     const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
     const mine = card.versions[1]!.card.opportunity.id
-    await call('opportunities.saveDraft', { id: mine, draft: { text: 'My own words for Threads.', markup: 'markdown' } })
+    await call('opportunities.saveDraft', { id: mine, draft: { text: 'My own words for X.', markup: 'markdown' } })
     expect(flow.get(card.group.id).versions[1]?.edited).toBe(true)
     const out = await flow.adapt(card.group.id, undefined, false)
     expect(out.results.map((r) => r.status)).toEqual(['done', 'skipped', 'done'])
     expect(out.results[1]?.reason).toMatch(/changed it by hand/)
-    expect(out.card.versions[1]?.card.draft?.text).toBe('My own words for Threads.')
+    expect(out.card.versions[1]?.card.draft?.text).toBe('My own words for X.')
     const again = await flow.adapt(card.group.id, [mine], true)
     expect(again.results.map((r) => r.status)).toEqual(['done'])
     expect(again.card.versions[1]?.card.draft?.text).toBe(`${MASTER.text} (adapted)`)
@@ -286,7 +286,7 @@ describe('adapting for each platform with the AI', () => {
   })
 
   it('does not rewrite a version that was sent already', async () => {
-    const { channels, flow, helper } = setup(['reddit', 'threads'])
+    const { channels, flow, helper } = setup(['reddit', 'x'])
     const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
     await call('opportunities.approve', { id: card.versions[0]!.card.opportunity.id })
     await world.sending.send(card.versions[0]!.card.opportunity.id)
@@ -310,22 +310,22 @@ describe('adapting for each platform with the AI', () => {
   it('leaves what the owner approved or put off alone in a bulk adapt, and adapts it when the owner points at it (which cancels the approval)', async () => {
     const { channels, flow } = setup()
     const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
-    const [reddit, threads, instagram] = card.versions.map((v) => v.card.opportunity.id) as [string, string, string]
+    const [reddit, xCh, pinterest] = card.versions.map((v) => v.card.opportunity.id) as [string, string, string]
     await call('opportunities.approve', { id: reddit })
-    await call('opportunities.defer', { id: instagram })
+    await call('opportunities.defer', { id: pinterest })
     const bulk = await flow.adapt(card.group.id, undefined, false)
     expect(bulk.results.map((r) => r.status)).toEqual(['skipped', 'done', 'skipped'])
     expect(bulk.results[0]?.reason).toMatch(/You approved it/)
     expect(bulk.results[2]?.reason).toMatch(/put it off/)
     expect(bulk.card.versions[0]?.card.approval).not.toBeNull()
-    const picked = await flow.adapt(card.group.id, [reddit, threads], false)
+    const picked = await flow.adapt(card.group.id, [reddit, xCh], false)
     expect(picked.results.map((r) => r.status)).toEqual(['done', 'done'])
     expect(picked.card.versions[0]?.card.approval).toBeNull() // read it again, then approve
     await expect(flow.adapt(card.group.id, ['not-a-version'], false)).rejects.toMatchObject({ code: 'invalid_input' })
   })
 
   it('drops the AI\'s text when the owner changes the version while the AI is writing, and keeps the owner\'s', async () => {
-    const { channels, flow, helper } = setup(['reddit', 'threads'])
+    const { channels, flow, helper } = setup(['reddit', 'x'])
     const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
     const mine = card.versions[1]!.card.opportunity.id
     helper.during = async (id) => {
@@ -340,7 +340,7 @@ describe('adapting for each platform with the AI', () => {
   })
 
   it('has nothing to adapt for a post of only a picture, and says so, instead of writing a post from the facts', async () => {
-    const { channels, flow, helper } = setup(['reddit', 'threads'])
+    const { channels, flow, helper } = setup(['reddit', 'x'])
     const m = await picture('only')
     const card = await flow.create(world.product.id, channels.map((c) => c.id), { title: 'T', text: '', attachments: [attach(m)], markup: 'markdown' })
     const out = await flow.adapt(card.group.id, undefined, false)
@@ -350,11 +350,11 @@ describe('adapting for each platform with the AI', () => {
   })
 
   it('says when the adapted text is still too long for the platform, and lets the owner read it', async () => {
-    const { channels, flow } = setup(['reddit', 'threads'])
-    const card = await flow.create(world.product.id, channels.map((c) => c.id), { ...MASTER, text: 'x'.repeat(520) })
+    const { channels, flow } = setup(['reddit', 'x'])
+    const card = await flow.create(world.product.id, channels.map((c) => c.id), { ...MASTER, text: 'x'.repeat(300) })
     const out = await flow.adapt(card.group.id, undefined, false)
     expect(out.results[1]?.status).toBe('done')
-    expect(out.results[1]?.reason).toMatch(/^Adapted, but .*500/)
+    expect(out.results[1]?.reason).toMatch(/^Adapted, but .*280/)
     expect(out.results[0]?.reason).toBe('Adapted. Read it, then approve.')
   })
 
@@ -377,7 +377,7 @@ describe('adapting for each platform with the AI', () => {
 
 describe('one approval for the group, after reading every version', () => {
   it('approves each version by its own approval, bound to its own account and destination, and sends nothing', async () => {
-    const { channels, flow } = setup(['reddit', 'threads'])
+    const { channels, flow } = setup(['reddit', 'x'])
     const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
     const out = await flow.approve(card.group.id, seenOf(card))
     expect(out.results.map((r) => r.status)).toEqual(['done', 'done'])
@@ -391,7 +391,7 @@ describe('one approval for the group, after reading every version', () => {
 
   it('names a version that cannot be approved, with its reason, leaves it out, and approves the rest', async () => {
     const { channels, flow } = setup()
-    const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER) // Instagram needs a picture
+    const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER) // Pinterest needs a picture
     const out = await flow.approve(card.group.id, seenOf(card))
     expect(out.results.map((r) => r.status)).toEqual(['done', 'done', 'skipped'])
     expect(out.results[2]?.reason).toMatch(/picture/i)
@@ -400,7 +400,7 @@ describe('one approval for the group, after reading every version', () => {
   })
 
   it('approves only the draft the owner was shown: a version that changed since is left for them to read again', async () => {
-    const { channels, flow } = setup(['reddit', 'threads'])
+    const { channels, flow } = setup(['reddit', 'x'])
     const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
     const seen = seenOf(card)
     await call('opportunities.saveDraft', { id: card.versions[1]!.card.opportunity.id, draft: { text: 'Changed after you looked.', markup: 'markdown' } })
@@ -413,7 +413,7 @@ describe('one approval for the group, after reading every version', () => {
   })
 
   it('refuses a malformed list of what was shown, and says a version it was not shown is not shown', async () => {
-    const { channels, flow } = setup(['reddit', 'threads'])
+    const { channels, flow } = setup(['reddit', 'x'])
     const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
     await expect(flow.approve(card.group.id, null as never)).rejects.toMatchObject({ code: 'invalid_input' })
     await expect(flow.approve(card.group.id, [] as never)).rejects.toMatchObject({ code: 'invalid_input' })
@@ -424,7 +424,7 @@ describe('one approval for the group, after reading every version', () => {
   })
 
   it('does not approve while the AI is adapting, nor while the group is being sent', async () => {
-    const { channels, flow, helper } = setup(['reddit', 'threads'])
+    const { channels, flow, helper } = setup(['reddit', 'x'])
     const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
     let pressed: Promise<unknown> | null = null
     helper.during = async () => {
@@ -436,7 +436,7 @@ describe('one approval for the group, after reading every version', () => {
   })
 
   it('does not touch a version that was sent already, and editing one version cancels only its own approval', async () => {
-    const { channels, flow } = setup(['reddit', 'threads'])
+    const { channels, flow } = setup(['reddit', 'x'])
     const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
     await flow.approve(card.group.id, seenOf(card))
     await call('opportunities.saveDraft', { id: card.versions[1]!.card.opportunity.id, draft: { text: 'Edited.', markup: 'markdown' } })
@@ -454,7 +454,7 @@ describe('sending the group with one press', () => {
   it('sends the approved versions one after another with a pause, each its own send; the unapproved one waits', async () => {
     const { channels, flow, sleeps } = setup()
     const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
-    await flow.approve(card.group.id, seenOf(card)) // Instagram is left out
+    await flow.approve(card.group.id, seenOf(card)) // Pinterest is left out
     const out = await flow.sendAll(card.group.id)
     expect(out.results.map((r) => r.status)).toEqual(['done', 'done', 'skipped'])
     expect(out.results[2]?.reason).toMatch(/not approved when you pressed/)
@@ -465,7 +465,7 @@ describe('sending the group with one press', () => {
   })
 
   it('sends only what was approved at the press: a version approved, or changed and approved again, while it runs is not sent by it', async () => {
-    const { channels, flow } = setup(['reddit', 'threads', 'x'])
+    const { channels, flow } = setup(['reddit', 'x', 'linkedin'])
     const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
     const [v0, v1, v2] = card.versions.map((v) => v.card.opportunity.id) as [string, string, string]
     await call('opportunities.approve', { id: v0 })
@@ -491,7 +491,7 @@ describe('sending the group with one press', () => {
   })
 
   it('does not send a version whose approval was given again after the press, though its text is the same', async () => {
-    const { channels, flow } = setup(['reddit', 'threads'])
+    const { channels, flow } = setup(['reddit', 'x'])
     const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
     const [v0, v1] = card.versions.map((v) => v.card.opportunity.id) as [string, string]
     await call('opportunities.approve', { id: v0 })
@@ -514,7 +514,7 @@ describe('sending the group with one press', () => {
   })
 
   it('does not send a version the owner put off while the group was being sent', async () => {
-    const { channels, flow } = setup(['reddit', 'threads'])
+    const { channels, flow } = setup(['reddit', 'x'])
     const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
     const [v0, v1] = card.versions.map((v) => v.card.opportunity.id) as [string, string]
     await call('opportunities.approve', { id: v0 })
@@ -534,7 +534,7 @@ describe('sending the group with one press', () => {
   })
 
   it('leaves a version the owner scheduled for later to its time', async () => {
-    const { channels, flow } = setup(['reddit', 'threads'])
+    const { channels, flow } = setup(['reddit', 'x'])
     const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
     const later = new Date(world.clock.now().getTime() + 86_400_000).toISOString()
     await call('publications.schedule', { id: card.versions[1]!.card.opportunity.id, at: later })
@@ -546,7 +546,7 @@ describe('sending the group with one press', () => {
   })
 
   it('goes on after a version fails: it stops nothing else, and says what happened to it', async () => {
-    const { channels, flow } = setup(['reddit', 'threads'])
+    const { channels, flow } = setup(['reddit', 'x'])
     const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
     await flow.approve(card.group.id, seenOf(card))
     world.connector.publishScript.push({ kind: 'fail', error: 'The site refused the post.' })
@@ -559,7 +559,7 @@ describe('sending the group with one press', () => {
   })
 
   it('keeps the limits of an account: a send the gate holds is named and the others go on', async () => {
-    const { channels, flow } = setup(['reddit', 'threads'])
+    const { channels, flow } = setup(['reddit', 'x'])
     // the second channel is on the first one's login: one budget
     world.core.db.prepare('UPDATE channels SET account_id = ? WHERE id = ?').run(channels[0]!.accountId, channels[1]!.id)
     for (const c of channels) world.setSettings(c.id, { limits: { perHour: 1, perDay: 10 } })
@@ -571,7 +571,7 @@ describe('sending the group with one press', () => {
   })
 
   it('refuses a second press while the first is running', async () => {
-    const { channels, flow } = setup(['reddit', 'threads'])
+    const { channels, flow } = setup(['reddit', 'x'])
     const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
     await flow.approve(card.group.id, seenOf(card))
     let release: () => void = () => undefined
@@ -590,7 +590,7 @@ describe('sending the group with one press', () => {
 
 describe('deleting a post for several channels', () => {
   it('deletes the versions that were not sent and keeps the one that was, as an ordinary post', async () => {
-    const { channels, flow } = setup(['reddit', 'threads'])
+    const { channels, flow } = setup(['reddit', 'x'])
     const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
     await flow.approve(card.group.id, seenOf(card))
     await world.sending.send(card.versions[0]!.card.opportunity.id)
@@ -604,7 +604,7 @@ describe('deleting a post for several channels', () => {
   })
 
   it('drops a group with no version left from the list', async () => {
-    const { channels, flow } = setup(['reddit', 'threads'])
+    const { channels, flow } = setup(['reddit', 'x'])
     const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
     expect(flow.remove(card.group.id).versions).toEqual([])
     expect(flow.list(world.product.id)).toEqual([])
@@ -617,11 +617,11 @@ describe('what a version says about how it goes out', () => {
     const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
     expect(card.versions.map((v) => v.way)).toEqual(['connector', 'connector', 'connector'])
     expect(card.versions[0]?.problems).toEqual([])
-    expect(card.versions[2]?.problems.join(' ')).toMatch(/picture/i) // Instagram needs one
+    expect(card.versions[2]?.problems.join(' ')).toMatch(/picture/i) // Pinterest needs one
   })
 
   it('goes by the AI browser when the owner chose it, for what the connector cannot carry, and by the connector for what it can', async () => {
-    const { channels, flow } = setup(['reddit', 'threads', 'instagram'])
+    const { channels, flow } = setup(['reddit', 'x', 'pinterest'])
     world.core.settings.updateApp({ publishWith: 'ai_browser' })
     world.core.services.postMissions = {} as never
     const m = await picture('w')
@@ -667,10 +667,10 @@ describe('what a version says about how it goes out', () => {
     expect(options.find((o) => o.platform === 'facebook')).toMatchObject({ fits: true })
     // Reddit takes a picture beside words only through the AI browser, which is still the owner's switch there
     expect(options.find((o) => o.platform === 'reddit')?.fits).toBe(false)
-    const card = await flow.create(world.product.id, channels.map((c) => c.id), { ...MASTER, attachments: [attach(m)] })
-    expect(card.versions.map((v) => v.way)).toEqual(['connector', 'ai_browser', 'ai_browser'])
+    const card = await flow.create(world.product.id, [channels[1]!.id, channels[2]!.id], { ...MASTER, attachments: [attach(m)] })
+    expect(card.versions.map((v) => v.way)).toEqual(['ai_browser', 'ai_browser'])
+    expect(card.versions[0]?.problems).toEqual([])
     expect(card.versions[1]?.problems).toEqual([])
-    expect(card.versions[2]?.problems).toEqual([])
   })
 
   it('names the AI browser as the way of a version for a channel the app does not read, even when the engine cannot carry it now (it cannot work the browser), and says what stops it; one that cannot be held to the tools carries it', async () => {
@@ -711,7 +711,7 @@ describe('what a version says about how it goes out', () => {
 
 describe('scheduling a group of versions at once (DEC-093)', () => {
   it('sets one planned time on every approved version shown to the owner, sends nothing, and lets them go out at that time', async () => {
-    const { channels } = setup(['reddit', 'threads'])
+    const { channels } = setup(['reddit', 'x'])
     const card = (await call('postGroups.create', { productId: world.product.id, channelIds: channels.map((c) => c.id), draft: MASTER })) as PostGroupCard
     await call('postGroups.approve', { id: card.group.id, seen: seenOf(card) })
     const at = new Date(world.clock.now().getTime() + 2 * 3_600_000).toISOString()
@@ -735,7 +735,7 @@ describe('scheduling a group of versions at once (DEC-093)', () => {
   })
 
   it('gives a time only to an approved version matching what the owner saw, and names every other with its reason', async () => {
-    const { channels, flow } = setup(['reddit', 'threads', 'x', 'linkedin'])
+    const { channels, flow } = setup(['reddit', 'x', 'linkedin', 'telegram'])
     const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
     const [v0, _v1, v2, v3] = card.versions.map((v) => v.card.opportunity.id) as [string, string, string, string]
     // v0: approved and unchanged; v1: not approved; v2: edited and re-approved after seen; v3: approved then already sent
@@ -764,7 +764,7 @@ describe('scheduling a group of versions at once (DEC-093)', () => {
   })
 
   it('refuses an invalid date or malformed seen without changing any version', async () => {
-    const { channels, flow } = setup(['reddit', 'threads'])
+    const { channels, flow } = setup(['reddit', 'x'])
     const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
     await flow.approve(card.group.id, seenOf(card))
     expect(() => flow.scheduleAll(card.group.id, 'not-a-date', seenOf(card))).toThrow(/not a valid date/)
@@ -774,7 +774,7 @@ describe('scheduling a group of versions at once (DEC-093)', () => {
   })
 
   it('spreads approved versions onto the next free posting time of each channel, skips channels without posting times with their reason, and respects taken slots', async () => {
-    const { channels } = setup(['reddit', 'threads', 'x'])
+    const { channels } = setup(['reddit', 'x', 'linkedin'])
     // Channel 0: Mon 10:00 UTC; Channel 1: no posting times; Channel 2: Tue 14:00 UTC (with the first Tue slot already taken by another post).
     const mon = { weekday: 1, hour: 10, minute: 0 }
     const tue = { weekday: 2, hour: 14, minute: 0 }
@@ -807,7 +807,7 @@ describe('scheduling a group of versions at once (DEC-093)', () => {
   })
 
   it('refuses to schedule a group while another group step is running', async () => {
-    const { channels, flow, helper } = setup(['reddit', 'threads'])
+    const { channels, flow, helper } = setup(['reddit', 'x'])
     const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
     helper.during = async () => {
       expect(() => flow.scheduleAll(card.group.id, '2026-12-05T10:00:00.000Z', seenOf(card))).toThrow(/being worked on right now/)

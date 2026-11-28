@@ -6,6 +6,7 @@
 // after a restart one more check is simply made.
 
 import type { AccountStatus, Channel, Id } from '../../shared/types'
+import { loginCheckNote } from '../channels/login'
 import type { Core } from '../core'
 import { TakeoverError, type Connector, type ConnectorContext } from '../ports'
 import type { FlowStore } from './store'
@@ -58,6 +59,8 @@ export class LoginWatch {
   async diagnose(connector: Connector, ctx: ConnectorContext): Promise<LoginVerdict> {
     try {
       const state = await connector.checkLogin(ctx)
+      const note = loginCheckNote(state, ctx.account.access).slice(0, 300)
+      this.core.db.prepare('UPDATE accounts SET last_checked_at = ?, last_check_signal = ? WHERE id = ?').run(this.core.clock.now().toISOString(), note, ctx.account.id)
       if (state.captcha) return 'captcha'
       return state.loggedIn ? 'ok' : 'login'
     } catch (error) {

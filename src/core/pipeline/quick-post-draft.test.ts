@@ -33,6 +33,11 @@ async function picture(tag = 'a'): Promise<MediaItem> {
 const attach = (m: MediaItem) => ({ name: m.name, path: m.path, mime: '', sha256: '', mediaId: m.id })
 const CARD: QuickCard = { style: 'bold', colour: 'sunset', shape: 'portrait', headline: 'Launch day', headlineEdited: false }
 const latest = (oppId: string): Draft => world.core.repos.latestDraft(oppId) as Draft
+const makeQuickWorld = (platform = 'instagram'): World => {
+  const w = makeWorld()
+  w.core.db.prepare('UPDATE channels SET platform = ? WHERE id = ?').run(platform, w.channel.id)
+  return w
+}
 const quick = async (draft: Record<string, unknown> = {}) => {
   const item = await picture('q')
   return ((await call('publications.create', { channelId: world.channel.id, draft: { postType: 'quick', text: 'Launch day\nWe are live.', attachments: [attach(item)], card: CARD, ...draft } })) as { opportunity: { id: string } }).opportunity
@@ -40,7 +45,7 @@ const quick = async (draft: Record<string, unknown> = {}) => {
 
 describe('a quick post is saved with its type, its caption and its card', () => {
   it('stores the caption as the text, no title, plain markup, the card and the one picture', async () => {
-    world = makeWorld()
+    world = makeQuickWorld()
     const opp = await quick()
     const draft = latest(opp.id)
     expect(draft).toMatchObject({ postType: 'quick', title: null, text: 'Launch day\nWe are live.', markup: 'legacy', card: CARD })
@@ -48,20 +53,20 @@ describe('a quick post is saved with its type, its caption and its card', () => 
   })
 
   it('does not need a title, and an empty caption with a picture is a post', async () => {
-    world = makeWorld()
+    world = makeQuickWorld()
     const opp = await quick({ text: '', card: null })
     expect(latest(opp.id)).toMatchObject({ postType: 'quick', title: null, text: '', card: null })
   })
 
   it('keeps `legacy` even if the caller asks for Markdown: the caption is sent as it is written', async () => {
-    world = makeWorld()
+    world = makeQuickWorld()
     const opp = await quick({ markup: 'markdown', text: '#launch **now**' })
     expect(latest(opp.id).markup).toBe('legacy')
     expect(latest(opp.id).text).toBe('#launch **now**')
   })
 
   it('refuses a title, no picture, two pictures, a bad card and a card on an article', async () => {
-    world = makeWorld()
+    world = makeQuickWorld()
     const a = await picture('a')
     const b = await picture('b')
     expect((await refusal('publications.create', { channelId: world.channel.id, draft: { postType: 'quick', title: 'No', text: 'x', attachments: [attach(a)] } }))?.message).toMatch(/no title/)
@@ -91,14 +96,14 @@ describe('a quick post is saved with its type, its caption and its card', () => 
 
 describe('editing a saved draft never changes its type (DEC-046)', () => {
   it('keeps the type and the card when the edit does not say them', async () => {
-    world = makeWorld()
+    world = makeQuickWorld()
     const opp = await quick()
     await call('opportunities.saveDraft', { id: opp.id, draft: { text: 'Edited caption', attachments: latest(opp.id).attachments } })
     expect(latest(opp.id)).toMatchObject({ postType: 'quick', text: 'Edited caption', card: CARD, title: null, markup: 'legacy' })
   })
 
   it('takes a new card when the edit gives one, and drops the card when the edit says the picture is not a card', async () => {
-    world = makeWorld()
+    world = makeQuickWorld()
     const opp = await quick()
     const next: QuickCard = { ...CARD, colour: 'ocean', headline: 'Edited', headlineEdited: true }
     await call('opportunities.saveDraft', { id: opp.id, draft: { postType: 'quick', text: 'c', attachments: latest(opp.id).attachments, card: next } })
@@ -108,7 +113,7 @@ describe('editing a saved draft never changes its type (DEC-046)', () => {
   })
 
   it('holds a saved quick post to its rules: a second picture or a title is refused', async () => {
-    world = makeWorld()
+    world = makeQuickWorld()
     const opp = await quick()
     const extra = await picture('extra')
     const twice = await refusal('opportunities.saveDraft', { id: opp.id, draft: { text: 'c', attachments: [...latest(opp.id).attachments, attach(extra)] } })
@@ -126,10 +131,79 @@ describe('editing a saved draft never changes its type (DEC-046)', () => {
   })
 
   it('can be told to change the type explicitly', async () => {
-    world = makeWorld()
+    world = makeQuickWorld()
     const opp = await quick()
     await call('opportunities.saveDraft', { id: opp.id, draft: { postType: 'article', title: 'Now an article', text: 'x', attachments: latest(opp.id).attachments } })
     expect(latest(opp.id)).toMatchObject({ postType: 'article', card: null, title: 'Now an article' })
+  })
+})
+
+describe('core enforces picture platforms and non-mixing groups (Q-008, DEC-095)', () => {
+  it('refuses a quick post on non-picture platforms and on replies, while still allowing article drafts on Facebook/Threads/Instagram', async () => {
+    world = makeWorld()
+    const item = await picture('p')
+    world.core.db.prepare('UPDATE channels SET platform = ? WHERE id = ?').run('reddit', world.channel.id)
+    expect(await refusal('publications.create', { channelId: world.channel.id, draft: { postType: 'quick', text: 'Nope', attachments: [attach(item)] } })).toMatchObject({
+      code: 'invalid_input',
+      message: expect.stringMatching(/takes an article, not a picture post/)
+    })
+    const article = ((await call('publications.create', { channelId: world.channel.id, draft: { title: 'T', text: 'Article' } })) as { opportunity: { id: string } }).opportunity
+    expect(await refusal('opportunities.saveDraft', { id: article.id, draft: { postType: 'quick', text: 'Switch', attachments: [attach(item)] } })).toMatchObject({
+      code: 'invalid_input',
+      message: expect.stringMatching(/takes an article, not a picture post/)
+    })
+    // Replies on a quick platform cannot be picture posts either.
+    const fb = world.addChannel({ accountId: world.addAccount({ label: 'FB', identity: 'fb_page' }).id, target: 'fb-page', platform: 'facebook' })
+    const reply = await world.newOpportunity({ channel: fb })
+    expect(await refusal('opportunities.saveDraft', { id: reply.id, draft: { postType: 'quick', text: 'Reply', attachments: [attach(item)] } })).toMatchObject({
+      code: 'invalid_input',
+      message: expect.stringMatching(/reply cannot be a picture post/i)
+    })
+    // Existing / explicit article drafts on Facebook, Threads and Instagram remain allowed.
+    for (const platform of ['facebook', 'threads', 'instagram']) {
+      const ch = world.addChannel({ accountId: world.addAccount({ label: `A-${platform}`, identity: `id_${platform}` }).id, target: `t-${platform}`, platform })
+      const created = ((await call('publications.create', { channelId: ch.id, draft: { title: 'Article', text: 'Still allowed' } })) as { opportunity: { id: string } }).opportunity
+      expect(latest(created.id)).toMatchObject({ postType: 'article', title: 'Article' })
+    }
+  })
+
+  it('refuses mixed quick/article groups in postGroups.create and postGroups.extend, while letting an older Facebook article extend to article channels', async () => {
+    world = makeWorld()
+    world.core.db.prepare('UPDATE channels SET platform = ? WHERE id = ?').run('reddit', world.channel.id)
+    const x = world.addChannel({ accountId: world.addAccount({ label: 'X', identity: 'x_id' }).id, target: '@x', platform: 'x' })
+    const ig = world.addChannel({ accountId: world.addAccount({ label: 'IG', identity: 'ig_id' }).id, target: '@ig', platform: 'instagram' })
+    const fb = world.addChannel({ accountId: world.addAccount({ label: 'FB', identity: 'fb_id' }).id, target: 'fb-page', platform: 'facebook' })
+    const item = await picture('m')
+
+    // Mixing picture and article channels in create is refused for both article and quick inputs.
+    expect(await refusal('postGroups.create', { productId: world.product.id, channelIds: [world.channel.id, ig.id], draft: { title: 'T', text: 'Mixed' } })).toMatchObject({
+      code: 'invalid_input',
+      message: expect.stringMatching(/cannot go together/i)
+    })
+    expect(
+      await refusal('postGroups.create', {
+        productId: world.product.id,
+        channelIds: [world.channel.id, x.id],
+        draft: { postType: 'quick', text: 'Quick on article channels', attachments: [attach(item)] }
+      })
+    ).toMatchObject({ code: 'invalid_input', message: expect.stringMatching(/takes an article, not a picture post/) })
+
+    // Extending a quick post to an article channel is refused.
+    const quickPost = ((await call('publications.create', { channelId: ig.id, draft: { postType: 'quick', text: 'Caption', attachments: [attach(item)] } })) as { opportunity: { id: string } }).opportunity
+    expect(await refusal('postGroups.extend', { opportunityId: quickPost.id, channelIds: [world.channel.id] })).toMatchObject({
+      code: 'invalid_input',
+      message: expect.stringMatching(/cannot go together/i)
+    })
+
+    // Extending an article post (even an older article living on Facebook) accepts article channels and refuses picture channels.
+    const fbArticle = ((await call('publications.create', { channelId: fb.id, draft: { title: 'Old article', text: 'Body' } })) as { opportunity: { id: string } }).opportunity
+    expect(await refusal('postGroups.extend', { opportunityId: fbArticle.id, channelIds: [ig.id] })).toMatchObject({
+      code: 'invalid_input',
+      message: expect.stringMatching(/cannot go together/i)
+    })
+    const extended = (await call('postGroups.extend', { opportunityId: fbArticle.id, channelIds: [world.channel.id] })) as PostGroupCard
+    expect(extended.versions).toHaveLength(2)
+    expect(extended.versions.every((v) => v.card.draft?.postType === 'article')).toBe(true)
   })
 })
 

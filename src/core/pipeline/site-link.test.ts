@@ -131,13 +131,20 @@ describe('a post for several channels', () => {
   const MASTER = { title: null, text: 'A short post about transits.', markup: 'legacy' as const }
 
   it('gives each version the site where its platform takes it, and a Reddit version none; none of them counts as changed by hand', async () => {
-    const { channels, flow } = group(['reddit', 'threads', 'instagram'])
+    const { channels, flow } = group(['reddit', 'x', 'linkedin'])
     const card = await flow.create(world.product.id, channels.map((c) => c.id), { ...MASTER })
     const byPlatform = Object.fromEntries(card.versions.map((v) => [world.store.requireChannel(v.card.opportunity.channelId).platform, v]))
     expect((byPlatform.reddit!.card.draft as Draft).link).toBeNull()
-    expect((byPlatform.threads!.card.draft as Draft).link).toBe(SITE)
-    expect((byPlatform.instagram!.card.draft as Draft).link).toBe(SITE)
+    expect((byPlatform.x!.card.draft as Draft).link).toBe(SITE)
+    expect((byPlatform.linkedin!.card.draft as Draft).link).toBe(SITE)
     expect(card.versions.map((v) => v.edited)).toEqual([false, false, false])
+
+    const quickGroup = group(['threads', 'instagram'])
+    const qCard = await quickGroup.flow.create(world.product.id, quickGroup.channels.map((c) => c.id), { ...MASTER })
+    const qBy = Object.fromEntries(qCard.versions.map((v) => [world.store.requireChannel(v.card.opportunity.channelId).platform, v]))
+    expect((qBy.threads!.card.draft as Draft).link).toBe(SITE)
+    expect((qBy.instagram!.card.draft as Draft).link).toBe(SITE)
+    expect(qCard.versions.map((v) => v.edited)).toEqual([false, false])
   })
 
   it('keeps the site when the AI adapts a version, and says nothing was changed by hand', async () => {

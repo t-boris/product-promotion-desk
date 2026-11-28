@@ -15,7 +15,7 @@ import { holdsCredential } from '../assist/kit'
 import { AiError } from '../ports'
 import { loadKnowledge, postChannelView, roleView } from './context'
 import { hasTopicField } from '../../shared/topic-tag'
-import { assertTopicFits, assertVideoAsFits, normalizeDraftInput, isHttpUrl } from './draft-input'
+import { assertQuickPlatformFits, assertTopicFits, assertVideoAsFits, normalizeDraftInput, isHttpUrl } from './draft-input'
 import { takesReel } from './send-ways'
 import {
   buildPublicationPrompt,
@@ -52,6 +52,7 @@ export class PublicationsFlow {
     if (!content.text && !content.link && content.attachments.length === 0) {
       throw new ApiError('invalid_input', 'A publication needs text, a link or an image.')
     }
+    assertQuickPlatformFits(channel.platform, content)
     assertTopicFits(channel.platform, content)
     assertVideoAsFits(channel.platform, takesReel(this.core, channel), content)
     const opp = this.core.db.transaction(() => {

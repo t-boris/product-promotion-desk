@@ -524,7 +524,7 @@ describe('the new-account form of the Accounts section', () => {
 })
 
 describe('the next step of an account', () => {
-  const account = (over: Partial<Account>): Account => ({ id: 'a', platform: 'reddit', label: 'A', identity: null, partition: 'p', status: 'login_required', createdAt: '', productId: null, role: null, loginName: null, email: null, mailboxId: null, browser: 'internal', access: 'browser', signsInVia: null, kind: null, profileId: null, ...over })
+  const account = (over: Partial<Account>): Account => ({ id: 'a', platform: 'reddit', label: 'A', identity: null, partition: 'p', status: 'login_required', createdAt: '', productId: null, role: null, loginName: null, email: null, mailboxId: null, browser: 'internal', access: 'browser', signsInVia: null, kind: null, profileId: null, lastCheckedAt: null, lastCheckSignal: null, ...over })
 
   it('goes through address, password and sign-in, in that order', () => {
     expect(nextStep(account({}), false, true).block).toBe('email')
@@ -565,7 +565,7 @@ describe('the next step of an account', () => {
 })
 
 describe('an account that signs in through another account (DEC-027)', () => {
-  const base = { id: 'a', platform: 'reddit', label: 'A', identity: null, partition: 'p', status: 'login_required' as const, createdAt: '', productId: null, role: null, loginName: null, email: null, mailboxId: null, browser: 'internal' as const, access: 'browser' as const, signsInVia: null, kind: null, profileId: null }
+  const base = { id: 'a', platform: 'reddit', label: 'A', identity: null, partition: 'p', status: 'login_required' as const, createdAt: '', productId: null, role: null, loginName: null, email: null, mailboxId: null, browser: 'internal' as const, access: 'browser' as const, signsInVia: null, kind: null, profileId: null, lastCheckedAt: null, lastCheckSignal: null }
   const account = (over: Partial<Account>): Account => ({ ...base, ...over })
   const threads = (over: Partial<Account> = {}): Account => account({ id: 't', platform: 'threads', label: 'Brand on Threads', signsInVia: 'i', ...over })
   const instagram = (over: Partial<Account> = {}): Account => account({ id: 'i', platform: 'instagram', label: 'Brand on Instagram', email: 'brand@example.com', loginName: 'brand', ...over })

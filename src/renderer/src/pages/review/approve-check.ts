@@ -2,6 +2,7 @@
 // Pure, so they are tested without the interface (lesson 101).
 
 import type { DraftInput } from '../../../../shared/api'
+import { cardHeadline } from '../../../../shared/quick-post'
 import type { DraftFinding, PostMarkup } from '../../../../shared/types'
 
 /** What was pressed: "Approve" or "Approve and send". The panel keeps it so "Approve anyway" does exactly that. */
@@ -22,17 +23,25 @@ export function needsCheck(draft: { author: 'ai' | 'user' } | null, dirty: boole
  */
 export const hasContent = (input: DraftInput, blocked: string | null): boolean => (input.text.trim().length > 0 || Boolean(input.link) || (input.attachments?.length ?? 0) > 0) && blocked === null
 
-/** The editor as the core reads it. */
-export function checkForm(input: DraftInput): { title: string; text: string; link: string; markup: PostMarkup } {
-  return { title: input.title ?? '', text: input.text, link: input.link ?? '', markup: input.markup === 'markdown' ? 'markdown' : 'legacy' }
+/** The editor as the core reads it. Includes the card headline on a quick post with a template card (Q-008, DEC-095). */
+export function checkForm(input: DraftInput): { title: string; text: string; link: string; markup: PostMarkup; cardHeadline?: string } {
+  const headline = input.postType === 'quick' && input.card ? cardHeadline(input.card, input.text) : ''
+  return {
+    title: input.title ?? '',
+    text: input.text,
+    link: input.link ?? '',
+    markup: input.markup === 'markdown' ? 'markdown' : 'legacy',
+    ...(headline ? { cardHeadline: headline } : {})
+  }
 }
 
 /**
- * The panel is made for one text. The words that decide it (title, text, link) make its fingerprint: once they change, the findings are about
- * something that is no longer on the screen and the panel goes. The attachments are not read by the rules and are not part of it.
+ * The panel is made for one text. The words that decide it (title, text, link, and card headline on a quick post) make its fingerprint:
+ * once they change, the findings are about something that is no longer on the screen and the panel goes. The attachments are not read by the rules and are not part of it.
  */
 export function fingerprint(input: DraftInput): string {
-  return JSON.stringify([input.title ?? '', input.text, input.link ?? '', input.markup === 'markdown' ? 'markdown' : 'legacy'])
+  const headline = input.postType === 'quick' && input.card ? cardHeadline(input.card, input.text) : ''
+  return JSON.stringify([input.title ?? '', input.text, input.link ?? '', input.markup === 'markdown' ? 'markdown' : 'legacy', ...(headline ? [headline] : [])])
 }
 
 /** What the panel shows: the findings (or why the check could not be made) for the text with this fingerprint, after this button. */

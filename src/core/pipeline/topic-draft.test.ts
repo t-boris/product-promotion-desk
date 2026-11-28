@@ -132,12 +132,12 @@ describe('the topic of a post written for several channels', () => {
   it('goes to the versions of the platforms that have a topic field, and to no other', async () => {
     world = makeWorld({ mode: 'approval' })
     setPlatform('threads')
-    const reddit = world.addChannel({ target: 'r/other' })
-    world.core.db.prepare('UPDATE channels SET platform = ? WHERE id = ?').run('reddit', reddit.id)
-    const group = (await call('postGroups.create', { productId: world.product.id, channelIds: [world.channel.id, reddit.id], draft: { title: 'T', text: 'body', topicTag: 'Astrology' } })) as { versions: { card: { opportunity: { id: string; channelId: string } } }[] }
+    const facebook = world.addChannel({ target: 'fb-page' })
+    world.core.db.prepare('UPDATE channels SET platform = ? WHERE id = ?').run('facebook', facebook.id)
+    const group = (await call('postGroups.create', { productId: world.product.id, channelIds: [world.channel.id, facebook.id], draft: { title: 'T', text: 'body', topicTag: 'Astrology' } })) as { versions: { card: { opportunity: { id: string; channelId: string } } }[] }
     const topicOf = (channelId: string) => latest(group.versions.find((v) => v.card.opportunity.channelId === channelId)!.card.opportunity.id).topicTag
     expect(topicOf(world.channel.id)).toBe('Astrology')
-    expect(topicOf(reddit.id)).toBeNull()
+    expect(topicOf(facebook.id)).toBeNull()
   })
 })
 

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Account, PageReport, PlatformInfo, SignInResult } from '../../../../shared/types'
 import { call, useAction, useQuery } from '../../hooks'
-import { Button, ErrorNote, useMainVariant } from '../../ui'
+import { Button, ErrorNote, formatTime, useMainVariant } from '../../ui'
 import { AccountBlock } from './AccountBlock'
 import { AccountStatusLine } from './AccountStatus'
 import { AgentRunPanel } from './AgentRunPanel'
@@ -138,6 +138,11 @@ export function AccountSignIn({
       )}
       <ErrorNote error={startingAgent.error ?? stoppingAgent.error} />
       {agentRun?.kind === kind && <AgentRunPanel run={agentRun} onStop={() => void stopAgent()} stopping={stoppingAgent.busy} testId={`agent-run-${account.id}`} />}
+      <p className="muted small" data-testid={`signin-last-check-${account.id}`}>
+        {account.lastCheckedAt
+          ? `Last checked ${formatTime(account.lastCheckedAt)}${account.lastCheckSignal ? ` · ${account.lastCheckSignal}` : ''}.`
+          : 'Sign-in has not been checked yet.'}
+      </p>
       <p className="muted small">A CAPTCHA, a code or any other check on the site is always yours: the app stops and tells you.</p>
       {linked && (
         <p className="muted small" data-testid={`signin-through-note-${account.id}`}>

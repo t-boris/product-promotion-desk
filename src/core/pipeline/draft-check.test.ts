@@ -9,8 +9,11 @@ afterEach(async () => {
   await closeWorld(world)
 })
 
-const check = (opportunityId: string, form?: { title?: string; text: string; link?: string }): Promise<DraftCheckResult> =>
-  world.core.router.call('drafts.check', { opportunityId, ...(form ? { form: { title: form.title ?? '', text: form.text, link: form.link ?? '' } } : {}) } as never)
+const check = (opportunityId: string, form?: { title?: string; text: string; link?: string; cardHeadline?: string }): Promise<DraftCheckResult> =>
+  world.core.router.call(
+    'drafts.check',
+    { opportunityId, ...(form ? { form: { title: form.title ?? '', text: form.text, link: form.link ?? '', ...(form.cardHeadline !== undefined ? { cardHeadline: form.cardHeadline } : {}) } } : {}) } as never
+  )
 const rulesOf = async (text: string, extra: { title?: string; link?: string } = {}): Promise<DraftFinding['rule'][]> => {
   const opp = await world.newOpportunity()
   return (await check(opp.id, { text, ...extra })).findings.map((f) => f.rule)
@@ -113,6 +116,56 @@ describe('drafts.check: what is found', () => {
   it('does not mistake a file name or an abbreviation for a link', async () => {
     world = makeWorld({ mode: 'draft' })
     expect(await rulesOf('Works with Node.js/Express, e.g. on a Mac, and/or Linux.')).toEqual([])
+  })
+
+  it('checks the card headline of a quick post like the caption, both saved and in the editor form (Q-008, DEC-095)', async () => {
+    world = makeWorld({ mode: 'draft' })
+    world.core.db.prepare('UPDATE channels SET platform = ? WHERE id = ?').run('instagram', world.channel.id)
+    world.knowledge.prohibited = [makeClaim('p1', 'Guaranteed 100% accurate predictions')]
+    const header = Buffer.alloc(24)
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(header)
+    const pic = (await world.core.router.call('media.add', {
+      productId: world.product.id,
+      name: 'card.png',
+      base64: Buffer.concat([header, Buffer.from('card')]).toString('base64'),
+      origin: 'card'
+    })) as { id: string; name: string; path: string }
+    const attachments = [{ name: pic.name, path: pic.path, mime: '', sha256: '', mediaId: pic.id }]
+    const created = (await world.core.router.call('publications.create', {
+      channelId: world.channel.id,
+      draft: {
+        postType: 'quick',
+        text: PLAIN,
+        attachments,
+        card: { style: 'bold', colour: 'indigo', shape: 'square', headline: 'Free for 30 days — only $9! bit.ly/deal', headlineEdited: true }
+      }
+    })) as { opportunity: Opportunity }
+
+    // Saved draft: card headline is checked even on Instagram (where platforms have no title field).
+    const savedRules = (await check(created.opportunity.id)).findings.map((f) => f.rule)
+    expect(savedRules).toEqual(expect.arrayContaining(['free', 'price', 'link']))
+
+    // Live editor form: edited cardHeadline triggers prohibited/discount/credential findings, while a clean headline clears them.
+    expect((await check(created.opportunity.id, { text: PLAIN, cardHeadline: 'Guaranteed 100% accurate predictions' })).findings.map((f) => f.rule)).toContain('prohibited')
+    expect((await check(created.opportunity.id, { text: PLAIN, cardHeadline: '50% off with coupon NATAL' })).findings.map((f) => f.rule)).toContain('discount')
+    expect((await check(created.opportunity.id, { text: PLAIN, cardHeadline: 'password: hunter22' })).findings.map((f) => f.rule)).toContain('credential')
+    expect((await check(created.opportunity.id, { text: PLAIN, cardHeadline: 'Clean chart notes' })).findings).toEqual([])
+
+    // When headline follows caption (headlineEdited: false), no duplicate finding is produced.
+    const mirrored = (await world.core.router.call('publications.create', {
+      channelId: world.channel.id,
+      draft: {
+        postType: 'quick',
+        text: 'Free for a month\nMore details in the app.',
+        attachments,
+        card: { style: 'bold', colour: 'indigo', shape: 'square', headline: 'Free for a month', headlineEdited: false }
+      }
+    })) as { opportunity: Opportunity }
+    expect((await check(mirrored.opportunity.id)).findings.map((f) => f.rule)).toEqual(['free'])
+
+    // Validation refuses non-string or overly long cardHeadline.
+    expect(await refusal({ opportunityId: created.opportunity.id, form: { title: '', text: PLAIN, link: '', cardHeadline: 42 } })).toBe('invalid_input')
+    expect(await refusal({ opportunityId: created.opportunity.id, form: { title: '', text: PLAIN, link: '', cardHeadline: 'x'.repeat(301) } })).toBe('invalid_input')
   })
 })
 

@@ -8,7 +8,7 @@
 import { ApiError } from '../../shared/api'
 import type { DraftInput } from '../../shared/api'
 import { kindsOf, pictureIdsIn, platformLabel } from '../../shared/post-format'
-import { parseQuickCard, type PostType, type QuickCard } from '../../shared/quick-post'
+import { parseQuickCard, QUICK_PLATFORMS, type PostType, type QuickCard } from '../../shared/quick-post'
 import { cleanTopicTag, hasTopicField, topicTagProblem } from '../../shared/topic-tag'
 import { reelProblem } from '../../shared/video-as'
 import type { Attachment, Id, VideoAs } from '../../shared/types'
@@ -156,4 +156,14 @@ export function assertVideoAsFits(platform: string, takesReel: boolean, content:
 
 export function assertTopicFits(platform: string, content: Pick<DraftContent, 'topicTag'>): void {
   if (content.topicTag && !hasTopicField(platform)) throw new ApiError('invalid_input', `${platformLabel(platform)} has no topic field: take the topic off the post.`)
+}
+
+/**
+ * A quick post (picture post) belongs only to the picture platforms (Instagram, Threads, Facebook — DEC-038, DEC-046, Q-008, DEC-095).
+ * Older or explicit article drafts on those platforms stay allowed.
+ */
+export function assertQuickPlatformFits(platform: string, content: Pick<DraftContent, 'postType'>): void {
+  if (content.postType === 'quick' && !QUICK_PLATFORMS.includes(platform)) {
+    throw new ApiError('invalid_input', `${platformLabel(platform)} takes an article, not a picture post (picture posts are for Instagram, Threads and Facebook).`)
+  }
 }

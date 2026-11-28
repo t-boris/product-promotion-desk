@@ -525,7 +525,7 @@ export interface ApiMethods {
   /** The AI's proposal of one flair from that list for the post as it is now (the owner presses for it): a name from the list, or null. Nothing is stored. */
   'drafts.suggestFlair': [{ channelId: Id; title: string; text: string }, { flair: string | null }]
   // The rules an AI draft passes, read against the owner's own text before it is approved. Local: no engine, nothing stored.
-  'drafts.check': [{ opportunityId: Id; form?: { title: string; text: string; link: string; markup?: PostMarkup } }, DraftCheckResult]
+  'drafts.check': [{ opportunityId: Id; form?: { title: string; text: string; link: string; markup?: PostMarkup; cardHeadline?: string } }, DraftCheckResult]
   /**
    * The AI writes (the field is empty, or `post`) or improves (the field is filled, steered by the owner's `instruction`) the title or the
    * text of a reply or of a post. A card is named by `opportunityId`; a new publication that has no card yet, by `channelId`. `form` is

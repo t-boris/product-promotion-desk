@@ -10,7 +10,7 @@ import { judgedForFit, noConnectorProblem, renderForPlatform } from '../../share
 import type { PipelineHooks } from '../services'
 import type { Core } from '../core'
 import { attachmentProblem } from './attachments'
-import { assertTopicFits, assertVideoAsFits, inheritPostType, normalizeDraftInput } from './draft-input'
+import { assertQuickPlatformFits, assertTopicFits, assertVideoAsFits, inheritPostType, normalizeDraftInput } from './draft-input'
 import { contentHash, hashedIdentity } from './hash'
 import { sendFitProblems, sendWays, takesReel } from './send-ways'
 import { OTHER_LOGIN_SPEAKS_REASON, SEND_LOCKED_STATES, SPEAKING_STATES, type FlowStore } from './store'
@@ -59,6 +59,8 @@ export class ReviewFlow implements PipelineHooks {
     const content = await normalizeDraftInput(input, { productId: opp.productId, media: this.core.services.media! })
     if (opp.kind === 'reply' && !content.text) throw new ApiError('invalid_input', 'A reply needs text.')
     const channel = this.store.requireChannel(opp.channelId)
+    if (opp.kind === 'reply' && content.postType === 'quick') throw new ApiError('invalid_input', 'A reply cannot be a picture post: only a post is.')
+    assertQuickPlatformFits(channel.platform, content)
     if (opp.kind === 'reply' && content.topicTag) throw new ApiError('invalid_input', 'A reply has no topic: only a post is filed under one.')
     assertTopicFits(channel.platform, content)
     if (opp.kind === 'reply' && content.videoAs) throw new ApiError('invalid_input', 'A reply is not a Reel: only a post is.')
@@ -74,7 +76,9 @@ export class ReviewFlow implements PipelineHooks {
       if (options.expectDraftId !== undefined && previous?.id !== options.expectDraftId) throw new ApiError('conflict', 'The draft changed while this text was being written.')
       // A draft that is already in review keeps its place; one that is not must not start a second voice.
       if (!SPEAKING_STATES.includes(current.state) && this.store.otherLoginSpeakingFor(current)) throw new ApiError('invalid_state', OTHER_LOGIN_SPEAKS_REASON)
-      this.store.insertDraft(id, inheritPostType(content, previous), {
+      const nextContent = inheritPostType(content, previous)
+      assertQuickPlatformFits(channel.platform, nextContent)
+      this.store.insertDraft(id, nextContent, {
         knowledgeVersionId: previous?.knowledgeVersionId ?? null,
         usedClaimLineageIds: previous?.usedClaimLineageIds ?? [],
         rationale: previous?.rationale ?? '',

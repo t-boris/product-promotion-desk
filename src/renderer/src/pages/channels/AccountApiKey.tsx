@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { keyNameOf, type Account, type PlatformInfo, type VaultUnavailable } from '../../../../shared/types'
 import { vaultUnavailableText } from '../../../../shared/vault-message'
 import { call, useAction } from '../../hooks'
-import { Button, ErrorNote, Field, useMainVariant, useOpenForm } from '../../ui'
+import { Button, ErrorNote, Field, formatTime, useMainVariant, useOpenForm } from '../../ui'
 import { AccountBlock } from './AccountBlock'
 import { GuideSteps } from './ConnectionGuide'
 
@@ -90,6 +90,12 @@ export function AccountApiKey({ account, api, unavailable, hasKey, endsAt }: { a
         )
       }
     >
+      {account.lastCheckedAt && (
+        <p className="muted small" data-testid={`api-key-last-check-${account.id}`}>
+          Last checked {formatTime(account.lastCheckedAt)}
+          {account.lastCheckSignal ? ` · ${account.lastCheckSignal}` : ''}.
+        </p>
+      )}
       {editing && (
         <form onSubmit={submit} className="stack" data-testid={`api-key-form-${account.id}`}>
           <GuideSteps account={account} steps={api.steps} testId={`api-key-steps-${account.id}`} />

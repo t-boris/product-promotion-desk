@@ -224,5 +224,14 @@ CREATE TABLE api_key_times (
   expires_at TEXT
 );
 `
+  },
+  {
+    id: 213,
+    name: 'channels: when sign-in was last checked and what was seen',
+    sql: `
+-- DEC-095: shown in the account Sign-in / API key block so the owner sees when the app last checked sign-in and what it saw.
+ALTER TABLE accounts ADD COLUMN last_checked_at TEXT;
+ALTER TABLE accounts ADD COLUMN last_check_signal TEXT;
+`
   }
 ]
