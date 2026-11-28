@@ -150,8 +150,8 @@ Versions are proposals; each phase is one release, installed and checked on the 
 | D | built, with E | 0.55.0 (DEC-055) | — (the fake server only) |
 | E | built | 0.55.0 | everything: needs the owner's bot (proof T1) |
 | F | built except a video | 0.78.0 (DEC-076), 0.79.0 (DEC-077: Facebook's own schedule, views of a post) | everything: needs the owner's Meta app and a Page access token. Not built: a video (see below) |
-| G | built for words, a link and a topic | 0.82.0 (DEC-080): connector `threads-api`, the token of an hour exchanged for a 60-day one with the Threads app secret (used once, not kept) and renewed by the scheduler job `api-keys` | everything: needs the owner's Meta app with the Threads use case. Not built: pictures and video (D5), hiding a reply, the quota read |
-| H | waiting | — | the same Meta app, a professional account, and D5 (pictures on a public address) |
+| G | built | 0.82.0 (DEC-080): connector `threads-api`, the token of an hour exchanged for a 60-day one with the Threads app secret (used once, not kept) and renewed by the scheduler job `api-keys`. 0.83.0 (DEC-081): pictures, video and several of them as one post, through the owner's place for files (D5: Settings, "A place for files"; an S3 bucket, a file put for the send, an address signed for an hour, deleted afterwards) | everything: needs the owner's Meta app with the Threads use case and the owner's bucket. Not said by Meta: whether a file is read from an address with a signature in its query. Not built: hiding a reply, the quota read |
+| H | next | D5 is built (0.83.0) | the same Meta app, a professional account |
 | I | waiting | — | needs the owner's paid X app and proof T4 |
 | J | waiting | — | needs Pinterest Standard access and a LinkedIn app |
 

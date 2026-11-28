@@ -28,7 +28,7 @@ export function createHttpPort(fetchImpl: Fetch = (url, init) => fetch(url, init
   return {
     async request(req: HttpRequest): Promise<HttpResponse> {
       const headers: Record<string, string> = { ...(req.headers ?? {}) }
-      let body: string | FormData | undefined
+      let body: string | FormData | Blob | undefined
       let hasFile = false
       if (req.json !== undefined) {
         headers['content-type'] = 'application/json'
@@ -43,6 +43,10 @@ export function createHttpPort(fetchImpl: Fetch = (url, init) => fetch(url, init
           }
         }
         body = form
+      } else if (req.file) {
+        hasFile = true
+        headers['content-type'] = req.file.mime
+        body = await openAsBlob(req.file.path, { type: req.file.mime })
       }
       const timeoutMs = req.timeoutMs ?? (hasFile ? UPLOAD_HTTP_TIMEOUT_MS : DEFAULT_HTTP_TIMEOUT_MS)
       let response: Response

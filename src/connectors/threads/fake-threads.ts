@@ -23,6 +23,8 @@ interface FakeMedia {
   likes: number
   views: number
   repost: boolean
+  /** The addresses of the pictures and videos of the post, in their order, as Threads read them. */
+  files: { kind: 'IMAGE' | 'VIDEO'; url: string }[]
 }
 
 interface FakeContainer {
@@ -41,6 +43,8 @@ export class FakeThreads implements HttpPort {
   tellsTokenFacts = true
   /** What a new container says of itself the first times it is asked. */
   containerStates: string[] = []
+  /** Whether Threads can read a file from this address at the moment it is given: an address nobody serves is refused, as the real one's fetch would fail. */
+  reads: (url: string) => boolean = () => true
   followers = 120
   readonly calls: { method: string; path: string; params: Record<string, string> }[] = []
   readonly media: FakeMedia[] = []
@@ -66,7 +70,7 @@ export class FakeThreads implements HttpPort {
   }
 
   private add(text: string, extra: Partial<FakeMedia> = {}): FakeMedia {
-    const item: FakeMedia = { id: String(this.next++), text, created: this.nowMs, username: this.profile.username, own: true, repliedTo: null, rootId: null, topic: null, likes: 0, views: 0, repost: false, ...extra }
+    const item: FakeMedia = { id: String(this.next++), text, created: this.nowMs, username: this.profile.username, own: true, repliedTo: null, rootId: null, topic: null, likes: 0, views: 0, repost: false, files: [], ...extra }
     this.media.unshift(item)
     return item
   }
@@ -200,7 +204,18 @@ export class FakeThreads implements HttpPort {
           this.failNext = null
           return this.error(400, failure.code, failure.message)
         }
-        if (params.media_type !== 'TEXT' || !params.text) return this.error(400, 100, 'The parameter text is required')
+        const kind = params.media_type
+        if (kind === 'TEXT') {
+          if (!params.text) return this.error(400, 100, 'The parameter text is required')
+        } else if (kind === 'IMAGE' || kind === 'VIDEO') {
+          const url = kind === 'IMAGE' ? params.image_url : params.video_url
+          if (!url) return this.error(400, 100, `The parameter ${kind === 'IMAGE' ? 'image_url' : 'video_url'} is required`)
+          if (!this.reads(url)) return this.error(400, 100, 'The media could not be fetched from this URI')
+        } else if (kind === 'CAROUSEL') {
+          const children = (params.children ?? '').split(',').filter(Boolean)
+          if (children.length < 2 || children.length > 20) return this.error(400, 100, 'A carousel takes 2 to 20 children')
+          if (children.some((id) => this.containers.find((c) => c.id === id)?.form.is_carousel_item !== 'true')) return this.error(400, 100, 'A child is not a carousel item')
+        } else return this.error(400, 100, 'The parameter media_type is required')
         if (params.reply_to_id && !this.media.some((m) => m.id === params.reply_to_id)) return this.error(400, 100, 'The post to reply to does not exist')
         const container: FakeContainer = { id: String(this.next++), form: params, status: 'FINISHED' }
         this.containers.push(container)
@@ -213,7 +228,14 @@ export class FakeThreads implements HttpPort {
         this.failNext = null
         if (failure && failure !== 'lost') return this.error(failure.status ?? 400, failure.code, failure.message)
         const parent = container.form.reply_to_id ? this.media.find((m) => m.id === container.form.reply_to_id) : undefined
-        const made = this.add(container.form.text as string, parent ? { repliedTo: parent.id, rootId: parent.rootId ?? parent.id } : { topic: container.form.topic_tag ?? null })
+        if (container.form.is_carousel_item === 'true') return this.error(400, 100, 'A carousel item is not published by itself')
+        const fileOf = (c: FakeContainer): FakeMedia['files'] =>
+          c.form.media_type === 'IMAGE' ? [{ kind: 'IMAGE', url: c.form.image_url as string }] : c.form.media_type === 'VIDEO' ? [{ kind: 'VIDEO', url: c.form.video_url as string }] : []
+        const files =
+          container.form.media_type === 'CAROUSEL'
+            ? (container.form.children as string).split(',').flatMap((id) => fileOf(this.containers.find((c) => c.id === id) as FakeContainer))
+            : fileOf(container)
+        const made = this.add(container.form.text ?? '', { files, ...(parent ? { repliedTo: parent.id, rootId: parent.rootId ?? parent.id } : { topic: container.form.topic_tag ?? null }) })
         container.status = 'PUBLISHED'
         if (failure === 'lost') throw new HttpNoAnswerError('the connection was lost')
         return this.ok({ id: made.id })

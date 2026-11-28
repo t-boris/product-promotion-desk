@@ -407,6 +407,19 @@ export interface ConnectorContext {
   apiKey(): Promise<string | null>
   /** Waits, for a platform that asks for time between two requests of one send (a Threads container before it is published). */
   pause(ms: number): Promise<void>
+  /** The owner's place for files on a public address (DEC-081), for a platform that takes a picture or a video only from one; null when none is set up. */
+  publicFiles(): Promise<PublicFiles | null>
+}
+
+/** A file standing on a public address for the minutes of a send. `remove` deletes it; it is called when the send ends, whatever its end. */
+export interface PublicFile {
+  url: string
+  remove(): Promise<void>
+}
+
+export interface PublicFiles {
+  /** Puts a file, read from its path, and gives the address a platform can read it from for an hour. It throws with the store's words when the store refuses. */
+  put(file: HttpFile): Promise<PublicFile>
 }
 
 /** A file of a multipart form, read from the disk by its path as it is sent. */
@@ -417,12 +430,13 @@ export interface HttpFile {
 }
 
 export interface HttpRequest {
-  method: 'GET' | 'POST' | 'DELETE'
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE'
   url: string
   headers?: Record<string, string>
-  /** A JSON body; or `form`, a multipart form whose values are words or files. At most one of the two. */
+  /** A JSON body; or `form`, a multipart form whose values are words or files; or `file`, one file as the whole body (a PUT to a store). At most one of the three. */
   json?: unknown
   form?: Record<string, string | HttpFile>
+  file?: HttpFile
   timeoutMs?: number
 }
 

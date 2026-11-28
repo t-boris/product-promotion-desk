@@ -3,6 +3,7 @@
 
 import type { AgentAsk, CapabilityKey, Channel, Claim, Id, MetricSnapshot, PostResultsView, PostStanding, SendAction } from '../shared/types'
 import type { PostMissionService } from './browser-agent/post-submit'
+import type { PublicFiles } from './ports'
 import type { WatchMissionService } from './browser-agent/watch'
 import type { ResearchMissionService } from './browser-agent/research'
 import type { MediaService } from './media/service'
@@ -145,6 +146,8 @@ export interface CoreServices {
   watchMissions?: WatchMissionService
   /** Implemented by the channels module; the scheduler has it renew the keys of API accounts that end (a Threads access token, DEC-080). */
   keys?: { renewDue(): Promise<number> }
+  /** The owner's place for files on a public address (DEC-081): whether one is set up, and the place itself for a connector's send. */
+  publicFiles?: { ready(): boolean; open(): Promise<PublicFiles | null> }
   /** Implemented by the channels module; the quick-post helper has the AI search a platform for trends, in the account's browser, on the owner's press (REQ-004). */
   researchMissions?: ResearchMissionService
   /** How a picture of a post is fetched (the network and the name lookup); absent means the real ones. A seam for tests: nothing sets it in the application. */

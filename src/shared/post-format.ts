@@ -691,9 +691,10 @@ export interface PlatformForm {
   /** How many characters the platform's API takes as the words under a picture or a video, when that is less than `textLimit` (Telegram). */
   apiCaptionLimit?: number
   /** `none`: the platform takes a video, but this application's API connector of it carries none (a Facebook Page). */
-  apiVideos?: 'none'
-  /** 'none': the platform's API takes a picture only from a public address on the internet, which this application has none of (Threads). */
-  apiPictures?: 'none'
+  /** `public_address`: the platform's API takes a video only from an address on the internet, so it goes through the owner's place for files (Threads, DEC-081). */
+  apiVideos?: 'none' | 'public_address'
+  /** `public_address`: the same for a picture. */
+  apiPictures?: 'public_address'
   /** `required`: a post without a picture is refused by the platform (Instagram). A video can stand in for the picture where the platform takes one (`videos` is not `none`). */
   pictures: 'none' | 'optional' | 'required'
   maxPictures: number
@@ -719,7 +720,7 @@ export const PLATFORM_FORMS: Record<string, PlatformForm> = {
   reddit: { format: 'markdown', hasTitle: true, titleLimit: 300, textLimit: 40_000, pictures: 'optional', maxPictures: 20, videos: 'optional', maxVideos: 1, link: 'field' },
   instagram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 2_200, pictures: 'required', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_bio' },
   facebook: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 63_206, apiVideos: 'none', pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text' },
-  threads: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 500, apiVideos: 'none', apiPictures: 'none', pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text', topic: 'field' },
+  threads: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 500, apiVideos: 'public_address', apiPictures: 'public_address', pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text', topic: 'field' },
   x: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 280, pictures: 'optional', maxPictures: 4, videos: 'optional', maxVideos: 1, link: 'in_text' },
   linkedin: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 3_000, pictures: 'optional', maxPictures: 9, videos: 'optional', maxVideos: 1, link: 'in_text' },
   telegram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 4_096, apiCaptionLimit: 1_024, pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text' },
@@ -970,6 +971,8 @@ export interface SendWays {
   noConnector?: boolean
   /** The channel works through its platform's own API (DEC-055): its connector carries every send, pictures and video included, and the AI browser is never used. */
   api?: boolean
+  /** The owner's place for files on a public address is set up (DEC-081): a platform whose API takes a picture only from an address gets it from there. */
+  publicFiles?: boolean
   /** The AI browser would carry this send, but the selected engine cannot work the browser: why, in words (only for a channel with no connector). */
   engineProblem?: string
 }
@@ -1016,8 +1019,11 @@ export function sendProblems(platform: string, rendered: RenderedPost, ways: Sen
   if (ways.api && formOf(platform).apiVideos === 'none' && kindsOf(rendered.attachments).videos > 0) {
     problems.push(`A video is not sent to ${label} through its API by this application. Take the video off, or publish it on ${label} yourself.`)
   }
-  if (ways.api && formOf(platform).apiPictures === 'none' && kindsOf(rendered.attachments).pictures > 0) {
-    problems.push(`A picture is not sent to ${label} through its API by this application: ${label} takes one only from a public address on the internet. Take the picture off, or publish the post on ${label} yourself.`)
+  // A platform that takes a picture or a video only from an address on the internet gets it through the owner's place for files, once one is set up (DEC-081).
+  const kinds = kindsOf(rendered.attachments)
+  const viaPlace = (formOf(platform).apiPictures === 'public_address' && kinds.pictures > 0) || (formOf(platform).apiVideos === 'public_address' && kinds.videos > 0)
+  if (ways.api && viaPlace && !ways.publicFiles) {
+    problems.push(`${label} takes a picture or a video through its API only from an address on the internet. Set up “A place for files” in Settings (a storage bucket of your own), or take it off the post, or publish the post on ${label} yourself.`)
   }
   if (rendered.attachments.length > 0 && !ways.aiBrowser && !ways.api) {
     // A video is carried by the AI browser only: no connector of this application uploads one.

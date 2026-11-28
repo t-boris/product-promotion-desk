@@ -1,4 +1,5 @@
 import type { Capability, CapabilityKey, CapabilityStatus, Channel, MetricReading } from '../../shared/types'
+import { isVideoMime } from '../../shared/types'
 import type { PostNumbers } from '../../shared/post-numbers'
 import { HttpNoAnswerError } from '../../core/net/http'
 import type {
@@ -11,6 +12,7 @@ import type {
   KeptKey,
   LoginState,
   NormalizedTarget,
+  PublicFile,
   PublishedRef,
   PublishOutcome,
   PublishRequest,
@@ -35,6 +37,12 @@ const NO_SUCH_OBJECT = 100
 /** A container of words is ready at once; Threads is asked a few times before the send gives up, and nothing is published then. */
 const CONTAINER_LOOKS = 12
 const CONTAINER_WAIT_MS = 5_000
+/** A video takes Threads minutes to prepare: it is asked every ten seconds for five minutes, the longest Meta's page says to ask. */
+const VIDEO_LOOKS = 30
+const VIDEO_WAIT_MS = 10_000
+/** What Threads takes from an address: a JPEG or PNG picture, an MP4 or MOV video; at most 20 in one post. */
+const TAKEN = new Set(['image/jpeg', 'image/png', 'video/mp4', 'video/quicktime'])
+const MOST_FILES = 20
 const DAY_MS = 24 * 3_600_000
 /** A token of an hour is a short one; anything that lasts longer than this is kept as it is. */
 const SHORT_TOKEN_MS = 2 * DAY_MS
@@ -143,8 +151,8 @@ const API: ApiAccess = {
   keyLooksValid: looksLikeThreadsToken
 }
 
-const NO_MEDIA =
-  'A picture or a video is not sent to Threads through its API by this application: Threads takes one only from a public address on the internet, and this application has none to put it on. Take it off the post, or publish the post on Threads yourself. Nothing was sent.'
+const NO_PLACE =
+  'Threads takes a picture or a video through its API only from an address on the internet, and no place for files is set up. Set one up in Settings (“A place for files”), or take it off the post, or publish the post on Threads yourself. Nothing was sent.'
 
 const untilOf = (now: Date, token: ThreadsToken): string | null =>
   typeof token.expires_in === 'number' && token.expires_in > 0 ? new Date(now.getTime() + token.expires_in * 1000).toISOString() : null
@@ -152,8 +160,8 @@ const untilOf = (now: Date, token: ThreadsToken): string | null =>
 /**
  * A Threads profile worked through the Threads API with the profile's own access token (DEC-080): posts of words with a link and a topic; the
  * replies under the profile's posts, read from Threads each time; replies under a post or a reply; likes, replies and views counted under a
- * post. Nothing is kept here: Threads holds the posts and gives them again. Not carried: a picture and a video, which Threads takes only from
- * a public address.
+ * post. Nothing is kept here: Threads holds the posts and gives them again. A picture or a video goes through the owner's place for files
+ * (DEC-081): Threads takes one only from an address on the internet, so the file stands there for the minutes of the send.
  */
 export class ThreadsApiConnector implements Connector {
   readonly id = THREADS_API_CONNECTOR_ID
@@ -310,7 +318,7 @@ export class ThreadsApiConnector implements Connector {
       cap('read_posts', ...reads),
       cap('read_comments', ...talks),
       cap('detect_changes', ...reads),
-      cap('publish_post', 'verified', `Posts go out as ${name}: words, a link in the words, a topic. A picture or a video is not sent this way: Threads takes one only from a public address. It needs the permission threads_content_publish. Until the app is published in Meta's dashboard (“Go live”), only the people of the app may see what it posts.`),
+      cap('publish_post', 'verified', `Posts go out as ${name}: words, a link in the words, a topic. A picture or a video goes through your place for files (Settings): Threads takes one only from an address on the internet. It needs the permission threads_content_publish. Until the app is published in Meta's dashboard (“Go live”), only the people of the app may see what it posts.`),
       cap('publish_reply', 'verified', 'A reply goes under the post or the reply, as the profile. It needs the permission threads_manage_replies.'),
       cap('verify_send', 'verified', 'Threads returns the post or the reply it made.'),
       cap('metrics', 'verified', 'The number of followers; under each post, likes, replies and views. It needs the permission threads_manage_insights.'),
@@ -413,46 +421,78 @@ export class ThreadsApiConnector implements Connector {
     ctx.tickets.assertValid(ticket, { accountId: ctx.account.id, destination: request.destination })
     const api = await this.client(ctx)
     if (!api) return failed('No Threads access token is saved for this account. Nothing was sent.')
-    if (request.attachments.length > 0) return failed(NO_MEDIA)
+    const files = request.attachments
     const words = wordsWithLink(request)
-    if (!words) return failed(request.kind === 'reply' ? 'The reply is empty. Nothing was sent.' : 'The post is empty. Nothing was sent.')
-    const form: Record<string, string> = { media_type: 'TEXT', text: words }
+    if (files.length === 0 && !words) return failed(request.kind === 'reply' ? 'The reply is empty. Nothing was sent.' : 'The post is empty. Nothing was sent.')
+    const unfit = files.find((file) => !TAKEN.has(file.mime))
+    if (unfit) return failed(`Threads takes a JPEG or PNG picture and an MP4 or MOV video through its API; “${unfit.name}” is neither. Nothing was sent.`)
+    if (files.length > MOST_FILES) return failed(`Threads takes at most ${MOST_FILES} pictures and videos in one post; this one has ${files.length}. Nothing was sent.`)
+    // What says where the post goes: under what it answers, or under its topic.
+    const where: Record<string, string> = {}
     if (request.kind === 'reply') {
       const parent = parseExternalId(request.parentExternalId)
       if (!parent) return failed('The post or the reply this answers was not read through the Threads API, so it cannot be answered there. Nothing was sent.')
-      form.reply_to_id = parent
+      where.reply_to_id = parent
     } else if (request.topicTag) {
-      form.topic_tag = request.topicTag
+      where.topic_tag = request.topicTag
     }
+    const place = files.length > 0 ? await ctx.publicFiles() : null
+    if (files.length > 0 && !place) return failed(NO_PLACE)
+    // Every file put on its public address for this send; each is deleted when the send ends, whatever its end.
+    const put: PublicFile[] = []
     try {
       const profile = await this.profile(ctx, api)
+      const hasVideo = files.some((file) => isVideoMime(file.mime))
+      for (const file of files) put.push(await (place as NonNullable<typeof place>).put({ path: file.path, name: file.name, mime: file.mime }))
+      const media = (index: number): Record<string, string> =>
+        isVideoMime((files[index] as (typeof files)[number]).mime) ? { media_type: 'VIDEO', video_url: (put[index] as PublicFile).url } : { media_type: 'IMAGE', image_url: (put[index] as PublicFile).url }
+      const text: Record<string, string> = words ? { text: words } : {}
       // Threads makes a post in two requests: a container that holds it, then the request that publishes the container.
-      const container = await api.post<{ id?: string }>(`${profile.id}/threads`, form)
-      if (!container.ok) return failed(`${refusal(container)} Nothing was sent.`)
-      const containerId = container.result.id
-      if (!containerId) return failed('Threads took the post and returned no id for it. Nothing was published.')
-      const ready = await this.whenReady(ctx, api, containerId)
-      if (ready !== null) return failed(ready)
+      const make = async (form: Record<string, string>, video: boolean): Promise<{ id: string } | { error: string }> => {
+        const container = await api.post<{ id?: string }>(`${profile.id}/threads`, form)
+        if (!container.ok) return { error: `${refusal(container)} Nothing was sent.` }
+        if (!container.result.id) return { error: 'Threads took the post and returned no id for it. Nothing was published.' }
+        const ready = await this.whenReady(ctx, api, container.result.id, video)
+        return ready === null ? { id: container.result.id } : { error: ready }
+      }
+      let whole: { id: string } | { error: string }
+      if (files.length === 0) whole = await make({ media_type: 'TEXT', ...text, ...where }, false)
+      else if (files.length === 1) whole = await make({ ...media(0), ...text, ...where }, hasVideo)
+      else {
+        // Several: each is a container of its own, and one more container names them all. One that fails leaves nothing published.
+        const children: string[] = []
+        for (const [index, file] of files.entries()) {
+          const item = await make({ ...media(index), is_carousel_item: 'true' }, isVideoMime(file.mime))
+          if ('error' in item) return failed(item.error)
+          children.push(item.id)
+        }
+        whole = await make({ media_type: 'CAROUSEL', children: children.join(','), ...text, ...where }, hasVideo)
+      }
+      if ('error' in whole) return failed(whole.error)
+      const containerId = whole.id
       return await this.lastStep(api, profile, () => api.post<{ id?: string }>(`${profile.id}/threads_publish`, { creation_id: containerId }))
     } catch (error) {
       // Only the request that publishes can leave a doubt, and it is asked through `lastStep`: anything that fails here failed before it.
-      if (error instanceof HttpNoAnswerError) return failed(`Threads did not answer (${error.message}) before anything was published. Nothing was sent.`)
-      return failed(error instanceof Error ? error.message : String(error))
+      if (error instanceof HttpNoAnswerError) return failed(`No answer came (${error.message}) before anything was published. Nothing was sent.`)
+      return failed(`${error instanceof Error ? error.message : String(error)} Nothing was sent.`)
+    } finally {
+      for (const file of put) await file.remove()
     }
   }
 
   /** Waits until Threads says the container may be published; null when it may, the reason in words when it never will. Nothing is published either way. */
-  private async whenReady(ctx: ConnectorContext, api: ThreadsApi, containerId: string): Promise<string | null> {
-    for (let look = 0; look < CONTAINER_LOOKS; look += 1) {
+  private async whenReady(ctx: ConnectorContext, api: ThreadsApi, containerId: string, video = false): Promise<string | null> {
+    const looks = video ? VIDEO_LOOKS : CONTAINER_LOOKS
+    for (let look = 0; look < looks; look += 1) {
       const state = await api.get<ThreadsContainer>(containerId, { fields: 'status,error_message' })
       if (!state.ok) return `${refusal(state)} Nothing was published.`
       const status = state.result.status
       if (status === 'FINISHED') return null
       if (status === 'ERROR' || status === 'EXPIRED') return `Threads could not prepare the post (${state.result.error_message ?? status}). Nothing was published.`
       if (status !== 'IN_PROGRESS') return `Threads answered with a state of the post this application does not know (${String(status)}). Nothing was published.`
-      await ctx.pause(CONTAINER_WAIT_MS)
+      await ctx.pause(video ? VIDEO_WAIT_MS : CONTAINER_WAIT_MS)
     }
-    return 'Threads was still preparing the post after a minute. Nothing was published; send it again.'
+    return `Threads was still preparing the post after ${video ? 'five minutes' : 'a minute'}. Nothing was published; send it again.`
   }
 
   /** The request that publishes. No answer to it, or an error of Threads' own side, leaves it unknown whether Threads made it. */

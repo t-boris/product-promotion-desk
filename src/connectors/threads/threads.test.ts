@@ -4,7 +4,9 @@ import { FakeKnowledge, makeClaim } from '../../core/pipeline/test-fixture'
 import { makeTestCore, type TestCore } from '../../core/testing/fakes'
 import { apiKeyKey } from '../../core/vault'
 import type { MonitorService, SendingService } from '../../core/services'
-import type { PublishRequest } from '../../core/ports'
+import type { HttpPort, PublishRequest } from '../../core/ports'
+import { FAKE_STORE_PLACE, FAKE_STORE_SECRET, FakeStore, byHost } from '../../core/net/fake-s3'
+import { sendWays } from '../../core/pipeline/send-ways'
 import { DEFAULT_PERIODIC, PeriodicTasks } from '../../core/pipeline/scheduler-periodic'
 import { RecordingSink } from '../../core/pipeline/scheduler-harness'
 import { guideSteps } from '../../shared/connection-guide'
@@ -23,8 +25,8 @@ const PROFILE_URL = 'https://www.threads.net/@natalmystic'
 const DAY = 24 * 3_600_000
 
 /** A core with the Threads API connector and a fake Threads behind the network port; one product. */
-function world(threads = new FakeThreads()) {
-  t = makeTestCore({ connectors: [new ThreadsApiConnector(), new UniversalConnector()], http: threads })
+function world(threads = new FakeThreads(), net: HttpPort = threads) {
+  t = makeTestCore({ connectors: [new ThreadsApiConnector(), new UniversalConnector()], http: net })
   const core = t.core
   core.services.knowledge = Object.assign(new FakeKnowledge(), { approved: [makeClaim('c1', 'Natal Mystic builds a natal chart from your birth date, time and place.')] })
   const productId = newId()
@@ -38,8 +40,8 @@ function world(threads = new FakeThreads()) {
 }
 
 /** A Threads account with its token saved and the profile connected, assessed and active. */
-async function connected(threads = new FakeThreads()) {
-  const w = world(threads)
+async function connected(threads = new FakeThreads(), net: HttpPort = threads) {
+  const w = world(threads, net)
   const account = await w.call('accounts.create', { productId: w.productId, platform: 'threads', label: 'Natal Mystic on Threads', access: 'api' })
   const ready = await w.call('vault.saveApiKey', { accountId: account.id, key: FAKE_LONG_TOKEN })
   const channel = await w.call('channels.connect', { productId: w.productId, accountId: account.id, target: PROFILE_URL })
@@ -54,6 +56,86 @@ async function connected(threads = new FakeThreads()) {
 
 const picture = (name: string) => ({ name, path: `/tmp/${name}`, mime: 'image/jpeg', sha256: 'x' })
 const made = (w: { threads: FakeThreads }) => w.threads.calls.filter((c) => c.method === 'POST')
+
+const video = (name: string) => ({ name, path: `/tmp/${name}`, mime: 'video/mp4', sha256: 'x' })
+
+/** A connected Threads profile whose owner also saved a place for files: one network with Threads and the store behind it. */
+async function withPlace() {
+  const threads = new FakeThreads()
+  const store = new FakeStore()
+  // Threads reads a file at the moment it is given its address: only an address the store serves right then is taken.
+  threads.reads = (url) => store.serves(url)
+  const net = byHost({ 'graph.threads.com': threads, 'store.example.com': store })
+  const w = await connected(threads, net)
+  await w.call('filePlace.save', { ...FAKE_STORE_PLACE, secret: FAKE_STORE_SECRET })
+  return { ...w, store }
+}
+
+describe('pictures and videos through the place for files', () => {
+  it('puts one picture on its address, gives Threads the address, publishes, and deletes the file', async () => {
+    const w = await withPlace()
+    expect(sendWays(w.core, undefined, w.channel)).toMatchObject({ api: true, publicFiles: true })
+    const out = await w.send({ text: 'A chart.', link: 'https://natalmystic.com', topicTag: 'astrology', attachments: [picture('chart one.jpg')] })
+    expect(out).toMatchObject({ status: 'confirmed' })
+    const post = w.threads.posts[0]
+    expect(post).toMatchObject({ text: 'A chart.\n\nhttps://natalmystic.com', topic: 'astrology' })
+    expect(post?.files).toHaveLength(1)
+    expect(post?.files[0]).toMatchObject({ kind: 'IMAGE', url: expect.stringMatching(/^https:\/\/store\.example\.com\/my-files\/ppd\/[^/]+\/chart-one\.jpg\?X-Amz-Algorithm=.*X-Amz-Expires=3600.*X-Amz-Signature=[0-9a-f]{64}$/) })
+    expect(w.store.everPut).toHaveLength(1)
+    expect(w.store.objects.size).toBe(0)
+    // Neither the secret key of the store nor the address with its signature is written anywhere.
+    expect(w.logged()).not.toContain(FAKE_STORE_SECRET)
+    expect(w.logged()).not.toContain('X-Amz-Signature')
+  })
+
+  it('sends a video as a video, waiting longer for it, and several files as one post in their order', async () => {
+    const w = await withPlace()
+    w.threads.containerStates = ['IN_PROGRESS', 'IN_PROGRESS', 'FINISHED']
+    expect(await w.send({ text: 'A reel.', attachments: [video('a.mp4')] })).toMatchObject({ status: 'confirmed' })
+    expect(w.threads.posts[0]?.files).toMatchObject([{ kind: 'VIDEO' }])
+
+    expect(await w.send({ text: 'Three.', attachments: [picture('1.jpg'), video('2.mp4'), picture('3.jpg')] })).toMatchObject({ status: 'confirmed' })
+    const post = w.threads.posts[0]
+    expect(post?.text).toBe('Three.')
+    expect(post?.files.map((f) => f.kind)).toEqual(['IMAGE', 'VIDEO', 'IMAGE'])
+    expect(post?.files.map((f) => w.store.keyOf(f.url)?.split('/').pop())).toEqual(['1.jpg', '2.mp4', '3.jpg'])
+    // The words, the topic and the reply go on the container of the whole post, never on an item.
+    const items = made(w).filter((c) => c.params.is_carousel_item === 'true')
+    expect(items).toHaveLength(3)
+    expect(items.every((c) => c.params.text === undefined)).toBe(true)
+    expect(w.store.objects.size).toBe(0)
+    // A picture with no words is a post too.
+    expect(await w.send({ text: '', attachments: [picture('only.jpg')] })).toMatchObject({ status: 'confirmed' })
+  })
+
+  it('deletes the files and publishes nothing when the store or Threads refuses, and says whose refusal it is', async () => {
+    const w = await withPlace()
+    w.store.refuses = { status: 403, code: 'AccessDenied', message: 'Access Denied' }
+    expect(await w.send({ text: 'A chart.', attachments: [picture('a.jpg')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/The store did not take the file: AccessDenied.*Nothing was sent/) })
+    w.store.refuses = null
+
+    w.threads.reads = () => false
+    expect(await w.send({ text: 'Two.', attachments: [picture('a.jpg'), picture('b.jpg')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/Threads refused it: The media could not be fetched.*Nothing was sent/) })
+    expect(w.store.everPut).toHaveLength(2)
+    expect(w.store.objects.size).toBe(0)
+    expect(w.threads.posts).toHaveLength(0)
+    expect(made(w).filter((c) => c.path.endsWith('threads_publish'))).toHaveLength(0)
+
+    // A kind of file Threads does not take, and more files than it takes, are refused before anything is put.
+    const before = w.store.everPut.length
+    expect(await w.send({ text: 'A gif.', attachments: [{ name: 'a.gif', path: '/tmp/a.gif', mime: 'image/gif', sha256: 'x' }] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/“a\.gif” is neither/) })
+    expect(await w.send({ text: 'Many.', attachments: Array.from({ length: 21 }, (_, i) => picture(`${i}.jpg`)) })).toMatchObject({ status: 'failed', error: expect.stringMatching(/at most 20/) })
+    expect(w.store.everPut.length).toBe(before)
+  })
+
+  it('still publishes when the store will not delete, and says the left file in the log', async () => {
+    const w = await withPlace()
+    w.store.mayDelete = false
+    expect(await w.send({ text: 'A chart.', attachments: [picture('a.jpg')] })).toMatchObject({ status: 'confirmed' })
+    expect(w.store.objects.size).toBe(1)
+    expect(w.logged()).toMatch(/could not be deleted from the place for files/)
+  })
+})
 
 describe('the address of a Threads profile', () => {
   it('is the profile itself, on either of Threads\' hosts or as a handle, and never a post', () => {
@@ -224,20 +306,23 @@ describe('posting as the profile', () => {
     expect(made(w).filter((c) => c.path.endsWith('threads_publish'))).toHaveLength(0)
   })
 
-  it('refuses a picture, a video and an empty post before anything is asked of Threads, and says the picture before the owner approves', async () => {
+  it('with no place for files, refuses a picture, a video and an empty post before anything is asked of Threads, and says so before the owner approves', async () => {
     const w = await connected()
     const asked = w.threads.calls.length
-    const video = { name: 'a.mp4', path: '/tmp/a.mp4', mime: 'video/mp4', sha256: 'x' }
-    expect(await w.send({ text: 'A chart.', attachments: [picture('a.jpg')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/only from a public address.*Nothing was sent/s) })
-    expect(await w.send({ text: 'A reel.', attachments: [video] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/Nothing was sent/) })
+    expect(await w.send({ text: 'A chart.', attachments: [picture('a.jpg')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/only from an address on the internet.*A place for files.*Nothing was sent/s) })
+    expect(await w.send({ text: 'A reel.', attachments: [video('a.mp4')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/Nothing was sent/) })
     expect(await w.send({ text: '  ' })).toMatchObject({ status: 'failed', error: expect.stringMatching(/empty/) })
     expect(w.threads.calls.length).toBe(asked)
     const rendered = renderForPlatform({ title: null, text: 'A chart.', link: null, attachments: [] } as never, 'threads')
-    expect(sendProblems('threads', { ...rendered, attachments: [picture('a.jpg')] }, { aiBrowser: false, api: true }).join(' ')).toMatch(/A picture is not sent to Threads through its API/)
-    expect(sendProblems('threads', { ...rendered, attachments: [video] }, { aiBrowser: false, api: true }).join(' ')).toMatch(/A video is not sent to Threads through its API/)
-    // The browser way of Threads carries a picture as before.
-    expect(sendProblems('threads', { ...rendered, attachments: [picture('a.jpg')] }, { aiBrowser: true, api: false }).join(' ')).not.toMatch(/through its API/)
-    expect(sendProblems('facebook', { ...rendered, attachments: [picture('a.jpg')] }, { aiBrowser: false, api: true }).join(' ')).not.toMatch(/picture is not sent/)
+    const without = { aiBrowser: false, api: true, publicFiles: false }
+    expect(sendProblems('threads', { ...rendered, attachments: [picture('a.jpg')] }, without).join(' ')).toMatch(/Set up “A place for files” in Settings/)
+    expect(sendProblems('threads', { ...rendered, attachments: [video('a.mp4')] }, without).join(' ')).toMatch(/Set up “A place for files” in Settings/)
+    // With the place set up nothing stops the post; the browser way of Threads and a Facebook Page never ask for the place.
+    expect(sendProblems('threads', { ...rendered, attachments: [picture('a.jpg')] }, { aiBrowser: false, api: true, publicFiles: true }).join(' ')).not.toMatch(/place for files/)
+    expect(sendProblems('threads', { ...rendered, attachments: [picture('a.jpg')] }, { aiBrowser: true, api: false }).join(' ')).not.toMatch(/place for files/)
+    expect(sendProblems('facebook', { ...rendered, attachments: [picture('a.jpg')] }, without).join(' ')).not.toMatch(/place for files/)
+    // What the gate of a send is told follows the saved place.
+    expect(sendWays(w.core, undefined, w.channel)).toMatchObject({ api: true, publicFiles: false })
   })
 
   it('says a refusal as a failure, an error of Threads\' own side and a lost answer as unknown, and finds the lost post among the profile\'s posts', async () => {

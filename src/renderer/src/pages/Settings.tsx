@@ -9,6 +9,7 @@ import { AppearanceCard } from './AppearanceCard'
 import { MailboxesCard } from './channels/MailboxesCard'
 import { engineChoiceVariant, recommendedEngineId, splitEngineDetail } from './engine-detail'
 import { EngineModelField } from './EngineModelField'
+import { FilePlaceCard } from './FilePlaceCard'
 import { LessonsCard } from './LessonsCard'
 import './settings.css'
 
@@ -18,6 +19,7 @@ export function SettingsPage() {
   const info = useQuery('app.info', undefined, ['settings'])
   // The base mailbox of the account library (DEC-037, phase C5): the Accounts screen lists logins only, the address they are made from is a setting.
   const mailboxes = useQuery('mailboxes.list', undefined, ['accounts'])
+  const filePlace = useQuery('filePlace.get', undefined, ['settings'])
   // The port field: what the owner typed and has not applied yet (null shows the port in use), and why it was refused.
   const [draft, setDraft] = useState<string | null>(null)
   const [portError, setPortError] = useState<string | null>(null)
@@ -208,6 +210,8 @@ A post or a reply you gave a time goes out the same way when its time comes, wit
       </Card>
 
       <MailboxesCard mailboxes={mailboxes.data ?? []} />
+
+      <FilePlaceCard state={filePlace.data} />
 
       <Card title="Local web access">
         <Hint>Serves this interface on 127.0.0.1 so it can be opened in a browser tab on this Mac, for example to check the app.</Hint>

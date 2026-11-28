@@ -1581,3 +1581,25 @@ Why now: after 0.81.2 the goal's Stop hook named phases G-J as unbuilt. G was re
 - [ ] with the owner's Meta app (Threads use case): the eight steps walked for real, a first post with a topic, a reply read and answered, the numbers read, a token renewed
 - [x] 0.82.1: the account's page says "the application renews it by itself before it ends" beside a saved Threads token (`PlatformInfo.api.renews`)
 - [ ] not built: pictures and video (needs D5, a public address for the file), hiding a reply, the quota read, the token's end date on the account's page (it is in the Log)
+
+## D5: a place for files on a public address, then pictures in Threads and phase H (plan 2026-11-28)
+
+Why: Threads and Instagram take a picture or a video only from an address on the internet. D5 of the publishing plan (taken with the goal's defaults): "a storage bucket of the owner's own; the file is uploaded before the send and deleted after the platform has read it". What is missing is only the owner's bucket; the application's side can be built against the S3 API, which every common store speaks (AWS S3, Cloudflare R2, Backblaze B2, Spaces, MinIO), and proven with the owner's bucket later.
+
+Design:
+- The bucket stays private. A file is put there (SigV4, `UNSIGNED-PAYLOAD`, streamed from its path), the platform is given a presigned GET address that lasts an hour, and the object is deleted when the send ends, whatever its end. No new library: signing with node:crypto.
+- `HttpPort` gets `PUT` with a file as the body.
+- Settings: card "A place for files" (endpoint, region, bucket, access key id; the secret key goes to the vault and is never shown); "Check" puts a small file, reads it through its presigned address, deletes it.
+- `ConnectorContext.publicFiles()` gives the place or null; the editor says before the send when a picture needs the place and it is not set up.
+- Threads: IMAGE, VIDEO and CAROUSEL containers through the place (0.83.0).
+- Phase H, Instagram with Instagram Login (0.84.0), after the fact sheet from Meta's saved pages.
+
+- [x] S1 `src/core/net/s3.ts` (sign, put, delete, presign) + tests against known SigV4 vectors and a fake store
+- [x] S2 settings + vault + API `fileHost.*` + Settings card + check
+- [x] S3 `ConnectorContext.publicFiles`, `sendWays`/`sendProblems`, Threads pictures and video
+- [x] S4 verify (6450 tests), DEC-081, release 0.83.0, own-instance look at the Settings card (empty, a refused address, saved, a check that got no answer; no overflow)
+- [ ] H Instagram connector (0.84.0)
+- [ ] I, J: after the research of X, Pinterest and LinkedIn documentation
+
+Review of 0.83.0: the place is `src/core/files/public-files.ts` (service, API `filePlace.*`), the store `src/core/net/s3.ts` (signing tested against the two examples of Amazon's documentation), the card `src/renderer/src/pages/FilePlaceCard.tsx`. Threads: one picture, one video, or 2-20 as one post (`is_carousel_item` items, then `CAROUSEL`); the words, the topic and the reply go on the container of the whole post. Unproven: a real store (S3, R2, B2), and whether Threads reads from an address with a signature in its query.
+

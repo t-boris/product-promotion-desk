@@ -145,8 +145,13 @@ export class Core {
   }
 
   /** The network and the account's own key, as a connector context carries them (DEC-055). The key is read when asked, never kept. */
-  apiAccess(account: Account): Pick<ConnectorContext, 'http' | 'apiKey' | 'pause'> {
-    return { http: this.http, apiKey: async () => (account.access === 'api' ? this.secrets.get(apiKeyKey(account.id)) : null), pause: (ms) => this.sleep(ms) }
+  apiAccess(account: Account): Pick<ConnectorContext, 'http' | 'apiKey' | 'pause' | 'publicFiles'> {
+    return {
+      http: this.http,
+      apiKey: async () => (account.access === 'api' ? this.secrets.get(apiKeyKey(account.id)) : null),
+      pause: (ms) => this.sleep(ms),
+      publicFiles: async () => (account.access === 'api' ? ((await this.services.publicFiles?.open()) ?? null) : null)
+    }
   }
 
   onShutdown(hook: () => void | Promise<void>): void {

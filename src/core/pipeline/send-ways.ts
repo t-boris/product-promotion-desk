@@ -40,7 +40,7 @@ export const scheduledByOwner = (opp: { scheduledAt: string | null }): boolean =
  */
 export function sendWays(core: Core, send?: { automatic: boolean; approvedBy: string; scheduled?: boolean }, channel?: Pick<Channel, 'reads'> & { connectorId?: string }): SendWays {
   // A channel that works through its platform's API has one way, its connector, for everything it sends (DEC-055).
-  if (channel?.connectorId && core.connectors.get(channel.connectorId)?.api) return { aiBrowser: false, api: true }
+  if (channel?.connectorId && core.connectors.get(channel.connectorId)?.api) return { aiBrowser: false, api: true, publicFiles: core.services.publicFiles?.ready() === true }
   const noConnector = channel !== undefined && !channel.reads
   const only = noConnector ? { noConnector: true } : {}
   const chosen = (noConnector || core.settings.app().publishWith === 'ai_browser') && core.services.postMissions !== undefined

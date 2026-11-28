@@ -27,6 +27,7 @@ import type {
   Mailbox,
   SignInResult,
   VaultStatus,
+  FilePlaceState,
   AppInfo,
   AppSettings,
   AttentionItem,
@@ -346,6 +347,10 @@ export interface ApiMethods {
   'accounts.checkLogin': [{ accountId: Id }, Account]
   // credential vault and assisted sign-in (REQ-012, DEC-014). No result ever carries a password except revealPassword, which the web mode refuses.
   'vault.status': [void, VaultStatus]
+  'filePlace.get': [void, FilePlaceState]
+  'filePlace.save': [{ endpoint: string; region: string; bucket: string; accessKeyId: string; secret?: string }, FilePlaceState]
+  'filePlace.check': [void, { ok: boolean; detail: string }]
+  'filePlace.remove': [void, FilePlaceState]
   /** Saves the login name and the password of an account. The password goes only to the vault, encrypted by the system keychain. */
   'vault.savePassword': [{ accountId: Id; loginName: string; password: string }, Account]
   /** Saves the key of an account that works through its platform's API (DEC-055) and checks it; the key is never returned. */

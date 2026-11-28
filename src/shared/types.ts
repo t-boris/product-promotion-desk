@@ -1133,6 +1133,19 @@ export interface AppSettings {
   animatedBackground: boolean
 }
 
+/** A storage bucket of the owner's own, spoken to in the S3 API (DEC-081). The secret key is not part of it: it is kept in the vault. */
+export interface FilePlace {
+  endpoint: string
+  region: string
+  bucket: string
+  accessKeyId: string
+}
+
+export interface FilePlaceState {
+  place: FilePlace | null
+  hasSecret: boolean
+}
+
 export interface AppInfo {
   name: string
   version: string
