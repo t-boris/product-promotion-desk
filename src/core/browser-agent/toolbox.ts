@@ -549,6 +549,8 @@ export class BrowserToolbox implements McpToolHost {
   private warningSeen: string | null = null
   /** The control of the form that is marked required and that nothing approved answers, when a submit was refused for it. */
   private requiredSeen: string | null = null
+  /** Why the approved topic could not be put into the form at the last browser_submit, in the application's own words; null when that was not what stopped it. */
+  private topicProblemSeen: string | null = null
   private last: PageSnapshot | null = null
   /** What the AI was last shown by browser_snapshot: the only labels it can name in browser_submit, and what each of them was. */
   private shown: PageSnapshot | null = null
@@ -1351,8 +1353,8 @@ export class BrowserToolbox implements McpToolHost {
   }
 
   /** What the page showed that matters to the send flow after the mission: a human check, a warning of the site. */
-  get observed(): { humanCheck: string | null; warning: string | null; required: string | null } {
-    return { humanCheck: this.humanCheckSeen, warning: this.warningSeen, required: this.requiredSeen }
+  get observed(): { humanCheck: string | null; warning: string | null; required: string | null; topic: string | null } {
+    return { humanCheck: this.humanCheckSeen, warning: this.warningSeen, required: this.requiredSeen, topic: this.topicProblemSeen }
   }
 
   /**
@@ -1400,9 +1402,12 @@ export class BrowserToolbox implements McpToolHost {
       { name: 'link', value: content.link, ref: str(args.link_ref) }
     ]
     const parts: Part[] = []
+    // What stopped an earlier call is not what stops this one.
+    this.topicProblemSeen = null
     for (const part of wanted) {
       if (part.value && part.value.trim() !== '') {
         if (!part.ref) {
+          if (part.name === 'topic') this.topicProblemSeen = 'the AI found no topic field in the form.'
           return fail(`The approved content has a ${part.name}: pass ${part.name}_ref, the label of the field it goes into. When the form has no such field, call report_result with needs_owner and say so: the application never publishes part of the approved content.`)
         }
         parts.push({ name: part.name, value: part.value, ref: part.ref })
@@ -1474,6 +1479,7 @@ export class BrowserToolbox implements McpToolHost {
       // publish the topic as the text. Judged at the first look only, as the profile's words are.
       for (const part of parts) {
         const named = TOPIC_FIELD.test(element(snapshot, part.ref)?.name ?? '')
+        if (part.name === 'topic' && !named) this.topicProblemSeen = 'the field the AI named for it is not one the page calls a topic.'
         if (part.name === 'topic' && !named) return `"${element(snapshot, part.ref)?.name || part.ref}" is not the topic field of the form (a field named like "Add a topic"). Nothing was typed. Look at the page again and name that field as topic_ref; when the form has none, call report_result with needs_owner and say so.`
         if (part.name !== 'topic' && named && parts.some((p) => p.name === 'topic')) return `${part.ref} is the topic field, and you named it for the ${part.name}. Nothing was typed. Name it as topic_ref and the field of the ${part.name} as ${part.name}_ref.`
       }
@@ -1594,6 +1600,7 @@ export class BrowserToolbox implements McpToolHost {
     for (const part of parts) {
       const held = await page.read<unknown>(fieldValueScript(part.ref))
       if (!sameContent(held, part.value)) {
+        if (part.name === 'topic') this.topicProblemSeen = 'the site changed what was typed into its topic field.'
         return { refused: `the ${part.name} field does not hold exactly the approved text (the site may change what is typed into it). Do not fix it by hand: report needs_owner and say what the field does.` }
       }
     }

@@ -110,6 +110,22 @@ describe('the topic of a draft', () => {
     expect(requests).toHaveLength(1)
     expect(requests[0].authority.content).toMatchObject({ kind: 'post', text: 'body', topicTag: 'Astrology' })
   })
+
+  it('says in the application\'s own words that the form did not take the topic, and how to publish without it', async () => {
+    const opp = newPost()
+    await save(opp.id, { topicTag: 'Astrology' })
+    await call('opportunities.approve', { id: opp.id })
+    world.core.services.postMissions = {
+      async run(request): Promise<PostMissionOutcome> {
+        return { ended: 'finished', committed: request.authority.committed, reported: { status: 'needs_owner', reason: 'something else' }, humanCheck: null, warning: null, topic: 'the AI found no topic field in the form.', error: null }
+      }
+    }
+    world.core.settings.updateApp({ publishWith: 'ai_browser' })
+    await (world.sending as SendingFlow).send(opp.id).catch(() => undefined)
+    const row = world.core.db.prepare('SELECT error FROM send_actions WHERE opportunity_id = ?').get(opp.id) as { error: string }
+    expect(row.error).toContain('The topic of the post could not be put into the form: the AI found no topic field in the form. Nothing was submitted.')
+    expect(row.error).toContain('empty the “Topic” line of the post')
+  })
 })
 
 describe('the topic of a post written for several channels', () => {

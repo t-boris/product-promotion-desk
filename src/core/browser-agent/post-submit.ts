@@ -121,6 +121,8 @@ export interface PostMissionOutcome {
   warning: string | null
   /** The control of the form that is marked required and that nothing approved answers (a flair the post has none of), when the application refused to press for it; null otherwise. */
   required?: string | null
+  /** Why the approved topic could not be put into the form (no topic field, a field that is not one, a site that changed what was typed), when that stopped the last attempt; null otherwise. */
+  topic?: string | null
   /** Why the run ended in an error, when it did. */
   error: string | null
   /**

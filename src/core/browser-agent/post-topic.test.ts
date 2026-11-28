@@ -109,6 +109,7 @@ describe('the approved topic of a post, in the form', () => {
     expect(t.page.typed).toEqual(['e1', 'e2'])
     expect(t.page.published).toEqual([{ topic: 'Astrology', body: 'Mercury turns direct on Friday.' }])
     expect(t.authority.committed).toBe(true)
+    expect(t.toolbox.observed.topic).toBeNull()
   })
 
   it('is never left out: without the label of the topic field nothing is typed, and the AI is told to report when the form has none', async () => {
@@ -122,6 +123,8 @@ describe('the approved topic of a post, in the form', () => {
     expect(t.page.typed).toEqual([])
     expect(t.page.published).toEqual([])
     expect(t.authority.leases).toBe(0)
+    // The application says it in its own words to the send flow, whatever the AI reports.
+    expect(t.toolbox.observed.topic).toBe('the AI found no topic field in the form.')
   })
 
   it('goes only into the field the page calls a topic: another field named for it, or the topic field named for the text, is refused before anything is typed', async () => {
@@ -130,6 +133,7 @@ describe('the approved topic of a post, in the form', () => {
     const wrong = await submit(t, { topic_ref: 'e3', text_ref: 'e2', submit_ref: 'e9' })
     expect(wrong.isError).toBe(true)
     expect(wrong.text).toContain('"Search" is not the topic field of the form')
+    expect(t.toolbox.observed.topic).toBe('the field the AI named for it is not one the page calls a topic.')
     // The two labels swapped: the topic would be published as the text.
     const swapped = await submit(t, { topic_ref: 'e2', text_ref: 'e1', submit_ref: 'e9' })
     expect(swapped.isError).toBe(true)
@@ -156,6 +160,7 @@ describe('the approved topic of a post, in the form', () => {
     const result = await submit(t)
     expect(result.isError).toBe(true)
     expect(result.text).toContain('the topic field does not hold exactly the approved text')
+    expect(t.toolbox.observed.topic).toBe('the site changed what was typed into its topic field.')
     expect(t.page.published).toEqual([])
     expect(t.authority.committed).toBe(false)
   })

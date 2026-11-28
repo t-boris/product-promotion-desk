@@ -228,6 +228,7 @@ describe('how a post mission ends: the authority says whether the control was pr
       humanCheck: null,
       warning: null,
       required: null,
+      topic: null,
       error: null,
       steps: `The AI's steps: 1. looked at the page | 2. called browser_submit with "Reply" | 3. reported done`
     })

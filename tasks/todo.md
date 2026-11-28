@@ -1523,6 +1523,7 @@ The topic is a part of the post the owner approves, like the flair: kept on the 
 - [x] the AI proposes: the editor's "Topic" line on a Threads post with "Propose" (the AI names it from the text); a post the AI writes for a Threads channel comes with a topic (`context.channel.topicRule`, the same way as the link rule)
 - [x] the preview shows the topic on the Threads sketch
 - [x] tests (rules, draft, hash, request, authority, toolbox, prompt, editor logic), `npm run verify`, decision, 0.81.0, install, read-only look
+- 0.81.1: when the form did not take the topic, the send says so in the application's own words (which of the three reasons) and how to publish without it.
 - Built as 0.81.0 (DEC-079). Unproven live: the real Threads composer was never looked at, so the name of its topic field ("Add a topic"), whether it keeps a typed topic as it is typed and whether it reads back are taken from what is known of it; when any of that differs the mission stops before the press and says so. When Threads' API is connected (phase G) the same topic goes out as `topic_tag`.
 
 ## Plan after the owner's answers of 2026-11-27

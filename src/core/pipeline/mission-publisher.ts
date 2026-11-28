@@ -323,6 +323,8 @@ export class MissionPublisher {
     if (outcome?.required) return { status: 'failed', error: `The form requires "${bounded(outcome.required, 80)}", which this post does not answer, so the site would have refused it. ${none} Choose it in the post (a flair is a line of its own in the editor), approve the post again and send it.` }
     if (!outcome) return { status: 'failed', error: `The AI browser stopped with an error. ${none} ${crash ?? ''}`.trim() }
     if (outcome.ended === 'stopped') return { status: 'failed', error: `You stopped the AI before it published. ${none}` }
+    // The application's own finding too: the post has a topic and the form did not take it. The post is never published without a part of what was approved.
+    if (outcome.topic) return { status: 'failed', error: `The topic of the post could not be put into the form: ${outcome.topic} ${none} To publish it without a topic, empty the “Topic” line of the post, approve it again and send it.` }
     if (outcome.ended === 'timeout') return { status: 'failed', error: `The AI did not finish in time. ${none}` }
     if (outcome.ended === 'error') return { status: 'failed', error: `The AI stopped because of an error (${outcome.error ?? 'unknown error'}). ${none}` }
     const reason = outcome.reported?.reason
