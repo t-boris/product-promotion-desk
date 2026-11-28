@@ -59,7 +59,7 @@ export function listPlatforms(connectors: ConnectorRegistry): PlatformInfo[] {
     const connector = all.find((c) => c.api !== undefined && c.platform === info.platform)
     const api = connector?.api
     if (!connector || !api) return info
-    return { ...info, api: { accountKind: api.accountKind, keyLabel: api.keyLabel, ...(api.keyName ? { keyName: api.keyName } : {}), steps: api.steps, ...(api.onceSecret ? { onceSecret: api.onceSecret } : {}), ...(connector.renewKey ? { renews: true as const } : {}) } }
+    return { ...info, api: { accountKind: api.accountKind, keyLabel: api.keyLabel, ...(api.keyName ? { keyName: api.keyName } : {}), steps: api.steps, ...(api.onceSecret ? { onceSecret: api.onceSecret } : {}), ...(connector.renewKey ? { renews: true as const } : {}), ...(api.work ? { work: api.work } : {}), ...(api.keyDays ? { keyDays: api.keyDays } : {}) } }
   }
   return [...prepared.sort(byLabel), ...named.sort(byLabel), ...(universal ? [platformInfo(universal)] : [])].map(withApi)
 }

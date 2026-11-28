@@ -12,11 +12,11 @@ import { passwordKey, apiKeyKey } from '../vault'
 import { requireText } from './errors'
 import type { ChannelsStore } from './store'
 import type { AccountsService } from './accounts'
-import { rememberKeyTimes } from './key-renewal'
+import { keyTimesOf, rememberKeyTimes } from './key-renewal'
 
 const MAX_LOGIN_NAME = 200
 const MAX_PASSWORD = 256
-const MAX_API_KEY = 512
+const MAX_API_KEY = 4096
 const CLIPBOARD_CLEAR_MS = 30_000
 
 export class VaultService {
@@ -31,7 +31,12 @@ export class VaultService {
     const unavailable = this.core.secrets.blocked()
     const accountIds = this.core.repos.listAccounts().filter((a) => this.core.secrets.has(passwordKey(a.id))).map((a) => a.id)
     const apiKeyAccountIds = this.core.repos.listAccounts().filter((a) => this.core.secrets.has(apiKeyKey(a.id))).map((a) => a.id)
-    return { available: unavailable === null, unavailable, accountIds, apiKeyAccountIds }
+    const apiKeyEnds: Record<string, string> = {}
+    for (const id of apiKeyAccountIds) {
+      const ends = keyTimesOf(this.core.db, id).expiresAt
+      if (ends) apiKeyEnds[id] = ends
+    }
+    return { available: unavailable === null, unavailable, accountIds, apiKeyAccountIds, apiKeyEnds }
   }
 
   /** Whether a password is saved for the account (no value). Reads the vault file only. */
@@ -107,13 +112,15 @@ export class VaultService {
         throw new ApiError('invalid_input', error instanceof Error ? error.message : String(error))
       }
     }
+    // A key the platform never renews and whose end it does not tell: counted from now, the day it was saved (it is made minutes before).
+    if (kept.expiresAt === null && api.keyDays) kept = { key: kept.key, expiresAt: new Date(this.core.clock.now().getTime() + api.keyDays * 24 * 3_600_000).toISOString() }
     try {
       await this.core.secrets.set(apiKeyKey(account.id), kept.key)
     } catch {
       throw new ApiError('vault_failed', `The ${keyNameOf(api)} could not be saved to the vault.`)
     }
     rememberKeyTimes(this.core.db, account.id, this.core.clock.now().toISOString(), kept.expiresAt)
-    this.core.log.info('accounts', `${aKeyNameOf(api).replace(/^a/, 'A')} was saved for ${account.label}${kept.expiresAt ? `; it lasts until ${kept.expiresAt.slice(0, 10)} and the application renews it by itself` : ''}.`)
+    this.core.log.info('accounts', `${aKeyNameOf(api).replace(/^a/, 'A')} was saved for ${account.label}${kept.expiresAt ? `; it lasts until ${kept.expiresAt.slice(0, 10)}${connector.renewKey ? ' and the application renews it by itself' : ', and a new one must be saved before then'}` : ''}.`)
     this.core.events.changed('accounts')
     return this.accounts.checkLogin(account.id, { signInAgain: false })
   }

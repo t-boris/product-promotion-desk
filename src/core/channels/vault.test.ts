@@ -37,10 +37,10 @@ function everythingVisible(w: World): string {
 describe('the vault', () => {
   it('saves a login name and a password; only the name is in the database and the account list', async () => {
     const w = await makeReadyWorld()
-    expect(await w.call('vault.status', undefined)).toEqual({ available: true, unavailable: null, accountIds: [], apiKeyAccountIds: [] })
+    expect(await w.call('vault.status', undefined)).toEqual({ available: true, unavailable: null, accountIds: [], apiKeyAccountIds: [], apiKeyEnds: {} })
     const account = await save(w)
     expect(account.loginName).toBe('natal_bot')
-    expect(await w.call('vault.status', undefined)).toEqual({ available: true, unavailable: null, accountIds: [w.account.id], apiKeyAccountIds: [] })
+    expect(await w.call('vault.status', undefined)).toEqual({ available: true, unavailable: null, accountIds: [w.account.id], apiKeyAccountIds: [], apiKeyEnds: {} })
 
     expect(JSON.stringify(await w.call('accounts.list', undefined))).not.toContain(PASSWORD)
     expect(JSON.stringify(await w.call('vault.status', undefined))).not.toContain(PASSWORD)
@@ -63,7 +63,7 @@ describe('the vault', () => {
     expect(await w.core.secrets.get(`account:${w.account.id}`)).toBe('second-password')
 
     await w.call('vault.removePassword', { accountId: w.account.id })
-    expect(await w.call('vault.status', undefined)).toEqual({ available: true, unavailable: null, accountIds: [], apiKeyAccountIds: [] })
+    expect(await w.call('vault.status', undefined)).toEqual({ available: true, unavailable: null, accountIds: [], apiKeyAccountIds: [], apiKeyEnds: {} })
     expect(w.core.repos.account(w.account.id).loginName).toBe('natal_bot')
 
     await save(w)
@@ -86,7 +86,7 @@ describe('the vault', () => {
     const w = await makeReadyWorld()
     w.t.secrets.encryptable = false
     // Looking at the screen asks nothing, so nothing is known yet.
-    expect(await w.call('vault.status', undefined)).toEqual({ available: true, unavailable: null, accountIds: [], apiKeyAccountIds: [] })
+    expect(await w.call('vault.status', undefined)).toEqual({ available: true, unavailable: null, accountIds: [], apiKeyAccountIds: [], apiKeyEnds: {} })
     expect(w.t.secrets.touches).toBe(0)
 
     const announced = w.changes.length
@@ -95,7 +95,7 @@ describe('the vault', () => {
     // What the click found out is announced, so the open screen reads the status again and shows its Password block.
     expect(w.changes.slice(announced)).toContain('accounts')
     expect(refused.message).not.toMatch(/no (usable )?(system )?keychain/i)
-    expect(await w.call('vault.status', undefined)).toEqual({ available: false, unavailable: 'refused', accountIds: [], apiKeyAccountIds: [] })
+    expect(await w.call('vault.status', undefined)).toEqual({ available: false, unavailable: 'refused', accountIds: [], apiKeyAccountIds: [], apiKeyEnds: {} })
     expect(w.t.secrets.values.size).toBe(0)
     expect(w.core.repos.account(w.account.id).loginName).toBeNull()
   })
@@ -105,7 +105,7 @@ describe('the vault', () => {
     w.t.secrets.encryptable = false
     w.t.secrets.cause = 'no_keychain'
     expect(await w.refusal('vault.savePassword', { accountId: w.account.id, loginName: 'x', password: PASSWORD })).toBe('vault_unavailable')
-    expect(await w.call('vault.status', undefined)).toEqual({ available: false, unavailable: 'no_keychain', accountIds: [], apiKeyAccountIds: [] })
+    expect(await w.call('vault.status', undefined)).toEqual({ available: false, unavailable: 'no_keychain', accountIds: [], apiKeyAccountIds: [], apiKeyEnds: {} })
   })
 
   it('does not touch the keychain to say which passwords are saved, however often it is asked (BUG-041)', async () => {
@@ -115,7 +115,7 @@ describe('the vault', () => {
     // Even a keychain that would refuse is not asked: the answer comes from the vault file.
     w.t.secrets.encryptable = false
     for (let i = 0; i < 3; i++) {
-      expect(await w.call('vault.status', undefined)).toEqual({ available: true, unavailable: null, accountIds: [w.account.id], apiKeyAccountIds: [] })
+      expect(await w.call('vault.status', undefined)).toEqual({ available: true, unavailable: null, accountIds: [w.account.id], apiKeyAccountIds: [], apiKeyEnds: {} })
       await w.call('accounts.list', undefined)
     }
     expect(w.t.secrets.touches).toBe(0)
@@ -139,7 +139,7 @@ describe('the vault', () => {
     }
     expect(w.t.clipboard.copies).toEqual([])
     // The screen is told to read the status again, and the status now says what happened; the saved password is still counted.
-    expect(await w.call('vault.status', undefined)).toEqual({ available: false, unavailable: 'refused', accountIds: [w.account.id], apiKeyAccountIds: [] })
+    expect(await w.call('vault.status', undefined)).toEqual({ available: false, unavailable: 'refused', accountIds: [w.account.id], apiKeyAccountIds: [], apiKeyEnds: {} })
   })
 
   it('says a saved password cannot be opened with this keychain when only that value is unreadable', async () => {

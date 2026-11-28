@@ -10,7 +10,7 @@ import { GuideSteps } from './ConnectionGuide'
  * The key of an account that works through its platform's API (a Telegram bot's token, DEC-055): what the owner does on the platform's side,
  * and the one field the key is pasted into. The key goes to the keychain's vault and is never shown again; saving it checks it at once.
  */
-export function AccountApiKey({ account, api, unavailable, hasKey }: { account: Account; api: NonNullable<PlatformInfo['api']>; unavailable: VaultUnavailable | null; hasKey: boolean }) {
+export function AccountApiKey({ account, api, unavailable, hasKey, endsAt }: { account: Account; api: NonNullable<PlatformInfo['api']>; unavailable: VaultUnavailable | null; hasKey: boolean; endsAt?: string | null }) {
   const [editing, setEditing] = useState(!hasKey)
   const [key, setKey] = useState('')
   const [secret, setSecret] = useState('')
@@ -41,6 +41,12 @@ export function AccountApiKey({ account, api, unavailable, hasKey }: { account: 
           {' '}
           · connected as <strong>{account.identity}</strong>
           {api.renews && <span data-testid={`api-key-renews-${account.id}`}> · the application renews it by itself before it ends</span>}
+          {!api.renews && api.keyDays !== undefined && endsAt && (
+            <span data-testid={`api-key-ends-${account.id}`}>
+              {' '}
+              · it lasts until about {endsAt.slice(0, 10)} ({api.keyDays} days from the day it was saved) and is not renewed: make a new one before then
+            </span>
+          )}
         </>
       ) : (
         ` · the platform does not accept it now: save a new ${name}, or check again`
@@ -48,7 +54,7 @@ export function AccountApiKey({ account, api, unavailable, hasKey }: { account: 
     </span>
   ) : (
     <span className="muted" data-testid={`api-key-state-${account.id}`}>
-      Not saved yet. The app posts, reads comments and answers through this {api.accountKind}, with no browser.
+      Not saved yet. {api.work ?? `The app posts, reads comments and answers through this ${api.accountKind}, with no browser.`}
     </span>
   )
 

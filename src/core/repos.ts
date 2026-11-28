@@ -102,7 +102,11 @@ export const mapAccount = (r: Row): Account => ({
 
 export const mapMailbox = (r: Row): Mailbox => ({ id: r.id as string, address: r.address as string, kind: 'existing', createdAt: r.created_at as string })
 
-export const mapChannel = (r: Row): Channel => ({
+/**
+ * `hasBrowser`: whether the channel's account works in a browser. A channel the application does not read is watched there (DEC-042, DEC-045);
+ * one of an account that works through its platform's API has no browser, so it is only for the owner's own posts (LinkedIn, DEC-084).
+ */
+export const mapChannel = (r: Row, hasBrowser = true): Channel => ({
   id: r.id as string,
   productId: r.product_id as string,
   accountId: r.account_id as string,
@@ -122,7 +126,7 @@ export const mapChannel = (r: Row): Channel => ({
   nextCheckAt: (r.next_check_at as string | null) ?? null,
   plan: parseJson<ChannelPlan | null>(r.plan_json as string | null, null),
   reads: r.reads !== 0,
-  watchedInBrowser: r.reads === 0,
+  watchedInBrowser: r.reads === 0 && hasBrowser,
   createdAt: r.created_at as string
 })
 
@@ -289,7 +293,13 @@ export const mapRun = (r: Row): Run => ({
 
 /** Thin typed lookups. Throws a readable error when a record is missing. */
 export class Repos {
-  constructor(private readonly db: Db) {}
+  /** `viaApi`: whether a connector, by its id, works through its platform's API (DEC-055); such a channel has no browser to be watched in. */
+  constructor(
+    private readonly db: Db,
+    private readonly viaApi: (connectorId: string) => boolean = () => false
+  ) {}
+
+  private readonly toChannel = (r: Row): Channel => mapChannel(r, !this.viaApi(r.connector_id as string))
 
   private one<T>(table: string, id: string, map: (r: Row) => T, label: string): T {
     const row = this.db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id) as Row | undefined
@@ -306,7 +316,7 @@ export class Repos {
     return mapAccount(row)
   }
   channel(id: string): Channel {
-    return this.one('channels', id, mapChannel, 'Channel')
+    return this.one('channels', id, this.toChannel, 'Channel')
   }
   discussion(id: string): Discussion {
     return this.one('discussions', id, mapDiscussion, 'Discussion')
@@ -331,7 +341,7 @@ export class Repos {
     return (this.db.prepare(`${ACCOUNT_SELECT} ORDER BY a.created_at`).all() as Row[]).map(mapAccount)
   }
   listChannels(): Channel[] {
-    return (this.db.prepare('SELECT * FROM channels ORDER BY created_at').all() as Row[]).map(mapChannel)
+    return (this.db.prepare('SELECT * FROM channels ORDER BY created_at').all() as Row[]).map(this.toChannel)
   }
   /** The accounts a product works with (DEC-015): those its channels use, and those that were first created for it. */
   accountsOfProduct(productId: string): Account[] {

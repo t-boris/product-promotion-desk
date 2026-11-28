@@ -695,6 +695,8 @@ export interface PlatformForm {
   apiVideos?: 'none' | 'public_address'
   /** `public_address`: the same for a picture. */
   apiPictures?: 'public_address'
+  /** Through its API a post of the platform holds pictures or one video, never both (LinkedIn). */
+  apiOneKind?: true
   /** `jpeg`: through its API the platform takes a picture only as a JPEG file (Instagram); the application sends a JPEG copy of a PNG by itself. */
   apiPictureKind?: 'jpeg'
   /** `required`: a post without a picture is refused by the platform (Instagram). A video can stand in for the picture where the platform takes one (`videos` is not `none`). */
@@ -724,7 +726,7 @@ export const PLATFORM_FORMS: Record<string, PlatformForm> = {
   facebook: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 63_206, apiVideos: 'none', pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text' },
   threads: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 500, apiVideos: 'public_address', apiPictures: 'public_address', pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text', topic: 'field' },
   x: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 280, pictures: 'optional', maxPictures: 4, videos: 'optional', maxVideos: 1, link: 'in_text' },
-  linkedin: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 3_000, pictures: 'optional', maxPictures: 9, videos: 'optional', maxVideos: 1, link: 'in_text' },
+  linkedin: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 3_000, apiOneKind: true, pictures: 'optional', maxPictures: 9, videos: 'optional', maxVideos: 1, link: 'in_text' },
   telegram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 4_096, apiCaptionLimit: 1_024, pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text' },
   pinterest: { format: 'plain', hasTitle: true, titleLimit: 100, textLimit: 500, pictures: 'required', maxPictures: 1, videos: 'optional', maxVideos: 1, link: 'field' },
   tiktok: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 2_200, pictures: 'none', maxPictures: 0, videos: 'required', maxVideos: 1, link: 'field' },
@@ -1026,6 +1028,9 @@ export function sendProblems(platform: string, rendered: RenderedPost, ways: Sen
   const viaPlace = (formOf(platform).apiPictures === 'public_address' && kinds.pictures > 0) || (formOf(platform).apiVideos === 'public_address' && kinds.videos > 0)
   if (ways.api && viaPlace && !ways.publicFiles) {
     problems.push(`${label} takes a picture or a video through its API only from an address on the internet. Set up “A place for files” in Settings (a storage bucket of your own), or take it off the post, or publish the post on ${label} yourself.`)
+  }
+  if (ways.api && formOf(platform).apiOneKind && kinds.videos > 0 && kinds.pictures > 0) {
+    problems.push(`${label} takes pictures or one video in a post through its API, not both. Take one of them off, or publish the post on ${label} yourself.`)
   }
   if (ways.api && formOf(platform).apiPictureKind === 'jpeg') {
     const other = rendered.attachments.find((a) => !isVideoMime(a.mime) && a.mime !== 'image/jpeg' && a.mime !== 'image/png')

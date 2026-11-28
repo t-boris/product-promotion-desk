@@ -1,7 +1,8 @@
 // Aggregates everything that needs the user into one list (SRC-001 screen "Требует внимания").
 // Items are derived from the database on demand, never stored, so the list can not drift from the real state.
 
-import type { AttentionItem, ChannelStatus, Id, Opportunity, SendAction } from '../../shared/types'
+import { keyNameOf, type Account, type AttentionItem, type ChannelStatus, type Id, type Opportunity, type SendAction } from '../../shared/types'
+import { keyTimesOf } from '../channels/key-renewal'
 import type { Core } from '../core'
 import type { Db } from '../db/database'
 import { mapAction, mapOpportunity } from '../repos'
@@ -92,9 +93,34 @@ function accountItems(core: Core): AttentionItem[] {
       items.push({ id: `captcha:${account.id}`, kind: 'captcha', title: `Solve the CAPTCHA for ${who}`, detail: 'The platform asks for a human check. Work on this account is suspended until you complete it.', ...base })
     } else if (account.status === 'suspended') {
       items.push({ id: `error:account:${account.id}`, kind: 'error', title: `Account ${who} is suspended`, detail: 'The platform suspended this account; automation on it is stopped.', ...base })
+    } else if (account.access === 'api') {
+      const ending = keyEnding(core, account)
+      if (ending) items.push({ id: `key:${account.id}`, kind: 'login', title: ending.title, detail: ending.detail, ...base })
     }
   }
   return items
+}
+
+/** A key is said to end this many days ahead. */
+export const KEY_ENDS_NOTICE_DAYS = 7
+
+/**
+ * A key that ends and that its platform does not renew (a LinkedIn access token, DEC-084), within a week of its end by the application's count:
+ * what to tell the owner, or null. A key the application renews by itself, or one with no end, is never said.
+ */
+function keyEnding(core: Core, account: Account): { title: string; detail: string } | null {
+  const api = core.connectors.list().find((c) => c.api !== undefined && c.platform === account.platform)?.api
+  if (!api?.keyDays) return null
+  const ends = keyTimesOf(core.db, account.id).expiresAt
+  if (!ends) return null
+  const left = Date.parse(ends) - core.clock.now().getTime()
+  if (Number.isNaN(left) || left > KEY_ENDS_NOTICE_DAYS * 24 * 3_600_000) return null
+  const name = keyNameOf(api)
+  const when = left <= 0 ? `ended on ${ends.slice(0, 10)}` : `ends on ${ends.slice(0, 10)}`
+  return {
+    title: `The ${name} of ${account.label} ${when}`,
+    detail: `It lasts ${api.keyDays} days and the platform does not renew it. Make a new one (the steps are on the account's page) and save it there; posts of this account stop going out once it has ended.`
+  }
 }
 
 const PROBLEM_STATUSES: ChannelStatus[] = ['needs_user', 'error']

@@ -473,6 +473,13 @@ export interface ApiAccess {
    * secret of a Threads app, which turns a token of an hour into one of 60 days).
    */
   onceSecret?: { label: string; hint: string }
+  /** What the application does through this kind of account, said where no key is saved yet. Absent: it posts, reads comments and answers. */
+  work?: string
+  /**
+   * The platform's keys end this many days after they are made, and it gives an app of this kind no way to renew one (a LinkedIn access token,
+   * 60). The application counts from the day the key was saved, shows the day on the account's page and tells the owner a week ahead (DEC-084).
+   */
+  keyDays?: number
 }
 
 /** The key the vault keeps for an API account, and when the platform stops accepting it (null when the platform did not say). */

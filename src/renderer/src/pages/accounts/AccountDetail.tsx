@@ -65,7 +65,7 @@ export function AccountDetail({
 
   const panels: Record<AccountTab, ReactNode> = {
     signin: viaApi ? (
-      info?.api && vault ? <AccountApiKey account={account} api={info.api} unavailable={vault.unavailable} hasKey={hasPassword} /> : null
+      info?.api && vault ? <AccountApiKey account={account} api={info.api} unavailable={vault.unavailable} hasKey={hasPassword} endsAt={vault.apiKeyEnds[account.id] ?? null} /> : null
     ) : (
       <>
         <ConnectionGuide account={account} info={info} />

@@ -1619,3 +1619,17 @@ Built on Meta's saved pages (fact sheet of 2026-11-28, Instagram API with Instag
 - [x] H5 (0.84.1, DEC-083) a picture that is not JPEG is sent as a JPEG copy made by the existing ImageShrinker (Electron, no library), through the place for files; only a picture that is neither JPEG nor PNG is named before approval
 - [x] H4 verify (6465 tests), DEC-082, own-instance look at the account's page (8 steps, one token field, no overflow), release 0.84.0
 
+
+## Phase J, part 1: a LinkedIn personal profile through LinkedIn's API, publishing only (plan 2026-11-28, 0.85.0)
+
+Facts (LinkedIn's pages saved 2026-11-28): the self-serve product "Share on LinkedIn" gives `w_member_social`: `POST /v2/ugcPosts` (3000 characters), pictures and a video registered through `/v2/assets?action=registerUpload` and uploaded from the local file; "Sign In with LinkedIn using OpenID Connect" gives `/v2/userinfo` (the name and the member's id). A token from the portal's token generator lasts 60 days and an app of this kind gets no refresh. Reading the profile's posts, comments and numbers is closed to such an app (`r_member_social`).
+
+- An account "Through a developer app (LinkedIn's own API)" with one key, the LinkedIn access token. A channel is the address of the personal profile (`linkedin.com/in/<name>`); a company page stays with the browser (it needs a reviewed product).
+- A post is words (a link in them, as the form has it; a post of words that ends with an address is sent as an article share so LinkedIn shows the card), 1-9 pictures, or one video up to 200 MB. Replies are refused in words: LinkedIn closes comments to such an app.
+- The channel is one the application does not read: it is for the owner's own posts ("your own posts" on the screens), never watched in the browser (an API account has none), no numbers.
+- A key that ends and cannot be renewed: `ApiAccess.keyDays` (60); the application counts from the day it was saved, the account's page says the day, and Inbox has an item a week ahead.
+- Open for the owner (not built, named in the report): comments and replies of the same profile "stay with the AI browser" in the plan; that needs one account that holds both a browser sign-in and a key, which changes the account's page.
+
+- [x] J1 core: `keyDays` and `work` on `ApiAccess`, the end day remembered and shown, Inbox item a week ahead, a channel of an API account that is not read is never watched in the browser, longer keys accepted
+- [x] J2 `src/connectors/linkedin/` (api, connector, fake server, tests)
+- [x] J3 verify (6477 tests), DEC-084, own-instance look (the account's page: 5 steps, 4 buttons, what the app does; the channel's page says “Not read by the app”), release 0.85.0

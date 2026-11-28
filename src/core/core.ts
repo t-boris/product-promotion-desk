@@ -102,7 +102,7 @@ export class Core {
     this.appVersion = deps.appVersion
     this.log = new Logger(this.db, this.events, this.clock, deps.echoLogs ?? false)
     this.settings = new SettingsStore(this.db)
-    this.repos = new Repos(this.db)
+    this.repos = new Repos(this.db, (connectorId) => this.connectors.get(connectorId)?.api !== undefined)
     this.runs = new RunRecorder(this.db, this.events, this.clock)
     this.aiActivity = new AiActivity(this.events, this.clock)
     this.engines = new EngineRegistry(deps.engines, this.settings, this.aiActivity)
