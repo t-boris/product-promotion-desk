@@ -43,6 +43,8 @@ export interface InstagramComment {
   timestamp?: string
   from?: { id?: string; username?: string }
   parent_id?: string
+  /** Whether the account hid the comment from other readers. */
+  hidden?: boolean
   replies?: { data?: InstagramComment[] }
 }
 

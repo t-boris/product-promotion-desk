@@ -189,5 +189,13 @@ CREATE TABLE listen_state (
 -- the setting it was proposed against and what it becomes. Nothing in channels is rewritten.
 ALTER TABLE weekly_reviews ADD COLUMN plan_json TEXT NOT NULL DEFAULT '[]';
 `
+  },
+  {
+    id: 409,
+    name: 'comments: hidden from other readers by the account',
+    sql: `
+-- Whether the account hid the comment on its platform (DEC-089): set by the owner's press here, and by what the platform says when it is read.
+ALTER TABLE comments ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
+`
   }
 ]

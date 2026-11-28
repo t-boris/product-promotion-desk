@@ -1565,7 +1565,7 @@ What Meta's documentation says (checked again 2026-11-27): a Page post made with
 - [x] messages: "scheduled" leaves the unattended refusal (it stays for an automatic rule's approval)
 - [x] posting times in the channel's settings (`postingSlots`, no table needed); pure `nextFreeSlot`; API `slots.get`, `slots.set`, `publications.enqueue`
 - [x] screens: Send at + "Next free time" on every unsent item; "Posting times" card on the channel page; lateness in Settings
-- [ ] tests, verify, release, lesson, deploy, read on the real screen
+- [x] tests, verify, release, deploy (0.51.0, commits 82d8ef7 and 9228ce1)
 
 ## Phase G: a Threads profile through the Threads API (0.82.0, DEC-080)
 
@@ -1580,7 +1580,7 @@ Why now: after 0.81.2 the goal's Stop hook named phases G-J as unbuilt. G was re
 - [x] verify (292 files, 6436 tests), decision DEC-080, own-instance look at the account's page (8 steps, two fields 619x28, no horizontal scroll)
 - [ ] with the owner's Meta app (Threads use case): the eight steps walked for real, a first post with a topic, a reply read and answered, the numbers read, a token renewed
 - [x] 0.82.1: the account's page says "the application renews it by itself before it ends" beside a saved Threads token (`PlatformInfo.api.renews`)
-- [ ] not built: pictures and video (needs D5, a public address for the file), hiding a reply, the quota read, the token's end date on the account's page (it is in the Log)
+- [x] what 0.82.0 left out of phase G: pictures and video (0.83.0, through the place for files) and hiding a reply (0.90.0, DEC-089). Outside the plan and not built: the quota read, the token's end date on the account's page (it is in the Log)
 
 ## D5: a place for files on a public address, then pictures in Threads and phase H (plan 2026-11-28)
 
@@ -1697,3 +1697,17 @@ Review: the reading is `XApiConnector.talk` (in memory, by the signed-in user's 
 - [x] DEC-088, plan row F, release 0.89.0
 
 Review: `FacebookPageConnector.video`. Not seen on a screen (no Page can be connected in an own instance without a real token); the preview's words are tested through `sendProblems`, the function the preview asks. Unproven with a real Page: that the post of a video carries the description as its words, the processing time, any limit of size. Not built: Reels.
+
+## Phases G and H, the last part: hiding a reply or a comment (2026-11-28, 0.90.0, DEC-089)
+
+Why: the plan's phases G and H list "hide"; both requests are in Meta's documentation.
+
+- [x] port: `hideComment`, `hidesTopLevelOnly`; `RemoteComment.hidden`; migration 409 `comments.hidden`; a reading replaces what is kept where the platform says
+- [x] Threads: `POST {reply-id}/manage_reply`, only a reply to the post itself; `hide_status` read
+- [x] Instagram: `POST {comment-id}` with `hide`; the field `hidden` read
+- [x] the card: `commentHiding` ('alone' | 'with_replies' | null), the route `opportunities.hideComment` under the account's lock, the button under the answered comment with what the press does, the badge "Hidden"
+- [x] tests of both connectors through the routes, of the words; verify (6511 tests)
+- [x] own-instance look with example data: the button, its words, the reason said when no token is saved, a narrow window
+- [x] DEC-089, plan rows G and H, release 0.90.0
+
+Review: `src/core/pipeline/comment-hiding.ts`, `HideComment.tsx`. Hiding does not close the item. Not built: the same on a Facebook Page (not in the plan). Unproven with real apps.

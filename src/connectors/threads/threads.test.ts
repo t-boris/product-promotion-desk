@@ -416,3 +416,37 @@ describe('replies and numbers', () => {
     expect(await w.connector.fetchMetrics(w.ctx)).toEqual([{ key: 'followers', label: 'Followers', value: 120, available: true }])
   })
 })
+
+describe('hiding a reply (DEC-089)', () => {
+  it('hides a reply to the profile\'s post on the owner\'s press, with what is under it, and shows it again; a reply to a reply is not offered; a refusal leaves it as it was', async () => {
+    const w = await connected()
+    const post = w.threads.ownerPosts('What does a natal chart show?')
+    const top = w.threads.reply(post.id, 'Buy followers at example.com', 'spam.bot')
+    const nested = w.threads.reply(top.id, 'Me too.', 'bo')
+    expect((await w.monitor.runChannel(w.channel.id)).status).toBe('ok')
+    const item = (replyId: string): string => (w.core.db.prepare('SELECT o.id FROM opportunities o JOIN comments c ON c.id = o.comment_id WHERE c.external_id = ?').get(`th:${replyId}`) as { id: string }).id
+
+    const card = await w.call('opportunities.get', { id: item(top.id) })
+    expect(card).toMatchObject({ commentHiding: 'with_replies', comment: { hidden: false } })
+    // Threads hides a reply to a reply only together with the reply it is under: it is not offered there.
+    expect(await w.call('opportunities.get', { id: item(nested.id) })).toMatchObject({ commentHiding: null })
+    await expect(w.call('opportunities.hideComment', { id: item(nested.id), hidden: true })).rejects.toMatchObject({ code: 'invalid_state' })
+
+    expect(await w.call('opportunities.hideComment', { id: item(top.id), hidden: true })).toMatchObject({ comment: { hidden: true } })
+    expect(w.threads.calls.at(-1)).toEqual({ method: 'POST', path: `${top.id}/manage_reply`, params: { hide: 'true' } })
+    expect(top.hidden).toBe(true)
+
+    w.threads.failNext = { code: 10, message: 'Application does not have permission for this action' }
+    await expect(w.call('opportunities.hideComment', { id: item(top.id), hidden: false })).rejects.toThrow(/Threads refused it: Application does not have permission for this action The comment is as it was on Threads\./)
+    expect(await w.call('opportunities.get', { id: item(top.id) })).toMatchObject({ comment: { hidden: true } })
+
+    expect(await w.call('opportunities.hideComment', { id: item(top.id), hidden: false })).toMatchObject({ comment: { hidden: false } })
+    expect(w.threads.calls.at(-1)?.params).toEqual({ hide: 'false' })
+    expect(top.hidden).toBe(false)
+
+    // Hidden on Threads itself: the next reading of the profile says so here.
+    top.hidden = true
+    await w.monitor.runChannel(w.channel.id)
+    expect(await w.call('opportunities.get', { id: item(top.id) })).toMatchObject({ comment: { hidden: true } })
+  })
+})

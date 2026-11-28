@@ -25,6 +25,8 @@ interface FakeMedia {
   repost: boolean
   /** The addresses of the pictures and videos of the post, in their order, as Threads read them. */
   files: { kind: 'IMAGE' | 'VIDEO'; url: string }[]
+  /** A reply the profile hid from other readers. */
+  hidden?: boolean
 }
 
 interface FakeContainer {
@@ -103,7 +105,7 @@ export class FakeThreads implements HttpPort {
       media_type: item.repost ? 'REPOST_FACADE' : 'TEXT_POST',
       has_replies: this.media.some((m) => m.repliedTo === item.id),
       is_reply_owned_by_me: item.own && item.repliedTo !== null,
-      hide_status: 'NOT_HUSHED',
+      hide_status: item.hidden ? 'HIDDEN' : 'NOT_HUSHED',
       ...(item.username ? { username: item.username, permalink: `https://www.threads.com/@${item.username}/post/p${item.id}` } : {}),
       ...(item.repliedTo ? { replied_to: { id: item.repliedTo }, root_post: { id: item.rootId } } : {}),
       ...(item.topic ? { topic_tag: item.topic } : {})
@@ -220,6 +222,19 @@ export class FakeThreads implements HttpPort {
         const container: FakeContainer = { id: String(this.next++), form: params, status: 'FINISHED' }
         this.containers.push(container)
         return this.ok({ id: container.id })
+      }
+      if (second === 'manage_reply') {
+        const reply = this.media.find((m) => m.id === first)
+        if (!reply) return this.error(400, 100, 'The reply does not exist')
+        // Only a reply to one of the profile's own posts, and only one that answers the post itself.
+        const root = this.media.find((m) => m.id === reply.rootId)
+        if (!root?.own || reply.repliedTo !== reply.rootId) return this.error(400, 100, 'Only a top-level reply to your own post can be hidden')
+        if (params.hide !== 'true' && params.hide !== 'false') return this.error(400, 100, 'The parameter hide is required')
+        const failure = this.failNext
+        this.failNext = null
+        if (failure && failure !== 'lost') return this.error(failure.status ?? 400, failure.code, failure.message)
+        reply.hidden = params.hide === 'true'
+        return this.ok({ success: true })
       }
       if (mine(first) && second === 'threads_publish') {
         const container = this.containers.find((c) => c.id === params.creation_id)

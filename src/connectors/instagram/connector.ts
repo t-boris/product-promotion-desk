@@ -41,7 +41,7 @@ export const INSTAGRAM_API_CONNECTOR_ID = 'instagram-api'
 const FEED_LIMIT = 25
 const PROFILE_FIELDS = 'user_id,username,name,account_type,followers_count'
 const POST_FIELDS = 'id,caption,media_type,permalink,timestamp,username,comments_count,like_count'
-const REPLY_FIELDS = 'id,text,username,timestamp,from,parent_id'
+const REPLY_FIELDS = 'id,text,username,timestamp,from,parent_id,hidden'
 const COMMENT_FIELDS = `${REPLY_FIELDS},replies{${REPLY_FIELDS}}`
 /** Instagram gives at most this many comments of a post, the newest first, and its pages name no way to the older ones. */
 const MOST_COMMENTS = 50
@@ -344,7 +344,8 @@ export class InstagramApiConnector implements Connector {
         body: comment.text ?? '',
         // Instagram gives a comment no address of its own: it is found under its post.
         url,
-        postedAt: iso(comment.timestamp)
+        postedAt: iso(comment.timestamp),
+        ...(comment.hidden === undefined ? {} : { hidden: comment.hidden })
       })
       // Instagram gives the newest first; the application keeps a conversation in the order it was written.
       for (const comment of [...top].reverse()) {
@@ -536,6 +537,22 @@ export class InstagramApiConnector implements Connector {
       // Published all the same.
     }
     return fallback
+  }
+
+  /** Hides a comment under the account's post from other readers, or shows it again (DEC-089). */
+  async hideComment(ctx: ConnectorContext, externalId: string, hidden: boolean): Promise<void> {
+    const api = await this.requireClient(ctx)
+    const comment = parseExternalId(externalId)
+    if (!comment || comment.kind !== 'comment') throw new Error('This comment was not read through the Instagram API, so it cannot be hidden through it.')
+    let answer: InstagramAnswer<{ success?: boolean }>
+    try {
+      answer = await api.post<{ success?: boolean }>(comment.id, { hide: hidden })
+    } catch (error) {
+      if (error instanceof HttpNoAnswerError) throw new Error(`Instagram did not answer (${error.message}).`, { cause: error })
+      throw error
+    }
+    if (!answer.ok) throw new Error(refusal(answer))
+    if (answer.result.success !== true) throw new Error('Instagram did not say that it was done.')
   }
 
   /** Looks among the account's posts, or under what was answered, for what a send with a lost answer may have made: the same words, not older than the attempt. */

@@ -200,6 +200,7 @@ export const mapComment = (r: Row): Comment => ({
   postedAt: (r.posted_at as string | null) ?? null,
   baseline: r.baseline === 1,
   isOwn: r.is_own === 1,
+  hidden: r.hidden === 1,
   contentHash: r.content_hash as string,
   firstSeenAt: r.first_seen_at as string,
   lastSeenAt: r.last_seen_at as string

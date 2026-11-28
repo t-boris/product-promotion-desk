@@ -14,6 +14,7 @@
 
 import { ApiError } from '../../shared/api'
 import type { Id, PostResultsView, SendAction } from '../../shared/types'
+import { setCommentHidden } from './comment-hiding'
 import { OwnSchedule } from './own-schedule'
 import { PostResults } from './post-results'
 import type { Core } from '../core'
@@ -99,6 +100,12 @@ export class SendingFlow implements SendingService {
 
   postResults(channelId: Id): PostResultsView {
     return this.results.view(channelId)
+  }
+
+  /** The owner hides the comment an item answers from other readers, or shows it again: one request, under the account's lock. */
+  setCommentHidden(opportunityId: Id, hidden: boolean): Promise<void> {
+    const channel = this.store.requireChannel(this.store.requireOpportunity(opportunityId).channelId)
+    return this.locks.run(channel.accountId, () => setCommentHidden(this.core, this.store, opportunityId, hidden))
   }
 
   readPostResultsNow(channelId: Id): Promise<PostResultsView> {

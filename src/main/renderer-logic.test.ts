@@ -35,6 +35,7 @@ import {
 } from '../renderer/src/pages/channels/own-posts'
 import { activateBlocker, canActivate, canPause, neverAssessed, setupStage } from '../renderer/src/pages/channels/setup-stage'
 import { afterCreateNote, nextStep } from '../renderer/src/pages/channels/next-step'
+import { hideCommentWords } from '../renderer/src/pages/review/hide-comment'
 import { chosenVia, contactLine, eligibleVia, viaBlocker, viaOption } from '../renderer/src/pages/channels/account-link'
 import { ACCOUNT_NAME_LIMIT, normalizeName, renameProblem } from '../renderer/src/pages/channels/account-name'
 import { CAPABILITY_LABEL, CAPABILITY_ORDER, abilityNeedsDecision, abilityStatusLabel, capabilityRows, membershipWord } from '../renderer/src/pages/channels/capability-words'
@@ -2411,5 +2412,14 @@ describe('the model dropdown of an engine card', () => {
     expect(modelNote(offered, 'opus')).toBe('For complex work and everyday tasks')
     expect(modelNote(offered, '')).toMatch(/uses the one it chooses itself/)
     expect(modelNote(offered, 'unlisted')).toBe('')
+  })
+})
+
+describe('the control that hides a comment (DEC-089)', () => {
+  it('says what the press does on the platform before it is pressed, and what was done after', () => {
+    expect(hideCommentWords('instagram', 'alone', false)).toEqual({ button: 'Hide on Instagram', note: 'Other readers stop seeing it on Instagram. Nothing is deleted, and you can show it again.' })
+    expect(hideCommentWords('threads', 'with_replies', false)).toEqual({ button: 'Hide on Threads', note: 'Other readers stop seeing it on Threads, with every reply under it. Nothing is deleted, and you can show it again.' })
+    expect(hideCommentWords('threads', 'with_replies', true)).toEqual({ button: 'Show again', note: 'Hidden on Threads: other readers do not see it, nor the replies under it. Nothing was deleted.' })
+    expect(hideCommentWords('instagram', 'alone', true).note).toBe('Hidden on Instagram: other readers do not see it. Nothing was deleted.')
   })
 })

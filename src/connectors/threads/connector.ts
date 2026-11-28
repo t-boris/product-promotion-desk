@@ -170,6 +170,8 @@ export class ThreadsApiConnector implements Connector {
   readonly label = 'Threads'
   readonly api = API
   readonly postNumberKinds = ['likes', 'comments', 'views'] as const
+  /** Threads hides a reply to the post itself, with every reply under it; a reply to a reply cannot be hidden alone. */
+  readonly hidesTopLevelOnly = true
 
   /** The profile each account's token belongs to, as Threads named it at the last check. */
   private readonly profiles = new Map<string, ThreadsProfile>()
@@ -348,7 +350,9 @@ export class ThreadsApiConnector implements Connector {
         author: this.author(ctx, profile, reply, reply.is_reply_owned_by_me === true),
         body: reply.text ?? '',
         url: reply.permalink ?? url,
-        postedAt: iso(reply.timestamp)
+        postedAt: iso(reply.timestamp),
+        // Threads says of each reply whether the account hid it.
+        ...(reply.hide_status ? { hidden: reply.hide_status === 'HIDDEN' } : {})
       }))
       incomplete = list.result.paging?.next !== undefined
     }
@@ -522,6 +526,22 @@ export class ThreadsApiConnector implements Connector {
       // Published all the same.
     }
     return this.address(profile)
+  }
+
+  /** Hides a reply to the account's post from other readers, with the replies under it, or shows it again (DEC-089). */
+  async hideComment(ctx: ConnectorContext, externalId: string, hidden: boolean): Promise<void> {
+    const api = await this.requireClient(ctx)
+    const id = parseExternalId(externalId)
+    if (!id) throw new Error('This reply was not read through the Threads API, so it cannot be hidden through it.')
+    let answer: ThreadsAnswer<{ success?: boolean }>
+    try {
+      answer = await api.post<{ success?: boolean }>(`${id}/manage_reply`, { hide: String(hidden) })
+    } catch (error) {
+      if (error instanceof HttpNoAnswerError) throw new Error(`Threads did not answer (${error.message}).`, { cause: error })
+      throw error
+    }
+    if (!answer.ok) throw new Error(refusal(answer))
+    if (answer.result.success !== true) throw new Error('Threads did not say that it was done.')
   }
 
   /** Looks in the profile's posts, or in its replies, for what a send with a lost answer may have made: the same words, not older than the attempt. */

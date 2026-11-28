@@ -186,10 +186,10 @@ export class Ingestor {
     const id = newId()
     this.core.db
       .prepare(
-        `INSERT INTO comments (id, discussion_id, channel_id, external_id, parent_external_id, author, body, url, posted_at, baseline, is_own, content_hash, first_seen_at, last_seen_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO comments (id, discussion_id, channel_id, external_id, parent_external_id, author, body, url, posted_at, baseline, is_own, hidden, content_hash, first_seen_at, last_seen_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(id, discussionId, channelId, c.externalId, c.parentExternalId, c.author, c.body, c.url, c.postedAt, baseline ? 1 : 0, isOwn ? 1 : 0, commentBodyHash(c.body), now, now)
+      .run(id, discussionId, channelId, c.externalId, c.parentExternalId, c.author, c.body, c.url, c.postedAt, baseline ? 1 : 0, isOwn ? 1 : 0, c.hidden ? 1 : 0, commentBodyHash(c.body), now, now)
     return this.core.repos.comment(id)
   }
 
@@ -198,8 +198,9 @@ export class Ingestor {
     const hash = commentBodyHash(c.body)
     const changed = hash !== existing.contentHash || c.url !== existing.url
     this.core.db
-      .prepare('UPDATE comments SET last_seen_at = ?, body = ?, content_hash = ?, url = ?, is_own = ? WHERE id = ?')
-      .run(now, c.body, hash, c.url, existing.isOwn || isOwn ? 1 : 0, existing.id)
+      // What the platform says of a hidden comment replaces what is kept; a platform that does not say leaves it as it is.
+      .prepare('UPDATE comments SET last_seen_at = ?, body = ?, content_hash = ?, url = ?, is_own = ?, hidden = COALESCE(?, hidden) WHERE id = ?')
+      .run(now, c.body, hash, c.url, existing.isOwn || isOwn ? 1 : 0, c.hidden === undefined ? null : c.hidden ? 1 : 0, existing.id)
 
     const opp = this.store.opportunityForComment(existing.id)
     if (!opp) return changed

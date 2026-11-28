@@ -3,6 +3,7 @@ import type { Comment, OpportunityCard } from '../../../../shared/types'
 import { Badge, formatTime } from '../../ui'
 import { OPEN_IN_ACCOUNT_BROWSER } from '../channels/open-browser'
 import { OpenChannelBrowser } from '../channels/OpenChannelBrowser'
+import { HideComment } from './HideComment'
 import { isHttpUrl } from './labels'
 import { AddressLink } from '../AddressLink'
 
@@ -22,17 +23,19 @@ function ExternalLink({ url, children }: { url: string | null | undefined; child
 }
 
 /** One comment of the conversation: who and when, then the words. A reply steps in by its depth; the one being answered has a bar. */
-function CommentBox({ comment, highlight, depth, extra }: { comment: Comment; highlight?: boolean; depth: number; extra?: ReactNode }) {
+function CommentBox({ comment, highlight, depth, extra, under }: { comment: Comment; highlight?: boolean; depth: number; extra?: ReactNode; under?: ReactNode }) {
   return (
     <div className={`thread-line${highlight ? ' highlight' : ''}`} style={{ '--depth': Math.min(depth, 4) } as CSSProperties} data-testid={highlight ? 'original-comment' : 'thread-comment'}>
       <div className="thread-meta">
         <strong>{comment.author}</strong>
         {comment.isOwn && <Badge>Your account</Badge>}
+        {comment.hidden && <Badge>Hidden</Badge>}
         {comment.postedAt && <span>{formatTime(comment.postedAt)}</span>}
         {highlight && <ExternalLink url={comment.url}>Open comment in browser</ExternalLink>}
         {extra}
       </div>
       <div className="thread-line-body">{preview(comment.body)}</div>
+      {under}
     </div>
   )
 }
@@ -79,7 +82,7 @@ export function ThreadView({ card }: { card: OpportunityCard }) {
       {ancestors.map((c, i) => (
         <CommentBox key={c.id} comment={c} depth={i} />
       ))}
-      {comment && <CommentBox comment={comment} highlight depth={ancestors.length} extra={discussion ? null : inAccount} />}
+      {comment && <CommentBox comment={comment} highlight depth={ancestors.length} extra={discussion ? null : inAccount} under={<HideComment card={card} />} />}
       {others.length > 0 && <div className="thread-replies-label">Replies under it</div>}
       {others.map((c) => (
         <CommentBox key={c.id} comment={c} depth={ancestors.length + 1} />

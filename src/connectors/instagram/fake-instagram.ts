@@ -15,6 +15,8 @@ interface FakeComment {
   username: string
   created: number
   replies: FakeComment[]
+  /** Hidden from other readers by the account. */
+  hidden?: boolean
 }
 
 interface FakeMedia {
@@ -107,6 +109,7 @@ export class FakeInstagram implements HttpPort {
       timestamp: this.time(comment.created),
       from: { id: comment.username === this.profile.username ? IG_ACCOUNT_ID : `u-${comment.username}`, username: comment.username },
       ...(parentId ? { parent_id: parentId } : {}),
+      hidden: comment.hidden === true,
       ...(withReplies && comment.replies.length > 0 ? { replies: { data: comment.replies.map((reply) => this.commentJson(reply, comment.id, false)) } } : {})
     }
   }
@@ -196,6 +199,15 @@ export class FakeInstagram implements HttpPort {
           return this.error(400, failure.code, failure.message, failure.userMessage)
         }
         return null
+      }
+      if (second === undefined && typeof body.hide === 'boolean') {
+        const found = this.findComment(first)
+        if (!found) return this.error(400, 100, 'The comment does not exist')
+        const refused = fails()
+        if (refused) return refused
+        // The account's own comments are always shown, whatever is asked.
+        if (found.comment.username !== this.profile.username) found.comment.hidden = body.hide
+        return this.ok({ success: true })
       }
       if (mine(first) && second === 'media') {
         const refused = fails()

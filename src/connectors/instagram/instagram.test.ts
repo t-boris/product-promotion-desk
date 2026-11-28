@@ -369,3 +369,33 @@ describe('comments and numbers', () => {
     expect((await w.call('accounts.checkLogin', { accountId: w.account.id })).status).not.toBe('ready')
   })
 })
+
+describe('hiding a comment (DEC-089)', () => {
+  it('hides a comment or a reply under the account\'s post on the owner\'s press and shows it again; what Instagram says of a hidden comment is kept', async () => {
+    const w = await connected()
+    const post = w.instagram.ownerPosts('What does a natal chart show?')
+    const top = w.instagram.comment(post.id, 'Buy followers at example.com', 'spam.bot')
+    const under = w.instagram.comment(post.id, 'Me too.', 'bo', top.id)
+    expect((await w.monitor.runChannel(w.channel.id)).status).toBe('ok')
+    const item = (commentId: string): string => (w.core.db.prepare('SELECT o.id FROM opportunities o JOIN comments c ON c.id = o.comment_id WHERE c.external_id = ?').get(`ig:c:${commentId}`) as { id: string }).id
+
+    expect(await w.call('opportunities.get', { id: item(top.id) })).toMatchObject({ commentHiding: 'alone', comment: { hidden: false } })
+    expect(await w.call('opportunities.get', { id: item(under.id) })).toMatchObject({ commentHiding: 'alone' })
+
+    expect(await w.call('opportunities.hideComment', { id: item(top.id), hidden: true })).toMatchObject({ comment: { hidden: true } })
+    expect(w.instagram.calls.at(-1)).toEqual({ method: 'POST', path: top.id, params: { hide: true }, auth: 'bearer' })
+    expect(top.hidden).toBe(true)
+
+    w.instagram.failNext = { code: 10, message: '(#10) Application does not have permission for this action' }
+    await expect(w.call('opportunities.hideComment', { id: item(under.id), hidden: true })).rejects.toThrow(/Instagram refused it: .*The comment is as it was on Instagram\./)
+    expect(under.hidden).toBeUndefined()
+
+    expect(await w.call('opportunities.hideComment', { id: item(top.id), hidden: false })).toMatchObject({ comment: { hidden: false } })
+    expect(top.hidden).toBe(false)
+
+    // Hidden on Instagram itself: the next reading of the account says so here.
+    under.hidden = true
+    await w.monitor.runChannel(w.channel.id)
+    expect(await w.call('opportunities.get', { id: item(under.id) })).toMatchObject({ comment: { hidden: true } })
+  })
+})

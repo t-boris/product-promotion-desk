@@ -531,6 +531,8 @@ export interface RemoteComment {
   body: string
   url: string
   postedAt: IsoTime | null
+  /** Whether the account hid this comment from other readers, where the platform says it. Left out where it does not say. */
+  hidden?: boolean
 }
 
 export interface RemoteDiscussion {
@@ -682,6 +684,14 @@ export interface Connector {
   /** Which of the three numbers `readPostNumbers` can ever return here (Reddit shows an author no views). Absent: all three. */
   postNumberKinds?: readonly (keyof PostNumbers)[]
   readPostNumbers?(ctx: ConnectorContext, posts: { externalId: string; url: string | null }[]): Promise<Record<string, PostNumbers>>
+  /**
+   * Present on a connector whose platform lets the account hide what somebody wrote under its posts (DEC-089): other readers stop seeing it,
+   * nothing is deleted, and `hidden: false` shows it again. Only the owner's press calls it. It throws, in words for the owner, when the
+   * platform could not be asked or refused.
+   */
+  hideComment?(ctx: ConnectorContext, externalId: string, hidden: boolean): Promise<void>
+  /** With `hideComment`: the platform hides only a comment that answers the post itself, together with everything under it (Threads). */
+  hidesTopLevelOnly?: true
   /**
    * Present on a connector whose platform keeps a post and publishes it at a given time by itself, with this application closed (DEC-077): how
    * far ahead of that time the platform takes one. Such a connector answers a request with `publishAt` with `scheduled` and has the three

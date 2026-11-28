@@ -500,6 +500,8 @@ export interface ApiMethods {
   'opportunities.prepareDraft': [{ id: Id }, OpportunityCard]
   'opportunities.saveDraft': [{ id: Id; draft: DraftInput }, OpportunityCard]
   'opportunities.approve': [{ id: Id }, OpportunityCard]
+  /** The owner hides the comment the item answers from other readers on its platform, or shows it again. Only where the card says it can. */
+  'opportunities.hideComment': [{ id: Id; hidden: boolean }, OpportunityCard]
   'opportunities.reject': [{ id: Id; reason?: string }, OpportunityCard]
   /** Deletes a deleted post of the owner's for good, with its drafts and approvals; only one that never went out. */
   'opportunities.purge': [{ id: Id }, { id: Id }]

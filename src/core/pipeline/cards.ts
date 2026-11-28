@@ -3,6 +3,7 @@
 import type { Comment, Opportunity, OpportunityCard } from '../../shared/types'
 import type { Core } from '../core'
 import { mapComment } from '../repos'
+import { commentHiding } from './comment-hiding'
 import type { FlowStore } from './store'
 
 const MAX_CHILDREN = 5
@@ -32,6 +33,7 @@ export function buildCard(core: Core, store: FlowStore, opp: Opportunity): Oppor
     channelPostingSlots: channel.settings.postingSlots.length,
     accountLabel: account.identity ? `${account.label} (${account.identity})` : account.label,
     comment,
+    commentHiding: commentHiding(core, channel, comment, discussion),
     discussion,
     thread: comment ? threadAround(core, store, comment) : [],
     draft,

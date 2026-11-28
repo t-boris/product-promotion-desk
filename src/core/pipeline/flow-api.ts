@@ -152,6 +152,10 @@ export function registerFlowApi({ core, store, review, monitor, drafting, sendin
       await review.approve(id)
       return card(id)
     },
+    'opportunities.hideComment': async ({ id, hidden }) => {
+      await sending.setCommentHidden(id, hidden === true)
+      return card(id)
+    },
     'opportunities.reject': ({ id, reason }) => {
       review.reject(id, reason)
       return card(id)

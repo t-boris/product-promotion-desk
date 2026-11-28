@@ -158,6 +158,14 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* Under the answered comment, where its platform lets the account hide it: the button, then what the press does. */
+.thread-hide {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-half) var(--space-2);
+  margin-top: var(--space-1);
+}
 /* The comment being answered carries a bar, like the quoted line of a mail. */
 .thread-line.highlight {
   padding-left: calc(var(--space-4) * var(--depth, 0) + var(--space-3));

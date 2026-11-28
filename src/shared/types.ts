@@ -806,6 +806,8 @@ export interface Comment {
   baseline: boolean
   /** Written by the account configured for this channel. */
   isOwn: boolean
+  /** The account hid it from other readers on its platform (the owner's press here, or what the platform said when it was read). */
+  hidden: boolean
   contentHash: string
   firstSeenAt: IsoTime
   lastSeenAt: IsoTime
@@ -1173,6 +1175,9 @@ export interface HistoryEntry {
 }
 
 /** Everything the review UI needs about one opportunity or publication. */
+/** What hiding a comment takes with it: the comment alone, or the comment with every reply under it (Threads). */
+export type CommentHiding = 'alone' | 'with_replies'
+
 export interface OpportunityCard {
   opportunity: Opportunity
   channelTarget: string
@@ -1184,6 +1189,8 @@ export interface OpportunityCard {
   channelPostingSlots: number
   accountLabel: string
   comment: Comment | null
+  /** How the channel's platform lets the account hide the comment from other readers, and show it again, from here; null where it does not. */
+  commentHiding: CommentHiding | null
   discussion: Discussion | null
   /** Parent chain and nearby comments available as conversation context. */
   thread: Comment[]
