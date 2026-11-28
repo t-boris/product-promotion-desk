@@ -1,7 +1,7 @@
 import type { Core } from '../core'
-import { keyNameOf } from '../../shared/types'
+import { keyNameOf, type Account } from '../../shared/types'
 import type { Db } from '../db/database'
-import type { KeyTimes } from '../ports'
+import type { Connector, KeyTimes } from '../ports'
 import { apiKeyKey } from '../vault'
 
 /** What is remembered of an account's key: when it was saved or last renewed, and when it ends as far as the platform said. */
@@ -23,26 +23,57 @@ export function rememberKeyTimes(db: Db, accountId: string, changedAt: string, e
 export class KeyRenewal {
   constructor(private readonly core: Core) {}
 
+  /** One renewal at a time for an account: a refresh token that is used once must never be used by two requests. */
+  private readonly lines = new Map<string, Promise<unknown>>()
+
+  private inLine<T>(accountId: string, work: () => Promise<T>): Promise<T> {
+    const next = (this.lines.get(accountId) ?? Promise.resolve()).then(work, work)
+    this.lines.set(accountId, next.catch(() => undefined))
+    return next
+  }
+
+  private connectorOf(account: Account): Connector | undefined {
+    return this.core.connectors.list().find((c) => c.api !== undefined && c.platform === account.platform)
+  }
+
+  /** Asks the connector for the key that takes the kept one's place, and keeps it. Null: nothing was due, or no key is saved. */
+  private async renew(account: Account, connector: Connector): Promise<string | null> {
+    // Asked of the vault file first: an account with no key saved never makes the keychain ask.
+    if (!connector.renewKey || !this.core.secrets.has(apiKeyKey(account.id))) return null
+    const key = await this.core.secrets.get(apiKeyKey(account.id))
+    if (!key) return null
+    const now = this.core.clock.now()
+    const next = await connector.renewKey(this.core.http, key, now, keyTimesOf(this.core.db, account.id))
+    if (!next) return null
+    await this.core.secrets.set(apiKeyKey(account.id), next.key)
+    rememberKeyTimes(this.core.db, account.id, now.toISOString(), next.expiresAt)
+    return next.key
+  }
+
+  /**
+   * The key of an account as a connector uses it now. A key that ends within hours (`renewedOnUse`: X's access token lasts two) is renewed
+   * first when it has ended, and the request then carries the new one; it throws what the platform said when it refuses the renewal.
+   */
+  async current(account: Account): Promise<string | null> {
+    const connector = this.connectorOf(account)
+    if (!connector?.api?.renewedOnUse) return this.core.secrets.get(apiKeyKey(account.id))
+    return this.inLine(account.id, async () => (await this.renew(account, connector)) ?? this.core.secrets.get(apiKeyKey(account.id)))
+  }
+
   /** Renews every key that is due; returns how many were renewed. A failure of one account does not stop the others. */
   async renewDue(): Promise<number> {
     let renewed = 0
     for (const account of this.core.repos.listAccounts()) {
       if (account.access !== 'api') continue
-      const connector = this.core.connectors.list().find((c) => c.api !== undefined && c.platform === account.platform)
+      const connector = this.connectorOf(account)
       if (!connector?.api || !connector.renewKey) continue
       const name = keyNameOf(connector.api)
       try {
-        // Asked of the vault file first: an account with no key saved never makes the keychain ask.
-        if (!this.core.secrets.has(apiKeyKey(account.id))) continue
-        const key = await this.core.secrets.get(apiKeyKey(account.id))
-        if (!key) continue
-        const now = this.core.clock.now()
-        const next = await connector.renewKey(this.core.http, key, now, keyTimesOf(this.core.db, account.id))
-        if (!next) continue
-        await this.core.secrets.set(apiKeyKey(account.id), next.key)
-        rememberKeyTimes(this.core.db, account.id, now.toISOString(), next.expiresAt)
+        if ((await this.inLine(account.id, () => this.renew(account, connector))) === null) continue
         renewed += 1
-        this.core.log.info('accounts', `The ${name} of ${account.label} was renewed${next.expiresAt ? `; it lasts until ${next.expiresAt.slice(0, 10)}` : ''}.`)
+        const ends = keyTimesOf(this.core.db, account.id).expiresAt
+        // A key renewed every few hours would fill the log: only the keys that last days are told of.
+        if (!connector.api.renewedOnUse) this.core.log.info('accounts', `The ${name} of ${account.label} was renewed${ends ? `; it lasts until ${ends.slice(0, 10)}` : ''}.`)
       } catch (error) {
         this.core.log.warn('accounts', `The ${name} of ${account.label} could not be renewed: ${error instanceof Error ? error.message : String(error)}`)
       }

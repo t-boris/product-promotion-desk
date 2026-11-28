@@ -24,6 +24,13 @@ export function AccountApiKey({ account, api, unavailable, hasKey, endsAt }: { a
     setSecret('')
     setEditing(false)
   })
+  // An account whose platform is signed in to through its own window (X): the application opens the page and waits for the owner there.
+  const [signIn, signingIn] = useAction(async () => {
+    await call('vault.signIn', { accountId: account.id, keyId })
+    setKeyId('')
+    setEditing(false)
+  })
+  const [stopWaiting] = useAction(() => call('vault.stopSignIn', { accountId: account.id }))
   const [check, checking] = useAction(() => call('accounts.checkLogin', { accountId: account.id }))
   const name = keyNameOf(api)
 
@@ -33,6 +40,10 @@ export function AccountApiKey({ account, api, unavailable, hasKey, endsAt }: { a
 
   function submit(event: FormEvent): void {
     event.preventDefault()
+    if (api.signIn) {
+      if (keyId.trim() !== '' && !signingIn.busy) void signIn()
+      return
+    }
     if (key.trim() !== '' && (!api.keyId || keyId.trim() !== '')) void save()
   }
 
@@ -51,7 +62,7 @@ export function AccountApiKey({ account, api, unavailable, hasKey, endsAt }: { a
           )}
         </>
       ) : (
-        ` · the platform does not accept it now: save a new ${name}, or check again`
+        ` · the platform does not accept it now: ${api.signIn ? `press “${api.signIn.label}” again` : `save a new ${name}`}, or check again`
       )}
     </span>
   ) : (
@@ -87,23 +98,46 @@ export function AccountApiKey({ account, api, unavailable, hasKey, endsAt }: { a
               <input className="input" value={keyId} onChange={(e) => setKeyId(e.target.value)} autoComplete="off" spellCheck={false} data-testid={`api-key-id-${account.id}`} />
             </Field>
           )}
-          <Field label={api.keyLabel} hint="Stored encrypted by the macOS keychain, only on this Mac. It is checked with the platform when you save it.">
-            <input className="input" type="password" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" spellCheck={false} data-testid={`api-key-input-${account.id}`} />
-          </Field>
+          {!api.signIn && (
+            <Field label={api.keyLabel} hint="Stored encrypted by the macOS keychain, only on this Mac. It is checked with the platform when you save it.">
+              <input className="input" type="password" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" spellCheck={false} data-testid={`api-key-input-${account.id}`} />
+            </Field>
+          )}
           {api.onceSecret && (
             <Field label={`${api.onceSecret.label} (optional)`} hint={api.onceSecret.hint}>
               <input className="input" type="password" value={secret} onChange={(e) => setSecret(e.target.value)} autoComplete="off" spellCheck={false} data-testid={`api-key-secret-${account.id}`} />
             </Field>
           )}
-          <div className="row">
-            <Button variant={saveVariant} type="submit" disabled={key.trim() === '' || (api.keyId !== undefined && keyId.trim() === '') || saving.busy} data-testid={`api-key-save-${account.id}`}>
-              {saving.busy ? 'Saving…' : `Save the ${name}`}
-            </Button>
-            {hasKey && <Button onClick={() => setEditing(false)}>Cancel</Button>}
-          </div>
+          {api.signIn ? (
+            <>
+              <div className="row">
+                <Button variant={saveVariant} type="submit" disabled={keyId.trim() === '' || signingIn.busy} data-testid={`api-sign-in-${account.id}`}>
+                  {signingIn.busy ? 'Waiting for you in the browser window…' : api.signIn.label}
+                </Button>
+                {signingIn.busy && (
+                  <Button onClick={() => void stopWaiting()} data-testid={`api-sign-in-stop-${account.id}`}>
+                    Stop waiting
+                  </Button>
+                )}
+                {hasKey && !signingIn.busy && <Button onClick={() => setEditing(false)}>Cancel</Button>}
+              </div>
+              {signingIn.busy && (
+                <p className="muted small" data-testid={`api-sign-in-waiting-${account.id}`}>
+                  The platform’s page is open in this account’s browser. Allow the application there; this waits ten minutes.
+                </p>
+              )}
+            </>
+          ) : (
+            <div className="row">
+              <Button variant={saveVariant} type="submit" disabled={key.trim() === '' || (api.keyId !== undefined && keyId.trim() === '') || saving.busy} data-testid={`api-key-save-${account.id}`}>
+                {saving.busy ? 'Saving…' : `Save the ${name}`}
+              </Button>
+              {hasKey && <Button onClick={() => setEditing(false)}>Cancel</Button>}
+            </div>
+          )}
         </form>
       )}
-      <ErrorNote error={saving.error ?? checking.error} />
+      <ErrorNote error={saving.error ?? signingIn.error ?? checking.error} />
     </AccountBlock>
   )
 }

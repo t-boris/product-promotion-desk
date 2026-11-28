@@ -218,7 +218,7 @@ export function CreateAccount({
         {createBlocker && <Hint data-testid="account-create-reason">{createBlocker}</Hint>}
       </div>
       <p className="muted small" data-testid="account-create-note">
-        {afterCreateNote(product, signsInWith !== undefined, viaApi && info?.api ? keyNameOf(info.api) : null)}
+        {afterCreateNote(product, signsInWith !== undefined, viaApi && info?.api ? keyNameOf(info.api) : null, viaApi ? (info?.api?.signIn?.label ?? null) : null)}
       </p>
       <ErrorNote error={state.error ?? proposing.error} />
     </form>

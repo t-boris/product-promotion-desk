@@ -16,10 +16,15 @@ export interface SignsInThrough {
   hasPassword: boolean
 }
 
-export function nextStep(account: Account, hasPassword: boolean, vaultAvailable: boolean, through?: SignsInThrough): NextStep {
+export function nextStep(account: Account, hasPassword: boolean, vaultAvailable: boolean, through?: SignsInThrough, signInLabel?: string): NextStep {
   // A login with no credentials of its own (Threads): the account it signs in through, then the sign-in. It never asks for an address or a password.
   if (through) return nextStepThrough(account, through)
-  // An account that works through its platform's API (a bot) has one thing to do: its key.
+  // An account that works through its platform's API has one thing to do: its key, or, where the platform is signed in to through its own window (X), that sign-in.
+  if (account.access === 'api' && signInLabel) {
+    return account.status === 'ready'
+      ? { block: null, text: 'All set. The app works with this account through the platform, with no browser.' }
+      : { block: 'key', text: hasPassword ? `Next: the platform does not accept the saved sign-in. Press “${signInLabel}” again, or check again.` : `Next: press “${signInLabel}” (the steps are below).` }
+  }
   if (account.access === 'api') {
     return account.status === 'ready' ? { block: null, text: 'All set. The app works with this account through the platform, with no browser.' } : { block: 'key', text: hasPassword ? 'Next: the platform does not accept the saved key. Save a new one, or check again.' : 'Next: save its key (the steps are below).' }
   }
@@ -47,7 +52,9 @@ function nextStepThrough(account: Account, through: SignsInThrough): NextStep {
  * product's Channels screen the app returns there, and the address, the password and the sign-in wait (the sign-in is needed before the
  * channel is activated, not to connect it or to write a draft by hand).
  */
-export function afterCreateNote(product: { name: string | undefined } | null, linked = false, keyName: string | null = null): string {
+export function afterCreateNote(product: { name: string | undefined } | null, linked = false, keyName: string | null = null, signInLabel: string | null = null): string {
+  // An account whose platform is signed in to through its own window has one thing to do: that sign-in.
+  if (signInLabel) return `After adding it you press “${signInLabel}” on the account's page (Accounts section); the steps are written there. Then connect its channel.`
   // An account that works through its platform's API has one thing to set: its key.
   if (keyName) return `After adding it you paste its ${keyName} on the account's page (Accounts section); the steps are written there. Then connect its channel.`
   // A login that signs in through another account has no address and no password to set.

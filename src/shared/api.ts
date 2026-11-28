@@ -356,6 +356,13 @@ export interface ApiMethods {
   'vault.savePassword': [{ accountId: Id; loginName: string; password: string }, Account]
   /** Saves the key of an account that works through its platform's API (DEC-055) and checks it; the key is never returned. */
   'vault.saveApiKey': [{ accountId: Id; key: string; secret?: string; keyId?: string }, Account]
+  /**
+   * Connects an API account whose platform is signed in to through its own window (X): opens the platform's page in the account's browser,
+   * waits for the owner to allow the application there (ten minutes at most), and keeps what the platform gives in the vault.
+   */
+  'vault.signIn': [{ accountId: Id; keyId: string }, Account]
+  /** Ends the wait of a sign-in that is going on for the account; the waiting call then fails with "The sign-in was stopped." */
+  'vault.stopSignIn': [{ accountId: Id }, void]
   'vault.removePassword': [{ accountId: Id }, Account]
   /** Local only: the saved password, for the owner to read. */
   'vault.revealPassword': [{ accountId: Id }, { password: string }]

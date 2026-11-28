@@ -528,6 +528,11 @@ describe('the next step of an account', () => {
     expect(nextStep(account({ access: 'api' }), false, true)).toMatchObject({ block: 'key', text: expect.stringMatching(/save its key/) })
     expect(nextStep(account({ access: 'api' }), true, true).text).toMatch(/does not accept/)
     expect(nextStep(account({ access: 'api', status: 'ready', identity: '@bot' }), true, true)).toMatchObject({ block: null, text: expect.stringMatching(/no browser/) })
+    // An account whose platform is signed in to through its own window (X) is told to press that button, never to paste a key.
+    expect(nextStep(account({ access: 'api' }), false, true, undefined, 'Sign in with X').text).toBe('Next: press “Sign in with X” (the steps are below).')
+    expect(nextStep(account({ access: 'api' }), true, true, undefined, 'Sign in with X').text).toMatch(/does not accept the saved sign-in\. Press “Sign in with X” again/)
+    expect(nextStep(account({ access: 'api', status: 'ready', identity: '@x' }), true, true, undefined, 'Sign in with X')).toMatchObject({ block: null })
+    expect(afterCreateNote(null, false, 'sign-in with X', 'Sign in with X')).toMatch(/you press “Sign in with X” on the account's page/)
     expect(afterCreateNote(null, false, keyNameOf({ keyLabel: 'Bot token' }))).toMatch(/paste its bot token/)
     expect(afterCreateNote(null, false, keyNameOf({ keyLabel: 'Threads access token', keyName: 'Threads access token' }))).toMatch(/paste its Threads access token/)
   })

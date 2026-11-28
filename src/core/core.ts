@@ -23,6 +23,7 @@ import {
 } from './ports'
 import { UnavailableSecretStore, apiKeyKey } from './vault'
 import { createHttpPort } from './net/http'
+import { createSignInListener, type SignInListener } from './net/sign-in-listener'
 import { Repos } from './repos'
 import { RunRecorder } from './runs'
 import { ApiRouter } from './api/router'
@@ -51,6 +52,8 @@ export interface CoreDeps {
   agentBridge?: AgentBridge
   /** Makes a smaller copy of a picture when a site refuses it for its size; without it the AI cannot shrink one. */
   imageShrinker?: ImageShrinker
+  /** The address on this Mac a platform answers a sign-in to; tests supply one on a free port. */
+  signInListener?: SignInListener
   /** The file dialog, thumbnails and the file manager for the post editor (DEC-030); without it the editor has no dialog. */
   mediaTools?: MediaTools
   /** Waits for a page to react between steps; tests supply one that does not wait. */
@@ -79,6 +82,7 @@ export class Core {
   readonly clipboard: SecretClipboard | null
   readonly agentBridge: AgentBridge | null
   readonly imageShrinker: ImageShrinker | null
+  readonly signInListener: SignInListener
   readonly mediaTools: MediaTools | null
   readonly sleep: (ms: number) => Promise<void>
   /** One switch for every writer of a channel's next check (the scheduler and the monitor), so they never disagree. */
@@ -113,6 +117,7 @@ export class Core {
     this.clipboard = deps.clipboard ?? null
     this.agentBridge = deps.agentBridge ?? null
     this.imageShrinker = deps.imageShrinker ?? null
+    this.signInListener = deps.signInListener ?? createSignInListener()
     this.mediaTools = deps.mediaTools ?? null
     this.sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
     this.scheduleJitter = deps.scheduleJitter ?? false
@@ -148,7 +153,8 @@ export class Core {
   apiAccess(account: Account): Pick<ConnectorContext, 'http' | 'apiKey' | 'pause' | 'publicFiles'> {
     return {
       http: this.http,
-      apiKey: async () => (account.access === 'api' ? this.secrets.get(apiKeyKey(account.id)) : null),
+      // A key that ends within hours is renewed here when it has ended (one account at a time); every other key is only read.
+      apiKey: async () => (account.access === 'api' ? (this.services.keys ? this.services.keys.current(account) : this.secrets.get(apiKeyKey(account.id))) : null),
       pause: (ms) => this.sleep(ms),
       publicFiles: async () => (account.access === 'api' ? ((await this.services.publicFiles?.open()) ?? null) : null)
     }

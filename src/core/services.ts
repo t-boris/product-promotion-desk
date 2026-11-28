@@ -1,7 +1,7 @@
 // Cross-module service contracts. Modules attach their implementation to `core.services` in `register()`
 // and consume other modules only through these interfaces, so they can be built and tested independently.
 
-import type { AgentAsk, CapabilityKey, Channel, Claim, Id, MetricSnapshot, PostResultsView, PostStanding, SendAction } from '../shared/types'
+import type { Account, AgentAsk, CapabilityKey, Channel, Claim, Id, MetricSnapshot, PostResultsView, PostStanding, SendAction } from '../shared/types'
 import type { PostMissionService } from './browser-agent/post-submit'
 import type { PublicFiles } from './ports'
 import type { WatchMissionService } from './browser-agent/watch'
@@ -145,7 +145,7 @@ export interface CoreServices {
   /** Implemented by the channels module; the monitor's watch flow has the AI look at a channel the app has no connector for, in the account's browser (DEC-042). */
   watchMissions?: WatchMissionService
   /** Implemented by the channels module; the scheduler has it renew the keys of API accounts that end (a Threads access token, DEC-080). */
-  keys?: { renewDue(): Promise<number> }
+  keys?: { renewDue(): Promise<number>; current(account: Account): Promise<string | null> }
   /** The owner's place for files on a public address (DEC-081): whether one is set up, and the place itself for a connector's send. */
   publicFiles?: { ready(): boolean; open(): Promise<PublicFiles | null> }
   /** Implemented by the channels module; the quick-post helper has the AI search a platform for trends, in the account's browser, on the owner's press (REQ-004). */

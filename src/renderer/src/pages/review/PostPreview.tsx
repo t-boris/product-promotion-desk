@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { judgedForFit, parseBlocks, platformLabel, renderForPlatform, sendProblems, type Block, type Inline, type PostContent, type RenderedPost, type SendWays } from '../../../../shared/post-format'
+import { judgedForFit, parseBlocks, platformLabel, renderForPlatform, sendPriceNote, sendProblems, type Block, type Inline, type PostContent, type RenderedPost, type SendWays } from '../../../../shared/post-format'
 import { hasTopicField } from '../../../../shared/topic-tag'
 import { PREVIEW_PLATFORMS, counterFor, fold, initialOf, previewKind, sketchNote, sketchNoteLook, visiblePictures, whereLine, type PreviewKind } from '../../../../shared/post-preview'
 import type { CardShape } from '../../../../shared/quick-post'
@@ -327,6 +327,8 @@ export function PostPreview({
   const rendered = renderForPlatform(content, platform)
   // An older draft is judged by its connector; the one thing said of it is that a link added to the end of the text took it over the limit (DEC-036). A quick post is judged whole, like a post written in the editor (its picture's own rules are shown by the composer).
   const problems = judgedForFit(content) ? (ways ? sendProblems(platform, rendered, ways) : []) : rendered.problems
+  // What the send costs is the channel's own matter: a look at the post as another platform says nothing of money.
+  const price = ways && platform === channelPlatform ? sendPriceNote(platform, rendered, ways) : null
   const ids = rendered.attachments.map((a) => a.mediaId).filter((id): id is string => id !== undefined)
   const thumbs = useThumbs(ids, 320)
   const empty = !rendered.title && rendered.text.trim() === '' && rendered.attachments.length === 0 && !rendered.link
@@ -375,6 +377,11 @@ export function PostPreview({
             <li key={problem}>{problem}</li>
           ))}
         </ul>
+      )}
+      {price && (
+        <p className="post-preview-notes muted small" data-testid="post-price">
+          {price}
+        </p>
       )}
     </section>
   )

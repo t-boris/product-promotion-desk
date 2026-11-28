@@ -1445,7 +1445,7 @@ One release per phase; each is verified (`npm run verify`), installed and read o
 - [ ] F (0.56.0) Facebook Page connector
 - [x] G (0.57.0) Threads connector — built as 0.82.0 (DEC-080), pictures and video as 0.83.0 through the place for files (DEC-081); unproven live (no Meta app)
 - [x] H (0.58.0) Instagram connector — built as 0.84.0 (DEC-082); unproven live (no Meta app, no bucket)
-- [ ] I (0.59.0) X connector
+- [x] I (0.59.0) X connector — built as 0.87.0 (DEC-086): sign-in in X's window, posts with pictures, the numbers of each post, the price before the approval; unproven live (no paid X app). Not built: reading replies and mentions and answering (proof T4 and the owner's word on paid reading), a video, a quote
 - [x] J (0.60.0) Pinterest and LinkedIn, publishing only: built as 0.85.0 (LinkedIn, DEC-084) and 0.86.0 (Pinterest, DEC-085)
 
 ## Ideal-application document (section 7)
@@ -1599,7 +1599,7 @@ Design:
 - [x] S3 `ConnectorContext.publicFiles`, `sendWays`/`sendProblems`, Threads pictures and video
 - [x] S4 verify (6450 tests), DEC-081, release 0.83.0, own-instance look at the Settings card (empty, a refused address, saved, a check that got no answer; no overflow)
 - [x] H Instagram connector (0.84.0, DEC-082)
-- [ ] I, J: after the research of X, Pinterest and LinkedIn documentation
+- [x] I, J: after the research of X, Pinterest and LinkedIn documentation — J as 0.85.0 and 0.86.0, I as 0.87.0
 
 Review of 0.83.0: the place is `src/core/files/public-files.ts` (service, API `filePlace.*`), the store `src/core/net/s3.ts` (signing tested against the two examples of Amazon's documentation), the card `src/renderer/src/pages/FilePlaceCard.tsx`. Threads: one picture, one video, or 2-20 as one post (`is_carousel_item` items, then `CAROUSEL`); the words, the topic and the reply go on the container of the whole post. Unproven: a real store (S3, R2, B2), and whether Threads reads from an address with a signature in its query.
 
@@ -1655,3 +1655,19 @@ Found while planning the price line of X: the preview worked the way of sending 
 
 - [x] `channels.sendWays` answers with the same `sendWays` the approval uses; `useSendWays(channelId)` in the review screens; `PostPreview` takes `ways` instead of two flags; the `reads` props that only served this are gone (QuickComposer, PublicationForm, DraftEditor's `post`)
 - [x] verify (6488 tests), own-instance look: a new post on a Pinterest API channel shows the preview with its problems
+
+## Phase I: an X account through X's API, posts and their numbers (plan 2026-11-28, 0.87.0)
+
+Facts (X's pages saved 2026-11-28): the API is paid per use (a post $0.015, a post with a link $0.20, a read of an own post's numbers $0.005 a post, counted once a day; "prices are subject to change"). OAuth 1.0a is being retired, so the way that lasts is OAuth 2.0 with a code and PKCE: the owner allows the app in a window of X, X sends the browser back to an address on this Mac (`http://127.0.0.1`, an exact match with the one registered in the app), the code lives 30 seconds, the access token 2 hours, and a refresh token that is used once gives the next pair. A reply through the API is allowed only to a person who mentioned or quoted the account ("summoned"); quoting is closed on pay-per-use.
+
+- The account is connected by a sign-in, not by a pasted key: the owner types the app's Client ID and presses “Sign in with X”; the application opens X's page in the account's own browser, waits on `127.0.0.1:47821/signin` for the answer for ten minutes at most, and keeps what X gives in the vault. General: `ApiAccess.signIn`, `Connector.signInUrl` / `keyFromSignIn`, a listener port of the core.
+- A key that ends within hours is renewed when it is used (`ApiAccess.renewedOnUse`), one account at a time; the daily renewal keeps an unused one alive.
+- Connector `x-api`: the channel is the account's own profile; a post of words with up to 4 pictures (JPEG, PNG, WEBP up to 5 MB) or one GIF; likes, replies and views under each post. Not read, not watched in a browser (as LinkedIn).
+- The price of a send is said in the preview before the approval, with the day of the price list.
+- Not built, and why: reading replies and mentions and answering them (every read is paid and X lets an app reply only when summoned: proof T4 and the owner's word on paid reading), a video (chunked upload), a quote.
+
+- [x] X1 sign-in through a window: listener, ports, `vault.signIn` / `vault.stopSignIn`, the key card
+- [x] X2 a key renewed when it is used
+- [x] X3 `src/connectors/x/` (api, connector, fake server, tests)
+- [x] X4 the price line in the preview
+- [ ] X5 verify, decision, own-instance look, release 0.87.0

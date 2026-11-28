@@ -118,6 +118,8 @@ export function register(core: Core): void {
     'vault.status': () => vault.status(),
     'vault.savePassword': (args) => vault.savePassword(args),
     'vault.saveApiKey': (args) => vault.saveApiKey(args),
+    'vault.signIn': (args) => vault.signIn(args),
+    'vault.stopSignIn': (args) => vault.stopSignIn(args.accountId),
     'vault.removePassword': (args) => vault.removePassword(args.accountId),
     'vault.revealPassword': (args) => vault.reveal(args.accountId),
     'vault.copyPassword': (args) => vault.copy(args.accountId),

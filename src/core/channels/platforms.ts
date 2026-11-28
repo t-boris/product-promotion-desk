@@ -61,7 +61,7 @@ export function listPlatforms(connectors: ConnectorRegistry): PlatformInfo[] {
     if (!connector || !api) return info
     // The address such an account takes may be another than the one its browser account takes (Pinterest: a board, not the profile).
     const guide = connector.channelGuide?.()
-    return { ...info, api: { accountKind: api.accountKind, keyLabel: api.keyLabel, ...(api.keyName ? { keyName: api.keyName } : {}), steps: api.steps, ...(api.onceSecret ? { onceSecret: api.onceSecret } : {}), ...(connector.renewKey ? { renews: true as const } : {}), ...(api.work ? { work: api.work } : {}), ...(api.keyDays ? { keyDays: api.keyDays } : {}), ...(api.keyId ? { keyId: api.keyId } : {}), ...(guide ? { channel: { example: guide.example, hint: guide.hint } } : {}) } }
+    return { ...info, api: { accountKind: api.accountKind, keyLabel: api.keyLabel, ...(api.keyName ? { keyName: api.keyName } : {}), steps: api.steps, ...(api.onceSecret ? { onceSecret: api.onceSecret } : {}), ...(connector.renewKey ? { renews: true as const } : {}), ...(api.work ? { work: api.work } : {}), ...(api.keyDays ? { keyDays: api.keyDays } : {}), ...(api.keyId ? { keyId: api.keyId } : {}), ...(guide ? { channel: { example: guide.example, hint: guide.hint } } : {}), ...(api.signIn ? { signIn: api.signIn } : {}) } }
   }
   return [...prepared.sort(byLabel), ...named.sort(byLabel), ...(universal ? [platformInfo(universal)] : [])].map(withApi)
 }

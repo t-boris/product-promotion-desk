@@ -60,7 +60,7 @@ export function AccountDetail({
   const viaHasPassword = via ? (vault?.accountIds.includes(via.id) ?? false) : false
   const step: NextStep = viaLoading
     ? { block: null, text: 'Loading…' }
-    : nextStep(account, hasPassword, vault?.available ?? true, wantedPlatform ? { account: via, label: wantedLabel, hasPassword: viaHasPassword } : undefined)
+    : nextStep(account, hasPassword, vault?.available ?? true, wantedPlatform ? { account: via, label: wantedLabel, hasPassword: viaHasPassword } : undefined, info?.api?.signIn?.label)
   const mismatch = platformMismatch(account.label, account.platform, platforms)
 
   const panels: Record<AccountTab, ReactNode> = {

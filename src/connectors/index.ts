@@ -3,6 +3,7 @@ import { FacebookPageConnector } from './facebook'
 import { InstagramApiConnector } from './instagram'
 import { LinkedInApiConnector } from './linkedin'
 import { PinterestApiConnector } from './pinterest'
+import { XApiConnector } from './x'
 import { RedditConnector } from './reddit'
 import { TelegramBotConnector } from './telegram'
 import { ThreadsApiConnector } from './threads'
@@ -15,5 +16,5 @@ export { authIssueOf, CaptchaRequiredError, LoginRequiredError, type AuthIssue }
  * module hands the universal connector the database so it can load its site profiles.
  */
 export function createConnectors(): Connector[] {
-  return [new RedditConnector(), new TelegramBotConnector(), new FacebookPageConnector(), new ThreadsApiConnector(), new InstagramApiConnector(), new LinkedInApiConnector(), new PinterestApiConnector(), new UniversalConnector()]
+  return [new RedditConnector(), new TelegramBotConnector(), new FacebookPageConnector(), new ThreadsApiConnector(), new InstagramApiConnector(), new LinkedInApiConnector(), new PinterestApiConnector(), new XApiConnector(), new UniversalConnector()]
 }

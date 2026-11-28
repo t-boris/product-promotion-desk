@@ -479,6 +479,13 @@ export interface ApiAccess {
    * (Pinterest). The connector's `keyToKeep` gets both and says what the vault keeps.
    */
   keyId?: { label: string; hint: string }
+  /**
+   * The account is connected by allowing the application in a window of the platform (OAuth with a code and PKCE), not by a pasted key: the
+   * words on the button. The connector then has `signInUrl` and `keyFromSignIn`, and what it keeps is never typed by the owner.
+   */
+  signIn?: { label: string }
+  /** The kept key ends within hours: it is renewed (`renewKey`) whenever it is used and has ended, not only by the daily renewal. */
+  renewedOnUse?: true
   /** What the application does through this kind of account, said where no key is saved yet. Absent: it posts, reads comments and answers. */
   work?: string
   /**
@@ -486,6 +493,23 @@ export interface ApiAccess {
    * 60). The application counts from the day the key was saved, shows the day on the account's page and tells the owner a week ahead (DEC-084).
    */
   keyDays?: number
+}
+
+/** What a sign-in through the platform's window is started with: the id of the owner's app, where the platform answers, and the two random words of the exchange. */
+export interface SignInAsk {
+  keyId: string
+  redirectUri: string
+  state: string
+  /** The S256 challenge of the verifier (PKCE). */
+  challenge: string
+}
+
+/** What the platform sent back, with what the exchange for a key needs. */
+export interface SignInAnswer {
+  keyId: string
+  redirectUri: string
+  code: string
+  verifier: string
 }
 
 /** The key the vault keeps for an API account, and when the platform stops accepting it (null when the platform did not say). */
@@ -686,6 +710,10 @@ export interface Connector {
    * `times` is what the application remembers of the key, for a platform that cannot be asked how long a key lasts.
    */
   renewKey?(http: HttpPort, key: string, now: Date, times: KeyTimes): Promise<KeptKey | null>
+  /** Only with `api.signIn`: the address of the platform's page where the owner allows the application. */
+  signInUrl?(ask: SignInAsk): string
+  /** Only with `api.signIn`: exchanges what the platform sent back for the key the vault keeps. It throws, in words, when the platform refuses. */
+  keyFromSignIn?(http: HttpPort, answer: SignInAnswer, now: Date): Promise<KeptKey>
   checkLogin(ctx: ConnectorContext): Promise<LoginState>
   /** Inspects the channel without publishing anything. Only actually verified capabilities may be 'verified'. */
   assess(ctx: ConnectorContext): Promise<Capability[]>

@@ -602,7 +602,7 @@ export interface PlatformInfo {
   /** Present when the platform can also be worked through its own API with a key the owner saves (DEC-055): a Telegram bot. */
   /** `renews`: the platform's keys end, and the application renews a saved one by itself before it does (a Threads access token, DEC-080). */
   /** `work`: what the application does through such an account, when it is not everything. `keyDays`: a key ends that many days after it is made and is not renewed (LinkedIn, DEC-084). */
-  api?: { accountKind: string; keyLabel: string; keyName?: string; steps: GuideStep[]; onceSecret?: { label: string; hint: string }; renews?: true; work?: string; keyDays?: number; keyId?: { label: string; hint: string }; channel?: { example: string; hint: string } }
+  api?: { accountKind: string; keyLabel: string; keyName?: string; steps: GuideStep[]; onceSecret?: { label: string; hint: string }; renews?: true; work?: string; keyDays?: number; keyId?: { label: string; hint: string }; channel?: { example: string; hint: string }; signIn?: { label: string } }
   /** The kinds of account the platform has (DEC-074); absent when it has one. */
   kinds?: AccountKindChoice[]
   /** How a browser account of the platform is connected, per kind; the key '' is for a kind not said yet, or a platform with no kinds (DEC-074). */
