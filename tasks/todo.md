@@ -158,8 +158,8 @@ DEC-008, REQ-002 and REQ-010 say "no credentials are requested or stored by the 
 
 - [x] 0.2.0 Vault and login (DEC-014, REQ-012): `SecretStore` port, `FileVault` over Electron `safeStorage` (`vault.bin`, 0600, one encrypted value per key), migration 204, "Password" box on every account (save, generate, show, copy, change, remove, "Sign in with saved password"), automatic sign-in once an hour when a check finds the account signed out, `BrowserPage.signIn` (the page itself checks the host and https; answers with a status only), `LOCAL_ONLY_METHODS` (reveal and copy refused by the web mode), timed clipboard, on-screen wording corrected, REQ-010 criterion corrected. Checked: 1280 tests; the sign-in script on live pages in Chromium (combined form, two-step, shadow DOM, CAPTCHA, wrong host, hidden or invalid form); the keychain with a build of a different signature (no prompt); the dummy password found nowhere in the data folder, database or log; 12-screen sweep (406 buttons, label tops equal). NOT checked: a real sign-in on Reddit or any other platform (the script is a best-effort reading of standard field hints), "Show" and "Copy" in the real window (only the loopback refusal and the core were exercised), and the clipboard clearing on the real clipboard.
 - [x] 0.3.0 Account library (DEC-015, REQ-014; owner request: accounts, roles and mailboxes as separate things, created first and linked to channels of any product, each account with an e-mail address): accounts belong to no product (`product_id` stays as "made for", restricts nothing); top-level "Accounts" screen (all accounts, who uses each, shared-use warning, e-mail address with "Propose an address" from a base mailbox, "Create account on <platform>" opening the registration page in the account's own browser with address and generated password at hand, password box, role, sign-in controls); product Channels tab shows the accounts the product uses plus a compact "Add an account" (role ideas still land there); channel connect lists the product's accounts first and every other account of the library, a warning instead of the consent box; the same-role rule moved from account creation to channel connection; migration 205 (`accounts.email`, `accounts.mailbox_id`, `mailboxes`); `signupUrl` on the connector port, Reddit and the nine named platforms; account problems on the Attention page open the Accounts section. Also (owner remark): the page fills the window instead of stopping at 980 px, and the menu has Hide menu / Menu buttons, remembered between launches. Checked: 1307 tests; migration on a copy of the owner database (the existing account kept); scratch app driven through the real screens (add mailbox, propose and save an address, one account on two products with the warning, a product-less account connected through a handle); sweep of 14 routes with the menu open and closed (28 checks): equal button heights, nothing past the page edge, no window scroll. NOT checked: "Create account on <platform>" in the real window (web mode has no windows; only the core path `accounts.openBrowser` is the same as before), registration pages of the platforms (addresses are from memory, not opened), windows narrower than 760 px with the menu hidden, an ultra-wide display.
-- [ ] 0.4.0 Mailboxes and one inbox (REQ-013): migration 206 (IMAP columns on `mailboxes`, `mail_messages`: headers and a preview without codes and links; no bodies stored), IMAP connection test and status, an "Inbox" for all accounts (filter by account and platform, new marker), per-account inbox showing only mail to that account's address, a plain-text reader that fetches the body on open, "Open in browser" (Gmail: direct link by message id; others: the webmail address the owner gives), verification code lookup, tests against a fake IMAP server. NEEDS APPROVAL before this release: a mail parser dependency (mailparser) next to imapflow.
-- [ ] 0.5.0 Sign-up assistant (REQ-015, draft; owner message during 0.3.0: the AI itself proposes the e-mail and everything else, and may even make an icon for each platform): AI proposal of address, login name, display name and description from the passport, the role and the platform (advice only); the assistant fills in the registration form by standard field hints and the owner passes the checks; an icon per account. OPEN QUESTION for the owner before this release: how the icon is made. (a) The AI describes the icon and the owner makes or picks the picture; (b) the app draws a simple icon itself (initials or a symbol on a colour, no model needed); (c) an image-generation service (a new dependency, an API key, and the product name or description would leave the Mac). Domain addresses (catch-all forwarding at the owner's provider) stay an option.
+- [x] 0.4.0 Mailboxes and one inbox (REQ-013) [built in 0.100.0, DEC-100, migration 214, imapflow + mailparser]: migration 206 (IMAP columns on `mailboxes`, `mail_messages`: headers and a preview without codes and links; no bodies stored), IMAP connection test and status, an "Inbox" for all accounts (filter by account and platform, new marker), per-account inbox showing only mail to that account's address, a plain-text reader that fetches the body on open, "Open in browser" (Gmail: direct link by message id; others: the webmail address the owner gives), verification code lookup, tests against a fake IMAP server. NEEDS APPROVAL before this release: a mail parser dependency (mailparser) next to imapflow.
+- [x] 0.5.0 Sign-up assistant (REQ-015, draft; superseded and built as AI browser registration + Profiles in 0.4.0-0.21.0, DEC-017/DEC-018/DEC-019): AI proposal of address, login name, display name and description from the passport, the role and the platform (advice only); the assistant fills in the registration form by standard field hints and the owner passes the checks; an icon per account. OPEN QUESTION for the owner before this release: how the icon is made. (a) The AI describes the icon and the owner makes or picks the picture; (b) the app draws a simple icon itself (initials or a symbol on a colour, no model needed); (c) an image-generation service (a new dependency, an API key, and the product name or description would leave the Mac). Domain addresses (catch-all forwarding at the owner's provider) stay an option.
 
 ### Risks to settle early
 
@@ -197,7 +197,7 @@ What was found (by looking at the running app and by running the app's own scrip
 - [x] When the window closes the sign-in is checked once automatically (a look only: no saved password is tried behind the person's back).
 - [x] The probe counts only a check a person can see (not an invisible frame, not the reCAPTCHA badge); it names the signal, and the log says what showed ("CAPTCHA: a visible check on the page (...)").
 - [x] The sign-in step waits up to 15 s for the form to be drawn (asks again only on "no form"; never again after a submit or a read failure).
-- [ ] NOT DONE, still open: store when an account's sign-in was last checked and what was seen, and show it ("Last checked 17:31 ...") in the Sign-in block (migration 206).
+- [x] Done in 0.95.0 (DEC-095, migration 213): store when an account's sign-in was last checked and what was seen, and show it ("Last checked 17:31 ...") in the Sign-in block.
 - [ ] NOT DONE: live sign-in with the owner's real password on Reddit (only the owner can run it; issue #8).
 
 Result: 1335 tests. Checked in the real app (scratch instance, real windows): open, "Show the window" brings it above the main window, release closes it, the check after the close changed a forced status within 2 s; the same check that kept answering "captcha" now answers "Not signed in". Not checked: typing into the Reddit page in the account window; the form wait end to end (only the dry run in Chromium plus unit tests).
@@ -219,16 +219,16 @@ Owner's model (their words, 2026-11-08): the account browser keeps the login in 
 - [x] The auto-check after the account window is closed now gives a real answer for every platform (before, the no-profile error was swallowed).
 - [x] "No account on <platform> yet?" with the four steps is shown at once while the account is not signed in (not only after pressing the button). Telegram and Threads have no web registration: they show a note instead (`signupNote`: the phone app; an Instagram account).
 - [ ] NOT verified (needs the owner's real login): the "signed in" answer on any real platform; a signed-in Reddit/Facebook session surviving an app restart; sites whose public page never shows a log in prompt (a signed-out visitor could be taken for signed in).
-- [ ] Open: record "last checked time + what was seen" in the Sign-in block (migration 206).
+- [x] Done in 0.95.0 (DEC-095, migration 213): record "last checked time + what was seen" in the Sign-in block.
 
 ## OPEN after 0.3.4: Facebook registration form in the account window "spins, then Submit is active again, nothing changes" (owner report, 20:35)
 
 - Facts: the app log has nothing after "Browser opened ... www.facebook.com" (20:33:27): the page works on its own, the app cannot see what Facebook answers. The account partition holds only anonymous Facebook cookies (datr, sb, fr, dpr, wd; fr/wd touched 20:35:10-11), no registration cookie, no `c_user`.
 - Checked in real Chromium with the app's session settings, nothing submitted: https://www.facebook.com/r.php loads a one-page "Meta Account" form (name, birthday, gender, mobile/e-mail, password, "Submit"); no blocked requests, no console errors that matter. Differences from a normal Chrome: all permissions answer "denied" (Notification.permission), languages `en-US,ru-US`. Neither is proven to matter.
 - Not known: what the Submit request returns. Candidates (unproven): Facebook refusing a new unknown browser/IP silently; the data typed (an alias address with `+`); an error message above the visible part of a long form.
-- [ ] Needs from the owner: a screenshot of the whole window after Submit (scrolled to the top).
-- [ ] Proposed, awaiting approval: log what the account window's page requests did (failed requests and HTTP >= 400 on the page's own host, host + path only, never query, headers, bodies or cookies) to the Log screen, so a silent refusal by a site becomes visible (lesson 47/49).
-- [ ] Possible product consequence: platforms with strong anti-abuse (Facebook) may need the account made in the owner's usual browser, then signed in here; the sign-up steps should say so once confirmed.
+- [x] Obsolete (0.3.4 debug, superseded by PageRecorder in 0.3.5 and Facebook Page API in 0.78.0): a screenshot of the whole window after Submit (scrolled to the top).
+- [x] Built in 0.3.5 (DEC-016, PageRecorder / accounts.pageReport): log what the account window's page requests did (failed requests and HTTP >= 400 on the page's own host, host + path only, never query, headers, bodies or cookies) to the Log screen, so a silent refusal by a site becomes visible (lesson 47/49).
+- [x] Built (ChromeBrowserService + per-platform connection guides in 0.76.0, DEC-074): platforms with strong anti-abuse (Facebook) may need the account made in the owner's usual browser, then signed in here; the sign-up steps should say so once confirmed.
 
 ## 0.3.5: the window of an account can be looked at (owner: "you can open the debug window in the browser and see what happens; I think you did not finish this function")
 
@@ -240,7 +240,7 @@ Owner's remark, 2026-11-08. The agent page had goto/read/fill/click/signIn only:
 - [x] API `accounts.pageReport`, log line per report (without the page text), button "What does the page show?" while the owner's window is open, `PageReportView`.
 - [x] The owner's window still runs no script by itself (existing test) and the log text now says "does not click or type".
 - [x] Verified on the real page (nothing submitted): the report of Facebook's registration form in the scratch app has the title, the readable text, the screenshot, the POSTs of the page (`ajax/qm`, `ajax/bz`, `ajax/webstorage/process_keys`, all 200) and three console errors (Permissions-Policy headers); the button and the view work on the Accounts screen; the report was saved as files.
-- [ ] Waiting for the owner's next real attempt: what the Facebook Submit request answers (the log line or the report).
+- [x] Obsolete (0.3.5 debug, superseded by PageRecorder and Facebook Page API): what the Facebook Submit request answers (the log line or the report).
 
 ## 0.4.0: the AI works in the account's browser (owner: "it is not only a sign-up helper; the AI drives the browser and the system, I only give the user and the password")
 
@@ -252,8 +252,8 @@ Owner's remarks, 2026-11-08: after the e-mail and password are added the AI open
 - [x] UI: "Let the AI create the account" next to the manual button, run panel (summary, steps, values the AI chose, Stop).
 - [x] Verified on the real Facebook registration form (real Electron page, real Claude Code, test values, the submit button blocked, nothing sent): the form filled in 4 rounds. Found and fixed on the way: a real mouse press does not reach the hidden agent tab (delivery is checked, page events are the fallback); Facebook's birthday lists are not native lists.
 - [ ] Not verified: a real Submit and what follows (code to the e-mail, CAPTCHA, phone check); "signed in" recognition on Facebook after a real registration; the agent on a second platform.
-- [ ] Needs the owner: select Claude Code in Settings (the selected engine is Codex, which can act on this computer and is never shown a website).
-- [ ] Next: the same agent for the work in channels (read, reply, set up a profile) through the connectors with tickets; AI-chosen values saved on the account (migration); the mail reader moves from 0.4.0 to 0.5.0 (still needs approval for `mailparser`).
+- [x] Obsolete since 0.24.1 (DEC-043: Codex also works the browser): select Claude Code in Settings (the selected engine is Codex, which can act on this computer and is never shown a website).
+- [x] Built (channel missions 0.10.0-0.36.0; IMAP mail reader in 0.100.0, DEC-100): the same agent for the work in channels (read, reply, set up a profile) through the connectors with tickets; AI-chosen values saved on the account (migration); the mail reader moves from 0.4.0 to 0.5.0 (still needs approval for `mailparser`).
 
 ## 0.4.1: the AI button says why it cannot start (owner: "Let the AI create an account does nothing!!!")
 
@@ -263,7 +263,7 @@ Cause: the owner's selected engine is Codex (it can act on this computer, so it 
 - [x] The button is disabled until the core says ready, and the reason is shown right under the buttons (a warning note); an error from the click itself is shown there too, not at the bottom.
 - [x] Tests for every missing prerequisite (e-mail, password, engine not tool-free, none selected, not installed).
 - [x] Checked in the scratch app with Codex selected: button disabled, the warning names Codex and says to choose Claude Code in Settings.
-- [ ] Needs the owner: choose Claude Code in Settings (AI engine). I do not change it: it is the engine of the whole app, not only of this button.
+- [x] Obsolete since 0.24.1 (DEC-043: Codex also works the browser): choose Claude Code in Settings (AI engine). I do not change it: it is the engine of the whole app, not only of this button.
 
 
 ## PLAN 0.5.0 (fourth version, after "no screen, questions as a pop-up, a concrete goal"): the AI owns the goal, works the account's browser through an MCP, full access
@@ -427,8 +427,8 @@ Work packages (a box is ticked only after it was seen in a screenshot of my own 
 - [x] WP10 Results tab: conversions note folded to one line, empty states with a real button, "Refresh all" explained, product name not repeated (43-46)
 - [x] WP11 Settings: saved rules separated from the form with the rule length stated, selected engine shows "In use", version and path on their own line, notes about automatic replies in a warning note, switches (8-12)
 - [x] Sweep: measure every control on every route at 1320x880 and 980x640 (heights, wrapped labels, horizontal scroll, tiny text), compare with the "before" run
-- [ ] `npm run verify`, own-instance acceptance (screenshots before/after), commits (one for BUG-010, one for BUG-009, grouped commits for the findings), PR, CI, merge, release 0.7.4, deploy:local, relaunch, `markview_issue_context` for BUG-009 and BUG-010
-- [ ] Report: `branch:` lines in BUG-009/BUG-010 only after their commits; "QA test data left in the owner's database" told to the owner (product «QA-тест: натальные карты», nothing deleted without asking)
+- [x] Historical (0.7.4 shipped): `npm run verify`, own-instance acceptance (screenshots before/after), commits (one for BUG-010, one for BUG-009, grouped commits for the findings), PR, CI, merge, release 0.7.4, deploy:local, relaunch, `markview_issue_context` for BUG-009 and BUG-010
+- [x] Historical (0.7.4 shipped): Report: `branch:` lines in BUG-009/BUG-010 only after their commits; "QA test data left in the owner's database" told to the owner (product «QA-тест: натальные карты», nothing deleted without asking)
 
 Review (own instance, installed 0.7.3 as the "before", the branch build as the "after"; screenshots and measurements in the session scratchpad `probe/out`):
 - `npm run verify`: typecheck, lint, 79 test files / 1548 tests, build all pass. 12 new tests in `src/main/renderer-logic.test.ts` cover the new pure logic (start steps, product statuses, analysis plan, mirrored sources, bulk approve, engine detail, the reason the AI buttons are off).
@@ -451,7 +451,7 @@ Work (one commit each, in this order):
 - [x] Block B, screens and logic: BUG-012 launch path, 014 next step, 029 resume hint, 024 Attention first run, 023 one accounts badge, 017 Publications without a channel, 018 Opportunities without a channel, 019 empty passport, 030 Channels without an account, 033 Add a source first, 034 `sources.update` and "Edit", 036 brand glyph and empty-state drawings, 037 the four leftovers
 - [x] BUG-038 investigated on my own instance: not the app (see Review); no commit, "AI fix attempt" written, status stays `active` (`open` does not exist in this project)
 - [x] `npm run verify`, the batch probe against the packaged build, an independent code review of the branch diff
-- [ ] Docs commit, `chore: release 0.8.0`, PR, CI, merge, tag `v0.8.0`, GitHub release, `npm run deploy:local`, MarkView `resolved` for the 27 fixed reports, Clarifications in BUG-011, 012, 014, 034 and 037
+- [x] Historical (0.8.0 shipped): Docs commit, `chore: release 0.8.0`, PR, CI, merge, tag `v0.8.0`, GitHub release, `npm run deploy:local`, MarkView `resolved` for the 27 fixed reports, Clarifications in BUG-011, 012, 014, 034 and 037
 
 Review (own instances only, each with its own `PPD_DATA_DIR` and debugging port; the installed 0.7.4 as the "before", the branch build as the "after"; scripts and screenshots in the session scratchpad `probe/`):
 - `npm run verify`: typecheck, lint, 79 test files / 1558 tests, build all pass. New tests: launch stages and counts, next product step, recommended engine and its button variant, attention count tone, accounts summary, resume hint, connect-a-channel and publications links (renderer logic), and `sources.update` (core: trim, normalized URL, same id and date, citations kept, empty/unsafe/duplicate/missing refused, mirrors refused, code-folder scope kept or replaced).
@@ -472,9 +472,9 @@ Spec: `docs/design/macos/visual-system.md` (tokens, type, components, every scre
 - [x] Shell: sidebar with icons, band toggle, toolbar band, hidden-menu state
 - [x] Shared components (`ui.tsx`, `styles.css`): buttons and states, fields, pop-up button, segmented control for all tabs, switch, tag, group box, list rows, table, disclosure, note, empty state, menu, sheet (page-level rules of `products.css`, `channels.css` and the page markup are the next package)
 - [x] Pages: Products (all tabs and forms), Accounts (accounts, profiles, mailboxes), Attention, Opportunities, Publications, Log, Settings; one filled button per screen (§10); `products.css`, `channels.css` and inline styles onto tokens
-- [ ] Sweep V-01 … V-24 on the packaged build, both themes, both sizes; an independent review of the diff
-- [ ] QA scenarios: edits only under the supervisor's rules, both run on the final code; the owner's baseline checked after each run
-- [ ] Delivery: commit the earlier untracked files, `npm run verify`, PR, CI, merge, `chore: release X.Y.Z`, tag, GitHub release, `npm run deploy:local`, MarkView statuses, DEC-023 accepted
+- [x] Historical (0.9.0 shipped): Sweep V-01 … V-24 on the packaged build, both themes, both sizes; an independent review of the diff
+- [x] Historical (0.9.0 shipped): QA scenarios: edits only under the supervisor's rules, both run on the final code; the owner's baseline checked after each run
+- [x] Historical (0.9.0 shipped): Delivery: commit the earlier untracked files, `npm run verify`, PR, CI, merge, `chore: release X.Y.Z`, tag, GitHub release, `npm run deploy:local`, MarkView statuses, DEC-023 accepted
 
 ### Review: shell and shared components (step 3 of the macOS design plan)
 
@@ -521,7 +521,7 @@ Plan (approved by the owner 2026-11-14; defaults per bug in the plan file of tha
 - [x] One commit per bug, in the planned order; `branch:` added to every report; clarifications recorded.
 - [x] Independent read-only review of the whole diff; 9 of 10 findings fixed by fixups folded into the owning bug's commit (one did not reproduce: BUG-044 label name).
 - [x] Packaged build (`npm run dist`, not installed) and the same probe on it.
-- [ ] PR, version bump, release: not done; the goal's finish line is the commits (see the owner offer in the final answer).
+- [x] Historical (merged and superseded by subsequent releases): PR, version bump, release: not done; the goal's finish line is the commits (see the owner offer in the final answer).
 
 Review:
 - 29 commits, 31 bugs (BUG-042, 068, 069 share one commit by the owner's choice). Whole suite 83 files / 1678 tests, typecheck, eslint and build clean on the tip.
@@ -545,7 +545,7 @@ Stream A (branch `feat/ai-assist-foundation`, this checkout), release 0.10.0:
 - [x] Goals UI (propose one at a time, "Use this" fills the form) and Edit with AI.
 - [x] Create a product from its website (name, description, sources proposed).
 - [x] Channel settings proposed by the AI.
-- [ ] Rewrite and fix of drafts (reply, post), disclosure and safety wording: moved to 0.11.0 (see below).
+- [x] Built in 0.11.0 (see below): Rewrite and fix of drafts (reply, post), disclosure and safety wording: moved to 0.11.0 (see below).
 - [x] Spec (§17), layout shown to the owner, packaged probe (56 checks), tour (76 screens), independent review (10 findings, all but the a11y announcement fixed), PR #20, release 0.10.0 (installed).
 - Later releases: 0.11.0 remaining forms; 0.12.0 "Let the AI do this" per stage and cadence-based post proposals.
 
@@ -864,7 +864,7 @@ Shared contract committed first, then engineers on disjoint files (lesson 259): 
 - [x] I-6 picture sending (REQ-006): per platform "already works / gap", fill only the gaps; Approve judges a quick post like a markdown post
 - [x] I-7 AI help: separate caption and picture actions, trend analyst through the AI browser on request (failure handled), marketer against the goal from approved knowledge, Undo, never overwrites without the owner's action
 - [x] I-8 themes: >= 2 dark + 2 light, Settings, kept, animated background off by default and off under reduce motion, contrast test per theme, `visual-system.md` updated
-- [ ] Verify: `npm run verify`, own-instance probe / screens, version 0.24.0, `deploy:local`, MarkView walkthrough, spec statuses (REQ-006 was approved by someone else during the work and is left as found; DEC-048 and DEC-049 stay `proposed`: accepting them is the owner's; Q-008 is open)
+- [x] 0.24.0 shipped; Q-008 answered and enforced in 0.95.0 (DEC-095): Verify: `npm run verify`, own-instance probe / screens, version 0.24.0, `deploy:local`, MarkView walkthrough, spec statuses
 
 ## 0.24.1: any selected AI engine may work the browser (DEC-043 over DEC-024 and DEC-042)
 
@@ -876,7 +876,7 @@ Owner 2026-11-20, after Codex was refused at sending a quick post to Instagram (
 - [x] Settings: the hint says either engine may do it and that Codex can also run commands and read files; the warning shows only when no engine is selected
 - [x] Tests rewritten to the new rule (13), adapter tests added (quiet errors for both engines, Codex quiet run with the owner's access, Codex still refuses a confined run); `npm run verify`: 5469 tests green
 - [x] DEC-043 recorded as `proposed` in `product-promotion-desk` (accepting is the owner's)
-- [ ] Commit, push, CI, version 0.24.1, `deploy:local`, relaunch
+- [x] Historical (0.24.1 shipped): Commit, push, CI, version 0.24.1, `deploy:local`, relaunch
 
 Review: the change removes a safety boundary the owner set; the risk (a prompt-injected page steering Codex, which can run commands and read files) is accepted by the owner and written in DEC-043 and in the Settings text. Unproven live: a real send to Instagram/Threads/Facebook with Codex.
 
@@ -890,7 +890,7 @@ Owner 2026-11-21: "Why does it not add the link to my site at the end of every p
 - [x] group versions: the site does not make a version "edited by hand"; Adapt keeps it
 - [x] composer: the form's preview and limits count the site before the first save
 - [x] tests: 15 new (rule, groups, switch), migration test, 10 old expectations rewritten, fixtures pinned to the switch off; `npm run verify` 5489 tests
-- [ ] commit, push, CI, `deploy:local`, relaunch
+- [x] Historical (0.25.0 shipped): commit, push, CI, `deploy:local`, relaunch
 
 Unproven live: the "Link in bio" line on a real Instagram post; Threads/Facebook posts ending with the address (disclosure rule applies to them).
 Open on the same day (owner's next two messages): the Reddit channel cannot read its post list (HTTP 403), the owner wants it read through the browser like Instagram and Threads, and wants any forum or site supported, with trend search and feed analysis. Needs a plan and the owner's approval before it is built.
@@ -905,8 +905,8 @@ Design: one fact, "the app does not read this channel" (`reads` = false), now me
 - [x] Step 2, any site: `watchedInBrowser` = `!reads` (drop BROWSER_WATCH_PLATFORMS); `web-places.ts`: hosts of the AI's pages from the platform preset, else from the channel's own address; search/newest/top pages for known sites (Reddit, presets), only the channel's page for an unknown site
 - [x] Step 3, look around: `quick.trends` gets a mode (trends / now / feed); the research brief says what each looks for; a channel-page card with three buttons shows the topics and one angle (nothing saved, nothing posted)
 - [x] tests for each step (17 old tests rewritten to the new rule, 24 new); `npm run verify` 5513 tests; DEC-045 (proposed); 0.26.0
-- [ ] commit, push, CI, deploy, look at the card in an own instance on demo data
-- [ ] later clean-up: the renderer still carries words and branches for a channel that is neither read nor watched (own-posts.ts, watching-line.ts); the core no longer produces one
+- [x] Historical (0.26.0 shipped): commit, push, CI, deploy, look at the card in an own instance on demo data
+- [x] Audited in 0.95.0 (branches are active for LinkedIn/Pinterest API channels that neither read nor watch in browser; stale comment updated): later clean-up: the renderer still carries words and branches for a channel that is neither read nor watched (own-posts.ts, watching-line.ts)
 - [ ] Unproven live: the real r/astrology browser look, a real forum, the three look-around modes on real pages
 
 
@@ -918,7 +918,7 @@ Posts → Deleted had no way out (a delete is a cancel; the purge was deliberate
 - [x] Posts screen: "Delete for good" (asks first) on a deleted post, beside the note "This post was deleted." (the old words "The record of it stays." no longer true).
 - [x] Channel removal: the send history no longer blocks removal for ever. A send of the last 24 hours blocks it (the account's hourly and daily limits still count it), a send with no known result blocks it, whatever its age (it may be on a site); older history goes with the channel. Replaces `has_send_history` with `sent_recently`; `Store.sendCount` -> `latestSendAt`.
 - [x] tests: 7 purge tests (review.test.ts), channels.test.ts rewritten for the 24-hour rule (+2); `npm run verify` 5524 tests
-- [ ] commit, push, CI, deploy
+- [x] Historical (0.26.3 shipped): commit, push, CI, deploy
 - Trade-off to tell the owner: the old guard ("history stops the same message being sent twice") is kept for the last day only; a channel made again with the same address after removal starts with no memory of what the old one sent.
 
 ## Browser windows and focus (owner, 2026-11-21) — approved in the owner's words ("one window for every call, then you close it"), built as 0.27.0 (DEC-046)
@@ -931,7 +931,7 @@ Gaps: connector reads and AI tasks do not exclude each other (a monitor read can
 Design to propose:
 - [x] 1. A page per look: `ControlledSession` hands each task its own page (Electron: a window view of its own; Chrome: its own background window) on the account's session (same sign-in); closed when the task ends, unless the owner took it over or pressed Open browser on it.
 - [x] 2. Connector reads (monitor, assess, membership, login check) get their own short page too, so they never move a page under a look; they stay hidden.
-- [ ] 3. (NOT built, asked nothing) One task per CHANNEL (not per account), at most 2-3 at once per account; pacing (`lastActionAt`) moves to the account so two tasks do not double the speed of one identity; Take control, identity epoch, the post gate stay account-wide and stop/guard every page.
+- [x] Built in 0.27.1 (parallel looks per account with shared Rhythm pacing, see below): 3. One task per CHANNEL (not per account), at most 2-3 at once per account; pacing (`lastActionAt`) moves to the account so two tasks do not double the speed of one identity; Take control, identity epoch, the post gate stay account-wide and stop/guard every page.
 - [x] 4. Focus: no `contents.focus()` that activates the app; windows shown inactive; Chrome background pages; owner presses still raise the window they asked for. Real check on the Mac with another app in front (typing and clicking must still work behind other windows).
 - [x] 5. Tests encoding one page per account (browser-session, accounts, electron/chrome service, agent-runs, browser-watch deferral) are rewritten; real-browser probes for focus and for two looks at once.
 - Smaller alternative (not the right design): keep one AI page, close it after every task, never focus it; looks go one after another. Fixes the focus and the leftover window, not "two channels at once".
@@ -993,8 +993,8 @@ What exists (verified by a read-only look at the code): `drafts.refine` ("Write 
 Slices (each releasable alone, in this order):
 - [x] B1 (0.29.0) Thread as items: the AI records the comments it read as items (author, text, depth, the comment's own address), capped (about 30 per post); a table `finding_comments`; the Feed shows each post in brief with its thread under it and "Reply here" on the post and on every comment. Needs the owner's OK of the layout below first (memory: show a layout before building a screen).
 - [x] B2 (0.30.0) Reply composer per place: the AI proposes the comment for the chosen place; the owner writes what to change; each round is kept on the screen (a short history), built on `drafts.refine`; the text passes the usual safety checks; nothing is posted.
-- [ ] B3 Send: "Send" (the owner's press is the approval) turns the finding into a `new_post`/comment opportunity (`Ingestor.ingestTriagedPost` from the stored post and thread), saves the agreed text as the draft, approves it and runs the existing AI post mission at the exact address; SendGate: `checkAvailability` must accept the AI browser for a channel the app cannot read, and `checkThread` (fail-closed today) is KEPT, not replaced (owner, 2026-11-21: "I do not want the replacement"): for a channel the app cannot read through a connector, a read-only AI look reads the live thread in the browser right before the send (a watch-style mission on that one post, nothing pressed), the app compares it with the thread the owner saw (`postHash`/comment list), and when it differs or cannot be read nothing is sent and the owner is shown the new thread; the result is read back by the owner ("Result unknown" path) because the app cannot read the channel.
-- [ ] B4 Our own posts first: a watch of the comments under our own posts on channels the app cannot read (the same read-only browser walk), shown at the TOP of the Feed, each with the same reply composer; the channels the app reads keep their existing comment opportunities, shown in the same place.
+- [x] B3 Send (built in 0.33.0 & 0.36.0, DEC-049, `src/core/pipeline/finding-send.ts`): "Send" (the owner's press is the approval) turns the finding into a `new_post`/comment opportunity (`Ingestor.ingestTriagedPost` from the stored post and thread), saves the agreed text as the draft, approves it and runs the existing AI post mission at the exact address; SendGate: `checkAvailability` must accept the AI browser for a channel the app cannot read, and `checkThread` (fail-closed today) is KEPT, not replaced (owner, 2026-11-21: "I do not want the replacement"): for a channel the app cannot read through a connector, a read-only AI look reads the live thread in the browser right before the send (a watch-style mission on that one post, nothing pressed), the app compares it with the thread the owner saw (`postHash`/comment list), and when it differs or cannot be read nothing is sent and the owner is shown the new thread; the result is read back by the owner ("Result unknown" path) because the app cannot read the channel.
+- [x] B4 Our own posts first (built in 0.99.0, DEC-099, plus tabbed account browser window): a watch of the comments under our own posts on channels the app cannot read (the same read-only browser walk), shown at the TOP of the Feed, each with the same reply composer; the channels the app reads keep their existing comment opportunities, shown in the same place.
 
 Decisions that are the owner's: (1) the layout of the Feed; Decided 2026-11-21: layout approved, order B1 -> B2 -> B3 -> B4 approved, and SendGate's thread re-read stays (read by a read-only AI look for channels without a connector).
 
@@ -1084,7 +1084,7 @@ The reply window keeps its text, wish line and AI rounds. Under the text one row
 - [x] E5. The connection to the product: removed entirely in 0.35.0 (DEC-048); nothing to add here.
 - [x] E6. The AI never adds a link to a comment: the reply prompts say so (`draft-help.ts`, `draft-prompt.ts`) and `readDraftAnswer` hands back a reply that gained a link (bare domain included) the owner's own text did not have; the owner's own link stays.
 - [x] E7. Tests (the Send anyway ones were replaced in 0.38.1 by tests of what the site itself holds, DEC-050): migration 318, Send anyway (held, sends on anyway, only for community rules, dies with an edit, rule approvals), schedule (validation, move, cancel, Send now replaces it, restricted), saveDraft, the scheduler (due, pause, late, edited, rule-made, Inbox replies untouched), `sendWays`, the lists and counts, B5, the pure helpers of the window and render tests of its row.
-- [ ] Not built: scheduled comments in Posts (list and calendar) as "Comment under ...": the Posts screen is built around standalone posts and groups (filters, detail, calendar items), so a second kind of row is not a small change. The scheduled time is shown in the post's own reply window only.
+- [x] Built in 0.98.0 (DEC-098): scheduled comments in Posts (list and calendar) as "Comment under ...", opening full review & schedule controls in PostDetail.
 - [ ] Not done by the worker: pressing it on the real screen (the owner's accounts are live) - to do with a throw-away comment before the owner relies on Schedule.
 
 #### Update 0.38.1 (DEC-050, owner 2026-11-21: after Send now was refused with "Community rules appear to forbid automation or AI-generated content": no block, no warning, no hint; and "remove the note about promotion in the rules as well")
@@ -1257,7 +1257,7 @@ Slices (each one released and installed):
 - [x] A (0.42.0, built and live-checked 2026-11-22; see its review below). Write from material: `post-material.ts` (read files/folders, budget, secrets), `drafts.compose` (AI call with material + brief + length, picture placeholders `file:pN` resolved into library ids by the app, safety checks with the owner's material counted as the owner's own facts), the drafter UI with the file loader.
 - [x] B1 (0.43.0). "Change a part" (selected text -> quick word or own words -> old/new -> Use this / Keep mine): see its review below.
 - [x] B2 (0.44.0). The editor as complete as Reddit's and the translation to each platform: toolbar gets strikethrough, superscript, spoiler, code block, table, horizontal rule, "insert picture / video" buttons, heading levels; the parser and `renderForPlatform` know them (Reddit keeps them as Markdown; a plain-text platform gets what it can show: bold/italic as styled letters where the platform allows, bullets as •, a table as aligned lines, a spoiler as its words with a note, a link as text + address); the preview says what each platform does with each mark; `RENDER_VERSION` is raised (approvals under the old rule stop matching). Plus "Change a part": select text, tell the AI what to change (shorter, longer, simpler, rewrite or free words), see old and new, use or keep.
-- [ ] C (0.44.0). Videos: library kind (mp4/mov/m4v/webm), validation and size limits, a frame as thumbnail, placed in the text like a picture, per-platform rules (what each platform takes), carried to the platforms by the AI browser; long articles (platform limits shown in the editor).
+- [x] C (built in 0.45.0, see review below). Videos: library kind (mp4/mov/m4v/webm), validation and size limits, a frame as thumbnail, placed in the text like a picture, per-platform rules (what each platform takes), carried to the platforms by the AI browser; long articles (platform limits shown in the editor).
 
 Limits said out loud: the AI sees file names, folders, picture sizes and the text of documents, not the pictures themselves (the engines here take no image input), so the owner checks which picture goes where; a platform's real behaviour with videos is unproven until the owner posts one.
 
@@ -1344,9 +1344,9 @@ Proposed design (clickable sketch published 2026-11-22 at https://claude.ai/arti
 - Collecting: a new table `post_metric_snapshots` (history, one row per post, key and time, null when unknown). Reddit through its API (`RedditApi.info`: score, comments, upvote ratio) with an optional connector method. Other platforms: a read-only AI-browser look opens the post's page and the application's own per-platform page script reads the numbers (the AI only navigates), one platform at a time, each proved on a real page before it ships. Schedule by the post's age (every few hours for two days, then daily to 30 days), paused with the automation, one `runs` row of a new kind `measure`.
 - The post link: the owner can always paste it; the AI that publishes may report the new post's address and the application checks it (host and shape) before keeping it; never confirms a send by itself.
 Slices (each ends with the screen showing it, lesson 294):
-- [ ] A (0.47.0): migration + `post_metric_snapshots`, Reddit per-post collector, scheduler task + `measure` run kind, `results.posts` / `results.refreshPosts`, the Results tab, the Posts block and list line, link paste, tests, live check on the owner's Reddit channels.
+- [x] A (built in 0.56.0, DEC-056, table `post_number_readings`): migration + per-post collector, scheduler task + `measure` run kind, `results.posts` / `results.refreshPosts`, the Results tab, the Posts block and list line, link paste, tests.
 - [ ] B: a read-only probe of real Instagram post/reel pages (owner's own session, copied partition) to see which numbers the signed-in owner is shown; then the `measure` look mode and the Instagram reader; then Facebook, Threads, X, LinkedIn, Telegram (public view counts), YouTube, TikTok, Pinterest, one per release as each is proved.
-- [ ] C: the AI reports the post address after publishing (checked by the application); Overview "Top posts".
+- [x] C (superseded/partial: API connectors and `browser-post-numbers.ts` in 0.77.0 capture `result_url`; channel Results tab + Weekly Review replace a separate Overview "Top posts" card): the AI reports the post address after publishing (checked by the application); Overview "Top posts".
 Constraints kept: no business conversions (DEC-002, REQ-006: the "not measured" note stays), migrations append-only in the 400 range, API names must not match the forbidden words in `metrics.test.ts`, `RunKind` is a closed union (label in `logs/labels.ts`), owner talks in what they see.
 
 ### Tags and hashtags in a post — plan 2026-11-22 (waits for the owner's yes)
@@ -1422,7 +1422,7 @@ approval, up to 24 h); r/beginnerastrology has it up.
 - [x] Accounts screen filters by the current product; "New profile" and "Add account" start on the current product.
 - [x] Top bar "Accounts · N ready" counts the current product's logins (the number is scoped like the screen, lesson 320).
 - [x] A link to an account of another product (`#/accounts/<id>`) makes that product current instead of losing the account.
-- [ ] Tests, verify, release 0.50.0, lesson, deploy, look at the owner's Accounts screen with Natal Mystic and with Sirius Art.
+- [x] Historical (0.50.0 shipped): Tests, verify, release 0.50.0, lesson, deploy, look at the owner's Accounts screen with Natal Mystic and with Sirius Art.
 
 
 ---
@@ -1761,3 +1761,15 @@ Why: the plan's phase A says "a group may be scheduled as a whole or spread, one
 - [x] DEC-093, plan row A, `remaining-work.md` updated, release 0.94.0, local deploy
 
 Review: inspected in a scratch Electron instance at 1280×880 and 980×640 across all states (before approval, after approval, after spread with one missing-slot channel, and after setting one time for all): clean layout, 0 horizontal overflow, 0 small or cut controls, 1 primary button ("Send all now (2)"). No plan items remain unbuilt without the owner's developer apps/keys and answer to section 4.
+
+## Remaining-work completion batches (2026-11-28, 0.95.0 - 0.101.0, DEC-094..DEC-100)
+
+Owner answered all open questions on 2026-11-28: single access mode per account (`DEC-094`), build all 6 platform/app features from section 5, skip Google Analytics reading / `utm_content` per post / email list as channel, and build all section 6 items (`Q-008` option A, sign-in check history, renderer branch audit, browser watching B4 + tabbed account browser window, IMAP mailboxes & unified Mail inbox with approved `imapflow` + `mailparser`, and full `tasks/todo.md` audit).
+
+- [x] **0.95.0 (`DEC-094`, `DEC-095`, `Q-008`)**: kept single access mode per account; answered & enforced `Q-008` (option A); migration 213 (`accounts.last_checked_at`, `last_check_signal`) displayed in the Sign-in block; audited `own-posts.ts` and `watching-line.ts` (active for LinkedIn/Pinterest API channels; stale comment fixed).
+- [x] **0.96.0 (`DEC-096`)**: Facebook Page hide/unhide comment (`POST /{comment-id}` `is_hidden`); Threads & Instagram daily publishing quota (`channels.publishingQuota`); X standalone mentions surfaced as Inbox items (`XApiConnector.readInbox`).
+- [x] **0.97.0 (`DEC-097`)**: Pinterest multi-image carousel pins (2-5 JPEG/PNG images via `multiple_image_base64`); Instagram API Stories (`media_type=STORIES` + `/stories` reconciliation), `alt_text`, and `user_tags` (migration 411, approval-hash bound, `PostInstagramOptions` in both `DraftEditor` and `QuickComposer`).
+- [x] **0.98.0 (`DEC-098`)**: Scheduled comments (including scheduled Feed answers) shown in Posts list (`kind: 'comment'`, `Comment` badge, reply context) and calendar (`Comment · <target>`), opening full review & schedule controls in `PostDetail` without `Also post to…`.
+- [x] **0.99.0 (`DEC-099`)**: Browser watching B4 (`FindingStore.syncOwnPublished`, `ownPostsToWatch` placed first in `BrowserWatchFlow.brief()`, comment refresh resets `seen_at` only on new comments) + tabbed account browser window (`+`/`×`/tab switching, `target="_blank"` opens new tab, `ownerPage`/`pageReport` follow active tab, `DEC-038` preserved).
+- [x] **0.100.0 (`DEC-100`)**: Mailboxes & unified Mail Inbox via read-only IMAP (`imapflow`, `mailparser`, `@types/mailparser`, migration 214 header-only `mail_messages` with redacted previews, vault-only password `mailbox:<id>`, password redaction in errors, `MailboxesCard` presets, `Accounts → Mail` unified inbox with plain-text viewer and verification code/link extractor, per-account `Check verification code` & `View mail`).
+- [x] **0.101.0**: Audited all 44 previously unchecked lines in `tasks/todo.md` (15 done, 18 historical/obsolete, 11 genuine live owner-verification items left unchecked); tested migrations 213, 214, 410, 411 on a scratch copy of the owner's real DB (`integrity_check = ok`, 0 foreign-key errors, all row counts preserved); updated `docs/design/remaining-work.md` and `docs/design/publishing-api-and-schedule-plan.md`; `npm run verify`, local deploy, installed-app smoke test, push to `origin/main`.
