@@ -198,6 +198,8 @@ export interface DraftInput {
   markup?: PostMarkup
   /** The flair of the post, by name, from the community's own list; null takes it off. Left out on a replacing draft, the earlier draft's flair stays (a post's other editors do not know it). */
   flair?: string | null
+  /** The one topic of the post on a platform that has a field for it (Threads); null takes it off. Left out on a replacing draft, the earlier draft's topic stays. */
+  topicTag?: string | null
   /**
    * `quick` for a post written in the quick-post composer (one picture, a caption in `text`, no title; DEC-046), `article` for the long form. Left out on
    * a draft that replaces an earlier one, it keeps that draft's type (editing never changes the type); on a first draft it is `article`.

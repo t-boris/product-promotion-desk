@@ -177,7 +177,7 @@ describe('no statement of the author\'s connection to the product is asked for (
     const base = { category: 'thanks', decision: 'reply', reply: 'Thanks!', rationale: 'r', usedClaimIds: [] }
     expect(parseReplyProposal(JSON.stringify(base))).toEqual(base)
     expect(parseReplyProposal(JSON.stringify({ ...base }))).toEqual(base)
-    const post = { topic: 't', title: 'T', text: 'x', link: null, rationale: 'r', usedClaimIds: [] }
+    const post = { topic: 't', title: 'T', text: 'x', link: null, rationale: 'r', usedClaimIds: [], topicTag: null }
     expect(parsePublicationProposal(JSON.stringify({ ...post, link: '' }))).toEqual(post)
   })
 

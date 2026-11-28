@@ -35,6 +35,8 @@ export interface ApprovedContent {
   attachments?: ApprovedFile[]
   /** The approved flair by name. The application chooses it on the form (browser_flair) and reads it back; the AI never gives or changes it. Null or left out: none. */
   flair?: string | null
+  /** The approved topic of the post (Threads). The application types it into the field the AI names (browser_submit's topic_ref) and reads it back; the AI never gives or changes it. Null or left out: none. */
+  topicTag?: string | null
 }
 
 /** One submission: a ticket held only for the length of `PostAuthority.lease`, and the point of no return. */

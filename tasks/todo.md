@@ -1454,7 +1454,7 @@ One release per phase; each is verified (`npm run verify`), installed and read o
   - [ ] readers for the channels worked in the browser, the post link there; the tagged site link; the site's analytics (needs the owner's answer: which analytics); goals with a number and a date
   - [x] the tagged site link (0.57.0): product switch, utm tags naming platform and channel, off by default
 - [x] 2 weekly review and the learning loop (0.58.0, DEC-057): Review screen, numbers against the usual of four weeks, AI's words and one change, accept / decline / own, direction for the AI's proposed posts for two weeks, Monday 9:00 job
-  - [ ] owner's answers still open: place in the sidebar, day and hour, whether an accepted change may steer the content mix
+  - [x] whether an accepted change may steer the content mix: yes (owner, 2026-11-28), built as 0.80.0 (DEC-078). Place in the sidebar and day and hour stay as built; the owner has not asked to change them
 - [x] 3 channel trials (0.59.0, DEC-058): Trial card on the channel's Results tab, terms, counted number, Inbox item at the end, keep / stop and park / extend, AI proposes the terms; no hard limit on channels in work (owner's question 3 open)
 - [x] 4 positioning and the audience's words (0.60.0, DEC-059): two Setup steps; five answers proposed and approved; words bank from read Feed posts with their posts; both feed the AI's proposed posts; a repeated question gets a draft. Not built: an FAQ store with approved answers; use in reply drafts
 - [ ] 5 themes, campaigns, seasonal calendar
@@ -1489,7 +1489,7 @@ One release per phase; each is verified (`npm run verify`), installed and read o
 ## Completion check of the ideal-app document, section 7 (2026-11-27, at 0.79.1)
 Each of the twelve items read against the code, not against the earlier notes.
 - 1 Results per post: tagged link (platform, channel), likes/comments/views per post on every channel (connector or AI browser), Plausible visitors by platform and channel, a goal's number and date: built. NOT built: the post itself in the tag, so visits per post, and sign-ups or sales per post. It waits for the owner's yes: it makes every tagged address longer inside the post's text, it works only for a product whose site has an analytics service, and the owner said a product may have none (lesson of 2026-11-27: a mention is not an order). Google Analytics is noted, not read.
-- 2 Weekly review: built. The accepted change steers the AI's drafts; steering the content mix by itself waits for the owner's answer (asked on the sketch).
+- 2 Weekly review: built. The accepted change steers the AI's drafts and, since 0.80.0 (DEC-078, the owner's answer of 2026-11-28), the plan of drafts for its two weeks.
 - 3 Channel trials, limit on channels in work: built.
 - 4 Positioning, audience's words, "said in three posts" mark: built.
 - 5 Campaigns, dates ahead with lead times: built.
@@ -1497,7 +1497,7 @@ Each of the twelve items read against the code, not against the earlier notes.
 - 7 Waiting note (48 hours), "took off" item, People with testimonials and permission: built.
 - 8 Heard elsewhere (name, phrases, competitors, places), "Add as a channel": built.
 - 9 AI-answer check, monthly: built.
-- 10 Translate, topic and keywords (copied by the owner), carousel and video plan: built. A topic typed into Threads by the AI browser waits for the owner's answer.
+- 10 Translate, topic and keywords (copied by the owner), carousel and video plan: built. A topic typed into Threads by the application: built as 0.81.0 (DEC-079) after the owner's answer of 2026-11-28.
 - 11 Warm-up plan, share of posts with the link, reach comparison: built.
 - 12 Launch venues: built, off until set.
 - Found by the check and fixed (0.79.1): the note under Results and Overview said "no analytics service is connected" for every product; it now follows the product's choice ("Site visits": none, read from Plausible, or chosen and not read).
@@ -1514,7 +1514,16 @@ The owner answered the four open questions: the post in the link's tag: not now;
 - [x] tests, verify, decision, release, read-only look
 - Built as 0.80.0 (DEC-078). `src/shared/mix-plan.ts` holds the rules, `weekly-review.ts` asks for and keeps the steps, `mix.ts` runs on the rhythm in force. Unproven live: "Prepare the review" and "Accept for the next week" were not pressed on the owner's data (they call the AI and save).
 ### R2: a topic typed into Threads by the AI browser
-- [ ] plan after reading the post mission and the draft's fields
+What Meta's own page says (threads/posts, read 2026-11-27): one topic per post, 1 to 50 characters, no periods and no ampersands. Threads has no connector here, so the AI browser is the only way a post goes out; the topic field of the real composer was not looked at.
+The topic is a part of the post the owner approves, like the flair: kept on the draft, bound by the approval, typed by the application and never by the AI.
+- [x] `src/shared/topic-tag.ts`: the rules of a topic (clean, 1-50 characters, no "." and no "&", one line), `hasTopicField(platform)`; `PlatformForm.topic` set for Threads only
+- [x] the draft: column `drafts.topic_tag` (pipeline migration 332), `Draft.topicTag`, `DraftInput.topicTag` (left out keeps the earlier draft's, null takes it off), refused on a platform with no topic field, part of the approval's hash only when set
+- [x] the send: `PublishRequest.topicTag`, `ApprovedContent.topicTag`, compared by the mission's authority with the draft's own
+- [x] the page: `browser_submit` takes `topic_ref`; the application types the approved topic first, reads it back with the other fields, and presses nothing when the form has no such field or does not hold exactly the approved topic; the brief says so
+- [x] the AI proposes: the editor's "Topic" line on a Threads post with "Propose" (the AI names it from the text); a post the AI writes for a Threads channel comes with a topic (`context.channel.topicRule`, the same way as the link rule)
+- [x] the preview shows the topic on the Threads sketch
+- [x] tests (rules, draft, hash, request, authority, toolbox, prompt, editor logic), `npm run verify`, decision, 0.81.0, install, read-only look
+- Built as 0.81.0 (DEC-079). Unproven live: the real Threads composer was never looked at, so the name of its topic field ("Add a topic"), whether it keeps a typed topic as it is typed and whether it reads back are taken from what is known of it; when any of that differs the mission stops before the press and says so. When Threads' API is connected (phase G) the same topic goes out as `topic_tag`.
 
 ## Plan after the owner's answers of 2026-11-27
 The owner answered: the kind of an account is asked per account with a guided connection in the internal browser; numbers under posts must be read on every channel; analytics is chosen per product (Google Analytics, Plausible or none).

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { judgedForFit, parseBlocks, platformLabel, renderForPlatform, sendProblems, type Block, type Inline, type PostContent, type RenderedPost } from '../../../../shared/post-format'
+import { hasTopicField } from '../../../../shared/topic-tag'
 import { PREVIEW_PLATFORMS, counterFor, fold, initialOf, previewKind, sketchNote, sketchNoteLook, visiblePictures, whereLine, type PreviewKind } from '../../../../shared/post-preview'
 import type { CardShape } from '../../../../shared/quick-post'
 import { isVideoMime } from '../../../../shared/types'
@@ -187,7 +188,7 @@ function Words({ rendered, markdown }: { rendered: RenderedPost; markdown: boole
   return markdown ? <div className="pv-words marked">{blocks(parseBlocks(rendered.text))}</div> : rendered.text !== '' ? <div className="pv-words pv-plain">{rendered.text}</div> : null
 }
 
-function Sketch({ rendered, kind, author, thumbs, markdown, live, flair }: { rendered: RenderedPost; kind: PreviewKind; author: PostAuthor; thumbs: Thumbs; markdown: boolean; live?: LivePicture; flair?: string | null }) {
+function Sketch({ rendered, kind, author, thumbs, markdown, live, flair, topic }: { rendered: RenderedPost; kind: PreviewKind; author: PostAuthor; thumbs: Thumbs; markdown: boolean; live?: LivePicture; flair?: string | null; topic?: string | null }) {
   const link = rendered.link ? <div className="pv-link small">{rendered.link}</div> : null
   const pictures = <Pictures rendered={rendered} kind={kind} thumbs={thumbs} live={live} />
   switch (kind) {
@@ -236,7 +237,15 @@ function Sketch({ rendered, kind, author, thumbs, markdown, live, flair }: { ren
             {initialOf(author.name)}
           </span>
           <div className="pv-short-body">
-            <span className="pv-author-name">{author.name || 'account'}</span>
+            <span className="pv-author-name">
+              {author.name || 'account'}
+              {topic && (
+                <span className="pv-topic" data-testid="preview-topic">
+                  {' › '}
+                  {topic}
+                </span>
+              )}
+            </span>
             <Words rendered={rendered} markdown={false} />
             {link}
             {pictures}
@@ -282,7 +291,8 @@ export function PostPreview({
   ticked,
   livePicture,
   pictureShape,
-  flair = null
+  flair = null,
+  topic = null
 }: {
   content: PostContent
   channelPlatform: string
@@ -304,6 +314,8 @@ export function PostPreview({
   pictureShape?: CardShape
   /** The flair of the post: Reddit shows it under the title. Nothing for a platform that has none. */
   flair?: string | null
+  /** The topic of the post: Threads shows it beside the account's name. Nothing for a platform that has no topic field. */
+  topic?: string | null
 }) {
   const [picked, setPicked] = useState(channelPlatform)
   // A different channel starts at its own platform again.
@@ -344,7 +356,7 @@ export function PostPreview({
         )}
       </div>
       <div className={`pv pv-${kind}`} data-testid="preview-sketch" data-kind={kind}>
-        {empty ? <div className="muted small">Nothing to show yet.</div> : <Sketch rendered={rendered} kind={kind} author={author} thumbs={thumbs} markdown={markdown} live={livePicture} flair={flair} />}
+        {empty ? <div className="muted small">Nothing to show yet.</div> : <Sketch rendered={rendered} kind={kind} author={author} thumbs={thumbs} markdown={markdown} live={livePicture} flair={flair} topic={hasTopicField(platform) ? topic : null} />}
       </div>
       <div className="muted small">{platforms && ticked && !ticked.includes(platform) ? sketchNoteLook(platform) : sketchNote(platform, platforms ? platform : channelPlatform)}</div>
       {!empty && (

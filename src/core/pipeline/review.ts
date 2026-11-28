@@ -10,7 +10,7 @@ import { judgedForFit, noConnectorProblem, renderForPlatform } from '../../share
 import type { PipelineHooks } from '../services'
 import type { Core } from '../core'
 import { attachmentProblem } from './attachments'
-import { inheritPostType, normalizeDraftInput } from './draft-input'
+import { assertTopicFits, inheritPostType, normalizeDraftInput } from './draft-input'
 import { contentHash, hashedIdentity } from './hash'
 import { sendFitProblems, sendWays } from './send-ways'
 import { OTHER_LOGIN_SPEAKS_REASON, SEND_LOCKED_STATES, SPEAKING_STATES, type FlowStore } from './store'
@@ -59,6 +59,8 @@ export class ReviewFlow implements PipelineHooks {
     const content = await normalizeDraftInput(input, { productId: opp.productId, media: this.core.services.media! })
     if (opp.kind === 'reply' && !content.text) throw new ApiError('invalid_input', 'A reply needs text.')
     const channel = this.store.requireChannel(opp.channelId)
+    if (opp.kind === 'reply' && content.topicTag) throw new ApiError('invalid_input', 'A reply has no topic: only a post is filed under one.')
+    assertTopicFits(channel.platform, content)
 
     this.core.db.transaction(() => {
       // Re-read inside the transaction: the state may have changed while attachments were being checked.

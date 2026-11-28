@@ -14,7 +14,8 @@ import type { Core } from '../core'
 import { holdsCredential } from '../assist/kit'
 import { AiError } from '../ports'
 import { loadKnowledge, postChannelView, roleView } from './context'
-import { normalizeDraftInput, isHttpUrl } from './draft-input'
+import { hasTopicField } from '../../shared/topic-tag'
+import { assertTopicFits, normalizeDraftInput, isHttpUrl } from './draft-input'
 import {
   buildPublicationPrompt,
   buildUpdatePrompt,
@@ -34,6 +35,9 @@ import { errorMessage } from './util'
 
 const AI_TIMEOUT_MS = 180_000
 
+/** The topic the AI gave with a post, kept only where the platform's composer has a field for it (it is asked for only there). */
+const topicFor = (platform: string, proposal: { topicTag: string | null }): string | null => (hasTopicField(platform) ? proposal.topicTag : null)
+
 export class PublicationsFlow {
   constructor(
     private readonly core: Core,
@@ -47,6 +51,7 @@ export class PublicationsFlow {
     if (!content.text && !content.link && content.attachments.length === 0) {
       throw new ApiError('invalid_input', 'A publication needs text, a link or an image.')
     }
+    assertTopicFits(channel.platform, content)
     const opp = this.core.db.transaction(() => {
       const created = this.store.createStandalone(channel, 'draft', 'Written by you')
       this.store.insertDraft(created.id, content, { knowledgeVersionId: null, usedClaimLineageIds: [], rationale: '', author: 'user' })
@@ -128,7 +133,7 @@ export class PublicationsFlow {
       const created = this.store.createStandalone(channel, 'draft', `${options.origin ? `${options.origin}. ` : ''}Suggested topic: ${proposal.topic}`)
       this.store.insertDraft(
         created.id,
-        { title: proposal.title, text: proposal.text, link: proposal.link, attachments: [] },
+        { title: proposal.title, text: proposal.text, link: proposal.link, attachments: [], topicTag: topicFor(channel.platform, proposal) },
         {
           knowledgeVersionId: knowledge.versionId,
           usedClaimLineageIds: [...new Set(report.usedClaims.map((c) => c.lineageId))],
@@ -223,7 +228,7 @@ export class PublicationsFlow {
       if (taken.changes !== 1) throw new ApiError('invalid_state', 'This note was used for a post already.')
       this.store.insertDraft(
         created.id,
-        { title: proposal.title, text: proposal.text, link: proposal.link, attachments: [] },
+        { title: proposal.title, text: proposal.text, link: proposal.link, attachments: [], topicTag: topicFor(channel.platform, proposal) },
         { knowledgeVersionId: knowledge.versionId, usedClaimLineageIds: [], rationale: withRole(proposal.rationale, role), author: 'ai' }
       )
       return created

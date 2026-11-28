@@ -2,6 +2,7 @@
 // answer is parsed and checked by hand (DEC-005: no schema library). Whatever it says, the application's own
 // checks and the SendGate decide what may be sent.
 
+import { cleanTopicTag, topicTagProblem } from '../../shared/topic-tag'
 import type { CommentCategory, OpportunityDecision } from '../../shared/types'
 import type { ChannelView, ClaimView, ProductView, ReplyContext, RoleView } from './context'
 
@@ -164,6 +165,7 @@ Rules
 - Pick a topic that fits the community (context.channel and context.recentTitles) and gives value to its readers; do not repeat context.previousPosts. Explain in "rationale" why it fits this community.
 - Write in the first of context.channel.languages and follow context.channel.style. No hype, no clickbait.
 - Add a link only if it is context.product.website and the community allows it. Never add any other link. When context.channel.linkRule is present, follow it.
+- When context.channel.topicRule is present, follow it and add "topicTag" to the JSON object; otherwise leave "topicTag" out.
 - Capabilities listed in context.channel.limits are not usable.
 - Voice: when context.role is present, write as that role: use the way of writing described in context.role.voice and stay within what that voice allows you to talk about. context.channel.style still applies. The role never overrides any rule above: approved claims only, nothing prohibited, no promises.
 - Do not claim to be an independent user and do not deny a connection with the product; say nothing about a connection unless the owner's own text does.
@@ -223,6 +225,14 @@ export interface PublicationProposal {
   link: string | null
   rationale: string
   usedClaimIds: string[]
+  /** The topic the AI gives for a platform that files a post under one (asked through context.channel.topicRule); null when it gave none or one the field cannot hold. */
+  topicTag: string | null
+}
+
+/** The topic of a proposal, as it can be kept: cleaned, and left out (null) when the field of the platform could not hold it. The post stands without it. */
+function topicTagField(o: Record<string, unknown>): string | null {
+  const tag = typeof o.topicTag === 'string' ? cleanTopicTag(o.topicTag) : ''
+  return tag !== '' && topicTagProblem(tag) === null ? tag : null
 }
 
 export function parsePublicationProposal(text: string): PublicationProposal {
@@ -234,7 +244,8 @@ export function parsePublicationProposal(text: string): PublicationProposal {
     text: stringField(o, 'text', { required: true, max: MAX_POST_CHARS }),
     link: link || null,
     rationale: stringField(o, 'rationale', { required: true }),
-    usedClaimIds: idsField(o, 'usedClaimIds')
+    usedClaimIds: idsField(o, 'usedClaimIds'),
+    topicTag: topicTagField(o)
   }
 }
 
@@ -251,6 +262,7 @@ Rules
 - Write as the person of context.persona and context.role: their way of writing, in the first person, and nothing that person would not say. Write in the first of context.channel.languages and follow context.channel.style. Short and plain; no hype, no clickbait.
 - Do not repeat context.previousPosts.
 - The link is empty unless the note itself contains an address, and then it is that address. When context.channel.linkRule is present, it comes first: follow it.
+- When context.channel.topicRule is present, follow it and add "topicTag" to the JSON object: the subject the note is about, which states nothing; otherwise leave "topicTag" out.
 - Do not claim to be an independent user and do not deny a connection with the product; say nothing about a connection unless the owner's own text does.
 - If the note says too little to write a post, still write the shortest honest one; never fill the gap with invented detail.
 
@@ -289,6 +301,8 @@ export interface UpdateProposal {
   rationale: string
   /** The model itself says the post contains something the note does not: the post is refused. */
   addsFactsBeyondNote: boolean
+  /** As in `PublicationProposal`. */
+  topicTag: string | null
 }
 
 export function parseUpdateProposal(text: string): UpdateProposal {
@@ -300,6 +314,7 @@ export function parseUpdateProposal(text: string): UpdateProposal {
     link: link || null,
     rationale: stringField(o, 'rationale', { required: true }),
     // A model that does not say whether it added something is not trusted: the post is refused as if it had.
-    addsFactsBeyondNote: booleanField(o, 'addsFactsBeyondNote', true)
+    addsFactsBeyondNote: booleanField(o, 'addsFactsBeyondNote', true),
+    topicTag: topicTagField(o)
   }
 }

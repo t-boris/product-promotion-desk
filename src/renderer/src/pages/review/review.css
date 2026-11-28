@@ -1033,6 +1033,10 @@ button.post-picture.library:hover .post-thumb {
 .flair-problem .hint {
   margin: 0;
 }
+.pv-topic {
+  font-weight: 400;
+  color: var(--muted);
+}
 .pv-flair {
   align-self: flex-start;
   padding: 0 var(--space-2);

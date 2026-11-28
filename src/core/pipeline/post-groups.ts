@@ -13,6 +13,7 @@
 // Nothing here approves or sends by itself: this file is not reached from the scheduler.
 
 import { ApiError, type DraftInput } from '../../shared/api'
+import { hasTopicField } from '../../shared/topic-tag'
 import { characterCount, formOf, judgedForFit, kindsOf, platformLabel, renderForPlatform, siteLinkFor, type PostContent, type SendWays } from '../../shared/post-format'
 import type {
   Channel,
@@ -125,7 +126,8 @@ export class PostGroupsFlow {
     }
     const id = this.core.db.transaction(() => {
       const group = this.insertGroup(productId, master, OWN_WORDS)
-      for (const channel of channels) this.addVersion(group, channel)
+      // The topic the owner typed is no part of the master (it is not words): it goes to the versions of the platforms that have a field for it.
+      for (const channel of channels) this.addVersion(group, channel, content.topicTag ?? null)
       return group.id
     })()
     this.core.log.info('pipeline', `A post was written for ${channels.length} channels`, productId)
@@ -155,7 +157,7 @@ export class PostGroupsFlow {
       }
       const taken = new Set(this.liveVersions(group.id).map((v) => v.channelId))
       const channels = this.channelsOf(opp.productId, channelIds.filter((c) => !taken.has(c)), 1)
-      for (const channel of channels) this.addVersion(group, channel)
+      for (const channel of channels) this.addVersion(group, channel, draft.topicTag)
       return group.id
     })()
     this.store.notify()
@@ -425,9 +427,9 @@ export class PostGroupsFlow {
   }
 
   /** A version is an ordinary standalone post of one channel, written from the master and standing on the same facts. */
-  private addVersion(group: StoredGroup, channel: Channel): void {
+  private addVersion(group: StoredGroup, channel: Channel, topicTag: string | null = null): void {
     const opp = this.store.createStandalone(channel, 'draft', 'Written by you, for several channels', group.id)
-    this.store.insertDraft(opp.id, group.master, group.provenance)
+    this.store.insertDraft(opp.id, topicTag && hasTopicField(channel.platform) ? { ...group.master, topicTag } : group.master, group.provenance)
   }
 
   /** The versions in the order they were made (the order the owner chose the channels in). */

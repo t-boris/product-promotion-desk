@@ -2,6 +2,7 @@
 // parent chain, the account's earlier replies, the approved product knowledge and the channel rules.
 
 import { linkRuleOf } from '../../shared/post-format'
+import { topicRuleOf } from '../../shared/topic-tag'
 import type { Account, Channel, Claim, Id, Opportunity, OpportunitySource } from '../../shared/types'
 import type { Core } from '../core'
 import { isPostTarget, postHash, postText } from './reply-target'
@@ -39,6 +40,8 @@ export interface ChannelView {
   limits: string[]
   /** Where a link goes on this platform, when its post form has no field for it (DEC-036); absent when it has one. Only a post's drafting is told. */
   linkRule?: string
+  /** What to give as the post's one topic, when the platform's composer has a field for it (Threads); absent when it has none. Only a post's drafting is told. */
+  topicRule?: string
 }
 
 /** The role of the login a draft is written with (DEC-010): who the author is and how they write. */
@@ -121,10 +124,11 @@ export function channelView(channel: Channel): ChannelView {
   }
 }
 
-/** The channel as the AI that writes a post is shown it: the same view and, when the platform's post form has no link field, what is done with the link (DEC-036). */
+/** The channel as the AI that writes a post is shown it: the same view and, when the platform's post form has no link field, what is done with the link (DEC-036); when it has a topic field, what to give as the topic. */
 export function postChannelView(channel: Channel): ChannelView {
   const linkRule = linkRuleOf(channel.platform)
-  return { ...channelView(channel), ...(linkRule ? { linkRule } : {}) }
+  const topicRule = topicRuleOf(channel.platform)
+  return { ...channelView(channel), ...(linkRule ? { linkRule } : {}), ...(topicRule ? { topicRule } : {}) }
 }
 
 /** The login's role, only when one is set. */

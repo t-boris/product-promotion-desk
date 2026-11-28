@@ -953,6 +953,8 @@ export interface Draft {
   markup: PostMarkup
   /** The name of the flair the post goes out with, chosen from the community's own list (Reddit); null: none. Part of what an approval binds when set. */
   flair: string | null
+  /** The one topic the post is filed under where the platform has a field for it (Threads); null: none. Typed by the application on the site. Part of what an approval binds when set. */
+  topicTag: string | null
   /**
    * `article` (every draft before DEC-046) or `quick` (one picture plus a caption; the caption is in `text`, the title is empty). Screens choose their
    * layout by this field, never by guessing from an empty title.

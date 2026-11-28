@@ -236,7 +236,10 @@ const SHARES_THE_PAGE = /^\s*(?:share|поделиться)\b/i
 const POST_PICTURES =
   'The owner approved pictures too. Put them into the form with browser_attach (one call, all of them, into a file input listed as input:file: its "takes" must say pictures, and several files at once when more than one is approved), before browser_submit: browser_submit refuses until they are in. After that only controls named Next or Continue are clicked, and the control that publishes (Share, Post) is pressed by browser_submit alone.'
 
-const postTools = (pictures: string[], flair: string | null): McpTool[] => [
+const POST_TOPIC =
+  'The owner approved a topic for this post. The form has a field for it, named like "Add a topic": pass its label as topic_ref in browser_submit, and the application types the approved topic itself, before the text. When the field shows only after a click on a control of that name, click it once while the form is empty. You never type a topic and never choose a suggested one. If the form has no topic field, call report_result with needs_owner and say so.'
+
+const postTools = (pictures: string[], flair: string | null, topic = false): McpTool[] => [
   TOOLS[0] as McpTool,
   TOOLS[1] as McpTool,
   tool('browser_click', 'Click an element, like a person with the mouse, to get to the form (open the thread, the comment box, the reply field: the "Reply" control under a comment, a "Create post" button). A control named like one that publishes is clicked only while every field of the page is empty, to open a form; with text in any field nothing is clicked. The control that publishes the form is pressed by browser_submit alone. Waits for the page to react.', { ref }, ['ref']),
@@ -247,11 +250,12 @@ const postTools = (pictures: string[], flair: string | null): McpTool[] => [
   TOOLS.find((t) => t.name === 'browser_wait_for') as McpTool,
   tool(
     'browser_submit',
-    'Publish the approved content: the application itself types it into the fields you name (you never give it any text), reads every field back, looks at the page once more and then presses the control you name. Call it once, when the form is open and empty (with the approved pictures in it, when there are any) and you can see its fields and its button in browser_snapshot. text_ref is the field for the text (a text box: the comment box, the body); title_ref and link_ref only when the approved content has a title or a link, and the form has fields for them; submit_ref is the button of the form, named like Post, Reply, Comment, Submit, Publish or Save. The labels must be the ones of your last browser_snapshot: look again after the page changed. If the answer says nothing was submitted, you may look again and call it again; if it says the control was pressed, do not call it again.',
+    'Publish the approved content: the application itself types it into the fields you name (you never give it any text), reads every field back, looks at the page once more and then presses the control you name. Call it once, when the form is open and empty (with the approved pictures in it, when there are any) and you can see its fields and its button in browser_snapshot. text_ref is the field for the text (a text box: the comment box, the body); title_ref and link_ref only when the approved content has a title or a link, and the form has fields for them; topic_ref only when the approved content has a topic (the field named like "Add a topic"); submit_ref is the button of the form, named like Post, Reply, Comment, Submit, Publish or Save. The labels must be the ones of your last browser_snapshot: look again after the page changed. If the answer says nothing was submitted, you may look again and call it again; if it says the control was pressed, do not call it again.',
     {
       text_ref: { type: 'string', description: 'The label of the field the text goes into, like e12' },
       title_ref: { type: 'string', description: 'The label of the title field, only when the approved content has a title' },
       link_ref: { type: 'string', description: 'The label of the link field, only when the approved content has a link' },
+      ...(topic ? { topic_ref: { type: 'string', description: 'The label of the topic field (named like "Add a topic"): the approved post has a topic' } } : {}),
       submit_ref: { type: 'string', description: 'The label of the control that publishes (Reply, Comment, Post, Submit)' }
     },
     ['submit_ref']
@@ -472,6 +476,11 @@ const POST_SETTING_CONTROL =
 const TEXT_ENTRY_ROLE = /^(?:textarea|textbox|input:(?:text|search|url|email|tel))$/
 /** The fields that hold several lines: a line break in any other field is never typed. */
 const MULTI_LINE_ROLE = /^(?:textarea|textbox)$/
+/**
+ * The name of the field a post's topic is typed into (Threads: "Add a topic"). English and Russian, whole words. LIVE ACCEPTANCE: the word is the one
+ * Threads is known to use; it must be checked on the real composer.
+ */
+const TOPIC_FIELD = /(?<![\p{L}\p{N}])(?:topics?|тем[аыуе])(?![\p{L}\p{N}])/iu
 const LINE_BREAK = /[\r\n\u0085\u2028\u2029]/
 /** The name of a control that edits something the account wrote: only the author of a post or a comment is offered one. */
 const EDIT_CONTROL = /(?<![\p{L}\p{N}])(?:edit|редактировать|изменить)(?![\p{L}\p{N}])/iu
@@ -482,7 +491,7 @@ const EDIT_CONTROL = /(?<![\p{L}\p{N}])(?:edit|редактировать|изм
 const SUBMIT_ROLE = /^(?:button|input:(?:submit|button|image))$/
 
 interface Part {
-  name: 'title' | 'text' | 'link'
+  name: 'topic' | 'title' | 'text' | 'link'
   value: string
   ref: string
 }
@@ -553,8 +562,8 @@ export class BrowserToolbox implements McpToolHost {
     const names = Object.keys(deps.files ?? {})
     const withUpload = names.length > 0 ? [...TOOLS.slice(0, 4), uploadTool(names), ...TOOLS.slice(4)] : TOOLS
     if ([deps.post, deps.join, deps.watch, deps.research].filter((mode) => mode !== undefined).length > 1) throw new Error('A mission is a post, a join, a watch or a research, never more than one of them.')
-    this.tools = deps.watch ? (deps.watch.numbers ? numbersTools(deps.watch) : watchTools(deps.watch)) : deps.research ? researchTools(deps.research) : deps.join ? joinTools(deps.join) : deps.post ? postTools((deps.post.authority.content.attachments ?? []).map((f) => f.name), deps.post.authority.content.flair ?? null) : deps.remember ? withUpload : withUpload.filter((t) => t.name !== 'remember_lesson')
-    this.instructions = deps.watch ? (deps.watch.numbers ? NUMBERS_INSTRUCTIONS : WATCH_INSTRUCTIONS) : deps.research ? RESEARCH_INSTRUCTIONS : deps.join ? JOIN_INSTRUCTIONS : deps.post ? [POST_INSTRUCTIONS, (deps.post.authority.content.attachments ?? []).length > 0 ? POST_PICTURES : '', deps.post.authority.content.flair ? POST_FLAIR : ''].filter((part) => part !== '').join(' ') : INSTRUCTIONS
+    this.tools = deps.watch ? (deps.watch.numbers ? numbersTools(deps.watch) : watchTools(deps.watch)) : deps.research ? researchTools(deps.research) : deps.join ? joinTools(deps.join) : deps.post ? postTools((deps.post.authority.content.attachments ?? []).map((f) => f.name), deps.post.authority.content.flair ?? null, Boolean(deps.post.authority.content.topicTag)) : deps.remember ? withUpload : withUpload.filter((t) => t.name !== 'remember_lesson')
+    this.instructions = deps.watch ? (deps.watch.numbers ? NUMBERS_INSTRUCTIONS : WATCH_INSTRUCTIONS) : deps.research ? RESEARCH_INSTRUCTIONS : deps.join ? JOIN_INSTRUCTIONS : deps.post ? [POST_INSTRUCTIONS, (deps.post.authority.content.attachments ?? []).length > 0 ? POST_PICTURES : '', deps.post.authority.content.flair ? POST_FLAIR : '', deps.post.authority.content.topicTag ? POST_TOPIC : ''].filter((part) => part !== '').join(' ') : INSTRUCTIONS
     this.maxCalls = deps.maxCalls ?? DEFAULT_MAX_CALLS
     this.trace = deps.post ? new StepTrace() : null
     this.rhythm = deps.rhythm ?? { at: null, reserved: null }
@@ -1383,7 +1392,9 @@ export class BrowserToolbox implements McpToolHost {
     const post = this.deps.post as PostSetup
     const content = post.authority.content
     const submitRef = str(args.submit_ref)
-    const wanted: { name: 'title' | 'text' | 'link'; value: string | null; ref: string }[] = [
+    // The topic is typed first: a site that offers topics while one is typed closes its list when the next field is typed into.
+    const wanted: { name: Part['name']; value: string | null; ref: string }[] = [
+      { name: 'topic', value: content.topicTag ?? null, ref: str(args.topic_ref) },
       { name: 'title', value: content.title, ref: str(args.title_ref) },
       { name: 'text', value: content.text, ref: str(args.text_ref) },
       { name: 'link', value: content.link, ref: str(args.link_ref) }
@@ -1459,6 +1470,13 @@ export class BrowserToolbox implements McpToolHost {
     if (fieldNames) {
       const control = element(snapshot, submitRef)
       for (const part of parts) if (profileNamed(element(snapshot, part.ref))) return profileProblem(`"${element(snapshot, part.ref)?.name}"`)
+      // The topic goes into the field the page itself calls a topic, and the other parts into fields it does not: a label given for the wrong part would
+      // publish the topic as the text. Judged at the first look only, as the profile's words are.
+      for (const part of parts) {
+        const named = TOPIC_FIELD.test(element(snapshot, part.ref)?.name ?? '')
+        if (part.name === 'topic' && !named) return `"${element(snapshot, part.ref)?.name || part.ref}" is not the topic field of the form (a field named like "Add a topic"). Nothing was typed. Look at the page again and name that field as topic_ref; when the form has none, call report_result with needs_owner and say so.`
+        if (part.name !== 'topic' && named && parts.some((p) => p.name === 'topic')) return `${part.ref} is the topic field, and you named it for the ${part.name}. Nothing was typed. Name it as topic_ref and the field of the ${part.name} as ${part.name}_ref.`
+      }
       if (profileNamed(control)) return profileProblem(`"${control?.name}"`)
       // A form that holds such a field next to the one the text goes into is a profile form, whatever the field is called.
       const form = control?.form

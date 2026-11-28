@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { DraftInput } from '../../../../shared/api'
+import { cleanTopicTag, hasTopicField } from '../../../../shared/topic-tag'
 import type { Attachment, Draft, Id, PostMarkup } from '../../../../shared/types'
 import { AiTextField } from '../../assist/AiField'
 import { OutlineDraft } from './OutlineDraft'
@@ -12,6 +13,7 @@ import { FoundSources } from './FoundSources'
 import { foundForAnswer, keepFound, type FoundFor } from './found-sources'
 import { fileName } from './labels'
 import { PostFlair } from './PostFlair'
+import { PostTopic } from './PostTopic'
 import { PostPictures, PostTextBox, usePostEditor } from './PostEditorParts'
 import { PostPreview, type PostAuthor } from './PostPreview'
 import { SectionAssist } from './SectionAssist'
@@ -26,24 +28,26 @@ export interface DraftForm {
   markup: PostMarkup
   /** The flair of the post in a community that has them (Reddit): a name from the community's own list, or none. */
   flair: string | null
+  /** The topic of the post on a platform that files a post under one (Threads), as it stands in the field; empty: none. */
+  topicTag: string
 }
 
 /** A new post is written in the post editor, so it is Markdown from the start; a reply is plain text. */
-export const emptyForm = (withTitle: boolean): DraftForm => ({ title: '', text: '', link: '', attachments: [], markup: withTitle ? 'markdown' : 'legacy', flair: null })
+export const emptyForm = (withTitle: boolean): DraftForm => ({ title: '', text: '', link: '', attachments: [], markup: withTitle ? 'markdown' : 'legacy', flair: null, topicTag: '' })
 
 function fromDraft(draft: Draft | null, withTitle: boolean): DraftForm {
   if (!draft) return emptyForm(withTitle)
-  return { title: draft.title ?? '', text: draft.text, link: draft.link ?? '', attachments: draft.attachments, markup: draft.markup ?? 'legacy', flair: draft.flair ?? null }
+  return { title: draft.title ?? '', text: draft.text, link: draft.link ?? '', attachments: draft.attachments, markup: draft.markup ?? 'legacy', flair: draft.flair ?? null, topicTag: draft.topicTag ?? '' }
 }
 
 /** What the core will store for this form: surrounding whitespace is trimmed there too. */
 export function toInput(form: DraftForm, withTitle: boolean): DraftInput {
-  return { title: withTitle ? form.title.trim() || null : null, text: form.text.trim(), link: form.link.trim() || null, attachments: form.attachments, markup: form.markup, flair: form.flair }
+  return { title: withTitle ? form.title.trim() || null : null, text: form.text.trim(), link: form.link.trim() || null, attachments: form.attachments, markup: form.markup, flair: form.flair, topicTag: cleanTopicTag(form.topicTag) || null }
 }
 
 const signature = (form: DraftForm, withTitle: boolean): string => {
   const input = toInput(form, withTitle)
-  return JSON.stringify([input.title, input.text, input.link, form.attachments.map((a) => a.mediaId ?? a.path), form.markup, form.flair])
+  return JSON.stringify([input.title, input.text, input.link, form.attachments.map((a) => a.mediaId ?? a.path), form.markup, form.flair, input.topicTag])
 }
 
 /** Form state for one draft: resets when a different (newly saved) draft arrives and says whether it was edited. */
@@ -82,6 +86,8 @@ interface Props {
     reads: boolean
     /** The channel this version of the post is for: its community's own form (the flairs it offers) is read for the Flair line. Left out, there is no such line. */
     channelId?: Id
+    /** The platforms of the channels a new post is written for, when the owner chooses them in the same form: the Topic line shows when any of them has a topic field. Left out: `platform` alone. */
+    platforms?: readonly string[]
   }
 }
 
@@ -174,7 +180,7 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
             {textField}
             <FoundSources sources={shownFound?.sources ?? []} />
           </div>
-          <PostPreview content={previewContent} flair={form.flair} channelPlatform={post.platform} author={post.author} aiBrowser={settings.data?.publishWith === 'ai_browser' || !post.reads} noConnector={!post.reads} />
+          <PostPreview content={previewContent} flair={form.flair} topic={cleanTopicTag(form.topicTag) || null} channelPlatform={post.platform} author={post.author} aiBrowser={settings.data?.publishWith === 'ai_browser' || !post.reads} noConnector={!post.reads} />
         </div>
       ) : (
         <>
@@ -184,6 +190,9 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
       )}
       {ai && <TranslateDraft title={form.title} text={form.text} disabled={disabled || blocked !== null} onTranslated={(translated) => set(withTitle ? translated : { text: translated.text })} />}
       {ai && <OutlineDraft title={form.title} text={form.text} disabled={disabled || blocked !== null} />}
+      {inEditor && post && (post.platforms ?? [post.platform]).some(hasTopicField) && (
+        <PostTopic value={form.topicTag} onChange={(topicTag) => onChange((current) => ({ ...current, topicTag }))} title={form.title} text={form.text} disabled={disabled} blocked={blocked} />
+      )}
       {inEditor && post?.channelId && <PostFlair channelId={post.channelId} value={form.flair} onChange={(flair) => onChange((current) => ({ ...current, flair }))} title={form.title} text={form.text} disabled={disabled} blocked={blocked} />}
       <div className="form-row">
         <Field label="Link (optional)" hint="Links are checked against the product's own website.">

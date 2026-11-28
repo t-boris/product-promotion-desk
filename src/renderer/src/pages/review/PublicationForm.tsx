@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { siteLinkFor } from '../../../../shared/post-format'
 import { postTypeOfPlatform } from '../../../../shared/quick-post'
+import { hasTopicField } from '../../../../shared/topic-tag'
 import type { GroupChannelOption, Id, IsoTime } from '../../../../shared/types'
 import { call, useAction, useQuery } from '../../hooks'
 import { Button, Card, ErrorNote, useOpenForm } from '../../ui'
@@ -50,7 +51,9 @@ export function PublicationForm({ productId, channelId, platform, reads, author,
   const firstTarget = chosen[0] === undefined || chosen[0] === channelId ? author.target : (known?.find((row) => row.channelId === chosen[0])?.target ?? author.target)
   const siteLink = product && platforms.length > 0 ? siteLinkFor(platforms[0]!, product, firstTarget) : null
   const quick: QuickForm = typed.link === null && siteLink ? { ...typed, link: siteLink } : typed
-  const input = toInput(form, true)
+  // A topic is sent only when one of the chosen channels has a field for it (Threads): for the others it would be a part of the post nothing can type.
+  const whole = toInput(form, true)
+  const input = platforms.some(hasTopicField) ? whole : { ...whole, topicTag: null }
   const options = useChannelOptions(productId, kind === 'quick' ? quickQuestion(quick) : input)
   useEffect(() => {
     if (options.data) setKnown(options.data)
@@ -93,7 +96,7 @@ export function PublicationForm({ productId, channelId, platform, reads, author,
           <>
             <PostFromMaterial productId={productId} channelId={channelId} form={form} onChange={setForm} />
             <PostDrafter productId={productId} channelId={channelId} form={form} onChange={setForm} />
-            <DraftEditor form={form} onChange={setForm} withTitle disabled={creating.busy} draft={null} autoFocus={picked === null} ai={{ channelId }} post={{ productId, platform, author, reads }} />
+            <DraftEditor form={form} onChange={setForm} withTitle disabled={creating.busy} draft={null} autoFocus={picked === null} ai={{ channelId }} post={{ productId, platform, author, reads, platforms }} />
           </>
         )}
         <WhereToPost

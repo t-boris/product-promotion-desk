@@ -123,8 +123,8 @@ export class MissionAuthority implements PostAuthority {
     this.watch = watch
     const shown = renderForPlatform(grant.draft, grant.channel.platform)
     const same = shown.title === content.title && shown.text === content.text && shown.link === content.link && JSON.stringify(shown.attachments) === JSON.stringify(typed.attachments)
-    // The flair is not rendered into the text: it is compared with the draft's own.
-    if (!same || (content.flair ?? null) !== (grant.draft.flair ?? null)) throw new MissionContentError('What the mission would type is not what was approved for this platform. Nothing was submitted.')
+    // The flair and the topic are not rendered into the text: they are compared with the draft's own.
+    if (!same || (content.flair ?? null) !== (grant.draft.flair ?? null) || (content.topicTag ?? null) !== (grant.draft.topicTag ?? null)) throw new MissionContentError('What the mission would type is not what was approved for this platform. Nothing was submitted.')
     // A copy nobody can change afterwards: what the mission types is what was checked above, and the ticket must be bound to the approved draft.
     this.content = Object.freeze({ ...content })
     this.typedHash = contentHash(grant.draft, grant.account, content.destination, grant.channel.platform)
@@ -232,7 +232,7 @@ export class MissionPublisher {
     }
 
     const request = grant.request
-    const content: ApprovedContent = { kind: request.kind, title: request.title, text: request.text, link: request.link, destination: request.destination, attachments: approvedFilesOf(request.attachments), flair: request.flair ?? null }
+    const content: ApprovedContent = { kind: request.kind, title: request.title, text: request.text, link: request.link, destination: request.destination, attachments: approvedFilesOf(request.attachments), flair: request.flair ?? null, topicTag: request.topicTag ?? null }
     let authority: MissionAuthority
     try {
       authority = new MissionAuthority(this.core, this.gate, grant, content, { attachments: request.attachments }, automatic, { moved: () => session.identityEpoch() !== checkedAt })

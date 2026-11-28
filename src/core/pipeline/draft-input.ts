@@ -7,8 +7,9 @@
 
 import { ApiError } from '../../shared/api'
 import type { DraftInput } from '../../shared/api'
-import { kindsOf, pictureIdsIn } from '../../shared/post-format'
+import { kindsOf, pictureIdsIn, platformLabel } from '../../shared/post-format'
 import { parseQuickCard, type PostType, type QuickCard } from '../../shared/quick-post'
+import { cleanTopicTag, hasTopicField, topicTagProblem } from '../../shared/topic-tag'
 import type { Attachment, Id } from '../../shared/types'
 import type { MediaService } from '../media/service'
 import { ATTACHMENT_MAX_COUNT, validateAttachments } from './attachments'
@@ -69,6 +70,10 @@ export async function normalizeDraftInput(input: DraftInput, ctx: DraftInputCont
   // Left out (undefined) keeps the earlier draft's flair; an empty one takes it off.
   const flair = input.flair === undefined ? undefined : (input.flair ?? '').trim().replace(/\s+/g, ' ') || null
   if (flair && flair.length > MAX_FLAIR_LENGTH) throw new ApiError('invalid_input', `The flair is longer than ${MAX_FLAIR_LENGTH} characters.`)
+  // The same for the topic: left out keeps the earlier draft's, an empty one takes it off.
+  const topicTag = input.topicTag === undefined ? undefined : cleanTopicTag(input.topicTag ?? '') || null
+  const topicWrong = topicTag ? topicTagProblem(topicTag) : null
+  if (topicWrong) throw new ApiError('invalid_input', topicWrong)
   if ((input.attachments?.length ?? 0) > ATTACHMENT_MAX_COUNT) throw new ApiError('invalid_attachment', `At most ${ATTACHMENT_MAX_COUNT} attachments are allowed.`)
 
   const kept: Attachment[] = []
@@ -94,6 +99,7 @@ export async function normalizeDraftInput(input: DraftInput, ctx: DraftInputCont
   if (postType !== undefined) content.postType = postType
   if (card !== undefined) content.card = card
   if (flair !== undefined) content.flair = flair
+  if (topicTag !== undefined) content.topicTag = topicTag
   if (postType === 'quick') assertQuickPost(content)
   return content
 }
@@ -108,18 +114,27 @@ export function assertQuickPost(content: DraftContent): void {
 }
 
 /**
- * A draft that replaces another keeps its post type, card and flair unless the caller says otherwise (editing never changes the type, DEC-046). The type
+ * A draft that replaces another keeps its post type, card, flair and topic unless the caller says otherwise (editing never changes the type, DEC-046). The type
  * stored is always explicit; this only chooses it when the input did not.
  */
-export function inheritPostType(content: DraftContent, previous: { postType: PostType; card: QuickCard | null; flair?: string | null } | null): DraftContent {
+export function inheritPostType(content: DraftContent, previous: { postType: PostType; card: QuickCard | null; flair?: string | null; topicTag?: string | null } | null): DraftContent {
   const postType = content.postType ?? previous?.postType ?? 'article'
   const next: DraftContent = { ...content, postType }
   // The flair belongs to the channel, not to the words: whoever rewrites the words (the AI's adaptation, an edit of the master) does not say it, and it stays.
   if (content.flair === undefined && previous?.flair) next.flair = previous.flair
+  if (content.topicTag === undefined && previous?.topicTag) next.topicTag = previous.topicTag
   if (postType === 'quick') {
     next.markup = 'legacy'
     if (content.card === undefined) next.card = previous?.postType === 'quick' ? previous.card : null
     assertQuickPost(next)
   } else next.card = null
   return next
+}
+
+/**
+ * A topic goes only where the platform's composer has a field for it (Threads): anywhere else nothing would type it, and the post would go out
+ * without a part of what was approved. Asked wherever a draft is stored for a channel.
+ */
+export function assertTopicFits(platform: string, content: Pick<DraftContent, 'topicTag'>): void {
+  if (content.topicTag && !hasTopicField(platform)) throw new ApiError('invalid_input', `${platformLabel(platform)} has no topic field: take the topic off the post.`)
 }

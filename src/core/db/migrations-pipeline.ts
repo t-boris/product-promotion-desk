@@ -645,5 +645,13 @@ CREATE TABLE platform_schedules (
 );
 CREATE INDEX platform_schedules_account ON platform_schedules (account_id, publish_at);
 `
+  },
+  {
+    id: 332,
+    name: 'drafts: the topic of a post',
+    sql: `
+-- The one topic a post is filed under where the platform's composer has a field for it (Threads); null: none. Part of what an approval binds.
+ALTER TABLE drafts ADD COLUMN topic_tag TEXT;
+`
   }
 ]

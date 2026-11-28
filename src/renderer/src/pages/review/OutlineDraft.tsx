@@ -55,7 +55,7 @@ export function OutlineDraft({ title, text, disabled }: { title: string; text: s
           <span>
             <strong>Keywords:</strong> {words.keywords.join(', ')}
           </span>
-          <Hint>Named by the AI from this post’s text; check them. Add them yourself where the platform takes them: one topic on Threads, keywords in a pin’s title and description on Pinterest. Nothing is kept and the post is not changed.</Hint>
+          <Hint>Named by the AI from this post’s text; check them. Add the keywords yourself where the platform takes them (a pin’s title and description on Pinterest). The topic of a Threads post is set in its “Topic” line, and the application types it there. Nothing is kept and the post is not changed.</Hint>
           <div className="row">
             <Button
               onClick={() => {

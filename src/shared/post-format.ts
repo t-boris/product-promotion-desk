@@ -706,6 +706,8 @@ export interface PlatformForm {
    * and the link lives in the account's profile (DEC-036, changed by DEC-044).
    */
   link: 'field' | 'in_text' | 'in_bio'
+  /** `field`: the composer has a field for one topic the post is filed under (Threads). Left out: the platform has none. */
+  topic?: 'field'
 }
 
 const OTHER: PlatformForm = { format: 'plain', hasTitle: false, titleLimit: null, textLimit: null, pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'field' }
@@ -715,7 +717,7 @@ export const PLATFORM_FORMS: Record<string, PlatformForm> = {
   reddit: { format: 'markdown', hasTitle: true, titleLimit: 300, textLimit: 40_000, pictures: 'optional', maxPictures: 20, videos: 'optional', maxVideos: 1, link: 'field' },
   instagram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 2_200, pictures: 'required', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_bio' },
   facebook: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 63_206, apiVideos: 'none', pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text' },
-  threads: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 500, pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text' },
+  threads: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 500, pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text', topic: 'field' },
   x: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 280, pictures: 'optional', maxPictures: 4, videos: 'optional', maxVideos: 1, link: 'in_text' },
   linkedin: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 3_000, pictures: 'optional', maxPictures: 9, videos: 'optional', maxVideos: 1, link: 'in_text' },
   telegram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 4_096, apiCaptionLimit: 1_024, pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text' },

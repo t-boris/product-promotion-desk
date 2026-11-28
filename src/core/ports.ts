@@ -505,6 +505,8 @@ export interface PublishRequest {
   attachments: Attachment[]
   /** The flair by name (Reddit's label a community asks of a post), chosen by the owner from the community's own list; null or left out: none. */
   flair?: string | null
+  /** The one topic the post is filed under where the platform's composer has a field for it (Threads), as the owner approved it; null or left out: none. */
+  topicTag?: string | null
   /** When the attempt being reconciled started; findPublished must ignore anything created before it. */
   attemptedAt?: IsoTime
   /**
