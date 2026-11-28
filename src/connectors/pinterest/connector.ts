@@ -1,11 +1,11 @@
 import { readFileSync, statSync } from 'node:fs'
-import type { Capability, CapabilityKey, CapabilityStatus, Channel, MetricReading } from '../../shared/types'
+import { isVideoMime, type Capability, type CapabilityKey, type CapabilityStatus, type Channel, type MetricReading } from '../../shared/types'
 import type { PostNumbers } from '../../shared/post-numbers'
 import { HttpNoAnswerError } from '../../core/net/http'
 import type { ActivityBatch, ApiAccess, ChannelGuide, Connector, ConnectorContext, HttpPort, KeptKey, LoginState, NormalizedTarget, PublishedRef, PublishOutcome, PublishRequest, RemoteDiscussion, SendTicket } from '../../core/ports'
 import { earliestCreation } from '../reconcile'
 import { sameText } from '../text'
-import { PinterestApi, askToken, looksLikeAppId, looksLikeSecretKey, type PinterestAccount, type PinterestAnswer, type PinterestBoard, type PinterestList, type PinterestPin, type PinterestPinNumbers } from './api'
+import { PinterestApi, askToken, looksLikeAppId, looksLikeSecretKey, type PinterestAccount, type PinterestAnswer, type PinterestBoard, type PinterestList, type PinterestMedia, type PinterestPin, type PinterestPinNumbers } from './api'
 
 export const PINTEREST_API_CONNECTOR_ID = 'pinterest-api'
 
@@ -15,6 +15,13 @@ const MOST_DESCRIPTION = 800
 const MOST_LINK = 2_048
 const MOST_PICTURE_BYTES = 20 * 1024 * 1024
 const PICTURES = new Set(['image/jpeg', 'image/png'])
+/** A video of a pin, by Pinterest's pages: MP4, MOV or M4V, up to 2 GB. */
+const VIDEOS = new Set(['video/mp4', 'video/quicktime', 'video/x-m4v'])
+const MOST_VIDEO_BYTES = 2 * 1024 * 1024 * 1024
+/** How long the upload of a video may take, and how its processing is asked about: every five seconds, for ten minutes. */
+const UPLOAD_TIMEOUT_MS = 30 * 60_000
+const VIDEO_LOOK_MS = 5_000
+const VIDEO_LOOKS = 120
 /** One page of the account's boards or pins; boards are read to the end, up to this many pages. */
 const PAGE = 100
 const MOST_PAGES = 10
@@ -292,7 +299,7 @@ export class PinterestApiConnector implements Connector {
       cap(
         'publish_post',
         'needs_check',
-        `Pins are created on the board “${found.board.name}” as @${found.account.username}: one JPEG or PNG picture up to 20 MB with a title, a description and a link. Until Pinterest gives the app Standard access, a pin it creates is seen only by you (Trial access). A video is published on Pinterest itself. Tried with the first pin.`
+        `Pins are created on the board “${found.board.name}” as @${found.account.username}: one JPEG or PNG picture up to 20 MB with a title, a description and a link, or one MP4, MOV or M4V video up to 2 GB with a picture as its cover. Until Pinterest gives the app Standard access, a pin it creates is seen only by you (Trial access). Tried with the first pin.`
       ),
       cap('verify_send', 'needs_check', 'Pinterest returns the pin it made. Tried with the first pin.'),
       ...closed
@@ -341,10 +348,17 @@ export class PinterestApiConnector implements Connector {
     const title = (request.title ?? '').trim()
     const words = request.text.trim()
     const link = (request.link ?? '').trim()
-    const files = request.attachments
-    if (files.length !== 1) return failed(`A pin made through Pinterest's API is one picture; this post has ${files.length === 0 ? 'none' : files.length}. Nothing was sent.`)
-    const picture = files[0] as (typeof files)[number]
-    if (!PICTURES.has(picture.mime)) return failed(`Pinterest takes a JPEG or PNG picture through its API; “${picture.name}” is neither. A video is published on Pinterest itself. Nothing was sent.`)
+    const videos = request.attachments.filter((file) => isVideoMime(file.mime))
+    const pictures = request.attachments.filter((file) => !isVideoMime(file.mime))
+    const count = (n: number, one: string, many: string): string => (n === 0 ? `no ${one}` : n === 1 ? `one ${one}` : `${n} ${many}`)
+    if (pictures.length !== 1 || videos.length > 1) {
+      const has = `${count(pictures.length, 'picture', 'pictures')}${videos.length > 0 ? ` and ${count(videos.length, 'video', 'videos')}` : ''}`
+      return failed(`A pin made through Pinterest's API is one picture, or one video with one picture as its cover; this post has ${has}. Nothing was sent.`)
+    }
+    const picture = pictures[0] as (typeof pictures)[number]
+    const video = videos[0]
+    if (!PICTURES.has(picture.mime)) return failed(`Pinterest takes a JPEG or PNG picture through its API; “${picture.name}” is neither. Nothing was sent.`)
+    if (video && !VIDEOS.has(video.mime)) return failed(`Pinterest takes an MP4, MOV or M4V video; “${video.name}” is none of them. Nothing was sent.`)
     if ([...title].length > MOST_TITLE) return failed(`Pinterest takes at most ${MOST_TITLE} characters in a pin's title; this one has ${[...title].length}. Nothing was sent.`)
     if ([...words].length > MOST_DESCRIPTION) return failed(`Pinterest takes at most ${MOST_DESCRIPTION} characters in a pin's description; this one has ${[...words].length}. Nothing was sent.`)
     if (link.length > MOST_LINK || (link !== '' && !/^https?:\/\//i.test(link))) return failed('The link of a pin is an address that starts with http:// or https://, at most 2048 characters. Nothing was sent.')
@@ -356,6 +370,14 @@ export class PinterestApiConnector implements Connector {
     } catch {
       return failed(`The picture “${picture.name}” could not be read from this Mac. Nothing was sent.`)
     }
+    if (video) {
+      try {
+        const bytes = statSync(video.path).size
+        if (bytes > MOST_VIDEO_BYTES) return failed(`Pinterest takes a video up to 2 GB; “${video.name}” is ${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB. Nothing was sent.`)
+      } catch {
+        return failed(`The video “${video.name}” could not be read from this Mac. Nothing was sent.`)
+      }
+    }
     let boardId: string
     try {
       const found = await this.board(ctx)
@@ -365,12 +387,19 @@ export class PinterestApiConnector implements Connector {
       if (error instanceof HttpNoAnswerError) return failed(`No answer came (${error.message}) before anything was created. Nothing was sent.`)
       return failed(`${error instanceof Error ? error.message : String(error)} Nothing was sent.`)
     }
+    // A video is uploaded first and named by its number; the post's picture is its cover. Until the pin is created nothing is published.
+    let source: Record<string, unknown> = { source_type: 'image_base64', content_type: picture.mime, data }
+    if (video) {
+      const uploaded = await this.upload(ctx, video)
+      if ('problem' in uploaded) return failed(`${uploaded.problem} Nothing was sent.`)
+      source = { source_type: 'video_id', media_id: uploaded.mediaId, cover_image_content_type: picture.mime, cover_image_data: data }
+    }
     const body = {
       board_id: boardId,
       ...(title ? { title } : {}),
       ...(words ? { description: words } : {}),
       ...(link ? { link } : {}),
-      media_source: { source_type: 'image_base64', content_type: picture.mime, data }
+      media_source: source
     }
     let answer: PinterestAnswer<PinterestPin>
     try {
@@ -386,6 +415,33 @@ export class PinterestApiConnector implements Connector {
     const id = answer.result.id
     if (!id || !/^\d+$/.test(id)) return { status: 'unknown', error: 'Pinterest accepted the pin and returned no id for it, so it is not known whether it was created.' }
     return { status: 'confirmed', url: addressOf(id), externalId: pinIdOf(id) }
+  }
+
+  /**
+   * A video on its way to a pin, by Pinterest's guide: the upload is registered, the file goes to the address and with the form fields
+   * Pinterest answered with (no token there), and its processing is asked about until it has succeeded. Nothing is published by any of it.
+   */
+  private async upload(ctx: ConnectorContext, video: { name: string; path: string; mime: string }): Promise<{ mediaId: string } | { problem: string }> {
+    try {
+      const registered = await this.ask<PinterestMedia>(ctx, (api) => api.post('media', { media_type: 'video' }))
+      if (!registered.ok) return { problem: refusal(registered) }
+      const { media_id: mediaId, upload_url: url, upload_parameters: fields } = registered.result
+      if (!mediaId || !url || !/^https:\/\//i.test(url) || !fields) return { problem: 'Pinterest gave no place to upload the video to.' }
+      // The file is the last field of the form, after everything Pinterest asked to send with it.
+      const sent = await ctx.http.request({ method: 'POST', url, form: { ...fields, file: { path: video.path, name: video.name, mime: video.mime } }, timeoutMs: UPLOAD_TIMEOUT_MS })
+      if (sent.status < 200 || sent.status >= 300) return { problem: `The upload of the video “${video.name}” was refused (HTTP ${sent.status}).` }
+      for (let look = 0; look < VIDEO_LOOKS; look += 1) {
+        await ctx.pause(VIDEO_LOOK_MS)
+        const state = await this.ask<PinterestMedia>(ctx, (api) => api.get(`media/${mediaId}`))
+        if (!state.ok) return { problem: refusal(state) }
+        if (state.result.status === 'succeeded') return { mediaId }
+        if (state.result.status === 'failed') return { problem: `Pinterest could not process the video “${video.name}”.` }
+      }
+      return { problem: `Pinterest was still processing the video “${video.name}” after ten minutes.` }
+    } catch (error) {
+      if (error instanceof HttpNoAnswerError) return { problem: `No answer came (${error.message}) before anything was created.` }
+      return { problem: error instanceof Error ? error.message : String(error) }
+    }
   }
 
   /** Looks among the account's newest pins for the one a send with a lost answer may have made: the same board, title and description, not older than the attempt. */

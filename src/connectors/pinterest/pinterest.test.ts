@@ -29,7 +29,7 @@ const DAY = 24 * 3_600_000
 /** A core with the Pinterest API connector; a fake Pinterest behind its API host; one product. */
 function world() {
   const pinterest = new FakePinterest()
-  t = makeTestCore({ connectors: [new PinterestApiConnector(), new UniversalConnector()], http: byHost({ 'api.pinterest.com': pinterest }) })
+  t = makeTestCore({ connectors: [new PinterestApiConnector(), new UniversalConnector()], http: byHost({ 'api.pinterest.com': pinterest, 'pinterest-media-upload.s3-accelerate.amazonaws.com': pinterest }) })
   const core = t.core
   pinterest.now = () => core.clock.now()
   const productId = newId()
@@ -135,7 +135,7 @@ describe('a Pinterest account that works through Pinterest\'s API (DEC-085)', ()
     const w = await connected()
     expect(w.channel).toMatchObject({ status: 'active', connectorId: 'pinterest-api', target: 'pinterest.com/natalmystic/natal-charts', url: BOARD_URL, reads: false, watchedInBrowser: false, baselineDoneAt: null })
     const caps = Object.fromEntries((await w.call('channels.assess', { channelId: w.channel.id })).capabilities.map((c) => [c.key, c]))
-    expect(caps.publish_post).toMatchObject({ status: 'needs_check', detail: expect.stringMatching(/board “Natal Charts” as @natalmystic.*one JPEG or PNG picture.*Standard access.*seen only by you.*video is published on Pinterest itself/s) })
+    expect(caps.publish_post).toMatchObject({ status: 'needs_check', detail: expect.stringMatching(/board “Natal Charts” as @natalmystic.*one JPEG or PNG picture.*or one MP4, MOV or M4V video up to 2 GB with a picture as its cover.*Standard access.*seen only by you/s) })
     for (const key of ['read_posts', 'read_comments', 'publish_reply']) expect(caps[key]).toMatchObject({ status: 'unavailable', detail: expect.stringMatching(/Pinterest's API has no comments/) })
     expect(caps.metrics).toMatchObject({ status: 'unavailable', detail: expect.stringMatching(/Under each pin.*reactions and comments.*shown in the last 90 days/s) })
     await expect(w.call('channels.connect', { productId: w.productId, accountId: w.account.id, target: 'https://www.pinterest.com/natalmystic/' })).rejects.toMatchObject({
@@ -203,12 +203,55 @@ describe('creating a pin', () => {
     expect(w.logged()).not.toContain(FAKE_PIN_SECRET)
   })
 
+  it('sends one video with the post\'s picture as its cover: the upload is registered, the file goes where Pinterest said, and the pin is created once the video is processed', async () => {
+    const w = await connected()
+    w.pinterest.videoLooks = 2
+    const asked = w.pinterest.calls.length
+    const out = await w.send({ title: 'A chart in a minute', text: 'Twelve houses.', link: 'https://natalmystic.com/chart', attachments: [file('clip.mov', 'video/quicktime', 4000), picture('cover.jpg', 'image/jpeg', 300)] })
+    expect(out).toMatchObject({ status: 'confirmed', externalId: expect.stringMatching(/^pin:\d+$/) })
+    const id = [...w.pinterest.media.keys()][0] as string
+    expect(w.pinterest.calls.slice(asked).map((c) => `${c.method} ${c.path} ${c.auth}`)).toEqual([
+      'GET boards?page_size=100 bearer',
+      'POST media bearer',
+      // The file goes to the storage with no token, after every field Pinterest gave.
+      'POST upload null',
+      `GET media/${id} bearer`,
+      `GET media/${id} bearer`,
+      `GET media/${id} bearer`,
+      'POST pins bearer'
+    ])
+    expect(w.pinterest.calls.find((c) => c.path === 'upload')?.body).toEqual(['x-amz-date', 'x-amz-signature', 'x-amz-security-token', 'x-amz-algorithm', 'key', 'policy', 'x-amz-credential', 'Content-Type', 'file'])
+    expect(w.pinterest.pins[0]).toMatchObject({ board_id: '549755885175', title: 'A chart in a minute', description: 'Twelve houses.', link: 'https://natalmystic.com/chart', picture: { type: 'image/jpeg', bytes: 300 }, video: 'clip.mov' })
+    expect(w.logged()).not.toContain(FAKE_PIN_SECRET)
+  })
+
+  it('creates no pin when the video is not taken: a refused upload, a video Pinterest cannot process, a lost answer before the pin', async () => {
+    const w = await connected()
+    const pins = () => w.pinterest.calls.filter((c) => c.method === 'POST' && c.path === 'pins').length
+    const post = () => w.send({ title: 'A clip', attachments: [picture(), file('clip.mp4', 'video/mp4')] })
+    w.pinterest.failsVideo = true
+    expect(await post()).toMatchObject({ status: 'failed', error: expect.stringMatching(/Pinterest could not process the video “clip.mp4”\. Nothing was sent\./) })
+    w.pinterest.failsVideo = false
+    w.pinterest.videoLooks = 200
+    expect(await post()).toMatchObject({ status: 'failed', error: expect.stringMatching(/still processing the video “clip.mp4” after ten minutes\. Nothing was sent\./) })
+    w.pinterest.videoLooks = 0
+    w.pinterest.withdrawTokens()
+    w.pinterest.app.secret = 'anotherSecretKeyOfTheApp0123456789abcdef'
+    expect(await post()).toMatchObject({ status: 'failed', error: expect.stringMatching(/Nothing was sent\./) })
+    expect(pins()).toBe(0)
+    expect(w.pinterest.pins).toHaveLength(0)
+  })
+
   it('refuses before asking Pinterest what a pin cannot be, and says it before the approval', async () => {
     const w = await connected()
     const pins = () => w.pinterest.calls.filter((c) => c.method === 'POST' && c.path === 'pins').length
-    expect(await w.send({ title: 'No picture' })).toMatchObject({ status: 'failed', error: expect.stringMatching(/is one picture; this post has none/) })
-    expect(await w.send({ attachments: [picture('a.png'), picture('b.png')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/is one picture; this post has 2/) })
-    expect(await w.send({ attachments: [file('clip.mp4', 'video/mp4')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/JPEG or PNG picture.*“clip.mp4” is neither.*video is published on Pinterest itself/s) })
+    expect(await w.send({ title: 'No picture' })).toMatchObject({ status: 'failed', error: expect.stringMatching(/is one picture, or one video with one picture as its cover; this post has no picture\./) })
+    expect(await w.send({ attachments: [picture('a.png'), picture('b.png')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/this post has 2 pictures\./) })
+    // A video needs a picture as its cover; two videos, or a kind of video Pinterest does not take, are refused.
+    expect(await w.send({ attachments: [file('clip.mp4', 'video/mp4')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/this post has no picture and one video\./) })
+    expect(await w.send({ attachments: [picture(), file('a.mp4', 'video/mp4'), file('b.mp4', 'video/mp4')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/this post has one picture and 2 videos\./) })
+    expect(await w.send({ attachments: [picture(), file('clip.webm', 'video/webm')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/takes an MP4, MOV or M4V video; “clip.webm” is none of them/) })
+    expect(await w.send({ attachments: [picture(), { name: 'gone.mp4', path: '/nonexistent/gone.mp4', mime: 'video/mp4', sha256: 'x' }] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/The video “gone.mp4” could not be read from this Mac/) })
     expect(await w.send({ attachments: [picture('anim.gif', 'image/gif')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/“anim.gif” is neither/) })
     expect(await w.send({ title: 'x'.repeat(101), attachments: [picture()] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/at most 100 characters in a pin's title; this one has 101/) })
     expect(await w.send({ text: 'x'.repeat(801), attachments: [picture()] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/at most 800 characters in a pin's description; this one has 801/) })
@@ -217,11 +260,14 @@ describe('creating a pin', () => {
     expect(await w.send({ attachments: [{ name: 'gone.png', path: '/nonexistent/gone.png', mime: 'image/png', sha256: 'x' }] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/could not be read from this Mac/) })
     expect(await w.send({ kind: 'reply', parentExternalId: 'pin:1', text: 'Thanks!' })).toMatchObject({ status: 'failed', error: expect.stringMatching(/has no comments.*Nothing was sent/s) })
     expect(pins()).toBe(0)
+    expect(w.pinterest.media.size).toBe(0)
 
-    // The owner reads the same before approving: a video does not go through the API.
+    // The owner reads before approving that a pin needs a picture; a video with its picture goes through the API.
     const ways = sendWays(w.core, undefined, w.channel)
     const video = renderForPlatform({ title: 'A clip', text: 'Words', link: null, attachments: [{ name: 'clip.mp4', mime: 'video/mp4' }] } as never, 'pinterest')
-    expect(sendProblems('pinterest', video, ways).join(' ')).toMatch(/A video is not sent to Pinterest through its API by this application/)
+    expect(sendProblems('pinterest', video, ways).join(' ')).not.toMatch(/video is not sent/)
+    const withCover = renderForPlatform({ title: 'A clip', text: 'Words', link: null, attachments: [{ name: 'cover.png', mime: 'image/png' }, { name: 'clip.mp4', mime: 'video/mp4' }] } as never, 'pinterest')
+    expect(sendProblems('pinterest', withCover, ways)).toEqual([])
   })
 
   it('says what Pinterest refused, and that the outcome is unknown when its answer was lost or held no id', async () => {

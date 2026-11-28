@@ -30,6 +30,15 @@ export interface PinterestBoard {
   privacy?: string
 }
 
+/** A video Pinterest was told is coming (`POST /media`): where to upload it and with which form fields, and how far its processing is. */
+export interface PinterestMedia {
+  media_id?: string
+  media_type?: string
+  status?: string
+  upload_url?: string
+  upload_parameters?: Record<string, string>
+}
+
 export interface PinterestPin {
   id: string
   created_at?: string

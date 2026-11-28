@@ -1711,3 +1711,15 @@ Why: the plan's phases G and H list "hide"; both requests are in Meta's document
 - [x] DEC-089, plan rows G and H, release 0.90.0
 
 Review: `src/core/pipeline/comment-hiding.ts`, `HideComment.tsx`. Hiding does not close the item. Not built: the same on a Facebook Page (not in the plan). Unproven with real apps.
+
+## Phase J, the last part: a video pin on Pinterest (2026-11-28, 0.91.0, DEC-090)
+
+Why: the plan's phase J says "pins with picture or video"; Pinterest's guide "Creating video Pins" documents every request.
+
+- [x] `POST /media` (video), the file to the given address with the given fields (no token, the file last), `GET /media/{id}` every 5 s up to 10 minutes, the pin with `video_id` and the post's picture as the cover (`cover_image_data`)
+- [x] refused before anything is asked: no picture, two videos, a kind that is not MP4/MOV/M4V, more than 2 GB, a file that cannot be read
+- [x] the form: `apiVideos: 'none'` removed for Pinterest; the channel's card says what a pin takes
+- [x] tests: the order of the requests and the fields of the upload, a video that fails or is not processed in time, the refusals; verify (6513 tests)
+- [x] DEC-090, plan row J, release 0.91.0
+
+Review: `PinterestApiConnector.upload`. Not seen on a screen (the only screen change is a line that no longer appears in the preview; tested through `sendProblems`). Unproven with a real app: the upload, the processing time, the cover given as data.

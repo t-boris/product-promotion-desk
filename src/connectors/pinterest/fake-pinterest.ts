@@ -13,9 +13,15 @@ interface FakePin {
   description: string | null
   link: string | null
   created_at: string
-  /** The kind and the size of the picture that came with it. */
+  /** The kind and the size of the picture that came with it: the pin's picture, or the cover of its video. */
   picture: { type: string; bytes: number }
+  /** The name of the uploaded video file, for a video pin. */
+  video?: string
 }
+
+const UPLOAD_HOST = 'pinterest-media-upload.s3-accelerate.amazonaws.com'
+/** The form fields Pinterest asks to send with an uploaded file. */
+const UPLOAD_FIELDS = ['x-amz-date', 'x-amz-signature', 'x-amz-security-token', 'x-amz-algorithm', 'key', 'policy', 'x-amz-credential', 'Content-Type']
 
 export class FakePinterest implements HttpPort {
   account = { id: '2783136121146311751', username: 'natalmystic', account_type: 'BUSINESS', business_name: 'Natal Mystic', follower_count: 10, monthly_views: 163 }
@@ -39,6 +45,11 @@ export class FakePinterest implements HttpPort {
   readonly tokens = new Set<string>()
   readonly calls: { method: string; path: string; body: unknown; auth: 'basic' | 'bearer' | null }[] = []
   readonly pins: FakePin[] = []
+  /** The video uploads Pinterest was told about: the uploaded file's name, and how many more times its state is asked before it has succeeded. */
+  readonly media = new Map<string, { file: string | null; looks: number }>()
+  /** How many times a video's state reads "processing" before it has succeeded; `failsVideo` makes it fail instead. */
+  videoLooks = 1
+  failsVideo = false
   private next = 9000
 
   private json(status: number, body: unknown): HttpResponse {
@@ -56,6 +67,17 @@ export class FakePinterest implements HttpPort {
 
   async request(req: HttpRequest): Promise<HttpResponse> {
     const url = new URL(req.url)
+    if (url.host === UPLOAD_HOST) {
+      // The storage Pinterest uploads to: no token, every field it was given, the file last.
+      const names = Object.keys(req.form ?? {})
+      const key = typeof req.form?.key === 'string' ? req.form.key : ''
+      const file = req.form?.file
+      this.calls.push({ method: req.method, path: 'upload', body: names, auth: req.headers?.authorization ? 'bearer' : null })
+      const upload = this.media.get(key.split(':')[2] ?? '')
+      if (req.method !== 'POST' || !upload || UPLOAD_FIELDS.some((name) => typeof req.form?.[name] !== 'string') || names.at(-1) !== 'file' || !file || typeof file === 'string') return { status: 403, headers: {}, text: '<Error><Code>AccessDenied</Code></Error>' }
+      upload.file = file.name
+      return { status: 204, headers: {}, text: '' }
+    }
     if (!url.pathname.startsWith('/v5/')) return this.error(404, 1, 'Not found')
     const path = url.pathname.slice('/v5/'.length)
     const headers = Object.fromEntries(Object.entries(req.headers ?? {}).map(([name, value]) => [name.toLowerCase(), value]))
@@ -87,6 +109,26 @@ export class FakePinterest implements HttpPort {
 
     if (req.method === 'GET' && path === 'pins') return this.json(200, { items: this.pins, bookmark: null })
 
+    if (req.method === 'POST' && path === 'media') {
+      if ((req.json as { media_type?: string } | undefined)?.media_type !== 'video') return this.error(400, 1, 'Invalid request: media_type')
+      const id = `52588${this.next++}`
+      this.media.set(id, { file: null, looks: this.videoLooks })
+      const fields = Object.fromEntries(UPLOAD_FIELDS.map((name) => [name, name === 'key' ? `uploads/17/4d/be/2:video:${id}:1` : name === 'Content-Type' ? 'multipart/form-data' : `fake-${name}`]))
+      return this.json(201, { media_id: id, media_type: 'video', upload_url: `https://${UPLOAD_HOST}/`, upload_parameters: fields })
+    }
+    const upload = /^media\/(\d+)$/.exec(path)
+    if (req.method === 'GET' && upload) {
+      const media = this.media.get(upload[1] as string)
+      if (!media) return this.error(404, 1, 'Media upload not found.')
+      if (media.file === null) return this.json(200, { media_id: upload[1], media_type: 'video', status: 'registered' })
+      if (this.failsVideo) return this.json(200, { media_id: upload[1], media_type: 'video', status: 'failed' })
+      if (media.looks > 0) {
+        media.looks -= 1
+        return this.json(200, { media_id: upload[1], media_type: 'video', status: 'processing' })
+      }
+      return this.json(200, { media_id: upload[1], media_type: 'video', status: 'succeeded' })
+    }
+
     const analytics = /^pins\/(\d+)\/analytics$/.exec(path)
     if (req.method === 'GET' && analytics) {
       const pin = this.pins.find((p) => p.id === analytics[1])
@@ -108,9 +150,19 @@ export class FakePinterest implements HttpPort {
         this.failNext = null
         return this.error(fail.status, fail.code, fail.message)
       }
-      const body = req.json as { board_id?: string; title?: string; description?: string; link?: string; media_source?: { source_type?: string; content_type?: string; data?: string } }
+      const body = req.json as {
+        board_id?: string
+        title?: string
+        description?: string
+        link?: string
+        media_source?: { source_type?: string; content_type?: string; data?: string; media_id?: string; cover_image_content_type?: string; cover_image_data?: string }
+      }
       if (!this.boards.some((board) => board.id === body.board_id)) return this.error(404, 40, 'Board not found.')
-      const media = body.media_source
+      const sent = body.media_source
+      // A video pin names an upload that has succeeded and carries its cover; a picture pin carries the picture.
+      const uploaded = sent?.source_type === 'video_id' ? this.media.get(sent.media_id ?? '') : undefined
+      if (sent?.source_type === 'video_id' && (!uploaded || uploaded.file === null || uploaded.looks > 0 || this.failsVideo)) return this.error(400, 1, 'Invalid request: the video is not ready')
+      const media = sent?.source_type === 'video_id' ? { source_type: 'image_base64', content_type: sent.cover_image_content_type, data: sent.cover_image_data } : sent
       if (media?.source_type !== 'image_base64' || !['image/jpeg', 'image/png'].includes(media.content_type ?? '') || !/^[a-zA-Z0-9+/=]+$/.test(media.data ?? '')) return this.error(400, 1, 'Invalid request: media_source')
       if ([...(body.title ?? '')].length > 100 || [...(body.description ?? '')].length > 800) return this.error(400, 1, 'Invalid request: title or description is too long')
       const pin: FakePin = {
@@ -120,7 +172,8 @@ export class FakePinterest implements HttpPort {
         description: body.description ?? null,
         link: body.link ?? null,
         created_at: this.now().toISOString(),
-        picture: { type: media.content_type as string, bytes: Buffer.from(media.data as string, 'base64').length }
+        picture: { type: media.content_type as string, bytes: Buffer.from(media.data as string, 'base64').length },
+        ...(uploaded?.file ? { video: uploaded.file } : {})
       }
       this.pins.unshift(pin)
       if (fail === 'lost') {

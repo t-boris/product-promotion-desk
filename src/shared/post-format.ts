@@ -734,7 +734,7 @@ export const PLATFORM_FORMS: Record<string, PlatformForm> = {
   x: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 280, apiVideos: 'none', apiPrice: { post: 0.015, withLink: 0.2, reply: 0.01, numbersADay: 0.001, asOf: '28 November 2026' }, pictures: 'optional', maxPictures: 4, videos: 'optional', maxVideos: 1, link: 'in_text' },
   linkedin: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 3_000, apiOneKind: true, pictures: 'optional', maxPictures: 9, videos: 'optional', maxVideos: 1, link: 'in_text' },
   telegram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 4_096, apiCaptionLimit: 1_024, pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text' },
-  pinterest: { format: 'plain', hasTitle: true, titleLimit: 100, textLimit: 500, apiVideos: 'none', pictures: 'required', maxPictures: 1, videos: 'optional', maxVideos: 1, link: 'field' },
+  pinterest: { format: 'plain', hasTitle: true, titleLimit: 100, textLimit: 500, pictures: 'required', maxPictures: 1, videos: 'optional', maxVideos: 1, link: 'field' },
   tiktok: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 2_200, pictures: 'none', maxPictures: 0, videos: 'required', maxVideos: 1, link: 'field' },
   youtube: { format: 'plain', hasTitle: true, titleLimit: 100, textLimit: 5_000, pictures: 'none', maxPictures: 0, videos: 'required', maxVideos: 1, link: 'field' }
 }
