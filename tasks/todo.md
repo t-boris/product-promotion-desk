@@ -1449,28 +1449,28 @@ One release per phase; each is verified (`npm run verify`), installed and read o
 - [x] J (0.60.0) Pinterest and LinkedIn, publishing only: built as 0.85.0 (LinkedIn, DEC-084) and 0.86.0 (Pinterest, DEC-085)
 
 ## Ideal-application document (section 7)
-- [ ] 1 results per post: tagged link, per-post numbers, site analytics, goals with a number and a date
+- [x] 1 results per post: tagged link, per-post numbers, site analytics, goals with a number and a date — built (see the completion check below). Not built on the owner's word of 2026-11-28: the post itself in the link's tag ("not now"); Google Analytics is noted, not read
   - [x] slice A (0.56.0, DEC-056): numbers under each sent post read by the application (Reddit), Results tab on the channel, Posts row and card
-  - [ ] readers for the channels worked in the browser, the post link there; the tagged site link; the site's analytics (needs the owner's answer: which analytics); goals with a number and a date
+  - [x] readers for the channels worked in the browser (0.77.0, DEC-075: the numbers read by the AI browser), the site's analytics (0.75.0, DEC-073: "Site visits", Plausible), goals with a number and a date (0.69.0, DEC-067)
   - [x] the tagged site link (0.57.0): product switch, utm tags naming platform and channel, off by default
 - [x] 2 weekly review and the learning loop (0.58.0, DEC-057): Review screen, numbers against the usual of four weeks, AI's words and one change, accept / decline / own, direction for the AI's proposed posts for two weeks, Monday 9:00 job
   - [x] whether an accepted change may steer the content mix: yes (owner, 2026-11-28), built as 0.80.0 (DEC-078). Place in the sidebar and day and hour stay as built; the owner has not asked to change them
 - [x] 3 channel trials (0.59.0, DEC-058): Trial card on the channel's Results tab, terms, counted number, Inbox item at the end, keep / stop and park / extend, AI proposes the terms; no hard limit on channels in work (owner's question 3 open)
 - [x] 4 positioning and the audience's words (0.60.0, DEC-059): two Setup steps; five answers proposed and approved; words bank from read Feed posts with their posts; both feed the AI's proposed posts; a repeated question gets a draft. Not built: an FAQ store with approved answers; use in reply drafts
-- [ ] 5 themes, campaigns, seasonal calendar
+- [x] 5 themes, campaigns, seasonal calendar
   - [x] the seasonal calendar (0.61.0, DEC-060): Dates ahead card under the Posts calendar; moon, sign seasons, equinoxes/solstices computed, gift dates listed, the owner's dates; lead time per platform; draft per date and channel on a press; Inbox item; skip
   - [x] the recap of one piece in several channels on Review (0.68.0), on post groups (DEC-032)
-  - [ ] a named theme over several pieces, with its own calendar
-- [ ] 7 conversations: reply window, took-off item, testimonials, people met
+  - [x] a named theme over several pieces, with its own calendar: campaigns (0.72.0, DEC-070; first and last day in the calendar cells, 0.72.1)
+- [x] 7 conversations: reply window, took-off item, testimonials, people met — the waiting note is the 48-hour window (0.64.0); "Remember" on a Feed comment (0.69.0, DEC-067). Not asked by the document and not built: testimonials offered in the post editor
   - [x] took-off Inbox item and the waiting note on comments to the account (0.64.0, DEC-063)
   - [x] testimonials with permission and source; the people met (0.67.0, DEC-066): People screen in the sidebar, the owner's own notes. Not built: "Remember this person" on a Feed comment; testimonials offered in the post editor
 - [x] 8 wider listening (0.63.0, DEC-062): Heard elsewhere card on Review; name + 5 phrases + 5 competitors; one searching AI request; mention / competitor / place; each address once, dismissed never again; weekly after the first look. Not built: a place turned into a channel by a press; an Inbox item
 - [x] 9 the AI-answer check (0.62.0, DEC-061): card on Review; up to 20 buyer questions (AI may propose); each asked with web search and no word about the product; named / cited worked out by the application; names and sites named most; checks kept and compared; asked again after 30 days. One engine only; no Inbox item
-- [ ] 10 content details
+- [x] 10 content details
   - [x] translate my post (0.66.0, DEC-065): row in the draft editor, addresses kept, Undo, nothing stored
-  - [ ] topic tag for Threads, keywords for Pinterest, carousel as a post form, shot list for a video
+  - [x] topic tag for Threads (0.74.0 copied by the owner; 0.81.0, DEC-079, typed by the application), keywords for Pinterest (0.74.0, DEC-072, copied by the owner), carousel as a post form and the shot list for a video (0.71.0, DEC-069)
 - [x] 11 account health (0.65.0, DEC-064): Health card on the account page: link share of posts and replies in 30 days, reach of the latest three posts against the ones before. Not built: warm-up plan (the account's age on its platform is unknown)
-- [ ] 12 launch venues
+- [x] 12 launch venues (0.73.0, DEC-071: the owner's checklist per venue, off until set)
 
 ## Review of the goal's work, 2026-11-27 (0.56.0 - 0.74.0)
 - Built and installed: results per post, tagged link, weekly review, channel trials, positioning, audience's words, dates ahead, AI-answer check, heard elsewhere, took-off item and waiting note, account health, translate my post, People, recap of one piece in several channels (0.68.0), a goal's number and date + "Remember" on a Feed comment + "Add as a channel" on a find (0.69.0, DEC-067), warm-up plan (0.70.0, DEC-068), plan a post as a carousel or a short video (0.71.0, DEC-069), campaigns (0.72.0, DEC-070). DEC-056 to DEC-070.
@@ -1670,4 +1670,6 @@ Facts (X's pages saved 2026-11-28): the API is paid per use (a post $0.015, a po
 - [x] X2 a key renewed when it is used
 - [x] X3 `src/connectors/x/` (api, connector, fake server, tests)
 - [x] X4 the price line in the preview
-- [ ] X5 verify, decision, own-instance look, release 0.87.0
+- [x] X5 verify (6502 tests), DEC-086, own-instance look, release 0.87.0 (installed; the start line read on the real application, no errors)
+
+Review of 0.87.0: the sign-in is `src/core/net/sign-in-listener.ts` (one waiting sign-in at a time on `127.0.0.1:47821`, only the answer with the right random word is taken) and `Vault.signIn` / `stopSignIn`; the renewal on use is `KeyRenewal.current` behind `ConnectorContext.apiKey()`, in one line per account. The connector is `src/connectors/x/`, its fake `fake-x.ts` checks the PKCE challenge and uses a refresh token once. Seen in an own instance with scratch data: the account's page (four steps, “Client ID”, “Sign in with X” disabled until the id is typed), the wait (“Waiting for you in the browser window…”, “Stop waiting”, the listener answering 404 to a wrong word and closed after the stop), the price line of a new post; no sideways scroll. Found while writing the price: the numbers of a post are read for 30 days on every channel, and X charges a post once for each day it is read, so a post costs about $0.15 more than its $0.015; the steps, the channel's capability and the preview say so. Open for the owner: read the numbers on X for fewer days, or not at all. Unproven: everything with a real X app (the sign-in page, the callback, the upload, the prices).
