@@ -56,8 +56,10 @@ export function listPlatforms(connectors: ConnectorRegistry): PlatformInfo[] {
   const byLabel = (a: PlatformInfo, b: PlatformInfo): number => a.label.localeCompare(b.label)
   // A platform that can also be worked through its own API says so (DEC-055): what the key is called and how the owner gets it.
   const withApi = (info: PlatformInfo): PlatformInfo => {
-    const api = all.find((c) => c.api !== undefined && c.platform === info.platform)?.api
-    return api ? { ...info, api: { accountKind: api.accountKind, keyLabel: api.keyLabel, ...(api.keyName ? { keyName: api.keyName } : {}), steps: api.steps, ...(api.onceSecret ? { onceSecret: api.onceSecret } : {}) } } : info
+    const connector = all.find((c) => c.api !== undefined && c.platform === info.platform)
+    const api = connector?.api
+    if (!connector || !api) return info
+    return { ...info, api: { accountKind: api.accountKind, keyLabel: api.keyLabel, ...(api.keyName ? { keyName: api.keyName } : {}), steps: api.steps, ...(api.onceSecret ? { onceSecret: api.onceSecret } : {}), ...(connector.renewKey ? { renews: true as const } : {}) } }
   }
   return [...prepared.sort(byLabel), ...named.sort(byLabel), ...(universal ? [platformInfo(universal)] : [])].map(withApi)
 }

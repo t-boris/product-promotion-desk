@@ -75,6 +75,8 @@ describe('a Facebook account that works through a Page\'s access token (DEC-076)
     const w = world()
     const info = (await w.call('platforms.list', undefined as never)).find((p) => p.platform === 'facebook')
     expect(info).toMatchObject({ connectorId: 'universal', api: { accountKind: 'Page', keyLabel: 'Page access token' } })
+    // A Page's token does not end: nothing is said about renewing it.
+    expect(info?.api).not.toHaveProperty('renews')
     expect(w.core.connectors.resolve(PAGE_URL)?.id).toBe('universal')
     const steps = guideSteps(info, { kind: null, access: 'api' })
     expect(steps.length).toBe(8)

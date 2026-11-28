@@ -72,7 +72,7 @@ describe('a Threads account that works through the Threads API (DEC-080)', () =>
   it('is offered for Threads beside the browser account, with the steps that get the token and a secret asked once; the API connector is never chosen by an address alone', async () => {
     const w = world()
     const info = (await w.call('platforms.list', undefined as never)).find((p) => p.platform === 'threads')
-    expect(info).toMatchObject({ connectorId: 'universal', api: { accountKind: 'developer app', keyLabel: 'Threads access token', onceSecret: { label: 'Threads app secret' } } })
+    expect(info).toMatchObject({ connectorId: 'universal', api: { accountKind: 'developer app', keyLabel: 'Threads access token', onceSecret: { label: 'Threads app secret' }, renews: true } })
     expect(w.core.connectors.resolve(PROFILE_URL)?.id).toBe('universal')
     const steps = guideSteps(info, { kind: null, access: 'api' })
     expect(steps.length).toBe(8)

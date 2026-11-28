@@ -40,6 +40,7 @@ export function AccountApiKey({ account, api, unavailable, hasKey }: { account: 
         <>
           {' '}
           · connected as <strong>{account.identity}</strong>
+          {api.renews && <span data-testid={`api-key-renews-${account.id}`}> · the application renews it by itself before it ends</span>}
         </>
       ) : (
         ` · the platform does not accept it now: save a new ${name}, or check again`

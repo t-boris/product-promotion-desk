@@ -1579,4 +1579,5 @@ Why now: after 0.81.2 the goal's Stop hook named phases G-J as unbuilt. G was re
 - [x] the browser guide of Threads points to the API choice; "Threads' own API", "Threads access token" written with the name's capital (`keyName`)
 - [x] verify (292 files, 6436 tests), decision DEC-080, own-instance look at the account's page (8 steps, two fields 619x28, no horizontal scroll)
 - [ ] with the owner's Meta app (Threads use case): the eight steps walked for real, a first post with a topic, a reply read and answered, the numbers read, a token renewed
+- [x] 0.82.1: the account's page says "the application renews it by itself before it ends" beside a saved Threads token (`PlatformInfo.api.renews`)
 - [ ] not built: pictures and video (needs D5, a public address for the file), hiding a reply, the quota read, the token's end date on the account's page (it is in the Log)
