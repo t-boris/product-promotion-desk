@@ -69,6 +69,8 @@ export function AddChannel({
   const account = chosenAccount(choices, accountId)
   const many = choices.mine.length + choices.others.length > 1
   const address = typedAddress(info, target)
+  // An account that works through the platform's API may take another address than a browser account does: its own example and hint are shown.
+  const apiAddress = account?.access === 'api' ? info?.api?.channel : undefined
   const reason = connectReason({ platformLabel: info?.label ?? null, hasAccount: account !== undefined, target })
   const alsoServes = account ? [...new Set(allChannels.filter((c) => c.accountId === account.id && c.productId !== product.id).map((c) => productName(c.productId)))] : []
   // Another login of this product is already in that community: say how discussions are shared between logins.
@@ -197,7 +199,7 @@ export function AddChannel({
 
       <section className={`add-step${info && account ? '' : ' off'}`} aria-labelledby="add-step-address">
         <h3 id="add-step-address">{addressLabel(info) === 'Community' ? '3. Which community?' : '3. Which address?'}</h3>
-        <Field label={addressLabel(info)} hint={address !== target.trim() ? `Address: ${address}.` : info?.hint}>
+        <Field label={addressLabel(info)} hint={address !== target.trim() ? `Address: ${address}.` : (apiAddress?.hint ?? info?.hint)}>
           <input
             className="input"
             value={target}
@@ -206,7 +208,7 @@ export function AddChannel({
               setTarget(e.target.value)
               setFromIdea(null)
             }}
-            placeholder={addressExample(info)}
+            placeholder={apiAddress?.example ?? addressExample(info)}
             disabled={!info || !account}
             data-testid="connect-target"
           />

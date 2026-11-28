@@ -33,6 +33,9 @@ export function createHttpPort(fetchImpl: Fetch = (url, init) => fetch(url, init
       if (req.json !== undefined) {
         headers['content-type'] = 'application/json'
         body = JSON.stringify(req.json)
+      } else if (req.urlencoded) {
+        headers['content-type'] = 'application/x-www-form-urlencoded'
+        body = new URLSearchParams(req.urlencoded).toString()
       } else if (req.form) {
         const form = new FormData()
         for (const [name, value] of Object.entries(req.form)) {

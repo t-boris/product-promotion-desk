@@ -19,6 +19,17 @@ describe('the network port for API connectors', () => {
     expect((seen[0]!.init.headers as Record<string, string>)['content-type']).toBe('application/json')
   })
 
+  it('sends a form of words the way a token address takes it', async () => {
+    let init: RequestInit | null = null
+    const port = createHttpPort(async (_url, given) => {
+      init = given
+      return new Response('{}')
+    })
+    await port.request({ method: 'POST', url: 'https://api.example/token', headers: { authorization: 'Basic eA==' }, urlencoded: { grant_type: 'client_credentials', scope: 'a:read,b:write' } })
+    expect(init!.body).toBe('grant_type=client_credentials&scope=a%3Aread%2Cb%3Awrite')
+    expect(init!.headers as Record<string, string>).toMatchObject({ 'content-type': 'application/x-www-form-urlencoded', authorization: 'Basic eA==' })
+  })
+
   it('sends a file of a form from its path, with its name and type', async () => {
     const path = join(mkdtempSync(join(tmpdir(), 'ppd-http-')), 'picture.png')
     writeFileSync(path, Buffer.from([1, 2, 3, 4]))

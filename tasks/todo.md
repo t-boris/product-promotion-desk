@@ -1446,7 +1446,7 @@ One release per phase; each is verified (`npm run verify`), installed and read o
 - [x] G (0.57.0) Threads connector — built as 0.82.0 (DEC-080), pictures and video as 0.83.0 through the place for files (DEC-081); unproven live (no Meta app)
 - [x] H (0.58.0) Instagram connector — built as 0.84.0 (DEC-082); unproven live (no Meta app, no bucket)
 - [ ] I (0.59.0) X connector
-- [ ] J (0.60.0) Pinterest and LinkedIn, publishing only
+- [x] J (0.60.0) Pinterest and LinkedIn, publishing only: built as 0.85.0 (LinkedIn, DEC-084) and 0.86.0 (Pinterest, DEC-085)
 
 ## Ideal-application document (section 7)
 - [ ] 1 results per post: tagged link, per-post numbers, site analytics, goals with a number and a date
@@ -1633,3 +1633,18 @@ Facts (LinkedIn's pages saved 2026-11-28): the self-serve product "Share on Link
 - [x] J1 core: `keyDays` and `work` on `ApiAccess`, the end day remembered and shown, Inbox item a week ahead, a channel of an API account that is not read is never watched in the browser, longer keys accepted
 - [x] J2 `src/connectors/linkedin/` (api, connector, fake server, tests)
 - [x] J3 verify (6477 tests), DEC-084, own-instance look (the account's page: 5 steps, 4 buttons, what the app does; the channel's page says “Not read by the app”), release 0.85.0
+
+## Phase J, part 2: Pinterest through its API, pins on a board of the app owner's account (plan 2026-11-28, 0.86.0)
+
+Facts (Pinterest's pages saved 2026-11-28): the client-credentials grant (`POST /v5/oauth/token`, Basic app id:secret key, a form-urlencoded body) gives a 30-day token "on behalf of the current app owner" with no sign-in window, and needs two-factor authentication on the account; `POST /v5/pins` takes a board's id, a title (100), a description (800), a link and one JPEG or PNG picture as base64; a board has an id and a name in the API and no address; there is no API for comments; `GET /v5/pins/{id}/analytics` gives impressions of a period (up to 90 days back) and the lifetime numbers of reactions and comments. With Trial access a pin the app creates is seen only by its creator; Standard access is asked for with a video recording (a screen recording of the calls is accepted when the owner is the only user).
+
+- An account "Through a developer app" with two values kept together in the vault: the app id and the app secret key (`ApiAccess.keyId`, a second value that is no secret). The application asks Pinterest for a token itself whenever it needs one; nothing ends for the owner.
+- A channel is the address of a board of that account (`pinterest.com/<name>/<board>/`); the board is found among the account's boards by its name. A pin is one picture with a title, a description and a link; a video is said before the approval (it needs another kind of token).
+- The channel is for the owner's own posts (no comments API); under each pin the application reads reactions, comments and the impressions of the last 90 days.
+- `HttpPort` takes a form-urlencoded body.
+
+- [x] P1 core: form-urlencoded body, `keyId` beside the key (ports, vault, screen). The numbers under each pin need nothing new: a connector's `readPostNumbers` is asked whether or not the channel is read. Not built: the account's followers and monthly views in Results (a channel that is not read shows no account numbers there, DEC-034)
+- [x] P2 `src/connectors/pinterest/` (api, connector, fake server, 10 tests); the Add-a-channel form and the refusal of an address show the API account's own example (a board, not the profile)
+- [x] P3 verify (6488 tests), DEC-085, own-instance look (account's page with “App id” and “App secret key”, Add a channel, the channel's page), release 0.86.0
+
+Review: built on Pinterest's documentation and a fake server, unproven with a real app. Seen in the look and not changed here: the page of a channel of an account that works through an API still offers “Open browser” and “Look around with the AI”, which speak of the account's browser.

@@ -14,10 +14,12 @@ export function AccountApiKey({ account, api, unavailable, hasKey, endsAt }: { a
   const [editing, setEditing] = useState(!hasKey)
   const [key, setKey] = useState('')
   const [secret, setSecret] = useState('')
+  const [keyId, setKeyId] = useState('')
   const saveVariant = useOpenForm(editing)
   const main = useMainVariant()
   const [save, saving] = useAction(async () => {
-    await call('vault.saveApiKey', { accountId: account.id, key, ...(api.onceSecret && secret.trim() !== '' ? { secret } : {}) })
+    await call('vault.saveApiKey', { accountId: account.id, key, ...(api.onceSecret && secret.trim() !== '' ? { secret } : {}), ...(api.keyId ? { keyId } : {}) })
+    setKeyId('')
     setKey('')
     setSecret('')
     setEditing(false)
@@ -31,7 +33,7 @@ export function AccountApiKey({ account, api, unavailable, hasKey, endsAt }: { a
 
   function submit(event: FormEvent): void {
     event.preventDefault()
-    if (key.trim() !== '') void save()
+    if (key.trim() !== '' && (!api.keyId || keyId.trim() !== '')) void save()
   }
 
   const summary = hasKey ? (
@@ -80,6 +82,11 @@ export function AccountApiKey({ account, api, unavailable, hasKey, endsAt }: { a
       {editing && (
         <form onSubmit={submit} className="stack" data-testid={`api-key-form-${account.id}`}>
           <GuideSteps account={account} steps={api.steps} testId={`api-key-steps-${account.id}`} />
+          {api.keyId && (
+            <Field label={api.keyId.label} hint={api.keyId.hint}>
+              <input className="input" value={keyId} onChange={(e) => setKeyId(e.target.value)} autoComplete="off" spellCheck={false} data-testid={`api-key-id-${account.id}`} />
+            </Field>
+          )}
           <Field label={api.keyLabel} hint="Stored encrypted by the macOS keychain, only on this Mac. It is checked with the platform when you save it.">
             <input className="input" type="password" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" spellCheck={false} data-testid={`api-key-input-${account.id}`} />
           </Field>
@@ -89,7 +96,7 @@ export function AccountApiKey({ account, api, unavailable, hasKey, endsAt }: { a
             </Field>
           )}
           <div className="row">
-            <Button variant={saveVariant} type="submit" disabled={key.trim() === '' || saving.busy} data-testid={`api-key-save-${account.id}`}>
+            <Button variant={saveVariant} type="submit" disabled={key.trim() === '' || (api.keyId !== undefined && keyId.trim() === '') || saving.busy} data-testid={`api-key-save-${account.id}`}>
               {saving.busy ? 'Saving…' : `Save the ${name}`}
             </Button>
             {hasKey && <Button onClick={() => setEditing(false)}>Cancel</Button>}

@@ -59,7 +59,9 @@ export class ChannelService {
     // An account connected with a key works through its platform's API connector, whatever else could serve the address (DEC-055).
     const api = account.access === 'api' ? connectorForPlatform(this.core.connectors, account.platform, 'api') : undefined
     if (account.access === 'api' && (!api || !api.matches(raw))) {
-      throw new ApiError('platform_mismatch', `${account.label} works through the ${account.platform} API, and this is not an address it can work with.`)
+      const guide = api?.channelGuide?.()
+      const takes = guide ? ` It takes ${guide.hint.charAt(0).toLowerCase()}${guide.hint.slice(1)} For example: ${guide.example}` : ''
+      throw new ApiError('platform_mismatch', `${account.label} works through the ${account.platform} API, and this is not an address it can work with.${takes}`)
     }
     const connector = api ?? this.core.connectors.resolve(raw)
     if (!connector) throw new ApiError('no_connector', 'No connector can handle this address.')

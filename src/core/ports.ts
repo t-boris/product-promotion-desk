@@ -437,8 +437,9 @@ export interface HttpRequest {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE'
   url: string
   headers?: Record<string, string>
-  /** A JSON body; or `form`, a multipart form whose values are words or files; or `file`, one file as the whole body (a PUT to a store). At most one of the three. */
+  /** A JSON body; or `form`, a multipart form whose values are words or files; or `urlencoded`, a form of words the way a token address takes it; or `file`, one file as the whole body (a PUT to a store). At most one of the four. */
   json?: unknown
+  urlencoded?: Record<string, string>
   form?: Record<string, string | HttpFile>
   file?: HttpFile
   timeoutMs?: number
@@ -473,6 +474,11 @@ export interface ApiAccess {
    * secret of a Threads app, which turns a token of an hour into one of 60 days).
    */
   onceSecret?: { label: string; hint: string }
+  /**
+   * A second value asked beside the key, required, that is no secret and is kept with the key: the id of the app the secret key belongs to
+   * (Pinterest). The connector's `keyToKeep` gets both and says what the vault keeps.
+   */
+  keyId?: { label: string; hint: string }
   /** What the application does through this kind of account, said where no key is saved yet. Absent: it posts, reads comments and answers. */
   work?: string
   /**
@@ -674,7 +680,7 @@ export interface Connector {
    * for it with the once-secret. It throws, in words for the owner, when the pasted key cannot be kept (it ended, or it is a short one and no
    * secret came with it).
    */
-  keyToKeep?(http: HttpPort, pasted: { key: string; secret: string | null }, now: Date): Promise<KeptKey>
+  keyToKeep?(http: HttpPort, pasted: { key: string; secret: string | null; keyId?: string | null }, now: Date): Promise<KeptKey>
   /**
    * Only on a connector whose keys end. Renews a kept key that nears its end; null when nothing is due yet. It throws when the platform refuses.
    * `times` is what the application remembers of the key, for a platform that cannot be asked how long a key lasts.

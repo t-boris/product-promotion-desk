@@ -59,7 +59,9 @@ export function listPlatforms(connectors: ConnectorRegistry): PlatformInfo[] {
     const connector = all.find((c) => c.api !== undefined && c.platform === info.platform)
     const api = connector?.api
     if (!connector || !api) return info
-    return { ...info, api: { accountKind: api.accountKind, keyLabel: api.keyLabel, ...(api.keyName ? { keyName: api.keyName } : {}), steps: api.steps, ...(api.onceSecret ? { onceSecret: api.onceSecret } : {}), ...(connector.renewKey ? { renews: true as const } : {}), ...(api.work ? { work: api.work } : {}), ...(api.keyDays ? { keyDays: api.keyDays } : {}) } }
+    // The address such an account takes may be another than the one its browser account takes (Pinterest: a board, not the profile).
+    const guide = connector.channelGuide?.()
+    return { ...info, api: { accountKind: api.accountKind, keyLabel: api.keyLabel, ...(api.keyName ? { keyName: api.keyName } : {}), steps: api.steps, ...(api.onceSecret ? { onceSecret: api.onceSecret } : {}), ...(connector.renewKey ? { renews: true as const } : {}), ...(api.work ? { work: api.work } : {}), ...(api.keyDays ? { keyDays: api.keyDays } : {}), ...(api.keyId ? { keyId: api.keyId } : {}), ...(guide ? { channel: { example: guide.example, hint: guide.hint } } : {}) } }
   }
   return [...prepared.sort(byLabel), ...named.sort(byLabel), ...(universal ? [platformInfo(universal)] : [])].map(withApi)
 }

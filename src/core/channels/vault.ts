@@ -93,7 +93,7 @@ export class VaultService {
    * Saves the key of an account that works through its platform's API (a bot token, DEC-055) and checks it with the platform at once: the account
    * becomes ready, with the name the platform gives it, or says why not. The key is kept only in the vault and is never shown again.
    */
-  async saveApiKey(args: { accountId: string; key: string; secret?: string }): Promise<Account> {
+  async saveApiKey(args: { accountId: string; key: string; secret?: string; keyId?: string }): Promise<Account> {
     const account = this.accounts.account(args.accountId)
     const connector = account.access === 'api' ? this.core.connectors.list().find((c) => c.api !== undefined && c.platform === account.platform) : undefined
     const api = connector?.api
@@ -101,13 +101,15 @@ export class VaultService {
     const key = typeof args.key === 'string' ? args.key.trim() : ''
     if (key === '') throw new ApiError('invalid_input', `The ${keyNameOf(api)} is required.`)
     if (key.length > MAX_API_KEY || !api.keyLooksValid(key)) throw new ApiError('invalid_input', `This does not look like ${aKeyNameOf(api)}. Copy it whole from where the platform shows it.`)
+    const keyId = api.keyId && typeof args.keyId === 'string' ? args.keyId.trim() : ''
+    if (api.keyId && (keyId === '' || keyId.length > 128 || /\s/.test(keyId))) throw new ApiError('invalid_input', `The ${api.keyId.label.toLowerCase()} is required: it is one word, shown beside the ${keyNameOf(api)}.`)
     await this.requireAvailable()
     // A platform whose keys end is asked how long this one lasts, and for a longer one when the owner gave the secret that makes it. The secret is used here and kept nowhere.
     const secret = api.onceSecret && typeof args.secret === 'string' && args.secret.trim() !== '' ? args.secret.trim() : null
     let kept: KeptKey = { key, expiresAt: null }
     if (connector.keyToKeep) {
       try {
-        kept = await connector.keyToKeep(this.core.http, { key, secret }, this.core.clock.now())
+        kept = await connector.keyToKeep(this.core.http, { key, secret, keyId: api.keyId ? keyId : null }, this.core.clock.now())
       } catch (error) {
         throw new ApiError('invalid_input', error instanceof Error ? error.message : String(error))
       }
