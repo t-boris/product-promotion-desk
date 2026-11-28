@@ -321,7 +321,6 @@ function PostsScreen({ product }: { product: Product }) {
             productId={product.id}
             channelId={writing.channelId}
             platform={(channels.find((c) => c.id === writing.channelId) ?? target).platform}
-            reads={(channels.find((c) => c.id === writing.channelId) ?? target).reads}
             author={{ name: authorName, target: (channels.find((c) => c.id === writing.channelId) ?? target).target }}
             plannedAt={writing.plannedAt}
             onCreated={(_created, saveNote) => {

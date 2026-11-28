@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { judgedForFit, parseBlocks, platformLabel, renderForPlatform, sendProblems, type Block, type Inline, type PostContent, type RenderedPost } from '../../../../shared/post-format'
+import { judgedForFit, parseBlocks, platformLabel, renderForPlatform, sendProblems, type Block, type Inline, type PostContent, type RenderedPost, type SendWays } from '../../../../shared/post-format'
 import { hasTopicField } from '../../../../shared/topic-tag'
 import { PREVIEW_PLATFORMS, counterFor, fold, initialOf, previewKind, sketchNote, sketchNoteLook, visiblePictures, whereLine, type PreviewKind } from '../../../../shared/post-preview'
 import type { CardShape } from '../../../../shared/quick-post'
@@ -285,8 +285,7 @@ export function PostPreview({
   content,
   channelPlatform,
   author,
-  aiBrowser = false,
-  noConnector = false,
+  ways,
   platforms,
   ticked,
   livePicture,
@@ -297,10 +296,8 @@ export function PostPreview({
   content: PostContent
   channelPlatform: string
   author: PostAuthor
-  /** The AI publishes in the account's browser (chosen in Settings, or the channel has no other way): pictures then go to any platform that takes them. */
-  aiBrowser?: boolean
-  /** The application does not read the channel, so no connector can post to it (DEC-035). */
-  noConnector?: boolean
+  /** How the post would go out, as the application judges it at the approval (`useSendWays`). Not known yet: nothing is said of the way. */
+  ways?: SendWays
   /**
    * The platforms the owner can look at the post as, when they are only the channels it goes to (the quick-post composer): the pop-up offers these and
    * no other, and the sketch's note speaks of the platform shown, since each of them is a place the post is going.
@@ -329,7 +326,7 @@ export function PostPreview({
   const kind = previewKind(platform)
   const rendered = renderForPlatform(content, platform)
   // An older draft is judged by its connector; the one thing said of it is that a link added to the end of the text took it over the limit (DEC-036). A quick post is judged whole, like a post written in the editor (its picture's own rules are shown by the composer).
-  const problems = judgedForFit(content) ? sendProblems(platform, rendered, { aiBrowser, ...(noConnector ? { noConnector } : {}) }) : rendered.problems
+  const problems = judgedForFit(content) ? (ways ? sendProblems(platform, rendered, ways) : []) : rendered.problems
   const ids = rendered.attachments.map((a) => a.mediaId).filter((id): id is string => id !== undefined)
   const thumbs = useThumbs(ids, 320)
   const empty = !rendered.title && rendered.text.trim() === '' && rendered.attachments.length === 0 && !rendered.link

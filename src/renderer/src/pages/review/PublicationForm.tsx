@@ -28,7 +28,7 @@ import { storeCard } from './quick/store-card'
  * kind's channels are off, with the reason, while one kind is ticked; with nothing ticked the article form shows and every channel is offered.
  * Each kind keeps what was typed in it while the form is open, so ticking the other kind and coming back loses nothing.
  */
-export function PublicationForm({ productId, channelId, platform, reads, author, plannedAt = null, onCreated, onCancel }: { productId: Id; channelId: Id; platform: string; reads: boolean; author: PostAuthor; /** The time the post is planned for when it was started from a day of the calendar; the draft is saved with it. */ plannedAt?: IsoTime | null; /** `note` says what could not be done beside saving (a time a channel cannot take). */ onCreated: (channelId: Id, note?: string) => void; onCancel: () => void }) {
+export function PublicationForm({ productId, channelId, platform, author, plannedAt = null, onCreated, onCancel }: { productId: Id; channelId: Id; platform: string; author: PostAuthor; /** The time the post is planned for when it was started from a day of the calendar; the draft is saved with it. */ plannedAt?: IsoTime | null; /** `note` says what could not be done beside saving (a time a channel cannot take). */ onCreated: (channelId: Id, note?: string) => void; onCancel: () => void }) {
   // The form is open on demand, so "Save as draft" is the screen's filled button while it is the form opened last.
   const saveVariant = useOpenForm()
   // One form for each kind of post; the channels ticked decide which one is shown.
@@ -96,7 +96,7 @@ export function PublicationForm({ productId, channelId, platform, reads, author,
           <>
             <PostFromMaterial productId={productId} channelId={channelId} form={form} onChange={setForm} />
             <PostDrafter productId={productId} channelId={channelId} form={form} onChange={setForm} />
-            <DraftEditor form={form} onChange={setForm} withTitle disabled={creating.busy} draft={null} autoFocus={picked === null} ai={{ channelId }} post={{ productId, platform, author, reads, platforms }} />
+            <DraftEditor form={form} onChange={setForm} withTitle disabled={creating.busy} draft={null} autoFocus={picked === null} ai={{ channelId }} post={{ productId, platform, author, waysOf: channelId, platforms }} />
           </>
         )}
         <WhereToPost

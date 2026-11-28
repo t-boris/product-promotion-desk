@@ -146,6 +146,9 @@ describe('a Pinterest account that works through Pinterest\'s API (DEC-085)', ()
     expect((await w.monitor.runChannel(w.channel.id)).status).toBe('ok')
     expect(w.core.db.prepare('SELECT COUNT(*) AS n FROM opportunities WHERE channel_id = ?').get(w.channel.id)).toEqual({ n: 0 })
     expect(sendWays(w.core, undefined, w.channel)).toMatchObject({ aiBrowser: false, api: true })
+    // The preview asks the application the same question the approval does.
+    expect(await w.call('channels.sendWays', { channelId: w.channel.id })).toEqual({ aiBrowser: false, api: true, publicFiles: false })
+    await expect(w.call('channels.sendWays', { channelId: 'nope' })).rejects.toMatchObject({ code: 'not_found' })
     expect(await w.connector.fetchMetrics(w.ctx)).toEqual([])
   })
 

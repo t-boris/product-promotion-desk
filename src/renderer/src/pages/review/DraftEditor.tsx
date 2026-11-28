@@ -7,7 +7,8 @@ import { OutlineDraft } from './OutlineDraft'
 import { TranslateDraft } from './TranslateDraft'
 import { useAssistBlock } from '../../assist/useAssistBlock'
 import { FileLoader } from '../../FileLoader'
-import { call, useQuery } from '../../hooks'
+import { call } from '../../hooks'
+import { useSendWays } from './send-ways'
 import { Badge, Button, Field } from '../../ui'
 import { FoundSources } from './FoundSources'
 import { foundForAnswer, keepFound, type FoundFor } from './found-sources'
@@ -82,8 +83,8 @@ interface Props {
     productId: Id
     platform: string
     author: PostAuthor
-    /** The application does not read this channel: the AI browser is its only way, and needs no switch (DEC-035). */
-    reads: boolean
+    /** The channel whose way of sending judges the post in the preview: the one it is for, or the one a new post is written on. */
+    waysOf: Id
     /** The channel this version of the post is for: its community's own form (the flairs it offers) is read for the Flair line. Left out, there is no such line. */
     channelId?: Id
     /** The platforms of the channels a new post is written for, when the owner chooses them in the same form: the Topic line shows when any of them has a topic field. Left out: `platform` alone. */
@@ -93,7 +94,7 @@ interface Props {
 
 /** Editor for a reply or a publication. Editing never changes what was approved: saving creates a new draft. */
 export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFocus = false, ai, post }: Props) {
-  const settings = useQuery('app.settings.get', undefined, ['settings'])
+  const ways = useSendWays(post?.waysOf)
   const editor = usePostEditor(form, onChange, post?.productId ?? '')
   const inEditor = withTitle && post !== undefined
   // The part of the text that is selected, for "Change a part" (the AI changes only that part).
@@ -180,7 +181,7 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
             {textField}
             <FoundSources sources={shownFound?.sources ?? []} />
           </div>
-          <PostPreview content={previewContent} flair={form.flair} topic={cleanTopicTag(form.topicTag) || null} channelPlatform={post.platform} author={post.author} aiBrowser={settings.data?.publishWith === 'ai_browser' || !post.reads} noConnector={!post.reads} />
+          <PostPreview content={previewContent} flair={form.flair} topic={cleanTopicTag(form.topicTag) || null} channelPlatform={post.platform} author={post.author} ways={ways} />
         </div>
       ) : (
         <>

@@ -83,7 +83,6 @@ export function ReviewBody({ item, notes }: { item: ReviewItem; /** What the own
           onChange={item.quick.setForm}
           platforms={[card.channelPlatform]}
           author={{ name: card.accountLabel, target: card.channelTarget }}
-          reads={card.channelReads}
           disabled={locked || working}
           draft={card.draft}
         />
@@ -95,7 +94,7 @@ export function ReviewBody({ item, notes }: { item: ReviewItem; /** What the own
           disabled={locked || working}
           draft={card.draft}
           ai={locked ? undefined : { opportunityId: opp.id }}
-          post={standalone ? { productId: opp.productId, platform: card.channelPlatform, reads: card.channelReads, channelId: opp.channelId, author: { name: card.accountLabel, target: card.channelTarget } } : undefined}
+          post={standalone ? { productId: opp.productId, platform: card.channelPlatform, waysOf: opp.channelId, channelId: opp.channelId, author: { name: card.accountLabel, target: card.channelTarget } } : undefined}
         />
       )}
       {!locked && opp.findingId === null && (

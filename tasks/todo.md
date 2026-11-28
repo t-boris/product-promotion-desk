@@ -1648,3 +1648,10 @@ Facts (Pinterest's pages saved 2026-11-28): the client-credentials grant (`POST 
 - [x] P3 verify (6488 tests), DEC-085, own-instance look (account's page with “App id” and “App secret key”, Add a channel, the channel's page), release 0.86.0
 
 Review: built on Pinterest's documentation and a fake server, unproven with a real app. Seen in the look and not changed here: the page of a channel of an account that works through an API still offers “Open browser” and “Look around with the AI”, which speak of the account's browser.
+
+## The preview judges a post by the channel's real way of sending (0.86.1, 2026-11-28)
+
+Found while planning the price line of X: the preview worked the way of sending out by itself (the owner's setting and whether the channel is read), so for a channel that works through its platform's API it said nothing of what that way cannot carry (a video to Pinterest or a Facebook Page, a picture without the place for files), and the approval then refused it with the reason. A LinkedIn or Pinterest API channel was judged as an AI-browser one.
+
+- [x] `channels.sendWays` answers with the same `sendWays` the approval uses; `useSendWays(channelId)` in the review screens; `PostPreview` takes `ways` instead of two flags; the `reads` props that only served this are gone (QuickComposer, PublicationForm, DraftEditor's `post`)
+- [x] verify (6488 tests), own-instance look: a new post on a Pinterest API channel shows the preview with its problems

@@ -1,7 +1,7 @@
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
 import type { CardColour, CardShape, CardStyle } from '../../../../../shared/quick-post'
 import type { Draft, Id } from '../../../../../shared/types'
-import { useQuery } from '../../../hooks'
+import { useSendWays } from '../send-ways'
 import { Badge } from '../../../ui'
 import { PostPreview, type PostAuthor } from '../PostPreview'
 import { CaptionField } from './CaptionField'
@@ -60,7 +60,6 @@ export function QuickComposer({
   platforms,
   lookAlso = [],
   author,
-  reads = false,
   disabled,
   draft = null,
   autoFocus = false,
@@ -78,8 +77,6 @@ export function QuickComposer({
   lookAlso?: readonly string[]
   /** Who speaks and where: the sketch names them. */
   author: PostAuthor
-  /** The application reads the channel (a connector can post to it). The channels of a quick post are not read, so this is false unless a connector exists. */
-  reads?: boolean
   disabled: boolean
   /** The saved draft this form came from, when it is one: who wrote it is said above the fields. */
   draft?: Draft | null
@@ -88,7 +85,7 @@ export function QuickComposer({
   pictureExtras?: (context: QuickSlotContext) => ReactNode
   thinkItThrough?: (context: QuickSlotContext) => ReactNode
 }) {
-  const settings = useQuery('app.settings.get', undefined, ['settings'])
+  const ways = useSendWays(channelId)
   const live = useLiveCard(form)
   const { content } = previewContent(form)
   const tight = tightestLimit(platforms).platform ?? platforms[0] ?? null
@@ -136,8 +133,7 @@ export function QuickComposer({
               platforms={previewChoices(platforms, lookAlso).map((c) => c.platform)}
               ticked={distinctPlatforms(platforms)}
               author={author}
-              aiBrowser={settings.data?.publishWith === 'ai_browser' || !reads}
-              noConnector={!reads}
+              ways={ways}
               livePicture={live ?? undefined}
               pictureShape={isCardPicture(form) ? form.card.shape : undefined}
             />

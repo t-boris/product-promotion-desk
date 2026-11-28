@@ -5,6 +5,7 @@ import { buildResultsHistory, buildResultsView } from './results'
 import { listHistory } from './history'
 import { MetricsServiceImpl, refreshTracked } from './metrics'
 import { registerFlow } from './register-flow'
+import { sendWays } from './send-ways'
 import { ApiError } from '../../shared/api'
 
 export { getAutomation, startAutomation, type Automation, type AutomationOptions } from './lifecycle'
@@ -37,6 +38,13 @@ export function register(core: Core): void {
     'results.get': (args) => buildResultsView(core, args?.productId),
     'results.history': (args) => buildResultsHistory(core, args),
     'results.posts': ({ channelId }) => sendingOf(core).postResults(channelId),
+    'channels.sendWays': ({ channelId }) => {
+      try {
+        return sendWays(core, undefined, core.repos.channel(channelId))
+      } catch {
+        throw new ApiError('not_found', `Channel not found: ${channelId}`)
+      }
+    },
     'results.readPosts': ({ channelId }) => sendingOf(core).readPostResultsNow(channelId),
     'overview.get': (args) => buildOverview(core, args),
     'results.refresh': async ({ channelId }) => {

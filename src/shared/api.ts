@@ -3,6 +3,7 @@
 // Electron IPC or over the loopback HTTP server is invisible to it.
 
 import type { PositioningAnswers } from './positioning'
+import type { SendWays } from './post-format'
 import type { TrialMetric } from './channel-trial'
 import type { CalendarKind } from './seasonal'
 import type { Person, PersonFields } from './people'
@@ -400,6 +401,8 @@ export interface ApiMethods {
   /** Re-validates the reviewed definition and stores it as a new version for `host`. Only the owner's screen calls it. */
   'channels.saveProfile': [{ host: string; definition: unknown }, SavedSiteProfile]
   'channels.assess': [{ channelId: Id }, Channel]
+  /** How a post to the channel would go out if the owner pressed Send: what the approval judges it by, for the preview to judge it the same. */
+  'channels.sendWays': [{ channelId: Id }, SendWays]
   'channels.updateSettings': [{ channelId: Id; settings: Partial<ChannelSettings> }, Channel]
   'channels.setMode': [{ channelId: Id; mode: ChannelMode }, Channel]
   /** Runs the first observation cycle (baseline) and sets the channel active. */
