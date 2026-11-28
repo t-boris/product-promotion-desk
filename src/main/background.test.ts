@@ -35,9 +35,9 @@ function fakePower() {
   }
 }
 
-const fakeApp = (packaged = true, atLogin = false) => {
+const fakeApp = (packaged = true, atLogin = false, registered = false) => {
   const login: unknown[] = []
-  return { login, app: { isPackaged: packaged, setLoginItemSettings: (s: unknown) => login.push(s), getLoginItemSettings: () => ({ wasOpenedAtLogin: atLogin }) } as never }
+  return { login, app: { isPackaged: packaged, setLoginItemSettings: (s: unknown) => login.push(s), getLoginItemSettings: () => ({ wasOpenedAtLogin: atLogin, openAtLogin: registered }) } as never }
 }
 
 const settings = (patch: Record<string, unknown> = {}) => ({ startAtLogin: false, keepAwake: true, scheduleGraceHours: 6, ...patch })
@@ -86,6 +86,21 @@ describe('working in the background (DEC-054)', () => {
     const dev = fakeApp(false)
     installBackground({ app: dev.app, core, powerMonitor: { isOnBatteryPower: () => false }, powerSaveBlocker: fakePower().blocker, intervalMs: 3_600_000 }).stop()
     expect(dev.login).toEqual([])
+  })
+
+  it('changes nothing and says nothing at a start when the system already has what the setting says', () => {
+    const run = (startAtLogin: boolean, registered: boolean) => {
+      const { core, lines } = fakeCore(settings({ startAtLogin }), { dueTimes: [], sending: false })
+      const installed = fakeApp(true, false, registered)
+      installBackground({ app: installed.app, core, powerMonitor: { isOnBatteryPower: () => false }, powerSaveBlocker: fakePower().blocker, intervalMs: 3_600_000 }).stop()
+      return { login: installed.login, said: lines.filter((line) => /starts at login/.test(line)) }
+    }
+    expect(run(false, false)).toEqual({ login: [], said: [] })
+    expect(run(true, true)).toEqual({ login: [], said: [] })
+    // A setting that differs from what the system has is applied and said, as before.
+    expect(run(false, true).login).toEqual([{ openAtLogin: false }])
+    expect(run(false, true).said).toHaveLength(1)
+    expect(run(true, false).login).toEqual([{ openAtLogin: true }])
   })
 
   it('knows a start made by the login item', () => {

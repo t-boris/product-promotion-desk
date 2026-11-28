@@ -28,9 +28,12 @@ export function installBackground({ app, core, powerMonitor, powerSaveBlocker, i
   const applyLogin = (): void => {
     const wanted = core.settings.app().startAtLogin
     if (registered === wanted) return
+    const first = registered === null
     registered = wanted
     // An unpackaged build would register the bare Electron binary: only the installed application is a login item.
     if (!app.isPackaged) return
+    // At a start the system already has what an earlier run set: the login item is changed, and the change is logged, only when the two differ.
+    if (first && loginItemNow(app) === wanted) return
     try {
       app.setLoginItemSettings({ openAtLogin: wanted })
       core.log.info('lifecycle', wanted ? 'The application now starts at login, in the menu bar' : 'The application no longer starts at login')
@@ -85,6 +88,15 @@ export function installBackground({ app, core, powerMonitor, powerSaveBlocker, i
 }
 
 /** Whether this start was made by the login item: the application then stays in the menu bar and opens no window. */
+/** Whether the system has the application as a login item now; null when it cannot say. */
+function loginItemNow(app: Pick<App, 'getLoginItemSettings'>): boolean | null {
+  try {
+    return app.getLoginItemSettings().openAtLogin === true
+  } catch {
+    return null
+  }
+}
+
 export function openedAtLogin(app: Pick<App, 'getLoginItemSettings'>): boolean {
   try {
     return app.getLoginItemSettings().wasOpenedAtLogin === true
