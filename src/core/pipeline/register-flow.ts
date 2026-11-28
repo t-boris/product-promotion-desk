@@ -131,7 +131,7 @@ export function registerFlow(core: Core): void {
     'quick.assess': (args) => quickHelp.assess(args),
     'quick.trends': (args) => quickHelp.trends(args)
   })
-  const groups = new PostGroupsFlow(core, store, review, sending, draftHelp)
+  const groups = new PostGroupsFlow(core, store, review, sending, draftHelp, publications)
   core.router.register({
     'postGroups.create': ({ productId, channelIds, draft }) => groups.create(productId, channelIds, draft),
     'postGroups.extend': ({ opportunityId, channelIds }) => groups.extend(opportunityId, channelIds),
@@ -140,6 +140,8 @@ export function registerFlow(core: Core): void {
     'postGroups.channels': ({ productId, draft, chosen }) => groups.channels(productId, draft, chosen),
     'postGroups.adapt': ({ id, opportunityIds, force }) => groups.adapt(id, opportunityIds, force ?? false),
     'postGroups.approve': ({ id, seen }) => groups.approve(id, seen),
+    'postGroups.schedule': ({ id, at, seen }) => groups.scheduleAll(id, at, seen),
+    'postGroups.enqueue': ({ id, seen }) => groups.enqueueAll(id, seen),
     'postGroups.sendAll': ({ id }) => groups.sendAll(id),
     'postGroups.remove': ({ id }) => groups.remove(id)
   })

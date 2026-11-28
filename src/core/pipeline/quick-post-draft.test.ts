@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { Channel, Draft, MediaItem, PostGroupCard } from '../../shared/types'
 import type { QuickCard } from '../../shared/quick-post'
 import { PostGroupsFlow } from './post-groups'
+import { PublicationsFlow } from './publications'
 import type { DraftHelp } from './draft-help'
 import type { ReviewFlow } from './review'
 import type { SendingFlow } from './sending'
@@ -142,7 +143,7 @@ describe('a quick post for several channels is a group of quick posts with the s
     }
     world.core.db.prepare('UPDATE channels SET platform = ? WHERE id = ?').run('instagram', world.channel.id)
     const help = { refine: async (args: { form: { text: string } }) => ({ text: `${args.form.text} (adapted)` }) } as unknown as DraftHelp
-    const flow = new PostGroupsFlow(world.core, world.store, world.core.services.pipeline as unknown as ReviewFlow, world.core.services.sending as unknown as SendingFlow, help, { sleep: async () => {} })
+    const flow = new PostGroupsFlow(world.core, world.store, world.core.services.pipeline as unknown as ReviewFlow, world.core.services.sending as unknown as SendingFlow, help, new PublicationsFlow(world.core, world.store), { sleep: async () => {} })
     return { channels, flow }
   }
 

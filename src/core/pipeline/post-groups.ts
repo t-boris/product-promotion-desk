@@ -20,6 +20,7 @@ import type {
   Draft,
   GroupChannelOption,
   Id,
+  IsoTime,
   Opportunity,
   PostGroup,
   PostGroupCard,
@@ -34,6 +35,7 @@ import { buildCard } from './cards'
 import { normalizeDraftInput } from './draft-input'
 import type { DraftHelp } from './draft-help'
 import { SendBlockedError } from './gate'
+import type { PublicationsFlow } from './publications'
 import type { ReviewFlow } from './review'
 import { chooseExecutor, sendFitProblems, sendWays } from './send-ways'
 import type { SendingFlow } from './sending'
@@ -106,9 +108,10 @@ export class PostGroupsFlow {
   constructor(
     private readonly core: Core,
     private readonly store: FlowStore,
-    private readonly review: Pick<ReviewFlow, 'approve' | 'saveDraft' | 'reject'>,
+    private readonly review: Pick<ReviewFlow, 'approve' | 'saveDraft' | 'reject' | 'currentHash'>,
     private readonly sending: Pick<SendingFlow, 'send'>,
     private readonly help: Pick<DraftHelp, 'refine'>,
+    private readonly publications: Pick<PublicationsFlow, 'schedule' | 'enqueue'>,
     private readonly options: PostGroupsOptions = {}
   ) {}
 
@@ -326,6 +329,85 @@ export class PostGroupsFlow {
           } catch (error) {
             skip(errorMessage(error))
           }
+        }
+      }
+      return { card: this.get(id), results }
+    } finally {
+      this.busy.delete(id)
+    }
+  }
+
+  /**
+   * One planned send time for every approved version whose latest draft is the one the owner was shown (`seen`, DEC-093).
+   * A version that is not approved, changed after being shown, has a stale approval or was already sent is named with its reason and left untouched.
+   */
+  scheduleAll(id: Id, at: IsoTime, seen: Record<Id, Id>): PostGroupOutcome {
+    if (typeof at !== 'string' || Number.isNaN(Date.parse(at))) throw new ApiError('invalid_input', 'The scheduled time is not a valid date.')
+    const scheduledAt = new Date(Date.parse(at)).toISOString()
+    return this.planVersions(id, seen, (opp) => this.publications.schedule(opp.id, scheduledAt))
+  }
+
+  /**
+   * Spreads the approved versions across their channels' next free posting times (DEC-093), each by the same rule as a single version (`enqueue`).
+   * A channel without posting times, or a version that is not approved or changed since `seen`, is named with its reason and left untouched; the rest get their slot.
+   */
+  enqueueAll(id: Id, seen: Record<Id, Id>): PostGroupOutcome {
+    return this.planVersions(id, seen, (opp) => this.publications.enqueue(opp.id))
+  }
+
+  private planVersions(id: Id, seen: Record<Id, Id>, apply: (opp: Opportunity) => Opportunity): PostGroupOutcome {
+    this.requireGroup(id)
+    if (typeof seen !== 'object' || seen === null || Array.isArray(seen)) throw new ApiError('invalid_input', 'Say which text of each version you were shown.')
+    this.claim(id)
+    try {
+      const results: PostGroupResult[] = []
+      for (const opp of this.liveVersions(id)) {
+        const label = labelOf(this.store.requireChannel(opp.channelId))
+        const skip = (reason: string): void => {
+          results.push({ opportunityId: opp.id, channelLabel: label, status: 'skipped', reason })
+        }
+        if (FINISHED.includes(opp.state)) {
+          skip('It was sent already.')
+          continue
+        }
+        const draft = this.core.repos.latestDraft(opp.id)
+        if (!draft) {
+          skip('It has no text yet.')
+          continue
+        }
+        const approval = this.core.repos.activeApproval(draft.id)
+        if (opp.state !== 'ready' || !approval) {
+          skip('It is not approved yet: approve it first.')
+          continue
+        }
+        if (approval.approvedBy !== 'user') {
+          skip('Only a version you approved yourself can be scheduled.')
+          continue
+        }
+        if (seen[opp.id] === undefined) {
+          skip('It was not shown to you: read it, then set a time.')
+          continue
+        }
+        if (seen[opp.id] !== draft.id) {
+          skip('It changed after you looked at it: read it again, then set a time.')
+          continue
+        }
+        const current = this.review.currentHash(opp, draft)
+        if (approval.contentHash !== current.hash || approval.accountId !== current.accountId || approval.destination !== current.destination) {
+          skip('Its approval no longer applies: review and approve it again.')
+          continue
+        }
+        try {
+          const updated = apply(opp)
+          results.push({
+            opportunityId: opp.id,
+            channelLabel: label,
+            status: 'done',
+            reason: `Scheduled for ${updated.scheduledAt}.`,
+            ...(updated.scheduledAt ? { scheduledAt: updated.scheduledAt } : {})
+          })
+        } catch (error) {
+          skip(errorMessage(error))
         }
       }
       return { card: this.get(id), results }

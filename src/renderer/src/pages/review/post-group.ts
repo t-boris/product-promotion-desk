@@ -63,8 +63,9 @@ export function seenOf(versions: readonly PostVersion[]): Record<Id, Id> {
   return seen
 }
 
-/** What a step reported is about the group as it was after the step: the stamp changes when any version's state or draft does. */
-export const groupStamp = (versions: readonly PostVersion[]): string => JSON.stringify(versions.map((v) => [v.card.opportunity.id, v.card.opportunity.state, v.card.draft?.id ?? null]))
+/** What a step reported is about the group as it was after the step: the stamp changes when any version's state, draft or planned time does. */
+export const groupStamp = (versions: readonly PostVersion[]): string =>
+  JSON.stringify(versions.map((v) => [v.card.opportunity.id, v.card.opportunity.state, v.card.draft?.id ?? null, v.card.opportunity.scheduledAt ?? null]))
 
 // ───────────── the group's actions ─────────────
 
@@ -82,6 +83,21 @@ export function groupMain(versions: readonly PostVersion[]): GroupMain | null {
 
 export const approveAllLabel = (versions: readonly PostVersion[]): string => `Approve all ${openVersions(versions).length}`
 export const sendAllLabel = (versions: readonly PostVersion[]): string => `Send all now (${approvedVersions(versions).length})`
+export const scheduleAllLabel = (versions: readonly PostVersion[]): string => `Schedule all (${approvedVersions(versions).length})`
+export const spreadSlotsLabel = (versions: readonly PostVersion[]): string => `Next free time each (${approvedVersions(versions).length})`
+
+/** Channels of approved versions that have no posting times configured yet (deduplicated, in version order). */
+export function missingSlotChannels(versions: readonly PostVersion[]): { channelId: Id; label: string }[] {
+  const seen = new Set<Id>()
+  const missing: { channelId: Id; label: string }[] = []
+  for (const version of approvedVersions(versions)) {
+    const channelId = version.card.opportunity.channelId
+    if (version.card.channelPostingSlots > 0 || seen.has(channelId)) continue
+    seen.add(channelId)
+    missing.push({ channelId, label: versionLabel(version.card) })
+  }
+  return missing
+}
 
 export interface GroupState {
   /** A step of the group is running. */
@@ -103,6 +119,7 @@ export function stepBlocker(state: GroupState): string | null {
 }
 
 export const NOT_APPROVED_YET = 'Approve the versions first.'
+export const CHOOSE_TIME_FIRST = 'Choose a date and time first.'
 
 /** Why "Send all now" is off, or null: nothing is approved yet, or what would go is not what is on the screen. */
 export function sendBlocker(versions: readonly PostVersion[], state: GroupState): string | null {
@@ -112,10 +129,52 @@ export function sendBlocker(versions: readonly PostVersion[], state: GroupState)
   return null
 }
 
+/** Why "Schedule all" (one time for every approved version) is off, or null. */
+export function scheduleAllBlocker(versions: readonly PostVersion[], state: GroupState, at: string): string | null {
+  const base = sendBlocker(versions, state)
+  if (base) return base
+  if (!at || Number.isNaN(new Date(at).getTime())) return CHOOSE_TIME_FIRST
+  return null
+}
+
+/** Why "Next free time each" is off, or null: nothing approved, unsaved edits, or none of the approved versions' channels has posting times. */
+export function spreadBlocker(versions: readonly PostVersion[], state: GroupState): string | null {
+  const base = sendBlocker(versions, state)
+  if (base) return base
+  const approved = approvedVersions(versions)
+  if (approved.every((v) => v.card.channelPostingSlots === 0)) {
+    const missing = missingSlotChannels(versions).map((m) => m.label)
+    return `No posting times set for ${listOf(missing)}: add them on each channel's page, or choose one time.`
+  }
+  return null
+}
+
+/** Shown when some (not all) approved versions' channels lack posting times, so the owner knows which ones "Next free time each" will skip. */
+export function spreadPartialNote(versions: readonly PostVersion[]): string | null {
+  const approved = approvedVersions(versions)
+  if (approved.length === 0) return null
+  const missing = missingSlotChannels(versions)
+  if (missing.length === 0 || approved.every((v) => v.card.channelPostingSlots === 0)) return null
+  return `No posting times set for ${listOf(missing.map((m) => m.label))}: “Next free time each” skips ${missing.length === 1 ? 'it' : 'them'}.`
+}
+
+/** One sentence explaining the group schedule controls above them. */
+export function groupScheduleHint(versions: readonly PostVersion[]): string {
+  return approvedVersions(versions).length > 0
+    ? 'Sets a time on each approved version you see here (unapproved or changed versions are skipped). The Mac must be awake then, except on Facebook’s own schedule.'
+    : 'Approve the versions first, then give all of them one time or each its channel’s next free posting time.'
+}
+
+/** One reason shown below the group schedule row when either schedule button is disabled. */
+export function groupScheduleReason(scheduleBlock: string | null, spreadBlock: string | null): string | null {
+  if (scheduleBlock === spreadBlock) return scheduleBlock
+  return spreadBlock ?? scheduleBlock
+}
+
 /** The one reason shown beside the buttons: what holds back the first button that is off. */
 export const reasonBeside = (approve: string | null, send: string | null): string | null => approve ?? send
 
-export type GroupStep = 'adapt' | 'approve' | 'send' | 'remove'
+export type GroupStep = 'adapt' | 'approve' | 'schedule' | 'spread' | 'send' | 'remove'
 
 /** On which step the group is, in words, while a slow call runs (an adaptation or a send takes minutes). */
 export function stepLabel(step: GroupStep, versions: readonly PostVersion[]): string {
@@ -124,6 +183,10 @@ export function stepLabel(step: GroupStep, versions: readonly PostVersion[]): st
       return `Adapting for ${channelCount(openVersions(versions).length)}…`
     case 'approve':
       return `Approving ${plural(openVersions(versions).length, 'version')}…`
+    case 'schedule':
+      return `Scheduling ${plural(approvedVersions(versions).length, 'version')}…`
+    case 'spread':
+      return `Placing ${plural(approvedVersions(versions).length, 'version')} on their channels' posting times…`
     case 'send':
       return `Sending to ${channelCount(approvedVersions(versions).length)}… one after another, with a pause between`
     case 'remove':
@@ -132,7 +195,7 @@ export function stepLabel(step: GroupStep, versions: readonly PostVersion[]): st
 }
 
 /** The word on the pressed button while its step runs. */
-export const BUSY_WORD: Record<GroupStep, string> = { adapt: 'Adapting…', approve: 'Approving…', send: 'Sending…', remove: 'Deleting…' }
+export const BUSY_WORD: Record<GroupStep, string> = { adapt: 'Adapting…', approve: 'Approving…', schedule: 'Scheduling…', spread: 'Scheduling…', send: 'Sending…', remove: 'Deleting…' }
 
 export const groupRemovalQuestion = 'Deletes every version that was not sent, in every channel. Nothing of them was sent, so nothing changes on any site. A version that was sent stays as an ordinary post. It cannot be brought back.'
 
@@ -140,7 +203,7 @@ export const startOverQuestion = 'The AI writes this version again from the post
 
 // ───────────── what a step reported ─────────────
 
-export type ReportedStep = 'adapt' | 'approve' | 'send'
+export type ReportedStep = 'adapt' | 'approve' | 'schedule' | 'spread' | 'send'
 
 export const RESULT_LABEL: Record<PostGroupResult['status'], string> = { done: 'Done', skipped: 'Skipped', failed: 'Failed' }
 
@@ -150,8 +213,8 @@ export const RESULT_TONE: Record<PostGroupResult['status'], Tone> = { done: 'goo
 export function resultsHeadline(step: ReportedStep, results: readonly PostGroupResult[]): string {
   const done = results.filter((r) => r.status === 'done').length
   const of = `${done} of ${plural(results.length, 'version')}`
-  if (results.length === 0) return step === 'send' ? 'Nothing was sent.' : step === 'approve' ? 'Nothing was approved.' : 'Nothing was adapted.'
-  return step === 'adapt' ? `Adapted ${of}.` : step === 'approve' ? `Approved ${of}.` : `Sent ${of}.`
+  if (results.length === 0) return step === 'send' ? 'Nothing was sent.' : step === 'approve' ? 'Nothing was approved.' : step === 'adapt' ? 'Nothing was adapted.' : 'Nothing was scheduled.'
+  return step === 'adapt' ? `Adapted ${of}.` : step === 'approve' ? `Approved ${of}.` : step === 'send' ? `Sent ${of}.` : `Scheduled ${of}.`
 }
 
 /** True when anything in the report needs the owner's attention. */

@@ -5,6 +5,7 @@ import type { Channel, Draft, MediaItem, PostGroupCard } from '../../shared/type
 import { adaptInstruction, editedByHand, PostGroupsFlow } from './post-groups'
 import { chooseExecutor, flairProblem, sendWays } from './send-ways'
 import type { DraftHelp } from './draft-help'
+import { PublicationsFlow } from './publications'
 import type { ReviewFlow } from './review'
 import type { SendingFlow } from './sending'
 import { closeWorld, makeWorld, type World } from './test-fixture'
@@ -43,7 +44,7 @@ function setup(platforms: string[] = ['reddit', 'threads', 'instagram']) {
     }
   } as unknown as DraftHelp
   const sleeps: number[] = []
-  const flow = new PostGroupsFlow(world.core, world.store, world.core.services.pipeline as unknown as ReviewFlow, world.core.services.sending as unknown as SendingFlow, help, {
+  const flow = new PostGroupsFlow(world.core, world.store, world.core.services.pipeline as unknown as ReviewFlow, world.core.services.sending as unknown as SendingFlow, help, new PublicationsFlow(world.core, world.store), {
     sleep: async (ms) => {
       sleeps.push(ms)
     }
@@ -705,5 +706,113 @@ describe('what a version says about how it goes out', () => {
     expect(editedByHand({ ...draft, postType: 'quick' } as Draft, { ...master, postType: 'quick' })).toBe(false)
     expect(editedByHand({ ...draft, text: 'B', author: 'ai' } as Draft, master)).toBe(false)
     expect(editedByHand(null, master)).toBe(false)
+  })
+})
+
+describe('scheduling a group of versions at once (DEC-093)', () => {
+  it('sets one planned time on every approved version shown to the owner, sends nothing, and lets them go out at that time', async () => {
+    const { channels } = setup(['reddit', 'threads'])
+    const card = (await call('postGroups.create', { productId: world.product.id, channelIds: channels.map((c) => c.id), draft: MASTER })) as PostGroupCard
+    await call('postGroups.approve', { id: card.group.id, seen: seenOf(card) })
+    const at = new Date(world.clock.now().getTime() + 2 * 3_600_000).toISOString()
+
+    const out = (await call('postGroups.schedule', { id: card.group.id, at, seen: seenOf(card) })) as { card: PostGroupCard; results: { status: string; reason: string; scheduledAt?: string }[] }
+    expect(out.results.map((r) => r.status)).toEqual(['done', 'done'])
+    expect(out.results.every((r) => r.scheduledAt === at && r.reason.includes(at))).toBe(true)
+    expect(out.card.versions.map((v) => v.card.opportunity.scheduledAt)).toEqual([at, at])
+    expect(published()).toBe(0)
+
+    // Send all keeps its snapshot rule and skips future-scheduled versions.
+    const sentNow = (await call('postGroups.sendAll', { id: card.group.id })) as { results: { status: string; reason: string }[] }
+    expect(sentNow.results.map((r) => r.status)).toEqual(['skipped', 'skipped'])
+    expect(sentNow.results.every((r) => /scheduled for/.test(r.reason))).toBe(true)
+    expect(published()).toBe(0)
+
+    // When the time comes, both go out automatically.
+    world.clock.advance(2 * 3_600_000 + 60_000)
+    expect(await world.sending.sendDuePublications()).toBe(2)
+    expect(published()).toBe(2)
+  })
+
+  it('gives a time only to an approved version matching what the owner saw, and names every other with its reason', async () => {
+    const { channels, flow } = setup(['reddit', 'threads', 'x', 'linkedin'])
+    const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
+    const [v0, _v1, v2, v3] = card.versions.map((v) => v.card.opportunity.id) as [string, string, string, string]
+    // v0: approved and unchanged; v1: not approved; v2: edited and re-approved after seen; v3: approved then already sent
+    await call('opportunities.approve', { id: v0 })
+    await call('opportunities.approve', { id: v2 })
+    await call('opportunities.approve', { id: v3 })
+    await world.sending.send(v3)
+    const seen = seenOf(flow.get(card.group.id))
+    await call('opportunities.saveDraft', { id: v2, draft: { title: 'Changed', text: 'Changed after you looked.', markup: 'markdown' } })
+    await call('opportunities.approve', { id: v2 })
+
+    const at = new Date(world.clock.now().getTime() + 3_600_000).toISOString()
+    const out = flow.scheduleAll(card.group.id, at, seen)
+    expect(out.results.map((r) => r.status)).toEqual(['done', 'skipped', 'skipped', 'skipped'])
+    expect(out.results[1]?.reason).toMatch(/not approved yet/)
+    expect(out.results[2]?.reason).toMatch(/changed after you looked/)
+    expect(out.results[3]?.reason).toMatch(/sent already/)
+    expect(out.card.versions.map((v) => v.card.opportunity.scheduledAt)).toEqual([at, null, null, null])
+
+    // Unseen version and stale approval are skipped too.
+    const unseen = flow.scheduleAll(card.group.id, at, {})
+    expect(unseen.results[0]).toMatchObject({ status: 'skipped', reason: expect.stringMatching(/not shown to you/) })
+    world.core.db.prepare('UPDATE accounts SET identity = ? WHERE id = ?').run('someone_else', channels[0]!.accountId)
+    const stale = flow.scheduleAll(card.group.id, at, seenOf(flow.get(card.group.id)))
+    expect(stale.results[0]).toMatchObject({ status: 'skipped', reason: expect.stringMatching(/approval no longer applies/) })
+  })
+
+  it('refuses an invalid date or malformed seen without changing any version', async () => {
+    const { channels, flow } = setup(['reddit', 'threads'])
+    const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
+    await flow.approve(card.group.id, seenOf(card))
+    expect(() => flow.scheduleAll(card.group.id, 'not-a-date', seenOf(card))).toThrow(/not a valid date/)
+    expect(() => flow.scheduleAll(card.group.id, '2026-12-05T10:00:00.000Z', null as never)).toThrow(/which text of each version/)
+    expect(() => flow.enqueueAll(card.group.id, [] as never)).toThrow(/which text of each version/)
+    expect(flow.get(card.group.id).versions.every((v) => v.card.opportunity.scheduledAt === null)).toBe(true)
+  })
+
+  it('spreads approved versions onto the next free posting time of each channel, skips channels without posting times with their reason, and respects taken slots', async () => {
+    const { channels } = setup(['reddit', 'threads', 'x'])
+    // Channel 0: Mon 10:00 UTC; Channel 1: no posting times; Channel 2: Tue 14:00 UTC (with the first Tue slot already taken by another post).
+    const mon = { weekday: 1, hour: 10, minute: 0 }
+    const tue = { weekday: 2, hour: 14, minute: 0 }
+    world.setSettings(channels[0]!.id, { postingSlots: [mon] })
+    world.setSettings(channels[1]!.id, { postingSlots: [] })
+    world.setSettings(channels[2]!.id, { postingSlots: [tue] })
+    // Take channel 2's very next slot with another post so the group version must land on the week after.
+    const blocker = (await call('publications.create', { channelId: channels[2]!.id, draft: { title: 'Earlier', text: 'Earlier post' } })) as { opportunity: { id: string } }
+    const firstTue = ((await call('publications.enqueue', { id: blocker.opportunity.id })) as { opportunity: { scheduledAt: string } }).opportunity.scheduledAt
+
+    const card = (await call('postGroups.create', { productId: world.product.id, channelIds: channels.map((c) => c.id), draft: MASTER })) as PostGroupCard
+    await call('postGroups.approve', { id: card.group.id, seen: seenOf(card) })
+    const out = (await call('postGroups.enqueue', { id: card.group.id, seen: seenOf(card) })) as { card: PostGroupCard; results: { channelLabel: string; status: string; reason: string; scheduledAt?: string }[] }
+
+    expect(out.results.map((r) => r.status)).toEqual(['done', 'skipped', 'done'])
+    expect(out.results[1]?.channelLabel).toContain('target-1')
+    expect(out.results[1]?.reason).toMatch(/has no posting times yet/)
+    expect(out.card.versions[1]?.card.opportunity.scheduledAt).toBeNull()
+    expect(out.card.versions[0]?.card.opportunity.scheduledAt).not.toBeNull()
+    expect(out.card.versions[2]?.card.opportunity.scheduledAt).not.toBeNull()
+    expect(out.card.versions[2]?.card.opportunity.scheduledAt).not.toBe(firstTue)
+    expect(Date.parse(out.card.versions[2]!.card.opportunity.scheduledAt!)).toBeGreaterThan(Date.parse(firstTue))
+    expect(out.card.versions[0]?.card.opportunity.scheduledAt).not.toBe(out.card.versions[2]?.card.opportunity.scheduledAt)
+    expect(published()).toBe(0)
+
+    // Send all leaves the two scheduled versions alone and still sends the one unscheduled approved version (channel 1).
+    const sent = (await call('postGroups.sendAll', { id: card.group.id })) as { results: { status: string; reason: string }[] }
+    expect(sent.results.map((r) => r.status)).toEqual(['skipped', 'done', 'skipped'])
+    expect(published()).toBe(1)
+  })
+
+  it('refuses to schedule a group while another group step is running', async () => {
+    const { channels, flow, helper } = setup(['reddit', 'threads'])
+    const card = await flow.create(world.product.id, channels.map((c) => c.id), MASTER)
+    helper.during = async () => {
+      expect(() => flow.scheduleAll(card.group.id, '2026-12-05T10:00:00.000Z', seenOf(card))).toThrow(/being worked on right now/)
+      expect(() => flow.enqueueAll(card.group.id, seenOf(card))).toThrow(/being worked on right now/)
+    }
+    await flow.adapt(card.group.id, undefined, false)
   })
 })

@@ -8,6 +8,7 @@ import { renderForPlatform } from '../../shared/post-format'
 import type { Channel, Draft } from '../../shared/types'
 import type { DraftHelp } from './draft-help'
 import { PostGroupsFlow } from './post-groups'
+import { PublicationsFlow } from './publications'
 import type { ReviewFlow } from './review'
 import type { SendingFlow } from './sending'
 import { closeWorld, makeWorld, type World } from './test-fixture'
@@ -124,7 +125,7 @@ describe('a post for several channels', () => {
     }
     channels.forEach((c, i) => world.core.db.prepare('UPDATE channels SET platform = ? WHERE id = ?').run(platforms[i], c.id))
     const help = { refine: async (args: { form: { text: string } }) => ({ text: `${args.form.text} (adapted)` }) } as unknown as DraftHelp
-    const flow = new PostGroupsFlow(world.core, world.store, world.core.services.pipeline as unknown as ReviewFlow, world.core.services.sending as unknown as SendingFlow, help, { sleep: async () => undefined })
+    const flow = new PostGroupsFlow(world.core, world.store, world.core.services.pipeline as unknown as ReviewFlow, world.core.services.sending as unknown as SendingFlow, help, new PublicationsFlow(world.core, world.store), { sleep: async () => undefined })
     return { channels, flow }
   }
   const MASTER = { title: null, text: 'A short post about transits.', markup: 'legacy' as const }

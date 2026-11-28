@@ -2,7 +2,8 @@ import { useCallback, useLayoutEffect, useState } from 'react'
 import { platformLabel } from '../../../../shared/post-format'
 import type { Id, PostGroupCard, PostGroupOutcome, PostGroupResult, PostVersion } from '../../../../shared/types'
 import { call } from '../../hooks'
-import { Badge, Button, Card, ConfirmAction, ErrorNote, Hint, formatTime, useMainVariant } from '../../ui'
+import { channelHref } from '../../route'
+import { Badge, Button, Card, ConfirmAction, ErrorNote, Field, Hint, formatTime, useMainVariant } from '../../ui'
 import { LOCKED_STATES } from './labels'
 import {
   BUSY_WORD,
@@ -11,15 +12,23 @@ import {
   channelCount,
   groupMain,
   groupRemovalQuestion,
+  groupScheduleHint,
+  groupScheduleReason,
   groupStamp,
   groupTitle,
   hasWarnings,
+  missingSlotChannels,
   openVersions,
   reasonBeside,
   resultsHeadline,
+  scheduleAllBlocker,
+  scheduleAllLabel,
   sendAllLabel,
   sendBlocker,
   seenOf,
+  spreadBlocker,
+  spreadPartialNote,
+  spreadSlotsLabel,
   startOverQuestion,
   stepBlocker,
   stepLabel,
@@ -62,6 +71,7 @@ export function PostGroupBox({ card, primaryAction, onMainAction }: { card: Post
   const [work, setWork] = useState<{ step: GroupStep | null; error: string | null }>({ step: null, error: null })
   const [report, setReport] = useState<Report | null>(null)
   const [unsavedIds, setUnsavedIds] = useState<ReadonlySet<Id>>(() => new Set())
+  const [scheduleAt, setScheduleAt] = useState('')
   const resting = useMainVariant()
 
   const main = groupMain(versions)
@@ -86,6 +96,11 @@ export function PostGroupBox({ card, primaryAction, onMainAction }: { card: Post
   const state = { working, unsaved: versions.filter((v) => unsavedIds.has(v.card.opportunity.id)).map((v) => versionLabel(v.card)) }
   const approveBlock = stepBlocker(state)
   const sendBlock = sendBlocker(versions, state)
+  const scheduleBlock = scheduleAllBlocker(versions, state, scheduleAt)
+  const spreadBlock = spreadBlocker(versions, state)
+  const scheduleReason = groupScheduleReason(scheduleBlock, spreadBlock)
+  const missingSlots = missingSlotChannels(versions)
+  const partialSlotsNote = spreadPartialNote(versions)
   const reason = reasonBeside(approveBlock, sendBlock)
   const open = openVersions(versions)
   const filled = primaryAction && resting === 'primary'
@@ -107,8 +122,10 @@ export function PostGroupBox({ card, primaryAction, onMainAction }: { card: Post
   }
   const adapt = (): Promise<void> => run('adapt', () => call('postGroups.adapt', { id: group.id }))
   const startOver = (opportunityId: Id): Promise<void> => run('adapt', () => call('postGroups.adapt', { id: group.id, opportunityIds: [opportunityId], force: true }))
-  // What the owner approves is what is on the screen: the draft of each version as these cards show it.
+  // What the owner approves or schedules is what is on the screen: the draft of each version as these cards show it.
   const approve = (): Promise<void> => run('approve', () => call('postGroups.approve', { id: group.id, seen: seenOf(versions) }))
+  const scheduleAll = (): Promise<void> => run('schedule', () => call('postGroups.schedule', { id: group.id, at: new Date(scheduleAt).toISOString(), seen: seenOf(versions) }))
+  const spreadSlots = (): Promise<void> => run('spread', () => call('postGroups.enqueue', { id: group.id, seen: seenOf(versions) }))
   const send = (): Promise<void> => run('send', () => call('postGroups.sendAll', { id: group.id }))
   const remove = (): Promise<void> =>
     run('remove', async () => {
@@ -148,31 +165,69 @@ export function PostGroupBox({ card, primaryAction, onMainAction }: { card: Post
           {main === null ? (
             <Hint data-testid="group-done">Nothing is left to approve or send here.</Hint>
           ) : (
-            <div className="review-actions" data-testid="group-buttons">
-              <div className="review-actions-main">
-                {reason && (
-                  <span className="muted small" data-testid="group-reason">
-                    {reason}
-                  </span>
+            <>
+              <div className="schedule group-schedule" data-testid="group-schedule">
+                <Field label="Schedule approved versions" hint={groupScheduleHint(versions)}>
+                  <div className="schedule-row">
+                    <input
+                      className="input schedule-input"
+                      type="datetime-local"
+                      value={scheduleAt}
+                      onChange={(e) => setScheduleAt(e.target.value)}
+                      disabled={working}
+                      data-testid="group-schedule-input"
+                    />
+                    <Button variant="secondary" onClick={() => void scheduleAll()} disabled={working || scheduleBlock !== null} data-testid="group-schedule-all">
+                      {work.step === 'schedule' ? BUSY_WORD.schedule : scheduleAllLabel(versions)}
+                    </Button>
+                    <Button variant="secondary" onClick={() => void spreadSlots()} disabled={working || spreadBlock !== null} data-testid="group-spread-slots">
+                      {work.step === 'spread' ? BUSY_WORD.spread : spreadSlotsLabel(versions)}
+                    </Button>
+                  </div>
+                </Field>
+                {scheduleReason && (
+                  <div className="muted small" data-testid="group-schedule-reason">
+                    {scheduleReason}
+                  </div>
                 )}
-                <Button variant="secondary" icon="sparkles" onClick={() => void adapt()} disabled={working || approveBlock !== null} data-testid="group-adapt">
-                  {work.step === 'adapt' ? BUSY_WORD.adapt : 'Adapt with AI'}
-                </Button>
-                {main === 'approve' ? (
-                  <>
-                    {sendButton}
-                    {approveButton}
-                  </>
-                ) : (
-                  sendButton
+                {missingSlots.length > 0 && (
+                  <div className="muted small group-missing-slots" data-testid="group-missing-slots">
+                    {partialSlotsNote && <span>{partialSlotsNote} </span>}
+                    {missingSlots.map((ch, idx) => (
+                      <span key={ch.channelId}>
+                        {idx > 0 ? ' · ' : ''}
+                        <a href={channelHref(ch.channelId, 'settings')}>Add posting times for {ch.label}</a>
+                      </span>
+                    ))}
+                  </div>
                 )}
               </div>
-              {open.length > 0 && (
-                <div className="review-actions-side">
-                  <ConfirmAction label={removal} variant="quiet" className="danger" question={groupRemovalQuestion} confirmLabel={removal} onConfirm={remove} disabled={working} testId="group-delete" confirmTestId="group-delete-confirm" />
+              <div className="review-actions" data-testid="group-buttons">
+                <div className="review-actions-main">
+                  {reason && (
+                    <span className="muted small" data-testid="group-reason">
+                      {reason}
+                    </span>
+                  )}
+                  <Button variant="secondary" icon="sparkles" onClick={() => void adapt()} disabled={working || approveBlock !== null} data-testid="group-adapt">
+                    {work.step === 'adapt' ? BUSY_WORD.adapt : 'Adapt with AI'}
+                  </Button>
+                  {main === 'approve' ? (
+                    <>
+                      {sendButton}
+                      {approveButton}
+                    </>
+                  ) : (
+                    sendButton
+                  )}
                 </div>
-              )}
-            </div>
+                {open.length > 0 && (
+                  <div className="review-actions-side">
+                    <ConfirmAction label={removal} variant="quiet" className="danger" question={groupRemovalQuestion} confirmLabel={removal} onConfirm={remove} disabled={working} testId="group-delete" confirmTestId="group-delete-confirm" />
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </div>
       </Card>
@@ -204,7 +259,7 @@ function GroupReport({ report }: { report: Report }) {
             <li key={r.opportunityId} data-status={r.status} data-testid={`group-result-${r.opportunityId}`}>
               <strong>{r.channelLabel}</strong>
               <span className={`group-result-status ${r.status}`}>{RESULT_LABEL[r.status]}</span>
-              <span className="group-result-reason">{r.reason}</span>
+              <span className="group-result-reason">{r.scheduledAt ? `Scheduled for ${formatTime(r.scheduledAt)}.` : r.reason}</span>
             </li>
           ))}
         </ul>

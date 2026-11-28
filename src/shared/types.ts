@@ -1778,6 +1778,8 @@ export interface PostGroupResult {
   channelLabel: string
   status: 'done' | 'skipped' | 'failed'
   reason: string
+  /** When a scheduling step set a time on this version, that time (so the screen can show it in the owner's local clock). */
+  scheduledAt?: IsoTime
 }
 
 export interface PostGroupOutcome {

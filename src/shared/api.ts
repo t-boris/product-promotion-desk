@@ -621,6 +621,10 @@ export interface ApiMethods {
   'postGroups.adapt': [{ id: Id; opportunityIds?: Id[]; force?: boolean }, PostGroupOutcome]
   /** The owner's one press after reading every version: approves each version, each by its own exact content. `seen` is the draft of each version the owner was shown. */
   'postGroups.approve': [{ id: Id; seen: Record<Id, Id> }, PostGroupOutcome]
+  /** Sets one planned send time on every approved version whose latest draft is the one in `seen`; versions that cannot take a time are named with their reason. */
+  'postGroups.schedule': [{ id: Id; at: IsoTime; seen: Record<Id, Id> }, PostGroupOutcome]
+  /** Places each approved version whose latest draft is the one in `seen` on the next free posting time of its channel; channels without posting times are named and left unscheduled. */
+  'postGroups.enqueue': [{ id: Id; seen: Record<Id, Id> }, PostGroupOutcome]
   /** The owner's one press: sends the approved versions one after another; one that fails stops nothing else. */
   'postGroups.sendAll': [{ id: Id }, PostGroupOutcome]
   /** Deletes the versions that were not sent; a sent one stays. */

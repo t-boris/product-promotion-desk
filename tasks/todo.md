@@ -1748,3 +1748,16 @@ Why: the plan's phase F says "video and Reels"; 0.89.0 built video posts, and on
 - [x] tests on `FakeFacebook` and pipeline (6521 tests), own-instance look at 1280×880 and 980×640, Q-002 answered, DEC-092, plan row F, release 0.93.0
 
 Review: inspected in a scratch Electron instance at 1280×880 and 980×640: "Publish the video as" ("Video post" / "Reel") stands cleanly under "Pictures and videos" with Facebook's limits, selecting "Reel" shows the preview note and enables Save, saving persists `videoAs: 'reel'`, 0 horizontal overflow, 0 small or cut buttons. Unproven on a real Facebook Page: the upload and processing on `rupload.facebook.com`, whether a Reel appears in the Page's feed for comments and numbers, and the 30 Reels/day limit.
+
+## Phase A, the last part: scheduling a group of versions at once (2026-11-28, 0.94.0, DEC-093)
+
+Why: the plan's phase A says "a group may be scheduled as a whole or spread, one version per slot of its channel"; previously only individual version cards could be scheduled.
+
+- [x] core & API: `postGroups.schedule` (one time for all approved versions matching `seen`) and `postGroups.enqueue` (each approved version on its channel's next free posting time); `PostGroupResult.scheduledAt` for local time formatting
+- [x] rules: same rules as single-version scheduling + `seen` draft match + active user approval matching current hash/account/destination; unapproved, changed, already sent, stale-approval versions and channels without posting times are skipped and named with their reason while the rest get their time; busy guard shared with adapt/approve/sendAll; "Send all" stays unchanged (press-time snapshot, skips future-scheduled versions)
+- [x] group card UI: "Schedule approved versions" block above the group action row with date/time input, "Schedule all (N)" and "Next free time each (N)" (both secondary, keeping one primary button on screen), inline disabled reasons, links to add posting times for channels that lack them, local-time formatting in the group report, `groupStamp` includes `scheduledAt`
+- [x] tests: core tests in `post-groups.test.ts` (one time, spread with taken slots and missing slots, unapproved/changed/sent/unseen/stale skips, busy guard, `sendAll` unchanged, `sendDuePublications` end-to-end) and renderer logic tests in `renderer-logic.test.ts`; full verify (6527 tests)
+- [x] own-instance look at 1280×880 and 980×640: pre-approval disabled state, post-approval missing-slot warning and link, spread across slots (1 done, 1 skipped with reason), one time for all (2 done, both marked Scheduled in list), 0 horizontal overflow, 0 small/cut buttons, 1 primary button
+- [x] DEC-093, plan row A, `remaining-work.md` updated, release 0.94.0, local deploy
+
+Review: inspected in a scratch Electron instance at 1280×880 and 980×640 across all states (before approval, after approval, after spread with one missing-slot channel, and after setting one time for all): clean layout, 0 horizontal overflow, 0 small or cut controls, 1 primary button ("Send all now (2)"). No plan items remain unbuilt without the owner's developer apps/keys and answer to section 4.

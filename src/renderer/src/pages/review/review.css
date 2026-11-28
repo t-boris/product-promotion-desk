@@ -969,6 +969,13 @@ button.post-picture.library:hover .post-thumb {
 .group-step {
   margin: 0;
 }
+.group-schedule {
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+.group-missing-slots {
+  overflow-wrap: anywhere;
+}
 
 /* What a step reported, one line for each version. The note's own tone says whether anything needs a look. */
 .note .group-results-body {

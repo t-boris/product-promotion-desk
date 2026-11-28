@@ -45,6 +45,7 @@ import { removalWords } from '../renderer/src/pages/review/removal-words'
 import {
   CANNOT_POST_REASON,
   CHOOSE_A_CHANNEL,
+  CHOOSE_TIME_FIRST,
   NOT_APPROVED_YET,
   alsoPostAllowed,
   approveAllLabel,
@@ -52,16 +53,24 @@ import {
   draftInputOf,
   extendLabel,
   groupMain,
+  groupScheduleHint,
+  groupScheduleReason,
   groupStamp,
   groupTitle,
   hasWarnings,
+  missingSlotChannels,
   reasonBeside,
   resultsHeadline,
   saveIntent,
   saveLabel,
+  scheduleAllBlocker,
+  scheduleAllLabel,
   seenOf,
   sendAllLabel,
   sendBlocker,
+  spreadBlocker,
+  spreadPartialNote,
+  spreadSlotsLabel,
   stepBlocker,
   stepLabel,
   toggled,
@@ -1949,11 +1958,66 @@ describe('one post for several channels: the group card and its main action (DEC
     expect(hasWarnings([result('failed')])).toBe(true)
   })
 
-  it('stamps a group so a report is dropped once any version changes its state or its draft', () => {
+  it('stamps a group so a report is dropped once any version changes its state, its draft or its planned time', () => {
     const before = [approved('a'), open('b')]
     expect(groupStamp(before)).toBe(groupStamp([approved('a'), open('b')]))
     expect(groupStamp(before)).not.toBe(groupStamp([approved('a'), approved('b')]))
     expect(groupStamp(before)).not.toBe(groupStamp([approved('a'), version('b', 'awaiting_approval', { draftId: 'newer' })]))
+    const scheduled = { ...approved('a'), card: { ...approved('a').card, opportunity: { ...approved('a').card.opportunity, scheduledAt: '2026-12-05T10:00:00.000Z' } } }
+    expect(groupStamp(before)).not.toBe(groupStamp([scheduled, open('b')]))
+  })
+
+  it('governs group scheduling: one time or next free time each, disabled with reasons and naming channels without posting times (DEC-093)', () => {
+    const withSlots = (id: string, platform: string, target: string, slots: number, approvedFlag = true): PostVersion => {
+      const base = approvedFlag ? approved(id) : open(id)
+      return {
+        ...base,
+        card: {
+          ...base.card,
+          channelPlatform: platform,
+          channelTarget: target,
+          channelPostingSlots: slots,
+          opportunity: { ...base.card.opportunity, channelId: `ch-${id}` }
+        }
+      }
+    }
+    const calm = { working: false, unsaved: [] }
+    const unapproved = [withSlots('a', 'reddit', 'r/a', 2, false), withSlots('b', 'threads', '@b', 0, false)]
+    const mixed = [withSlots('a', 'reddit', 'r/a', 2, true), withSlots('b', 'threads', '@b', 0, true)]
+    const none = [withSlots('a', 'reddit', 'r/a', 0, true), withSlots('b', 'threads', '@b', 0, true)]
+
+    expect(scheduleAllLabel(mixed)).toBe('Schedule all (2)')
+    expect(spreadSlotsLabel(mixed)).toBe('Next free time each (2)')
+    expect(groupScheduleHint(unapproved)).toMatch(/Approve the versions first/)
+    expect(groupScheduleHint(mixed)).toMatch(/Sets a time on each approved version/)
+
+    // Unapproved: both actions blocked by approval.
+    expect(scheduleAllBlocker(unapproved, calm, '2026-12-05T10:00')).toBe(NOT_APPROVED_YET)
+    expect(spreadBlocker(unapproved, calm)).toBe(NOT_APPROVED_YET)
+    expect(groupScheduleReason(NOT_APPROVED_YET, NOT_APPROVED_YET)).toBe(NOT_APPROVED_YET)
+    expect(missingSlotChannels(unapproved)).toEqual([])
+    expect(spreadPartialNote(unapproved)).toBeNull()
+
+    // Mixed slots: one-time needs a date, spread is ready and names the channel without posting times.
+    expect(scheduleAllBlocker(mixed, calm, '')).toBe(CHOOSE_TIME_FIRST)
+    expect(scheduleAllBlocker(mixed, calm, '2026-12-05T10:00')).toBeNull()
+    expect(spreadBlocker(mixed, calm)).toBeNull()
+    expect(missingSlotChannels(mixed)).toEqual([{ channelId: 'ch-b', label: 'Threads @b' }])
+    expect(spreadPartialNote(mixed)).toBe('No posting times set for Threads @b: “Next free time each” skips it.')
+    expect(groupScheduleReason(CHOOSE_TIME_FIRST, null)).toBe(CHOOSE_TIME_FIRST)
+
+    // No approved channel has posting times: spread is disabled naming both channels.
+    expect(spreadBlocker(none, calm)).toMatch(/No posting times set for Reddit r\/a and Threads @b/)
+    expect(spreadPartialNote(none)).toBeNull()
+    expect(groupScheduleReason(CHOOSE_TIME_FIRST, spreadBlocker(none, calm))).toMatch(/No posting times set for Reddit r\/a and Threads @b/)
+
+    // Step labels and report headlines.
+    expect(stepLabel('schedule', mixed)).toBe('Scheduling 2 versions…')
+    expect(stepLabel('spread', mixed)).toMatch(/^Placing 2 versions/)
+    const r = (status: PostGroupResult['status']): PostGroupResult => ({ opportunityId: status, channelLabel: 'Reddit r/a', status, reason: 'why' })
+    expect(resultsHeadline('schedule', [r('done'), r('skipped')])).toBe('Scheduled 1 of 2 versions.')
+    expect(resultsHeadline('spread', [r('done')])).toBe('Scheduled 1 of 1 version.')
+    expect(resultsHeadline('schedule', [])).toBe('Nothing was scheduled.')
   })
 
   it('a group takes part in the one filled button like a card: the first in the order that offers one owns it, and a group that offers none hands it on', () => {
