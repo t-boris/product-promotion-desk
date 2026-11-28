@@ -64,15 +64,20 @@ export function PostsList({ rows, selectedId, onSelect, footer }: { rows: PostRo
               className={`posts-row${selected ? ' selected' : ''}`}
               onClick={() => onSelect(row.id)}
               data-testid={`post-row-${row.id}`}
+              data-kind={row.kind}
               data-state={row.state}
             >
               <Thumb attachment={row.thumbnail} />
               <span className="posts-row-main">
                 <span className="posts-row-top">
                   <span className="posts-row-title">{row.title}</span>
+                  {row.kind === 'comment' && <Badge>Comment</Badge>}
                   <Badge tone={tone}>{row.attention ?? STATE_LABEL[row.state]}</Badge>
                 </span>
-                <span className="posts-row-line">{row.targets.join(' · ')}</span>
+                <span className="posts-row-line">
+                  {row.targets.join(' · ')}
+                  {row.replyContext ? ` · ${row.replyContext}` : ''}
+                </span>
                 <span className="posts-row-line posts-row-when">
                   {whenOf(row)}
                   {row.numbers && <span data-testid={`post-row-numbers-${row.id}`}> · {row.numbers}</span>}

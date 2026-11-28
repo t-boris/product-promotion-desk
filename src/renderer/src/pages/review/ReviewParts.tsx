@@ -98,7 +98,7 @@ export function ReviewBody({ item, notes }: { item: ReviewItem; /** What the own
           post={standalone ? { productId: opp.productId, platform: card.channelPlatform, waysOf: opp.channelId, channelId: opp.channelId, author: { name: card.accountLabel, target: card.channelTarget } } : undefined}
         />
       )}
-      {!locked && opp.findingId === null && (
+      {!locked && (opp.findingId === null || opp.scheduledAt !== null) && (
         <ScheduleControl opportunity={opp} slots={card.channelPostingSlots} channelHref={channelHref(opp.channelId, 'settings')} busy={working} onSchedule={(at) => void actions.schedule(opp.id, at)} onEnqueue={() => void actions.enqueue(opp.id)} />
       )}
 

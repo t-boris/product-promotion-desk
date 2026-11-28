@@ -15,6 +15,8 @@ export interface CalendarEntry {
   state: PostState
   /** `planned`: going out then; `sent`: went out then. */
   kind: 'planned' | 'sent'
+  /** True when the entry is a scheduled comment/reply rather than a standalone post (DEC-098). */
+  isComment?: boolean
   at: IsoTime
 }
 
@@ -58,7 +60,7 @@ export function calendarEntries(rows: PostRow[]): CalendarEntry[] {
   for (const row of rows) {
     for (const card of row.cards) {
       const opportunity = card.opportunity
-      const base = { id: opportunity.id, rowId: row.id, title: row.title, target: card.channelTarget }
+      const base = { id: opportunity.id, rowId: row.id, title: row.title, target: card.channelTarget, ...(row.kind === 'comment' ? { isComment: true } : {}) }
       if (opportunity.state === 'confirmed') {
         entries.push({ ...base, state: 'sent', kind: 'sent', at: card.lastAction?.completedAt ?? opportunity.updatedAt })
       } else if (opportunity.state !== 'cancelled' && opportunity.scheduledAt !== null) {

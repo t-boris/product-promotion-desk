@@ -479,3 +479,55 @@ describe('plannedTimeNote', () => {
   })
 })
 
+describe('scheduled comments in Posts (DEC-098)', () => {
+  const replyCard = (over: Partial<CardSeed> & { commentAuthor?: string; discussionTitle?: string; findingId?: string | null }) => {
+    const base = card(over as CardSeed)
+    ;(base.opportunity as { kind: string; findingId?: string | null }).kind = 'reply'
+    ;(base.opportunity as { findingId?: string | null }).findingId = over.findingId ?? null
+    if (over.commentAuthor) (base as unknown as { comment: { author: string; body: string } }).comment = { author: over.commentAuthor, body: 'Question about charts' }
+    if (over.discussionTitle) (base as unknown as { discussion: { title: string } }).discussion = { title: over.discussionTitle }
+    return base
+  }
+
+  it('includes active scheduled replies (including Feed answers) with kind comment, and leaves out unscheduled, sent or rejected replies', () => {
+    const unscheduled = replyCard({ id: 'r-unscheduled', state: 'ready', scheduledAt: null, text: 'Not scheduled' })
+    const sent = replyCard({ id: 'r-sent', state: 'confirmed', scheduledAt: '2026-11-20T10:00:00.000Z', text: 'Already out' })
+    const rejected = replyCard({ id: 'r-gone', state: 'cancelled', scheduledAt: '2026-11-20T10:00:00.000Z', text: 'Rejected' })
+    const scheduled = replyCard({
+      id: 'r-sched',
+      state: 'ready',
+      scheduledAt: '2026-11-21T15:00:00.000Z',
+      text: 'Try checking the rising sign first.',
+      target: 'r/astrology',
+      commentAuthor: 'u/stargazer'
+    })
+    const feedAnswer = replyCard({
+      id: 'r-feed',
+      state: 'draft',
+      scheduledAt: '2026-11-22T09:00:00.000Z',
+      text: 'Great breakdown of house systems.',
+      target: 'threads.net/@natal',
+      discussionTitle: 'Placidus vs Whole Sign',
+      findingId: 'f-1'
+    })
+
+    const rows = buildPostRows([unscheduled, sent, rejected, scheduled, feedAnswer], [])
+    expect(rows.map((r) => [r.id, r.kind, r.state, r.replyContext])).toEqual([
+      ['r-sched', 'comment', 'scheduled', 'Reply to u/stargazer'],
+      ['r-feed', 'comment', 'draft', 'Comment on “Placidus vs Whole Sign”']
+    ])
+
+    // Searchable by comment text or what it answers, and counted in state filters.
+    expect(matchesFilter(rows[0], { state: 'scheduled', channelId: null, query: 'stargazer' })).toBe(true)
+    expect(matchesFilter(rows[1], { state: 'draft', channelId: null, query: 'placidus' })).toBe(true)
+    expect(stateCounts(rows, { channelId: null, query: '' })).toEqual({ all: 2, draft: 1, approved: 0, scheduled: 1, sent: 0, deleted: 0 })
+
+    // Placed on the calendar with isComment: true on their planned dates.
+    const entries = calendarEntries(rows)
+    expect(entries).toEqual([
+      { id: 'r-sched', rowId: 'r-sched', title: 'Try checking the rising sign first.', target: 'r/astrology', state: 'scheduled', kind: 'planned', isComment: true, at: '2026-11-21T15:00:00.000Z' },
+      { id: 'r-feed', rowId: 'r-feed', title: 'Great breakdown of house systems.', target: 'threads.net/@natal', state: 'draft', kind: 'planned', isComment: true, at: '2026-11-22T09:00:00.000Z' }
+    ])
+  })
+})
+

@@ -303,6 +303,9 @@
 .posts-cal-entry.sent {
   background: var(--good-bg);
 }
+.posts-cal-entry.comment {
+  border-left: 2px solid var(--accent);
+}
 .posts-cal-more {
   color: var(--text-2);
 }

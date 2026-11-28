@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Button, IconButton } from '../../ui'
+import { Badge, Button, IconButton } from '../../ui'
 import { STATE_LABEL } from './PostsList'
 import { calendarEntries, canWriteOn, monthGrid, monthTitle, shiftMonth, type CalendarDay, type YearMonth } from './posts-calendar'
 import type { PostRow } from './posts-filter'
@@ -93,8 +93,13 @@ export function PostsCalendar({
                 >
                   <span className="posts-cal-num">{Number(cell.date.slice(8))}</span>
                   {shown.map((entry) => (
-                    <span key={entry.id} className={`posts-cal-entry ${entry.kind}`} title={`${entry.title} · ${entry.target}`}>
-                      {entry.target}
+                    <span
+                      key={entry.id}
+                      className={`posts-cal-entry ${entry.kind}${entry.isComment ? ' comment' : ''}`}
+                      title={`${entry.isComment ? 'Comment: ' : ''}${entry.title} · ${entry.target}`}
+                      data-testid={`calendar-entry-${entry.id}`}
+                    >
+                      {entry.isComment ? `Comment · ${entry.target}` : entry.target}
                     </span>
                   ))}
                   {more > 0 && <span className="posts-cal-more">+{more} more</span>}
@@ -123,6 +128,7 @@ export function PostsCalendar({
             {chosen.entries.map((entry) => (
               <li key={entry.id}>
                 <span className="posts-cal-agenda-time">{shortTime(entry.at)}</span>
+                {entry.isComment && <Badge>Comment</Badge>}
                 <span className="posts-cal-agenda-text">
                   <strong>{entry.title}</strong> · {entry.target} · {STATE_LABEL[entry.state]}
                 </span>

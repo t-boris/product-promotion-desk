@@ -75,10 +75,12 @@ function PostsScreen({ product }: { product: Product }) {
   const channels: Channel[] = channelsQuery.data ?? []
   const accounts = useQuery('accounts.list', undefined, ['accounts'])
   const cardsQuery = useQuery('opportunities.list', { productId: product.id, kind: 'standalone' }, ['opportunities'])
+  // Scheduled replies/comments (including scheduled Feed answers) are also listed in Posts and placed on the calendar (DEC-098).
+  const repliesQuery = useQuery('opportunities.list', { productId: product.id, kind: 'reply' }, ['opportunities'])
   // The groups are the product's: one post for several channels is one row, whichever channel the filter is on (DEC-032).
   const groupsQuery = useQuery('postGroups.list', { productId: product.id }, ['opportunities'])
   const groups = groupsQuery.data ?? []
-  const rows = useMemo(() => buildPostRows(cardsQuery.data ?? [], groups), [cardsQuery.data, groupsQuery.data])
+  const rows = useMemo(() => buildPostRows([...(cardsQuery.data ?? []), ...(repliesQuery.data ?? [])], groups), [cardsQuery.data, repliesQuery.data, groupsQuery.data])
 
   // A link may ask for the calendar (the Inbox item about dates ahead does).
   const [view, setView] = useState<View>(() => (postsCalendarAsked(window.location.hash) ? 'calendar' : 'list'))
@@ -184,7 +186,7 @@ function PostsScreen({ product }: { product: Product }) {
   const nothingYet = !loading && rows.length === 0 && !noChannels
   // With nothing written yet the empty state's "Write one myself" is the screen's filled button; the header then does not offer a second one with the same name.
   const emptyOffersWrite = nothingYet && view === 'list' && writing === null
-  const error = channelsQuery.error ?? cardsQuery.error ?? groupsQuery.error
+  const error = channelsQuery.error ?? cardsQuery.error ?? repliesQuery.error ?? groupsQuery.error
 
   const suggestControl =
     channels.length > 1 && channelId === null ? (
@@ -371,7 +373,7 @@ function PostsScreen({ product }: { product: Product }) {
                 {selected && (
                   <PostDetail
                     key={selected.id}
-                    card={selected.kind === 'post' ? selected.cards[0] : null}
+                    card={selected.kind !== 'group' ? selected.cards[0] : null}
                     group={selectedGroup}
                     primaryAction={main.isOwner(selected.id)}
                     onMainAction={main.offer}

@@ -38,7 +38,8 @@ export function PostDetail({
 
 function SinglePost({ card, primaryAction, onMainAction }: { card: OpportunityCard; primaryAction: boolean; onMainAction: (id: Id, offering: boolean) => void }) {
   const opp = card.opportunity
-  const item = useReviewItem(card, { alsoPostTo: true })
+  const isReply = opp.kind === 'reply'
+  const item = useReviewItem(card, { alsoPostTo: !isReply })
   const offers = mainActionOf(opp.state, item.dirty) !== null
   useLayoutEffect(() => {
     onMainAction(opp.id, offers)
@@ -47,7 +48,7 @@ function SinglePost({ card, primaryAction, onMainAction }: { card: OpportunityCa
   const settled = opp.state === 'confirmed' || opp.state === 'cancelled'
 
   return (
-    <div className="posts-detail" data-testid="post-detail" data-kind="post" data-state={opp.state} data-review-item="">
+    <div className="posts-detail" data-testid="post-detail" data-kind={isReply ? 'comment' : 'post'} data-state={opp.state} data-review-item="">
       <div className="posts-detail-scroll">
         <div className="review-head inbox-detail-head">
           <ReviewIdentity card={card} />
@@ -62,7 +63,9 @@ function SinglePost({ card, primaryAction, onMainAction }: { card: OpportunityCa
       <div className="inbox-bar" data-testid="post-bar">
         {settled ? (
           <div className="inbox-bar-settled">
-            <span className="review-foot-note">{opp.state === 'confirmed' ? 'This post was sent.' : 'This post was deleted.'}</span>
+            <span className="review-foot-note">
+              {isReply ? (opp.state === 'confirmed' ? 'This comment was sent.' : 'This comment was rejected.') : opp.state === 'confirmed' ? 'This post was sent.' : 'This post was deleted.'}
+            </span>
             {opp.state === 'cancelled' && opp.kind === 'standalone' && <PurgeButton id={opp.id} />}
             <ReviewActionRow item={item} />
           </div>

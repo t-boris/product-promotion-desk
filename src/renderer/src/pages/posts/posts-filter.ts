@@ -64,15 +64,17 @@ export function removedFlag(card: OpportunityCard): string | null {
   return isTakenDown(card.opportunity.state, card.lastAction) ? 'Removed' : null
 }
 
-/** One post or one group, as a row of the list. */
+/** One post, group, or scheduled comment (DEC-098), as a row of the list. */
 export interface PostRow {
   /** The group's id for a group, else the opportunity's id. */
   id: Id
-  kind: 'post' | 'group'
-  /** One card for a post; every version's card for a group. */
+  kind: 'post' | 'group' | 'comment'
+  /** One card for a post or comment; every version's card for a group. */
   cards: OpportunityCard[]
   title: string
-  /** The text the search reads: title, text and the channels. */
+  /** Short context for a scheduled comment ("Reply to @alice", "Comment on …"), null for posts and groups. */
+  replyContext: string | null
+  /** The text the search reads: title, text, reply context and the channels. */
   haystack: string
   /** The states of the versions; a post has exactly one. */
   states: PostState[]
@@ -107,8 +109,26 @@ export function titleOf(card: OpportunityCard): string {
   const title = draft?.title?.trim()
   if (title) return title
   const first = (draft?.text ?? '').split('\n').map((line) => line.trim()).find((line) => line !== '')
-  if (!first) return draft && draft.attachments.length > 0 ? (kindsOf(draft.attachments).videos > 0 ? 'Video post' : 'Picture post') : 'Empty draft'
+  if (!first) {
+    if (card.opportunity.kind === 'reply') return 'Scheduled comment'
+    return draft && draft.attachments.length > 0 ? (kindsOf(draft.attachments).videos > 0 ? 'Video post' : 'Picture post') : 'Empty draft'
+  }
   return first.length > TITLE_LIMIT ? `${first.slice(0, TITLE_LIMIT - 1)}…` : first
+}
+
+/** Short label saying what a scheduled comment answers, or null when none is known. */
+export function replyContextOf(card: OpportunityCard): string | null {
+  if (card.opportunity.kind !== 'reply') return null
+  if (card.comment?.author) return `Reply to ${card.comment.author}`
+  const topic = card.discussion?.title?.trim()
+  if (topic) return `Comment on “${topic.length > 48 ? `${topic.slice(0, 47)}…` : topic}”`
+  return null
+}
+
+/** True for an active reply/comment that the owner gave a planned send time to (DEC-098). */
+export function isScheduledReply(card: OpportunityCard): boolean {
+  const opp = card.opportunity
+  return opp.kind === 'reply' && opp.scheduledAt !== null && opp.state !== 'cancelled' && opp.state !== 'confirmed'
 }
 
 /** The numbers of a row: one version's own line in its platform's words; several versions added up, with the plain word for likes. */
@@ -132,13 +152,16 @@ function rowOf(id: Id, kind: PostRow['kind'], cards: OpportunityCard[], masterTe
     .map((c) => c.opportunity.scheduledAt as string)
     .sort()
   const sent = cards.map((c) => (c.opportunity.state === 'confirmed' ? c.lastAction?.completedAt ?? c.opportunity.updatedAt : null)).filter((at): at is string => at !== null).sort()
-  // What the search reads: the title and the text, and the headline of a card (it is text on the picture, and may be the owner's own words).
-  const text = cards.map((c) => `${c.draft?.title ?? ''} ${c.draft?.text ?? ''} ${c.draft?.postType === 'quick' ? (c.draft.card?.headline ?? '') : ''}`).join(' ')
+  // What the search reads: the title and the text, the headline of a card, and for a scheduled comment what it answers.
+  const text = cards
+    .map((c) => `${c.draft?.title ?? ''} ${c.draft?.text ?? ''} ${c.draft?.postType === 'quick' ? (c.draft.card?.headline ?? '') : ''} ${c.discussion?.title ?? ''} ${c.comment?.author ?? ''} ${c.comment?.body ?? ''}`)
+    .join(' ')
   return {
     id,
     kind,
     cards,
     title: titleOf(first),
+    replyContext: kind === 'comment' ? replyContextOf(first) : null,
     haystack: `${text} ${masterText} ${cards.map((c) => c.channelTarget).join(' ')}`.toLowerCase(),
     states,
     state,
@@ -163,8 +186,12 @@ export function buildPostRows(cards: OpportunityCard[], groups: PostGroupCard[])
   const inGroup = new Set(groups.flatMap((g) => g.versions.map((v) => v.card.opportunity.id)))
   const rows: PostRow[] = groups.filter((g) => g.versions.length > 0).map((g) => rowOf(g.group.id, 'group', g.versions.map((v) => v.card), `${g.group.master.title ?? ''} ${g.group.master.text}`))
   for (const card of cards) {
-    if (card.opportunity.kind !== 'standalone' || inGroup.has(card.opportunity.id)) continue
-    rows.push(rowOf(card.opportunity.id, 'post', [card]))
+    if (card.opportunity.kind === 'standalone') {
+      if (inGroup.has(card.opportunity.id)) continue
+      rows.push(rowOf(card.opportunity.id, 'post', [card]))
+    } else if (isScheduledReply(card)) {
+      rows.push(rowOf(card.opportunity.id, 'comment', [card]))
+    }
   }
   return rows
 }
