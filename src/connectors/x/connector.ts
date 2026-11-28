@@ -1,5 +1,5 @@
 import { statSync } from 'node:fs'
-import type { Capability, CapabilityKey, CapabilityStatus, Channel, MetricReading } from '../../shared/types'
+import { isVideoMime, type Capability, type CapabilityKey, type CapabilityStatus, type Channel, type MetricReading } from '../../shared/types'
 import type { PostNumbers } from '../../shared/post-numbers'
 import { HttpNoAnswerError } from '../../core/net/http'
 import { SIGN_IN_CALLBACK } from '../../core/net/sign-in-listener'
@@ -15,6 +15,10 @@ const MOST_PICTURES = 4
 const MOST_PICTURE_BYTES = 5 * 1024 * 1024
 const PICTURES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const GIF = 'image/gif'
+/** A video of a post, by X's reference: MP4 or MOV. It goes up in segments of 4 MB (X asks for 5 MB at most), and its processing is waited for up to ten minutes. */
+const VIDEOS = new Set(['video/mp4', 'video/quicktime'])
+const SEGMENT_BYTES = 4 * 1024 * 1024
+const VIDEO_WAIT_MS = 10 * 60_000
 /** An access token is taken as ended this long before its end, so a request never carries one that ends on the way. */
 const RENEW_AHEAD_MS = 5 * 60_000
 /** How far back the account's posts and what was written to it are read: as long as the numbers of a post are. */
@@ -392,7 +396,7 @@ export class XApiConnector implements Connector {
       cap(
         'publish_post',
         'needs_check',
-        `Posts go out as ${name}: words with up to ${MOST_PICTURES} pictures (JPEG, PNG or WEBP, 5 MB each) or one GIF. X charges your developer app for each post (about $0.015, or $0.20 with a link). A video and a quote are published on X itself. Tried with the first post.`
+        `Posts go out as ${name}: words with up to ${MOST_PICTURES} pictures (JPEG, PNG or WEBP, 5 MB each), one GIF, or one MP4 or MOV video (how long a video may be is set by the account: 20 minutes without X Premium). X charges your developer app for each post (about $0.015, or $0.20 with a link). A quote is published on X itself. Tried with the first post.`
       ),
       cap('publish_reply', 'needs_check', `An answer goes under a reply as ${name}. ${REPLY_RULE} X charges about $0.01 for an answer. Tried with the first answer.`),
       cap('verify_send', 'needs_check', 'X returns the post it made. Tried with the first post.'),
@@ -464,18 +468,25 @@ export class XApiConnector implements Connector {
     const files = request.attachments
     if (text === '' && files.length === 0) return failed(`There is nothing to ${reply ? 'answer with' : 'post'}: no words and no picture. Nothing was sent.`)
     const gifs = files.filter((file) => file.mime === GIF)
-    const unfit = files.find((file) => file.mime !== GIF && !PICTURES.has(file.mime))
-    if (unfit) return failed(`X takes a JPEG, PNG or WEBP picture or a GIF from this application; “${unfit.name}” is none of them. A video is published on X itself. Nothing was sent.`)
+    const video = files.find((file) => isVideoMime(file.mime))
+    const unfit = files.find((file) => file.mime !== GIF && !PICTURES.has(file.mime) && !VIDEOS.has(file.mime))
+    if (unfit) return failed(`X takes a JPEG, PNG or WEBP picture, a GIF, or an MP4 or MOV video from this application; “${unfit.name}” is none of them. Nothing was sent.`)
+    if (video && files.length > 1) return failed('X takes one video in a post, with no picture beside it. Nothing was sent.')
     if (gifs.length > 0 && files.length > 1) return failed('X takes one GIF in a post, with no other picture. Nothing was sent.')
     if (files.length > MOST_PICTURES) return failed(`X takes at most ${MOST_PICTURES} pictures in a post; this one has ${files.length}. Nothing was sent.`)
+    let videoBytes = 0
     for (const file of files) {
+      const what = file === video ? 'video' : 'picture'
       let bytes: number
       try {
         bytes = statSync(file.path).size
       } catch {
-        return failed(`The picture “${file.name}” could not be read from this Mac. Nothing was sent.`)
+        return failed(`The ${what} “${file.name}” could not be read from this Mac. Nothing was sent.`)
       }
-      if (bytes > MOST_PICTURE_BYTES) return failed(`X takes a picture up to 5 MB through its API; “${file.name}” is ${Math.ceil(bytes / (1024 * 1024))} MB. Nothing was sent.`)
+      if (file === video) {
+        if (bytes === 0) return failed(`The video “${file.name}” is empty. Nothing was sent.`)
+        videoBytes = bytes
+      } else if (bytes > MOST_PICTURE_BYTES) return failed(`X takes a picture up to 5 MB through its API; “${file.name}” is ${Math.ceil(bytes / (1024 * 1024))} MB. Nothing was sent.`)
     }
     let api: XApi
     let handle: string
@@ -486,7 +497,12 @@ export class XApiConnector implements Connector {
       handle = found.user.username
       api = await this.requireClient(ctx)
       const mediaIds: string[] = []
-      for (const file of files) {
+      if (video) {
+        const put = await this.uploadVideo(ctx, api, video, videoBytes)
+        if ('problem' in put) return failed(`${put.problem} Nothing was sent.`)
+        mediaIds.push(put.id)
+      }
+      for (const file of video ? [] : files) {
         const put = await api.upload({ path: file.path, name: file.name, mime: file.mime }, file.mime === GIF ? 'tweet_gif' : 'tweet_image')
         if (!put.ok) return failed(`${refusal(put)} The picture “${file.name}” was not taken. Nothing was sent.`)
         const id = put.result.data?.id
@@ -519,6 +535,35 @@ export class XApiConnector implements Connector {
   }
 
   /** Looks among the account's posts for the one a send with a lost answer may have made: the same words, in the same place, not older than the attempt. */
+  /**
+   * A video on its way to a post (X's chunked upload): started, sent in segments, closed, and waited for while X processes it, asking again
+   * when X says to. Nothing is posted by any of it: a video that is uploaded and not attached is seen by nobody.
+   */
+  private async uploadVideo(ctx: ConnectorContext, api: XApi, video: { name: string; path: string; mime: string }, bytes: number): Promise<{ id: string } | { problem: string }> {
+    const notTaken = `The video “${video.name}” was not taken.`
+    const started = await api.startUpload(video.mime, bytes)
+    if (!started.ok) return { problem: `${refusal(started)} ${notTaken}` }
+    const id = started.result.data?.id
+    if (!id) return { problem: `X started the upload of the video “${video.name}” and returned no id for it.` }
+    for (let index = 0, start = 0; start < bytes; index += 1, start += SEGMENT_BYTES) {
+      const sent = await api.appendUpload(id, index, { path: video.path, name: video.name, mime: video.mime, part: { start, end: Math.min(start + SEGMENT_BYTES, bytes) } })
+      if (!sent.ok) return { problem: `${refusal(sent)} ${notTaken}` }
+    }
+    let state = await api.finishUpload(id)
+    for (let waited = 0; ; ) {
+      if (!state.ok) return { problem: `${refusal(state)} ${notTaken}` }
+      const processing = state.result.data?.processing_info
+      if (!processing || processing.state === 'succeeded') return { id }
+      if (processing.state === 'failed') return { problem: `X could not process the video “${video.name}”.` }
+      if (waited >= VIDEO_WAIT_MS) return { problem: `X was still processing the video “${video.name}” after ten minutes.` }
+      // X says when to ask again; never sooner than a second, never later than half a minute.
+      const wait = Math.min(Math.max(processing.check_after_secs ?? 1, 1), 30) * 1000
+      await ctx.pause(wait)
+      waited += wait
+      state = await api.uploadState(id)
+    }
+  }
+
   async findPublished(ctx: ConnectorContext, request: PublishRequest): Promise<PublishedRef | null> {
     const floor = earliestCreation(request)
     const user = await this.requireOwner(ctx)

@@ -42,6 +42,11 @@ export class FakeX implements HttpPort {
   /** Every post, the newest first. */
   readonly all: FakeXPost[] = []
   readonly uploads = new Map<string, { name: string; category: string }>()
+  /** The videos on their way: the size X was told, the segments it got (their sizes, by their number), and how many more times its state is asked before it is processed. */
+  readonly videos = new Map<string, { mime: string; total: number; segments: number[]; name: string; closed: boolean; looks: number }>()
+  /** How many times a video's state reads "in_progress" after it is closed; `failsVideo` makes its processing fail. */
+  videoLooks = 1
+  failsVideo = false
   private readonly people = new Map<string, string>()
   private readonly codes = new Map<string, { challenge: string; redirectUri: string }>()
   private readonly access = new Map<string, number>()
@@ -187,6 +192,46 @@ export class FakeX implements HttpPort {
 
     if (req.method === 'GET' && path === 'users/me') return this.json(200, { data: this.user })
 
+    if (req.method === 'POST' && path === 'media/upload/initialize') {
+      const refused = this.fails('upload')
+      if (refused) return refused
+      const body = req.json as { media_type?: string; total_bytes?: number; media_category?: string }
+      if (!['video/mp4', 'video/quicktime'].includes(body.media_type ?? '') || !Number.isInteger(body.total_bytes) || (body.total_bytes as number) <= 0 || body.media_category !== 'tweet_video') return this.problem(400, 'Invalid Request', 'One or more parameters to your request was invalid.')
+      const id = `18${this.next++}`
+      this.videos.set(id, { mime: body.media_type as string, total: body.total_bytes as number, segments: [], name: '', closed: false, looks: this.videoLooks })
+      return this.json(200, { data: { id, media_key: `13_${id}`, expires_after_secs: 86_400 } })
+    }
+    const step = /^media\/upload\/(\d+)\/(append|finalize)$/.exec(path)
+    if (req.method === 'POST' && step) {
+      const video = this.videos.get(step[1] as string)
+      if (!video || video.closed) return this.problem(400, 'Invalid Request', 'The media upload does not exist or is closed.')
+      if (step[2] === 'append') {
+        const segment = req.form?.media
+        const index = Number(req.form?.segment_index)
+        if (!segment || typeof segment === 'string' || !segment.part || !Number.isInteger(index) || index !== video.segments.length) return this.problem(400, 'Invalid Request', 'One or more parameters to your request was invalid.')
+        const size = segment.part.end - segment.part.start
+        // X takes a segment of 5 MB at most.
+        if (size <= 0 || size > 5 * 1024 * 1024) return this.problem(413, 'Payload Too Large', 'The segment is too large.')
+        video.segments.push(size)
+        video.name = segment.name
+        return this.json(200, { data: { expires_at: 0 } })
+      }
+      if (video.segments.reduce((sum, size) => sum + size, 0) !== video.total) return this.problem(400, 'Invalid Request', 'The uploaded segments do not make the size the upload was started with.')
+      video.closed = true
+      this.uploads.set(step[1] as string, { name: video.name, category: 'tweet_video' })
+      return this.json(200, { data: { id: step[1], media_key: `13_${step[1]}`, size: video.total, ...(video.looks > 0 || this.failsVideo ? { processing_info: { state: 'pending', check_after_secs: 1 } } : {}) } })
+    }
+    if (req.method === 'GET' && path === 'media/upload') {
+      const video = this.videos.get(q.get('media_id') ?? '')
+      if (q.get('command') !== 'STATUS' || !video || !video.closed) return this.problem(400, 'Invalid Request', 'One or more parameters to your request was invalid.')
+      if (this.failsVideo) return this.json(200, { data: { id: q.get('media_id'), processing_info: { state: 'failed' } } })
+      if (video.looks > 0) {
+        video.looks -= 1
+        return this.json(200, { data: { id: q.get('media_id'), processing_info: { state: 'in_progress', check_after_secs: 2, progress_percent: 50 } } })
+      }
+      return this.json(200, { data: { id: q.get('media_id'), processing_info: { state: 'succeeded', progress_percent: 100 } } })
+    }
+
     if (req.method === 'POST' && path === 'media/upload') {
       const refused = this.fails('upload')
       if (refused) return refused
@@ -205,6 +250,9 @@ export class FakeX implements HttpPort {
       if (typeof body.text !== 'string' || (body.text === '' && ids.length === 0)) return this.problem(400, 'Invalid Request', 'One or more parameters to your request was invalid.')
       if ([...body.text].length > 280) return this.problem(403, 'Forbidden', 'You are not permitted to post a Post this long.')
       if (ids.some((id) => !this.uploads.has(id)) || ids.length > 4) return this.problem(400, 'Invalid Request', 'Your media IDs are invalid.')
+      // A video stands alone in a post, and only once X has processed it.
+      const filmed = ids.filter((id) => this.videos.has(id))
+      if (filmed.length > 0 && (ids.length > 1 || (this.videos.get(filmed[0] as string)?.looks ?? 0) > 0 || this.failsVideo)) return this.problem(400, 'Invalid Request', 'Your media IDs are invalid.')
       const parent = body.reply ? this.all.find((post) => post.id === body.reply?.in_reply_to_tweet_id) : undefined
       if (body.reply && !parent) return this.problem(400, 'Invalid Request', 'You attempted to reply to a Post that is deleted or not visible to you.')
       // An answer is taken only when the answered post names the account (or is the account's own).

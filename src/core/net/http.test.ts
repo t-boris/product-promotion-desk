@@ -44,6 +44,20 @@ describe('the network port for API connectors', () => {
     expect(file).toMatchObject({ name: 'picture.png', type: 'image/png', size: 4 })
   })
 
+  it('sends only the named part of a file: one segment of an upload a platform takes in parts', async () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'ppd-http-')), 'clip.mp4')
+    writeFileSync(path, Buffer.from([1, 2, 3, 4, 5, 6, 7]))
+    let form: FormData | null = null
+    const port = createHttpPort(async (_url, init) => {
+      form = init.body as FormData
+      return new Response('ok')
+    })
+    await port.request({ method: 'POST', url: 'https://api.example/append', form: { segment_index: '1', media: { path, name: 'clip.mp4', mime: 'video/mp4', part: { start: 3, end: 6 } } } })
+    const segment = form!.get('media') as File
+    expect(segment).toMatchObject({ name: 'clip.mp4', type: 'video/mp4', size: 3 })
+    expect([...new Uint8Array(await segment.arrayBuffer())]).toEqual([4, 5, 6])
+  })
+
   it('says "no answer" without repeating the address, which may hold a key', async () => {
     const port = createHttpPort(async () => {
       throw new TypeError('fetch failed: https://api.example/botSECRET/send')

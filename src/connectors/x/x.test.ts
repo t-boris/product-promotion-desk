@@ -187,7 +187,7 @@ describe('an X account that works through X\'s API (DEC-086)', () => {
     const w = await connected()
     expect(w.channel).toMatchObject({ status: 'active', connectorId: 'x-api', target: '@natalmystic', url: PROFILE_URL, reads: true, watchedInBrowser: false })
     const caps = Object.fromEntries((await w.call('channels.assess', { channelId: w.channel.id })).capabilities.map((c) => [c.key, c]))
-    expect(caps.publish_post).toMatchObject({ status: 'needs_check', detail: expect.stringMatching(/go out as @NatalMystic.*up to 4 pictures.*one GIF.*\$0\.015.*\$0\.20 with a link\).*video and a quote are published on X itself/s) })
+    expect(caps.publish_post).toMatchObject({ status: 'needs_check', detail: expect.stringMatching(/go out as @NatalMystic.*up to 4 pictures.*one GIF, or one MP4 or MOV video.*20 minutes without X Premium.*\$0\.015.*\$0\.20 with a link\).*A quote is published on X itself/s) })
     expect(caps.read_posts).toMatchObject({ status: 'verified', detail: expect.stringMatching(/posts of @NatalMystic of the last 30 days are read from X/) })
     expect(caps.read_comments).toMatchObject({ status: 'verified', detail: expect.stringMatching(/Replies to the posts of @NatalMystic are read from X: those that name the account.*tenth of a cent/s) })
     expect(caps.publish_reply).toMatchObject({ status: 'needs_check', detail: expect.stringMatching(/answer goes under a reply as @NatalMystic.*only a post that names the account.*\$0\.01/s) })
@@ -246,11 +246,64 @@ describe('posting on X', () => {
     expect(w.logged()).not.toContain(w.kept().a)
   })
 
-  it('refuses before asking X what a post cannot be, and says the video and the price before the approval', async () => {
+  it('sends one video in segments: the upload is started with the file\'s kind and size, closed, waited for while X processes it, and only then the post is made', async () => {
     const w = await connected()
-    const made = () => w.x.calls.filter((c) => c.method === 'POST' && (c.path === 'tweets' || c.path === 'media/upload')).length
+    w.x.videoLooks = 2
+    const MB = 1024 * 1024
+    const asked = w.x.calls.length
+    const out = await w.send({ text: 'A chart in a minute.', attachments: [file('clip.mov', 'video/quicktime', 9 * MB + 5)] })
+    expect(out).toMatchObject({ status: 'confirmed', externalId: expect.stringMatching(/^x:\d+$/) })
+    const id = [...w.x.videos.keys()][0] as string
+    expect(w.x.calls.slice(asked).filter((c) => c.path !== 'users/me').map((c) => `${c.method} ${c.path}`)).toEqual([
+      'POST media/upload/initialize',
+      `POST media/upload/${id}/append`,
+      `POST media/upload/${id}/append`,
+      `POST media/upload/${id}/append`,
+      `POST media/upload/${id}/finalize`,
+      `GET media/upload?command=STATUS&media_id=${id}`,
+      `GET media/upload?command=STATUS&media_id=${id}`,
+      `GET media/upload?command=STATUS&media_id=${id}`,
+      'POST tweets'
+    ])
+    expect(w.x.calls.find((c) => c.path === 'media/upload/initialize')?.body).toEqual({ media_type: 'video/quicktime', total_bytes: 9 * MB + 5, media_category: 'tweet_video' })
+    // Segments of 4 MB, numbered from 0, the rest in the last one.
+    expect(w.x.videos.get(id)).toMatchObject({ segments: [4 * MB, 4 * MB, MB + 5], closed: true })
+    expect(w.x.calls.filter((c) => c.method === 'POST' && c.path === 'tweets').at(-1)?.body).toEqual({ text: 'A chart in a minute.', media: { media_ids: [id] } })
+    expect(w.x.posts[0]).toMatchObject({ text: 'A chart in a minute.', media: ['clip.mov'] })
+    expect(w.logged()).not.toContain(w.kept().a)
+  })
+
+  it('makes no post when the video is not taken: a refused upload, a video X cannot process, one it is still processing after ten minutes', async () => {
+    const w = await connected()
+    const posts = () => w.x.calls.filter((c) => c.method === 'POST' && c.path === 'tweets').length
+    const post = () => w.send({ text: 'A clip', attachments: [file('clip.mp4', 'video/mp4', 100)] })
+    w.x.failNext = { status: 403, title: 'Forbidden', detail: 'You are not permitted to upload media.', on: 'upload' }
+    expect(await post()).toMatchObject({ status: 'failed', error: expect.stringMatching(/not permitted to upload media.*The video “clip.mp4” was not taken\. Nothing was sent\./s) })
+    w.x.failsVideo = true
+    expect(await post()).toMatchObject({ status: 'failed', error: expect.stringMatching(/X could not process the video “clip.mp4”\. Nothing was sent\./) })
+    w.x.failsVideo = false
+    w.x.videoLooks = 1000
+    const states = () => w.x.calls.filter((c) => c.path.startsWith('media/upload?command=STATUS')).length
+    const before = states()
+    expect(await post()).toMatchObject({ status: 'failed', error: expect.stringMatching(/still processing the video “clip.mp4” after ten minutes\. Nothing was sent\./) })
+    // X said to ask again in a second, then every two: ten minutes of it and no longer.
+    expect(states() - before).toBe(301)
+    expect(posts()).toBe(0)
+    // A small video X needs no time for goes out at once.
+    w.x.videoLooks = 0
+    expect(await post()).toMatchObject({ status: 'confirmed' })
+    expect(states() - before).toBe(301)
+  })
+
+  it('refuses before asking X what a post cannot be, and says the price before the approval', async () => {
+    const w = await connected()
+    const made = () => w.x.calls.filter((c) => c.method === 'POST' && (c.path === 'tweets' || c.path.startsWith('media/upload'))).length
     expect(await w.send({})).toMatchObject({ status: 'failed', error: expect.stringMatching(/nothing to post/) })
-    expect(await w.send({ text: 'A clip', attachments: [file('clip.mp4', 'video/mp4')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/“clip.mp4” is none of them.*video is published on X itself/s) })
+    expect(await w.send({ text: 'A clip', attachments: [file('clip.webm', 'video/webm')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/a GIF, or an MP4 or MOV video from this application; “clip.webm” is none of them/) })
+    expect(await w.send({ text: 'A clip', attachments: [file('clip.mp4', 'video/mp4'), picture()] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/one video in a post, with no picture beside it/) })
+    expect(await w.send({ text: 'A clip', attachments: [file('a.mp4', 'video/mp4'), file('b.mp4', 'video/mp4')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/one video in a post/) })
+    expect(await w.send({ text: 'A clip', attachments: [file('empty.mp4', 'video/mp4', 0)] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/The video “empty.mp4” is empty/) })
+    expect(await w.send({ text: 'A clip', attachments: [{ name: 'gone.mp4', path: '/nonexistent/gone.mp4', mime: 'video/mp4', sha256: 'x' }] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/The video “gone.mp4” could not be read from this Mac/) })
     expect(await w.send({ attachments: [1, 2, 3, 4, 5].map((n) => picture(`${n}.png`)) })).toMatchObject({ status: 'failed', error: expect.stringMatching(/at most 4 pictures in a post; this one has 5/) })
     expect(await w.send({ attachments: [picture('moon.gif', 'image/gif'), picture()] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/one GIF in a post, with no other picture/) })
     expect(await w.send({ attachments: [picture('big.png', 'image/png', 5 * 1024 * 1024 + 1)] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/up to 5 MB through its API; “big.png” is 6 MB/) })
@@ -261,7 +314,9 @@ describe('posting on X', () => {
 
     const ways = sendWays(w.core, undefined, w.channel)
     const video = renderForPlatform({ title: null, text: 'A clip', link: null, attachments: [{ name: 'clip.mp4', mime: 'video/mp4' }] } as never, 'x')
-    expect(sendProblems('x', video, ways).join(' ')).toMatch(/A video is not sent to X through its API by this application/)
+    expect(sendProblems('x', video, ways)).toEqual([])
+    const mixed = renderForPlatform({ title: null, text: 'A clip', link: null, attachments: [{ name: 'clip.mp4', mime: 'video/mp4' }, { name: 'chart.png', mime: 'image/png' }] } as never, 'x')
+    expect(sendProblems('x', mixed, ways).join(' ')).toMatch(/video/)
     // The price of the send, by whether the post has an address in it; nothing is said of money for a browser channel or another platform.
     const plain = renderForPlatform({ title: null, text: 'Words only.', link: null, attachments: [] } as never, 'x')
     const linked = renderForPlatform({ title: null, text: 'Read it.', link: 'https://natalmystic.com/how', attachments: [] } as never, 'x')

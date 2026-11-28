@@ -42,7 +42,8 @@ export function createHttpPort(fetchImpl: Fetch = (url, init) => fetch(url, init
           if (typeof value === 'string') form.append(name, value)
           else {
             hasFile = true
-            form.append(name, await openAsBlob(value.path, { type: value.mime }), value.name)
+            const whole = await openAsBlob(value.path, { type: value.mime })
+            form.append(name, value.part ? whole.slice(value.part.start, value.part.end, value.mime) : whole, value.name)
           }
         }
         body = form

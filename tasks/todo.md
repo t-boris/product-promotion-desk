@@ -1723,3 +1723,16 @@ Why: the plan's phase J says "pins with picture or video"; Pinterest's guide "Cr
 - [x] DEC-090, plan row J, release 0.91.0
 
 Review: `PinterestApiConnector.upload`. Not seen on a screen (the only screen change is a line that no longer appears in the preview; tested through `sendProblems`). Unproven with a real app: the upload, the processing time, the cover given as data.
+
+## Phase I, the last part: a video in a post on X (2026-11-28, 0.92.0, DEC-091)
+
+Why: the plan's phase I says "post with media from local files"; X's guide "Chunked Media Upload" documents every request.
+
+- [x] the network port sends a named part of a file (`HttpFile.part`), so a segment is read from the file and a large video is never held in memory
+- [x] `XApi.startUpload` / `appendUpload` / `finishUpload` / `uploadState`; `XApiConnector.uploadVideo`: 4 MB segments, the wait X asks for (1 to 30 s), ten minutes at most
+- [x] refused before anything is asked: a kind that is not MP4/MOV, a video with a picture beside it, two videos, an empty or unreadable file
+- [x] the form: `apiVideos: 'none'` replaced by `apiOneKind` for X; the channel's card says what a post takes
+- [x] tests: the order of the requests and the sizes of the segments, a refused upload, a failed processing, ten minutes of waiting, the part of a file; verify (6516 tests)
+- [x] DEC-091, plan row I, release 0.92.0
+
+Review: not seen on a screen (the only screen change is a line that no longer appears in the preview; tested through `sendProblems`). Unproven with a real paid X app: the upload, the processing time, X's refusal for a too long video.

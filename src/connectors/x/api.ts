@@ -45,6 +45,11 @@ export interface XList {
   meta?: { next_token?: string }
 }
 
+/** A video on its way to a post: its id, and while X processes it, how far that is and when to ask again. */
+export interface XUpload {
+  data?: { id?: string; processing_info?: { state?: string; check_after_secs?: number } }
+}
+
 const words = (value: unknown): string | null => (typeof value === 'string' && value !== '' ? value : null)
 
 function read<T>(response: HttpResponse, hide: string[]): XAnswer<T> {
@@ -86,6 +91,26 @@ export class XApi {
 
   async post<T>(path: string, body: unknown): Promise<XAnswer<T>> {
     return read<T>(await this.http.request({ method: 'POST', url: `${X_API}/${path}`, headers: this.auth, json: body }), [this.token])
+  }
+
+  /**
+   * A video goes up in parts, by X's guide to the chunked upload: the upload is started with the file's kind and size, the file is sent in
+   * segments numbered from 0, the upload is closed, and X is asked about its processing until it has succeeded.
+   */
+  async startUpload(mime: string, bytes: number): Promise<XAnswer<XUpload>> {
+    return this.post<XUpload>('media/upload/initialize', { media_type: mime, total_bytes: bytes, media_category: 'tweet_video' })
+  }
+
+  async appendUpload(id: string, index: number, segment: HttpFile): Promise<XAnswer<unknown>> {
+    return read(await this.http.request({ method: 'POST', url: `${X_API}/media/upload/${id}/append`, headers: this.auth, form: { segment_index: String(index), media: segment }, timeoutMs: 10 * 60_000 }), [this.token])
+  }
+
+  async finishUpload(id: string): Promise<XAnswer<XUpload>> {
+    return read<XUpload>(await this.http.request({ method: 'POST', url: `${X_API}/media/upload/${id}/finalize`, headers: this.auth }), [this.token])
+  }
+
+  async uploadState(id: string): Promise<XAnswer<XUpload>> {
+    return this.get<XUpload>('media/upload', { command: 'STATUS', media_id: id })
   }
 
   /** Uploads one picture in one request; X answers with the id a post names it by. */

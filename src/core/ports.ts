@@ -431,6 +431,8 @@ export interface HttpFile {
   path: string
   name: string
   mime: string
+  /** Only these bytes of the file, from `start` up to and not including `end`: one segment of an upload a platform takes in parts. */
+  part?: { start: number; end: number }
 }
 
 export interface HttpRequest {
