@@ -132,6 +132,101 @@ describe('the weekly review', () => {
   })
 })
 
+describe('an accepted change and the plan of drafts (owner\'s answer of 2026-11-28)', () => {
+  const POST = { topic: 'Charts', title: 'How charts work', text: 'A natal chart is built from your birth date, time and place.', link: '', rationale: 'from c1', usedClaimIds: ['c1'] }
+  const answerWith = (plan: unknown[]): string => JSON.stringify({ worked: ['The story post drew 40 points.'], didNot: [], change: 'Post about the product twice as often here.', why: 'It drew the most points.', plan })
+  const mixCard = () => world.core.router.call('mix.get', { channelId: world.channel.id })
+  const standalone = (): number => (world.core.db.prepare("SELECT COUNT(*) AS n FROM opportunities WHERE kind = 'standalone' AND state = 'draft'").get() as { n: number }).n
+
+  /** A week with two sent posts, the product's channel preparing a product post every 14 days, and the review asked on Monday. */
+  async function reviewed(plan: unknown[]): Promise<string> {
+    world = makeWorld({ mode: 'approval' })
+    world.setSettings(world.channel.id, { mix: [{ kind: 'product_post', enabled: true, everyDays: 14 }] })
+    await sentPost('A story', { likes: 40, comments: 6 })
+    await sentPost('A question')
+    const week = toNextMonday()
+    world.engine.on('weekly.review', answerWith(plan))
+    await call('weekly.prepare', {})
+    return week
+  }
+
+  it('the AI names a channel, a kind and a move; the application keeps the step with the days it decided, and shows it before the press', async () => {
+    const week = await reviewed([{ channel: 'placeholder', kind: 'product_post', move: 'more' }])
+    // The channel is named in the prompt as the owner sees it, with its plan as set.
+    const asked = world.engine.calls.find((c) => c.label === 'weekly.review')!.prompt
+    expect(asked).toContain(`${world.channel.target}: product_post every 14 days, own_update off, showcase off`)
+    // "placeholder" is no channel of the product: that step is left out, the change stands.
+    expect((await call('weekly.get', { week })).change).toMatchObject({ text: 'Post about the product twice as often here.', plan: [] })
+
+    world.engine.on('weekly.review', answerWith([{ channel: world.channel.target, kind: 'product_post', move: 'more' }, { channel: world.channel.target, kind: 'showcase', move: 'pause' }, { channel: world.channel.target, kind: 'own_update', move: 'faster' }]))
+    const view = await call('weekly.prepare', { week })
+    expect(view.change?.plan).toEqual([{ channelId: world.channel.id, target: world.channel.target, kind: 'product_post', move: 'more', from: { enabled: true, everyDays: 14 }, to: { enabled: true, everyDays: 7 }, applies: true }])
+    // Proposed is not in force.
+    expect((await mixCard()).kinds.find((k) => k.kind === 'product_post')).toMatchObject({ enabled: true, everyDays: 14, review: null })
+  })
+
+  it('accepted, it changes how often the channel\'s drafts are prepared for two weeks, and the owner\'s own setting stays as set', async () => {
+    const week = await reviewed([])
+    world.engine.on('weekly.review', answerWith([{ channel: world.channel.target, kind: 'product_post', move: 'more' }]))
+    await call('weekly.prepare', { week })
+    await call('weekly.decide', { week, decision: 'accept' })
+
+    const kind = (await mixCard()).kinds.find((k) => k.kind === 'product_post')
+    expect(kind).toMatchObject({ enabled: true, everyDays: 14, review: { enabled: true, everyDays: 7 } })
+    expect(world.refresh().settings.mix).toEqual([{ kind: 'product_post', enabled: true, everyDays: 14 }])
+
+    // A first draft is prepared at once; the next one comes after about 7 days, not 14.
+    world.engine.on('draft.publication', JSON.stringify(POST))
+    expect(await world.core.services.mix!.runDue()).toBe(1)
+    world.clock.advance(9 * DAY)
+    expect(await world.core.services.mix!.runDue()).toBe(1)
+    expect(standalone()).toBe(2)
+
+    // Two weeks after the reviewed week the change is over: the owner's 14 days are back.
+    world.clock.advance(6 * DAY)
+    expect((await mixCard()).kinds.find((k) => k.kind === 'product_post')).toMatchObject({ everyDays: 14, review: null })
+    world.clock.advance(4 * DAY)
+    expect(await world.core.services.mix!.runDue()).toBe(0)
+  })
+
+  it('a pause prepares no draft while it is in force', async () => {
+    const week = await reviewed([])
+    world.engine.on('weekly.review', answerWith([{ channel: world.channel.target, kind: 'product_post', move: 'pause' }]))
+    await call('weekly.prepare', { week })
+    await call('weekly.decide', { week, decision: 'accept' })
+    world.engine.on('draft.publication', JSON.stringify(POST))
+
+    expect(await world.core.services.mix!.runDue()).toBe(0)
+    expect((await mixCard()).kinds.find((k) => k.kind === 'product_post')).toMatchObject({ enabled: true, review: { enabled: false }, nextAt: null })
+  })
+
+  it('the owner\'s later edit of that setting wins at once, and the review says the step is not applied', async () => {
+    const week = await reviewed([])
+    world.engine.on('weekly.review', answerWith([{ channel: world.channel.target, kind: 'product_post', move: 'pause' }]))
+    await call('weekly.prepare', { week })
+    await call('weekly.decide', { week, decision: 'accept' })
+
+    world.setSettings(world.channel.id, { mix: [{ kind: 'product_post', enabled: true, everyDays: 10 }] })
+
+    expect((await mixCard()).kinds.find((k) => k.kind === 'product_post')).toMatchObject({ everyDays: 10, review: null })
+    expect((await call('weekly.get', { week })).change?.plan).toMatchObject([{ applies: false }])
+    world.engine.on('draft.publication', JSON.stringify(POST))
+    expect(await world.core.services.mix!.runDue()).toBe(1)
+  })
+
+  it('declined, or replaced by the owner\'s own words, it changes no plan', async () => {
+    const week = await reviewed([])
+    world.engine.on('weekly.review', answerWith([{ channel: world.channel.target, kind: 'product_post', move: 'pause' }]))
+    await call('weekly.prepare', { week })
+    await call('weekly.decide', { week, decision: 'decline' })
+    expect((await mixCard()).kinds.find((k) => k.kind === 'product_post')).toMatchObject({ review: null })
+
+    const own = await call('weekly.decide', { week, decision: 'own', text: 'Answer every comment within a day.' })
+    expect(own.change).toMatchObject({ state: 'accepted', byOwner: true, plan: [] })
+    expect((await mixCard()).kinds.find((k) => k.kind === 'product_post')).toMatchObject({ review: null })
+  })
+})
+
 describe('the words of the review', () => {
   const input: ReviewInput = {
     productId: 'p',
@@ -140,7 +235,8 @@ describe('the words of the review', () => {
     numbers: { week: { posts: 1, replies: 0, removed: 0, likes: null, comments: null, views: null, read: 0 }, before: { posts: 0, replies: 0, removed: 0, likes: null, comments: null, views: null, read: 0 }, usual: { posts: null, replies: null, likes: null, comments: null, views: null, removed: null }, channels: [] },
     channelNames: {},
     posts: [],
-    lastChange: 'Post twice.'
+    lastChange: 'Post twice.',
+    drafts: [{ channel: 'r/astrology', kinds: [{ kind: 'product_post', enabled: true, everyDays: 14 }, { kind: 'own_update', enabled: false, everyDays: 7 }, { kind: 'showcase', enabled: false, everyDays: 30 }] }]
   }
 
   it('the prompt never turns an unread number into a zero and names the change of the week', () => {

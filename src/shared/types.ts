@@ -1,6 +1,7 @@
 // Domain types shared by the core, the main process and the UI.
 // Everything here is plain serializable data (it crosses IPC / HTTP boundaries).
 
+import type { PlanStep } from './mix-plan'
 import type { CalendarKind, OwnDate } from './seasonal'
 import type { FindKind } from './listening'
 import type { LinkShare, Reach, WarmUp } from './account-health'
@@ -1450,6 +1451,11 @@ export interface WeeklyChange {
   state: 'proposed' | 'accepted' | 'declined'
   byOwner: boolean
   decidedAt: IsoTime | null
+  /**
+   * What accepting the change does to the plan of drafts of the product's channels, for as long as the change is in force. Empty: nothing (a
+   * change the owner wrote, or one that is not about how often drafts are prepared). `applies` is false once the owner changed that setting.
+   */
+  plan: (PlanStep & { target: string; applies: boolean })[]
 }
 
 /** The weekly review of a product as its page shows it (DEC-057). */
@@ -1691,6 +1697,8 @@ export interface ProductUpdate {
 }
 
 export interface MixKindCard extends MixSetting {
+  /** What the accepted change of the weekly review makes of this kind for now, and until when; null when it changes nothing. `enabled` and `everyDays` stay the owner's own. */
+  review: { enabled: boolean; everyDays: number; until: IsoTime } | null
   /** When a draft of this kind was last prepared by the mix; null if never. */
   lastDraftAt: IsoTime | null
   /** When the next draft is due (never before now); null while the kind is off. */

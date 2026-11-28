@@ -1,9 +1,11 @@
 // The weekly review of a product (DEC-057): one page a week. The application counts what went out and what the sites showed under it, against the
 // product's own usual; the AI reads those numbers and the week's posts and writes what worked, what did not and ONE change to try. The owner
 // accepts it, declines it or writes their own; the accepted change is given to the AI's drafts of the next two weeks as the owner's direction.
-// Nothing is posted, approved or scheduled by this; the content mix is not changed by it.
+// Nothing is posted, approved or scheduled by this. An accepted change proposed by the AI may also carry steps for the plan of drafts (the content
+// mix): which kind of post is prepared more often, less often or not at all on which channel, for the same two weeks (owner's answer of 2026-11-28).
 import { ApiError } from '../../shared/api'
-import type { Id, WeeklyChange, WeeklyPost, WeeklyReviewView, WeeklyWords } from '../../shared/types'
+import { DEFAULT_EVERY_DAYS, MAX_PLAN_STEPS, MIX_KINDS, PLAN_MOVES, moved, parsePlan, stepApplies, type PlanMove, type PlanStep, type Rhythm } from '../../shared/mix-plan'
+import type { Channel, Id, MixKind, WeeklyChange, WeeklyPost, WeeklyReviewView, WeeklyWords } from '../../shared/types'
 import { CHANGE_LASTS_MS, MIN_SENDS_TO_REVIEW, USUAL_WEEKS, lastFullWeek, shiftWeeks, weekKey, weekLabel, weekNumbers, weekOfKey, type WeekNumbers, type WeekSend } from '../../shared/weekly-review'
 import { readyEngine } from '../assist/gate'
 import { appLanguageRule, askWithRepair, fence, isRecord, oneLine, plainText, unsafe, type Parsed } from '../assist/kit'
@@ -40,6 +42,8 @@ export interface ReviewInput {
   posts: { key: string; channel: string; title: string; likes: number | null; comments: number | null; views: number | null; removed: boolean; earlier: boolean }[]
   /** The change the owner accepted for this week, if any: the AI may say whether the week followed it. */
   lastChange: string | null
+  /** The plan of drafts of each channel of the product as the owner set it: what a plan step may change. */
+  drafts: { channel: string; kinds: { kind: MixKind; enabled: boolean; everyDays: number }[] }[]
 }
 
 export interface ReviewAnswer {
@@ -47,6 +51,8 @@ export interface ReviewAnswer {
   didNot: string[]
   change: string
   why: string
+  /** What the change means for the plan of drafts, in the mix's own words; the application turns a move into days. */
+  plan: { channel: string; kind: MixKind; move: PlanMove }[]
 }
 
 const shown = (n: number | null): string => (n === null ? 'not shown' : String(n))
@@ -58,6 +64,9 @@ export function reviewPrompt(input: ReviewInput): AiTask {
   const posts = input.posts
     .map((p) => `[${p.key}] ${p.earlier ? 'earlier week' : 'this week'} | ${p.channel} | likes or points ${shown(p.likes)}, comments ${shown(p.comments)}, views ${shown(p.views)}${p.removed ? ' | TAKEN DOWN by the site or community' : ''}\ntitle: ${p.title}`)
     .join('\n\n')
+  const draftsPlan = input.drafts
+    .map((d) => `${d.channel}: ${d.kinds.map((k) => `${k.kind} ${k.enabled ? `every ${k.everyDays} days` : 'off'}`).join(', ')}`)
+    .join('\n')
   const w = input.numbers.week
   const u = input.numbers.usual
   const prompt = [
@@ -71,6 +80,7 @@ export function reviewPrompt(input: ReviewInput): AiTask {
     '2. "didNot": one to three short points on what did not (a channel below its usual, posts taken down, a week with nothing sent somewhere). An empty list when nothing stands out.',
     '3. "change": ONE change to try next week, concrete enough to act on (what kind of post, where, how often; or what to stop). One sentence. Not a list.',
     '4. "why": one or two sentences saying which of the numbers or posts below the change rests on.',
+    `5. "plan": what the change means for how often DRAFTS of the owner's own posts are prepared, as zero to ${MAX_PLAN_STEPS} steps. A step names a channel exactly as written in <drafts_plan>, a kind (${MIX_KINDS.join(', ')}) and a move: "more" (prepared twice as often, or switched on), "less" (half as often) or "pause" (none for now). The application decides the days; you never write a number of days. Give a step only when the change says so in its own words; an empty list when the change is about something else (replies, the words of a post, the time of day).`,
     '',
     'Rules:',
     '- Use only the numbers and posts given. You may repeat a number given here; never compute or invent another, and never state a number for something "not shown".',
@@ -86,8 +96,10 @@ export function reviewPrompt(input: ReviewInput): AiTask {
     '',
     fence('posts', posts),
     '',
+    fence('drafts_plan', draftsPlan),
+    '',
     'Answer with ONLY this JSON object, no code fences and no other text:',
-    '{"worked": ["..."], "didNot": ["..."], "change": "...", "why": "..."}'
+    '{"worked": ["..."], "didNot": ["..."], "change": "...", "why": "...", "plan": [{"channel": "...", "kind": "product_post", "move": "more"}]}'
   ]
     .filter((line, i, all) => !(line === '' && all[i - 1] === ''))
     .join('\n')
@@ -106,7 +118,15 @@ export function readReview(raw: unknown): Parsed<ReviewAnswer> {
   if (change === '') return { ok: false, error: 'change must be one sentence: the one change to try next week.' }
   if (unsafe(change)) return { ok: false, error: 'change must not ask for automation, credentials or a promise; propose a plain change in what is posted, where or how often.' }
   const why = typeof raw.why === 'string' ? plainText(raw.why, MAX_WHY) : ''
-  return { ok: true, value: { worked: points(raw.worked), didNot: points(raw.didNot), change, why: unsafe(why) ? '' : why } }
+  // A step that is not whole is left out, not repaired: the change itself stands without it.
+  const plan: ReviewAnswer['plan'] = []
+  for (const entry of Array.isArray(raw.plan) ? raw.plan : []) {
+    if (!isRecord(entry) || typeof entry.channel !== 'string' || !MIX_KINDS.includes(entry.kind as MixKind) || !PLAN_MOVES.includes(entry.move as PlanMove)) continue
+    const channel = plainText(entry.channel, 120)
+    if (channel === '' || plan.some((step) => step.channel === channel && step.kind === entry.kind)) continue
+    plan.push({ channel, kind: entry.kind as MixKind, move: entry.move as PlanMove })
+  }
+  return { ok: true, value: { worked: points(raw.worked), didNot: points(raw.didNot), change, why: unsafe(why) ? '' : why, plan: plan.slice(0, MAX_PLAN_STEPS) } }
 }
 
 /** The AI part, injectable so a test can script it. */
@@ -123,15 +143,34 @@ export const reviewHelper: ReviewHelper = {
  * weeks ago. Null: none.
  */
 export function directionInForce(core: Core, productId: Id): string | null {
-  const rows = core.db.prepare("SELECT week_key, change_text FROM weekly_reviews WHERE product_id = ? AND change_state = 'accepted' ORDER BY week_key DESC LIMIT 3").all(productId) as { week_key: string; change_text: string }[]
+  return changeInForce(core, productId)?.text ?? null
+}
+
+/** The accepted change in force now with the steps it makes in the plan of drafts, and when it stops. Null: none. */
+export function changeInForce(core: Core, productId: Id): { text: string; plan: PlanStep[]; until: string } | null {
+  const rows = core.db.prepare("SELECT week_key, change_text, plan_json FROM weekly_reviews WHERE product_id = ? AND change_state = 'accepted' ORDER BY week_key DESC LIMIT 3").all(productId) as { week_key: string; change_text: string; plan_json: string }[]
   const now = core.clock.now().getTime()
   for (const row of rows) {
     const start = weekOfKey(row.week_key)
     if (!start) continue
     const ended = shiftWeeks(start, 1).getTime()
-    if (now >= ended && now < ended + CHANGE_LASTS_MS && row.change_text.trim() !== '') return row.change_text
+    if (now >= ended && now < ended + CHANGE_LASTS_MS && row.change_text.trim() !== '') return { text: row.change_text, plan: parsePlan(parseJson(row.plan_json)), until: new Date(ended + CHANGE_LASTS_MS).toISOString() }
   }
   return null
+}
+
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
+}
+
+/** The owner's own setting of one kind on a channel, with the kind's usual days when it was never set. */
+export function ownRhythm(channel: Channel, kind: MixKind): Rhythm {
+  const setting = channel.settings.mix.find((entry) => entry.kind === kind)
+  return { enabled: setting?.enabled ?? false, everyDays: setting?.everyDays ?? DEFAULT_EVERY_DAYS[kind] }
 }
 
 export class WeeklyReview {
@@ -163,7 +202,7 @@ export class WeeklyReview {
     if (args.decision === 'own') {
       const text = plainText(requireText(args.text, 'The change'), MAX_CHANGE)
       if (text === '') throw new ApiError('invalid_input', 'Write the change in a sentence.')
-      if (row) this.core.db.prepare("UPDATE weekly_reviews SET change_text = ?, change_why = '', change_state = 'accepted', by_owner = 1, decided_at = ? WHERE id = ?").run(text, now, row.id)
+      if (row) this.core.db.prepare("UPDATE weekly_reviews SET change_text = ?, change_why = '', change_state = 'accepted', by_owner = 1, decided_at = ?, plan_json = '[]' WHERE id = ?").run(text, now, row.id)
       else this.core.db.prepare("INSERT INTO weekly_reviews (id, product_id, week_key, worked_json, did_not_json, change_text, change_why, change_state, by_owner, decided_at, prepared_at) VALUES (?, ?, ?, '[]', '[]', ?, '', 'accepted', 1, ?, NULL)").run(newId(), productId, key, text, now)
     } else {
       if (!row || String(row.change_text ?? '') === '') throw new ApiError('invalid_input', 'There is no proposed change for this week yet.')
@@ -270,7 +309,7 @@ export class WeeklyReview {
     const words: WeeklyWords | null = row?.prepared_at ? { worked: parseList(row.worked_json), didNot: parseList(row.did_not_json), preparedAt: row.prepared_at as string } : null
     const change: WeeklyChange | null =
       row && String(row.change_text ?? '') !== ''
-        ? { text: row.change_text as string, why: (row.change_why as string | null) ?? '', state: row.change_state as WeeklyChange['state'], byOwner: row.by_owner === 1, decidedAt: (row.decided_at as string | null) ?? null }
+        ? { text: row.change_text as string, why: (row.change_why as string | null) ?? '', state: row.change_state as WeeklyChange['state'], byOwner: row.by_owner === 1, decidedAt: (row.decided_at as string | null) ?? null, plan: this.planOf(row) }
         : null
     const channels: WeeklyReviewView['channels'] = {}
     for (const c of numbers.channels) {
@@ -305,6 +344,29 @@ export class WeeklyReview {
     }
   }
 
+  /** The kept steps with the channel's name and whether each still applies to the owner's setting as it is now. A step of a removed channel is left out. */
+  private planOf(row: Row): WeeklyChange['plan'] {
+    const channels = new Map(this.core.repos.listChannels().map((c) => [c.id, c]))
+    return parsePlan(parseJson(String(row.plan_json ?? '[]'))).flatMap((step) => {
+      const channel = channels.get(step.channelId)
+      return channel ? [{ ...step, target: channel.target, applies: stepApplies(ownRhythm(channel, step.kind), step) }] : []
+    })
+  }
+
+  /** The AI's steps turned into kept ones: the channel found by its name among the product's, the days decided here; a step that would change nothing is left out. */
+  private stepsFrom(productId: Id, answered: ReviewAnswer['plan']): PlanStep[] {
+    const channels = this.core.repos.listChannels().filter((c) => c.productId === productId)
+    const steps: PlanStep[] = []
+    for (const entry of answered) {
+      const channel = channels.find((c) => c.target === entry.channel) ?? channels.find((c) => c.target.toLowerCase() === entry.channel.toLowerCase())
+      if (!channel) continue
+      const from = ownRhythm(channel, entry.kind)
+      const to = moved(from, entry.move)
+      if (to) steps.push({ channelId: channel.id, kind: entry.kind, move: entry.move, from, to })
+    }
+    return steps
+  }
+
   private async prepareLocked(productId: Id, start: Date): Promise<WeeklyReviewView> {
     const key = weekKey(start)
     const end = shiftWeeks(start, 1)
@@ -329,7 +391,11 @@ export class WeeklyReview {
       numbers,
       channelNames,
       posts: [...thisWeek.slice(0, 20).map((p) => asInput(p, false)), ...before.map((p) => asInput(p, true))],
-      lastChange: previous && previous.change_state === 'accepted' ? String(previous.change_text ?? '') || null : null
+      lastChange: previous && previous.change_state === 'accepted' ? String(previous.change_text ?? '') || null : null,
+      drafts: this.core.repos
+        .listChannels()
+        .filter((c) => c.productId === productId && c.status !== 'setup')
+        .map((c) => ({ channel: c.target, kinds: MIX_KINDS.map((kind) => ({ kind, ...ownRhythm(c, kind) })) }))
     }
     let answer: ReviewAnswer
     try {
@@ -339,18 +405,19 @@ export class WeeklyReview {
       throw error
     }
     const at = this.core.clock.now().toISOString()
+    const plan = JSON.stringify(this.stepsFrom(productId, answer.plan))
     const row = this.row(productId, key)
     if (!row) {
       this.core.db
-        .prepare("INSERT INTO weekly_reviews (id, product_id, week_key, worked_json, did_not_json, change_text, change_why, change_state, by_owner, decided_at, prepared_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'proposed', 0, NULL, ?)")
-        .run(newId(), productId, key, JSON.stringify(answer.worked), JSON.stringify(answer.didNot), answer.change, answer.why, at)
+        .prepare("INSERT INTO weekly_reviews (id, product_id, week_key, worked_json, did_not_json, change_text, change_why, change_state, by_owner, decided_at, prepared_at, plan_json) VALUES (?, ?, ?, ?, ?, ?, ?, 'proposed', 0, NULL, ?, ?)")
+        .run(newId(), productId, key, JSON.stringify(answer.worked), JSON.stringify(answer.didNot), answer.change, answer.why, at, plan)
     } else if (row.decided_at) {
       // The owner already answered: their decision and its text stay; only the words are made again.
       this.core.db.prepare('UPDATE weekly_reviews SET worked_json = ?, did_not_json = ?, prepared_at = ? WHERE id = ?').run(JSON.stringify(answer.worked), JSON.stringify(answer.didNot), at, row.id)
     } else {
       this.core.db
-        .prepare("UPDATE weekly_reviews SET worked_json = ?, did_not_json = ?, change_text = ?, change_why = ?, change_state = 'proposed', by_owner = 0, prepared_at = ? WHERE id = ?")
-        .run(JSON.stringify(answer.worked), JSON.stringify(answer.didNot), answer.change, answer.why, at, row.id)
+        .prepare("UPDATE weekly_reviews SET worked_json = ?, did_not_json = ?, change_text = ?, change_why = ?, change_state = 'proposed', by_owner = 0, prepared_at = ?, plan_json = ? WHERE id = ?")
+        .run(JSON.stringify(answer.worked), JSON.stringify(answer.didNot), answer.change, answer.why, at, plan, row.id)
     }
     // The log says that a review was made, never what it says.
     this.core.log.info('results', `The review of the week ${weekLabel(start)} was prepared.`)

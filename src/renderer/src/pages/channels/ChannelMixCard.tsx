@@ -1,6 +1,8 @@
 import { useEffect, useId, useReducer, useRef, useState } from 'react'
 import type { Channel, MixKind, MixKindCard } from '../../../../shared/types'
+import { rhythmWords } from '../../../../shared/mix-plan'
 import { call, useAction, useQuery } from '../../hooks'
+import { shortTime } from '../posts/short-time'
 import { Button, Card, ErrorNote, Hint, Loading, useOpenForm } from '../../ui'
 import { MixNotes } from './MixNotes'
 import {
@@ -131,7 +133,7 @@ export function ChannelMixCard({ channel, blockedReason }: { channel: Channel; b
               </div>
             </div>
             {form.map((row) => {
-              const kindCard: MixKindCard = data.kinds.find((k) => k.kind === row.kind) ?? { kind: row.kind, enabled: false, everyDays: 0, lastDraftAt: null, nextAt: null, problem: null }
+              const kindCard: MixKindCard = data.kinds.find((k) => k.kind === row.kind) ?? { kind: row.kind, enabled: false, everyDays: 0, review: null, lastDraftAt: null, nextAt: null, problem: null }
               const words = KIND_WORDS[row.kind]
               const changed = rowChanged(row, saved.find((s) => s.kind === row.kind))
               const status = kindStatus(kindCard, { now, changed, blocked: data.blocked !== null })
@@ -170,6 +172,11 @@ export function ChannelMixCard({ channel, blockedReason }: { channel: Channel; b
                     {problem && (
                       <Hint className="bad" id={`${daysId}-problem`} data-testid={`mix-days-problem-${row.kind}`}>
                         {DAYS_PROBLEM}
+                      </Hint>
+                    )}
+                    {kindCard.review && !changed && (
+                      <Hint tone="strong" data-testid={`mix-review-${row.kind}`}>
+                        The change you accepted in the weekly review is in force until {shortTime(kindCard.review.until)}: {rhythmWords(kindCard.review)}. Your own setting is kept here and comes back after; change it and yours applies at once.
                       </Hint>
                     )}
                     {statusLine(status) && (

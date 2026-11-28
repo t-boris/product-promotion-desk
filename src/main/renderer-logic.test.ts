@@ -2060,7 +2060,7 @@ describe('"Where to post": the ticks and what Save does with them (DEC-032)', ()
 
 describe('the content mix card of a channel (DEC-033)', () => {
   const NOW = Date.parse('2026-11-15T12:00:00.000Z')
-  const kind = (patch: Partial<MixKindCard> & Pick<MixKindCard, 'kind'>): MixKindCard => ({ enabled: false, everyDays: 14, lastDraftAt: null, nextAt: null, problem: null, ...patch })
+  const kind = (patch: Partial<MixKindCard> & Pick<MixKindCard, 'kind'>): MixKindCard => ({ enabled: false, everyDays: 14, review: null, lastDraftAt: null, nextAt: null, problem: null, ...patch })
   /** What the core sends for a channel that never had a mix: all three kinds, off, each with its usual rhythm. */
   const emptyCard = (): Pick<MixCard, 'kinds'> => ({ kinds: [kind({ kind: 'product_post', everyDays: 14 }), kind({ kind: 'own_update', everyDays: 7 }), kind({ kind: 'showcase', everyDays: 30 })] })
   const saved = formFromCard(emptyCard())

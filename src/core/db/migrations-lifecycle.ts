@@ -180,5 +180,14 @@ CREATE TABLE listen_state (
   last_error TEXT
 );
 `
+  },
+  {
+    id: 408,
+    name: 'weekly review: the steps an accepted change makes in the plan of drafts',
+    sql: `
+-- Owner's answer of 2026-11-28: an accepted change changes the content mix too. One JSON list per review; each step keeps the channel, the kind,
+-- the setting it was proposed against and what it becomes. Nothing in channels is rewritten.
+ALTER TABLE weekly_reviews ADD COLUMN plan_json TEXT NOT NULL DEFAULT '[]';
+`
   }
 ]

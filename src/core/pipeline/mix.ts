@@ -12,6 +12,7 @@ import { newId } from '../db/database'
 import type { Core } from '../core'
 import type { MixService } from '../services'
 import { loadKnowledge } from './context'
+import { DEFAULT_EVERY_DAYS, MIX_KINDS, rhythmInForce, stepApplies } from '../../shared/mix-plan'
 import { RECUT_EVERY_DAYS } from '../../shared/product-choices'
 import { RECUT_FOCUS, SHOWCASE_FOCUS } from './draft-prompt'
 import { lowTimeOn } from './product-choices'
@@ -19,6 +20,7 @@ import type { PublicationsFlow } from './publications'
 import { schedulableChannels } from './scheduler-eligibility'
 import type { FlowStore } from './store'
 import { errorMessage } from './util'
+import { changeInForce, ownRhythm } from './weekly-review'
 
 /** The mix prepares no draft for a channel while this many of its posts wait for the owner. */
 export const MIX_WAITING_CAP = 3
@@ -34,8 +36,7 @@ const MAX_NOTE_CHARS = 500
 /** A note the AI failed to make a post from this many times is set aside: one note never holds the others back. */
 export const MAX_NOTE_TRIES = 3
 
-export const MIX_KINDS: readonly MixKind[] = ['product_post', 'own_update', 'showcase']
-export const DEFAULT_EVERY_DAYS: Record<MixKind, number> = { product_post: 14, own_update: 7, showcase: 30 }
+export { DEFAULT_EVERY_DAYS, MIX_KINDS }
 /** Posts that wait for the owner to decide. */
 const WAITING_STATES = ['draft', 'awaiting_approval']
 /** A post about the product stands on approved facts; an own update stands on a note. */
@@ -145,21 +146,25 @@ export class MixFlow implements MixService {
     const unused = usableNotes(this.core, channel.productId).length
     const setAside = (this.core.db.prepare('SELECT COUNT(*) AS n FROM product_updates WHERE product_id = ? AND used_in_opportunity_id IS NULL AND failed_tries >= ?').get(channel.productId, MAX_NOTE_TRIES) as { n: number }).n
     const facts = loadKnowledge(this.core, channel.productId).approved.length
+    const change = changeInForce(this.core, channel.productId)
     const kinds = MIX_KINDS.map((kind): MixKindCard => {
-      const setting = channel.settings.mix.find((entry) => entry.kind === kind)
-      const enabled = setting?.enabled ?? false
-      const everyDays = setting?.everyDays ?? DEFAULT_EVERY_DAYS[kind]
+      // `enabled` and `everyDays` are the owner's own: the form shows and saves them. What the accepted change of the weekly review makes of
+      // the kind for now is beside them, and it is what the next draft is counted from.
+      const { enabled, everyDays } = ownRhythm(channel, kind)
+      const step = change?.plan.find((s) => s.channelId === channelId && s.kind === kind)
+      const review = change && step && stepApplies({ enabled, everyDays }, step) ? { ...step.to, until: change.until } : null
+      const inForce = review ?? { enabled, everyDays }
       const state = this.state(channelId, kind)
       let nextAt: IsoTime | null = null
       let problem: string | null = null
-      if (enabled) {
-        nextAt = new Date(Math.max(now, dueAtMs(channelId, kind, everyDays, state.lastDraftAt, now), retryAtMs(state.lastAttemptAt, state.failures, now))).toISOString()
+      if (inForce.enabled) {
+        nextAt = new Date(Math.max(now, dueAtMs(channelId, kind, inForce.everyDays, state.lastDraftAt, now), retryAtMs(state.lastAttemptAt, state.failures, now))).toISOString()
         if (kind === 'own_update' && unused === 0) problem = setAside > 0 ? `The AI could not make a post from ${setAside === 1 ? 'a note' : `${setAside} notes`}. Rewrite ${setAside === 1 ? 'it' : 'them'}, or remove ${setAside === 1 ? 'it' : 'them'}, and tell what is new.` : 'Waiting for a note: tell what is new.'
         else if (NEEDS_FACTS.includes(kind) && facts === 0) problem = 'There are no approved facts about the product yet.'
         else if (waiting >= MIX_WAITING_CAP) problem = `${waiting} posts of this channel are waiting for you.`
         else if (state.lastError) problem = `The last try failed: ${state.lastError}`
       }
-      return { kind, enabled, everyDays, lastDraftAt: state.lastDraftAt, nextAt, problem }
+      return { kind, enabled, everyDays, review, lastDraftAt: state.lastDraftAt, nextAt, problem }
     })
     return { channelId, kinds, waiting, cap: MIX_WAITING_CAP, unusedUpdates: unused, blocked: mixBlocker(channel) }
   }
@@ -229,7 +234,7 @@ export class MixFlow implements MixService {
         if (mixBlocker(channel) !== null || waitingCount(this.core, channel.id) >= MIX_WAITING_CAP) continue
         // The kind that has waited longest goes first, so a kind with a short rhythm does not starve the others when only one slot is free.
         const now0 = this.core.clock.now().getTime()
-        const wanted = channel.settings.mix
+        const wanted = this.inForce(channel)
           .filter((entry) => entry.enabled)
           .map((entry) => ({ entry, due: dueAtMs(channel.id, entry.kind, entry.everyDays, this.state(channel.id, entry.kind).lastDraftAt, now0) }))
           .sort((a, b) => a.due - b.due)
@@ -291,6 +296,15 @@ export class MixFlow implements MixService {
   }
 
   // ───────────── parts ─────────────
+
+  /**
+   * The mix of a channel as it runs now: the owner's setting of each kind, or what the accepted change of the weekly review makes of it while
+   * that change is in force and the owner has not changed the setting since (owner's answer of 2026-11-28). Drafts only, as ever.
+   */
+  private inForce(channel: Channel): MixSetting[] {
+    const change = changeInForce(this.core, channel.productId)
+    return MIX_KINDS.map((kind) => ({ kind, ...rhythmInForce(ownRhythm(channel, kind), change?.plan.find((step) => step.channelId === channel.id && step.kind === kind)) }))
+  }
 
   private async prepare(channel: Channel, kind: MixKind, note: ProductUpdate | undefined): Promise<void> {
     if (kind === 'own_update') {

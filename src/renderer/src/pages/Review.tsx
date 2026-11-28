@@ -2,11 +2,13 @@ import { AnswerCheckCard } from './weekly/AnswerCheckCard'
 import { ListeningCard } from './weekly/ListeningCard'
 import { useState } from 'react'
 import { numbersLine } from '../../../shared/post-numbers'
+import { changeHint, planWords } from '../../../shared/mix-plan'
 import { groupRecaps } from '../../../shared/weekly-review'
 import type { Product, WeeklyReviewView } from '../../../shared/types'
 import { call, useAction, useQuery } from '../hooks'
 import { Badge, Button, Card, ErrorNote, Hint, Loading } from '../ui'
 import { AddressLink } from './AddressLink'
+import { KIND_WORDS } from './channels/mix-card'
 import { ProductScreen } from './ProductScreen'
 import { relativeTime } from './inbox/inbox-groups'
 import { shortTime } from './posts/short-time'
@@ -197,6 +199,19 @@ function Change({ view, productId }: { view: WeeklyReviewView; productId: string
             {state === 'declined' && <Badge>Declined</Badge>}
           </p>
           {change.why && <p className="muted">Why: {change.why}</p>}
+          {change.plan.length > 0 && (
+            <div className="weekly-plan" data-testid="weekly-plan">
+              <p className="muted">{state === 'accepted' ? 'What it changes in the plan of drafts, for the two weeks after this one:' : 'Accepting it also changes the plan of drafts, for the two weeks after this one:'}</p>
+              <ul>
+                {change.plan.map((step) => (
+                  <li key={`${step.channelId}-${step.kind}`}>
+                    <strong>{step.target}</strong> · {KIND_WORDS[step.kind].label}: {planWords(step)}
+                    {!step.applies && <span className="muted"> (not applied: you changed this setting since)</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <Hint>{change.byOwner ? 'Written by you.' : 'Proposed by the AI from the numbers above; you decide.'}</Hint>
         </>
       ) : (
@@ -233,7 +248,7 @@ function Change({ view, productId }: { view: WeeklyReviewView; productId: string
           </Button>
         </div>
       )}
-      <Hint>An accepted change is given to the AI as your direction when it proposes posts for this product, for the two weeks after this one. It changes no schedule and no content mix, and nothing is posted because of it.</Hint>
+      <Hint>{changeHint(change)}</Hint>
       <ErrorNote error={deciding.error} />
     </Card>
   )

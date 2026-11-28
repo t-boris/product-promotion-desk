@@ -1503,6 +1503,19 @@ Each of the twelve items read against the code, not against the earlier notes.
 - Found by the check and fixed (0.79.1): the note under Results and Overview said "no analytics service is connected" for every product; it now follows the product's choice ("Site visits": none, read from Plausible, or chosen and not read).
 - Unanswered questions of section 9 that block nothing built: an email list as a channel (4).
 
+## Plan after the owner's answers of 2026-11-28
+The owner answered the four open questions: the post in the link's tag: not now; the weekly review's accepted change changes the plan of publications too; an email list: not needed; a Threads topic is typed by the AI in the browser.
+### R1: the accepted change changes the plan of drafts (content mix) for two weeks
+- [x] the AI's review answer carries up to four plan steps in the mix's own words: a channel, a kind of post, and "more", "less" or "pause"; the application, not the AI, turns a step into days (more: half the days, less: twice, pause: off)
+- [x] a step is kept with what the channel's setting was and what it becomes (`weekly_reviews.plan_json`, lifecycle migration); it is in force exactly while the accepted change is (two weeks after the reviewed week) and only while the owner's own setting of that kind is unchanged: the owner's later edit wins
+- [x] the mix reads the setting in force; the channel's "Content mix" card says what the review changed and until when, and its form keeps showing and saving the owner's own values
+- [x] the review's change card lists what accepting changes in the plan, before the press; a change written by the owner changes no plan (it is free text)
+- [x] drafts only, as before (DEC-033): nothing is approved, scheduled or sent because of it
+- [x] tests, verify, decision, release, read-only look
+- Built as 0.80.0 (DEC-078). `src/shared/mix-plan.ts` holds the rules, `weekly-review.ts` asks for and keeps the steps, `mix.ts` runs on the rhythm in force. Unproven live: "Prepare the review" and "Accept for the next week" were not pressed on the owner's data (they call the AI and save).
+### R2: a topic typed into Threads by the AI browser
+- [ ] plan after reading the post mission and the draft's fields
+
 ## Plan after the owner's answers of 2026-11-27
 The owner answered: the kind of an account is asked per account with a guided connection in the internal browser; numbers under posts must be read on every channel; analytics is chosen per product (Google Analytics, Plausible or none).
 - [x] N1 (0.77.0, DEC-075; not yet seen on a real site) numbers under the owner's posts on channels worked through the browser (Instagram, Facebook, Threads): the AI browser opens the account's own posts and the numbers are kept like Reddit's (changes DEC-056)

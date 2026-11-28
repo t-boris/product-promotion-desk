@@ -179,7 +179,8 @@ export function kindStatus(kind: MixKindCard, context: { now: number; changed: b
   const dateOptions = { locale: context.locale, timeZone: context.timeZone }
   const last = kind.lastDraftAt ? `Last draft: ${shortDate(kind.lastDraftAt, context.now, dateOptions)}` : null
   if (context.changed) return { last, next: null, problem: null, unsaved: true }
-  if (!kind.enabled) return { last, next: null, problem: null, unsaved: false }
+  // While the weekly review's accepted change is in force, it decides whether drafts of this kind are prepared.
+  if (!(kind.review ? kind.review.enabled : kind.enabled)) return { last, next: null, problem: null, unsaved: false }
   if (kind.problem) return { last, next: null, problem: kind.problem, unsaved: false }
   if (context.blocked || !kind.nextAt) return { last, next: null, problem: null, unsaved: false }
   const due = Date.parse(kind.nextAt)
