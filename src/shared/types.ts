@@ -573,6 +573,9 @@ export interface GuideStep {
   link?: string
 }
 
+/** The key of an API account as it is written inside a sentence: its label in lower case, unless the label starts with a name ("Threads access token"). */
+export const keyNameOf = (api: { keyLabel: string; keyName?: string }): string => api.keyName ?? api.keyLabel.toLowerCase()
+
 export interface PlatformInfo {
   /** Connector id, e.g. "reddit" or "universal". */
   connectorId: string
@@ -589,7 +592,7 @@ export interface PlatformInfo {
   /** Where channels of the platform are found and chosen (a list or a search of communities, groups, accounts), opened in the account's own browser (DEC-028); empty when the platform has none. */
   browseUrl?: string
   /** Present when the platform can also be worked through its own API with a key the owner saves (DEC-055): a Telegram bot. */
-  api?: { accountKind: string; keyLabel: string; steps: GuideStep[] }
+  api?: { accountKind: string; keyLabel: string; keyName?: string; steps: GuideStep[]; onceSecret?: { label: string; hint: string } }
   /** The kinds of account the platform has (DEC-074); absent when it has one. */
   kinds?: AccountKindChoice[]
   /** How a browser account of the platform is connected, per kind; the key '' is for a kind not said yet, or a platform with no kinds (DEC-074). */

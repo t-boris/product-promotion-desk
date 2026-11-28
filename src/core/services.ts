@@ -143,6 +143,8 @@ export interface CoreServices {
   postMissions?: PostMissionService
   /** Implemented by the channels module; the monitor's watch flow has the AI look at a channel the app has no connector for, in the account's browser (DEC-042). */
   watchMissions?: WatchMissionService
+  /** Implemented by the channels module; the scheduler has it renew the keys of API accounts that end (a Threads access token, DEC-080). */
+  keys?: { renewDue(): Promise<number> }
   /** Implemented by the channels module; the quick-post helper has the AI search a platform for trends, in the account's browser, on the owner's press (REQ-004). */
   researchMissions?: ResearchMissionService
   /** How a picture of a post is fetched (the network and the name lookup); absent means the real ones. A seam for tests: nothing sets it in the application. */

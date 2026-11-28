@@ -1,6 +1,6 @@
 import { KIND_NOT_SAID } from '../../../../shared/connection-guide'
 import { useState, type FormEvent } from 'react'
-import type { Account, AccountRole, Mailbox, PlatformInfo, Profile, AccountAccess } from '../../../../shared/types'
+import { keyNameOf, type Account, type AccountRole, type Mailbox, type PlatformInfo, type Profile, type AccountAccess } from '../../../../shared/types'
 import { call, useAction } from '../../hooks'
 import { Button, ErrorNote, Field, Hint, useOpenForm } from '../../ui'
 import { chosenVia, eligibleVia, viaBlocker, viaOption } from './account-link'
@@ -124,10 +124,10 @@ export function CreateAccount({
         </Field>
       </div>
       {info?.api && (
-        <Field label="How the app works with it" hint={viaApi ? `The app posts, reads comments and answers through a ${info.api.accountKind} of yours, by itself and with no browser. You paste its ${info.api.keyLabel.toLowerCase()} on the account's page.` : `In the account's own browser, signed in as you. Choose the ${info.api.accountKind} to post on a schedule and read comments without a browser.`}>
+        <Field label="How the app works with it" hint={viaApi ? `The app posts, reads comments and answers through a ${info.api.accountKind} of yours, by itself and with no browser. You paste its ${keyNameOf(info.api)} on the account's page.` : `In the account's own browser, signed in as you. Choose the ${info.api.accountKind} to post on a schedule and read comments without a browser.`}>
           <select className="input" value={viaApi ? 'api' : 'browser'} onChange={(e) => setAccess(e.target.value === 'api' ? 'api' : 'browser')} data-testid="account-access">
             <option value="browser">In the account's browser</option>
-            <option value="api">{`Through a ${info.api.accountKind} (${info.label}'s own API)`}</option>
+            <option value="api">{`Through a ${info.api.accountKind} (${info.label}${info.label.endsWith('s') ? '’' : '’s'} own API)`}</option>
           </select>
         </Field>
       )}
@@ -218,7 +218,7 @@ export function CreateAccount({
         {createBlocker && <Hint data-testid="account-create-reason">{createBlocker}</Hint>}
       </div>
       <p className="muted small" data-testid="account-create-note">
-        {afterCreateNote(product, signsInWith !== undefined, viaApi ? (info?.api?.keyLabel ?? null) : null)}
+        {afterCreateNote(product, signsInWith !== undefined, viaApi && info?.api ? keyNameOf(info.api) : null)}
       </p>
       <ErrorNote error={state.error ?? proposing.error} />
     </form>

@@ -47,9 +47,9 @@ function nextStepThrough(account: Account, through: SignsInThrough): NextStep {
  * product's Channels screen the app returns there, and the address, the password and the sign-in wait (the sign-in is needed before the
  * channel is activated, not to connect it or to write a draft by hand).
  */
-export function afterCreateNote(product: { name: string | undefined } | null, linked = false, keyLabel: string | null = null): string {
+export function afterCreateNote(product: { name: string | undefined } | null, linked = false, keyName: string | null = null): string {
   // An account that works through its platform's API has one thing to set: its key.
-  if (keyLabel) return `After adding it you paste its ${keyLabel.toLowerCase()} on the account's page (Accounts section); the steps are written there. Then connect its channel.`
+  if (keyName) return `After adding it you paste its ${keyName} on the account's page (Accounts section); the steps are written there. Then connect its channel.`
   // A login that signs in through another account has no address and no password to set.
   if (linked) return product ? `After adding it you go back to the Channels screen of ${product.name ?? 'this product'} to connect a channel with this account. Its sign-in comes later, in the Accounts section: the AI signs in through the account you chose.` : 'After adding it you are told what to do next: let the AI sign in through the account you chose.'
   if (!product) return 'After adding it you are told what to do next: set the address and the password, then create the account on the platform or sign in.'

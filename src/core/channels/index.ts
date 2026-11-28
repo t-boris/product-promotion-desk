@@ -20,6 +20,7 @@ import { GoalIdeaService } from './goal-ideas'
 import { RoleSuggestionService } from './roles'
 import { AgentRunService } from './agent-runs'
 import { SignInService } from './sign-in'
+import { KeyRenewal } from './key-renewal'
 import { ChannelsStore } from './store'
 import { SuggestionService } from './suggestions'
 import { VaultService } from './vault'
@@ -57,6 +58,7 @@ export function register(core: Core): void {
   core.services.agent = agent
   core.services.postMissions = agent
   core.services.watchMissions = agent
+  core.services.keys = new KeyRenewal(core)
   core.services.researchMissions = agent
   core.services.channels = {
     markCapabilityVerified: (channelId, key, detail) => channels.markCapabilityVerified(channelId, key, detail),

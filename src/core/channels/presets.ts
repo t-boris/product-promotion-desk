@@ -119,7 +119,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
         },
         { text: 'Then connect its channel on the Channels screen: the address of the Page, like https://www.facebook.com/yourpage.' },
         {
-          text: 'A Page can also be worked with no browser, through Meta’s own API: posts go out by themselves at their time, and comments and the numbers under posts are read from Facebook. That is an account of its own: add an account, and under “How the app works with it” choose “Through a Page (Facebook\'s own API)”.'
+          text: 'A Page can also be worked with no browser, through Meta’s own API: posts go out by themselves at their time, and comments and the numbers under posts are read from Facebook. That is an account of its own: add an account, and under “How the app works with it” choose “Through a Page (Facebook’s own API)”.'
         }
       ],
       profile: [
@@ -223,7 +223,10 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
       '': [
         { text: 'Threads has no login of its own: this account signs in with its Instagram account (the step below). Its kind is the kind of that Instagram account.' },
         { text: 'Sign in (the Sign-in step below). The first time, Threads asks to make the Threads profile from the Instagram one: confirm it.' },
-        { text: 'Then connect its channel on the Channels screen: the address is the profile, like @yourbrand.' }
+        { text: 'Then connect its channel on the Channels screen: the address is the profile, like @yourbrand.' },
+        {
+          text: 'A Threads profile can also be worked with no browser, through Threads’ own API: posts of words go out by themselves at their time, with their topic, and replies and the numbers under posts are read from Threads. A picture or a video does not go that way. That is an account of its own: add an account, and under “How the app works with it” choose “Through a developer app (Threads’ own API)”.'
+        }
       ]
     },
     note: 'Short text posts. The platform restricts automation.'

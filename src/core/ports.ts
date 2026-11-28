@@ -405,6 +405,8 @@ export interface ConnectorContext {
   http: HttpPort
   /** The account's API key from the vault (a bot token); null when none is saved. Only an API connector asks, and it never logs or returns it. */
   apiKey(): Promise<string | null>
+  /** Waits, for a platform that asks for time between two requests of one send (a Threads container before it is published). */
+  pause(ms: number): Promise<void>
 }
 
 /** A file of a multipart form, read from the disk by its path as it is sent. */
@@ -442,10 +444,23 @@ export interface ApiAccess {
   accountKind: string
   /** What the key is called, e.g. "Bot token". */
   keyLabel: string
+  /** The key's name inside a sentence, when lowering the label would lower a name ("Threads access token"). */
+  keyName?: string
   /** What the owner does on the platform's side to get the key and let it work, in order; a step with an address opens in the account's own browser (DEC-074). */
   steps: GuideStep[]
   /** Whether a typed key looks like one, before it is saved. */
   keyLooksValid(key: string): boolean
+  /**
+   * A second secret asked beside the key and used once, to make the key last: it is sent to the platform with the key and kept nowhere (the
+   * secret of a Threads app, which turns a token of an hour into one of 60 days).
+   */
+  onceSecret?: { label: string; hint: string }
+}
+
+/** The key the vault keeps for an API account, and when the platform stops accepting it (null when the platform did not say). */
+export interface KeptKey {
+  key: string
+  expiresAt: string | null
 }
 
 export interface RemoteComment {
@@ -623,6 +638,14 @@ export interface Connector {
    * whose access is 'api', is never chosen by an address alone, uses no browser session, and carries every send of its channels itself.
    */
   api?: ApiAccess
+  /**
+   * Only on a connector whose keys end. What the vault keeps for a pasted key: the key itself, or the longer-lasting one the platform gives
+   * for it with the once-secret. It throws, in words for the owner, when the pasted key cannot be kept (it ended, or it is a short one and no
+   * secret came with it).
+   */
+  keyToKeep?(http: HttpPort, pasted: { key: string; secret: string | null }, now: Date): Promise<KeptKey>
+  /** Only on a connector whose keys end. Renews a kept key that nears its end; null when nothing is due yet. It throws when the platform refuses. */
+  renewKey?(http: HttpPort, key: string, now: Date): Promise<KeptKey | null>
   checkLogin(ctx: ConnectorContext): Promise<LoginState>
   /** Inspects the channel without publishing anything. Only actually verified capabilities may be 'verified'. */
   assess(ctx: ConnectorContext): Promise<Capability[]>

@@ -90,12 +90,13 @@ export class AccountsService {
     const email = args.email ? parseEmail(args.email) : null
     const mailboxId = email && args.mailboxId ? this.knownMailbox(args.mailboxId) : null
     const profileId = args.profileId ? this.profileFor(args.profileId, platform, null) : null
-    const via = this.signInThrough(platform, args.signsInVia, profileId)
     const access: AccountAccess = args.access === 'api' ? 'api' : 'browser'
+    // An account worked through the platform's API signs in nowhere: it has a key, and no other account to sign in through (Threads, DEC-080).
+    const via = access === 'api' ? null : this.signInThrough(platform, args.signsInVia, profileId)
     if (args.access !== undefined && args.access !== 'api' && args.access !== 'browser') throw new ApiError('invalid_input', 'An account works in its browser or through the platform\'s API.')
     if (access === 'api' && !connectorForPlatform(this.core.connectors, platform, 'api')) throw new ApiError('invalid_input', `The app has no API connection for "${platform}": this account works in its browser.`)
     const kind = this.parseKind(platform, access, args.kind)
-    const account = this.store.insertAccount(product?.id ?? null, platform, label, role, email, mailboxId, profileId, access === 'api' ? null : via, access, kind)
+    const account = this.store.insertAccount(product?.id ?? null, platform, label, role, email, mailboxId, profileId, via, access, kind)
     this.core.log.info('accounts', `Account created${product ? ` for "${product.name}"` : ''}: ${label} (${platform})${role ? `, role "${role.name}"` : ''}${email ? `, e-mail ${email}` : ''}${via ? `, signs in through ${this.account(via).label}` : ''}. Sign in through the account browser.`)
     this.core.events.changed('accounts', 'attention')
     return account

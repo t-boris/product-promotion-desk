@@ -1443,7 +1443,7 @@ One release per phase; each is verified (`npm run verify`), installed and read o
 - [x] D (0.55.0, with E) base for API connectors: network port, tokens in the vault, refresh, connect flow, own-post comment tracking, per-post numbers
 - [x] E (0.55.0) Telegram bot connector
 - [ ] F (0.56.0) Facebook Page connector
-- [ ] G (0.57.0) Threads connector
+- [x] G (0.57.0) Threads connector — built as 0.82.0 (DEC-080) for words, a link and a topic; pictures and video wait for D5; unproven live (no Meta app)
 - [ ] H (0.58.0) Instagram connector
 - [ ] I (0.59.0) X connector
 - [ ] J (0.60.0) Pinterest and LinkedIn, publishing only
@@ -1532,7 +1532,7 @@ The owner answered: the kind of an account is asked per account with a guided co
 - [x] N2 (0.76.0, DEC-074) the kind of an account, asked when it is created (Instagram: professional or personal; Facebook: Page or personal profile), kept per account
 - [x] N3 (0.76.0, DEC-074) a connection guide per platform and kind: numbered steps, each link opens the account's own browser at that page; Telegram bot guide in the same form
 - [x] N4 (0.75.0, DEC-073; Google Analytics is noted, not read) analytics per product: none, Plausible or Google Analytics; a "site visits" goal measure only when there is one
-- [ ] N5 (Facebook Page: 0.78.0, DEC-076; Threads and Instagram not built) phases F-H guides per account kind (what a business and a personal account can do through Meta's API), once the Meta proofs T2/T3 are done with the guide
+- [ ] N5 (Facebook Page: 0.78.0, DEC-076; Threads: 0.82.0, DEC-080; Instagram not built) phases F-H guides per account kind (what a business and a personal account can do through Meta's API), once the Meta proofs T2/T3 are done with the guide
 
 ## Phase F: a Facebook Page through Meta's own API (0.78.0)
 What Meta's documentation says (read 2026-11-27, sources in the plan document): a Page access token made from a long-lived token of the person does not end; a Page post takes words, a link and photos as files; comments are read and answered; a post made while the app is in Development mode is seen only by the people of the app, so the app has to be switched to Live. Nothing of this was tried with a real Page: the owner has no Meta app yet. Built like the Telegram bot (DEC-055): an account of its own with one key.
@@ -1566,3 +1566,17 @@ What Meta's documentation says (checked again 2026-11-27): a Page post made with
 - [x] posting times in the channel's settings (`postingSlots`, no table needed); pure `nextFreeSlot`; API `slots.get`, `slots.set`, `publications.enqueue`
 - [x] screens: Send at + "Next free time" on every unsent item; "Posting times" card on the channel page; lateness in Settings
 - [ ] tests, verify, release, lesson, deploy, read on the real screen
+
+## Phase G: a Threads profile through the Threads API (0.82.0, DEC-080)
+
+Why now: after 0.81.2 the goal's Stop hook named phases G-J as unbuilt. G was re-read against Meta's saved pages: only the source of a lasting token was undocumented, and the exchange (token of an hour + Threads app secret -> 60 days) and the renewal (no secret) are documented. So it is built on the documentation, as E and F were.
+
+- [x] `src/connectors/threads/` : `api.ts` (client, token calls), `connector.ts` (`threads-api`), `fake-threads.ts`, `threads.test.ts` (17 tests)
+- [x] the key form asks the "Threads app secret (optional)" beside the token (`ApiAccess.onceSecret`); `Connector.keyToKeep` decides what the vault keeps; the secret is kept nowhere
+- [x] `Connector.renewKey` + `src/core/channels/key-renewal.ts` + scheduler job `api-keys` (every 6 h, also while paused)
+- [x] an API account needs no account to sign in through (Threads signed in with Instagram even for the API way: found by the tests)
+- [x] a picture or a video is said before the send (`apiPictures: 'none'`, `apiVideos: 'none'` for Threads) and refused by the connector
+- [x] the browser guide of Threads points to the API choice; "Threads' own API", "Threads access token" written with the name's capital (`keyName`)
+- [x] verify (292 files, 6436 tests), decision DEC-080, own-instance look at the account's page (8 steps, two fields 619x28, no horizontal scroll)
+- [ ] with the owner's Meta app (Threads use case): the eight steps walked for real, a first post with a topic, a reply read and answered, the numbers read, a token renewed
+- [ ] not built: pictures and video (needs D5, a public address for the file), hiding a reply, the quota read, the token's end date on the account's page (it is in the Log)

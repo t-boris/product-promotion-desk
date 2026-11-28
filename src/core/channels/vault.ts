@@ -4,10 +4,10 @@
 // not a secret. Nothing here logs, emits or returns a password except `reveal`, which the web mode refuses.
 
 import { ApiError } from '../../shared/api'
-import type { Account, VaultStatus } from '../../shared/types'
+import { keyNameOf, type Account, type VaultStatus } from '../../shared/types'
 import { vaultUnavailableText } from '../../shared/vault-message'
 import type { Core } from '../core'
-import { SecretOpenError } from '../ports'
+import { SecretOpenError, type KeptKey } from '../ports'
 import { passwordKey, apiKeyKey } from '../vault'
 import { requireText } from './errors'
 import type { ChannelsStore } from './store'
@@ -87,20 +87,31 @@ export class VaultService {
    * Saves the key of an account that works through its platform's API (a bot token, DEC-055) and checks it with the platform at once: the account
    * becomes ready, with the name the platform gives it, or says why not. The key is kept only in the vault and is never shown again.
    */
-  async saveApiKey(args: { accountId: string; key: string }): Promise<Account> {
+  async saveApiKey(args: { accountId: string; key: string; secret?: string }): Promise<Account> {
     const account = this.accounts.account(args.accountId)
-    const api = account.access === 'api' ? this.core.connectors.list().find((c) => c.api !== undefined && c.platform === account.platform)?.api : undefined
-    if (!api) throw new ApiError('invalid_input', `${account.label} works in its browser: it has no API key to save.`)
+    const connector = account.access === 'api' ? this.core.connectors.list().find((c) => c.api !== undefined && c.platform === account.platform) : undefined
+    const api = connector?.api
+    if (!connector || !api) throw new ApiError('invalid_input', `${account.label} works in its browser: it has no API key to save.`)
     const key = typeof args.key === 'string' ? args.key.trim() : ''
-    if (key === '') throw new ApiError('invalid_input', `The ${api.keyLabel.toLowerCase()} is required.`)
-    if (key.length > MAX_API_KEY || !api.keyLooksValid(key)) throw new ApiError('invalid_input', `This does not look like a ${api.keyLabel.toLowerCase()}. Copy it whole from where the platform shows it.`)
+    if (key === '') throw new ApiError('invalid_input', `The ${keyNameOf(api)} is required.`)
+    if (key.length > MAX_API_KEY || !api.keyLooksValid(key)) throw new ApiError('invalid_input', `This does not look like a ${keyNameOf(api)}. Copy it whole from where the platform shows it.`)
     await this.requireAvailable()
-    try {
-      await this.core.secrets.set(apiKeyKey(account.id), key)
-    } catch {
-      throw new ApiError('vault_failed', `The ${api.keyLabel.toLowerCase()} could not be saved to the vault.`)
+    // A platform whose keys end is asked how long this one lasts, and for a longer one when the owner gave the secret that makes it. The secret is used here and kept nowhere.
+    const secret = api.onceSecret && typeof args.secret === 'string' && args.secret.trim() !== '' ? args.secret.trim() : null
+    let kept: KeptKey = { key, expiresAt: null }
+    if (connector.keyToKeep) {
+      try {
+        kept = await connector.keyToKeep(this.core.http, { key, secret }, this.core.clock.now())
+      } catch (error) {
+        throw new ApiError('invalid_input', error instanceof Error ? error.message : String(error))
+      }
     }
-    this.core.log.info('accounts', `A ${api.keyLabel.toLowerCase()} was saved for ${account.label}.`)
+    try {
+      await this.core.secrets.set(apiKeyKey(account.id), kept.key)
+    } catch {
+      throw new ApiError('vault_failed', `The ${keyNameOf(api)} could not be saved to the vault.`)
+    }
+    this.core.log.info('accounts', `A ${keyNameOf(api)} was saved for ${account.label}${kept.expiresAt ? `; it lasts until ${kept.expiresAt.slice(0, 10)} and the application renews it by itself` : ''}.`)
     this.core.events.changed('accounts')
     return this.accounts.checkLogin(account.id, { signInAgain: false })
   }

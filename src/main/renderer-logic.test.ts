@@ -3,6 +3,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import type { ApiEvent } from '../shared/api'
+import { keyNameOf } from '../shared/types'
 import type { Account, AgentRun, AnalysisStage, AttentionItem, Channel, ChannelPlan, Claim, GroupChannelOption, MixCard, MixKindCard, MixSetting, OpportunityCard, OpportunityState, PlatformInfo, PostGroup, PostGroupResult, PostVersion, Product, ProductUpdate } from '../shared/types'
 import { createFanOut } from '../renderer/src/fan-out'
 import { createProductChoiceStore, newestProduct, readLastProduct, resolveCurrentProduct, saveLastProduct, type ProductStorage } from '../renderer/src/current-product'
@@ -527,7 +528,8 @@ describe('the next step of an account', () => {
     expect(nextStep(account({ access: 'api' }), false, true)).toMatchObject({ block: 'key', text: expect.stringMatching(/save its key/) })
     expect(nextStep(account({ access: 'api' }), true, true).text).toMatch(/does not accept/)
     expect(nextStep(account({ access: 'api', status: 'ready', identity: '@bot' }), true, true)).toMatchObject({ block: null, text: expect.stringMatching(/no browser/) })
-    expect(afterCreateNote(null, false, 'Bot token')).toMatch(/paste its bot token/)
+    expect(afterCreateNote(null, false, keyNameOf({ keyLabel: 'Bot token' }))).toMatch(/paste its bot token/)
+    expect(afterCreateNote(null, false, keyNameOf({ keyLabel: 'Threads access token', keyName: 'Threads access token' }))).toMatch(/paste its Threads access token/)
   })
 
   it('does not ask for a password where the Mac keeps none', () => {

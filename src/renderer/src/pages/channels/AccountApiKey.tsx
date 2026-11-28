@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import type { Account, PlatformInfo, VaultUnavailable } from '../../../../shared/types'
+import { keyNameOf, type Account, type PlatformInfo, type VaultUnavailable } from '../../../../shared/types'
 import { vaultUnavailableText } from '../../../../shared/vault-message'
 import { call, useAction } from '../../hooks'
 import { Button, ErrorNote, Field, useMainVariant, useOpenForm } from '../../ui'
@@ -13,15 +13,17 @@ import { GuideSteps } from './ConnectionGuide'
 export function AccountApiKey({ account, api, unavailable, hasKey }: { account: Account; api: NonNullable<PlatformInfo['api']>; unavailable: VaultUnavailable | null; hasKey: boolean }) {
   const [editing, setEditing] = useState(!hasKey)
   const [key, setKey] = useState('')
+  const [secret, setSecret] = useState('')
   const saveVariant = useOpenForm(editing)
   const main = useMainVariant()
   const [save, saving] = useAction(async () => {
-    await call('vault.saveApiKey', { accountId: account.id, key })
+    await call('vault.saveApiKey', { accountId: account.id, key, ...(api.onceSecret && secret.trim() !== '' ? { secret } : {}) })
     setKey('')
+    setSecret('')
     setEditing(false)
   })
   const [check, checking] = useAction(() => call('accounts.checkLogin', { accountId: account.id }))
-  const name = api.keyLabel.toLowerCase()
+  const name = keyNameOf(api)
 
   if (unavailable) {
     return <AccountBlock step={1} title={api.keyLabel} testId={`vault-unavailable-${account.id}`} summary={<span className="muted">{vaultUnavailableText(unavailable)}</span>} />
@@ -74,6 +76,11 @@ export function AccountApiKey({ account, api, unavailable, hasKey }: { account: 
           <Field label={api.keyLabel} hint="Stored encrypted by the macOS keychain, only on this Mac. It is checked with the platform when you save it.">
             <input className="input" type="password" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" spellCheck={false} data-testid={`api-key-input-${account.id}`} />
           </Field>
+          {api.onceSecret && (
+            <Field label={`${api.onceSecret.label} (optional)`} hint={api.onceSecret.hint}>
+              <input className="input" type="password" value={secret} onChange={(e) => setSecret(e.target.value)} autoComplete="off" spellCheck={false} data-testid={`api-key-secret-${account.id}`} />
+            </Field>
+          )}
           <div className="row">
             <Button variant={saveVariant} type="submit" disabled={key.trim() === '' || saving.busy} data-testid={`api-key-save-${account.id}`}>
               {saving.busy ? 'Saving…' : `Save the ${name}`}

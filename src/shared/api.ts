@@ -349,7 +349,7 @@ export interface ApiMethods {
   /** Saves the login name and the password of an account. The password goes only to the vault, encrypted by the system keychain. */
   'vault.savePassword': [{ accountId: Id; loginName: string; password: string }, Account]
   /** Saves the key of an account that works through its platform's API (DEC-055) and checks it; the key is never returned. */
-  'vault.saveApiKey': [{ accountId: Id; key: string }, Account]
+  'vault.saveApiKey': [{ accountId: Id; key: string; secret?: string }, Account]
   'vault.removePassword': [{ accountId: Id }, Account]
   /** Local only: the saved password, for the owner to read. */
   'vault.revealPassword': [{ accountId: Id }, { password: string }]

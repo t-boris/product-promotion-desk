@@ -19,6 +19,8 @@ export interface PeriodicOptions {
   scanEveryMs: number
   /** How often the content mix looks for a draft that is due (DEC-033). */
   mixEveryMs: number
+  /** How often the keys of API accounts are looked at for renewal: one that ends in 60 days is renewed weeks before it does (DEC-080). */
+  keysEveryMs: number
   /** Delay before the startup reconciliation is retried after it failed. */
   gateRetryMs: number
   /** The same failing task logs at most once per this interval. */
@@ -30,6 +32,7 @@ export const DEFAULT_PERIODIC: PeriodicOptions = {
   metricsEveryMs: 60 * MINUTE_MS,
   scanEveryMs: MINUTE_MS,
   mixEveryMs: 5 * MINUTE_MS,
+  keysEveryMs: 6 * 60 * MINUTE_MS,
   gateRetryMs: 30_000,
   errorLogEveryMs: 10 * MINUTE_MS
 }
@@ -45,6 +48,7 @@ export class PeriodicTasks {
   private digestScanAtMs = 0
   private mixScanAtMs = 0
   private weeklyScanAtMs = 0
+  private keysScanAtMs = 0
   private halted = false
   /** Whether automation was paused at the last tick. */
   private pausedAtTick = false
@@ -132,6 +136,12 @@ export class PeriodicTasks {
         const handed = await keeper.keepOwnSchedules()
         if (handed > 0) this.core.log.info('scheduler', `${handed} scheduled post(s) handed to their platform's own schedule`)
       })
+    }
+    // A key that ends is renewed whether automation runs or not: a pause of weeks must not leave an account without one.
+    const { keys } = this.core.services
+    if (keys && (nowMs >= this.keysScanAtMs || this.keysScanAtMs - nowMs > this.options.keysEveryMs)) {
+      this.keysScanAtMs = nowMs + this.options.keysEveryMs
+      this.launch('api-keys', async () => void (await keys.renewDue()))
     }
     if (!paused) {
       const { sending, metrics } = this.core.services
