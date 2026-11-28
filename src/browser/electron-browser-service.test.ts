@@ -897,3 +897,53 @@ describe('page steps of the browser agent (DEC-017): real input first, a script 
     expect(agentContents().inputEvents).toEqual([])
   })
 })
+
+describe('tabbed account browser window (DEC-099)', () => {
+  it('opens new tabs via toolbar +, opens target=_blank links in new tabs, switches active tab for ownerPage/pageReport, and closes tabs cleanly', async () => {
+    const { service } = setup()
+    const acc = account('a')
+    await service.openForUser(acc, 'https://www.reddit.com/r/astrology/')
+    const win = created.windows[0]
+    const tab1 = created.views[0]
+    const bar = created.views[1]
+    tab1.webContents.pageTitle = 'r/astrology'
+
+    // Clicking '+' in toolbar opens a second tab at the active tab's origin inside the same window.
+    bar.webContents.windowOpenHandler?.({ url: `${TOOLBAR_COMMAND_ORIGIN}/new-tab` })
+    expect(created.windows).toHaveLength(1)
+    const tab2 = created.views[2]
+    expect(tab2.webContents.loaded).toEqual(['https://www.reddit.com/'])
+    tab2.webContents.pageTitle = 'Reddit Home'
+    expect(win.children).toEqual([tab2, bar])
+    expect(await service.ownerPage(acc)).toEqual({ url: 'https://www.reddit.com/', title: 'Reddit Home' })
+
+    // A site popup / target=_blank opens a third tab instead of replacing tab2.
+    expect(tab2.webContents.windowOpenHandler?.({ url: 'https://www.reddit.com/settings/' })).toEqual({ action: 'deny' })
+    const tab3 = created.views[3]
+    expect(tab3.webContents.loaded).toEqual(['https://www.reddit.com/settings/'])
+    tab3.webContents.pageTitle = 'Settings'
+    expect(await service.ownerPage(acc)).toEqual({ url: 'https://www.reddit.com/settings/', title: 'Settings' })
+
+    // Switching back to tab1 updates ownerPage and visible children.
+    bar.webContents.windowOpenHandler?.({ url: `${TOOLBAR_COMMAND_ORIGIN}/tab/t1` })
+    expect(win.children).toEqual([tab1, bar])
+    expect(await service.ownerPage(acc)).toEqual({ url: 'https://www.reddit.com/r/astrology/', title: 'r/astrology' })
+
+    // openForUser for a URL already open in an inactive tab switches to that tab without opening a new window.
+    await service.openForUser(acc, 'https://www.reddit.com/settings/')
+    expect(created.windows).toHaveLength(1)
+    expect(win.children).toEqual([tab3, bar])
+
+    // Closing tab3 switches back cleanly and destroys tab3's WebContents; window stays open.
+    bar.webContents.windowOpenHandler?.({ url: `${TOOLBAR_COMMAND_ORIGIN}/close-tab/t3` })
+    expect(tab3.webContents.destroyed).toBe(true)
+    expect(win.destroyed).toBe(false)
+
+    // Closing the remaining two tabs closes the window when the last tab closes.
+    bar.webContents.windowOpenHandler?.({ url: `${TOOLBAR_COMMAND_ORIGIN}/close-tab/t2` })
+    expect(win.destroyed).toBe(false)
+    bar.webContents.windowOpenHandler?.({ url: `${TOOLBAR_COMMAND_ORIGIN}/close-tab/t1` })
+    expect(win.destroyed).toBe(true)
+    expect(service.hasUserWindow(acc)).toBe(false)
+  })
+})

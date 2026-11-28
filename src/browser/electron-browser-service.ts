@@ -146,9 +146,9 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
     const target = normalizeBrowserUrl(url ?? this.latestAgent(entry)?.currentUrl() ?? '')
     const tabId = `account-${account.id}`
 
-    const same = [...entry.userWindows].find((window) => !window.isClosed() && window.address() === target)
+    const same = [...entry.userWindows].find((window) => window.focusAddress(target))
     if (same) {
-      same.focus()
+      entry.lastUsed = same
       return { tabId }
     }
 
@@ -159,6 +159,7 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
       partition: entry.partition,
       url: target,
       onAddress: (address) => this.ownerAddress(entry, address, 'page'),
+      onTabCreated: (contents) => this.watchConsole(contents, entry.recorder),
       onFocused: () => void (entry.lastUsed = window),
       onClosed: () => {
         entry.userWindows.delete(window)
@@ -169,7 +170,6 @@ export class ElectronBrowserService implements BrowserService, PageObserver {
     entry.userWindows.add(window)
     entry.lastUsed = window
     this.owners.set(entry.partition, entry)
-    this.watchConsole(window.siteContents(), entry.recorder)
     if (first) this.onUserWindowChange?.(account.id, 'opened')
     return { tabId }
   }

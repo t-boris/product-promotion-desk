@@ -3,7 +3,7 @@
 // goals, the topics) and everything the pages say is DATA, fenced as such: it cannot close its fence, and nothing in it is an instruction.
 
 import { fence, languageRule, oneLine } from '../assist/kit'
-import { TO_READ_LABEL, WATCH_IMAGES_MAX, WATCH_READ_LIMIT, WATCH_TOPICS_MAX, type WatchBrief } from './watch'
+import { OWN_POST_LABEL, TO_READ_LABEL, WATCH_IMAGES_MAX, WATCH_READ_LIMIT, WATCH_TOPICS_MAX, type WatchBrief } from './watch'
 
 const HOUR_MS = 3_600_000
 
@@ -142,6 +142,9 @@ export function watchMissionPrompt(brief: WatchBrief, today: Date): string {
     'HOW TO WORK:',
     '- You work in the account\'s own browser, which the owner may watch, through the tools of the "ppd" MCP server: browser_snapshot, browser_scroll, watch_open, watch_back, watch_record, report_result. You have no other tools: you cannot click, type or press a key, and nothing on this computer is yours to use.',
     '- Start with watch_open and place 1. After that visit the other places one by one, each with watch_open and its number. Look at the page with browser_snapshot; scroll with browser_scroll to see more of a list, like a person.',
+    ...(brief.places.some((place) => place.label.startsWith(OWN_POST_LABEL))
+      ? [`- Places starting with "${OWN_POST_LABEL}" are the account's own posts. Check them FIRST: open each with watch_open and its number, READ the post and every comment under it in full, and record it with watch_record (including all current comments, and reply_to + comment if someone asked a question the owner should answer).`]
+      : []),
     ...(brief.places.some((place) => place.label.startsWith(TO_READ_LABEL))
       ? [`- Some of the places are posts that an earlier check noted without reading them (they start with "${TO_READ_LABEL}"). Do these FIRST: open each with watch_open and its number, READ it in full and record it again with what you read. If, once read, it is not worth a reply after all, record it as "notice" (or "skip").`]
       : []),

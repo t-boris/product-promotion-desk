@@ -8,7 +8,27 @@
 
 import { ApiError } from '../../shared/api'
 import type { Account, Channel, Finding, Id } from '../../shared/types'
-import { READ_POST_MAX_CALLS, canonicalWatchUrl, TO_READ_LABEL, WATCH_FIRST_LOOK_MAX_CALLS, WATCH_KNOWN_LIMIT, WATCH_MAX_CALLS, WATCH_MAX_POSTS, WATCH_TIMEOUT_MS, WATCH_UNREAD_LIMIT, type WatchBody, type WatchBrief, type WatchItem, type WatchOutcome, type WatchStat, type WatchRecorded } from '../browser-agent/watch'
+import {
+  OWN_POST_LABEL,
+  OWN_POST_RECHECK_MS,
+  OWN_POST_WATCH_DAYS,
+  READ_POST_MAX_CALLS,
+  canonicalWatchUrl,
+  TO_READ_LABEL,
+  WATCH_FIRST_LOOK_MAX_CALLS,
+  WATCH_KNOWN_LIMIT,
+  WATCH_MAX_CALLS,
+  WATCH_MAX_POSTS,
+  WATCH_OWN_POSTS_LIMIT,
+  WATCH_TIMEOUT_MS,
+  WATCH_UNREAD_LIMIT,
+  type WatchBody,
+  type WatchBrief,
+  type WatchItem,
+  type WatchOutcome,
+  type WatchStat,
+  type WatchRecorded
+} from '../browser-agent/watch'
 import { MAX_LOOK_BACK_DAYS } from '../channels/settings'
 import { webPlaces } from '../channels/web-places'
 import { platformLabel } from '../../shared/post-format'
@@ -83,6 +103,10 @@ export class BrowserWatchFlow {
     const ready = await missions.watchReady(account.id)
     if (!ready.ready) return deferred(`The channel was not looked at: ${ready.reason ?? 'the AI cannot work in this account now'}`)
 
+    // B4 (DEC-099): register any confirmed standalone posts published on this channel so the AI checks comments under them first.
+    const siteHosts = webPlaces(channel).hosts
+    const syncedOwn = this.findings.syncOwnPublished(channel, account, siteHosts)
+
     const tally = { noted: 0, skipped: 0, known: 0 }
     const isOwn = this.ingestor.ownPostTest(channel, account)
     // The numbers a page shows for the posts on it (comments, score) refresh those of the posts known already.
@@ -117,7 +141,7 @@ export class BrowserWatchFlow {
     }
     // Whatever the look came to, what it recorded stands and the Feed shows it. The pictures it named are fetched in the background and show up when they are here.
     this.findings.pruneSkipped()
-    if (tally.noted + tally.skipped > 0) this.findings.notify()
+    if (tally.noted + tally.skipped + syncedOwn > 0) this.findings.notify()
     void this.pictures.fetchWaiting()
     if (tally.noted > 0) this.afterNew(channel.productId)
     return this.result(channel, outcome, startedAt.toISOString(), tally)
@@ -230,11 +254,18 @@ export class BrowserWatchFlow {
     // the newest posts first where the site has such a page (a Reddit community's own page shows its best posts, not what was written since the last look),
     // and never searches: the channel's queries only tell it what the owner follows, and "Look around" is where the owner asks for a search.
     // After them, the posts the AI called worth a reply before it read threads: it is sent to read them, a few at a time (see `FindingStore.unreadReplies`).
-    const recent = new Date(this.core.clock.now().getTime() - UNREAD_RECENT_MS).toISOString()
-    const unread = withUnread ? this.findings.unreadPosts(channel.id, WATCH_UNREAD_LIMIT, recent) : []
+    const nowMs = this.core.clock.now().getTime()
+    const recent = new Date(nowMs - UNREAD_RECENT_MS).toISOString()
+    // B4 (DEC-099): check comments under the account's own posts FIRST, before browsing the rest of the channel.
+    const ownSince = new Date(nowMs - OWN_POST_WATCH_DAYS * DAY_MS).toISOString()
+    const ownRecheckBefore = new Date(nowMs - OWN_POST_RECHECK_MS).toISOString()
+    const ownPosts = withUnread ? this.findings.ownPostsToWatch(channel.id, WATCH_OWN_POSTS_LIMIT, ownSince, ownRecheckBefore) : []
+    const ownUrls = new Set(ownPosts.map((post) => post.url))
+    const ownPlaces = ownPosts.map((post) => ({ label: `${OWN_POST_LABEL}: ${post.title}`, url: post.url }))
+    const unread = withUnread ? this.findings.unreadPosts(channel.id, WATCH_UNREAD_LIMIT, recent).filter((post) => !ownUrls.has(post.url)) : []
     this.findings.markOffered(channel.id, unread.map((post) => post.url))
     const toRead = unread.map((post) => ({ label: `${TO_READ_LABEL}: ${post.title}`, url: post.url }))
-    const places = [...(site.newest ? [{ label: `The newest posts of ${channel.target}`, url: site.newest }] : []), { label: `The channel's own page, ${channel.target}`, url: channel.url }, ...toRead]
+    const places = [...ownPlaces, ...(site.newest ? [{ label: `The newest posts of ${channel.target}`, url: site.newest }] : []), { label: `The channel's own page, ${channel.target}`, url: channel.url }, ...toRead]
     const queries = channel.settings.queries.filter((q) => q.trim() !== '')
     return {
       platform: platformLabel(channel.platform),
@@ -251,7 +282,7 @@ export class BrowserWatchFlow {
       firstLook,
       lookBackDays,
       since: new Date(since).toISOString(),
-      known: this.findings.recentUrls(channel.id, WATCH_KNOWN_LIMIT, recent),
+      known: this.findings.recentUrls(channel.id, WATCH_KNOWN_LIMIT, recent, ownUrls),
       maxPosts: WATCH_MAX_POSTS,
       maxCalls: firstLook ? WATCH_FIRST_LOOK_MAX_CALLS : WATCH_MAX_CALLS
     }

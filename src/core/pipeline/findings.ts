@@ -3,13 +3,13 @@
 // `opportunity_id`, set when a post was worth a reply and its ordinary `new_post` opportunity was opened (or was there already).
 
 import { ApiError } from '../../shared/api'
-import type { Finding, FindingCard, FindingComment, FindingCounts, FindingLabel, FindingPicture, FindingTag, Id } from '../../shared/types'
+import type { Account, Channel, Finding, FindingCard, FindingComment, FindingCounts, FindingLabel, FindingPicture, FindingTag, Id } from '../../shared/types'
 import type { Core } from '../core'
 import { newId, type Db } from '../db/database'
 import { mapFinding } from '../repos'
 import { oneLine } from '../assist/kit'
 import type { RemoteDiscussion } from '../ports'
-import { WATCH_IMAGES_MAX, WATCH_READ_TRIES, WATCH_REPLY_PREFIX, type WatchComment, type WatchItem, type WatchPicture } from '../browser-agent/watch'
+import { canonicalWatchUrl, OWN_POST_WATCH_DAYS, WATCH_IMAGES_MAX, WATCH_READ_TRIES, WATCH_REPLY_PREFIX, type WatchComment, type WatchItem, type WatchPicture } from '../browser-agent/watch'
 
 type Row = Record<string, unknown>
 type Bindable = string | number | null
@@ -133,10 +133,24 @@ export class FindingStore {
       }
       // A post found before the AI read it has a verdict and nothing behind it: when the AI now read it, what it read is kept (the verdict stays).
       if (item.about === '') return false
-      const unread = this.db.prepare(`SELECT id FROM findings WHERE channel_id = ? AND external_id = ? AND about = ''`).get(channelId, item.url) as { id: Id } | undefined
-      if (!unread) return false
-      this.applyRead(unread.id, item, now)
-      return true
+      const existing = this.db.prepare('SELECT id, about, is_own FROM findings WHERE channel_id = ? AND external_id = ?').get(channelId, item.url) as { id: Id; about: string; is_own: number } | undefined
+      if (!existing) return false
+      if (existing.about === '') {
+        this.applyRead(existing.id, item, now)
+        return true
+      }
+      // B4 (DEC-099): an own post already read once is re-checked for new comments. Refresh its comments, and mark it unseen if any new comment arrived.
+      if (existing.is_own === 1 || item.own) {
+        const before = this.thread(existing.id)
+        const seenComments = new Set(before.map((c) => `${c.author.trim().toLowerCase()}\n${c.text.trim()}`))
+        const hasNew = item.comments.some((c) => !seenComments.has(`${c.author.trim().toLowerCase()}\n${c.text.trim()}`))
+        this.applyRead(existing.id, { ...item, own: true }, now)
+        if (hasNew) {
+          this.db.prepare('UPDATE findings SET seen_at = NULL WHERE id = ?').run(existing.id)
+          return true
+        }
+      }
+      return false
     })()
   }
 
@@ -313,10 +327,66 @@ export class FindingStore {
   }
 
   /**
-   * The addresses of the channel's most recent findings (the ones a look in the browser is told it judged already), newest first. A post that waits to be read
-   * (see `unreadPosts`, with the same `since`) is not "judged": the look is sent to it by name.
+   * Registers recent confirmed standalone posts published on this channel (with a known `result_url` on the channel's hosts) as own findings
+   * (`is_own = 1`) so browser watching checks them first for new comments and shows them at the top of Feed (B4, DEC-099).
    */
-  recentUrls(channelId: Id, limit: number, since: string): string[] {
+  syncOwnPublished(channel: Channel, account: Account, hosts: readonly string[], windowDays = OWN_POST_WATCH_DAYS): number {
+    const since = new Date(this.core.clock.now().getTime() - windowDays * 86_400_000).toISOString()
+    const rows = this.db
+      .prepare(
+        `SELECT o.id AS opp_id, a.result_url AS url, COALESCE(a.completed_at, a.attempted_at) AS at
+           FROM send_actions a
+           JOIN opportunities o ON o.id = a.opportunity_id
+          WHERE o.channel_id = ? AND o.kind = 'standalone' AND a.state = 'confirmed'
+            AND a.result_url IS NOT NULL AND a.result_url <> ''
+            AND COALESCE(a.completed_at, a.attempted_at) >= ?
+          ORDER BY COALESCE(a.completed_at, a.attempted_at) DESC
+          LIMIT 20`
+      )
+      .all(channel.id, since) as { opp_id: Id; url: string; at: string }[]
+    if (rows.length === 0) return 0
+    const author = oneLine(account.identity ?? account.label, MAX_STORED_AUTHOR)
+    let added = 0
+    this.db.transaction(() => {
+      for (const row of rows) {
+        const url = canonicalWatchUrl(row.url, [...hosts])
+        if (!url) continue
+        const draft = this.core.repos.latestDraft(row.opp_id)
+        const firstLine = (draft?.text ?? '').split('\n').map((l) => l.trim()).find((l) => l !== '') ?? ''
+        const title = oneLine(draft?.title?.trim() || firstLine || 'Your post', MAX_STORED_TITLE)
+        const info = this.db
+          .prepare(
+            `INSERT INTO findings (id, product_id, channel_id, external_id, title, url, author, posted_at, stage, label, relation, about, thread, reply_to, suggested_comment, analysis, topics_json, read_at, is_own, first_look, opportunity_id, seen_at, starred_at, reply_count, score, stats_at, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'read', 'notice', 'Your own post — watching for new comments.', '', '', '', '', '', '[]', NULL, 1, 0, NULL, NULL, NULL, NULL, NULL, NULL, ?, ?)
+             ON CONFLICT (channel_id, external_id) DO UPDATE SET is_own = 1`
+          )
+          .run(newId(), channel.productId, channel.id, url, title, url, author, row.at, row.at, row.at)
+        if (info.changes > 0) added += 1
+      }
+    })()
+    return added
+  }
+
+  /**
+   * Recent own posts of this channel (`is_own = 1`) that should be checked first in browser watch for new comments (B4, DEC-099):
+   * never read yet, or last read before `recheckBefore`.
+   */
+  ownPostsToWatch(channelId: Id, limit: number, since: string, recheckBefore: string): { url: string; title: string }[] {
+    return this.db
+      .prepare(
+        `SELECT external_id AS url, title FROM findings
+          WHERE channel_id = ? AND is_own = 1 AND label = 'notice' AND created_at >= ?
+            AND (read_at IS NULL OR read_at < ?)
+          ORDER BY (read_at IS NULL) DESC, COALESCE(read_at, created_at) ASC, created_at DESC LIMIT ?`
+      )
+      .all(channelId, since, recheckBefore, limit) as { url: string; title: string }[]
+  }
+
+  /**
+   * The addresses of the channel's most recent findings (the ones a look in the browser is told it judged already), newest first. A post that waits to be read
+   * (see `unreadPosts`, with the same `since`) or an own post scheduled for comment refresh (`excludeUrls`) is not "judged": the look is sent to it by name.
+   */
+  recentUrls(channelId: Id, limit: number, since: string, excludeUrls?: ReadonlySet<string>): string[] {
     const rows = this.db
       .prepare(
         `SELECT external_id AS id FROM findings
@@ -324,7 +394,8 @@ export class FindingStore {
           ORDER BY created_at DESC, rowid DESC LIMIT ?`
       )
       .all(channelId, since, limit) as { id: string }[]
-    return rows.map((row) => row.id)
+    const urls = rows.map((row) => row.id)
+    return excludeUrls && excludeUrls.size > 0 ? urls.filter((u) => !excludeUrls.has(u)) : urls
   }
 
   /** A look was told to read these posts: each one has been offered once more (see `WATCH_READ_TRIES`). */

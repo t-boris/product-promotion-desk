@@ -592,3 +592,98 @@ describe('what is not looked at', () => {
     expect(x.ai.requests).toEqual([])
   })
 })
+
+describe('own posts first and comment watching on browser-watched channels (B4, DEC-099)', () => {
+  it('registers confirmed own posts, places them FIRST in brief.places, excludes them from known, and refreshes comments without creating opportunities', async () => {
+    const x = watched()
+    const nowIso = x.w.clock.now().toISOString()
+    // Seed one confirmed standalone publication with a result_url on Instagram.
+    x.w.core.db
+      .prepare(`INSERT INTO opportunities (id, channel_id, product_id, kind, source, state, destination, reason, created_at, updated_at) VALUES ('opp-own', ?, ?, 'standalone', 'comment', 'confirmed', 'https://www.instagram.com/natalmystic/', '', ?, ?)`)
+      .run(x.channelId, x.w.product.id, nowIso, nowIso)
+    x.w.core.db
+      .prepare(`INSERT INTO drafts (id, opportunity_id, title, text, link, attachments_json, markup, post_type, knowledge_version_id, used_claims_json, rationale, author, created_at) VALUES ('d-own', 'opp-own', 'My chart guide', 'How to read your rising sign', NULL, '[]', 'markdown', 'article', NULL, '[]', '', 'user', ?)`)
+      .run(nowIso)
+    x.w.core.db
+      .prepare(`INSERT INTO approvals (id, draft_id, content_hash, account_id, destination, approved_by, approved_at) VALUES ('ap-own', 'd-own', 'h', ?, 'https://www.instagram.com/natalmystic/', 'user', ?)`)
+      .run(x.w.account.id, nowIso)
+    x.w.core.db
+      .prepare(`INSERT INTO send_actions (id, opportunity_id, draft_id, approval_id, account_id, destination, content_hash, state, result_url, attempted_at, completed_at, authorization_basis) VALUES ('sa-own', 'opp-own', 'd-own', 'ap-own', ?, 'https://www.instagram.com/natalmystic/', 'h', 'confirmed', 'https://www.instagram.com/p/OWN1/?utm_source=ig', ?, ?, 'user approval')`)
+      .run(x.w.account.id, nowIso, nowIso)
+
+    // First look: own post is synced and placed FIRST in brief.places, never in known.
+    x.ai.script = (request) => {
+      expect(request.brief.places[0]).toEqual({ label: 'Your own post — check for new comments: My chart guide', url: 'https://www.instagram.com/p/OWN1' })
+      expect(request.brief.known).not.toContain('https://www.instagram.com/p/OWN1')
+      const res = request.record([
+        item('OWN1', {
+          url: 'https://www.instagram.com/p/OWN1',
+          title: 'My chart guide',
+          author: 'brand_account',
+          about: 'Our own guide on reading the rising sign.',
+          thread: 'One user asked a follow-up.',
+          comments: [{ author: '@luna', text: 'Does whole sign change the ascendant?', depth: 0, url: '' }]
+        })
+      ])
+      expect(res).toEqual({ stored: 1, known: 0 })
+      return done()
+    }
+    await check(x)
+
+    const store = new FindingStore(x.w.core)
+    const ownRow = x.w.core.db.prepare('SELECT id, is_own, seen_at FROM findings WHERE channel_id = ? AND external_id = ?').get(x.channelId, 'https://www.instagram.com/p/OWN1') as { id: string; is_own: number; seen_at: string | null }
+    expect(ownRow.is_own).toBe(1)
+    expect(store.thread(ownRow.id)).toHaveLength(1)
+
+    // Owner marks it seen; 2 hours later, a new comment arrives under our own post -> re-checked first, comments updated, marked unseen again!
+    store.markSeen([ownRow.id])
+    x.w.clock.advance(2 * 60 * MINUTE)
+    x.ai.script = (request) => {
+      expect(request.brief.places[0]?.url).toBe('https://www.instagram.com/p/OWN1')
+      expect(request.brief.known).not.toContain('https://www.instagram.com/p/OWN1')
+      const res = request.record([
+        item('OWN1', {
+          url: 'https://www.instagram.com/p/OWN1',
+          title: 'My chart guide',
+          author: 'brand_account',
+          about: 'Our own guide on reading the rising sign.',
+          thread: 'Two users commented.',
+          comments: [
+            { author: '@luna', text: 'Does whole sign change the ascendant?', depth: 0, url: '' },
+            { author: '@sol', text: 'Can I import my chart?', depth: 0, url: '' }
+          ]
+        })
+      ])
+      expect(res).toEqual({ stored: 1, known: 0 })
+      return done()
+    }
+    await check(x)
+    const afterNew = x.w.core.db.prepare('SELECT seen_at FROM findings WHERE id = ?').get(ownRow.id) as { seen_at: string | null }
+    expect(afterNew.seen_at).toBeNull()
+    expect(store.thread(ownRow.id).map((c) => c.author)).toEqual(['@luna', '@sol'])
+
+    // Owner marks seen again; 2 hours later, NO new comments -> stays seen and counts as known (no noise).
+    store.markSeen([ownRow.id])
+    x.w.clock.advance(2 * 60 * MINUTE)
+    x.ai.script = (request) => {
+      const res = request.record([
+        item('OWN1', {
+          url: 'https://www.instagram.com/p/OWN1',
+          title: 'My chart guide',
+          author: 'brand_account',
+          about: 'Our own guide on reading the rising sign.',
+          thread: 'Two users commented.',
+          comments: [
+            { author: '@luna', text: 'Does whole sign change the ascendant?', depth: 0, url: '' },
+            { author: '@sol', text: 'Can I import my chart?', depth: 0, url: '' }
+          ]
+        })
+      ])
+      expect(res).toEqual({ stored: 0, known: 1 })
+      return done()
+    }
+    await check(x)
+    const afterSame = x.w.core.db.prepare('SELECT seen_at FROM findings WHERE id = ?').get(ownRow.id) as { seen_at: string | null }
+    expect(afterSame.seen_at).not.toBeNull()
+  })
+})

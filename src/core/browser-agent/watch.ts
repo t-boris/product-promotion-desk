@@ -45,6 +45,14 @@ export const WATCH_UNREAD_LIMIT = 8
 export const WATCH_READ_TRIES = 3
 /** What a place of the brief that is such a post starts with: a post noted before (worth a reply, starred, or found in the last day or two) that nobody has read in full. */
 export const TO_READ_LABEL = 'A post noted before, not read yet'
+/** What a place of the brief that is one of the account's own posts starts with: checked FIRST for new comments (B4, DEC-099). */
+export const OWN_POST_LABEL = 'Your own post — check for new comments'
+/** How many recent own posts a browser watch check inspects first for new comments (B4). */
+export const WATCH_OWN_POSTS_LIMIT = 5
+/** How many days after publishing/finding an own post keeps getting checked for new comments in browser watch (B4). */
+export const OWN_POST_WATCH_DAYS = 14
+/** Minimum gap between two re-checks of the same own post for new comments (1 hour). */
+export const OWN_POST_RECHECK_MS = 60 * 60 * 1000
 export const WATCH_SKIP_RELATION = 'Not relevant to the product\'s goals.'
 const MAX_TITLE = 200
 /** What the AI may say of a post worth a reply (characters): the post, the thread, whom to answer, and the comment (which keeps its paragraphs). */

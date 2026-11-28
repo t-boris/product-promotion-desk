@@ -183,7 +183,15 @@ export class WebContentsView {
  */
 export class BaseWindow extends EventEmitter {
   readonly children: WebContentsView[] = []
-  readonly contentView = { addChildView: (view: WebContentsView) => void this.children.push(view) }
+  readonly contentView = {
+    addChildView: (view: WebContentsView) => {
+      if (!this.children.includes(view)) this.children.push(view)
+    },
+    removeChildView: (view: WebContentsView) => {
+      const idx = this.children.indexOf(view)
+      if (idx >= 0) this.children.splice(idx, 1)
+    }
+  }
   private shown = false
   opacity = 1
   mouseIgnored = false
