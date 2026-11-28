@@ -4,7 +4,7 @@
 // not a secret. Nothing here logs, emits or returns a password except `reveal`, which the web mode refuses.
 
 import { ApiError } from '../../shared/api'
-import { keyNameOf, type Account, type VaultStatus } from '../../shared/types'
+import { aKeyNameOf, keyNameOf, type Account, type VaultStatus } from '../../shared/types'
 import { vaultUnavailableText } from '../../shared/vault-message'
 import type { Core } from '../core'
 import { SecretOpenError, type KeptKey } from '../ports'
@@ -12,6 +12,7 @@ import { passwordKey, apiKeyKey } from '../vault'
 import { requireText } from './errors'
 import type { ChannelsStore } from './store'
 import type { AccountsService } from './accounts'
+import { rememberKeyTimes } from './key-renewal'
 
 const MAX_LOGIN_NAME = 200
 const MAX_PASSWORD = 256
@@ -94,7 +95,7 @@ export class VaultService {
     if (!connector || !api) throw new ApiError('invalid_input', `${account.label} works in its browser: it has no API key to save.`)
     const key = typeof args.key === 'string' ? args.key.trim() : ''
     if (key === '') throw new ApiError('invalid_input', `The ${keyNameOf(api)} is required.`)
-    if (key.length > MAX_API_KEY || !api.keyLooksValid(key)) throw new ApiError('invalid_input', `This does not look like a ${keyNameOf(api)}. Copy it whole from where the platform shows it.`)
+    if (key.length > MAX_API_KEY || !api.keyLooksValid(key)) throw new ApiError('invalid_input', `This does not look like ${aKeyNameOf(api)}. Copy it whole from where the platform shows it.`)
     await this.requireAvailable()
     // A platform whose keys end is asked how long this one lasts, and for a longer one when the owner gave the secret that makes it. The secret is used here and kept nowhere.
     const secret = api.onceSecret && typeof args.secret === 'string' && args.secret.trim() !== '' ? args.secret.trim() : null
@@ -111,7 +112,8 @@ export class VaultService {
     } catch {
       throw new ApiError('vault_failed', `The ${keyNameOf(api)} could not be saved to the vault.`)
     }
-    this.core.log.info('accounts', `A ${keyNameOf(api)} was saved for ${account.label}${kept.expiresAt ? `; it lasts until ${kept.expiresAt.slice(0, 10)} and the application renews it by itself` : ''}.`)
+    rememberKeyTimes(this.core.db, account.id, this.core.clock.now().toISOString(), kept.expiresAt)
+    this.core.log.info('accounts', `${aKeyNameOf(api).replace(/^a/, 'A')} was saved for ${account.label}${kept.expiresAt ? `; it lasts until ${kept.expiresAt.slice(0, 10)} and the application renews it by itself` : ''}.`)
     this.core.events.changed('accounts')
     return this.accounts.checkLogin(account.id, { signInAgain: false })
   }

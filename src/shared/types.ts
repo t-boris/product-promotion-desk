@@ -576,6 +576,12 @@ export interface GuideStep {
 /** The key of an API account as it is written inside a sentence: its label in lower case, unless the label starts with a name ("Threads access token"). */
 export const keyNameOf = (api: { keyLabel: string; keyName?: string }): string => api.keyName ?? api.keyLabel.toLowerCase()
 
+/** A key's name after its article: "a bot token", "an Instagram access token". */
+export const aKeyNameOf = (api: { keyName?: string; keyLabel: string }): string => {
+  const name = keyNameOf(api)
+  return `${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name}`
+}
+
 export interface PlatformInfo {
   /** Connector id, e.g. "reddit" or "universal". */
   connectorId: string

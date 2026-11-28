@@ -695,6 +695,8 @@ export interface PlatformForm {
   apiVideos?: 'none' | 'public_address'
   /** `public_address`: the same for a picture. */
   apiPictures?: 'public_address'
+  /** `jpeg`: through its API the platform takes a picture only as a JPEG file (Instagram). */
+  apiPictureKind?: 'jpeg'
   /** `required`: a post without a picture is refused by the platform (Instagram). A video can stand in for the picture where the platform takes one (`videos` is not `none`). */
   pictures: 'none' | 'optional' | 'required'
   maxPictures: number
@@ -718,7 +720,7 @@ const OTHER: PlatformForm = { format: 'plain', hasTitle: false, titleLimit: null
 /** What each platform of the application shows and holds. Limits are the platforms' published ones; a site that is not listed has none. */
 export const PLATFORM_FORMS: Record<string, PlatformForm> = {
   reddit: { format: 'markdown', hasTitle: true, titleLimit: 300, textLimit: 40_000, pictures: 'optional', maxPictures: 20, videos: 'optional', maxVideos: 1, link: 'field' },
-  instagram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 2_200, pictures: 'required', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_bio' },
+  instagram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 2_200, apiVideos: 'public_address', apiPictures: 'public_address', apiPictureKind: 'jpeg', pictures: 'required', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_bio' },
   facebook: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 63_206, apiVideos: 'none', pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text' },
   threads: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 500, apiVideos: 'public_address', apiPictures: 'public_address', pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text', topic: 'field' },
   x: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 280, pictures: 'optional', maxPictures: 4, videos: 'optional', maxVideos: 1, link: 'in_text' },
@@ -1024,6 +1026,10 @@ export function sendProblems(platform: string, rendered: RenderedPost, ways: Sen
   const viaPlace = (formOf(platform).apiPictures === 'public_address' && kinds.pictures > 0) || (formOf(platform).apiVideos === 'public_address' && kinds.videos > 0)
   if (ways.api && viaPlace && !ways.publicFiles) {
     problems.push(`${label} takes a picture or a video through its API only from an address on the internet. Set up “A place for files” in Settings (a storage bucket of your own), or take it off the post, or publish the post on ${label} yourself.`)
+  }
+  if (ways.api && formOf(platform).apiPictureKind === 'jpeg') {
+    const other = rendered.attachments.find((a) => !isVideoMime(a.mime) && a.mime !== 'image/jpeg')
+    if (other) problems.push(`${label} takes a picture through its API only as a JPEG file, and “${other.name}” is not one. Save it as JPEG and put that one on the post, or publish the post on ${label} yourself.`)
   }
   if (rendered.attachments.length > 0 && !ways.aiBrowser && !ways.api) {
     // A video is carried by the AI browser only: no connector of this application uploads one.

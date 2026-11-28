@@ -212,5 +212,17 @@ CREATE TABLE telegram_state (
 -- DEC-074: one of the platform's kinds (Instagram: professional or personal; Facebook: page or profile). NULL = not said, or one kind only.
 ALTER TABLE accounts ADD COLUMN kind TEXT;
 `
+  },
+  {
+    id: 212,
+    name: 'channels: when the key of an API account was saved or renewed, and when it ends',
+    sql: `
+-- DEC-082: a platform that gives no way to ask how long a key lasts (Instagram) is renewed by these times. The key itself is only in the vault.
+CREATE TABLE api_key_times (
+  account_id TEXT PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
+  changed_at TEXT NOT NULL,
+  expires_at TEXT
+);
+`
   }
 ]

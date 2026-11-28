@@ -477,6 +477,12 @@ export interface KeptKey {
   expiresAt: string | null
 }
 
+/** What the application remembers of a kept key: when it was saved or last renewed, and when it ends as far as the platform said. Null: not known. */
+export interface KeyTimes {
+  changedAt: string | null
+  expiresAt: string | null
+}
+
 export interface RemoteComment {
   externalId: string
   parentExternalId: string | null
@@ -658,8 +664,11 @@ export interface Connector {
    * secret came with it).
    */
   keyToKeep?(http: HttpPort, pasted: { key: string; secret: string | null }, now: Date): Promise<KeptKey>
-  /** Only on a connector whose keys end. Renews a kept key that nears its end; null when nothing is due yet. It throws when the platform refuses. */
-  renewKey?(http: HttpPort, key: string, now: Date): Promise<KeptKey | null>
+  /**
+   * Only on a connector whose keys end. Renews a kept key that nears its end; null when nothing is due yet. It throws when the platform refuses.
+   * `times` is what the application remembers of the key, for a platform that cannot be asked how long a key lasts.
+   */
+  renewKey?(http: HttpPort, key: string, now: Date, times: KeyTimes): Promise<KeptKey | null>
   checkLogin(ctx: ConnectorContext): Promise<LoginState>
   /** Inspects the channel without publishing anything. Only actually verified capabilities may be 'verified'. */
   assess(ctx: ConnectorContext): Promise<Capability[]>

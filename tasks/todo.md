@@ -1443,8 +1443,8 @@ One release per phase; each is verified (`npm run verify`), installed and read o
 - [x] D (0.55.0, with E) base for API connectors: network port, tokens in the vault, refresh, connect flow, own-post comment tracking, per-post numbers
 - [x] E (0.55.0) Telegram bot connector
 - [ ] F (0.56.0) Facebook Page connector
-- [x] G (0.57.0) Threads connector — built as 0.82.0 (DEC-080) for words, a link and a topic; pictures and video wait for D5; unproven live (no Meta app)
-- [ ] H (0.58.0) Instagram connector
+- [x] G (0.57.0) Threads connector — built as 0.82.0 (DEC-080), pictures and video as 0.83.0 through the place for files (DEC-081); unproven live (no Meta app)
+- [x] H (0.58.0) Instagram connector — built as 0.84.0 (DEC-082); unproven live (no Meta app, no bucket)
 - [ ] I (0.59.0) X connector
 - [ ] J (0.60.0) Pinterest and LinkedIn, publishing only
 
@@ -1532,7 +1532,7 @@ The owner answered: the kind of an account is asked per account with a guided co
 - [x] N2 (0.76.0, DEC-074) the kind of an account, asked when it is created (Instagram: professional or personal; Facebook: Page or personal profile), kept per account
 - [x] N3 (0.76.0, DEC-074) a connection guide per platform and kind: numbered steps, each link opens the account's own browser at that page; Telegram bot guide in the same form
 - [x] N4 (0.75.0, DEC-073; Google Analytics is noted, not read) analytics per product: none, Plausible or Google Analytics; a "site visits" goal measure only when there is one
-- [ ] N5 (Facebook Page: 0.78.0, DEC-076; Threads: 0.82.0, DEC-080; Instagram not built) phases F-H guides per account kind (what a business and a personal account can do through Meta's API), once the Meta proofs T2/T3 are done with the guide
+- [x] N5 (Facebook Page: 0.78.0, DEC-076; Threads: 0.82.0, DEC-080; Instagram: 0.84.0, DEC-082; the three guides are on the account's page, written from Meta's pages; the proof with a real app is the owner's) phases F-H guides per account kind (what a business and a personal account can do through Meta's API), once the Meta proofs T2/T3 are done with the guide
 
 ## Phase F: a Facebook Page through Meta's own API (0.78.0)
 What Meta's documentation says (read 2026-11-27, sources in the plan document): a Page access token made from a long-lived token of the person does not end; a Page post takes words, a link and photos as files; comments are read and answered; a post made while the app is in Development mode is seen only by the people of the app, so the app has to be switched to Live. Nothing of this was tried with a real Page: the owner has no Meta app yet. Built like the Telegram bot (DEC-055): an account of its own with one key.
@@ -1598,8 +1598,23 @@ Design:
 - [x] S2 settings + vault + API `fileHost.*` + Settings card + check
 - [x] S3 `ConnectorContext.publicFiles`, `sendWays`/`sendProblems`, Threads pictures and video
 - [x] S4 verify (6450 tests), DEC-081, release 0.83.0, own-instance look at the Settings card (empty, a refused address, saved, a check that got no answer; no overflow)
-- [ ] H Instagram connector (0.84.0)
+- [x] H Instagram connector (0.84.0, DEC-082)
 - [ ] I, J: after the research of X, Pinterest and LinkedIn documentation
 
 Review of 0.83.0: the place is `src/core/files/public-files.ts` (service, API `filePlace.*`), the store `src/core/net/s3.ts` (signing tested against the two examples of Amazon's documentation), the card `src/renderer/src/pages/FilePlaceCard.tsx`. Threads: one picture, one video, or 2-20 as one post (`is_carousel_item` items, then `CAROUSEL`); the words, the topic and the reply go on the container of the whole post. Unproven: a real store (S3, R2, B2), and whether Threads reads from an address with a signature in its query.
+
+## Phase H: an Instagram professional account through the Instagram API (plan 2026-11-28, 0.84.0)
+
+Built on Meta's saved pages (fact sheet of 2026-11-28, Instagram API with Instagram Login, host graph.instagram.com, v27.0), like E, F and G: nothing tried with a real app.
+
+- Account "Through a developer app (Instagram’s own API)"; the key is the access token the app dashboard generates ("Generate token"), which lasts 60 days. Meta's pages give no call that says when such a token ends, so the application remembers when a key was saved or renewed (table `api_key_times`, channels migration 212) and renews an Instagram token a day after it was saved and every week after that.
+- A post is one JPEG picture, one video (a reel, also shown in the feed) or 2-20 of them as a carousel, with the caption; every file goes through the place for files (DEC-081). No post of words only: Instagram has none.
+- Comments under the account's posts are read (50 newest per post, with their replies); a reply goes under a comment, a comment under the own post.
+- Numbers: likes and comments from the post itself, views from its insights; followers from the profile.
+- Not built: stories, alt text, tags of people and places, hiding or deleting a comment, the publishing quota read, the resumable upload (Meta gives it to Facebook Login only).
+
+- [x] H1 `api_key_times` + `KeyTimes` given to `renewKey`; saved at `vault.saveApiKey`, kept by `KeyRenewal`
+- [x] H2 `src/connectors/instagram/` (api, connector, fake server, tests)
+- [x] H3 post form: pictures and video through the place, JPEG only said before the approval; guide steps; the Threads browser guide no longer says a picture does not go through the API
+- [x] H4 verify (6465 tests), DEC-082, own-instance look at the account's page (8 steps, one token field, no overflow), release 0.84.0
 

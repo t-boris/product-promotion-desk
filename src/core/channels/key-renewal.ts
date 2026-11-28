@@ -1,6 +1,19 @@
 import type { Core } from '../core'
 import { keyNameOf } from '../../shared/types'
+import type { Db } from '../db/database'
+import type { KeyTimes } from '../ports'
 import { apiKeyKey } from '../vault'
+
+/** What is remembered of an account's key: when it was saved or last renewed, and when it ends as far as the platform said. */
+export function keyTimesOf(db: Db, accountId: string): KeyTimes {
+  const row = db.prepare('SELECT changed_at AS changedAt, expires_at AS expiresAt FROM api_key_times WHERE account_id = ?').get(accountId) as KeyTimes | undefined
+  return row ?? { changedAt: null, expiresAt: null }
+}
+
+/** Remembers that the key of an account was saved or renewed now. */
+export function rememberKeyTimes(db: Db, accountId: string, changedAt: string, expiresAt: string | null): void {
+  db.prepare('INSERT INTO api_key_times (account_id, changed_at, expires_at) VALUES (?, ?, ?) ON CONFLICT(account_id) DO UPDATE SET changed_at = excluded.changed_at, expires_at = excluded.expires_at').run(accountId, changedAt, expiresAt)
+}
 
 /**
  * Keys that end (a Threads access token lasts 60 days) are renewed by the application before they do: each API account whose connector can
@@ -23,9 +36,11 @@ export class KeyRenewal {
         if (!this.core.secrets.has(apiKeyKey(account.id))) continue
         const key = await this.core.secrets.get(apiKeyKey(account.id))
         if (!key) continue
-        const next = await connector.renewKey(this.core.http, key, this.core.clock.now())
+        const now = this.core.clock.now()
+        const next = await connector.renewKey(this.core.http, key, now, keyTimesOf(this.core.db, account.id))
         if (!next) continue
         await this.core.secrets.set(apiKeyKey(account.id), next.key)
+        rememberKeyTimes(this.core.db, account.id, now.toISOString(), next.expiresAt)
         renewed += 1
         this.core.log.info('accounts', `The ${name} of ${account.label} was renewed${next.expiresAt ? `; it lasts until ${next.expiresAt.slice(0, 10)}` : ''}.`)
       } catch (error) {

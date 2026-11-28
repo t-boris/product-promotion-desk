@@ -73,7 +73,10 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
           url: INSTAGRAM_SETTINGS,
           link: 'Open Instagram’s settings'
         },
-        INSTAGRAM_CHANNEL
+        INSTAGRAM_CHANNEL,
+        {
+          text: 'A professional account can also be worked with no browser, through Instagram’s own API: posts with their pictures or video go out by themselves at their time, and comments and the numbers under posts are read from Instagram. Each picture goes through your place for files (Settings). That is an account of its own: add an account, and under “How the app works with it” choose “Through a developer app (Instagram’s own API)”.'
+        }
       ],
       personal: [
         SIGN_IN('Instagram'),
@@ -225,7 +228,7 @@ export const PLATFORM_PRESETS: PlatformPreset[] = [
         { text: 'Sign in (the Sign-in step below). The first time, Threads asks to make the Threads profile from the Instagram one: confirm it.' },
         { text: 'Then connect its channel on the Channels screen: the address is the profile, like @yourbrand.' },
         {
-          text: 'A Threads profile can also be worked with no browser, through Threads’ own API: posts of words go out by themselves at their time, with their topic, and replies and the numbers under posts are read from Threads. A picture or a video does not go that way. That is an account of its own: add an account, and under “How the app works with it” choose “Through a developer app (Threads’ own API)”.'
+          text: 'A Threads profile can also be worked with no browser, through Threads’ own API: posts of words go out by themselves at their time, with their topic, and replies and the numbers under posts are read from Threads. A picture or a video goes that way through your place for files (Settings). That is an account of its own: add an account, and under “How the app works with it” choose “Through a developer app (Threads’ own API)”.'
         }
       ]
     },
