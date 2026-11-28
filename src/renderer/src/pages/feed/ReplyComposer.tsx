@@ -4,6 +4,7 @@ import type { FindingSendResult } from '../../../../shared/api'
 import { AiProgressPanel } from '../../AiProgress'
 import { call, useAction, useQuery } from '../../hooks'
 import { Button, ErrorNote, Hint } from '../../ui'
+import { useReplyPrice } from '../review/send-ways'
 import { OpenChannelBrowser } from '../channels/OpenChannelBrowser'
 import { FullReply } from './FullReply'
 import { ReplyActions } from './ReplyActions'
@@ -40,6 +41,7 @@ export function ReplyComposer({ finding, place, comments, initialWish = '', onCl
 
   const comment = place === 'post' ? null : (comments.find((c) => c.position === place) ?? null)
   const replies = useQuery('findings.replies', { id: finding.id }, ['opportunities'])
+  const replyPrice = useReplyPrice(finding.channelId)
   const here = replies.data?.places.find((p) => p.position === (place === 'post' ? null : place)) ?? null
   const [result, setResult] = useState<FindingSendResult | null>(null)
   const [attempt, setAttempt] = useState<Doing>('send')
@@ -205,6 +207,11 @@ export function ReplyComposer({ finding, place, comments, initialWish = '', onCl
                   ? 'Could not copy: select the text and copy it yourself.'
                   : sendNote(replies.data?.accountLabel ?? '', placeLabel(place, finding.author, comments))}
           </span>
+          {replyPrice && (
+            <span className="muted small" data-testid="reply-price">
+              {replyPrice}
+            </span>
+          )}
           {(posting.busy || planning.busy) && <AiProgressPanel />}
           {line && (
             <Hint tone={line.tone === 'good' ? undefined : 'warn'} data-testid="reply-send-result" data-state={result?.state}>

@@ -29,6 +29,15 @@ describe('withInboxVerdict', () => {
     expect(get(result, 'read_posts').status).toBe('verified') // nothing else is touched
     expect(result).toHaveLength(list.length)
   })
+
+  it('keeps the connector\'s own reason when the connector itself says the inbox is unavailable', () => {
+    // A Page or a profile worked through an API: replies are read as comments under the account's posts, and the general reason would deny it.
+    const own = 'Replies arrive as replies to the account\'s posts.'
+    const list = normalizeAssessment(blankCapabilities(), [cap('read_inbox', 'unavailable', own)], AT)
+    expect(get(withInboxVerdict(list, false, AT), 'read_inbox')).toEqual({ key: 'read_inbox', status: 'unavailable', detail: own, checkedAt: AT })
+    const silent = normalizeAssessment(blankCapabilities(), [cap('read_inbox', 'unavailable', ' ')], AT)
+    expect(get(withInboxVerdict(silent, false, AT), 'read_inbox').detail).toBe(NO_INBOX_REASON)
+  })
 })
 
 describe('channels.assess and the inbox', () => {

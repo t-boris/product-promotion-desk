@@ -410,6 +410,8 @@ export interface ApiMethods {
   'channels.assess': [{ channelId: Id }, Channel]
   /** How a post to the channel would go out if the owner pressed Send: what the approval judges it by, for the preview to judge it the same. */
   'channels.sendWays': [{ channelId: Id }, SendWays]
+  /** What the channel's platform charges the owner's developer app for an answer sent now, in words; null where an answer costs nothing. */
+  'channels.replyPrice': [{ channelId: Id }, string | null]
   'channels.updateSettings': [{ channelId: Id; settings: Partial<ChannelSettings> }, Channel]
   'channels.setMode': [{ channelId: Id; mode: ChannelMode }, Channel]
   /** Runs the first observation cycle (baseline) and sets the channel active. */

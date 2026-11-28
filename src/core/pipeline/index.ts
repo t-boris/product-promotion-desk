@@ -5,6 +5,7 @@ import { buildResultsHistory, buildResultsView } from './results'
 import { listHistory } from './history'
 import { MetricsServiceImpl, refreshTracked } from './metrics'
 import { registerFlow } from './register-flow'
+import { sendPriceNote } from '../../shared/post-format'
 import { sendWays } from './send-ways'
 import { ApiError } from '../../shared/api'
 
@@ -44,6 +45,15 @@ export function register(core: Core): void {
       } catch {
         throw new ApiError('not_found', `Channel not found: ${channelId}`)
       }
+    },
+    'channels.replyPrice': ({ channelId }) => {
+      let channel
+      try {
+        channel = core.repos.channel(channelId)
+      } catch {
+        throw new ApiError('not_found', `Channel not found: ${channelId}`)
+      }
+      return sendPriceNote(channel.platform, { text: '', link: null }, sendWays(core, undefined, channel), 'reply')
     },
     'results.readPosts': ({ channelId }) => sendingOf(core).readPostResultsNow(channelId),
     'overview.get': (args) => buildOverview(core, args),

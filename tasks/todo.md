@@ -1673,3 +1673,16 @@ Facts (X's pages saved 2026-11-28): the API is paid per use (a post $0.015, a po
 - [x] X5 verify (6502 tests), DEC-086, own-instance look, release 0.87.0 (installed; the start line read on the real application, no errors)
 
 Review of 0.87.0: the sign-in is `src/core/net/sign-in-listener.ts` (one waiting sign-in at a time on `127.0.0.1:47821`, only the answer with the right random word is taken) and `Vault.signIn` / `stopSignIn`; the renewal on use is `KeyRenewal.current` behind `ConnectorContext.apiKey()`, in one line per account. The connector is `src/connectors/x/`, its fake `fake-x.ts` checks the PKCE challenge and uses a refresh token once. Seen in an own instance with scratch data: the account's page (four steps, “Client ID”, “Sign in with X” disabled until the id is typed), the wait (“Waiting for you in the browser window…”, “Stop waiting”, the listener answering 404 to a wrong word and closed after the stop), the price line of a new post; no sideways scroll. Found while writing the price: the numbers of a post are read for 30 days on every channel, and X charges a post once for each day it is read, so a post costs about $0.15 more than its $0.015; the steps, the channel's capability and the preview say so. Open for the owner: read the numbers on X for fewer days, or not at all. Unproven: everything with a real X app (the sign-in page, the callback, the upload, the prices).
+
+## Phase I, part 2: replies on X read and answered (2026-11-28, 0.88.0, DEC-087)
+
+Why: the plan's phase I says "replies read through own mentions", at X's own-data price ($0.001), which the owner approved with the plan; 0.87.0 left it out on my own caution about paid reading.
+
+- [x] the connector keeps the account's posts, answers and the posts that name it (30 days), asks only for what is newer; `fetchActivity`, `fetchThread` (an older post by its id), the channel is read
+- [x] an answer under a reply; X's refusal said with its rule; a lost answer found under the reply by its words
+- [x] numbers from the account's own list of posts (`since_id` / `until_id`, without answers and reposts)
+- [x] the price of an answer where it is approved: `channels.replyPrice`, `useReplyPrice`, the review card and the Feed's answer
+- [x] the channel's card keeps a connector's own reason for an inbox that is not read (`inboxReasonOf`): also Facebook, Instagram and Threads channels worked through an API
+- [x] verify (6505 tests), DEC-087, own-instance look (account page, channel page, the two price lines asked of the application), release 0.88.0
+
+Review: the reading is `XApiConnector.talk` (in memory, by the signed-in user's id). After each start the 30 days are read once in full. Not seen on a screen: the price line on a review card of a reply and in the Feed's answer (no X conversation can be made in an own instance without a real X app); the line's words are tested through the route. Unproven: everything with a real X app, proof T4 included.

@@ -8,7 +8,7 @@ import { TranslateDraft } from './TranslateDraft'
 import { useAssistBlock } from '../../assist/useAssistBlock'
 import { FileLoader } from '../../FileLoader'
 import { call } from '../../hooks'
-import { useSendWays } from './send-ways'
+import { useReplyPrice, useSendWays } from './send-ways'
 import { Badge, Button, Field } from '../../ui'
 import { FoundSources } from './FoundSources'
 import { foundForAnswer, keepFound, type FoundFor } from './found-sources'
@@ -78,6 +78,8 @@ interface Props {
    * that has a card) or the channel (a new publication). Left out, the editor has no AI control (a draft that can no longer change).
    */
   ai?: { opportunityId?: Id; channelId?: Id }
+  /** A reply: the channel it goes out on, so what the platform charges for an answer is said under the text. Left out for a post, whose preview says its price. */
+  replyOn?: Id
   /** A post is written in the post editor (DEC-030): the product whose library holds its pictures, and the platform the preview shows it as. */
   post?: {
     productId: Id
@@ -93,8 +95,9 @@ interface Props {
 }
 
 /** Editor for a reply or a publication. Editing never changes what was approved: saving creates a new draft. */
-export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFocus = false, ai, post }: Props) {
+export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFocus = false, ai, post, replyOn }: Props) {
   const ways = useSendWays(post?.waysOf)
+  const replyPrice = useReplyPrice(replyOn)
   const editor = usePostEditor(form, onChange, post?.productId ?? '')
   const inEditor = withTitle && post !== undefined
   // The part of the text that is selected, for "Change a part" (the AI changes only that part).
@@ -187,6 +190,11 @@ export function DraftEditor({ form, onChange, withTitle, disabled, draft, autoFo
         <>
           {textField}
           <FoundSources sources={shownFound?.sources ?? []} />
+          {replyPrice && (
+            <p className="muted small" data-testid="reply-price">
+              {replyPrice}
+            </p>
+          )}
         </>
       )}
       {ai && <TranslateDraft title={form.title} text={form.text} disabled={disabled || blocked !== null} onTranslated={(translated) => set(withTitle ? translated : { text: translated.text })} />}

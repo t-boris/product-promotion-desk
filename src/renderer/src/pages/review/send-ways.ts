@@ -11,3 +11,12 @@ export function useSendWays(channelId: Id | null | undefined): SendWays | undefi
   const ways = useQuery('channels.sendWays', { channelId: channelId ?? '' }, ['settings', 'channels', 'accounts'], { skip: !channelId })
   return channelId ? ways.data : undefined
 }
+
+/**
+ * What an answer on the channel costs the owner's developer app, in the application's words; null where an answer costs nothing, without a
+ * channel, and until the answer comes. Asked of the application, so the screen need not know which platform charges.
+ */
+export function useReplyPrice(channelId: Id | null | undefined): string | null {
+  const price = useQuery('channels.replyPrice', { channelId: channelId ?? '' }, ['settings', 'channels', 'accounts'], { skip: !channelId })
+  return channelId ? (price.data ?? null) : null
+}

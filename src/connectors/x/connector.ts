@@ -3,10 +3,10 @@ import type { Capability, CapabilityKey, CapabilityStatus, Channel, MetricReadin
 import type { PostNumbers } from '../../shared/post-numbers'
 import { HttpNoAnswerError } from '../../core/net/http'
 import { SIGN_IN_CALLBACK } from '../../core/net/sign-in-listener'
-import type { ActivityBatch, ApiAccess, ChannelGuide, Connector, ConnectorContext, HttpPort, KeptKey, KeyTimes, LoginState, NormalizedTarget, PublishedRef, PublishOutcome, PublishRequest, RemoteDiscussion, SendTicket, SignInAnswer, SignInAsk } from '../../core/ports'
+import type { ActivityBatch, ApiAccess, ChannelGuide, Connector, ConnectorContext, HttpPort, KeptKey, KeyTimes, LoginState, NormalizedTarget, PublishedRef, PublishOutcome, PublishRequest, RemoteComment, RemoteDiscussion, SendTicket, SignInAnswer, SignInAsk } from '../../core/ports'
 import { earliestCreation } from '../reconcile'
 import { sameText } from '../text'
-import { XApi, X_AUTHORIZE, X_SCOPES, askToken, looksLikeClientId, type XAnswer, type XPost, type XToken, type XUser } from './api'
+import { XApi, X_AUTHORIZE, X_SCOPES, askToken, looksLikeClientId, type XAnswer, type XList, type XPost, type XToken, type XUser } from './api'
 
 export const X_API_CONNECTOR_ID = 'x-api'
 
@@ -17,8 +17,54 @@ const PICTURES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const GIF = 'image/gif'
 /** An access token is taken as ended this long before its end, so a request never carries one that ends on the way. */
 const RENEW_AHEAD_MS = 5 * 60_000
-/** How many posts' numbers one request asks for. */
-const MOST_IDS = 100
+/** How far back the account's posts and what was written to it are read: as long as the numbers of a post are. */
+const WINDOW_MS = 30 * 24 * 3_600_000
+/** One page of a reading, and how many pages one reading asks for at most. */
+const PAGE = '100'
+const MOST_PAGES = 5
+/** How many of the account's posts one check of the channel gives. */
+const FEED_LIMIT = 25
+/** What is asked of every post that is read as a part of a conversation. */
+const TALK_FIELDS = 'created_at,author_id,conversation_id,in_reply_to_user_id,referenced_tweets'
+
+/**
+ * What is read of an account: its own posts and answers, and what was written to it, of the last 30 days. Kept while the application runs, so
+ * X is asked only for what is newer than what is here: X charges for every post it gives, once a day.
+ */
+interface Talk {
+  /** The id of the user it was read for: another one signing in starts anew. */
+  who: string
+  own: Map<string, XPost>
+  said: Map<string, XPost>
+  /** The handle of each person who wrote, by their id. */
+  names: Map<string, string>
+}
+
+const isId = (id: unknown): id is string => typeof id === 'string' && /^\d{1,25}$/.test(id)
+
+const iso = (time: string | undefined): string | null => (time && !Number.isNaN(Date.parse(time)) ? new Date(Date.parse(time)).toISOString() : null)
+
+/** The newest of the posts, by its id: ids grow with time. */
+function newestOf(posts: Map<string, XPost>): string | null {
+  let top: bigint | null = null
+  for (const id of posts.keys()) {
+    const value = BigInt(id)
+    if (top === null || value > top) top = value
+  }
+  return top === null ? null : top.toString()
+}
+
+/** The post another one answers; null for a post that starts a conversation. */
+const answered = (post: XPost): string | null => {
+  const id = post.referenced_tweets?.find((ref) => ref.type === 'replied_to')?.id
+  return isId(id) ? id : null
+}
+
+/** A reply as X's pages show it: without the names it begins with, which X puts there for the people it answers. */
+const withoutNames = (text: string): string => text.replace(/^(?:@\w{1,15}\s+)+/, '')
+
+/** X writes every address in a post as a short one of its own, and adds one for a picture: words are compared without addresses. */
+const plain = (value: string): string => withoutNames(value).replace(/https?:\/\/\S+/g, ' ').replace(/\s+/g, ' ').trim()
 
 const HOST = /^(?:https?:\/\/)?(?:www\.|mobile\.)?(?:x|twitter)\.com\//i
 /** First words of an address that are pages of X itself, not a profile. */
@@ -68,6 +114,9 @@ function parseKept(key: string): Kept | null {
 
 type Refusal = Extract<XAnswer<unknown>, { ok: false }>
 
+/** The signed-in user, whose handle X named. */
+type Me = XUser & { username: string }
+
 const signInAgain = (said: string): Error => Object.assign(new Error(`X no longer accepts the saved sign-in (${said}). Press “Sign in with X” on the account's page again.`), { name: 'LoginRequiredError' })
 
 /** What X refused, in words. */
@@ -90,7 +139,8 @@ function keptFrom(clientId: string, token: XToken, now: Date): KeptKey {
   return { key: JSON.stringify({ c: clientId, a: token.access_token, r: token.refresh_token } satisfies Kept), expiresAt: new Date(now.getTime() + lasts * 1000).toISOString() }
 }
 
-const NOT_READ = 'Replies and mentions are not read through X\'s API by this application: X charges for every post read, and lets an app reply only to a person who mentioned the account. Read and answer them on X.'
+/** X's rule for an answer made through its API (its pages on making posts, read 2026-11-28). */
+const REPLY_RULE = 'X lets an app answer only a post that names the account, as a reply to it does.'
 
 const CONSOLE = 'https://console.x.com'
 
@@ -101,10 +151,10 @@ const API: ApiAccess = {
   keyId: { label: 'Client ID', hint: 'From “Keys and tokens” of your app in X’s Developer Console. It is no secret; it is kept with the sign-in.' },
   signIn: { label: 'Sign in with X' },
   renewedOnUse: true,
-  work: 'The app posts on X as the signed-in account through X’s own API, with no browser, and reads the numbers under its posts. X charges your developer app for each of these. Replies and mentions are not read through the API: those you read and answer on X.',
+  work: 'The app works on X as the signed-in account through X’s own API, with no browser: it posts, reads the replies people write to the account’s posts, sends your answers to them, and reads the numbers under each post. X charges your developer app for each of these.',
   steps: [
     {
-      text: 'X’s API is paid from credits you buy in its Developer Console. By X’s price list of 28 November 2026: about $0.015 for each post this application makes ($0.20 for a post with a link), about half a cent for a post on each day its numbers are read (the application reads them for 30 days after a post: about $0.15 a post), and about a cent on a day it checks who signed in. Nothing is spent beyond the credits unless you turn on auto-recharge there. Open the console, signed in as the account that will post, and buy credits.',
+      text: 'X’s API is paid from credits you buy in its Developer Console. By X’s price list of 28 November 2026: about $0.015 for each post this application makes ($0.20 for a post with a link) and $0.01 for each answer to a reply. Reading costs a tenth of a cent for each of the account’s posts and each reply to it on a day it is read (five times that when the app belongs to another account than the one that signs in), so the numbers of a post, read for 30 days, cost about $0.03; X may add up to a cent for the name of each person who wrote a reply, and takes about a cent on a day the application checks who signed in. Nothing is spent beyond the credits unless you turn on auto-recharge there. Open the console, signed in as the account that will post, and buy credits.',
       url: CONSOLE,
       link: 'Open X’s Developer Console'
     },
@@ -123,20 +173,23 @@ const API: ApiAccess = {
 }
 
 /**
- * An X account worked through X's API with the sign-in of X's own window (DEC-086): a post of words with up to four pictures or one GIF,
- * made by the application at its time, and the numbers under each post. Every request is paid by the owner's developer app, so nothing is
- * read on a schedule but those numbers: the channel is for the owner's own posts, is not read and is never watched in a browser.
+ * An X account worked through X's API with the sign-in of X's own window (DEC-086, DEC-087): a post of words with up to four pictures or one
+ * GIF, made by the application at its time; the replies people write to the account's posts, read from the account's own posts and from what
+ * names it, and the owner's answers to them; the numbers under each post. Every request is paid by the owner's developer app, so X is asked
+ * only for what is newer than what was read, and through the addresses X prices lowest for an account's own data.
  */
 export class XApiConnector implements Connector {
   readonly id = X_API_CONNECTOR_ID
   readonly platform = 'x'
-  readonly version = '1'
+  readonly version = '2'
   readonly label = 'X (Twitter)'
   readonly api = API
   readonly postNumberKinds = ['likes', 'comments', 'views'] as const
 
   /** Who signed in, by account: asked of X once and kept until the next sign-in check (X charges for the read). */
   private readonly users = new Map<string, XUser>()
+  /** What was read of each account, kept while the application runs. */
+  private readonly talks = new Map<string, Talk>()
 
   matches(input: string): boolean {
     return profileOf(input) !== null
@@ -157,7 +210,7 @@ export class XApiConnector implements Connector {
   }
 
   readsChannel(_channel: Channel): boolean {
-    return false
+    return true
   }
 
   signInUrl(ask: SignInAsk): string {
@@ -214,6 +267,7 @@ export class XApiConnector implements Connector {
   }
 
   async checkLogin(ctx: ConnectorContext): Promise<LoginState> {
+    // Another user may have signed in: who it is is asked again. What was read is kept for as long as it is the same user.
     this.users.delete(ctx.account.id)
     const said = (signal: string): LoginState => ({ loggedIn: false, identity: null, captcha: false, signal })
     try {
@@ -226,7 +280,7 @@ export class XApiConnector implements Connector {
   }
 
   /** The signed-in user when the channel is their own profile; the reason in words when it is another's. */
-  private async owner(ctx: ConnectorContext): Promise<{ user: XUser & { username: string } } | { problem: string }> {
+  private async owner(ctx: ConnectorContext): Promise<{ user: Me } | { problem: string }> {
     const handle = profileOf(ctx.channel.url)
     if (!handle) return { problem: `${ctx.channel.url} is not the address of a profile. Connect the profile that signed in.` }
     const user = await this.user(ctx)
@@ -235,66 +289,180 @@ export class XApiConnector implements Connector {
     return { user: { ...user, username } }
   }
 
+  private async requireOwner(ctx: ConnectorContext): Promise<Me> {
+    const found = await this.owner(ctx)
+    if ('problem' in found) throw new Error(found.problem)
+    return found.user
+  }
+
+  /** Reads a list page by page, newest first, as far as X gives it and at most `MOST_PAGES` pages. */
+  private async pages(api: XApi, path: string, params: Record<string, string>): Promise<{ posts: XPost[]; users: XUser[] }> {
+    const posts: XPost[] = []
+    const users: XUser[] = []
+    let next: string | undefined
+    for (let page = 0; page < MOST_PAGES; page += 1) {
+      const got = await api.get<XList>(path, { ...params, ...(next ? { pagination_token: next } : {}) })
+      if (!got.ok) throw unreadable(got)
+      posts.push(...(got.result.data ?? []))
+      users.push(...(got.result.includes?.users ?? []))
+      next = got.result.meta?.next_token
+      if (!next) break
+    }
+    return { posts, users }
+  }
+
+  /**
+   * The account's own posts and answers and what was written to it, brought up to now: X is asked for what is newer than the newest post kept
+   * (everything of the last 30 days the first time), through the two addresses it prices as an account's own data.
+   */
+  private async talk(ctx: ConnectorContext, user: Me): Promise<Talk> {
+    const api = await this.requireClient(ctx)
+    const kept = this.talks.get(ctx.account.id)
+    const talk: Talk = kept?.who === user.id ? kept : { who: user.id, own: new Map<string, XPost>(), said: new Map<string, XPost>(), names: new Map<string, string>() }
+    const floorMs = ctx.clock.now().getTime() - WINDOW_MS
+    const from = (kept: Map<string, XPost>): Record<string, string> => {
+      const newest = newestOf(kept)
+      return newest ? { since_id: newest } : { start_time: new Date(floorMs).toISOString().replace(/\.\d{3}Z$/, 'Z') }
+    }
+    const own = await this.pages(api, `users/${user.id}/tweets`, { max_results: PAGE, 'tweet.fields': TALK_FIELDS, exclude: 'retweets', ...from(talk.own) })
+    const said = await this.pages(api, `users/${user.id}/mentions`, { max_results: PAGE, 'tweet.fields': TALK_FIELDS, expansions: 'author_id', 'user.fields': 'username', ...from(talk.said) })
+    for (const post of own.posts) if (isId(post.id)) talk.own.set(post.id, post)
+    for (const post of said.posts) if (isId(post.id) && post.author_id !== user.id) talk.said.set(post.id, post)
+    for (const person of said.users) if (person.username) talk.names.set(person.id, person.username)
+    for (const posts of [talk.own, talk.said]) for (const [id, post] of posts) if (Date.parse(post.created_at ?? '') < floorMs) posts.delete(id)
+    this.talks.set(ctx.account.id, talk)
+    return talk
+  }
+
+  /** A post of the account with what was said under it: the replies that name the account and the account's own answers, oldest first. */
+  private discussion(ctx: ConnectorContext, user: Me, talk: Talk, root: XPost): RemoteDiscussion {
+    const me = ctx.account.identity ?? `@${user.username}`
+    const inside = [...talk.own.values(), ...talk.said.values()].filter((post) => post.id !== root.id && post.conversation_id === root.id)
+    inside.sort((a, b) => (BigInt(a.id) < BigInt(b.id) ? -1 : 1))
+    const comments: RemoteComment[] = inside.map((post) => {
+      const mine = talk.own.has(post.id)
+      const name = mine ? user.username : talk.names.get(post.author_id ?? '')
+      return {
+        externalId: postIdOf(post.id),
+        parentExternalId: postIdOf(answered(post) ?? root.id),
+        // What the account itself wrote is the account's own: nobody to answer.
+        author: mine ? me : name ? `@${name}` : 'Somebody on X',
+        body: withoutNames(post.text ?? ''),
+        url: name ? addressOf(name, post.id) : `https://x.com/i/status/${post.id}`,
+        postedAt: iso(post.created_at)
+      }
+    })
+    const body = root.text ?? ''
+    const firstLine = body.split('\n')[0] ?? ''
+    return { externalId: postIdOf(root.id), url: addressOf(user.username, root.id), title: firstLine.length > 100 ? `${firstLine.slice(0, 99)}…` : firstLine, author: me, body, postedAt: iso(root.created_at), comments }
+  }
+
   async assess(ctx: ConnectorContext): Promise<Capability[]> {
     const checkedAt = ctx.clock.now().toISOString()
     const cap = (key: CapabilityKey, status: CapabilityStatus, detail: string): Capability => ({ key, status, detail, checkedAt })
-    const closed = [
-      ...(['read_posts', 'read_comments', 'detect_changes', 'publish_reply', 'read_inbox'] as CapabilityKey[]).map((key) => cap(key, 'unavailable', NOT_READ)),
-      cap('metrics', 'unavailable', 'The account\'s followers are not read here. Under each post the application reads likes, replies and views for 30 days after it went out; X charges about half a cent for a post on each day it is read (about $0.15 a post).'),
-      cap('membership', 'unavailable', 'A profile is not joined: it is the account\'s own.')
+    const notOffered = [
+      cap('metrics', 'unavailable', 'The account\'s followers are not read here. Under each post the application reads likes, replies and views for 30 days after it went out; X charges a tenth of a cent for a post on each day it is read (about $0.03 a post).'),
+      cap('membership', 'unavailable', 'A profile is not joined: it is the account\'s own.'),
+      cap('read_inbox', 'unavailable', 'Replies arrive as replies to the account\'s posts. A post of somebody else that names the account is not collected.')
     ]
-    const stopped = (detail: string): Capability[] => [cap('publish_post', 'needs_user', detail), cap('verify_send', 'needs_user', detail), ...closed]
+    const all = (status: CapabilityStatus, detail: string): Capability[] =>
+      (['read_posts', 'read_comments', 'detect_changes', 'publish_post', 'publish_reply', 'verify_send'] as CapabilityKey[]).map((key) => cap(key, status, detail)).concat(notOffered)
     let found: Awaited<ReturnType<XApiConnector['owner']>>
     try {
-      if (!(await this.client(ctx))) return stopped('Press “Sign in with X” on the account\'s page first.')
+      if (!(await this.client(ctx))) return all('needs_user', 'Press “Sign in with X” on the account\'s page first.')
       found = await this.owner(ctx)
     } catch (error) {
-      return stopped(error instanceof Error ? error.message : String(error))
+      return all('needs_user', error instanceof Error ? error.message : String(error))
     }
-    if ('problem' in found) return stopped(found.problem)
+    if ('problem' in found) return all('needs_user', found.problem)
+    const name = `@${found.user.username}`
+    let reads: [CapabilityStatus, string]
+    let talks: [CapabilityStatus, string]
+    try {
+      await this.talk(ctx, found.user)
+      reads = ['verified', `The posts of ${name} of the last 30 days are read from X.`]
+      talks = ['verified', `Replies to the posts of ${name} are read from X: those that name the account, as a reply does unless its writer took the name out. X charges a tenth of a cent for each.`]
+    } catch (error) {
+      reads = talks = ['needs_user', error instanceof Error ? error.message : String(error)]
+    }
     return [
+      cap('read_posts', ...reads),
+      cap('read_comments', ...talks),
+      cap('detect_changes', ...reads),
       cap(
         'publish_post',
         'needs_check',
-        `Posts go out as @${found.user.username}: words with up to ${MOST_PICTURES} pictures (JPEG, PNG or WEBP, 5 MB each) or one GIF. X charges your developer app for each post (about $0.015, or $0.20 with a link) and for reading its numbers. A video and a quote are published on X itself. Tried with the first post.`
+        `Posts go out as ${name}: words with up to ${MOST_PICTURES} pictures (JPEG, PNG or WEBP, 5 MB each) or one GIF. X charges your developer app for each post (about $0.015, or $0.20 with a link). A video and a quote are published on X itself. Tried with the first post.`
       ),
+      cap('publish_reply', 'needs_check', `An answer goes under a reply as ${name}. ${REPLY_RULE} X charges about $0.01 for an answer. Tried with the first answer.`),
       cap('verify_send', 'needs_check', 'X returns the post it made. Tried with the first post.'),
-      ...closed
+      ...notOffered
     ]
   }
 
-  /** Nothing is read: every read is paid, and the owner reads replies on X. The monitor finds no discussion and asks no more. */
-  async fetchActivity(ctx: ConnectorContext, _options: { limit: number }): Promise<ActivityBatch> {
-    return { discussions: [], fetchedAt: ctx.clock.now().toISOString() }
+  /** The account's newest posts, each with the replies to it. */
+  async fetchActivity(ctx: ConnectorContext, options: { limit: number }): Promise<ActivityBatch> {
+    const user = await this.requireOwner(ctx)
+    const talk = await this.talk(ctx, user)
+    const posts = [...talk.own.values()].filter((post) => answered(post) === null)
+    posts.sort((a, b) => (BigInt(a.id) > BigInt(b.id) ? -1 : 1))
+    const discussions = posts.slice(0, Math.max(1, Math.min(options.limit, FEED_LIMIT))).map((post) => this.discussion(ctx, user, talk, post))
+    return { discussions, fetchedAt: ctx.clock.now().toISOString() }
   }
 
-  async fetchThread(_ctx: ConnectorContext, _discussionExternalId: string): Promise<RemoteDiscussion | null> {
-    return null
+  /** One post of the account with the replies to it. A post older than what is kept is asked of X by its id. */
+  async fetchThread(ctx: ConnectorContext, discussionExternalId: string): Promise<RemoteDiscussion | null> {
+    const id = parseExternalId(discussionExternalId)
+    if (!id) return null
+    const user = await this.requireOwner(ctx)
+    const talk = await this.talk(ctx, user)
+    let root = talk.own.get(id)
+    if (!root) {
+      const asked = await (await this.requireClient(ctx)).get<{ data?: XPost[] }>('tweets', { ids: id, 'tweet.fields': TALK_FIELDS })
+      if (!asked.ok) throw unreadable(asked)
+      root = (asked.result.data ?? []).find((post) => post.id === id && post.author_id === user.id)
+    }
+    // Only a post of the account that starts a conversation is a discussion of this channel.
+    if (!root || answered(root) !== null) return null
+    return this.discussion(ctx, user, talk, root)
   }
 
   async fetchMetrics(_ctx: ConnectorContext): Promise<MetricReading[]> {
     return []
   }
 
+  /** The numbers of the account's posts, read from its own list of posts between the oldest and the newest of those asked for. */
   async readPostNumbers(ctx: ConnectorContext, posts: { externalId: string; url: string | null }[]): Promise<Record<string, PostNumbers>> {
     const whole = (value: unknown): number | null => (typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null)
-    const ids = posts.map((post) => parseExternalId(post.externalId)).filter((id): id is string => id !== null)
+    const wanted = new Set(posts.map((post) => parseExternalId(post.externalId)).filter((id): id is string => id !== null))
+    if (wanted.size === 0) return {}
+    const user = await this.requireOwner(ctx)
+    const ids = [...wanted].map((id) => BigInt(id))
+    const oldest = ids.reduce((a, b) => (a < b ? a : b))
+    const newest = ids.reduce((a, b) => (a > b ? a : b))
+    const read = await this.pages(await this.requireClient(ctx), `users/${user.id}/tweets`, {
+      max_results: PAGE,
+      'tweet.fields': 'public_metrics',
+      exclude: 'retweets,replies',
+      since_id: (oldest - BigInt(1)).toString(),
+      until_id: (newest + BigInt(1)).toString()
+    })
     const found: Record<string, PostNumbers> = {}
-    for (let from = 0; from < ids.length; from += MOST_IDS) {
-      const page = await (await this.requireClient(ctx)).get<{ data?: XPost[] }>('tweets', { ids: ids.slice(from, from + MOST_IDS).join(','), 'tweet.fields': 'public_metrics' })
-      if (!page.ok) throw unreadable(page)
-      // A post X no longer has is simply not in the answer.
-      for (const post of page.result.data ?? []) found[postIdOf(post.id)] = { likes: whole(post.public_metrics?.like_count), comments: whole(post.public_metrics?.reply_count), views: whole(post.public_metrics?.impression_count) }
+    // A post X no longer has is simply not in the answer.
+    for (const post of read.posts) {
+      if (wanted.has(post.id)) found[postIdOf(post.id)] = { likes: whole(post.public_metrics?.like_count), comments: whole(post.public_metrics?.reply_count), views: whole(post.public_metrics?.impression_count) }
     }
     return found
   }
 
   async publish(ctx: ConnectorContext, ticket: SendTicket, request: PublishRequest): Promise<PublishOutcome> {
     ctx.tickets.assertValid(ticket, { accountId: ctx.account.id, destination: request.destination })
-    if (request.kind === 'reply') return failed(`${NOT_READ} Nothing was sent.`)
+    const reply = request.kind === 'reply'
+    const parent = reply ? parseExternalId(request.parentExternalId) : null
+    if (reply && !parent) return failed('The reply or the post this answers was not read through X\'s API, so it cannot be answered there. Nothing was sent.')
     const text = request.text.trim()
     const files = request.attachments
-    if (text === '' && files.length === 0) return failed('There is nothing to post: no words and no picture. Nothing was sent.')
+    if (text === '' && files.length === 0) return failed(`There is nothing to ${reply ? 'answer with' : 'post'}: no words and no picture. Nothing was sent.`)
     const gifs = files.filter((file) => file.mime === GIF)
     const unfit = files.find((file) => file.mime !== GIF && !PICTURES.has(file.mime))
     if (unfit) return failed(`X takes a JPEG, PNG or WEBP picture or a GIF from this application; “${unfit.name}” is none of them. A video is published on X itself. Nothing was sent.`)
@@ -325,39 +493,39 @@ export class XApiConnector implements Connector {
         if (!id) return failed(`X took the picture “${file.name}” and returned no id for it. Nothing was sent.`)
         mediaIds.push(id)
       }
-      body = { text, ...(mediaIds.length > 0 ? { media: { media_ids: mediaIds } } : {}) }
+      body = { text, ...(mediaIds.length > 0 ? { media: { media_ids: mediaIds } } : {}), ...(parent ? { reply: { in_reply_to_tweet_id: parent } } : {}) }
     } catch (error) {
       // Nothing was posted yet: a picture that was uploaded and not attached is seen by nobody.
       if (error instanceof HttpNoAnswerError) return failed(`No answer came from X (${error.message}) before the post was made. Nothing was sent.`)
       return failed(`${error instanceof Error ? error.message : String(error)} Nothing was sent.`)
     }
+    const what = reply ? 'answer' : 'post'
     let answer: XAnswer<{ data?: XPost }>
     try {
       answer = await api.post<{ data?: XPost }>('tweets', body)
     } catch (error) {
-      if (error instanceof HttpNoAnswerError) return { status: 'unknown', error: `X did not answer (${error.message}), so it is not known whether the post was made.` }
+      if (error instanceof HttpNoAnswerError) return { status: 'unknown', error: `X did not answer (${error.message}), so it is not known whether the ${what} was made.` }
       return failed(`${error instanceof Error ? error.message : String(error)} Nothing was sent.`)
     }
     if (!answer.ok) {
-      if (answer.status >= 500) return { status: 'unknown', error: `X answered with an error of its own (${answer.message}), so it is not known whether the post was made.` }
+      if (answer.status >= 500) return { status: 'unknown', error: `X answered with an error of its own (${answer.message}), so it is not known whether the ${what} was made.` }
+      // X refuses an answer to a post that does not name the account: said with X's rule, so the owner knows to answer on X.
+      if (reply && answer.status === 403) return failed(`${refusal(answer)} ${REPLY_RULE} Answer this one on X. Nothing was sent.`)
       return failed(`${refusal(answer)} Nothing was sent.`)
     }
     const id = answer.result.data?.id
-    if (!id || !/^\d+$/.test(id)) return { status: 'unknown', error: 'X accepted the post and returned no id for it, so it is not known whether it was made.' }
+    if (!isId(id)) return { status: 'unknown', error: `X accepted the ${what} and returned no id for it, so it is not known whether it was made.` }
     return { status: 'confirmed', url: addressOf(handle, id), externalId: postIdOf(id) }
   }
 
-  /** Looks among the account's five newest posts for the one a send with a lost answer may have made: the same words, not older than the attempt. */
+  /** Looks among the account's posts for the one a send with a lost answer may have made: the same words, in the same place, not older than the attempt. */
   async findPublished(ctx: ConnectorContext, request: PublishRequest): Promise<PublishedRef | null> {
-    if (request.kind !== 'post') throw new Error(`${NOT_READ} Look at X and say whether it is there.`)
     const floor = earliestCreation(request)
-    const found = await this.owner(ctx)
-    if ('problem' in found) throw new Error(found.problem)
-    const list = await (await this.requireClient(ctx)).get<{ data?: XPost[] }>(`users/${found.user.id}/tweets`, { max_results: '5', 'tweet.fields': 'created_at', exclude: 'retweets,replies' })
-    if (!list.ok) throw unreadable(list)
-    // X writes every address in a post as a short one of its own, and adds one for a picture: the words are compared without addresses.
-    const plain = (value: string): string => value.replace(/https?:\/\/\S+/g, ' ').replace(/\s+/g, ' ').trim()
-    const hit = (list.result.data ?? []).find((post) => sameText(plain(post.text ?? ''), plain(request.text)) && Date.parse(post.created_at ?? '') >= floor)
-    return hit ? { url: addressOf(found.user.username, hit.id), externalId: postIdOf(hit.id) } : null
+    const user = await this.requireOwner(ctx)
+    const parent = request.kind === 'reply' ? parseExternalId(request.parentExternalId) : null
+    if (request.kind === 'reply' && !parent) throw new Error('The reply this answers was not read through X\'s API, so the answer cannot be looked for. Look at X and say whether it is there.')
+    const talk = await this.talk(ctx, user)
+    const hit = [...talk.own.values()].find((post) => answered(post) === parent && sameText(plain(post.text ?? ''), plain(request.text)) && Date.parse(post.created_at ?? '') >= floor)
+    return hit ? { url: addressOf(user.username, hit.id), externalId: postIdOf(hit.id) } : null
   }
 }

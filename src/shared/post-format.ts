@@ -698,9 +698,9 @@ export interface PlatformForm {
   apiPictures?: 'public_address'
   /**
    * What the platform charges the owner's developer app, in US dollars, and the day of that price list (X): for a post made through its API,
-   * for one with a link, and for a post on each day its numbers are read.
+   * for one with a link, for an answer to a reply, and for a post on each day its numbers are read.
    */
-  apiPrice?: { post: number; withLink: number; numbersADay: number; asOf: string }
+  apiPrice?: { post: number; withLink: number; reply: number; numbersADay: number; asOf: string }
   /** Through its API a post of the platform holds pictures or one video, never both (LinkedIn). */
   apiOneKind?: true
   /** `jpeg`: through its API the platform takes a picture only as a JPEG file (Instagram); the application sends a JPEG copy of a PNG by itself. */
@@ -731,7 +731,7 @@ export const PLATFORM_FORMS: Record<string, PlatformForm> = {
   instagram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 2_200, apiVideos: 'public_address', apiPictures: 'public_address', apiPictureKind: 'jpeg', pictures: 'required', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_bio' },
   facebook: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 63_206, apiVideos: 'none', pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text' },
   threads: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 500, apiVideos: 'public_address', apiPictures: 'public_address', pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text', topic: 'field' },
-  x: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 280, apiVideos: 'none', apiPrice: { post: 0.015, withLink: 0.2, numbersADay: 0.005, asOf: '28 November 2026' }, pictures: 'optional', maxPictures: 4, videos: 'optional', maxVideos: 1, link: 'in_text' },
+  x: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 280, apiVideos: 'none', apiPrice: { post: 0.015, withLink: 0.2, reply: 0.01, numbersADay: 0.001, asOf: '28 November 2026' }, pictures: 'optional', maxPictures: 4, videos: 'optional', maxVideos: 1, link: 'in_text' },
   linkedin: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 3_000, apiOneKind: true, pictures: 'optional', maxPictures: 9, videos: 'optional', maxVideos: 1, link: 'in_text' },
   telegram: { format: 'plain', hasTitle: false, titleLimit: null, textLimit: 4_096, apiCaptionLimit: 1_024, pictures: 'optional', maxPictures: 10, videos: 'optional', maxVideos: 1, link: 'in_text' },
   pinterest: { format: 'plain', hasTitle: true, titleLimit: 100, textLimit: 500, apiVideos: 'none', pictures: 'required', maxPictures: 1, videos: 'optional', maxVideos: 1, link: 'field' },
@@ -1014,12 +1014,14 @@ const usd = (amount: number): string => '$' + amount.toFixed(3).replace(/(\.\d\d
 
 /**
  * What the platform charges the owner's developer app for this send, said before the approval; null when the send costs nothing (every platform
- * but X, and X in the browser). A post with an address in it costs more on X, so the line says which of the two prices this post has.
+ * but X, and X in the browser). A post with an address in it costs more on X, so the line says which of the two prices this post has; an
+ * answer to a reply has one price, with an address or without.
  */
-export function sendPriceNote(platform: string, rendered: Pick<RenderedPost, 'text' | 'link'>, ways: SendWays): string | null {
+export function sendPriceNote(platform: string, rendered: Pick<RenderedPost, 'text' | 'link'>, ways: SendWays, kind: 'post' | 'reply' = 'post'): string | null {
   const price = formOf(platform).apiPrice
   if (!ways.api || !price) return null
   const label = platformLabel(platform)
+  if (kind === 'reply') return `${label} charges your developer app about ${usd(price.reply)} for this answer. This is ${label}'s price list of ${price.asOf}; today's prices are in its Developer Console.`
   const linked = Boolean(rendered.link) || /https?:\/\/\S+/i.test(rendered.text)
   const what = linked ? `about ${usd(price.withLink)} for this post, because it has a link (${usd(price.post)} without one)` : `about ${usd(price.post)} for this post (${usd(price.withLink)} if it had a link)`
   // The numbers under a sent post are read for a month, and the platform charges a post once for each day it is read.

@@ -84,12 +84,19 @@ export function normalizeAssessment(previous: Capability[], assessed: Capability
 export const NO_INBOX_REASON = 'This platform has no inbox the app can read, so replies to the account and mentions of it are not collected here.'
 
 /**
- * A platform whose connector cannot read an inbox says so on the row of the capability (DEC-039), whatever the connector reported about it: the row
- * is "unavailable" and the reason is the one the owner reads in the channel's Status. Pure.
+ * A platform whose connector cannot read an inbox says so on the row of the capability (DEC-039), whatever status the connector reported: the row
+ * is "unavailable" and the reason is the one the owner reads in the channel's Status. A connector that itself says the inbox is unavailable keeps
+ * its own reason: where replies are read as comments under the account's posts (a Page, a profile worked through an API), the general one would
+ * say they are not collected. Pure.
  */
 export function withInboxVerdict(capabilities: Capability[], canReadInbox: boolean, at: IsoTime): Capability[] {
   if (canReadInbox) return capabilities
-  return capabilities.map((c): Capability => (c.key === 'read_inbox' ? { key: 'read_inbox', status: 'unavailable', detail: NO_INBOX_REASON, checkedAt: at } : c))
+  return capabilities.map((c): Capability => (c.key === 'read_inbox' ? { key: 'read_inbox', status: 'unavailable', detail: inboxReasonOf(c), checkedAt: at } : c))
+}
+
+/** The reason an inbox is not read: the connector's own when it gave one with "unavailable", the general one otherwise. */
+export function inboxReasonOf(reported: Capability | undefined): string {
+  return reported?.status === 'unavailable' && reported.detail.trim() !== '' ? reported.detail : NO_INBOX_REASON
 }
 
 /** The result of an actual authorized use: the one way a sending ability becomes 'verified'. */

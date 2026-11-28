@@ -94,6 +94,7 @@ export function ReviewBody({ item, notes }: { item: ReviewItem; /** What the own
           disabled={locked || working}
           draft={card.draft}
           ai={locked ? undefined : { opportunityId: opp.id }}
+          replyOn={standalone ? undefined : opp.channelId}
           post={standalone ? { productId: opp.productId, platform: card.channelPlatform, waysOf: opp.channelId, channelId: opp.channelId, author: { name: card.accountLabel, target: card.channelTarget } } : undefined}
         />
       )}

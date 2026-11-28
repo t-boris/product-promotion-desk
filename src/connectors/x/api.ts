@@ -29,7 +29,20 @@ export interface XPost {
   id: string
   text?: string
   created_at?: string
+  author_id?: string
+  /** The id of the post a conversation started with: every reply in it carries the same one. */
+  conversation_id?: string
+  in_reply_to_user_id?: string
+  /** What the post answers (`replied_to`), quotes or reposts. */
+  referenced_tweets?: { type?: string; id?: string }[]
   public_metrics?: { like_count?: number; reply_count?: number; impression_count?: number }
+}
+
+/** A page of posts, the people who wrote them when they were asked for, and the word the next page is asked with. */
+export interface XList {
+  data?: XPost[]
+  includes?: { users?: XUser[] }
+  meta?: { next_token?: string }
 }
 
 const words = (value: unknown): string | null => (typeof value === 'string' && value !== '' ? value : null)

@@ -7,7 +7,7 @@
 // what any login of the product wrote is its own, one voice per discussion, once per comment.
 
 import type { Account, Channel } from '../../shared/types'
-import { NO_INBOX_REASON } from '../channels/capabilities'
+import { inboxReasonOf } from '../channels/capabilities'
 import type { Core } from '../core'
 import { TakeoverError, type Connector, type ConnectorContext, type RemoteDiscussion, type RemoteInboxItem } from '../ports'
 import type { Ingestor } from './ingest'
@@ -60,7 +60,8 @@ export async function collectInbox(
 async function read(core: Core, store: FlowStore, ingestor: Ingestor, channel: Channel, account: Account, connector: Connector, ctx: ConnectorContext): Promise<InboxOutcome> {
   // A platform with no inbox the app can read stays empty, and says why where the owner looks for it.
   if (typeof connector.readInbox !== 'function') {
-    store.noteCapability(channel.id, 'read_inbox', 'unavailable', NO_INBOX_REASON)
+    // The reason the connector gave at the assessment stays; a channel that has none yet gets the general one.
+    store.noteCapability(channel.id, 'read_inbox', 'unavailable', inboxReasonOf(store.requireChannel(channel.id).capabilities.find((c) => c.key === 'read_inbox')))
     return NOTHING
   }
   // The capability is the switch: the assessment (or an earlier read) found the inbox closed, and its reason stays until the next assessment.
