@@ -1616,5 +1616,6 @@ Built on Meta's saved pages (fact sheet of 2026-11-28, Instagram API with Instag
 - [x] H1 `api_key_times` + `KeyTimes` given to `renewKey`; saved at `vault.saveApiKey`, kept by `KeyRenewal`
 - [x] H2 `src/connectors/instagram/` (api, connector, fake server, tests)
 - [x] H3 post form: pictures and video through the place, JPEG only said before the approval; guide steps; the Threads browser guide no longer says a picture does not go through the API
+- [x] H5 (0.84.1, DEC-083) a picture that is not JPEG is sent as a JPEG copy made by the existing ImageShrinker (Electron, no library), through the place for files; only a picture that is neither JPEG nor PNG is named before approval
 - [x] H4 verify (6465 tests), DEC-082, own-instance look at the account's page (8 steps, one token field, no overflow), release 0.84.0
 

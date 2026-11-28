@@ -53,8 +53,9 @@ const CONTAINER_LOOKS = 12
 const CONTAINER_WAIT_MS = 5_000
 const VIDEO_LOOKS = 30
 const VIDEO_WAIT_MS = 10_000
-/** What Instagram takes from an address: a JPEG picture and nothing else as a picture, an MP4 or MOV video; at most 20 in one post. */
+/** What Instagram takes from an address: a JPEG picture and nothing else as a picture (8 MB at most), an MP4 or MOV video; at most 20 in one post. */
 const VIDEOS = new Set(['video/mp4', 'video/quicktime'])
+const MOST_PICTURE_BYTES = 8 * 1024 * 1024
 const MOST_FILES = 20
 const MOST_HASHTAGS = 30
 const DAY_MS = 24 * 3_600_000
@@ -310,7 +311,7 @@ export class InstagramApiConnector implements Connector {
       cap(
         'publish_post',
         'verified',
-        `Posts go out as ${name}: one JPEG picture, one video (a reel, shown in the feed as well) or up to ${MOST_FILES} of them, with the caption. Every file goes through your place for files (Settings): Instagram takes one only from an address on the internet. It needs the permission instagram_business_content_publish. Until the app is published in Meta's dashboard (“Go live”), only the people of the app may see what it posts.`
+        `Posts go out as ${name}: one picture, one video (a reel, shown in the feed as well) or up to ${MOST_FILES} of them, with the caption. Every file goes through your place for files (Settings): Instagram takes one only from an address on the internet, and a picture only as JPEG, so the application sends a JPEG copy of a PNG. It needs the permission instagram_business_content_publish. Until the app is published in Meta's dashboard (“Go live”), only the people of the app may see what it posts.`
       ),
       cap('publish_reply', 'verified', 'A reply goes under a comment, and a comment under the account\'s own post, as the account. It needs the permission instagram_business_manage_comments.'),
       cap('verify_send', 'verified', 'Instagram returns the post or the comment it made.'),
@@ -427,8 +428,8 @@ export class InstagramApiConnector implements Connector {
     if (request.kind === 'reply') return this.reply(api, request, words)
     const files = request.attachments
     if (files.length === 0) return failed('Instagram has no post of words only: add a picture or a video. Nothing was sent.')
-    const unfit = files.find((file) => file.mime !== 'image/jpeg' && !VIDEOS.has(file.mime))
-    if (unfit) return failed(`Instagram takes only a JPEG picture and an MP4 or MOV video through its API; “${unfit.name}” is neither. Save the picture as JPEG and put that one on the post. Nothing was sent.`)
+    const unfit = files.find((file) => (isVideoMime(file.mime) ? !VIDEOS.has(file.mime) : !file.mime.startsWith('image/')))
+    if (unfit) return failed(`Instagram takes a picture and an MP4 or MOV video through its API; “${unfit.name}” is neither. Nothing was sent.`)
     if (files.length > MOST_FILES) return failed(`Instagram takes at most ${MOST_FILES} pictures and videos in one post; this one has ${files.length}. Nothing was sent.`)
     const tags = words.match(/#[\p{L}\p{N}_]+/gu)?.length ?? 0
     if (tags > MOST_HASHTAGS) return failed(`Instagram takes at most ${MOST_HASHTAGS} hashtags in a caption; this one has ${tags}. Nothing was sent.`)
@@ -438,7 +439,8 @@ export class InstagramApiConnector implements Connector {
     const put: PublicFile[] = []
     try {
       const profile = await this.profile(ctx, api)
-      for (const file of files) put.push(await place.put({ path: file.path, name: file.name, mime: file.mime }))
+      // Instagram takes a picture only as JPEG: one of another kind is put as a JPEG copy, the original untouched.
+      for (const file of files) put.push(await place.put({ path: file.path, name: file.name, mime: file.mime }, isVideoMime(file.mime) ? undefined : { jpegUnder: MOST_PICTURE_BYTES }))
       const isVideo = (index: number): boolean => isVideoMime((files[index] as (typeof files)[number]).mime)
       const urlOf = (index: number): string => (put[index] as PublicFile).url
       const caption: Record<string, unknown> = words ? { caption: words } : {}

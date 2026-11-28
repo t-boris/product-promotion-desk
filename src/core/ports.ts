@@ -418,8 +418,12 @@ export interface PublicFile {
 }
 
 export interface PublicFiles {
-  /** Puts a file, read from its path, and gives the address a platform can read it from for an hour. It throws with the store's words when the store refuses. */
-  put(file: HttpFile): Promise<PublicFile>
+  /**
+   * Puts a file, read from its path, and gives the address a platform can read it from for an hour. It throws with the store's words when the
+   * store refuses. `jpegUnder`: for a platform that takes a picture only as JPEG, a picture of another kind is put as a JPEG copy no larger
+   * than this many bytes (the original is never changed); it throws in words when no such copy can be made.
+   */
+  put(file: HttpFile, options?: { jpegUnder?: number }): Promise<PublicFile>
 }
 
 /** A file of a multipart form, read from the disk by its path as it is sent. */

@@ -695,7 +695,7 @@ export interface PlatformForm {
   apiVideos?: 'none' | 'public_address'
   /** `public_address`: the same for a picture. */
   apiPictures?: 'public_address'
-  /** `jpeg`: through its API the platform takes a picture only as a JPEG file (Instagram). */
+  /** `jpeg`: through its API the platform takes a picture only as a JPEG file (Instagram); the application sends a JPEG copy of a PNG by itself. */
   apiPictureKind?: 'jpeg'
   /** `required`: a post without a picture is refused by the platform (Instagram). A video can stand in for the picture where the platform takes one (`videos` is not `none`). */
   pictures: 'none' | 'optional' | 'required'
@@ -1028,8 +1028,8 @@ export function sendProblems(platform: string, rendered: RenderedPost, ways: Sen
     problems.push(`${label} takes a picture or a video through its API only from an address on the internet. Set up “A place for files” in Settings (a storage bucket of your own), or take it off the post, or publish the post on ${label} yourself.`)
   }
   if (ways.api && formOf(platform).apiPictureKind === 'jpeg') {
-    const other = rendered.attachments.find((a) => !isVideoMime(a.mime) && a.mime !== 'image/jpeg')
-    if (other) problems.push(`${label} takes a picture through its API only as a JPEG file, and “${other.name}” is not one. Save it as JPEG and put that one on the post, or publish the post on ${label} yourself.`)
+    const other = rendered.attachments.find((a) => !isVideoMime(a.mime) && a.mime !== 'image/jpeg' && a.mime !== 'image/png')
+    if (other) problems.push(`${label} takes a picture through its API only as a JPEG file. The application makes one from a PNG by itself, and “${other.name}” is neither. Save it as JPEG or PNG and put that one on the post, or publish the post on ${label} yourself.`)
   }
   if (rendered.attachments.length > 0 && !ways.aiBrowser && !ways.api) {
     // A video is carried by the AI browser only: no connector of this application uploads one.

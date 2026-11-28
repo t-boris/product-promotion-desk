@@ -83,19 +83,41 @@ export class PublicFileService {
     const store = await this.store()
     if (!store) return null
     return {
-      put: async (file: HttpFile): Promise<PublicFile> => {
-        const key = `ppd/${newId()}/${safeName(file.name)}`
-        await store.put(key, file)
-        return {
-          url: store.addressOf(key, PUBLIC_ADDRESS_SECONDS),
-          // A file that could not be deleted does not change what became of the send: it is said in the log, and its address stops working within the hour.
-          remove: async () => {
+      put: async (given: HttpFile, options?: { jpegUnder?: number }): Promise<PublicFile> => {
+        // A platform that takes only JPEG gets a JPEG copy of a picture of another kind, made here and deleted once it is put.
+        const copyDir = options?.jpegUnder !== undefined && given.mime !== 'image/jpeg' ? mkdtempSync(join(tmpdir(), 'ppd-jpeg-')) : null
+        let file = given
+        try {
+          if (copyDir !== null) {
+            if (!this.core.imageShrinker) throw new Error(`“${given.name}” is not a JPEG picture, and this build of the application cannot make one from it.`)
+            let path: string
             try {
-              await store.remove(key)
+              path = await this.core.imageShrinker.shrink(given.path, options?.jpegUnder as number, copyDir)
             } catch (error) {
-              this.core.log.warn('settings', `A file put for a send could not be deleted from the place for files (${key}): ${error instanceof Error ? error.message : String(error)}`)
+              throw new Error(`“${given.name}” is not a JPEG picture, and a JPEG copy of it could not be made (${error instanceof Error ? error.message : String(error)}) Save it as JPEG or PNG and put that one on the post.`, { cause: error })
             }
+            file = { path, name: `${given.name.replace(/\.[A-Za-z0-9]+$/, '')}.jpg`, mime: 'image/jpeg' }
           }
+          return await this.keep(store, file)
+        } finally {
+          if (copyDir !== null) rmSync(copyDir, { recursive: true, force: true })
+        }
+      }
+    }
+  }
+
+  /** Puts one file under a name of its own, and gives its address for an hour with the way to delete it. */
+  private async keep(store: S3Store, file: HttpFile): Promise<PublicFile> {
+    const key = `ppd/${newId()}/${safeName(file.name)}`
+    await store.put(key, file)
+    return {
+      url: store.addressOf(key, PUBLIC_ADDRESS_SECONDS),
+      // A file that could not be deleted does not change what became of the send: it is said in the log, and its address stops working within the hour.
+      remove: async () => {
+        try {
+          await store.remove(key)
+        } catch (error) {
+          this.core.log.warn('settings', `A file put for a send could not be deleted from the place for files (${key}): ${error instanceof Error ? error.message : String(error)}`)
         }
       }
     }

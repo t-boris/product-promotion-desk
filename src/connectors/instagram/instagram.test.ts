@@ -1,3 +1,5 @@
+import { existsSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { newId } from '../../core/db/database'
 import { FAKE_STORE_PLACE, FAKE_STORE_SECRET, FakeStore, byHost } from '../../core/net/fake-s3'
@@ -6,7 +8,7 @@ import { sendWays } from '../../core/pipeline/send-ways'
 import { makeTestCore, type TestCore } from '../../core/testing/fakes'
 import { apiKeyKey } from '../../core/vault'
 import type { MonitorService } from '../../core/services'
-import type { PublishRequest } from '../../core/ports'
+import type { ImageShrinker, PublishRequest } from '../../core/ports'
 import { guideSteps } from '../../shared/connection-guide'
 import { renderForPlatform, sendProblems } from '../../shared/post-format'
 import { UniversalConnector } from '../universal'
@@ -23,11 +25,11 @@ const PROFILE_URL = 'https://www.instagram.com/natalmystic/'
 const DAY = 24 * 3_600_000
 
 /** A core with the Instagram API connector; one network with a fake Instagram and a fake store behind it; one product. */
-function world(instagram = new FakeInstagram()) {
+function world(instagram = new FakeInstagram(), shrinker: ImageShrinker | undefined = undefined) {
   const store = new FakeStore()
   // Instagram reads a file at the moment it is given its address: only an address the store serves right then is taken.
   instagram.reads = (url) => store.serves(url)
-  t = makeTestCore({ connectors: [new InstagramApiConnector(), new UniversalConnector()], http: byHost({ 'graph.instagram.com': instagram, 'store.example.com': store }) })
+  t = makeTestCore({ connectors: [new InstagramApiConnector(), new UniversalConnector()], http: byHost({ 'graph.instagram.com': instagram, 'store.example.com': store }), imageShrinker: shrinker })
   const core = t.core
   core.services.knowledge = Object.assign(new FakeKnowledge(), { approved: [makeClaim('c1', 'Natal Mystic builds a natal chart from your birth date, time and place.')] })
   const productId = newId()
@@ -41,8 +43,8 @@ function world(instagram = new FakeInstagram()) {
 }
 
 /** An Instagram account with its token saved and the profile connected, assessed and active; `place` also saves a place for files. */
-async function connected(options: { place?: boolean; instagram?: FakeInstagram } = {}) {
-  const w = world(options.instagram)
+async function connected(options: { place?: boolean; instagram?: FakeInstagram; shrinker?: ImageShrinker } = {}) {
+  const w = world(options.instagram, options.shrinker)
   if (options.place !== false) await w.call('filePlace.save', { ...FAKE_STORE_PLACE, secret: FAKE_STORE_SECRET })
   const account = await w.call('accounts.create', { productId: w.productId, platform: 'instagram', label: 'Natal Mystic on Instagram', access: 'api' })
   const ready = await w.call('vault.saveApiKey', { accountId: account.id, key: FAKE_IG_TOKEN })
@@ -143,7 +145,7 @@ describe('an Instagram account that works through the Instagram API (DEC-082)', 
     const caps = Object.fromEntries((await w.call('channels.assess', { channelId: w.channel.id })).capabilities.map((c) => [c.key, c]))
     expect(caps.read_posts).toMatchObject({ status: 'verified' })
     expect(caps.read_comments).toMatchObject({ status: 'needs_check' })
-    expect(caps.publish_post?.detail).toMatch(/one JPEG picture, one video.*place for files.*Go live/s)
+    expect(caps.publish_post?.detail).toMatch(/one picture, one video.*place for files.*JPEG copy of a PNG.*Go live/s)
     expect(w.channel).toMatchObject({ status: 'active', connectorId: 'instagram-api', reads: true })
     // The publishing addresses carry the id of the professional account, not the id inside the app.
     expect(w.instagram.calls.some((c) => c.path === `${IG_ACCOUNT_ID}/media`)).toBe(true)
@@ -195,11 +197,40 @@ describe('posting as the account', () => {
     expect(w.store.objects.size).toBe(0)
   })
 
-  it('refuses before anything is asked of Instagram: words alone, a picture that is not JPEG, too many hashtags, no place for files; and says it before the owner approves', async () => {
+  it('sends a JPEG copy of a picture that is not JPEG, made for the send and deleted after it; and says in words when no copy can be made', async () => {
+    const copies: string[] = []
+    const shrinker: ImageShrinker = {
+      shrink: async (source, maxBytes, outDir) => {
+        if (source.endsWith('.webp')) throw new Error('The picture could not be read.')
+        expect(maxBytes).toBe(8 * 1024 * 1024)
+        const path = join(outDir, 'picture.jpg')
+        writeFileSync(path, 'jpeg bytes')
+        copies.push(path)
+        return path
+      }
+    }
+    const w = await connected({ shrinker })
+    expect(await w.send({ text: 'Made by the AI.', attachments: [picture('chart.png', 'image/png'), picture('photo.jpg')] })).toMatchObject({ status: 'confirmed' })
+    // The store was given a JPEG under the picture's own name; the JPEG that was one already went as it is.
+    expect(w.store.everPut.map((key) => key.split('/').pop())).toEqual(['chart.jpg', 'photo.jpg'])
+    expect(copies).toHaveLength(1)
+    expect(existsSync(copies[0] as string)).toBe(false)
+    expect(w.instagram.media[0]?.files.map((f) => w.store.keyOf(f.url)?.split('/').pop())).toEqual(['chart.jpg', 'photo.jpg'])
+
+    const asked = w.instagram.calls.length
+    expect(await w.send({ text: 'A.', attachments: [picture('a.webp', 'image/webp')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/“a\.webp” is not a JPEG picture, and a JPEG copy of it could not be made \(The picture could not be read\.\) Save it as JPEG or PNG.*Nothing was sent/) })
+    expect(w.store.objects.size).toBe(0)
+    expect(made(w).filter((c) => c.path.endsWith('/media')).length).toBe(made({ instagram: { calls: w.instagram.calls.slice(0, asked) } as FakeInstagram }).filter((c) => c.path.endsWith('/media')).length)
+    // A build with no picture tools says so instead of sending a file Instagram would refuse.
+    const bare = await connected()
+    expect(await bare.send({ text: 'A.', attachments: [picture('a.png', 'image/png')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/this build of the application cannot make one/) })
+  })
+
+  it('refuses before anything is asked of Instagram: words alone, a file that is no picture, too many hashtags, no place for files; and says it before the owner approves', async () => {
     const w = await connected({ place: false })
     const asked = w.instagram.calls.length
     expect(await w.send({ text: 'Words only.' })).toMatchObject({ status: 'failed', error: expect.stringMatching(/no post of words only/) })
-    expect(await w.send({ text: 'A chart.', attachments: [picture('a.png', 'image/png')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/only a JPEG picture.*“a\.png” is neither/) })
+    expect(await w.send({ text: 'A chart.', attachments: [picture('a.pdf', 'application/pdf')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/takes a picture and an MP4 or MOV video.*“a\.pdf” is neither/) })
     expect(await w.send({ text: Array.from({ length: 31 }, (_, i) => `#tag${i}`).join(' '), attachments: [picture('a.jpg')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/at most 30 hashtags in a caption; this one has 31/) })
     expect(await w.send({ text: 'A chart.', attachments: [picture('a.jpg')] })).toMatchObject({ status: 'failed', error: expect.stringMatching(/no place for files is set up.*Nothing was sent/s) })
     expect(w.instagram.calls.length).toBe(asked)
@@ -210,11 +241,11 @@ describe('posting as the account', () => {
     expect(without).toMatchObject({ api: true, publicFiles: false })
     expect(sendProblems('instagram', { ...rendered, attachments: [picture('a.jpg')] }, without).join(' ')).toMatch(/Set up “A place for files” in Settings/)
     const withPlace = { aiBrowser: false, api: true, publicFiles: true }
-    expect(sendProblems('instagram', { ...rendered, attachments: [picture('a.png', 'image/png')] }, withPlace).join(' ')).toMatch(/only as a JPEG file, and “a\.png” is not one/)
-    expect(sendProblems('instagram', { ...rendered, attachments: [picture('a.jpg')] }, withPlace).join(' ')).not.toMatch(/JPEG|place for files/)
-    // In the account's browser a PNG goes as before, and Threads takes one through its API.
-    expect(sendProblems('instagram', { ...rendered, attachments: [picture('a.png', 'image/png')] }, { aiBrowser: true }).join(' ')).not.toMatch(/JPEG/)
-    expect(sendProblems('threads', { ...rendered, attachments: [picture('a.png', 'image/png')] }, withPlace).join(' ')).not.toMatch(/JPEG/)
+    expect(sendProblems('instagram', { ...rendered, attachments: [picture('a.webp', 'image/webp')] }, withPlace).join(' ')).toMatch(/only as a JPEG file\. The application makes one from a PNG by itself, and “a\.webp” is neither/)
+    expect(sendProblems('instagram', { ...rendered, attachments: [picture('a.jpg'), picture('a.png', 'image/png')] }, withPlace).join(' ')).not.toMatch(/JPEG|place for files/)
+    // In the account's browser any picture goes as before, and Threads takes its own kinds through its API.
+    expect(sendProblems('instagram', { ...rendered, attachments: [picture('a.webp', 'image/webp')] }, { aiBrowser: true }).join(' ')).not.toMatch(/JPEG/)
+    expect(sendProblems('threads', { ...rendered, attachments: [picture('a.webp', 'image/webp')] }, withPlace).join(' ')).not.toMatch(/JPEG/)
   })
 
   it('publishes nothing and deletes the files when Instagram could not prepare the post, never finished, or could not read the file; its own words for a person are given', async () => {
