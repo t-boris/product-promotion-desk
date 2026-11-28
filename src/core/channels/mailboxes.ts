@@ -5,6 +5,7 @@
 import { ApiError } from '../../shared/api'
 import type { Mailbox } from '../../shared/types'
 import type { Core } from '../core'
+import { mailboxPasswordKey } from '../vault'
 import { requireText } from './errors'
 import type { ChannelsStore } from './store'
 
@@ -35,14 +36,16 @@ export class MailboxService {
     private readonly store: ChannelsStore
   ) {}
 
+  private readonly hasPassword = (id: string): boolean => this.core.secrets.has(mailboxPasswordKey(id))
+
   list(): Mailbox[] {
-    return this.store.listMailboxes()
+    return this.store.listMailboxes(this.hasPassword)
   }
 
   add(args: { address: string }): Mailbox {
     const address = parseEmail(args.address, 'The mailbox address')
-    if (this.store.listMailboxes().some((m) => m.address === address)) throw new ApiError('duplicate', `${address} is already registered.`)
-    const mailbox = this.store.insertMailbox(address)
+    if (this.store.listMailboxes(this.hasPassword).some((m) => m.address === address)) throw new ApiError('duplicate', `${address} is already registered.`)
+    const mailbox = this.store.insertMailbox(address, this.hasPassword)
     this.core.log.info('accounts', `Mailbox ${address} registered. Addresses for accounts can be made from it.`)
     this.core.events.changed('accounts')
     return mailbox
@@ -50,6 +53,7 @@ export class MailboxService {
 
   remove(id: unknown): void {
     const mailbox = this.mailbox(id)
+    this.core.secrets.delete(mailboxPasswordKey(mailbox.id))
     this.store.deleteMailbox(mailbox.id)
     this.core.log.info('accounts', `Mailbox ${mailbox.address} removed. Addresses already given to accounts stay.`)
     this.core.events.changed('accounts')
@@ -57,7 +61,7 @@ export class MailboxService {
 
   mailbox(id: unknown): Mailbox {
     const wanted = requireText(id, 'The mailbox')
-    const found = this.store.listMailboxes().find((m) => m.id === wanted)
+    const found = this.store.listMailboxes(this.hasPassword).find((m) => m.id === wanted)
     if (!found) throw new ApiError('not_found', 'The mailbox was not found.')
     return found
   }

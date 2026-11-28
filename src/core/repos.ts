@@ -104,7 +104,21 @@ export const mapAccount = (r: Row): Account => ({
   lastCheckSignal: (r.last_check_signal as string | null | undefined) ?? null
 })
 
-export const mapMailbox = (r: Row): Mailbox => ({ id: r.id as string, address: r.address as string, kind: 'existing', createdAt: r.created_at as string })
+export const mapMailbox = (r: Row, hasPassword = false): Mailbox => ({
+  id: r.id as string,
+  address: r.address as string,
+  kind: 'existing',
+  createdAt: r.created_at as string,
+  imapHost: (r.imap_host as string | null | undefined) ?? null,
+  imapPort: typeof r.imap_port === 'number' && r.imap_port > 0 ? r.imap_port : 993,
+  imapSecure: r.imap_secure === undefined ? true : Boolean(r.imap_secure),
+  imapUser: (r.imap_user as string | null | undefined) ?? null,
+  webmailUrl: (r.webmail_url as string | null | undefined) ?? null,
+  imapStatus: r.imap_status === 'ready' || r.imap_status === 'error' ? r.imap_status : 'unconfigured',
+  imapError: (r.imap_error as string | null | undefined) ?? null,
+  lastSyncedAt: (r.last_synced_at as string | null | undefined) ?? null,
+  hasPassword
+})
 
 /**
  * `hasBrowser`: whether the channel's account works in a browser. A channel the application does not read is watched there (DEC-042, DEC-045);

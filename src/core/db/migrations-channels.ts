@@ -233,5 +233,37 @@ CREATE TABLE api_key_times (
 ALTER TABLE accounts ADD COLUMN last_checked_at TEXT;
 ALTER TABLE accounts ADD COLUMN last_check_signal TEXT;
 `
+  },
+  {
+    id: 214,
+    name: 'channels: mailbox IMAP configuration and header-only mail messages',
+    sql: `
+-- REQ-013, DEC-100: IMAP connection settings on base mailboxes (passwords stay in the encrypted vault only)
+-- and header-only mail index (redacted preview only; bodies, codes and magic links are never stored on disk).
+ALTER TABLE mailboxes ADD COLUMN imap_host TEXT;
+ALTER TABLE mailboxes ADD COLUMN imap_port INTEGER NOT NULL DEFAULT 993;
+ALTER TABLE mailboxes ADD COLUMN imap_secure INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE mailboxes ADD COLUMN imap_user TEXT;
+ALTER TABLE mailboxes ADD COLUMN webmail_url TEXT;
+ALTER TABLE mailboxes ADD COLUMN imap_status TEXT NOT NULL DEFAULT 'unconfigured';
+ALTER TABLE mailboxes ADD COLUMN imap_error TEXT;
+ALTER TABLE mailboxes ADD COLUMN last_synced_at TEXT;
+
+CREATE TABLE IF NOT EXISTS mail_messages (
+  id TEXT PRIMARY KEY,
+  mailbox_id TEXT NOT NULL REFERENCES mailboxes(id) ON DELETE CASCADE,
+  uid INTEGER NOT NULL,
+  message_id TEXT,
+  from_address TEXT NOT NULL,
+  to_address TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  preview TEXT NOT NULL,
+  received_at TEXT NOT NULL,
+  unread INTEGER NOT NULL DEFAULT 1,
+  fetched_at TEXT NOT NULL,
+  UNIQUE(mailbox_id, uid)
+);
+CREATE INDEX IF NOT EXISTS idx_mail_messages_mailbox_received ON mail_messages(mailbox_id, received_at DESC);
+`
   }
 ]

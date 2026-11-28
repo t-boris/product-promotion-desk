@@ -4,9 +4,10 @@ import { accountsNewHref, parseAccountsHash, productHref } from '../route'
 import { useHash } from '../use-hash'
 import { peopleOfProduct, productOfAccount } from '../../../shared/account-scope'
 import { useCurrentProduct } from '../product-context'
-import { Button, Card, EmptyState, ErrorNote, Loading, OpenFormsScope, Page } from '../ui'
+import { Button, Card, EmptyState, ErrorNote, Loading, OpenFormsScope, Page, SegmentedControl } from '../ui'
 import { AccountDetail } from './accounts/AccountDetail'
 import { AccountsList } from './accounts/AccountsList'
+import { MailInbox } from './accounts/MailInbox'
 import { accountKey, displayOrder, groupAccounts, parseKey, profileKey } from './accounts/accounts-groups'
 import { NewProfile } from './accounts/NewProfile'
 import { CreateAccount } from './channels/CreateAccount'
@@ -37,6 +38,7 @@ function AccountsScreen() {
   const accounts = useQuery('accounts.list', undefined, ['accounts'])
   const platforms = useQuery('platforms.list', undefined, [])
   const mailboxes = useQuery('mailboxes.list', undefined, ['accounts'])
+  const unreadMail = useQuery('mail.list', { unreadOnly: true, limit: 100 }, ['accounts'])
   const vault = useQuery('vault.status', undefined, ['accounts'])
   const profiles = useQuery('profiles.list', undefined, ['accounts'])
   const products = useQuery('products.list', undefined, ['products'])
@@ -47,6 +49,9 @@ function AccountsScreen() {
   // no longer exists is ignored.
   const forProduct = route.productId && (products.data === undefined || products.data.some((p) => p.id === route.productId)) ? route.productId : null
   const [makingProfile, setMakingProfile] = useState(false)
+  const [section, setSection] = useState<'accounts' | 'mail'>('accounts')
+  const [mailAccountId, setMailAccountId] = useState<string | null>(null)
+  const unreadCount = unreadMail.data?.length ?? 0
 
   const allAccounts = accounts.data ?? []
   const allProfiles = profiles.data ?? []
@@ -127,12 +132,47 @@ function AccountsScreen() {
       fill
       actions={
         <>
-          <Button onClick={() => setMakingProfile(true)} disabled={adding || makingProfile} data-testid="profile-add">
-            New profile
-          </Button>
-          <Button icon="plus" onClick={goNew} disabled={adding} data-testid="account-add">
-            Add account
-          </Button>
+          {!adding && (
+            <SegmentedControl<'accounts' | 'mail'>
+              label="Accounts view"
+              name="accounts-section"
+              testIdPrefix="accounts-section-"
+              value={section}
+              onChange={(next) => {
+                setSection(next)
+                if (next === 'accounts') setMailAccountId(null)
+              }}
+              options={[
+                { value: 'accounts', label: 'Accounts' },
+                { value: 'mail', label: unreadCount > 0 ? `Mail ${unreadCount}` : 'Mail' }
+              ]}
+            />
+          )}
+          {section === 'accounts' && (
+            <>
+              <Button
+                onClick={() => {
+                  setSection('accounts')
+                  setMakingProfile(true)
+                }}
+                disabled={adding || makingProfile}
+                data-testid="profile-add"
+              >
+                New profile
+              </Button>
+              <Button
+                icon="plus"
+                onClick={() => {
+                  setSection('accounts')
+                  goNew()
+                }}
+                disabled={adding}
+                data-testid="account-add"
+              >
+                Add account
+              </Button>
+            </>
+          )}
         </>
       }
     >
@@ -165,7 +205,16 @@ function AccountsScreen() {
           )}
         </div>
       )}
-      {!adding && !loading && (
+      {!adding && !loading && section === 'mail' && (
+        <MailInbox
+          accounts={allAccounts}
+          mailboxes={mailboxes.data ?? []}
+          platforms={platformList}
+          initialAccountId={mailAccountId}
+          onClearInitialAccount={() => setMailAccountId(null)}
+        />
+      )}
+      {!adding && !loading && section === 'accounts' && (
         <div className="accounts-split">
           <AccountsList groups={groups} platforms={platformList} selectedKey={makingProfile ? null : selectedKey} tabKey={selectedKey} onSelect={select} />
           <div className="accounts-detail-pane">
@@ -192,6 +241,10 @@ function AccountsScreen() {
                 vault={vault.data}
                 onOpenProfile={(id) => select(profileKey(id))}
                 onOpenAccount={(id) => select(accountKey(id))}
+                onOpenMail={(id) => {
+                  setMailAccountId(id)
+                  setSection('mail')
+                }}
               />
             ) : selectedProfile ? (
               <ProfileDetail

@@ -1,6 +1,6 @@
 // Persistence for accounts and channels. Rows are mapped by the shared mappers in ../repos.
 
-import type { Account, AccountAccess, Profile, AccountRole, Mailbox, ProfileFields, ProfileGender, ProfileStatus, AccountStatus, Capability, Channel, ChannelMode, ChannelPlan, ChannelSettings, ChannelStatus } from '../../shared/types'
+import type { Account, AccountAccess, Profile, AccountRole, Mailbox, MailboxImapStatus, ProfileFields, ProfileGender, ProfileStatus, AccountStatus, Capability, Channel, ChannelMode, ChannelPlan, ChannelSettings, ChannelStatus } from '../../shared/types'
 import { newId, toJson, type Db } from '../db/database'
 import type { Clock } from '../ports'
 import { mapMailbox, type Repos } from '../repos'
@@ -87,20 +87,90 @@ export class ChannelsStore {
     return this.repos.account(id)
   }
 
-  listMailboxes(): Mailbox[] {
-    return (this.db.prepare('SELECT * FROM mailboxes ORDER BY created_at, rowid').all() as Record<string, unknown>[]).map(mapMailbox)
+  listMailboxes(hasPassword: (id: string) => boolean = () => false): Mailbox[] {
+    return (this.db.prepare('SELECT * FROM mailboxes ORDER BY created_at, rowid').all() as Record<string, unknown>[]).map((row) => mapMailbox(row, hasPassword(row.id as string)))
   }
 
-  insertMailbox(address: string): Mailbox {
+  insertMailbox(address: string, hasPassword: (id: string) => boolean = () => false): Mailbox {
     const id = newId()
     this.db.prepare("INSERT INTO mailboxes (id, address, kind, created_at) VALUES (?, ?, 'existing', ?)").run(id, address, this.clock.now().toISOString())
-    return this.listMailboxes().find((m) => m.id === id) as Mailbox
+    return this.listMailboxes(hasPassword).find((m) => m.id === id) as Mailbox
+  }
+
+  updateMailboxImap(
+    id: string,
+    patch: { host: string | null; port: number; secure: boolean; user: string | null; webmailUrl: string | null; status: MailboxImapStatus; error: string | null }
+  ): void {
+    this.db
+      .prepare('UPDATE mailboxes SET imap_host = ?, imap_port = ?, imap_secure = ?, imap_user = ?, webmail_url = ?, imap_status = ?, imap_error = ? WHERE id = ?')
+      .run(patch.host, patch.port, patch.secure ? 1 : 0, patch.user, patch.webmailUrl, patch.status, patch.error, id)
+  }
+
+  setMailboxImapStatus(id: string, status: MailboxImapStatus, error: string | null, syncedAt?: string): void {
+    if (syncedAt !== undefined) {
+      this.db.prepare('UPDATE mailboxes SET imap_status = ?, imap_error = ?, last_synced_at = ? WHERE id = ?').run(status, error, syncedAt, id)
+    } else {
+      this.db.prepare('UPDATE mailboxes SET imap_status = ?, imap_error = ? WHERE id = ?').run(status, error, id)
+    }
   }
 
   /** The addresses already given to accounts stay; only the link to the base mailbox is cut. */
   deleteMailbox(id: string): void {
     this.db.prepare('UPDATE accounts SET mailbox_id = NULL WHERE mailbox_id = ?').run(id)
+    this.db.prepare('DELETE FROM mail_messages WHERE mailbox_id = ?').run(id)
     this.db.prepare('DELETE FROM mailboxes WHERE id = ?').run(id)
+  }
+
+  // ───────────── mail messages (header-only index, REQ-013, DEC-100) ─────────────
+
+  latestMailboxUid(mailboxId: string): number | null {
+    const row = this.db.prepare('SELECT MAX(uid) AS uid FROM mail_messages WHERE mailbox_id = ?').get(mailboxId) as { uid: number | null } | undefined
+    return typeof row?.uid === 'number' ? row.uid : null
+  }
+
+  upsertMailMessage(msg: {
+    mailboxId: string
+    uid: number
+    messageId: string | null
+    fromAddress: string
+    toAddress: string
+    subject: string
+    preview: string
+    receivedAt: string
+    unread: boolean
+    fetchedAt: string
+  }): boolean {
+    const info = this.db
+      .prepare(
+        `INSERT INTO mail_messages (id, mailbox_id, uid, message_id, from_address, to_address, subject, preview, received_at, unread, fetched_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (mailbox_id, uid) DO NOTHING`
+      )
+      .run(newId(), msg.mailboxId, msg.uid, msg.messageId, msg.fromAddress, msg.toAddress, msg.subject, msg.preview, msg.receivedAt, msg.unread ? 1 : 0, msg.fetchedAt)
+    return info.changes === 1
+  }
+
+  listMailMessages(filter: { mailboxId?: string; unreadOnly?: boolean; limit: number }): StoredMailRow[] {
+    const where: string[] = []
+    const params: (string | number)[] = []
+    if (filter.mailboxId) {
+      where.push('mailbox_id = ?')
+      params.push(filter.mailboxId)
+    }
+    if (filter.unreadOnly) where.push('unread = 1')
+    const sql = `SELECT * FROM mail_messages${where.length > 0 ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY received_at DESC, uid DESC LIMIT ?`
+    return (this.db.prepare(sql).all(...params, filter.limit) as Record<string, unknown>[]).map(mapMailRow)
+  }
+
+  getMailMessage(id: string): StoredMailRow | null {
+    const row = this.db.prepare('SELECT * FROM mail_messages WHERE id = ?').get(id) as Record<string, unknown> | undefined
+    return row ? mapMailRow(row) : null
+  }
+
+  setMailUnread(id: string, unread: boolean): StoredMailRow | null {
+    const info = this.db.prepare('UPDATE mail_messages SET unread = ? WHERE id = ?').run(unread ? 1 : 0, id)
+    if (info.changes === 0) return null
+    return this.getMailMessage(id)
   }
 
   /** The name the account signs in with; not a secret (the password is only in the vault). */
@@ -299,5 +369,35 @@ export class ChannelsStore {
       )
       .get(channelId) as { n: number }
     return row.n
+  }
+}
+
+export interface StoredMailRow {
+  id: string
+  mailboxId: string
+  uid: number
+  messageId: string | null
+  fromAddress: string
+  toAddress: string
+  subject: string
+  preview: string
+  receivedAt: string
+  unread: boolean
+  fetchedAt: string
+}
+
+function mapMailRow(r: Record<string, unknown>): StoredMailRow {
+  return {
+    id: r.id as string,
+    mailboxId: r.mailbox_id as string,
+    uid: Number(r.uid),
+    messageId: (r.message_id as string | null) ?? null,
+    fromAddress: String(r.from_address ?? ''),
+    toAddress: String(r.to_address ?? ''),
+    subject: String(r.subject ?? ''),
+    preview: String(r.preview ?? ''),
+    receivedAt: String(r.received_at ?? ''),
+    unread: Boolean(r.unread),
+    fetchedAt: String(r.fetched_at ?? '')
   }
 }

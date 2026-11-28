@@ -343,12 +343,77 @@ export interface Account {
   lastCheckSignal: string | null
 }
 
-/** A base mailbox (DEC-015): an ordinary mailbox of the owner, from which each account gets an address of its own. */
+/** IMAP status of a base mailbox (REQ-013, DEC-100). */
+export type MailboxImapStatus = 'unconfigured' | 'ready' | 'error'
+
+/** A base mailbox (DEC-015, REQ-013, DEC-100): an ordinary mailbox of the owner, with optional read-only IMAP connection. */
 export interface Mailbox {
   id: Id
   address: string
   kind: 'existing'
   createdAt: IsoTime
+  imapHost: string | null
+  imapPort: number
+  imapSecure: boolean
+  imapUser: string | null
+  webmailUrl: string | null
+  imapStatus: MailboxImapStatus
+  imapError: string | null
+  lastSyncedAt: IsoTime | null
+  /** True when an IMAP app password is stored in the encrypted vault (the password itself is never returned). */
+  hasPassword: boolean
+}
+
+/** One header-only message synced from a mailbox via IMAP (REQ-013, DEC-100). Never stores bodies, codes or magic links. */
+export interface MailMessage {
+  id: Id
+  mailboxId: Id
+  mailboxAddress: string
+  uid: number
+  messageId: string | null
+  fromAddress: string
+  toAddress: string
+  subject: string
+  /** Redacted preview without links, verification codes, or tokens. */
+  preview: string
+  receivedAt: IsoTime
+  unread: boolean
+  /** Matched account whose email equals `toAddress` (or null when unattributed). */
+  accountId: Id | null
+  accountLabel: string | null
+  platform: string | null
+  /** Direct webmail link (Gmail message search or configured webmail URL), opened in the app's own browser. */
+  webmailUrl: string | null
+}
+
+/** On-demand plain-text body fetched live over IMAP (never persisted to SQLite, REQ-013). */
+export interface MailBodyView {
+  message: MailMessage
+  text: string
+  codes: string[]
+  links: string[]
+}
+
+/** Result of checking recent account mail for a verification code or confirmation link (REQ-013, DEC-100). */
+export interface VerificationLookup {
+  accountId: Id
+  email: string
+  checkedAt: IsoTime
+  matches: {
+    messageId: Id
+    subject: string
+    fromAddress: string
+    receivedAt: IsoTime
+    codes: string[]
+    links: string[]
+  }[]
+}
+
+/** Result of syncing one or all configured IMAP mailboxes. */
+export interface MailSyncResult {
+  synced: number
+  added: number
+  errors: { mailboxId: Id; error: string }[]
 }
 
 /**

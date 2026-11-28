@@ -1,7 +1,7 @@
 {
   "name": "product-promotion-desk",
   "productName": "Product Promotion Desk",
-  "version": "0.99.0",
+  "version": "0.100.0",
   "description": "Personal macOS application that helps promote products using an installed Codex or Claude Code as the AI engine.",
   "private": true,
   "type": "module",
@@ -27,11 +27,14 @@
   },
   "dependencies": {
     "better-sqlite3": "13.0.3",
+    "imapflow": "^2.12.2",
+    "mailparser": "^3.15.0",
     "puppeteer-core": "25.16.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",
     "@types/better-sqlite3": "9.6.0",
+    "@types/mailparser": "^3.9.0",
     "@types/node": "^22.0.0",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",

@@ -11,6 +11,7 @@ import { draftSiteProfile, planChannel, proposeProfile, suggestChannels, suggest
 import { ChannelService } from './channel-service'
 import { ChannelPlanService } from './plan'
 import { LessonService } from './lessons'
+import { MailService } from './mail'
 import { MailboxService } from './mailboxes'
 import { listPlatforms } from './platforms'
 import { PersonProfileService } from './person-profile'
@@ -48,6 +49,7 @@ export function register(core: Core): void {
   const plans = new ChannelPlanService(core, { planChannel }, store)
   const vault = new VaultService(core, accounts, store)
   const mailboxes = new MailboxService(core, store)
+  const mail = new MailService(core, store, mailboxes)
   const signIn = new SignInService(core, accounts, vault, store)
   const people = new PersonProfileService(core, store, { proposeProfile })
   const lessons = new LessonService(core)
@@ -73,6 +75,15 @@ export function register(core: Core): void {
     'mailboxes.list': () => mailboxes.list(),
     'mailboxes.add': (args) => mailboxes.add(args),
     'mailboxes.remove': (args) => mailboxes.remove(args.id),
+    'mailboxes.configureImap': (args) => mail.configureImap(args),
+    'mailboxes.savePassword': (args) => mail.savePassword(args),
+    'mailboxes.removePassword': (args) => mail.removePassword(args.id),
+    'mailboxes.testImap': (args) => mail.testImap(args.id),
+    'mailboxes.sync': (args) => mail.sync(args?.id),
+    'mail.list': (args) => mail.list(args),
+    'mail.readBody': (args) => mail.readBody(args.messageId),
+    'mail.markRead': (args) => mail.markRead(args),
+    'mail.codes': (args) => mail.lookupCodes(args),
     'accounts.remove': (args) => accounts.remove(args.id),
     'accounts.setRole': (args) => accounts.setRole(args),
     'accounts.suggestRoles': (args) => roles.suggest(args),

@@ -24,6 +24,42 @@ import type { InstagramPostForm, InstagramUserTag, VideoAs } from '../shared/typ
 import type { McpLaunch } from './mcp/protocol'
 import type { PostNumbers } from '../shared/post-numbers'
 
+/** Read-only IMAP client port (REQ-013, DEC-100). Real implementation lives in src/main/mail-client.ts using imapflow + mailparser; tests use a fake. */
+export interface ImapConfig {
+  host: string
+  port: number
+  secure: boolean
+  user: string
+  password: string
+}
+
+export interface RemoteMailHeader {
+  uid: number
+  messageId: string | null
+  from: string
+  to: string[]
+  subject: string
+  /** Raw snippet/body text used ONLY in memory to compute the redacted preview; never stored raw. */
+  previewSource: string
+  receivedAt: IsoTime
+  seen: boolean
+}
+
+export interface RemoteMailBody {
+  uid: number
+  subject: string
+  from: string
+  to: string[]
+  receivedAt: IsoTime
+  text: string
+}
+
+export interface MailPort {
+  testConnection(config: ImapConfig): Promise<void>
+  fetchHeaders(config: ImapConfig, options: { limit: number; sinceUid?: number }): Promise<RemoteMailHeader[]>
+  fetchBody(config: ImapConfig, uid: number): Promise<RemoteMailBody | null>
+}
+
 export interface Clock {
   now(): Date
 }

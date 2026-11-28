@@ -16,6 +16,7 @@ import { installBackground, openedAtLogin } from './background'
 import { installLifecycle } from './lifecycle'
 import { McpGateway } from './mcp-gateway'
 import { ElectronImageShrinker } from './image-shrinker'
+import { ImapMailClient } from './mail-client'
 import { ElectronMediaTools } from './media-tools'
 import { followTheme } from './native-theme'
 import { createNotificationSink } from './notifications'
@@ -74,6 +75,7 @@ async function start(): Promise<void> {
     agentBridge: gateway,
     imageShrinker: new ElectronImageShrinker(),
     mediaTools: new ElectronMediaTools(),
+    mail: new ImapMailClient(),
     // Passwords: encrypted by the system keychain, in a file of their own next to the database (DEC-014).
     secrets: new FileVault(join(dataDir, 'vault.bin'), safeStorage),
     clipboard: new TimedClipboard({ writeText: (text) => clipboard.writeText(text), readText: () => clipboard.readText() }),

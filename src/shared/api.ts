@@ -26,6 +26,10 @@ import type {
   BrowserState,
   PageReport,
   Mailbox,
+  MailMessage,
+  MailBodyView,
+  MailSyncResult,
+  VerificationLookup,
   SignInResult,
   VaultStatus,
   FilePlaceState,
@@ -300,6 +304,23 @@ export interface ApiMethods {
   'mailboxes.add': [{ address: string }, Mailbox]
   /** Removes a base mailbox; the addresses already given to accounts stay. */
   'mailboxes.remove': [{ id: Id }, void]
+  /** Saves IMAP connection settings for a base mailbox (REQ-013, DEC-100); password is kept in the encrypted vault only. */
+  'mailboxes.configureImap': [{ id: Id; host: string | null; port?: number; secure?: boolean; user?: string | null; webmailUrl?: string | null }, Mailbox]
+  /** Saves an IMAP app password into the encrypted vault only (never stored in SQLite or logged). */
+  'mailboxes.savePassword': [{ id: Id; password: string }, Mailbox]
+  'mailboxes.removePassword': [{ id: Id }, Mailbox]
+  /** Tests read-only IMAP connection with the saved host and vault password, updating status and last error. */
+  'mailboxes.testImap': [{ id: Id }, Mailbox]
+  /** Syncs recent message headers (and redacted previews only) from one or all configured IMAP mailboxes. */
+  'mailboxes.sync': [{ id?: Id } | undefined, MailSyncResult]
+  /** Lists synced mail headers across mailboxes, optionally filtered by account, platform, mailbox, or unread state. */
+  'mail.list': [{ mailboxId?: Id; accountId?: Id; platform?: string; unreadOnly?: boolean; limit?: number } | undefined, MailMessage[]]
+  /** Fetches a single message's plain-text body on demand over IMAP (never stored on disk) and extracts verification codes/links. */
+  'mail.readBody': [{ messageId: Id }, MailBodyView]
+  /** Marks a synced message read or unread in the local header index. */
+  'mail.markRead': [{ messageId: Id; unread: boolean }, MailMessage]
+  /** Checks recent mail addressed to an account's e-mail for verification codes and confirmation links (owner-only, never sent to AI). */
+  'mail.codes': [{ accountId: Id; sinceMinutes?: number }, VerificationLookup]
   /** Sets, changes or removes (null) the role of a login (DEC-010). Name and voice are trimmed and length-limited. */
   'accounts.setRole': [{ accountId: Id; role: AccountRole | null }, Account]
   /** AI ideas for roles and login names for this product, from its approved passport. Nothing is created. */

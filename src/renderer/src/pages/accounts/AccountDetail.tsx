@@ -35,7 +35,8 @@ export function AccountDetail({
   mailboxes,
   vault,
   onOpenProfile,
-  onOpenAccount
+  onOpenAccount,
+  onOpenMail
 }: {
   account: Account
   platforms: PlatformInfo[]
@@ -43,6 +44,7 @@ export function AccountDetail({
   vault: VaultStatus | undefined
   onOpenProfile: (profileId: string) => void
   onOpenAccount: (accountId: string) => void
+  onOpenMail?: (accountId: string) => void
 }) {
   const [tab, setTab] = useState<AccountTab>(DEFAULT_ACCOUNT_TAB)
   const info = platforms.find((p) => p.platform === account.platform)
@@ -73,7 +75,7 @@ export function AccountDetail({
           <AccountViaLine account={account} via={via} wantedPlatform={wantedPlatform} wantedLabel={wantedLabel} accounts={accounts.data ?? []} next={step.block} onOpenAccount={onOpenAccount} />
         ) : (
           <>
-            <AccountEmail account={account} mailboxes={mailboxes} next={step.block} />
+            <AccountEmail account={account} mailboxes={mailboxes} next={step.block} onOpenMail={onOpenMail} />
             {vault && <AccountPassword account={account} unavailable={vault.unavailable} hasPassword={hasPassword} next={step.block} />}
           </>
         )}

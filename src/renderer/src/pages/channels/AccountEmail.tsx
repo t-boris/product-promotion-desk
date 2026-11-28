@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
-import type { Account, Mailbox } from '../../../../shared/types'
-import { call, useAction } from '../../hooks'
-import { Button, ErrorNote, Field, useMainVariant, useOpenForm } from '../../ui'
+import type { Account, Mailbox, VerificationLookup } from '../../../../shared/types'
+import { call, useAction, useQuery } from '../../hooks'
+import { Badge, Button, ErrorNote, Field, useMainVariant, useOpenForm } from '../../ui'
 import { AccountBlock } from './AccountBlock'
 import { CopyButton } from './CopyButton'
 import type { NextStep } from './next-step'
@@ -10,7 +10,18 @@ import type { NextStep } from './next-step'
  * The e-mail address of one account (DEC-015): what it signs up with and where the platform writes to it. An address can be
  * typed, or proposed from a base mailbox, which gives every account an address of its own.
  */
-export function AccountEmail({ account, mailboxes, next }: { account: Account; mailboxes: Mailbox[]; /** The step the account needs next: "Set an address" is the filled button only when it is this one. */ next: NextStep['block'] }) {
+export function AccountEmail({
+  account,
+  mailboxes,
+  next,
+  onOpenMail
+}: {
+  account: Account
+  mailboxes: Mailbox[]
+  /** The step the account needs next: "Set an address" is the filled button only when it is this one. */
+  next: NextStep['block']
+  onOpenMail?: (accountId: string) => void
+}) {
   const [editing, setEditing] = useState(false)
   // The open form owns the filled button while it is the form opened last; the resting "Set an address" is filled only while it is the account's next step.
   const saveVariant = useOpenForm(editing)
@@ -33,7 +44,16 @@ export function AccountEmail({ account, mailboxes, next }: { account: Account; m
     setAddress(result.address)
     setFromMailbox(mailboxId)
   })
-  const error = saving.error ?? clearing.error ?? proposing.error
+  const [lookup, setLookup] = useState<VerificationLookup | null>(null)
+  const [checkCodes, checkingCodes] = useAction(async () => {
+    const res = await call('mail.codes', { accountId: account.id })
+    setLookup(res)
+  })
+  const [openLink, openingLink] = useAction((url: string) => call('accounts.openAddress', { url }))
+  const unreadQuery = useQuery('mail.list', { accountId: account.id, unreadOnly: true, limit: 20 }, ['accounts'])
+  const unreadForAccount = account.email ? (unreadQuery.data?.length ?? 0) : 0
+  const hasImapMailbox = mailboxes.some((m) => m.imapHost && m.hasPassword)
+  const error = saving.error ?? clearing.error ?? proposing.error ?? checkingCodes.error ?? openingLink.error
   const mailbox = mailboxes.find((m) => m.id === account.mailboxId)
 
   function submit(event: FormEvent): void {
@@ -126,6 +146,55 @@ export function AccountEmail({ account, mailboxes, next }: { account: Account; m
             </Button>
           </div>
         </form>
+      )}
+      {!editing && account.email && (hasImapMailbox || unreadForAccount > 0) && (
+        <div className="row" style={{ flexWrap: 'wrap', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }} data-testid={`account-mail-bar-${account.id}`}>
+          {unreadForAccount > 0 && <Badge tone="info">{unreadForAccount} unread</Badge>}
+          {hasImapMailbox && (
+            <Button variant="secondary" onClick={() => void checkCodes()} disabled={checkingCodes.busy} data-testid={`account-check-code-${account.id}`}>
+              {checkingCodes.busy ? 'Checking mail…' : 'Check verification code'}
+            </Button>
+          )}
+          {onOpenMail && (
+            <Button variant="quiet" onClick={() => onOpenMail(account.id)} data-testid={`account-open-mail-${account.id}`}>
+              View mail
+            </Button>
+          )}
+        </div>
+      )}
+      {lookup && (
+        <div className="note stack" style={{ marginTop: 'var(--space-2)', gap: 'var(--space-1)' }} data-testid={`account-code-result-${account.id}`}>
+          {lookup.matches.length === 0 ? (
+            <span className="muted small">No verification code or confirmation link found in mail to {lookup.email} from the last 30 minutes.</span>
+          ) : (
+            lookup.matches.map((match) => (
+              <div key={match.messageId} className="stack" style={{ gap: 'var(--space-1)' }}>
+                <div className="small">
+                  <strong>{match.subject}</strong> <span className="muted">from {match.fromAddress}</span>
+                </div>
+                {match.codes.length > 0 && (
+                  <div className="row" style={{ flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                    {match.codes.map((code) => (
+                      <span key={code} style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-1)' }}>
+                        <code style={{ fontWeight: 'var(--fw-semibold)' }}>{code}</code>
+                        <CopyButton text={code} />
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {match.links.length > 0 && (
+                  <div className="row" style={{ flexWrap: 'wrap', gap: 'var(--space-1)' }}>
+                    {match.links.slice(0, 2).map((link) => (
+                      <Button key={link} variant="secondary" onClick={() => void openLink(link)} disabled={openingLink.busy}>
+                        Open confirmation link
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
       )}
       <ErrorNote error={error} />
     </AccountBlock>

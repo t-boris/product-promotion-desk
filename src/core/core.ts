@@ -16,6 +16,7 @@ import {
   type ConnectorContext,
   type HttpPort,
   type ImageShrinker,
+  type MailPort,
   type MediaTools,
   type SecretClipboard,
   type SecretStore,
@@ -56,6 +57,8 @@ export interface CoreDeps {
   signInListener?: SignInListener
   /** The file dialog, thumbnails and the file manager for the post editor (DEC-030); without it the editor has no dialog. */
   mediaTools?: MediaTools
+  /** Read-only IMAP mail client (REQ-013, DEC-100); absent means IMAP sync/reading is unavailable in this environment. */
+  mail?: MailPort
   /** Waits for a page to react between steps; tests supply one that does not wait. */
   sleep?: (ms: number) => Promise<void>
   /** A channel is checked a few minutes earlier or later than its interval says, so channels never start together (DEC-040). The application turns it on; tests leave it off for exact times. */
@@ -84,6 +87,7 @@ export class Core {
   readonly imageShrinker: ImageShrinker | null
   readonly signInListener: SignInListener
   readonly mediaTools: MediaTools | null
+  readonly mail: MailPort | null
   readonly sleep: (ms: number) => Promise<void>
   /** One switch for every writer of a channel's next check (the scheduler and the monitor), so they never disagree. */
   readonly scheduleJitter: boolean
@@ -119,6 +123,7 @@ export class Core {
     this.imageShrinker = deps.imageShrinker ?? null
     this.signInListener = deps.signInListener ?? createSignInListener()
     this.mediaTools = deps.mediaTools ?? null
+    this.mail = deps.mail ?? null
     this.sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
     this.scheduleJitter = deps.scheduleJitter ?? false
     this.browser = typeof deps.browser === 'function' ? deps.browser(this.tickets) : deps.browser
